@@ -4,15 +4,30 @@
 
 ```
 debate_agent/
+  AGENTS.md             # standing AI-assistant instructions
   .env                  # real secrets — never commit
   .env.example          # blank template — always commit
   .gitignore
+  README.md
   ARCHITECTURE.md       # the system design brief
   CONVENTIONS.md
+  DECISIONS.md          # durable project decisions
+  STATUS.md             # phase status log
+  HANDOFF.md            # handoff notes for the next assistant
+  pyproject.toml
+  .agent/
+    PLANS.md
+    plans/
+      phase-00-foundation.md
+  .agents/
+    PLANS/
+      phase-00-foundation.md  # compatibility mirror; .agent/plans is canonical
   
   models.py             # all Pydantic models
   store.py              # all SQLite read/write functions
   utils.py              # sha256, uuid5, shared helpers
+  providers/
+  prompts/
   
   agents/
     planner.py
@@ -24,6 +39,7 @@ debate_agent/
     renderer.py
   
   tests/
+    fixtures/
     ...
 ```
 
@@ -38,7 +54,9 @@ The flow is:
   Reviewer-approved result → `LedgerRecord` written to SQLite, then read by Synthesizer
   Synthesizer output → `SynthesisOutput` passed directly to Renderer
 
-Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries.
+Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the Ledger.
+
+IDs are assigned only after the deterministic validation gate for that artifact passes. Failed candidates, rejected statements, and invalid rendered briefs receive no release-relevant IDs.
 
 ## 3. Tech Stack
 
@@ -50,6 +68,7 @@ Never pass raw dicts between agents. Always use the typed Pydantic models from m
   ruff                  # linting and formatting
 
 No additional dependencies without flagging it first.
+Do not add an LLM SDK, web framework, ORM, scraper, or HTTP library until a later phase explicitly approves it.
 API client to be added in a later phase — skip any LLM call stubs for now.
 
 ## 4. Coding Style
@@ -68,6 +87,9 @@ API client to be added in a later phase — skip any LLM call stubs for now.
   - candidates table can be cleared between runs
   - No composite score column anywhere — evidence_quality and claim_fit are always separate
   - All schema definitions live in store.py in a single init_db() function
+  - Concurrent supporting/opposing researchers must not share SQLite connections, cursors, or transactions
+  - Prefer coordinator-owned serialized writes after both sync researchers finish; if a worker must touch SQLite, it opens and closes its own connection
+  - Persistence records that affect release must include run IDs, prompt/model versions when applicable, retrieval attempts, and timestamps
 
 ## 6. Environment Variables
 
@@ -79,8 +101,11 @@ API client to be added in a later phase — skip any LLM call stubs for now.
 
   A phase is complete when all tests for that phase pass with no errors.
   Do not move to the next phase until the current phase tests are green.
+  Run `pytest`, `ruff check .`, and `ruff format --check .` before considering a phase complete.
 
   Phase 1: test_phase1.py passes
   Phase 2: test_phase2.py passes
   etc.
 ```
+
+The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may exist only as a compatibility mirror for requested scaffolding and must not become a second source of truth.

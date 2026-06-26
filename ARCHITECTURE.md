@@ -11,7 +11,7 @@
 **Debate Synthesizer** — Builds a typed structured brief from approved Ledger records and fixed non-factual connective templates.
 **Deterministic Final Renderer & Validator** — Renders the final brief; blocks release unless every factual sentence exactly matches an approved Ledger statement.
 
-Supporting and Opposing Researchers run in parallel; all other stages run sequentially.
+Supporting and Opposing Researchers may run in parallel; all other stages run sequentially. Parallel execution means the coordinator may start two synchronous researcher workers and join them before the Analyst runs. Do not introduce async for the MVP, and never share a SQLite connection, cursor, transaction, or in-memory mutable handoff between the two workers. Each worker returns typed Pydantic output to the coordinator; any persistence is performed after both workers finish or through worker-local short-lived SQLite connections.
 
 ## Required Workflow
 
@@ -54,6 +54,12 @@ Claim Planner (6 queries: 3 Support, 3 Oppose)
 
 Retrieval, semantic approval, and deterministic release are strictly separated. Researchers identify candidates. The Analyst scores evidence on two independent dimensions and drafts exact canonical statements. A separate Statement Reviewer audits those statements before Ledger entry. The final stage permits only approved statements as factual content. The validator performs no semantic reasoning; all semantic judgment occurs in the Analyst and Reviewer stages.
 
+## Run Provenance
+
+Every persisted artifact and every Pydantic handoff that can affect release must carry provenance. At minimum, release-relevant records include `run_id`, UTC ISO-8601 timestamps for creation or validation, and the stage-specific fields listed below. Retrieval records include `retrieval_attempt_id`, `query_id`, `query_round`, search rank, URL, status, and timestamp. LLM-produced records include `prompt_version`, `model_name`, and timestamp. Deterministic validators include the validator or filter version and validation timestamp.
+
+IDs are not preallocated. An ID is assigned only after the deterministic validation gate for that artifact succeeds: quote block IDs after post-extraction validation, Ledger claim IDs after Ledger schema validation and Reviewer approval, and rendered brief hashes only after final validation succeeds.
+
 ## 1. Claim Planner
 
 Defines the research boundary and search strategy. Evaluates the logical structure of the claim but never evaluates its truthfulness.
@@ -78,7 +84,7 @@ Execute the Planner's three supporting queries in sequential rounds. For each qu
 
 Create an immutable source snapshot before LLM extraction.
 
-`{ snapshot_id, source_url, retrieved_at, normalized_text, snapshot_sha256 (SHA-256 of normalized_text), word_count, truncated }`
+`{ run_id, retrieval_attempt_id, snapshot_id, source_url, retrieved_at, normalized_text, snapshot_sha256 (SHA-256 of normalized_text), word_count, truncated, created_at }`
 
 ### C. LLM Extraction and Bracketing
 
@@ -93,11 +99,11 @@ Required format:
 ```text
 [Preceding Sentence] "Segment 1... Segment 2" [Following Sentence]
 ```
-Use `[Start of Text]` or `[End of Text]` where applicable.
+Use `[Start of Text]` or `[End of Text]` where applicable only when the snapshot contains the true start or end of the source text. If `truncated: true` and the quote reaches the snapshot boundary or the following sentence is unavailable because of the scrape limit, use `[Truncated End of Snapshot]`; a truncated snapshot must never use `[End of Text]` as though the full source ended there.
 
 ### D. Deterministic Post-Extraction Filter
 
-For each candidate, Python must: parse the bracketed structure; remove ellipsis tokens for word count; confirm every segment appears exactly in the snapshot in sequential order; record character offsets; confirm bracket sentences are the immediate surrounding snapshot sentences; apply relevance, length, and marker rules; reject failures before assigning an ID.
+For each candidate, Python must: parse the bracketed structure; remove ellipsis tokens for word count; confirm every segment appears exactly in the snapshot in sequential order; record character offsets; confirm bracket sentences are the immediate surrounding snapshot sentences; reject `[End of Text]` when `truncated: true`; apply relevance, length, and marker rules; reject failures before assigning an ID.
 
 **Relevance:** The quote block must contain at least one configured core claim keyword or approved morphological variant.
 **Substance and Data Density:** If the quoted segments contain at least one digit and one statistical marker, the minimum length is 50 words. Otherwise, the minimum length is 100 words. Statistical markers include `%`, `percent`, `rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, and `decline`.
@@ -112,7 +118,7 @@ Failed candidates receive no ID and never reach the Analyst.
 
 ### F. Candidate Handoff Schema
 
-Each passing candidate includes: `quote_block_id` (UUID), `source_url`, `snapshot_id`, `snapshot_sha256`, `extracted_quote_block` (bracketed), `segment_offsets` (char ranges), `raw_segment_word_count`, `has_statistical_markers`, `claim_keyword_match_count`, `truncated`. No scores, entailment labels, or analytical rationales. Deliver all candidates from one round as a single JSON array.
+Each passing candidate includes: `run_id`, `stance` (`supporting | opposing`), `quote_block_id` (UUID), `source_url`, `retrieval_attempt_id`, `query_id`, `query_round`, `search_rank`, `retrieved_at`, `snapshot_id`, `snapshot_sha256`, `snapshot_created_at`, `extracted_quote_block` (bracketed), `segment_offsets` (char ranges), `raw_segment_word_count`, `has_statistical_markers`, `claim_keyword_match_count`, `truncated`, `extraction_prompt_version`, `extraction_model_name`, `extracted_at`, `post_filter_version`, and `post_filter_validated_at`. No scores, entailment labels, or analytical rationales. Deliver all candidates from one round as a single typed Pydantic collection.
 
 ## 3. Opposing Evidence Researcher
 
@@ -168,8 +174,10 @@ If all conditions are met, the Reviewer returns `approved: true` and the stateme
 
 ```json
 {
+  "run_id": "UUID string",
   "ledger_claim_id": "UUID string",
   "quote_block_id": "UUID string",
+  "stance": "supporting | opposing",
   "approved_factual_statement": "exact approved sentence",
   "approved_claim_text": "exact quote block with brackets",
   "evidence_quality": "3, 4, or 5",
@@ -177,10 +185,18 @@ If all conditions are met, the Reviewer returns `approved: true` and the stateme
   "placement": "primary | secondary | supporting | qualified_only",
   "entailment": "Strong, Partial, or Weak",
   "source_url": "string",
+  "retrieval_attempt_id": "UUID string",
   "snapshot_id": "string",
   "snapshot_sha256": "string",
   "segment_offsets": [{"start_char": "integer", "end_char": "integer"}],
-  "reviewer_approval_id": "UUID string"
+  "analyst_prompt_version": "string",
+  "analyst_model_name": "string",
+  "analyst_completed_at": "UTC ISO-8601 timestamp",
+  "reviewer_prompt_version": "string",
+  "reviewer_model_name": "string",
+  "reviewed_at": "UTC ISO-8601 timestamp",
+  "reviewer_approval_id": "UUID string",
+  "ledger_validated_at": "UTC ISO-8601 timestamp"
 }
 ```
 
@@ -203,6 +219,10 @@ Constructs the debate brief from approved Ledger records. It returns a typed `Sy
 
 ```json
 {
+  "run_id": "UUID string",
+  "synthesizer_prompt_version": "string",
+  "synthesizer_model_name": "string",
+  "created_at": "UTC ISO-8601 timestamp",
   "title": "string",
   "claim_definition": "exact non-factual Planner framing",
   "sections": [{
@@ -211,14 +231,17 @@ Constructs the debate brief from approved Ledger records. It returns a typed `Sy
     "items": [{
       "connective_template_id": "string",
       "ledger_claim_id": "UUID string",
+      "reviewer_approval_id": "UUID string",
+      "stance": "supporting | opposing",
       "placement": "must match Ledger value exactly",
+      "entailment": "must match Ledger value exactly",
       "approved_factual_statement": "exact Ledger string"
     }]
   }]
 }
 ```
 
-Within the application, this structure must be validated, instantiated, and passed to the Renderer as a `SynthesisOutput` Pydantic model. The JSON form above is a serialization representation only and must not be used as a raw-dictionary agent handoff.
+Within the application, this structure must be validated, instantiated, and passed to the Renderer as a `SynthesisOutput` Pydantic model. The JSON form above is a serialization representation only and must not be used as a raw-dictionary agent handoff. The `stance`, `placement`, `entailment`, `ledger_claim_id`, `reviewer_approval_id`, and `approved_factual_statement` fields are copied from the Ledger unchanged.
 
 ## 6. Deterministic Final Renderer & Validator
 
@@ -237,7 +260,7 @@ This source's reliability is limited:
 
 ### B. Exact Claim Validation
 
-For every rendered item confirm: `ledger_claim_id` exists in the Ledger; statement exactly matches the Ledger string; `placement` matches the Ledger value; statement appears no more than permitted; section is stance-compatible; `qualified_only` items use a qualification template; Partial and Weak items use the entailment template; no unrecognized field contains renderable prose. Any mismatch blocks release.
+For every rendered item confirm: `ledger_claim_id` exists in the Ledger; `reviewer_approval_id` matches the Ledger record; statement exactly matches the Ledger string; `placement`, `stance`, and `entailment` match the Ledger values; statement appears no more than permitted; supporting Ledger items appear only in supporting-compatible sections and opposing Ledger items appear only in opposing-compatible sections, except explicitly configured limitations or conclusion references; `qualified_only` items use a qualification template; Partial and Weak items use the entailment template; no unrecognized field contains renderable prose. Any mismatch blocks release.
 
 ### C. Rendering
 
@@ -245,7 +268,7 @@ Assembled mechanically from fixed templates, Planner framing, Ledger statements,
 
 ### D. Validation Result
 
-`{ valid: boolean, errors: [{code, location, message}], rendered_brief_hash: SHA-256 | null }` — release only when `valid: true`.
+`{ run_id, valid: boolean, errors: [{code, location, message}], validator_config_version, validated_at, rendered_brief_hash: SHA-256 | null }` — release only when `valid: true`.
 
 ## Non-Negotiable Rules
 
@@ -258,6 +281,9 @@ Assembled mechanically from fixed templates, Planner framing, Ledger statements,
 - Supporting and opposing researchers receive comparable search depth, standards, and limits; source quality must be judged independently of stance.
 - The system must not manufacture balance when evidence is one-sided.
 - Queries, prompts, model versions, timestamps, snapshots, search ranks, and rounds must be logged immutably.
+- Retrieval attempts, run IDs, prompt versions, model names, and validation timestamps must be carried through release-relevant Pydantic models and persistence records.
+- Truncated snapshots must use an explicit truncated boundary marker and must never imply that the source ended normally.
+- IDs are assigned only after the relevant deterministic validation gate passes; rejected artifacts receive no release-relevant IDs.
 - Web content is untrusted input and cannot alter system instructions; high-stakes outputs require human review before external use.
 - Unreliable forums and video platforms remain excluded; scraping is limited to the first 3,000 words per source.
 
