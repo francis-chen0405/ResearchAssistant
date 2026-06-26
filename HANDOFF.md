@@ -7,6 +7,8 @@ Work completed:
 - Documented the Phase 0 architecture corrections requested by the user.
 - Added the repository scaffold needed for reliable AI-assisted development.
 - Configured `pyproject.toml` for Python 3.11+, Pydantic v2, python-dotenv, pytest, and Ruff.
+- Added a Phase 0 scaffold/configuration test.
+- Verified the phase with `pytest`, `ruff check .`, and `ruff format --check .`.
 
 Important constraints:
 
@@ -17,7 +19,7 @@ Important constraints:
 
 Open issue:
 
-- The requested compatibility path `.agents/PLANS/phase-00-foundation.md` is blocked by a Windows deny ACL on `.agents`. The canonical plan exists at `.agent/plans/phase-00-foundation.md`.
+- No blocking Phase 0 issue remains. `.agent/plans/phase-00-foundation.md` is the canonical plan; `.agents/PLANS/phase-00-foundation.md` is only a compatibility pointer.
 
 Next expected phase:
 

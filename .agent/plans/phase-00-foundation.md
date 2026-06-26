@@ -16,9 +16,11 @@ Prepare the repository for reliable AI-assisted development without implementing
 - `pyproject.toml`
 - `.agent/PLANS.md`
 - `.agent/plans/phase-00-foundation.md`
+- `.agents/PLANS/phase-00-foundation.md`
 - `providers/.gitkeep`
 - `prompts/.gitkeep`
 - `tests/fixtures/.gitkeep`
+- `tests/test_phase0_foundation.py`
 
 ## Architectural Decisions
 
@@ -34,7 +36,7 @@ Prepare the repository for reliable AI-assisted development without implementing
 ## Acceptance Criteria
 
 - `ARCHITECTURE.md` and `CONVENTIONS.md` resolve the known Phase 0 consistency issues.
-- Required scaffold files and directories exist, except paths blocked by workspace permissions are documented.
+- Required scaffold files and directories exist.
 - `pyproject.toml` declares Python 3.11+, Pydantic v2, python-dotenv, pytest, and Ruff.
 - No LLM SDK, web framework, ORM, scraper, or HTTP library is added.
 - No working agents, database behavior, web retrieval, scraping, or LLM calls are implemented.
@@ -50,6 +52,5 @@ ruff format --check .
 
 ## Unresolved Risks
 
-- The `.agents/PLANS/phase-00-foundation.md` compatibility mirror may require a workspace permission or ACL change outside normal Phase 0 edits.
 - Future schema work must translate the documented fields into concrete Pydantic models without weakening the exact-match validator requirements.
 - Empty existing agent and test files remain placeholders until a later phase defines their contents.
