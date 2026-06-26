@@ -24,8 +24,6 @@ debate_agent/
     renderer.py
   
   tests/
-    test_phase1.py
-    test_phase2.py
     ...
 ```
 
