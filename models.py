@@ -1,0 +1,485 @@
+from __future__ import annotations
+
+from datetime import datetime
+from enum import StrEnum
+from typing import Annotated, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+Score = Annotated[int, Field(ge=1, le=5)]
+ApprovedScore = Annotated[int, Field(ge=3, le=5)]
+PositiveInt = Annotated[int, Field(ge=1)]
+NonNegativeInt = Annotated[int, Field(ge=0)]
+NonEmptyStr = Annotated[str, Field(min_length=1)]
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class RunStatus(StrEnum):
+    PLANNED = "planned"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class Stage(StrEnum):
+    CLAIM_PLANNER = "claim_planner"
+    SUPPORTING_RESEARCHER = "supporting_researcher"
+    OPPOSING_RESEARCHER = "opposing_researcher"
+    EVIDENCE_ANALYST = "evidence_analyst"
+    STATEMENT_REVIEWER = "statement_reviewer"
+    CLAIM_LEDGER = "claim_ledger"
+    DEBATE_SYNTHESIZER = "debate_synthesizer"
+    FINAL_RENDERER_VALIDATOR = "final_renderer_validator"
+
+
+class Stance(StrEnum):
+    SUPPORTING = "supporting"
+    OPPOSING = "opposing"
+
+
+class Placement(StrEnum):
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+    SUPPORTING = "supporting"
+    QUALIFIED_ONLY = "qualified_only"
+
+
+class Entailment(StrEnum):
+    STRONG = "Strong"
+    PARTIAL = "Partial"
+    WEAK = "Weak"
+
+
+class RetrievalStatus(StrEnum):
+    RETRIEVED = "retrieved"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class ReviewerFailureCode(StrEnum):
+    NOT_ENTAILED = "not_entailed"
+    MISSING_QUALIFICATION = "missing_qualification"
+    BIASED_FRAMING = "biased_framing"
+    CLAIM_FIT_MISMATCH = "claim_fit_mismatch"
+
+
+class SectionType(StrEnum):
+    SUPPORTING = "supporting"
+    OPPOSING = "opposing"
+    LIMITATIONS = "limitations"
+    CONCLUSION = "conclusion"
+
+
+class ValidationErrorCode(StrEnum):
+    LEDGER_MISMATCH = "ledger_mismatch"
+    INVALID_SECTION = "invalid_section"
+    INVALID_TEMPLATE = "invalid_template"
+    ALTERED_STATEMENT = "altered_statement"
+    SCHEMA_ERROR = "schema_error"
+
+
+def _validate_aware_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("datetime values must be timezone-aware")
+    return value
+
+
+def _validate_offsets(offsets: list[SegmentOffset]) -> list[SegmentOffset]:
+    previous_end: int | None = None
+    for offset in offsets:
+        if previous_end is not None and offset.start_char < previous_end:
+            raise ValueError("segment offsets must be ordered and non-overlapping")
+        previous_end = offset.end_char
+    return offsets
+
+
+class SegmentOffset(StrictModel):
+    start_char: NonNegativeInt
+    end_char: PositiveInt
+
+    @model_validator(mode="after")
+    def validate_order(self) -> SegmentOffset:
+        if self.start_char >= self.end_char:
+            raise ValueError("segment offset start_char must be before end_char")
+        return self
+
+
+class ClaimDefinition(StrictModel):
+    run_id: UUID
+    claim_text: NonEmptyStr
+    population: NonEmptyStr
+    jurisdiction: NonEmptyStr
+    time_period: NonEmptyStr
+    comparison_baseline: NonEmptyStr
+    intervention_or_exposure: NonEmptyStr
+    causal_or_comparative_meaning: NonEmptyStr
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class AmbiguityRecord(StrictModel):
+    run_id: UUID
+    ambiguity_id: UUID
+    description: NonEmptyStr
+    impact: NonEmptyStr
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class SearchQuery(StrictModel):
+    run_id: UUID
+    query_id: UUID
+    stance: Stance
+    query_round: Annotated[int, Field(ge=1, le=3)]
+    strategy: NonEmptyStr
+    query_text: NonEmptyStr
+    exclusion_parameters: NonEmptyStr
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class PlannerOutput(StrictModel):
+    run_id: UUID
+    claim_definition: ClaimDefinition
+    ambiguities: list[AmbiguityRecord]
+    search_queries: list[SearchQuery]
+    planner_prompt_version: NonEmptyStr
+    planner_model_name: NonEmptyStr
+    planned_at: datetime
+
+    _planned_at_is_aware = field_validator("planned_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_queries(self) -> PlannerOutput:
+        supporting_rounds = {
+            query.query_round for query in self.search_queries if query.stance is Stance.SUPPORTING
+        }
+        opposing_rounds = {
+            query.query_round for query in self.search_queries if query.stance is Stance.OPPOSING
+        }
+        if supporting_rounds != {1, 2, 3} or opposing_rounds != {1, 2, 3}:
+            raise ValueError(
+                "planner output must include three supporting and three opposing queries"
+            )
+        return self
+
+
+class RetrievalRecord(StrictModel):
+    run_id: UUID
+    retrieval_attempt_id: UUID
+    query_id: UUID
+    query_round: Annotated[int, Field(ge=1, le=3)]
+    query_text: NonEmptyStr
+    search_rank: Annotated[int, Field(ge=1, le=3)]
+    source_url: NonEmptyStr
+    resolved_url: NonEmptyStr
+    status: RetrievalStatus
+    retrieved_at: datetime
+
+    _retrieved_at_is_aware = field_validator("retrieved_at")(_validate_aware_datetime)
+
+
+class SourceSnapshot(StrictModel):
+    run_id: UUID
+    retrieval_attempt_id: UUID
+    snapshot_id: UUID
+    source_url: NonEmptyStr
+    retrieved_at: datetime
+    normalized_text: NonEmptyStr
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    word_count: NonNegativeInt
+    truncated: bool
+    created_at: datetime
+
+    _retrieved_at_is_aware = field_validator("retrieved_at")(_validate_aware_datetime)
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class ProvisionalCandidate(StrictModel):
+    run_id: UUID
+    stance: Stance
+    source_url: NonEmptyStr
+    retrieval_attempt_id: UUID
+    query_id: UUID
+    query_round: Annotated[int, Field(ge=1, le=3)]
+    search_rank: Annotated[int, Field(ge=1, le=3)]
+    snapshot_id: UUID
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    extracted_quote_block: NonEmptyStr
+    extraction_prompt_version: NonEmptyStr
+    extraction_model_name: NonEmptyStr
+    extracted_at: datetime
+
+    _extracted_at_is_aware = field_validator("extracted_at")(_validate_aware_datetime)
+
+
+class CandidateQuoteBlock(StrictModel):
+    run_id: UUID
+    stance: Stance
+    quote_block_id: UUID
+    source_url: NonEmptyStr
+    retrieval_attempt_id: UUID
+    query_id: UUID
+    query_round: Annotated[int, Field(ge=1, le=3)]
+    search_rank: Annotated[int, Field(ge=1, le=3)]
+    retrieved_at: datetime
+    snapshot_id: UUID
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    snapshot_created_at: datetime
+    extracted_quote_block: NonEmptyStr
+    segment_offsets: Annotated[list[SegmentOffset], Field(min_length=1)]
+    raw_segment_word_count: PositiveInt
+    has_statistical_markers: bool
+    claim_keyword_match_count: PositiveInt
+    truncated: bool
+    extraction_prompt_version: NonEmptyStr
+    extraction_model_name: NonEmptyStr
+    extracted_at: datetime
+    post_filter_version: NonEmptyStr
+    post_filter_validated_at: datetime
+
+    _retrieved_at_is_aware = field_validator("retrieved_at")(_validate_aware_datetime)
+    _snapshot_created_at_is_aware = field_validator("snapshot_created_at")(_validate_aware_datetime)
+    _extracted_at_is_aware = field_validator("extracted_at")(_validate_aware_datetime)
+    _post_filter_validated_at_is_aware = field_validator("post_filter_validated_at")(
+        _validate_aware_datetime
+    )
+    _segment_offsets_are_ordered = field_validator("segment_offsets")(_validate_offsets)
+
+
+class CandidateBatch(StrictModel):
+    run_id: UUID
+    stance: Stance
+    query_round: Annotated[int, Field(ge=1, le=3)]
+    candidates: list[CandidateQuoteBlock]
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_batch_members(self) -> CandidateBatch:
+        for candidate in self.candidates:
+            if candidate.run_id != self.run_id:
+                raise ValueError("candidate run_id must match batch run_id")
+            if candidate.stance is not self.stance:
+                raise ValueError("candidate stance must match batch stance")
+            if candidate.query_round != self.query_round:
+                raise ValueError("candidate query_round must match batch query_round")
+        return self
+
+
+class ScoreDecision(StrictModel):
+    run_id: UUID
+    quote_block_id: UUID
+    evidence_quality: Score
+    claim_fit: Score
+    placement: Placement | None = None
+    approved: bool
+    rationale: NonEmptyStr
+    analyst_prompt_version: NonEmptyStr
+    analyst_model_name: NonEmptyStr
+    scored_at: datetime
+
+    _scored_at_is_aware = field_validator("scored_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_approval_and_placement(self) -> ScoreDecision:
+        rejected = (
+            self.evidence_quality == 1
+            or self.claim_fit == 1
+            or self.evidence_quality == 2
+            or (self.claim_fit == 2 and self.evidence_quality < 4)
+        )
+        if rejected and self.approved:
+            raise ValueError("score combinations below approval thresholds cannot be approved")
+        if self.approved and self.placement is None:
+            raise ValueError("approved score decisions require placement")
+        if not self.approved and self.placement is not None:
+            raise ValueError("rejected score decisions must not assign placement")
+        return self
+
+
+class StatementDraft(StrictModel):
+    run_id: UUID
+    statement_draft_id: UUID
+    quote_block_id: UUID
+    stance: Stance
+    draft_statement: NonEmptyStr
+    claim_fit: Score
+    analyst_prompt_version: NonEmptyStr
+    analyst_model_name: NonEmptyStr
+    drafted_at: datetime
+
+    _drafted_at_is_aware = field_validator("drafted_at")(_validate_aware_datetime)
+
+
+class StatementReviewResult(StrictModel):
+    run_id: UUID
+    statement_draft_id: UUID
+    quote_block_id: UUID
+    approved: bool
+    reviewer_approval_id: UUID | None = None
+    approved_factual_statement: NonEmptyStr | None = None
+    failure_code: ReviewerFailureCode | None = None
+    rationale: NonEmptyStr
+    reviewer_prompt_version: NonEmptyStr
+    reviewer_model_name: NonEmptyStr
+    reviewed_at: datetime
+
+    _reviewed_at_is_aware = field_validator("reviewed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_result_shape(self) -> StatementReviewResult:
+        if self.approved:
+            if self.reviewer_approval_id is None:
+                raise ValueError("approved review results require reviewer_approval_id")
+            if self.approved_factual_statement is None:
+                raise ValueError("approved review results require an approved factual statement")
+            if self.failure_code is not None:
+                raise ValueError("approved review results cannot include a failure code")
+        elif self.failure_code is None:
+            raise ValueError("rejected review results require a failure code")
+        return self
+
+
+class LedgerRecord(StrictModel):
+    run_id: UUID
+    ledger_claim_id: UUID
+    quote_block_id: UUID
+    stance: Stance
+    approved_factual_statement: NonEmptyStr
+    approved_claim_text: NonEmptyStr
+    evidence_quality: ApprovedScore
+    claim_fit: ApprovedScore
+    placement: Placement
+    entailment: Entailment
+    source_url: NonEmptyStr
+    retrieval_attempt_id: UUID
+    snapshot_id: UUID
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    segment_offsets: Annotated[list[SegmentOffset], Field(min_length=1)]
+    analyst_prompt_version: NonEmptyStr
+    analyst_model_name: NonEmptyStr
+    analyst_completed_at: datetime
+    reviewer_prompt_version: NonEmptyStr
+    reviewer_model_name: NonEmptyStr
+    reviewed_at: datetime
+    reviewer_approval_id: UUID
+    ledger_validated_at: datetime
+
+    _segment_offsets_are_ordered = field_validator("segment_offsets")(_validate_offsets)
+    _analyst_completed_at_is_aware = field_validator("analyst_completed_at")(
+        _validate_aware_datetime
+    )
+    _reviewed_at_is_aware = field_validator("reviewed_at")(_validate_aware_datetime)
+    _ledger_validated_at_is_aware = field_validator("ledger_validated_at")(_validate_aware_datetime)
+
+
+class SynthesisItem(StrictModel):
+    connective_template_id: NonEmptyStr
+    ledger_claim_id: UUID
+    reviewer_approval_id: UUID
+    stance: Stance
+    placement: Placement
+    entailment: Entailment
+    approved_factual_statement: NonEmptyStr
+
+
+class SynthesisSection(StrictModel):
+    section_type: SectionType
+    heading: NonEmptyStr
+    items: list[SynthesisItem]
+
+    @model_validator(mode="after")
+    def validate_item_compatibility(self) -> SynthesisSection:
+        if self.section_type is SectionType.SUPPORTING:
+            required_stance = Stance.SUPPORTING
+        elif self.section_type is SectionType.OPPOSING:
+            required_stance = Stance.OPPOSING
+        else:
+            return self
+
+        for item in self.items:
+            if item.stance is not required_stance:
+                raise ValueError("section items must use a compatible stance")
+        return self
+
+
+class SynthesisOutput(StrictModel):
+    run_id: UUID
+    synthesizer_prompt_version: NonEmptyStr
+    synthesizer_model_name: NonEmptyStr
+    created_at: datetime
+    title: NonEmptyStr
+    claim_definition: NonEmptyStr
+    sections: list[SynthesisSection]
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class ValidationError(StrictModel):
+    code: ValidationErrorCode
+    location: NonEmptyStr
+    message: NonEmptyStr
+
+
+class ValidationResult(StrictModel):
+    run_id: UUID
+    valid: bool
+    errors: list[ValidationError]
+    validator_config_version: NonEmptyStr
+    validated_at: datetime
+    rendered_brief_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+
+    _validated_at_is_aware = field_validator("validated_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_result(self) -> ValidationResult:
+        if self.valid and self.errors:
+            raise ValueError("valid results cannot include errors")
+        if self.valid and self.rendered_brief_hash is None:
+            raise ValueError("valid results require rendered_brief_hash")
+        if not self.valid and not self.errors:
+            raise ValueError("invalid results require at least one validation error")
+        return self
+
+
+class RunManifest(StrictModel):
+    run_id: UUID
+    status: RunStatus
+    raw_claim: NonEmptyStr
+    current_stage: Stage
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+    _updated_at_is_aware = field_validator("updated_at")(_validate_aware_datetime)
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_completion(self) -> RunManifest:
+        if self.status is RunStatus.COMPLETED and self.completed_at is None:
+            raise ValueError("completed runs require completed_at")
+        return self
+
+
+class ModelInvocationRecord(StrictModel):
+    run_id: UUID
+    invocation_id: UUID
+    stage: Stage
+    prompt_version: NonEmptyStr
+    model_name: NonEmptyStr
+    input_artifact_id: UUID
+    output_artifact_id: UUID | None = None
+    status: Literal["completed", "failed"]
+    invoked_at: datetime
+
+    _invoked_at_is_aware = field_validator("invoked_at")(_validate_aware_datetime)
