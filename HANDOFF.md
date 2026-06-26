@@ -1,5 +1,43 @@
 # Handoff
 
+## 2026-06-26 - Phase 2 Store
+
+Work completed:
+
+- Implemented the SQLite persistence layer in `store.py` with `init_db()` containing all schema definitions for 19 tables.
+- Created append-only storage for runs, planner outputs, planner queries, retrieval attempts, snapshots, provisional extractions, candidates, analyst decisions, statement review attempts, ledger records, synthesis attempts, validation runs, and model invocations.
+- All functions accept explicit `db_path` parameters; no global connections.
+- Read functions return Pydantic models; write functions accept Pydantic models.
+- Snapshots and Ledger records are INSERT-ONLY with no update or delete functions.
+- Multi-write operations use explicit transactions with rollback on failure.
+- Fixed `_validate_aware_datetime` in `models.py` to handle `None` for optional datetime fields.
+- Added `tests/test_phase2.py` with 36 tests covering all required scenarios.
+- Added `.agent/plans/phase-02-store.md` and updated `.agent/PLANS.md`.
+- Updated `STATUS.md` for Phase 2.
+
+Important constraints:
+
+- Stop at Phase 2 unless the user explicitly requests Phase 3.
+- Do not implement web retrieval, LLM calls, orchestration, rendering, SDK integrations, web frameworks, ORMs, or HTTP clients yet.
+- Continue passing Pydantic model instances between internal stages; do not pass raw dictionaries except at persistence, API, logging, or export boundaries.
+- Preserve the separate `evidence_quality` and `claim_fit` fields; do not add any composite evidence score.
+- Concurrent researcher workers must each open their own connections; this is enforced by design but not yet tested under threading.
+
+Verification:
+
+- `pytest tests/test_phase2.py`: 36 passed.
+- `pytest tests/`: 54 passed (Phase 0: 2, Phase 1: 16, Phase 2: 36).
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Open issue:
+
+- Verification used the local `.venv` created in Phase 1.
+
+Next expected phase:
+
+- Phase 3 should begin only after explicit user direction and should implement retrieval logging and web search integration.
+
 ## 2026-06-26 - Phase 1 Models
 
 Work completed:

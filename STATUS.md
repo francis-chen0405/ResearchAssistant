@@ -1,5 +1,40 @@
 # Status
 
+## 2026-06-26 - Phase 2 Store
+
+Status: Complete.
+
+Completed:
+
+- Implemented the SQLite persistence layer in `store.py` with `init_db()` containing all schema definitions.
+- Created append-only storage for runs, planner outputs, planner queries, retrieval attempts, snapshots, provisional extractions, candidates, analyst decisions, statement review attempts, ledger records, synthesis attempts, validation runs, and model invocations.
+- Enabled SQLite foreign keys on every connection via `PRAGMA foreign_keys = ON`.
+- All functions accept explicit `db_path` parameters; no global connections are used.
+- Read functions return Pydantic models; write functions accept Pydantic models.
+- Snapshots and Ledger records are INSERT-ONLY with no update or delete functions.
+- Multi-write operations use explicit transactions with rollback on failure.
+- Timestamps are stored as UTC ISO-8601 strings and reconstructed as timezone-aware datetimes.
+- `evidence_quality` and `claim_fit` remain separate columns; no composite score column.
+- Fixed `_validate_aware_datetime` in `models.py` to handle `None` for optional datetime fields.
+- Added Phase 2 tests covering database initialization, foreign-key enforcement, insert and read round trips, database close and reopen, immutable snapshot behavior, immutable Ledger behavior, transaction rollback, invalid foreign keys, typed reconstruction from stored rows, and duplicate identifier rejection.
+- Added the canonical Phase 2 plan at `.agent/plans/phase-02-store.md` and linked it from `.agent/PLANS.md`.
+
+Not completed:
+
+- No Phase 3 implementation has begun.
+- No web retrieval, LLM calls, orchestration, rendering, SDK integrations, web frameworks, ORMs, or HTTP clients were implemented.
+
+Verification:
+
+- `pytest tests/test_phase2.py`: 36 passed.
+- `pytest tests/`: 54 passed (Phase 0: 2, Phase 1: 16, Phase 2: 36).
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Notes:
+
+- Verification used the local `.venv` created in Phase 1.
+
 ## 2026-06-26 - Phase 1 Models
 
 Status: Complete.

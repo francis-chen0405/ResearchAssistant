@@ -82,7 +82,9 @@ class ValidationErrorCode(StrEnum):
     SCHEMA_ERROR = "schema_error"
 
 
-def _validate_aware_datetime(value: datetime) -> datetime:
+def _validate_aware_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("datetime values must be timezone-aware")
     return value
