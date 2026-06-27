@@ -1,5 +1,39 @@
 # Status
 
+## 2026-06-27 - Post-Phase-2 Hardening
+
+Status: Complete.
+
+Completed:
+
+- Strengthened `AGENTS.md` with explicit safety rules for destructive Git commands, phase boundaries, protected documentation content, regression tests, strict internal Pydantic artifacts, immutable release-relevant artifacts, and unchanged test expectations.
+- Confirmed internal Pydantic artifacts inherit the shared `StrictModel` base with `model_config = ConfigDict(extra="forbid")`.
+- Added representative extra-field rejection tests for Ledger, synthesis, validation, candidate quote, source snapshot, and model invocation artifacts.
+- Added a SQLite `schema_migrations` table initialized by `init_db()` with the Phase 2 initial schema record.
+- Added Phase 2 coverage proving the schema migration table and initial migration record exist after initialization.
+- Reviewed the Phase 1 and Phase 2 implementation for later-phase scope creep.
+- Updated the Phase 2 plan with a post-phase hardening note.
+
+Verification:
+
+- `pytest tests/test_phase1.py tests/test_phase2.py -q`: 81 passed, one local `.pytest_cache` permission warning remains.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Tracked issues:
+
+- Snapshot `snapshot_sha256` and `word_count` are not recomputed from `normalized_text` at model construction. This remains deferred until Phase 3 defines snapshot and quotation integrity behavior precisely.
+- The local `.pytest_cache` directory may still produce a permission warning during pytest.
+
+Scope review:
+
+- No retrieval, scraper, LLM provider, orchestration, renderer, or Phase 3 snapshot-integrity implementation was found.
+- Phase 3 has not started.
+
+Safe to continue:
+
+- Yes. The next exact task is Phase 3 snapshot and quotation integrity, only after explicit user direction.
+
 ## 2026-06-26 - Phase 2 Hardening
 
 Status: Complete.

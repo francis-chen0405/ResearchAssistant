@@ -12,6 +12,7 @@ from models import (
     ClaimDefinition,
     Entailment,
     LedgerRecord,
+    ModelInvocationRecord,
     Placement,
     PlannerOutput,
     ReviewerFailureCode,
@@ -20,9 +21,11 @@ from models import (
     SectionType,
     SegmentOffset,
     SourceSnapshot,
+    Stage,
     Stance,
     StatementReviewResult,
     SynthesisItem,
+    SynthesisOutput,
     SynthesisSection,
     ValidationError,
     ValidationErrorCode,
@@ -108,6 +111,86 @@ def ledger_kwargs() -> dict[str, object]:
     }
 
 
+def source_snapshot_kwargs() -> dict[str, object]:
+    return {
+        "run_id": RUN_ID,
+        "retrieval_attempt_id": RETRIEVAL_ATTEMPT_ID,
+        "snapshot_id": SNAPSHOT_ID,
+        "source_url": "https://example.test/source",
+        "retrieved_at": aware_now(),
+        "normalized_text": "Snapshot text.",
+        "snapshot_sha256": HASH,
+        "word_count": 2,
+        "truncated": False,
+        "created_at": aware_now(),
+    }
+
+
+def synthesis_item_kwargs() -> dict[str, object]:
+    return {
+        "connective_template_id": "supporting-evidence",
+        "ledger_claim_id": LEDGER_CLAIM_ID,
+        "reviewer_approval_id": REVIEWER_APPROVAL_ID,
+        "stance": Stance.SUPPORTING,
+        "placement": Placement.SECONDARY,
+        "entailment": Entailment.STRONG,
+        "approved_factual_statement": "The approved factual statement is exact.",
+    }
+
+
+def synthesis_section_kwargs() -> dict[str, object]:
+    return {
+        "section_type": SectionType.SUPPORTING,
+        "heading": "Supporting evidence",
+        "items": [SynthesisItem(**synthesis_item_kwargs())],
+    }
+
+
+def synthesis_output_kwargs() -> dict[str, object]:
+    return {
+        "run_id": RUN_ID,
+        "synthesizer_prompt_version": "synth-v1",
+        "synthesizer_model_name": "test-model",
+        "created_at": aware_now(),
+        "title": "Brief title",
+        "claim_definition": "Claim framing",
+        "sections": [SynthesisSection(**synthesis_section_kwargs())],
+    }
+
+
+def validation_error_kwargs() -> dict[str, object]:
+    return {
+        "code": ValidationErrorCode.SCHEMA_ERROR,
+        "location": "brief",
+        "message": "Invalid brief.",
+    }
+
+
+def validation_result_kwargs() -> dict[str, object]:
+    return {
+        "run_id": RUN_ID,
+        "valid": False,
+        "errors": [ValidationError(**validation_error_kwargs())],
+        "validator_config_version": "validator-v1",
+        "validated_at": aware_now(),
+        "rendered_brief_hash": None,
+    }
+
+
+def model_invocation_kwargs() -> dict[str, object]:
+    return {
+        "run_id": RUN_ID,
+        "invocation_id": UUID("00000000-0000-0000-0000-000000000012"),
+        "stage": Stage.CLAIM_PLANNER,
+        "prompt_version": "planner-v1",
+        "model_name": "test-model",
+        "input_artifact_id": UUID("00000000-0000-0000-0000-000000000013"),
+        "output_artifact_id": UUID("00000000-0000-0000-0000-000000000014"),
+        "status": "completed",
+        "invoked_at": aware_now(),
+    }
+
+
 def test_valid_candidate_ledger_synthesis_and_validation_models_construct() -> None:
     candidate = CandidateQuoteBlock(**candidate_kwargs())
     ledger = LedgerRecord(**ledger_kwargs())
@@ -138,6 +221,29 @@ def test_valid_candidate_ledger_synthesis_and_validation_models_construct() -> N
     assert candidate.quote_block_id == QUOTE_BLOCK_ID
     assert section.items[0].approved_factual_statement == ledger.approved_factual_statement
     assert validation.valid is True
+
+
+@pytest.mark.parametrize(
+    ("model_type", "kwargs"),
+    [
+        (LedgerRecord, ledger_kwargs()),
+        (SynthesisItem, synthesis_item_kwargs()),
+        (SynthesisSection, synthesis_section_kwargs()),
+        (SynthesisOutput, synthesis_output_kwargs()),
+        (ValidationError, validation_error_kwargs()),
+        (ValidationResult, validation_result_kwargs()),
+        (CandidateQuoteBlock, candidate_kwargs()),
+        (SourceSnapshot, source_snapshot_kwargs()),
+        (ModelInvocationRecord, model_invocation_kwargs()),
+    ],
+)
+def test_internal_artifacts_reject_extra_unknown_fields(
+    model_type: type[object], kwargs: dict[str, object]
+) -> None:
+    kwargs["unexpected_field"] = "must be rejected"
+
+    with pytest.raises(PydanticValidationError):
+        model_type(**kwargs)
 
 
 @pytest.mark.parametrize(
@@ -270,18 +376,7 @@ def test_overlapping_offsets_are_rejected() -> None:
 
 def test_naive_datetimes_are_rejected() -> None:
     with pytest.raises(PydanticValidationError):
-        SourceSnapshot(
-            run_id=RUN_ID,
-            retrieval_attempt_id=RETRIEVAL_ATTEMPT_ID,
-            snapshot_id=SNAPSHOT_ID,
-            source_url="https://example.test/source",
-            retrieved_at=naive_now(),
-            normalized_text="Snapshot text.",
-            snapshot_sha256=HASH,
-            word_count=2,
-            truncated=False,
-            created_at=aware_now(),
-        )
+        SourceSnapshot(**source_snapshot_kwargs() | {"retrieved_at": naive_now()})
 
 
 def test_empty_approved_factual_statements_are_rejected() -> None:

@@ -59,6 +59,21 @@ def init_db(db_path: str) -> None:
     try:
         conn.executescript(
             """
+            -- schema migrations -------------------------------------------
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version      INTEGER PRIMARY KEY,
+                description  TEXT NOT NULL,
+                applied_at   TEXT NOT NULL
+            );
+
+            INSERT OR IGNORE INTO schema_migrations
+                (version, description, applied_at)
+                VALUES (
+                    1,
+                    'phase-2 initial sqlite schema',
+                    '2026-06-26T00:00:00+00:00'
+                );
+
             -- runs --------------------------------------------------------
             CREATE TABLE IF NOT EXISTS runs (
                 run_id          TEXT PRIMARY KEY,

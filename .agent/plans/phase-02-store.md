@@ -42,6 +42,12 @@ Implement the SQLite persistence layer for the Debate Research Agent System usin
 - No ORM, web retrieval, LLM calls, or orchestration are introduced.
 - `STATUS.md` and `HANDOFF.md` are updated for Phase 2.
 
+## Post-Phase Hardening
+
+- `init_db()` now creates a `schema_migrations` table and records version 1 as the Phase 2 initial SQLite schema, making future schema changes explicit and auditable.
+- Representative Phase 1 artifact tests now prove unknown fields are rejected by strict internal Pydantic models, including Ledger, synthesis, validation, candidate, snapshot, and model invocation artifacts.
+- No Phase 3 snapshot integrity, retrieval, LLM, orchestration, or renderer behavior was added during this hardening pass.
+
 ## Commands To Verify The Phase
 
 ```powershell

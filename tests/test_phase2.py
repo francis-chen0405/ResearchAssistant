@@ -340,6 +340,7 @@ class TestInitDB:
             }
             conn.close()
             expected = {
+                "schema_migrations",
                 "runs",
                 "planner_outputs",
                 "claim_definitions",
@@ -361,6 +362,26 @@ class TestInitDB:
                 "model_invocations",
             }
             assert expected.issubset(tables)
+        finally:
+            os.unlink(path)
+
+    def test_schema_migration_record_created(self) -> None:
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        try:
+            init_db(path)
+            conn = sqlite3.connect(path)
+            row = conn.execute(
+                """SELECT version, description, applied_at
+                   FROM schema_migrations
+                   ORDER BY version"""
+            ).fetchone()
+            conn.close()
+            assert row == (
+                1,
+                "phase-2 initial sqlite schema",
+                "2026-06-26T00:00:00+00:00",
+            )
         finally:
             os.unlink(path)
 

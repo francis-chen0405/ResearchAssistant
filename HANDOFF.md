@@ -1,5 +1,59 @@
 # Handoff
 
+## 2026-06-27 - Post-Phase-2 Hardening
+
+Current branch:
+
+- `master`
+
+Files changed:
+
+- `AGENTS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `.agent/plans/phase-02-store.md`
+- `store.py`
+- `tests/test_phase1.py`
+- `tests/test_phase2.py`
+
+Work completed:
+
+- Performed a narrow post-Phase-2 hardening pass without beginning Phase 3.
+- Strengthened `AGENTS.md` with explicit rules against destructive Git commands without user instruction, undocumented deletion of protected docs/plans, weakening tests, and beginning the next phase.
+- Documented the strict internal Pydantic artifact default: `model_config = ConfigDict(extra="forbid")` unless a specific exception is documented.
+- Confirmed all internal artifact models in `models.py` already inherit `StrictModel`; no model redesign was needed.
+- Added representative regression tests proving unknown extra fields are rejected for `LedgerRecord`, `SynthesisItem`, `SynthesisSection`, `SynthesisOutput`, `ValidationError`, `ValidationResult`, `CandidateQuoteBlock`, `SourceSnapshot`, and `ModelInvocationRecord`.
+- Added a SQLite `schema_migrations` table in `init_db()` and an idempotent version 1 record for the Phase 2 initial schema.
+- Added Phase 2 tests proving the schema migration table and initial record exist after database initialization.
+- Reviewed Phase 1 and Phase 2 implementation for later-phase scope creep.
+- Updated `STATUS.md` and `.agent/plans/phase-02-store.md` with post-phase hardening notes.
+
+Commands run:
+
+- `git branch --show-current`: `master`
+- `git status --short`: reported the existing `.pytest_cache` permission warning.
+- `rg -n "requests|httpx|aiohttp|beautifulsoup|bs4|selenium|playwright|openai|anthropic|LLM|scrape|retriev|render|orchestrat|integrity|sha256|hash|Snapshot Integrity|Final Renderer|async def|sqlite3\\.connect\\(|UPDATE |DELETE |reset --hard|clean -fd|force-push|force push" .`: reviewed for scope creep and destructive-command references.
+- `pytest tests/test_phase1.py tests/test_phase2.py -q`: first attempt failed collection because the sandbox import path did not include the workspace root.
+- `PYTHONPATH=C:\Users\fchen\ResearchAssistant pytest tests/test_phase1.py tests/test_phase2.py -q`: 81 passed, one `.pytest_cache` permission warning.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Known limitations:
+
+- Snapshot `snapshot_sha256` and `word_count` still are not recomputed from `normalized_text` at model construction. This remains deferred to Phase 3, where snapshot and quotation integrity should be defined precisely.
+- The local `.pytest_cache` directory still causes a permission warning during pytest and git status scans.
+- No threaded SQLite concurrency test exists yet; Phase 2 still enforces no global connections by design through per-call connections.
+
+Scope review:
+
+- No retrieval implementation, scraper, LLM provider, orchestration, renderer behavior, or Phase 3 snapshot-integrity implementation was found.
+- No later-phase code was removed because no later-phase implementation was present.
+- Phase 3 was not started.
+
+Next exact task:
+
+- Phase 3 snapshot and quotation integrity.
+
 ## 2026-06-26 - Phase 2 Hardening
 
 Work completed:
