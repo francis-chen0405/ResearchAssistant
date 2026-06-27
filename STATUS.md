@@ -1,5 +1,41 @@
 # Status
 
+## 2026-06-27 - Phase 3 Snapshot and Quotation Integrity
+
+Status: Complete.
+
+Completed:
+
+- Added deterministic helpers for SHA-256 hashing, word counting, and UUID5 quote-block ID derivation.
+- Added shared researcher post-extraction filtering in `agents/researcher.py`.
+- Added strict typed Phase 3 helper artifacts for parsed quote blocks, quote metrics, and filter results.
+- Implemented snapshot integrity checks that recompute `snapshot_sha256` and `word_count` from `normalized_text`.
+- Implemented deterministic parsing and validation for bracketed quote blocks, segment membership, segment offsets, immediate bracket context, start/end/truncated boundary markers, quote length thresholds, statistical markers, and claim-keyword relevance.
+- Ensured rejected provisional candidates return typed rejection results with no `CandidateQuoteBlock` and no `quote_block_id`.
+- Added a deterministic candidate-vs-snapshot re-check function for future Analyst code without implementing Analyst scoring or Ledger behavior.
+- Added adversarial Phase 3 tests for malformed quote blocks, missing or out-of-order segments, wrong bracket context, hash and word-count mismatches, boundary marker misuse, quote length thresholds, statistical marker rules, missing claim keywords, repeated segment text, ellipsis word counting, deterministic IDs, and tampered offsets.
+- During final self-review, tightened statistical marker detection so incidental substrings such as `rate` inside `corporate` cannot unlock the 50-word statistical threshold, and added a metadata rejection guard before candidate ID assignment.
+- Added the canonical Phase 3 plan at `.agent/plans/phase-03-snapshot-integrity.md` and linked it from `.agent/PLANS.md`.
+
+Verification:
+
+- `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q` from the activated virtual environment: 104 passed, one local `.pytest_cache` permission warning remains.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: passed.
+
+Notes:
+
+- PowerShell blocked activation of `.venv\Scripts\Activate.ps1`, and `python` was not available on PATH, so verification used the virtual environment's Python executable directly without setting `PYTHONPATH`.
+- Phase 1 models, Phase 2 store code, and the SQLite schema were not changed.
+
+Scope review:
+
+- No retrieval, scraping, LLM calls, SDK integrations, Analyst scoring, Reviewer logic, Ledger admission, synthesis, rendering, final validation, orchestration, web frameworks, ORMs, HTTP clients, or Phase 4 work was implemented.
+
+Safe to continue:
+
+- Yes, after explicit user direction for Phase 4.
+
 ## 2026-06-27 - Post-Phase-2 Hardening
 
 Status: Complete.

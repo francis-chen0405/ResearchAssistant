@@ -1,5 +1,58 @@
 # Handoff
 
+## 2026-06-27 - Phase 3 Snapshot and Quotation Integrity
+
+Current branch:
+
+- `master`
+
+Files changed:
+
+- `utils.py`
+- `agents/researcher.py`
+- `tests/test_phase3.py`
+- `.agent/PLANS.md`
+- `.agent/plans/phase-03-snapshot-integrity.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Work completed:
+
+- Implemented deterministic SHA-256, word-count, and quote-block UUID5 helpers.
+- Added `agents/researcher.py` as the shared deterministic post-extraction filter surface for future supporting and opposing researchers.
+- Added strict typed helper artifacts: `ParsedQuoteBlock`, `QuoteMetrics`, and `PostExtractionFilterResult`.
+- Implemented `build_source_snapshot()` and `validate_snapshot_integrity()` for recomputing snapshot hash and word count from `normalized_text`.
+- Implemented bracketed quote parsing, sequential exact segment matching, offset recording, immediate bracket-context validation, boundary-marker validation, statistical marker detection, claim-keyword matching, and architecture-defined quote length thresholds.
+- Implemented `filter_provisional_candidate()` so invalid provisional candidates return a typed rejection result and never receive a `CandidateQuoteBlock` or `quote_block_id`.
+- Implemented `verify_candidate_against_snapshot()` as a deterministic re-check function future Analyst code can call. It does not score evidence, create Analyst decisions, call a Reviewer, or admit anything to the Ledger.
+- Added adversarial Phase 3 coverage for invalid quote blocks, segment/order failures, context failures, snapshot integrity failures, boundary-marker misuse, threshold edges, statistical marker rules, missing keywords, repeated text disambiguation, ellipsis word counts, deterministic IDs, and tampered offsets.
+- During final self-review, fixed statistical marker substring matching so incidental words such as `corporate` cannot satisfy the `rate` marker, and added a pre-ID metadata validation guard for filter version and validation timestamp.
+- Documented Phase 3 in `.agent/plans/phase-03-snapshot-integrity.md` and updated the phase-plan index.
+
+Commands run:
+
+- `. .\.venv\Scripts\Activate.ps1; python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q`: failed because PowerShell script execution is disabled and `python` is not on PATH.
+- `cmd /c ".venv\Scripts\activate.bat && python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q"`: 104 passed, one local `.pytest_cache` permission warning.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format agents\researcher.py`: reformatted one file after the initial format check requested changes.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: passed.
+
+Known limitations:
+
+- Sentence-boundary detection is deterministic and intentionally simple for Phase 3. It handles the MVP test cases but is not a full NLP sentence segmenter.
+- The local `.pytest_cache` directory still causes a permission warning during pytest.
+- Verification used the virtual environment's Python executable directly because activation was blocked and `python` is not on PATH. `PYTHONPATH` was not set.
+
+Scope review:
+
+- Phase 1 models, Phase 2 store code, and the SQLite schema were not changed.
+- No retrieval, scraping, LLM calls, SDK integrations, Analyst scoring, Reviewer logic, Ledger admission, synthesis, rendering, final validation, orchestration, web frameworks, ORMs, HTTP clients, or Phase 4 work was implemented.
+- Tests assert that rejected post-extraction filter results have `candidate is None`, so invalid cases do not receive a candidate ID.
+
+Next exact task:
+
+- Phase 4 only after explicit user direction.
+
 ## 2026-06-27 - Post-Phase-2 Hardening
 
 Current branch:
