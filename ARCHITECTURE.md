@@ -54,6 +54,10 @@ Claim Planner (6 queries: 3 Support, 3 Oppose)
 
 Retrieval, semantic approval, and deterministic release are strictly separated. Researchers identify candidates. The Analyst scores evidence on two independent dimensions and drafts exact canonical statements. A separate Statement Reviewer audits those statements before Ledger entry. The final stage permits only approved statements as factual content. The validator performs no semantic reasoning; all semantic judgment occurs in the Analyst and Reviewer stages.
 
+## Phase Sequencing
+
+`ARCHITECTURE.md` defines system invariants, evidence rules, and release rules. Phase sequencing lives in `.agent/PLANS.md` and individual `.agent/plans/phase-XX-*.md` files. If a phase prompt conflicts with architecture, architecture wins unless the user explicitly approves an architecture change.
+
 ## Run Provenance
 
 Every persisted artifact and every Pydantic handoff that can affect release must carry provenance. At minimum, release-relevant records include `run_id`, UTC ISO-8601 timestamps for creation or validation, and the stage-specific fields listed below. Retrieval records include `retrieval_attempt_id`, `query_id`, `query_round`, search rank, URL, status, and timestamp. LLM-produced records include `prompt_version`, `model_name`, and timestamp. Deterministic validators include the validator or filter version and validation timestamp.

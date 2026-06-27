@@ -99,7 +99,14 @@ API client to be added in a later phase — skip any LLM call stubs for now.
   Never hardcode keys or paths.
   Required variables are documented in .env.example only.
 
-## 7. Done Criteria Per Phase
+## 7. Phase-Gated Development
+
+  Development is phase-gated.
+  Before editing, Codex must check `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the current phase plan.
+  Codex must not begin the next phase until the current phase is tested, documented, and committed.
+  Codex must run pytest and Ruff before marking a phase complete.
+
+## 8. Done Criteria Per Phase
 
   A phase is complete when all tests for that phase pass with no errors.
   Do not move to the next phase until the current phase tests are green.

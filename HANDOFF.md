@@ -1,5 +1,50 @@
 # Handoff
 
+## 2026-06-27 - Documentation Roadmap Alignment
+
+Current branch:
+
+- `master`
+- Attempted to create `docs/phase-roadmap`, but Git could not create the branch ref in this session.
+
+Files changed:
+
+- `.agent/PLANS.md`
+- `ARCHITECTURE.md`
+- `CONVENTIONS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Work completed:
+
+- Added the full Phase 0-10 roadmap to `.agent/PLANS.md`.
+- Added a short architecture note clarifying that architecture defines invariants while phase sequencing lives in `.agent/PLANS.md` and `.agent/plans/`.
+- Added a short conventions note clarifying phase-gated development and required pre-edit checks.
+- Confirmed Phase 3 is complete and Phase 4 has not started.
+
+Commands run:
+
+- `git branch --show-current`: `master`.
+- `git status --short`: clean except a permission warning when Git inspected `.pytest_cache/`.
+- `git status --porcelain=v1 -uno`: clean.
+- `git log --oneline -10`: latest commit was `298b711 phase-03`.
+- `git branch --list docs/phase-roadmap`: no local branch found.
+- `git switch -c docs/phase-roadmap`: failed because Git could not create `.git/refs/heads/docs/phase-roadmap`.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: failed because it would reformat existing code files outside this documentation-only pass: `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`.
+
+Scope review:
+
+- Documentation-only pass.
+- No code files changed.
+- No dependencies added.
+- No Analyst rules, Reviewer rules, Ledger admission, rendering, orchestration, retrieval, scraping, LLM provider work, or evaluation work was started.
+- `.agent/PLANS.md` now contains the Phase 0-10 roadmap.
+
+Next exact task:
+
+- Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+
 ## 2026-06-27 - Phase 3 Snapshot and Quotation Integrity
 
 Current branch:

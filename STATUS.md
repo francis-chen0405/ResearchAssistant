@@ -1,5 +1,28 @@
 # Status
 
+## 2026-06-27 - Documentation Roadmap Alignment
+
+Status: Complete.
+
+Completed:
+
+- Updated `.agent/PLANS.md` with the full Phase 0-10 roadmap.
+- Added a short phase-sequencing cross-reference note to `ARCHITECTURE.md`.
+- Added a short phase-gated development note to `CONVENTIONS.md`.
+- Confirmed Phase 3 is complete and Phase 4 has not started.
+
+Verification:
+
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: failed because it would reformat existing code files outside this documentation-only pass: `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`.
+
+Notes:
+
+- This was a documentation-only roadmap alignment pass.
+- No code files were changed.
+- No Phase 4 implementation was started.
+- The next exact task remains Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+
 ## 2026-06-27 - Phase 3 Snapshot and Quotation Integrity
 
 Status: Complete.
