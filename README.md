@@ -2,9 +2,9 @@
 
 This repository contains the design and scaffold for a multi-stage debate research system.
 
-Current phase: Phase 0 foundation.
+Current phase: Phase 2 store hardening.
 
-Phase 0 prepares the repository for reliable AI-assisted development. It defines architecture, conventions, assistant rules, phase planning, and project tooling. It does not implement working agents, database behavior, web retrieval, scraping, or LLM calls.
+Phase 2 defines the typed Pydantic contracts and SQLite persistence layer. It does not implement working agents, web retrieval, scraping, orchestration, rendering, SDK integrations, web frameworks, ORMs, HTTP clients, or LLM calls.
 
 Start here:
 

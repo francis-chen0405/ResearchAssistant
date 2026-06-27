@@ -1,5 +1,44 @@
 # Handoff
 
+## 2026-06-26 - Phase 2 Hardening
+
+Work completed:
+
+- Performed a narrow Phase 2 hardening and cleanup pass without beginning Phase 3.
+- Updated `ARCHITECTURE.md` and `CONVENTIONS.md` for the two-axis eligibility rule, derived `ledger_score`, and Claim Fit 2 clarification.
+- Implemented deterministic scoring helpers in `models.py`.
+- Added `ledger_score` to `ScoreDecision` and `LedgerRecord`.
+- Enforced score eligibility, derived Ledger score, and placement consistency in `ScoreDecision` and `LedgerRecord`.
+- Strengthened `PlannerOutput`, `StatementReviewResult`, and `ValidationResult` validators.
+- Added SQLite foreign keys for clear architecture-defined artifact relationships:
+  planner queries to retrieval attempts, retrieval attempts to snapshots, snapshots/retrieval attempts to candidates, candidates to analyst decisions and statement drafts/reviews, approved reviews to Ledger records, and Ledger records to synthesis items.
+- Added `read_statement_draft()` to the store API.
+- Updated tests for all changed validators and store constraints.
+- Updated README phase text, Phase 2 plan notes, and the `HANDbOFF.md` typo in the Phase 0 plan.
+
+Verification:
+
+- `pytest`: 73 passed; one local `.pytest_cache` permission warning remains.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Tracked issues:
+
+- Snapshot `snapshot_sha256` and `word_count` validation against `normalized_text` is still deferred. Do this when snapshot normalization and hashing behavior are implemented precisely; do not guess the normalization rules in the model layer.
+- The local `.pytest_cache` directory still causes a permission warning.
+
+Important constraints:
+
+- Stop at Phase 2 unless the user explicitly requests Phase 3.
+- Do not implement web retrieval, scraping, LLM calls, orchestration, renderer logic, SDK integrations, web frameworks, ORMs, HTTP clients, or real agent behavior yet.
+- Agent modules remain placeholders.
+- Internal handoffs must continue to use Pydantic model instances, not raw dictionaries.
+- Claim Fit 2 records must not enter the final Ledger.
+
+Safe to continue:
+
+- Yes, after explicit user direction for Phase 3.
+
 ## 2026-06-26 - Phase 2 Store
 
 Work completed:

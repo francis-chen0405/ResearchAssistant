@@ -58,6 +58,8 @@ Never pass raw dicts between agents. Always use the typed Pydantic models from m
 
 IDs are assigned only after the deterministic validation gate for that artifact passes. Failed candidates, rejected statements, and invalid rendered briefs receive no release-relevant IDs.
 
+Evidence scoring remains two-axis: `evidence_quality` and `claim_fit` are recorded and validated separately. The derived `ledger_score` is allowed only after both axis thresholds pass and must never compensate for a failing axis.
+
 ## 3. Tech Stack
 
   Python 3.11+
@@ -85,7 +87,7 @@ API client to be added in a later phase — skip any LLM call stubs for now.
   - snapshots and ledger tables are INSERT-ONLY
   - No UPDATE or DELETE operations on those two tables, ever
   - candidates table can be cleared between runs
-  - No composite score column anywhere — evidence_quality and claim_fit are always separate
+  - `evidence_quality` and `claim_fit` are always stored separately; any `ledger_score` is derived from those fields after eligibility passes
   - All schema definitions live in store.py in a single init_db() function
   - Concurrent supporting/opposing researchers must not share SQLite connections, cursors, or transactions
   - Prefer coordinator-owned serialized writes after both sync researchers finish; if a worker must touch SQLite, it opens and closes its own connection

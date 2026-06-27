@@ -12,6 +12,12 @@ ApprovedScore = Annotated[int, Field(ge=3, le=5)]
 PositiveInt = Annotated[int, Field(ge=1)]
 NonNegativeInt = Annotated[int, Field(ge=0)]
 NonEmptyStr = Annotated[str, Field(min_length=1)]
+REQUIRED_QUERY_EXCLUSIONS = (
+    "-site:reddit.com",
+    "-site:quora.com",
+    "-site:youtube.com",
+    "-site:tiktok.com",
+)
 
 
 class StrictModel(BaseModel):
@@ -99,6 +105,30 @@ def _validate_offsets(offsets: list[SegmentOffset]) -> list[SegmentOffset]:
     return offsets
 
 
+def _is_ledger_eligible(evidence_quality: int, claim_fit: int) -> bool:
+    return evidence_quality >= 2 and claim_fit >= 3 and evidence_quality + claim_fit >= 5
+
+
+def _derive_ledger_score(evidence_quality: int, claim_fit: int) -> int:
+    total_score = evidence_quality + claim_fit
+    if total_score <= 6:
+        return 3
+    if total_score <= 8:
+        return 4
+    return 5
+
+
+def _expected_placement(evidence_quality: int, claim_fit: int) -> Placement:
+    ledger_score = _derive_ledger_score(evidence_quality, claim_fit)
+    if claim_fit == 3:
+        return Placement.QUALIFIED_ONLY
+    if ledger_score == 5:
+        return Placement.PRIMARY
+    if ledger_score == 4:
+        return Placement.SECONDARY
+    return Placement.SUPPORTING
+
+
 class SegmentOffset(StrictModel):
     start_char: NonNegativeInt
     end_char: PositiveInt
@@ -160,16 +190,35 @@ class PlannerOutput(StrictModel):
 
     @model_validator(mode="after")
     def validate_queries(self) -> PlannerOutput:
-        supporting_rounds = {
-            query.query_round for query in self.search_queries if query.stance is Stance.SUPPORTING
+        if self.claim_definition.run_id != self.run_id:
+            raise ValueError("claim definition run_id must match planner run_id")
+        for ambiguity in self.ambiguities:
+            if ambiguity.run_id != self.run_id:
+                raise ValueError("ambiguity run_id must match planner run_id")
+
+        expected_rounds = {
+            (Stance.SUPPORTING, 1),
+            (Stance.SUPPORTING, 2),
+            (Stance.SUPPORTING, 3),
+            (Stance.OPPOSING, 1),
+            (Stance.OPPOSING, 2),
+            (Stance.OPPOSING, 3),
         }
-        opposing_rounds = {
-            query.query_round for query in self.search_queries if query.stance is Stance.OPPOSING
-        }
-        if supporting_rounds != {1, 2, 3} or opposing_rounds != {1, 2, 3}:
+        actual_rounds = {(query.stance, query.query_round) for query in self.search_queries}
+        if len(self.search_queries) != 6 or actual_rounds != expected_rounds:
             raise ValueError(
-                "planner output must include three supporting and three opposing queries"
+                "planner output must include exactly three supporting and three opposing queries"
             )
+        for query in self.search_queries:
+            if query.run_id != self.run_id:
+                raise ValueError("search query run_id must match planner run_id")
+            missing = [
+                exclusion
+                for exclusion in REQUIRED_QUERY_EXCLUSIONS
+                if exclusion not in query.exclusion_parameters
+            ]
+            if missing:
+                raise ValueError("search query is missing required exclusion parameters")
         return self
 
 
@@ -282,6 +331,7 @@ class ScoreDecision(StrictModel):
     quote_block_id: UUID
     evidence_quality: Score
     claim_fit: Score
+    ledger_score: ApprovedScore | None = None
     placement: Placement | None = None
     approved: bool
     rationale: NonEmptyStr
@@ -293,18 +343,23 @@ class ScoreDecision(StrictModel):
 
     @model_validator(mode="after")
     def validate_approval_and_placement(self) -> ScoreDecision:
-        rejected = (
-            self.evidence_quality == 1
-            or self.claim_fit == 1
-            or self.evidence_quality == 2
-            or (self.claim_fit == 2 and self.evidence_quality < 4)
-        )
-        if rejected and self.approved:
-            raise ValueError("score combinations below approval thresholds cannot be approved")
-        if self.approved and self.placement is None:
-            raise ValueError("approved score decisions require placement")
-        if not self.approved and self.placement is not None:
-            raise ValueError("rejected score decisions must not assign placement")
+        eligible = _is_ledger_eligible(self.evidence_quality, self.claim_fit)
+        if not eligible:
+            if self.approved:
+                raise ValueError("ineligible score combinations cannot be approved")
+            if self.ledger_score is not None or self.placement is not None:
+                raise ValueError("ineligible score decisions must not assign Ledger fields")
+            return self
+
+        if self.approved:
+            expected_score = _derive_ledger_score(self.evidence_quality, self.claim_fit)
+            expected_placement = _expected_placement(self.evidence_quality, self.claim_fit)
+            if self.ledger_score != expected_score:
+                raise ValueError("approved score decisions require the derived Ledger score")
+            if self.placement is not expected_placement:
+                raise ValueError("approved score decisions require the derived placement")
+        elif self.ledger_score is not None or self.placement is not None:
+            raise ValueError("rejected score decisions must not assign Ledger fields")
         return self
 
 
@@ -346,8 +401,13 @@ class StatementReviewResult(StrictModel):
                 raise ValueError("approved review results require an approved factual statement")
             if self.failure_code is not None:
                 raise ValueError("approved review results cannot include a failure code")
-        elif self.failure_code is None:
-            raise ValueError("rejected review results require a failure code")
+        else:
+            if self.failure_code is None:
+                raise ValueError("rejected review results require a failure code")
+            if self.reviewer_approval_id is not None:
+                raise ValueError("rejected review results cannot include reviewer_approval_id")
+            if self.approved_factual_statement is not None:
+                raise ValueError("rejected review results cannot include an approved statement")
         return self
 
 
@@ -358,8 +418,9 @@ class LedgerRecord(StrictModel):
     stance: Stance
     approved_factual_statement: NonEmptyStr
     approved_claim_text: NonEmptyStr
-    evidence_quality: ApprovedScore
-    claim_fit: ApprovedScore
+    evidence_quality: Score
+    claim_fit: Score
+    ledger_score: ApprovedScore
     placement: Placement
     entailment: Entailment
     source_url: NonEmptyStr
@@ -382,6 +443,16 @@ class LedgerRecord(StrictModel):
     )
     _reviewed_at_is_aware = field_validator("reviewed_at")(_validate_aware_datetime)
     _ledger_validated_at_is_aware = field_validator("ledger_validated_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_score_contract(self) -> LedgerRecord:
+        if not _is_ledger_eligible(self.evidence_quality, self.claim_fit):
+            raise ValueError("Ledger records require eligible two-axis scores")
+        if self.ledger_score != _derive_ledger_score(self.evidence_quality, self.claim_fit):
+            raise ValueError("Ledger records require the derived Ledger score")
+        if self.placement is not _expected_placement(self.evidence_quality, self.claim_fit):
+            raise ValueError("Ledger records require the derived placement")
+        return self
 
 
 class SynthesisItem(StrictModel):
@@ -450,6 +521,8 @@ class ValidationResult(StrictModel):
             raise ValueError("valid results require rendered_brief_hash")
         if not self.valid and not self.errors:
             raise ValueError("invalid results require at least one validation error")
+        if not self.valid and self.rendered_brief_hash is not None:
+            raise ValueError("invalid results cannot include rendered_brief_hash")
         return self
 
 

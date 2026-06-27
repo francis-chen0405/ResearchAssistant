@@ -9,7 +9,7 @@ import os
 import sqlite3
 import tempfile
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -66,6 +66,7 @@ from store import (
     read_retrieval_attempt,
     read_run,
     read_snapshot,
+    read_statement_draft,
     read_statement_review,
     read_synthesis,
     read_validation,
@@ -88,7 +89,7 @@ def db_path() -> str:
     os.unlink(path)
 
 
-def _make_run(run_id=None) -> RunManifest:
+def _make_run(run_id: UUID | None = None) -> RunManifest:
     rid = run_id or uuid4()
     return RunManifest(
         run_id=rid,
@@ -100,7 +101,8 @@ def _make_run(run_id=None) -> RunManifest:
     )
 
 
-def _make_planner(run_id) -> PlannerOutput:
+def _make_planner(run_id: UUID) -> PlannerOutput:
+    exclusions = "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com"
     return PlannerOutput(
         run_id=run_id,
         claim_definition=ClaimDefinition(
@@ -131,7 +133,7 @@ def _make_planner(run_id) -> PlannerOutput:
                 query_round=r,
                 strategy=f"strategy_s{r}",
                 query_text=f"supporting query {r}",
-                exclusion_parameters="-site:reddit.com",
+                exclusion_parameters=exclusions,
                 created_at=_NOW,
             )
             for r in range(1, 4)
@@ -144,7 +146,7 @@ def _make_planner(run_id) -> PlannerOutput:
                 query_round=r,
                 strategy=f"strategy_o{r}",
                 query_text=f"opposing query {r}",
-                exclusion_parameters="-site:reddit.com",
+                exclusion_parameters=exclusions,
                 created_at=_NOW,
             )
             for r in range(1, 4)
@@ -155,11 +157,11 @@ def _make_planner(run_id) -> PlannerOutput:
     )
 
 
-def _make_retrieval(run_id) -> RetrievalRecord:
+def _make_retrieval(run_id: UUID, query_id: UUID) -> RetrievalRecord:
     return RetrievalRecord(
         run_id=run_id,
         retrieval_attempt_id=uuid4(),
-        query_id=uuid4(),
+        query_id=query_id,
         query_round=1,
         query_text="test query",
         search_rank=1,
@@ -170,7 +172,7 @@ def _make_retrieval(run_id) -> RetrievalRecord:
     )
 
 
-def _make_snapshot(run_id, retrieval_attempt_id) -> SourceSnapshot:
+def _make_snapshot(run_id: UUID, retrieval_attempt_id: UUID) -> SourceSnapshot:
     return SourceSnapshot(
         run_id=run_id,
         retrieval_attempt_id=retrieval_attempt_id,
@@ -185,14 +187,19 @@ def _make_snapshot(run_id, retrieval_attempt_id) -> SourceSnapshot:
     )
 
 
-def _make_candidate(run_id, retrieval_attempt_id, snapshot_id) -> CandidateQuoteBlock:
+def _make_candidate(
+    run_id: UUID,
+    retrieval_attempt_id: UUID,
+    query_id: UUID,
+    snapshot_id: UUID,
+) -> CandidateQuoteBlock:
     return CandidateQuoteBlock(
         run_id=run_id,
         stance=Stance.SUPPORTING,
         quote_block_id=uuid4(),
         source_url="https://example.com/source",
         retrieval_attempt_id=retrieval_attempt_id,
-        query_id=uuid4(),
+        query_id=query_id,
         query_round=1,
         search_rank=1,
         retrieved_at=_NOW,
@@ -213,21 +220,28 @@ def _make_candidate(run_id, retrieval_attempt_id, snapshot_id) -> CandidateQuote
     )
 
 
-def _make_ledger(run_id) -> LedgerRecord:
+def _make_ledger(
+    run_id: UUID,
+    quote_block_id: UUID,
+    retrieval_attempt_id: UUID,
+    snapshot_id: UUID,
+    reviewer_approval_id: UUID,
+) -> LedgerRecord:
     return LedgerRecord(
         run_id=run_id,
         ledger_claim_id=uuid4(),
-        quote_block_id=uuid4(),
+        quote_block_id=quote_block_id,
         stance=Stance.SUPPORTING,
         approved_factual_statement="The approved factual statement.",
         approved_claim_text='Preceding. "Segment 1" Following.',
         evidence_quality=4,
         claim_fit=4,
-        placement=Placement.PRIMARY,
+        ledger_score=4,
+        placement=Placement.SECONDARY,
         entailment=Entailment.STRONG,
         source_url="https://example.com/source",
-        retrieval_attempt_id=uuid4(),
-        snapshot_id=uuid4(),
+        retrieval_attempt_id=retrieval_attempt_id,
+        snapshot_id=snapshot_id,
         snapshot_sha256=_SHA,
         segment_offsets=[SegmentOffset(start_char=0, end_char=10)],
         analyst_prompt_version="v1",
@@ -236,9 +250,74 @@ def _make_ledger(run_id) -> LedgerRecord:
         reviewer_prompt_version="v1",
         reviewer_model_name="test-model",
         reviewed_at=_NOW,
-        reviewer_approval_id=uuid4(),
+        reviewer_approval_id=reviewer_approval_id,
         ledger_validated_at=_NOW,
     )
+
+
+def _insert_run_and_planner(db_path: str) -> tuple[RunManifest, PlannerOutput, SearchQuery]:
+    run = _make_run()
+    insert_run(db_path, run)
+    planner = _make_planner(run.run_id)
+    insert_planner_output(db_path, planner)
+    query = next(q for q in planner.search_queries if q.stance is Stance.SUPPORTING)
+    return run, planner, query
+
+
+def _insert_candidate_chain(
+    db_path: str,
+) -> tuple[
+    RunManifest, PlannerOutput, SearchQuery, RetrievalRecord, SourceSnapshot, CandidateQuoteBlock
+]:
+    run, planner, query = _insert_run_and_planner(db_path)
+    ret = _make_retrieval(run.run_id, query.query_id)
+    insert_retrieval_attempt(db_path, ret)
+    snap = _make_snapshot(run.run_id, ret.retrieval_attempt_id)
+    insert_snapshot(db_path, snap)
+    cand = _make_candidate(run.run_id, ret.retrieval_attempt_id, query.query_id, snap.snapshot_id)
+    insert_candidate(db_path, cand)
+    return run, planner, query, ret, snap, cand
+
+
+def _insert_review_chain(
+    db_path: str,
+) -> tuple[
+    RunManifest,
+    PlannerOutput,
+    SearchQuery,
+    RetrievalRecord,
+    SourceSnapshot,
+    CandidateQuoteBlock,
+    StatementDraft,
+    StatementReviewResult,
+]:
+    run, planner, query, ret, snap, cand = _insert_candidate_chain(db_path)
+    draft = StatementDraft(
+        run_id=run.run_id,
+        statement_draft_id=uuid4(),
+        quote_block_id=cand.quote_block_id,
+        stance=Stance.SUPPORTING,
+        draft_statement="Draft text.",
+        claim_fit=4,
+        analyst_prompt_version="v1",
+        analyst_model_name="model",
+        drafted_at=_NOW,
+    )
+    insert_statement_draft(db_path, draft)
+    review = StatementReviewResult(
+        run_id=run.run_id,
+        statement_draft_id=draft.statement_draft_id,
+        quote_block_id=cand.quote_block_id,
+        approved=True,
+        reviewer_approval_id=uuid4(),
+        approved_factual_statement="Approved text.",
+        rationale="Passes all checks",
+        reviewer_prompt_version="v1",
+        reviewer_model_name="model",
+        reviewed_at=_NOW,
+    )
+    insert_statement_review(db_path, review)
+    return run, planner, query, ret, snap, cand, draft, review
 
 
 # ---------------------------------------------------------------------------
@@ -340,17 +419,15 @@ class TestRoundTrips:
         assert len(loaded.search_queries) == 6
 
     def test_retrieval_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        rec = _make_retrieval(run.run_id)
+        run, _, query = _insert_run_and_planner(db_path)
+        rec = _make_retrieval(run.run_id, query.query_id)
         insert_retrieval_attempt(db_path, rec)
         loaded = read_retrieval_attempt(db_path, rec.retrieval_attempt_id)
         assert loaded == rec
 
     def test_snapshot_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ret = _make_retrieval(run.run_id)
+        run, _, query = _insert_run_and_planner(db_path)
+        ret = _make_retrieval(run.run_id, query.query_id)
         insert_retrieval_attempt(db_path, ret)
         snap = _make_snapshot(run.run_id, ret.retrieval_attempt_id)
         insert_snapshot(db_path, snap)
@@ -358,17 +435,16 @@ class TestRoundTrips:
         assert loaded == snap
 
     def test_provisional_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
+        run, _, query, ret, snap, _ = _insert_candidate_chain(db_path)
         prov = ProvisionalCandidate(
             run_id=run.run_id,
             stance=Stance.SUPPORTING,
             source_url="https://example.com",
-            retrieval_attempt_id=uuid4(),
-            query_id=uuid4(),
+            retrieval_attempt_id=ret.retrieval_attempt_id,
+            query_id=query.query_id,
             query_round=1,
             search_rank=1,
-            snapshot_id=uuid4(),
+            snapshot_id=snap.snapshot_id,
             snapshot_sha256=_SHA,
             extracted_quote_block="Some quote",
             extraction_prompt_version="v1",
@@ -382,26 +458,19 @@ class TestRoundTrips:
         assert loaded[0].extracted_quote_block == "Some quote"
 
     def test_candidate_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ret = _make_retrieval(run.run_id)
-        insert_retrieval_attempt(db_path, ret)
-        snap = _make_snapshot(run.run_id, ret.retrieval_attempt_id)
-        insert_snapshot(db_path, snap)
-        cand = _make_candidate(run.run_id, ret.retrieval_attempt_id, snap.snapshot_id)
-        insert_candidate(db_path, cand)
+        _, _, _, _, _, cand = _insert_candidate_chain(db_path)
         loaded = read_candidate(db_path, cand.quote_block_id)
         assert loaded == cand
 
     def test_analyst_decision_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
+        run, _, _, _, _, cand = _insert_candidate_chain(db_path)
         decision = ScoreDecision(
             run_id=run.run_id,
-            quote_block_id=uuid4(),
+            quote_block_id=cand.quote_block_id,
             evidence_quality=4,
             claim_fit=4,
-            placement=Placement.PRIMARY,
+            ledger_score=4,
+            placement=Placement.SECONDARY,
             approved=True,
             rationale="Strong evidence",
             analyst_prompt_version="v1",
@@ -413,49 +482,37 @@ class TestRoundTrips:
         assert loaded == decision
 
     def test_statement_review_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        draft = StatementDraft(
-            run_id=run.run_id,
-            statement_draft_id=uuid4(),
-            quote_block_id=uuid4(),
-            stance=Stance.SUPPORTING,
-            draft_statement="Draft text.",
-            claim_fit=4,
-            analyst_prompt_version="v1",
-            analyst_model_name="model",
-            drafted_at=_NOW,
-        )
-        insert_statement_draft(db_path, draft)
-        review = StatementReviewResult(
-            run_id=run.run_id,
-            statement_draft_id=draft.statement_draft_id,
-            quote_block_id=draft.quote_block_id,
-            approved=True,
-            reviewer_approval_id=uuid4(),
-            approved_factual_statement="Approved text.",
-            rationale="Passes all checks",
-            reviewer_prompt_version="v1",
-            reviewer_model_name="model",
-            reviewed_at=_NOW,
-        )
-        insert_statement_review(db_path, review)
+        run, *_, draft, review = _insert_review_chain(db_path)
+        loaded_draft = read_statement_draft(db_path, draft.statement_draft_id)
         loaded = read_statement_review(db_path, run.run_id, draft.statement_draft_id)
+        assert loaded_draft == draft
         assert loaded == review
 
     def test_ledger_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ledger = _make_ledger(run.run_id)
+        run, _, _, ret, snap, cand, _, review = _insert_review_chain(db_path)
+        assert review.reviewer_approval_id is not None
+        ledger = _make_ledger(
+            run.run_id,
+            cand.quote_block_id,
+            ret.retrieval_attempt_id,
+            snap.snapshot_id,
+            review.reviewer_approval_id,
+        )
         insert_ledger_record(db_path, ledger)
         loaded = read_ledger_record(db_path, ledger.ledger_claim_id)
         assert loaded == ledger
 
     def test_synthesis_round_trip(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ledger_id = uuid4()
-        approval_id = uuid4()
+        run, _, _, ret, snap, cand, _, review = _insert_review_chain(db_path)
+        assert review.reviewer_approval_id is not None
+        ledger = _make_ledger(
+            run.run_id,
+            cand.quote_block_id,
+            ret.retrieval_attempt_id,
+            snap.snapshot_id,
+            review.reviewer_approval_id,
+        )
+        insert_ledger_record(db_path, ledger)
         synthesis = SynthesisOutput(
             run_id=run.run_id,
             synthesizer_prompt_version="v1",
@@ -470,12 +527,12 @@ class TestRoundTrips:
                     items=[
                         SynthesisItem(
                             connective_template_id="tmpl_support",
-                            ledger_claim_id=ledger_id,
-                            reviewer_approval_id=approval_id,
+                            ledger_claim_id=ledger.ledger_claim_id,
+                            reviewer_approval_id=ledger.reviewer_approval_id,
                             stance=Stance.SUPPORTING,
-                            placement=Placement.PRIMARY,
-                            entailment=Entailment.STRONG,
-                            approved_factual_statement="Fact.",
+                            placement=ledger.placement,
+                            entailment=ledger.entailment,
+                            approved_factual_statement=ledger.approved_factual_statement,
                         )
                     ],
                 )
@@ -486,7 +543,7 @@ class TestRoundTrips:
         assert loaded.title == synthesis.title
         assert len(loaded.sections) == 1
         assert len(loaded.sections[0].items) == 1
-        assert loaded.sections[0].items[0].ledger_claim_id == ledger_id
+        assert loaded.sections[0].items[0].ledger_claim_id == ledger.ledger_claim_id
 
     def test_validation_round_trip(self, db_path: str) -> None:
         run = _make_run()
@@ -556,9 +613,8 @@ class TestCloseReopen:
 
 class TestSnapshotImmutability:
     def test_duplicate_snapshot_rejected(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ret = _make_retrieval(run.run_id)
+        run, _, query = _insert_run_and_planner(db_path)
+        ret = _make_retrieval(run.run_id, query.query_id)
         insert_retrieval_attempt(db_path, ret)
         snap = _make_snapshot(run.run_id, ret.retrieval_attempt_id)
         insert_snapshot(db_path, snap)
@@ -580,9 +636,15 @@ class TestSnapshotImmutability:
 
 class TestLedgerImmutability:
     def test_duplicate_ledger_rejected(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ledger = _make_ledger(run.run_id)
+        run, _, _, ret, snap, cand, _, review = _insert_review_chain(db_path)
+        assert review.reviewer_approval_id is not None
+        ledger = _make_ledger(
+            run.run_id,
+            cand.quote_block_id,
+            ret.retrieval_attempt_id,
+            snap.snapshot_id,
+            review.reviewer_approval_id,
+        )
         insert_ledger_record(db_path, ledger)
         with pytest.raises(sqlite3.IntegrityError):
             insert_ledger_record(db_path, ledger)
@@ -628,8 +690,16 @@ class TestTransactionRollback:
 
     def test_synthesis_rollback_on_bad_item(self, db_path: str) -> None:
         """If a synthesis item fails, the whole synthesis is rolled back."""
-        run = _make_run()
-        insert_run(db_path, run)
+        run, _, _, ret, snap, cand, _, review = _insert_review_chain(db_path)
+        assert review.reviewer_approval_id is not None
+        ledger = _make_ledger(
+            run.run_id,
+            cand.quote_block_id,
+            ret.retrieval_attempt_id,
+            snap.snapshot_id,
+            review.reviewer_approval_id,
+        )
+        insert_ledger_record(db_path, ledger)
         synthesis = SynthesisOutput(
             run_id=run.run_id,
             synthesizer_prompt_version="v1",
@@ -644,12 +714,12 @@ class TestTransactionRollback:
                     items=[
                         SynthesisItem(
                             connective_template_id="t1",
-                            ledger_claim_id=uuid4(),
-                            reviewer_approval_id=uuid4(),
+                            ledger_claim_id=ledger.ledger_claim_id,
+                            reviewer_approval_id=ledger.reviewer_approval_id,
                             stance=Stance.SUPPORTING,
-                            placement=Placement.PRIMARY,
-                            entailment=Entailment.STRONG,
-                            approved_factual_statement="Fact.",
+                            placement=ledger.placement,
+                            entailment=ledger.entailment,
+                            approved_factual_statement=ledger.approved_factual_statement,
                         )
                     ],
                 )
@@ -672,7 +742,14 @@ class TestTransactionRollback:
 
 class TestInvalidForeignKeys:
     def test_retrieval_without_run(self, db_path: str) -> None:
-        ret = _make_retrieval(uuid4())
+        ret = _make_retrieval(uuid4(), uuid4())
+        with pytest.raises(sqlite3.IntegrityError):
+            insert_retrieval_attempt(db_path, ret)
+
+    def test_retrieval_without_query(self, db_path: str) -> None:
+        run = _make_run()
+        insert_run(db_path, run)
+        ret = _make_retrieval(run.run_id, uuid4())
         with pytest.raises(sqlite3.IntegrityError):
             insert_retrieval_attempt(db_path, ret)
 
@@ -681,15 +758,90 @@ class TestInvalidForeignKeys:
         with pytest.raises(sqlite3.IntegrityError):
             insert_snapshot(db_path, snap)
 
+    def test_snapshot_without_retrieval(self, db_path: str) -> None:
+        run, _, _ = _insert_run_and_planner(db_path)
+        snap = _make_snapshot(run.run_id, uuid4())
+        with pytest.raises(sqlite3.IntegrityError):
+            insert_snapshot(db_path, snap)
+
     def test_candidate_without_run(self, db_path: str) -> None:
-        cand = _make_candidate(uuid4(), uuid4(), uuid4())
+        cand = _make_candidate(uuid4(), uuid4(), uuid4(), uuid4())
         with pytest.raises(sqlite3.IntegrityError):
             insert_candidate(db_path, cand)
 
+    def test_candidate_without_snapshot(self, db_path: str) -> None:
+        run, _, query = _insert_run_and_planner(db_path)
+        ret = _make_retrieval(run.run_id, query.query_id)
+        insert_retrieval_attempt(db_path, ret)
+        cand = _make_candidate(run.run_id, ret.retrieval_attempt_id, query.query_id, uuid4())
+        with pytest.raises(sqlite3.IntegrityError):
+            insert_candidate(db_path, cand)
+
+    def test_analyst_decision_without_candidate(self, db_path: str) -> None:
+        run, _, _ = _insert_run_and_planner(db_path)
+        decision = ScoreDecision(
+            run_id=run.run_id,
+            quote_block_id=uuid4(),
+            evidence_quality=4,
+            claim_fit=4,
+            ledger_score=4,
+            placement=Placement.SECONDARY,
+            approved=True,
+            rationale="Strong evidence",
+            analyst_prompt_version="v1",
+            analyst_model_name="model",
+            scored_at=_NOW,
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            insert_analyst_decision(db_path, decision)
+
     def test_ledger_without_run(self, db_path: str) -> None:
-        ledger = _make_ledger(uuid4())
+        ledger = _make_ledger(uuid4(), uuid4(), uuid4(), uuid4(), uuid4())
         with pytest.raises(sqlite3.IntegrityError):
             insert_ledger_record(db_path, ledger)
+
+    def test_ledger_without_review_approval(self, db_path: str) -> None:
+        run, _, _, ret, snap, cand = _insert_candidate_chain(db_path)
+        ledger = _make_ledger(
+            run.run_id,
+            cand.quote_block_id,
+            ret.retrieval_attempt_id,
+            snap.snapshot_id,
+            uuid4(),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            insert_ledger_record(db_path, ledger)
+
+    def test_synthesis_item_without_ledger_record(self, db_path: str) -> None:
+        run = _make_run()
+        insert_run(db_path, run)
+        synthesis = SynthesisOutput(
+            run_id=run.run_id,
+            synthesizer_prompt_version="v1",
+            synthesizer_model_name="model",
+            created_at=_NOW,
+            title="Test",
+            claim_definition="Framing",
+            sections=[
+                SynthesisSection(
+                    section_type=SectionType.SUPPORTING,
+                    heading="Supporting",
+                    items=[
+                        SynthesisItem(
+                            connective_template_id="t1",
+                            ledger_claim_id=uuid4(),
+                            reviewer_approval_id=uuid4(),
+                            stance=Stance.SUPPORTING,
+                            placement=Placement.SECONDARY,
+                            entailment=Entailment.STRONG,
+                            approved_factual_statement="Fact.",
+                        )
+                    ],
+                )
+            ],
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            insert_synthesis(db_path, synthesis)
 
     def test_model_invocation_without_run(self, db_path: str) -> None:
         inv = ModelInvocationRecord(
@@ -713,25 +865,25 @@ class TestInvalidForeignKeys:
 
 class TestTypedReconstruction:
     def test_candidate_segment_offsets_are_typed(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ret = _make_retrieval(run.run_id)
-        insert_retrieval_attempt(db_path, ret)
-        snap = _make_snapshot(run.run_id, ret.retrieval_attempt_id)
-        insert_snapshot(db_path, snap)
-        cand = _make_candidate(run.run_id, ret.retrieval_attempt_id, snap.snapshot_id)
-        insert_candidate(db_path, cand)
+        *_, cand = _insert_candidate_chain(db_path)
         loaded = read_candidate(db_path, cand.quote_block_id)
         assert isinstance(loaded.segment_offsets[0], SegmentOffset)
 
     def test_ledger_scores_are_integers(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ledger = _make_ledger(run.run_id)
+        run, _, _, ret, snap, cand, _, review = _insert_review_chain(db_path)
+        assert review.reviewer_approval_id is not None
+        ledger = _make_ledger(
+            run.run_id,
+            cand.quote_block_id,
+            ret.retrieval_attempt_id,
+            snap.snapshot_id,
+            review.reviewer_approval_id,
+        )
         insert_ledger_record(db_path, ledger)
         loaded = read_ledger_record(db_path, ledger.ledger_claim_id)
         assert isinstance(loaded.evidence_quality, int)
         assert isinstance(loaded.claim_fit, int)
+        assert isinstance(loaded.ledger_score, int)
 
     def test_timestamps_are_aware(self, db_path: str) -> None:
         run = _make_run()
@@ -779,22 +931,14 @@ class TestDuplicateRejection:
             insert_run(db_path, run)
 
     def test_duplicate_retrieval(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ret = _make_retrieval(run.run_id)
+        run, _, query = _insert_run_and_planner(db_path)
+        ret = _make_retrieval(run.run_id, query.query_id)
         insert_retrieval_attempt(db_path, ret)
         with pytest.raises(sqlite3.IntegrityError):
             insert_retrieval_attempt(db_path, ret)
 
     def test_duplicate_candidate(self, db_path: str) -> None:
-        run = _make_run()
-        insert_run(db_path, run)
-        ret = _make_retrieval(run.run_id)
-        insert_retrieval_attempt(db_path, ret)
-        snap = _make_snapshot(run.run_id, ret.retrieval_attempt_id)
-        insert_snapshot(db_path, snap)
-        cand = _make_candidate(run.run_id, ret.retrieval_attempt_id, snap.snapshot_id)
-        insert_candidate(db_path, cand)
+        *_, cand = _insert_candidate_chain(db_path)
         with pytest.raises(sqlite3.IntegrityError):
             insert_candidate(db_path, cand)
 

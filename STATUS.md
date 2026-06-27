@@ -1,5 +1,48 @@
 # Status
 
+## 2026-06-26 - Phase 2 Hardening
+
+Status: Complete.
+
+Completed:
+
+- Resolved the architecture inconsistency around Claim Fit 2: Claim Fit 2 items may be retained as borderline analyst context, but they cannot enter the final Ledger unless rescored to Claim Fit 3 or higher.
+- Documented and implemented two-axis Ledger eligibility: `evidence_quality >= 2`, `claim_fit >= 3`, and `total_score >= 5`, with no compensation for a failing axis.
+- Added derived `ledger_score` values: 3 for total scores 5-6, 4 for total scores 7-8, and 5 for total scores 9-10.
+- Enforced deterministic score-to-placement validation in `ScoreDecision` and `LedgerRecord`.
+- Strengthened `PlannerOutput` validation to require exactly six queries, matching child `run_id` values, no duplicate or extra stance/round pairs, and all standard exclusion parameters.
+- Strengthened `StatementReviewResult` so rejected reviews cannot carry approval fields.
+- Strengthened `ValidationResult` so invalid validation results cannot carry `rendered_brief_hash`.
+- Added SQLite foreign keys for clear parent-child artifact relationships from planner queries through synthesis items.
+- Added `read_statement_draft()` for typed statement draft round trips.
+- Updated README and Phase 2 plan notes; fixed the `HANDbOFF.md` typo in the Phase 0 plan.
+- Added type annotations to Phase 2 test helpers.
+
+Tests added or updated:
+
+- Added scoring example coverage for eligible and ineligible two-axis combinations.
+- Added tests for inconsistent placement and derived Ledger score rejection.
+- Added planner validation tests for extra queries, child `run_id` mismatches, and missing exclusion parameters.
+- Added review and validation result shape tests.
+- Added statement draft round-trip coverage.
+- Added SQLite orphan-artifact rejection tests for retrieval attempts, snapshots, candidates, analyst decisions, Ledger records, and synthesis items.
+- Updated Phase 2 fixtures to create realistic parent artifact chains before inserting child records.
+
+Verification:
+
+- `pytest`: 73 passed; one local `.pytest_cache` permission warning remains.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Tracked issues:
+
+- Snapshot `snapshot_sha256` and `word_count` are not recomputed from `normalized_text` at model construction. This should be implemented in the snapshot creation or post-extraction validation phase once normalization and hashing behavior are precisely defined in code.
+- The local `.pytest_cache` directory still produces a permission warning during pytest.
+
+Safe to continue:
+
+- Yes. The project is safe to continue to Phase 3 after explicit user direction. No Phase 3 implementation has begun.
+
 ## 2026-06-26 - Phase 2 Store
 
 Status: Complete.

@@ -140,19 +140,30 @@ Each candidate is scored independently on two dimensions. The two scores must be
 
 **Claim Fit (1–5)** — Precision with which the excerpt addresses the claim as worded, including all qualifications and superlatives. 5: directly addresses exact claim, population, mechanism, and scope. 4: addresses core claim with minor gaps. 3: addresses a related or narrower version. 2: tangential; requires inferential bridging. 1: does not address the claim as stated.
 
-Reject if either score is 1. Reject if Evidence Quality is 2 (regardless of Claim Fit). Reject if Claim Fit is 2 and Evidence Quality is below 4. All other combinations with both scores at 3 or above proceed. Note truncation; reduce Evidence Quality if missing text could materially change the excerpt's meaning.
+Ledger eligibility is based on both axes, not on a compensating combined total alone. Evidence Quality must be at least 2, Claim Fit must be at least 3, and `total_score = evidence_quality + claim_fit` must be at least 5. Evidence with Evidence Quality below 2 is never eligible for the final Ledger. Evidence with Claim Fit below 3 is never eligible for the final Ledger, even if Evidence Quality is high.
+
+Claim Fit 2 items may be reviewed, retained as borderline context, or used by the Analyst to understand the evidence landscape, but they cannot become final Ledger records unless the Analyst revises the final score to Claim Fit 3 or higher through the review process. The final Ledger score range remains 3–5.
+
+Derived Ledger score:
+
+| Total score | Ledger score |
+|---|---|
+| 5–6 | 3 |
+| 7–8 | 4 |
+| 9–10 | 5 |
+
+Note truncation; reduce Evidence Quality if missing text could materially change the excerpt's meaning.
 
 ### C. Placement Assignment
 
-The Analyst assigns `placement` based on the score pair; it is binding on the Synthesizer and Renderer.
+The Analyst assigns `placement` deterministically from the score pair and derived Ledger score; it is binding on the Synthesizer and Renderer.
 
-| Evidence Quality | Claim Fit | Placement |
-|---|---|---|
-| 4–5 | 4–5 | `primary` |
-| 4–5 | 3 | `qualified_only` |
-| 3 | 4–5 | `secondary` |
-| 3 | 3 | `supporting` |
-| Any approved | ≤ 2 | `qualified_only` |
+| Condition | Placement |
+|---|---|
+| Claim Fit is 3 | `qualified_only` |
+| Otherwise, derived Ledger score is 5 | `primary` |
+| Otherwise, derived Ledger score is 4 | `secondary` |
+| Otherwise, derived Ledger score is 3 | `supporting` |
 
 `qualified_only` requires an explicit scope or reliability caveat. The Synthesizer may not promote a `qualified_only` item to a higher tier.
 
@@ -180,8 +191,9 @@ If all conditions are met, the Reviewer returns `approved: true` and the stateme
   "stance": "supporting | opposing",
   "approved_factual_statement": "exact approved sentence",
   "approved_claim_text": "exact quote block with brackets",
-  "evidence_quality": "3, 4, or 5",
-  "claim_fit": "3, 4, or 5",
+  "evidence_quality": "1 through 5",
+  "claim_fit": "1 through 5",
+  "ledger_score": "3, 4, or 5",
   "placement": "primary | secondary | supporting | qualified_only",
   "entailment": "Strong, Partial, or Weak",
   "source_url": "string",
@@ -273,7 +285,8 @@ Assembled mechanically from fixed templates, Planner framing, Ledger statements,
 ## Non-Negotiable Rules
 
 - Every factual sentence must exactly match an approved Ledger statement and carry both a `ledger_claim_id` and a `reviewer_approval_id`; the validator must compare exact text, not merely confirm IDs exist.
-- `evidence_quality` and `claim_fit` must be recorded and used separately; they must never be merged into a single score.
+- `evidence_quality` and `claim_fit` must be recorded and used separately; eligibility must fail when either axis is below its threshold, even if the combined total is high.
+- `ledger_score` is derived deterministically from the two sub-scores only after eligibility passes; it must not be used to compensate for a failing Evidence Quality or Claim Fit score.
 - `placement` is set by the Analyst, passed through the Synthesizer unchanged, and verified by the Validator; no stage may alter it.
 - No canonical factual statement may enter the Ledger without passing Statement Reviewer approval.
 - The Synthesizer must not produce unrestricted factual prose.

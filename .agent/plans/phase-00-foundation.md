@@ -11,7 +11,7 @@ Prepare the repository for reliable AI-assisted development without implementing
 - `AGENTS.md`
 - `DECISIONS.md`
 - `STATUS.md`
-- `HANDbOFF.md`
+- `HANDOFF.md`
 - `README.md`
 - `pyproject.toml`
 - `.agent/PLANS.md`

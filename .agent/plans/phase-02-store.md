@@ -23,9 +23,10 @@ Implement the SQLite persistence layer for the Debate Research Agent System usin
 - Snapshots and Ledger records tables are INSERT-ONLY — no update or delete functions exist.
 - Multi-write operations (planner output, synthesis, validation) use explicit transactions with rollback on failure.
 - Timestamps are stored as UTC ISO-8601 strings and reconstructed as timezone-aware datetimes.
-- `evidence_quality` and `claim_fit` remain separate columns; no composite score column exists.
+- `evidence_quality` and `claim_fit` remain separate columns; `ledger_score` is derived only after both axes pass eligibility.
 - Segment offsets are stored as JSON strings and reconstructed as typed `SegmentOffset` lists.
 - Boolean values are stored as integers (0/1) per SQLite convention.
+- Clear parent-child artifact relationships are enforced with SQLite foreign keys where the architecture defines them.
 
 ## Acceptance Criteria
 

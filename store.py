@@ -113,7 +113,7 @@ def init_db(db_path: str) -> None:
             CREATE TABLE IF NOT EXISTS retrieval_attempts (
                 retrieval_attempt_id TEXT PRIMARY KEY,
                 run_id               TEXT NOT NULL REFERENCES runs(run_id),
-                query_id             TEXT NOT NULL,
+                query_id             TEXT NOT NULL REFERENCES search_queries(query_id),
                 query_round          INTEGER NOT NULL,
                 query_text           TEXT NOT NULL,
                 search_rank          INTEGER NOT NULL,
@@ -127,7 +127,8 @@ def init_db(db_path: str) -> None:
             CREATE TABLE IF NOT EXISTS snapshots (
                 snapshot_id           TEXT PRIMARY KEY,
                 run_id                TEXT NOT NULL REFERENCES runs(run_id),
-                retrieval_attempt_id  TEXT NOT NULL,
+                retrieval_attempt_id  TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
                 source_url            TEXT NOT NULL,
                 retrieved_at          TEXT NOT NULL,
                 normalized_text       TEXT NOT NULL,
@@ -142,11 +143,12 @@ def init_db(db_path: str) -> None:
                 run_id                   TEXT NOT NULL REFERENCES runs(run_id),
                 stance                   TEXT NOT NULL,
                 source_url               TEXT NOT NULL,
-                retrieval_attempt_id     TEXT NOT NULL,
-                query_id                 TEXT NOT NULL,
+                retrieval_attempt_id     TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                query_id                 TEXT NOT NULL REFERENCES search_queries(query_id),
                 query_round              INTEGER NOT NULL,
                 search_rank              INTEGER NOT NULL,
-                snapshot_id              TEXT NOT NULL,
+                snapshot_id              TEXT NOT NULL REFERENCES snapshots(snapshot_id),
                 snapshot_sha256          TEXT NOT NULL,
                 extracted_quote_block    TEXT NOT NULL,
                 extraction_prompt_version TEXT NOT NULL,
@@ -160,12 +162,13 @@ def init_db(db_path: str) -> None:
                 run_id                    TEXT NOT NULL REFERENCES runs(run_id),
                 stance                    TEXT NOT NULL,
                 source_url                TEXT NOT NULL,
-                retrieval_attempt_id      TEXT NOT NULL,
-                query_id                  TEXT NOT NULL,
+                retrieval_attempt_id      TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                query_id                  TEXT NOT NULL REFERENCES search_queries(query_id),
                 query_round               INTEGER NOT NULL,
                 search_rank               INTEGER NOT NULL,
                 retrieved_at              TEXT NOT NULL,
-                snapshot_id               TEXT NOT NULL,
+                snapshot_id               TEXT NOT NULL REFERENCES snapshots(snapshot_id),
                 snapshot_sha256           TEXT NOT NULL,
                 snapshot_created_at       TEXT NOT NULL,
                 extracted_quote_block     TEXT NOT NULL,
@@ -184,9 +187,10 @@ def init_db(db_path: str) -> None:
             -- analyst decisions --------------------------------------------
             CREATE TABLE IF NOT EXISTS analyst_decisions (
                 run_id                  TEXT NOT NULL REFERENCES runs(run_id),
-                quote_block_id          TEXT NOT NULL,
+                quote_block_id          TEXT NOT NULL REFERENCES candidates(quote_block_id),
                 evidence_quality        INTEGER NOT NULL,
                 claim_fit               INTEGER NOT NULL,
+                ledger_score            INTEGER,
                 placement               TEXT,
                 approved                INTEGER NOT NULL,
                 rationale               TEXT NOT NULL,
@@ -200,7 +204,7 @@ def init_db(db_path: str) -> None:
             CREATE TABLE IF NOT EXISTS statement_drafts (
                 statement_draft_id  TEXT PRIMARY KEY,
                 run_id              TEXT NOT NULL REFERENCES runs(run_id),
-                quote_block_id      TEXT NOT NULL,
+                quote_block_id      TEXT NOT NULL REFERENCES candidates(quote_block_id),
                 stance              TEXT NOT NULL,
                 draft_statement     TEXT NOT NULL,
                 claim_fit           INTEGER NOT NULL,
@@ -213,9 +217,9 @@ def init_db(db_path: str) -> None:
                 run_id                       TEXT NOT NULL REFERENCES runs(run_id),
                 statement_draft_id           TEXT NOT NULL
                     REFERENCES statement_drafts(statement_draft_id),
-                quote_block_id               TEXT NOT NULL,
+                quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
                 approved                     INTEGER NOT NULL,
-                reviewer_approval_id         TEXT,
+                reviewer_approval_id         TEXT UNIQUE,
                 approved_factual_statement   TEXT,
                 failure_code                 TEXT,
                 rationale                    TEXT NOT NULL,
@@ -229,17 +233,19 @@ def init_db(db_path: str) -> None:
             CREATE TABLE IF NOT EXISTS ledger_records (
                 ledger_claim_id              TEXT PRIMARY KEY,
                 run_id                       TEXT NOT NULL REFERENCES runs(run_id),
-                quote_block_id               TEXT NOT NULL,
+                quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
                 stance                       TEXT NOT NULL,
                 approved_factual_statement   TEXT NOT NULL,
                 approved_claim_text          TEXT NOT NULL,
                 evidence_quality             INTEGER NOT NULL,
                 claim_fit                    INTEGER NOT NULL,
+                ledger_score                 INTEGER NOT NULL,
                 placement                    TEXT NOT NULL,
                 entailment                   TEXT NOT NULL,
                 source_url                   TEXT NOT NULL,
-                retrieval_attempt_id         TEXT NOT NULL,
-                snapshot_id                  TEXT NOT NULL,
+                retrieval_attempt_id         TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                snapshot_id                  TEXT NOT NULL REFERENCES snapshots(snapshot_id),
                 snapshot_sha256              TEXT NOT NULL,
                 segment_offsets              TEXT NOT NULL,
                 analyst_prompt_version       TEXT NOT NULL,
@@ -248,7 +254,8 @@ def init_db(db_path: str) -> None:
                 reviewer_prompt_version      TEXT NOT NULL,
                 reviewer_model_name          TEXT NOT NULL,
                 reviewed_at                  TEXT NOT NULL,
-                reviewer_approval_id         TEXT NOT NULL,
+                reviewer_approval_id         TEXT NOT NULL
+                    REFERENCES statement_review_attempts(reviewer_approval_id),
                 ledger_validated_at          TEXT NOT NULL
             );
 
@@ -275,7 +282,8 @@ def init_db(db_path: str) -> None:
                 section_order                INTEGER NOT NULL,
                 item_order                   INTEGER NOT NULL,
                 connective_template_id       TEXT NOT NULL,
-                ledger_claim_id              TEXT NOT NULL,
+                ledger_claim_id              TEXT NOT NULL
+                    REFERENCES ledger_records(ledger_claim_id),
                 reviewer_approval_id         TEXT NOT NULL,
                 stance                       TEXT NOT NULL,
                 placement                    TEXT NOT NULL,
@@ -819,14 +827,15 @@ def insert_analyst_decision(db_path: str, decision: ScoreDecision) -> None:
     try:
         conn.execute(
             """INSERT INTO analyst_decisions
-               (run_id, quote_block_id, evidence_quality, claim_fit, placement,
+               (run_id, quote_block_id, evidence_quality, claim_fit, ledger_score, placement,
                 approved, rationale, analyst_prompt_version, analyst_model_name, scored_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 str(decision.run_id),
                 str(decision.quote_block_id),
                 decision.evidence_quality,
                 decision.claim_fit,
+                decision.ledger_score,
                 decision.placement.value if decision.placement else None,
                 int(decision.approved),
                 decision.rationale,
@@ -860,6 +869,7 @@ def _row_to_score_decision(row: sqlite3.Row) -> ScoreDecision:
         quote_block_id=UUID(row["quote_block_id"]),
         evidence_quality=row["evidence_quality"],
         claim_fit=row["claim_fit"],
+        ledger_score=row["ledger_score"],
         placement=row["placement"],
         approved=bool(row["approved"]),
         rationale=row["rationale"],
@@ -895,6 +905,30 @@ def insert_statement_draft(db_path: str, draft: StatementDraft) -> None:
             ),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def read_statement_draft(db_path: str, statement_draft_id: UUID) -> StatementDraft:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM statement_drafts WHERE statement_draft_id = ?",
+            (str(statement_draft_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"statement draft {statement_draft_id} not found")
+        return StatementDraft(
+            run_id=UUID(row["run_id"]),
+            statement_draft_id=UUID(row["statement_draft_id"]),
+            quote_block_id=UUID(row["quote_block_id"]),
+            stance=row["stance"],
+            draft_statement=row["draft_statement"],
+            claim_fit=row["claim_fit"],
+            analyst_prompt_version=row["analyst_prompt_version"],
+            analyst_model_name=row["analyst_model_name"],
+            drafted_at=_iso_to_dt(row["drafted_at"]),
+        )
     finally:
         conn.close()
 
@@ -976,12 +1010,12 @@ def insert_ledger_record(db_path: str, record: LedgerRecord) -> None:
             """INSERT INTO ledger_records
                (ledger_claim_id, run_id, quote_block_id, stance,
                 approved_factual_statement, approved_claim_text,
-                evidence_quality, claim_fit, placement, entailment,
+                evidence_quality, claim_fit, ledger_score, placement, entailment,
                 source_url, retrieval_attempt_id, snapshot_id, snapshot_sha256,
                 segment_offsets, analyst_prompt_version, analyst_model_name,
                 analyst_completed_at, reviewer_prompt_version, reviewer_model_name,
                 reviewed_at, reviewer_approval_id, ledger_validated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 str(record.ledger_claim_id),
                 str(record.run_id),
@@ -991,6 +1025,7 @@ def insert_ledger_record(db_path: str, record: LedgerRecord) -> None:
                 record.approved_claim_text,
                 record.evidence_quality,
                 record.claim_fit,
+                record.ledger_score,
                 record.placement.value,
                 record.entailment.value,
                 record.source_url,
@@ -1037,6 +1072,7 @@ def _row_to_ledger_record(row: sqlite3.Row) -> LedgerRecord:
         approved_claim_text=row["approved_claim_text"],
         evidence_quality=row["evidence_quality"],
         claim_fit=row["claim_fit"],
+        ledger_score=row["ledger_score"],
         placement=row["placement"],
         entailment=row["entailment"],
         source_url=row["source_url"],
