@@ -308,17 +308,3 @@ Research stops after three rounds per side: all six queries executed, Top 3 resu
 | Pro/Con Balance — both sides fairly represented where evidence exists | Monitored |
 | Completion Time | < 2 min |
 | Human Reviewer Preference — blind comparison vs. human research | Measured |
-
-## Recommended Build Order
-
-1. **Schemas and Artifact Store** — Planner, snapshot, candidate, Ledger, and validation schemas; add `evidence_quality`, `claim_fit`, and `placement` fields; immutable snapshot storage.
-2. **Retrieval and Logging** — Top-3 search wrapper; log queries, ranks, timestamps, URLs, outcomes, and truncation flags.
-3. **Extraction** — Researcher prompts and Macro-Bracket Rule; provisional segments without IDs.
-4. **Post-Extraction Filter** — exact text, order, brackets, offsets, length, markers, relevance; IDs assigned only after success.
-5. **Evidence Analyst** — snapshot verification, dual-dimension scoring, placement assignment, entailment, canonical statement drafting.
-6. **Statement Reviewer** — isolated review call with entailment, qualification, neutrality, and Claim Fit consistency checks; one-revision loop.
-7. **Ledger** — accept only Reviewer-approved statements; store `reviewer_approval_id` with each record.
-8. **Structured Synthesizer** — enforce `placement` passthrough; Ledger IDs, exact statements, and connective template IDs only.
-9. **Renderer and Validator** — exact matching including `placement` verification; enumerate approved connective templates at deployment.
-10. **Benchmarks** — quotation integrity, score separation on known contested claims, placement enforcement, Reviewer and validator escape attempts.
-11. **Expansion** — iterative loops only if the fixed three-round design proves insufficient.
