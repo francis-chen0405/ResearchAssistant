@@ -1,5 +1,44 @@
 # Status
 
+## 2026-06-27 - Documentation Consistency Pass After Phase 3
+
+Status: Complete.
+
+Current state:
+
+- Phase 0 is complete.
+- Phase 1 is complete.
+- Phase 2 is complete.
+- Post-Phase-2 hardening is complete.
+- Phase 3 is complete.
+- Full Phase 0-10 roadmap alignment is complete.
+- Tests through Phase 3 pass.
+- Phase 4 has not started.
+
+Documentation updates in this pass:
+
+- Updating stale project-state references in `AGENTS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `README.md`, and `.agent/plans/phase-02-store.md`.
+- Leaving code, tests, dependencies, provider files, orchestrator files, and future agent implementations unchanged.
+
+Verification:
+
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: failed because it would reformat existing code/test files outside this documentation-only pass: `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`.
+- `.\.venv\Scripts\python.exe -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q`: 104 passed, one local `.pytest_cache` permission warning.
+
+Verification note:
+
+- No code files were changed to satisfy the format check because this pass is documentation-only.
+
+Known risks:
+
+- Sentence-boundary detection remains deterministic and intentionally simple for the MVP.
+- The local `.pytest_cache` directory may emit a permission warning during pytest or Git scans.
+
+Next exact task:
+
+- Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+
 ## 2026-06-27 - Documentation Roadmap Alignment
 
 Status: Complete.
@@ -22,6 +61,7 @@ Notes:
 - No code files were changed.
 - No Phase 4 implementation was started.
 - The next exact task remains Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+- Current roadmap and formatting status is superseded by the documentation consistency pass above and the later Phase 3 verification entry.
 
 ## 2026-06-27 - Phase 3 Snapshot and Quotation Integrity
 

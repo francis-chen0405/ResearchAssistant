@@ -58,5 +58,6 @@ ruff format --check .
 
 ## Unresolved Risks
 
-- Phase 3 will need to implement retrieval logging and web search integration.
+- Phase 3 has since implemented deterministic snapshot and quote-block integrity.
+- Retrieval logging and web search integration belong to later roadmap phases, not Phase 3.
 - Concurrent researcher workers must each open their own connections; this is enforced by design but not yet tested under threading.

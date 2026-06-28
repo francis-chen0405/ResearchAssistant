@@ -1,6 +1,6 @@
 # AI Assistant Instructions
 
-This repository has completed Phase 2 for the Debate Research Agent System. Before editing any file, read `ARCHITECTURE.md` and `CONVENTIONS.md` completely.
+This repository has completed Phase 3 for the Debate Research Agent System. Phase 4 has not started. Before editing any file, read `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the relevant current phase plan completely.
 
 Required rules for every future assistant:
 
@@ -13,6 +13,7 @@ Required rules for every future assistant:
 - Do not weaken tests to make implementation pass.
 - Prefer adding failing regression tests before fixing validator or integrity bugs.
 - Never add dependencies without flagging them first and getting explicit approval when they are outside the current phase.
+- Document any approved dependency change in the relevant status, handoff, and phase-plan files.
 - Never silently return `None` on failure; raise a clear exception or return a typed failure model.
 - Never run destructive Git commands such as `git reset --hard`, `git clean -fd`, or force-push unless explicitly instructed by the user.
 - Never delete architecture, convention, status, handoff, or phase-plan content without explaining the exact replacement.

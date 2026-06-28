@@ -1,5 +1,59 @@
 # Handoff
 
+## 2026-06-27 - Documentation Consistency Pass After Phase 3
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 3 Snapshot and Quotation Integrity.
+- Phase 4 has not started.
+
+Latest important commits:
+
+- `2661eeb plan`
+- `298b711 phase-03`
+- `23caf22 phase-02 fix`
+- `cff9c0e phase 02 fix`
+- `2e80edb phase-01`
+- `d854df3 phase-00complete`
+
+Files changed by recent phases:
+
+- Phase 3: `utils.py`, `agents/researcher.py`, `tests/test_phase3.py`, `.agent/plans/phase-03-snapshot-integrity.md`, `.agent/PLANS.md`, `STATUS.md`, and `HANDOFF.md`.
+- Roadmap/documentation alignment: `.agent/PLANS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, and `HANDOFF.md`.
+- This consistency pass: documentation files only.
+
+Commands run:
+
+- `git branch --show-current`: `master`.
+- `git status --short`: only documentation files modified, plus the local `.pytest_cache/` permission warning.
+- `git status --porcelain=v1 -uno`: clean before this pass.
+- `git log --oneline -10`: latest commit was `2661eeb plan`.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: failed because it would reformat existing code/test files outside this documentation-only pass: `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`.
+- `.\.venv\Scripts\python.exe -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q`: 104 passed, one local `.pytest_cache` permission warning.
+- `git diff --stat`: documentation files only.
+- `git diff --name-only`: documentation files only.
+
+Current known limitations:
+
+- Sentence-boundary detection is deterministic and intentionally simple for MVP quote integrity.
+- The local `.pytest_cache` directory may emit a permission warning during pytest or Git scans.
+- Ruff format currently reports pre-existing formatting drift in `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`; those files were not modified during this documentation-only pass.
+
+Next exact task:
+
+- Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 5 or later work.
+- Do not implement Phase 4 during documentation-only passes.
+- Do not create `agents/analyst.py` or `agents/reviewer.py` until Phase 4 is explicitly requested.
+
 ## 2026-06-27 - Documentation Roadmap Alignment
 
 Current branch:
