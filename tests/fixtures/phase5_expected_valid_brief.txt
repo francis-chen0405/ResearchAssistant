@@ -1,0 +1,12 @@
+# Fixture Debate Brief
+
+Claim definition: Fixture claim framing without factual findings.
+
+## Supporting Evidence
+- Supporting evidence: The audit reported a 12% decrease in processing time. [source: https://example.test/source-1]
+
+## Opposing Evidence
+- Opposing evidence: The evaluation reported higher administrative costs in the first year. [source: https://example.test/source-2]
+
+## Limitations
+- This source addresses a narrower version of the claim: Among surveyed schools, the pilot reported a 9% gain. [source: https://example.test/source-3]

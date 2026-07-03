@@ -1,5 +1,53 @@
 # Status
 
+## 2026-07-03 - Phase 5 Synthesizer Schema, Renderer, and Release Validator
+
+Status: Complete.
+
+Completed:
+
+- Added deterministic `SynthesisOutput` construction in `agents/synthesizer.py` from
+  typed `LedgerRecord` instances.
+- Added a fixed approved non-factual connective template registry in
+  `agents/renderer.py`.
+- Added deterministic final validation that revalidates typed synthesis shape, rejects
+  hidden renderable fields, compares every item against the Ledger, enforces section
+  compatibility, enforces template compatibility, enforces one final use per Ledger
+  claim, and returns no hash for invalid releases.
+- Added deterministic rendering that uses only title/framing fields, approved template
+  text, exact Ledger factual statements, and Ledger source URLs.
+- Added SHA-256 hashing of the final rendered brief only when validation succeeds.
+- Added adversarial Phase 5 tests for changed words, punctuation, capitalization, wrong
+  IDs, wrong statements, Reviewer approval drift, placement drift, stance drift,
+  qualified evidence promotion, side-crossing sections, unknown templates, hidden prose,
+  free-form factual transitions, missing Partial/Weak warnings, Ledger overuse,
+  non-Ledger statements, valid stable hashing, and invalid no-hash results.
+- Added the canonical Phase 5 plan at
+  `.agent/plans/phase-05-release-gate.md`.
+
+Verification:
+
+- `python -m pytest tests/test_phase5.py -q`: first run failed only on the intentional
+  hash placeholder; final run passed with 21 passed in 0.12s.
+- `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py -q`:
+  passed with 168 passed in 0.73s.
+- `python -m ruff check .`: passed, all checks passed.
+- `python -m ruff format --check .`: passed, 17 files already formatted.
+
+Known risks:
+
+- Template compatibility is deterministic configuration, not semantic review.
+- The renderer includes Ledger `source_url` citations mechanically; no citation
+  formatting beyond deterministic URL inclusion was added.
+- The synthesizer helper remains deterministic and fixture-oriented. No LLM calls,
+  provider integrations, retrieval, scraping, orchestration, CLI, async code, or
+  external dependencies were added.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline.
+- Phase 6 was not started.
+
 ## 2026-07-03 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission
 
 Status: Complete.

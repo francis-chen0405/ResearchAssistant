@@ -1,5 +1,82 @@
 # Handoff
 
+## 2026-07-03 - Phase 5 Synthesizer Schema, Renderer, and Release Validator
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 5 Synthesizer Schema, Renderer, and Release Validator.
+- Phase 6 has not started.
+
+Files changed:
+
+- `agents/synthesizer.py`
+- `agents/renderer.py`
+- `tests/test_phase5.py`
+- `tests/fixtures/phase5_expected_valid_brief.txt`
+- `.agent/plans/phase-05-release-gate.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 5 as deterministic typed helpers and a release validator around the
+  existing Phase 1 `SynthesisOutput`, `LedgerRecord`, and `ValidationResult` models.
+- Keep the fixed approved non-factual connective template registry in
+  `agents/renderer.py` as strict Pydantic configuration artifacts.
+- Build synthesis output only from typed `LedgerRecord` instances and copy Ledger IDs,
+  Reviewer approval IDs, stance, placement, entailment, and approved factual statements
+  exactly.
+- Render only after validation succeeds. Invalid releases return typed
+  `ValidationResult(valid=False, rendered_brief_hash=None)`.
+- Enforce one final rendered use per Ledger claim in Phase 5.
+- Treat `qualified_only`, Partial entailment, and Weak entailment as requiring approved
+  qualification or warning templates.
+- No model or SQLite schema change was needed. No dependencies were added.
+- No LLM calls, retrieval, scraping, provider integrations, fixture pipeline,
+  orchestration, CLI, external dependencies, async code, or Phase 6 work was added.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master`.
+- `git log --oneline -10`: latest commit before Phase 5 edits was `dfa57af phase-04`.
+- `python -m pytest tests/test_phase5.py -q`: first run failed only on the intentional
+  hash placeholder; final run passed with 21 passed in 0.12s.
+- `python -m ruff check .`: passed after import cleanup, all checks passed.
+- `python -m ruff format --check .`: passed, 17 files already formatted.
+- `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py -q`:
+  passed with 168 passed in 0.73s.
+- `python -m ruff check .`: final required run passed, all checks passed.
+- `python -m ruff format --check .`: final required run passed, 17 files already
+  formatted.
+
+Exact results:
+
+- Phase 5 focused tests: 21 passed in 0.12s.
+- Required Phase 1-5 tests: 168 passed in 0.73s.
+- Ruff check: all checks passed.
+- Ruff format check: 17 files already formatted.
+
+Known limitations:
+
+- Template compatibility is deterministic configuration, not semantic review.
+- Source citations are rendered mechanically from Ledger `source_url` values.
+- The synthesizer helper is deterministic and fixture-oriented; it is not an LLM-backed
+  synthesizer and does not orchestrate a complete run.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline.
+
+Do not start:
+
+- Do not begin Phase 7 or later work.
+- Do not add real search providers, scrapers, LLM providers, live network calls, API
+  keys, or external provider integrations as part of Phase 6.
+
 ## 2026-07-03 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission
 
 Current branch:
