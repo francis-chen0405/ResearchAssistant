@@ -1,5 +1,73 @@
 # Status
 
+## 2026-07-03 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission
+
+Status: Complete.
+
+Completed:
+
+- Added deterministic Analyst score interpretation in `agents/analyst.py` with an
+  explicit 25-row Evidence Quality and Claim Fit score-pair table.
+- Added typed Analyst helpers for score decisions, Ledger-bound statement drafts, and
+  Ledger admission.
+- Added deterministic Reviewer input and review-result helpers in `agents/reviewer.py`.
+- Enforced one-revision maximum, Reviewer approval/rejection handling, required
+  `reviewer_approval_id`, exact Reviewer-approved statement matching, and rejection of
+  altered statements after approval.
+- Reused Phase 3 snapshot and quote verification before Ledger admission, including
+  hash recomputation and exact quote-offset rechecks.
+- Enforced placement immutability, Claim Fit 3 qualification requirements,
+  `qualified_only` requirements, and Partial/Weak entailment qualification requirements.
+- Allowed multiple Ledger records from one quote block only when each statement is
+  separately drafted and separately reviewed.
+- Added adversarial Phase 4 tests covering all required score pairs and Ledger
+  admission guard failures.
+- Added the canonical Phase 4 plan at
+  `.agent/plans/phase-04-ledger-admission.md`.
+
+Verification:
+
+- `python -m pytest tests/test_phase4.py -q`: failed because `python` is not available
+  on PATH in this shell.
+- `python3 -m pytest tests/test_phase4.py -q`: failed because the system Python did not
+  have `pytest` installed.
+- `.venv/bin/python -m pip install -e '.[dev]'`: first failed under the sandbox due to
+  blocked package-index DNS; after approval it reached the package index but failed
+  because editable package discovery is not configured for the current flat layout.
+- `.venv/bin/python -m pip install 'pydantic>=2.0,<3.0' 'python-dotenv>=1.0,<2.0' 'pytest>=8.0,<9.0' 'ruff>=0.8,<1.0'`:
+  passed, installing only dependencies already declared in `pyproject.toml`.
+- `.venv/bin/python -m pytest tests/test_phase4.py -q`: 43 passed in 0.20s.
+- `.venv/bin/python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py -q`:
+  147 passed in 0.87s before documentation updates and 147 passed in 0.91s after
+  documentation updates.
+- `.venv/bin/python -m ruff check .`: passed.
+- `.venv/bin/python -m ruff format --check .`: passed.
+- Exact required command
+  `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py -q`:
+  initially failed with `zsh:1: command not found: python`; after the session-local
+  `python` launcher was restored, passed with 147 passed in 0.82s, then 147 passed in
+  0.74s after documentation updates.
+- Exact required command `python -m ruff check .`: initially failed with
+  `zsh:1: command not found: python`; after the launcher was restored, passed.
+- Exact required command `python -m ruff format --check .`: initially failed with
+  `zsh:1: command not found: python`; after the launcher was restored, passed.
+
+Known risks:
+
+- Qualification detection is deterministic and marker-based; it is not semantic LLM
+  review.
+- Reviewer approval is fixture-driven in Phase 4 and does not call an LLM.
+- The exact requested `python -m ...` verification commands now pass through a
+  session-local temporary launcher. If Codex creates a new temporary PATH directory
+  later, that launcher may need to be restored.
+- Editable installation remains blocked by missing package discovery configuration, but
+  no Phase 4 packaging change was required.
+
+Next exact task:
+
+- Phase 5 Synthesizer schema, renderer, and release validator.
+- Phase 5 was not started.
+
 ## 2026-06-27 - Documentation Consistency Pass After Phase 3
 
 Status: Complete.

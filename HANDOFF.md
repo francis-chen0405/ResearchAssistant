@@ -1,5 +1,97 @@
 # Handoff
 
+## 2026-07-03 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission.
+- Phase 5 has not started.
+
+Files changed:
+
+- `agents/analyst.py`
+- `agents/reviewer.py`
+- `tests/test_phase4.py`
+- `.agent/plans/phase-04-ledger-admission.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 4 as deterministic typed helper surfaces around existing Pydantic
+  models rather than changing the model or SQLite schema.
+- Keep the explicit 25-row Evidence Quality and Claim Fit score-pair policy in
+  `agents/analyst.py`.
+- Reconstruct `LedgerRecord` values from the candidate, snapshot, Analyst decision,
+  reviewed draft, and Reviewer approval instead of accepting caller-supplied Ledger
+  fields.
+- Reuse Phase 3 `verify_candidate_against_snapshot()` before Ledger admission so hash
+  and offset re-verification are both required.
+- Treat Claim Fit 3, `qualified_only`, Partial entailment, and Weak entailment as
+  requiring explicit qualification markers before Ledger admission.
+- Keep Reviewer behavior fixture-driven and deterministic. No LLM calls, provider
+  integrations, retrieval, rendering, final validator, orchestration, async code, or
+  new dependencies were added.
+
+Commands run:
+
+- `git status --short --branch`: `## master...origin/master` before Phase 4 edits.
+- `git log --oneline -10`: latest commit before Phase 4 edits was `272c7bf phase-03 fix`.
+- `python -m pytest tests/test_phase4.py -q`: failed because `python` is not available
+  on PATH.
+- `python3 -m pytest tests/test_phase4.py -q`: failed because the system Python did not
+  have `pytest` installed.
+- `/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m pytest tests/test_phase4.py -q`:
+  failed because the bundled interpreter did not have `pytest` installed.
+- `/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m venv .venv`:
+  passed.
+- `.venv/bin/python -m pip install -e '.[dev]'`: first failed because sandboxed DNS
+  blocked package-index access; after approval, failed because editable package
+  discovery is not configured for the current flat layout.
+- `.venv/bin/python -m pip install 'pydantic>=2.0,<3.0' 'python-dotenv>=1.0,<2.0' 'pytest>=8.0,<9.0' 'ruff>=0.8,<1.0'`:
+  passed, installing only dependencies already declared in `pyproject.toml`.
+- `.venv/bin/python -m pytest tests/test_phase4.py -q`: first run found one adversarial
+  test construction issue; final run passed with 43 passed in 0.20s.
+- `.venv/bin/python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py -q`:
+  passed with 147 passed in 0.87s before documentation updates and 147 passed in
+  0.91s after documentation updates.
+- `.venv/bin/python -m ruff check .`: passed.
+- `.venv/bin/python -m ruff format --check .`: passed.
+- Exact required command
+  `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py -q`:
+  initially failed with `zsh:1: command not found: python`; after the session-local
+  `python` launcher was restored, passed with 147 passed in 0.82s, then 147 passed in
+  0.74s after documentation updates.
+- Exact required command `python -m ruff check .`: initially failed with
+  `zsh:1: command not found: python`; after the launcher was restored, passed.
+- Exact required command `python -m ruff format --check .`: initially failed with
+  `zsh:1: command not found: python`; after the launcher was restored, passed.
+
+Known limitations:
+
+- Qualification checks are deterministic marker checks, not semantic judgment.
+- Reviewer approval is represented by typed fixtures/checks only; real Reviewer LLM
+  calls are still out of scope.
+- Plain `python` now resolves through a session-local temporary launcher and the exact
+  `python -m ...` checks pass. If Codex creates a new temporary PATH directory later,
+  that launcher may need to be restored.
+- Editable installation is blocked by current flat-layout package discovery. This was
+  not changed because Phase 4 does not require packaging work.
+
+Next exact task:
+
+- Phase 5 Synthesizer schema, renderer, and release validator.
+
+Do not start:
+
+- Do not begin Phase 5 or later work without explicit user direction.
+- Do not add LLM calls, retrieval, scraping, provider integrations, orchestration,
+  rendering, final validation, async code, or external dependencies as part of Phase 4.
+
 ## 2026-06-27 - Documentation Consistency Pass After Phase 3
 
 Current branch:
