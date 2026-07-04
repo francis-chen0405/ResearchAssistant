@@ -50,6 +50,6 @@ ruff format --check .
 
 ## Unresolved Risks
 
-- The `.agents/PLANS/phase-00-foundation.md` compatibility mirror may require a workspace permission or ACL change outside normal Phase 0 edits.
+- The `.agents/PLANS/phase-00-foundation.md` compatibility mirror exists, but `.agent/plans/` remains the canonical source of truth.
 - Future schema work must translate the documented fields into concrete Pydantic models without weakening the exact-match validator requirements.
-- Empty existing agent and test files remain placeholders until a later phase defines their contents.
+- This was true at Phase 0 completion: empty existing agent and test files remained placeholders until a later phase defined their contents. By Phase 5, deterministic helper modules exist for researcher filtering, Analyst policy, Reviewer checks, synthesis, rendering, and release validation; `planner.py`, `supportingresearcher.py`, and `opposingresearcher.py` remain placeholders.

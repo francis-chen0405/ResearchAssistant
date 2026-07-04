@@ -1,5 +1,48 @@
 # Status
 
+## 2026-07-04 - Post-Phase-5 Documentation State Audit
+
+Status: Complete.
+
+Completed:
+
+- Audited source-of-truth documentation, phase plans, `agents/`, and `tests/` against the
+  current Phase 5 implementation.
+- Updated `README.md` and `AGENTS.md` so they no longer describe Phase 3 as the latest
+  completed phase or Phase 4 as unstarted.
+- Added missing durable Phase 4 and Phase 5 decisions to `DECISIONS.md`.
+- Added a current Phase 5 project-state summary to `.agent/PLANS.md`, including active
+  deterministic modules, remaining placeholder agent files, current tests, and the Phase 6
+  boundary.
+- Clarified that `.agent/plans/` is canonical and `.agents/PLANS/` is only a compatibility
+  mirror; the mirror was kept and its stale absolute Windows path was replaced with the
+  canonical relative path.
+- Updated older phase-plan wording where it could mislead future readers about the
+  current mirror state or Phase 5 completion.
+- Left dated historical status and handoff entries as point-in-time records instead of
+  rewriting them wholesale.
+- No implementation behavior, tests, dependencies, or Phase 6 behavior was changed.
+
+Verification:
+
+- Exact `python -m pytest`: failed because this shell does not have `python` on `PATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 173 passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 17 files
+  already formatted.
+
+Known limitations:
+
+- Plain `python` remains unavailable unless the repository `.venv/bin` directory is placed
+  on `PATH`.
+- Phase 6 fixture-only complete pipeline has not started.
+- The repo still has no orchestration, CLI, live retrieval, scraping, LLM/API calls,
+  provider integrations, SDK integrations, web frameworks, ORMs, or HTTP clients.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline, only after explicit user direction.
+
 ## 2026-07-04 - Phase 5 Verification Pass
 
 Status: Complete.
@@ -173,7 +216,7 @@ Current state:
 - Phase 3 is complete.
 - Full Phase 0-10 roadmap alignment is complete.
 - Tests through Phase 3 pass.
-- Phase 4 has not started.
+- At that time, Phase 4 had not started.
 
 Documentation updates in this pass:
 
@@ -208,7 +251,7 @@ Completed:
 - Updated `.agent/PLANS.md` with the full Phase 0-10 roadmap.
 - Added a short phase-sequencing cross-reference note to `ARCHITECTURE.md`.
 - Added a short phase-gated development note to `CONVENTIONS.md`.
-- Confirmed Phase 3 is complete and Phase 4 has not started.
+- Confirmed at that time that Phase 3 was complete and Phase 4 had not started.
 
 Verification:
 

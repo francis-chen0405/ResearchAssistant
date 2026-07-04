@@ -1,5 +1,74 @@
 # Handoff
 
+## 2026-07-04 - Post-Phase-5 Documentation State Audit
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 5 Synthesizer Schema, Renderer, and Release Validator.
+- Phase 6 has not started.
+
+Files changed in this audit:
+
+- `README.md`
+- `AGENTS.md`
+- `DECISIONS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `.agent/PLANS.md`
+- `.agent/plans/phase-00-foundation.md`
+- `.agent/plans/phase-04-ledger-admission.md`
+- `.agents/PLANS/phase-00-foundation.md`
+
+Work completed:
+
+- Audited the current docs, phase plans, `agents/`, and `tests/` after the Phase 5 commits.
+- Fixed stale current-state wording that still said Phase 3 was latest and Phase 4 had not
+  started.
+- Added current Phase 5 project-state guidance to the canonical plan index.
+- Added durable Phase 4 and Phase 5 decision entries.
+- Confirmed `.agent/plans/` is the intended source of truth. `.agents/PLANS/` was left in
+  place as a compatibility mirror and not consolidated or deleted.
+- Replaced the mirror file's stale absolute Windows path with the canonical relative plan
+  path.
+- Confirmed active deterministic modules are `models.py`, `store.py`, `utils.py`,
+  `agents/researcher.py`, `agents/analyst.py`, `agents/reviewer.py`,
+  `agents/synthesizer.py`, and `agents/renderer.py`.
+- Confirmed `agents/planner.py`, `agents/supportingresearcher.py`, and
+  `agents/opposingresearcher.py` remain placeholders for later roadmap phases.
+- Made no implementation, test, dependency, or Phase 6 behavior changes.
+
+Commands run:
+
+- `git status --short`: clean before audit edits.
+- `git log --oneline --decorate -n 8`: latest commits were `64d0408 phase-05 fix` and
+  `378d58a phase-05`.
+- `git diff dfa57af..HEAD --name-only`: confirmed Phase 5 changed seven tracked files.
+- `python -m pytest`: failed because this shell does not have `python` on `PATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 173 passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 17 files already
+  formatted.
+
+Known limitations:
+
+- Plain `python` is unavailable unless `.venv/bin` is placed on `PATH`.
+- No Phase 6 fixture pipeline, orchestration, CLI, live retrieval, scraping, LLM/API calls,
+  provider integrations, SDK integrations, web frameworks, ORMs, or HTTP clients exist.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 6 without explicit user direction.
+- Do not add real search providers, scrapers, LLM providers, network calls, live API keys,
+  or external provider integrations.
+
 ## 2026-07-04 - Phase 5 Verification Pass
 
 Current branch:
@@ -162,7 +231,7 @@ Current branch:
 Latest completed phase:
 
 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission.
-- Phase 5 has not started.
+- At that handoff time, Phase 5 had not started.
 
 Files changed:
 
@@ -254,7 +323,7 @@ Current branch:
 Latest completed phase:
 
 - Phase 3 Snapshot and Quotation Integrity.
-- Phase 4 has not started.
+- At that handoff time, Phase 4 had not started.
 
 Latest important commits:
 
@@ -319,7 +388,7 @@ Work completed:
 - Added the full Phase 0-10 roadmap to `.agent/PLANS.md`.
 - Added a short architecture note clarifying that architecture defines invariants while phase sequencing lives in `.agent/PLANS.md` and `.agent/plans/`.
 - Added a short conventions note clarifying phase-gated development and required pre-edit checks.
-- Confirmed Phase 3 is complete and Phase 4 has not started.
+- Confirmed at that time that Phase 3 was complete and Phase 4 had not started.
 
 Commands run:
 
@@ -482,7 +551,7 @@ Important constraints:
 
 - Stop at Phase 2 unless the user explicitly requests Phase 3.
 - Do not implement web retrieval, scraping, LLM calls, orchestration, renderer logic, SDK integrations, web frameworks, ORMs, HTTP clients, or real agent behavior yet.
-- Agent modules remain placeholders.
+- At Phase 2 close, agent modules remained placeholders.
 - Internal handoffs must continue to use Pydantic model instances, not raw dictionaries.
 - Claim Fit 2 records must not enter the final Ledger.
 

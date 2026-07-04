@@ -4,6 +4,16 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
+## Current Project State After Phase 5
+
+Phases 0 through 5 are complete. Phase 6 has not started and should begin only after explicit user direction.
+
+Active deterministic modules now include `models.py`, `store.py`, `utils.py`, `agents/researcher.py`, `agents/analyst.py`, `agents/reviewer.py`, `agents/synthesizer.py`, and `agents/renderer.py`. The `agents/planner.py`, `agents/supportingresearcher.py`, and `agents/opposingresearcher.py` files remain placeholders until their later roadmap phases.
+
+Tests currently cover Phase 0 scaffold checks, Phase 1 Pydantic contracts, Phase 2 SQLite persistence, Phase 3 snapshot and quotation integrity, Phase 4 Analyst/Reviewer/Ledger admission policy, and Phase 5 synthesis/rendering/release validation. The latest documented full verification is `python -m pytest` with 173 tests passing, plus `python -m ruff check .` and `python -m ruff format --check .` passing.
+
+The next exact phase is Phase 6 fixture-only complete pipeline. Do not add real search providers, scrapers, LLM providers, network calls, live API keys, or external provider integrations in Phase 6.
+
 ## Phase 0: Repository Foundation
 
 Purpose: Establish project documentation, repository rules, scaffold, pyproject configuration, assistant instructions, status tracking, handoff tracking, and phase planning.

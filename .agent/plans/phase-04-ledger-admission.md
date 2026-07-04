@@ -184,4 +184,6 @@ Result: passed, 16 files already formatted.
 
 ## Next Phase Confirmation
 
-Phase 5 Synthesizer schema, renderer, and release validator was not started.
+At Phase 4 completion, Phase 5 Synthesizer schema, renderer, and release validator had
+not started. Phase 5 has since completed; see `.agent/plans/phase-05-release-gate.md`,
+`STATUS.md`, and `HANDOFF.md` for the current project state.

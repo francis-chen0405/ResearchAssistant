@@ -53,4 +53,20 @@
 - Treat `.agent/PLANS.md` as the compact source of truth for the full Phase 0-10 roadmap.
 - Keep detailed implementation prompts out of the roadmap index; use individual `.agent/plans/phase-XX-*.md` files for phase-specific plans.
 - Clarify that `ARCHITECTURE.md` defines system invariants while phase sequencing lives in `.agent/PLANS.md` and the canonical `.agent/plans/` directory.
-- Confirm Phase 4 is the next unstarted phase: Analyst rules, Reviewer rules, and Ledger admission.
+- At the time of roadmap alignment, Phase 4 was the next unstarted phase: Analyst rules, Reviewer rules, and Ledger admission.
+
+## 2026-07-03 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission
+
+- Implement Phase 4 as deterministic typed helper surfaces in `agents/analyst.py` and `agents/reviewer.py`; do not add LLM calls or provider integrations.
+- Keep score interpretation explicit with a 25-row Evidence Quality and Claim Fit table, preserving separate score axes before deriving any Ledger score.
+- Reconstruct Ledger records from candidate, snapshot, Analyst decision, StatementDraft, and Reviewer approval artifacts instead of trusting caller-supplied Ledger fields.
+- Reuse Phase 3 snapshot and quote verification before Ledger admission so a matching hash alone is not treated as proof that the quotation exists at the recorded offsets.
+- Keep Reviewer input narrow: quote block, bracket context, draft statement, and Claim Fit score only.
+
+## 2026-07-04 - Phase 5 Synthesizer Schema, Renderer, and Release Validator
+
+- Build `SynthesisOutput` only from typed `LedgerRecord` instances; reject raw dictionary Ledger handoffs.
+- Keep approved connective templates in `agents/renderer.py` as deterministic strict Pydantic configuration artifacts.
+- Validate final releases by exact Ledger claim ID, Reviewer approval ID, statement text, placement, stance, entailment, section compatibility, template compatibility, and one-use-per-Ledger-claim rules.
+- Compute the rendered brief SHA-256 hash only after final validation succeeds; invalid validation results carry no rendered hash.
+- Keep Phase 5 deterministic and fixture-oriented. No fixture pipeline, orchestration, CLI, live retrieval, scraping, LLM/API calls, provider integrations, dependencies, or Phase 6 behavior was added.
