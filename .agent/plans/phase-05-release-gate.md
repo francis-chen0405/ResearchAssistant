@@ -101,6 +101,25 @@ Result: passed, 17 files already formatted.
 - `python -m ruff check .`: all checks passed.
 - `python -m ruff format --check .`: 17 files already formatted.
 
+## 2026-07-04 Verification Addendum
+
+- Re-inspected the Phase 5 changed files and confirmed no provider abstraction, real
+  LLM/API call, retrieval, scraping, orchestration, fixture pipeline, dependency, or
+  Phase 6 behavior was introduced.
+- Added Phase 5 regression tests for raw dictionary Ledger handoffs and empty approved
+  Ledger statements.
+- Tightened the synthesizer to reject non-`LedgerRecord` inputs explicitly.
+- Tightened final validation to revalidate LedgerRecord shape and return invalid typed
+  validation results with no rendered hash for malformed Ledger inputs.
+- Initial exact `python -m pytest` failed because this shell did not have `python` on
+  `PATH`; verification used the repository `.venv/bin` directory at the front of `PATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase5.py -q`: 24 passed in
+  0.10s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: 173 passed in 0.74s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: 17 files already
+  formatted.
+
 ## Unresolved Risks
 
 - Template compatibility is deterministic configuration, not semantic review.

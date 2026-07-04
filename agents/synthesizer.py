@@ -43,23 +43,28 @@ def build_synthesis_output(
     synthesizer_prompt_version: str = DEFAULT_SYNTHESIZER_PROMPT_VERSION,
     synthesizer_model_name: str = DEFAULT_SYNTHESIZER_MODEL_NAME,
 ) -> SynthesisOutput:
-    for record in ledger_records:
+    typed_records = [
+        _require_ledger_record(record, f"ledger_records[{index}]")
+        for index, record in enumerate(ledger_records)
+    ]
+
+    for record in typed_records:
         if record.run_id != run_id:
             raise ValueError("Ledger record run_id must match synthesis run_id")
 
     sections: list[SynthesisSection] = []
     supporting = _ordered_records(
         record
-        for record in ledger_records
+        for record in typed_records
         if record.stance is Stance.SUPPORTING and record.placement is not Placement.QUALIFIED_ONLY
     )
     opposing = _ordered_records(
         record
-        for record in ledger_records
+        for record in typed_records
         if record.stance is Stance.OPPOSING and record.placement is not Placement.QUALIFIED_ONLY
     )
     limitations = _ordered_records(
-        record for record in ledger_records if record.placement is Placement.QUALIFIED_ONLY
+        record for record in typed_records if record.placement is Placement.QUALIFIED_ONLY
     )
 
     if supporting:
@@ -96,6 +101,12 @@ def build_synthesis_output(
         claim_definition=claim_definition,
         sections=sections,
     )
+
+
+def _require_ledger_record(record: object, location: str) -> LedgerRecord:
+    if not isinstance(record, LedgerRecord):
+        raise TypeError(f"{location} must be a LedgerRecord instance")
+    return record
 
 
 def _ordered_records(records: Iterable[LedgerRecord]) -> list[LedgerRecord]:

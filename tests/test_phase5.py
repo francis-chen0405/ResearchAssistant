@@ -169,6 +169,51 @@ def _assert_invalid(
     assert any(error.code is code for error in result.errors)
 
 
+def test_synthesizer_rejects_raw_dictionary_ledger_handoff() -> None:
+    ledger_payload = _valid_ledgers()[0].model_dump(mode="python")
+
+    with pytest.raises(TypeError, match="LedgerRecord"):
+        build_synthesis_output(
+            run_id=_RUN_ID,
+            title="Fixture Debate Brief",
+            claim_definition="Fixture claim framing without factual findings.",
+            ledger_records=[ledger_payload],
+            created_at=_NOW,
+        )
+
+
+def test_final_validator_rejects_raw_dictionary_ledger_handoff() -> None:
+    ledgers = _valid_ledgers()
+    synthesis = _synthesis(ledgers)
+    ledger_payload = ledgers[0].model_dump(mode="python")
+
+    result = validate_final_release(
+        synthesis,
+        [ledger_payload, *ledgers[1:]],
+        validated_at=_NOW,
+    )
+
+    assert result.valid is False
+    assert result.rendered_brief_hash is None
+    assert any(error.code is ValidationErrorCode.SCHEMA_ERROR for error in result.errors)
+
+
+def test_empty_approved_ledger_statement_blocks_release() -> None:
+    ledgers = _valid_ledgers()
+    synthesis = _synthesis(ledgers)
+    empty_statement_ledger = ledgers[0].model_copy(update={"approved_factual_statement": ""})
+
+    result = validate_final_release(
+        synthesis,
+        [empty_statement_ledger, *ledgers[1:]],
+        validated_at=_NOW,
+    )
+
+    assert result.valid is False
+    assert result.rendered_brief_hash is None
+    assert any(error.code is ValidationErrorCode.SCHEMA_ERROR for error in result.errors)
+
+
 def test_change_one_word_blocks_release() -> None:
     ledgers = _valid_ledgers()
     synthesis = _synthesis(ledgers)

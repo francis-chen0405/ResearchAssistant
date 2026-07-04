@@ -171,6 +171,19 @@ def _ledger_lookup(
     errors: list[ValidationError] = []
     lookup: dict[object, LedgerRecord] = {}
     for index, record in enumerate(ledger_records):
+        if not isinstance(record, LedgerRecord):
+            errors.append(
+                _error(
+                    ValidationErrorCode.SCHEMA_ERROR,
+                    f"ledger_records[{index}]",
+                    "Final validation requires LedgerRecord instances.",
+                )
+            )
+            continue
+        schema_errors = _ledger_schema_errors(record, index)
+        errors.extend(schema_errors)
+        if schema_errors:
+            continue
         if record.run_id != synthesis.run_id:
             errors.append(
                 _error(
@@ -189,6 +202,21 @@ def _ledger_lookup(
             )
         lookup[record.ledger_claim_id] = record
     return lookup, errors
+
+
+def _ledger_schema_errors(record: LedgerRecord, index: int) -> list[ValidationError]:
+    try:
+        LedgerRecord.model_validate(record.model_dump(mode="python"))
+    except PydanticValidationError as exc:
+        return [
+            _error(
+                ValidationErrorCode.SCHEMA_ERROR,
+                _prefix_location(f"ledger_records[{index}]", detail.get("loc", ())),
+                str(detail.get("msg", "LedgerRecord schema validation failed.")),
+            )
+            for detail in exc.errors()
+        ]
+    return []
 
 
 def _schema_errors_from_revalidation(synthesis: SynthesisOutput) -> list[ValidationError]:
@@ -477,6 +505,13 @@ def _format_pydantic_location(location: object) -> str:
     if not isinstance(location, tuple) or not location:
         return "synthesis"
     return ".".join(str(part) for part in location)
+
+
+def _prefix_location(prefix: str, location: object) -> str:
+    suffix = _format_pydantic_location(location)
+    if suffix == "synthesis":
+        return prefix
+    return f"{prefix}.{suffix}"
 
 
 def _error(

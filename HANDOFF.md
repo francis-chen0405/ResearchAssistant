@@ -1,5 +1,81 @@
 # Handoff
 
+## 2026-07-04 - Phase 5 Verification Pass
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 5 Synthesizer Schema, Renderer, and Release Validator.
+- Phase 6 has not started.
+
+Files changed in this verification pass:
+
+- `agents/synthesizer.py`
+- `agents/renderer.py`
+- `tests/test_phase5.py`
+- `STATUS.md`
+- `HANDOFF.md`
+- `.agent/plans/phase-05-release-gate.md`
+
+Work completed:
+
+- Verified the original Phase 5 commit touched exactly the files documented in the Phase
+  5 plan and handoff.
+- Confirmed the renderer only produces final text through the validation gate and uses
+  fixed approved templates plus exact Ledger factual statements and source URLs.
+- Confirmed the validator enforces Ledger claim ID, Reviewer approval ID, exact
+  statement, placement, stance, entailment, section compatibility, template
+  compatibility, and one-use-per-Ledger-claim checks.
+- Added narrow regression tests for raw dictionary Ledger handoffs and empty approved
+  Ledger statements.
+- Tightened the synthesizer to reject non-`LedgerRecord` inputs with a clear exception.
+- Tightened the final validator to reject non-`LedgerRecord` inputs and malformed
+  `LedgerRecord` instances with typed invalid validation results and no rendered hash.
+
+Commands run:
+
+- `git status --short --branch`: clean before verification edits.
+- `git log --oneline --decorate -10`: latest commit before this pass was
+  `378d58a phase-05`.
+- `git show --stat --oneline --name-only HEAD`: confirmed Phase 5 changed seven files.
+- `git diff dfa57af..HEAD --name-only`: confirmed Phase 5 changed seven files.
+- Exact `python -m pytest`: failed because this shell did not have `python` on `PATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 170 passed in 1.08s
+  before the verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed before the verification
+  patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed before the
+  verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase5.py -q`: passed with
+  24 passed in 0.10s after the verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 173 passed in 0.74s after
+  the verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed after the verification
+  patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed after the
+  verification patch.
+
+Known limitations:
+
+- Plain `python` is unavailable unless `.venv/bin` is placed on `PATH`.
+- Template compatibility is deterministic configuration, not semantic review.
+- Source citations are still deterministic URL inclusions only.
+- No provider abstractions, real LLM/API calls, retrieval, scraping, fixture pipeline,
+  orchestration, CLI, dependencies, or Phase 6 behavior were added.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 6 without explicit user direction.
+- Do not add provider abstractions, real search, scraping, real LLM calls, SDK
+  integrations, live network calls, API keys, or external provider integrations.
+
 ## 2026-07-03 - Phase 5 Synthesizer Schema, Renderer, and Release Validator
 
 Current branch:
