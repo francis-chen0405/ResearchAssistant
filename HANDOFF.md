@@ -1,5 +1,103 @@
 # Handoff
 
+## 2026-07-04 - Phase 6 Fixture-Only Complete Pipeline
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 6 Fixture-Only Complete Pipeline.
+- Phase 7 has not started.
+
+Files changed:
+
+- `orchestrator.py`
+- `cli.py`
+- `tests/test_phase6.py`
+- `tests/fixtures/basic_valid_run/`
+- `tests/fixtures/invalid_release_run/`
+- `.agent/plans/phase-06-fixture-pipeline.md`
+- `.agent/PLANS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 6 as a fixture-only coordinator around the existing typed Phase 1
+  models, Phase 2 store functions, Phase 3 deterministic candidate filter, Phase 4
+  Ledger admission helper, and Phase 5 renderer/validator.
+- Keep fixture JSON at persistence boundaries only. Internal handoffs are Pydantic
+  model instances.
+- Derive Phase 6 Ledger claim IDs deterministically from run ID, Reviewer approval ID,
+  approved factual statement, and a Phase 6 derivation-version string.
+- Treat expected final-validator blocks as successful CLI execution with a typed
+  blocked result and useful validation errors.
+- Persist fixture output locally and deterministically in `.phase6_output/`, with
+  idempotent output verification on rerun.
+- Keep snapshots and Ledger records insert-only; reruns verify existing rows instead of
+  updating or deleting them.
+- Add no dependencies and do not start provider abstractions, search, scraping, LLM/API
+  calls, API-key reads, async code, web frameworks, ORMs, HTTP clients, or Phase 7 work.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master` with no
+  uncommitted changes.
+- `git log --oneline -10`: latest commit before Phase 6 edits was
+  `1cbf5c9 update files to phase-05`.
+- Exact `python cli.py run-fixture tests/fixtures/basic_valid_run`: failed before
+  project execution with `zsh:1: command not found: python`.
+- Exact `python cli.py run-fixture tests/fixtures/invalid_release_run`: failed before
+  project execution with `zsh:1: command not found: python`.
+- Exact `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py -q`:
+  failed before project execution with `zsh:1: command not found: python`.
+- Exact `python -m ruff check .`: failed before project execution with
+  `zsh:1: command not found: python`.
+- Exact `python -m ruff format --check .`: failed before project execution with
+  `zsh:1: command not found: python`.
+- `PATH="$PWD/.venv/bin:$PATH" python cli.py run-fixture tests/fixtures/basic_valid_run`:
+  passed and printed a released result with rendered hash
+  `cfb4182d7469c05f269150605aa24907fbc850ea7f70e4e86633a9c96f60f1ed`.
+- `PATH="$PWD/.venv/bin:$PATH" python cli.py run-fixture tests/fixtures/invalid_release_run`:
+  passed and printed a blocked result with an `altered_statement` validation error.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase6.py -q`: passed with
+  11 passed in 1.63s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py -q`:
+  passed with 182 passed in 3.38s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 20 files
+  already formatted.
+
+Exact results:
+
+- Valid fixture CLI: released.
+- Invalid fixture CLI: blocked, not crashed.
+- Phase 6 focused tests: 11 passed.
+- Phase 1 through Phase 6 tests: 182 passed.
+- Ruff check: all checks passed.
+- Ruff format check: 20 files already formatted.
+
+Known limitations:
+
+- Bare `python` is still unavailable unless `.venv/bin` is placed on `PATH`.
+- Phase 6 is fully offline and fixture-only; it does not execute live retrieval,
+  scraping, LLM calls, or provider-backed orchestration.
+- The fixture pipeline proves deterministic wiring and validation behavior, not live
+  semantic research quality.
+
+Next exact task:
+
+- Phase 7 search and scraping provider interfaces, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 7 without explicit user direction.
+- Do not add live network calls, search providers, scrapers, LLM providers, API-key
+  reads, SDK integrations, async orchestration, web frameworks, ORMs, or HTTP clients as
+  part of Phase 6 follow-up.
+
 ## 2026-07-04 - Post-Phase-5 Documentation State Audit
 
 Current branch:

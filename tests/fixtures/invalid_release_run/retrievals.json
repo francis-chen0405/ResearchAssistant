@@ -1,0 +1,26 @@
+[
+  {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "retrieval_attempt_id": "60000000-0000-0000-0000-000000000201",
+    "query_id": "60000000-0000-0000-0000-000000000101",
+    "query_round": 1,
+    "query_text": "fixture policy improves student outcomes evidence",
+    "search_rank": 1,
+    "source_url": "https://example.test/phase6/support-source",
+    "resolved_url": "https://example.test/phase6/support-source",
+    "status": "retrieved",
+    "retrieved_at": "2026-07-04T12:00:00+00:00"
+  },
+  {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "retrieval_attempt_id": "60000000-0000-0000-0000-000000000202",
+    "query_id": "60000000-0000-0000-0000-000000000111",
+    "query_round": 1,
+    "query_text": "fixture policy does not improve student outcomes evidence",
+    "search_rank": 1,
+    "source_url": "https://example.test/phase6/oppose-source",
+    "resolved_url": "https://example.test/phase6/oppose-source",
+    "status": "retrieved",
+    "retrieved_at": "2026-07-04T12:00:00+00:00"
+  }
+]

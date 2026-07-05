@@ -1,0 +1,24 @@
+[
+  {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "statement_draft_id": "60000000-0000-0000-0000-000000000301",
+    "quote_block_id": "9d23236b-f2d5-5478-a812-3f5d02b62fa5",
+    "stance": "supporting",
+    "draft_statement": "Schools reported higher completion rates compared with baseline classes.",
+    "claim_fit": 5,
+    "analyst_prompt_version": "phase6-analyst-fixture-v1",
+    "analyst_model_name": "deterministic-fixture",
+    "drafted_at": "2026-07-04T12:00:00+00:00"
+  },
+  {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "statement_draft_id": "60000000-0000-0000-0000-000000000302",
+    "quote_block_id": "fc0abae9-66a1-5d0e-b390-3302812738ca",
+    "stance": "opposing",
+    "draft_statement": "Surveyed families reported a 20% decline in student satisfaction after the fixture rollout.",
+    "claim_fit": 4,
+    "analyst_prompt_version": "phase6-analyst-fixture-v1",
+    "analyst_model_name": "deterministic-fixture",
+    "drafted_at": "2026-07-04T12:00:00+00:00"
+  }
+]

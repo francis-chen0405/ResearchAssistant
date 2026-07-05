@@ -1,0 +1,88 @@
+{
+  "run_id": "60000000-0000-0000-0000-000000000002",
+  "claim_definition": {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "claim_text": "The fixture policy improves student outcomes.",
+    "population": "student outcomes",
+    "jurisdiction": "fixture jurisdiction",
+    "time_period": "2026 fixture term",
+    "comparison_baseline": "baseline classes",
+    "intervention_or_exposure": "fixture policy",
+    "causal_or_comparative_meaning": "comparative improvement",
+    "created_at": "2026-07-04T12:00:00+00:00"
+  },
+  "ambiguities": [
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "ambiguity_id": "60000000-0000-0000-0000-000000000010",
+      "description": "Fixture-only claim scope.",
+      "impact": "No live interpretation is performed in Phase 6.",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    }
+  ],
+  "search_queries": [
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "query_id": "60000000-0000-0000-0000-000000000101",
+      "stance": "supporting",
+      "query_round": 1,
+      "strategy": "Direct Affirmation",
+      "query_text": "fixture policy improves student outcomes evidence",
+      "exclusion_parameters": "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    },
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "query_id": "60000000-0000-0000-0000-000000000102",
+      "stance": "supporting",
+      "query_round": 2,
+      "strategy": "Underlying Mechanism",
+      "query_text": "fixture policy mechanism student outcomes evidence",
+      "exclusion_parameters": "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    },
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "query_id": "60000000-0000-0000-0000-000000000103",
+      "stance": "supporting",
+      "query_round": 3,
+      "strategy": "Deep-Dive Analysis",
+      "query_text": "fixture policy student outcomes analysis",
+      "exclusion_parameters": "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    },
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "query_id": "60000000-0000-0000-0000-000000000111",
+      "stance": "opposing",
+      "query_round": 1,
+      "strategy": "Direct Refutation",
+      "query_text": "fixture policy does not improve student outcomes evidence",
+      "exclusion_parameters": "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    },
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "query_id": "60000000-0000-0000-0000-000000000112",
+      "stance": "opposing",
+      "query_round": 2,
+      "strategy": "Limiting Conditions",
+      "query_text": "fixture policy limitations student outcomes",
+      "exclusion_parameters": "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    },
+    {
+      "run_id": "60000000-0000-0000-0000-000000000002",
+      "query_id": "60000000-0000-0000-0000-000000000113",
+      "stance": "opposing",
+      "query_round": 3,
+      "strategy": "Confounding Factors",
+      "query_text": "fixture policy confounding factors student outcomes",
+      "exclusion_parameters": "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com",
+      "created_at": "2026-07-04T12:00:00+00:00"
+    }
+  ],
+  "planner_prompt_version": "phase6-planner-fixture-v1",
+  "planner_model_name": "deterministic-fixture",
+  "planned_at": "2026-07-04T12:00:00+00:00"
+}

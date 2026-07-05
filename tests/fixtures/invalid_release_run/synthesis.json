@@ -1,0 +1,40 @@
+{
+  "run_id": "60000000-0000-0000-0000-000000000002",
+  "synthesizer_prompt_version": "phase6-synthesizer-fixture-v1",
+  "synthesizer_model_name": "deterministic-fixture",
+  "created_at": "2026-07-04T12:00:00+00:00",
+  "title": "Fixture Policy Brief",
+  "claim_definition": "The fixture policy improves student outcomes.",
+  "sections": [
+    {
+      "section_type": "supporting",
+      "heading": "Supporting Evidence",
+      "items": [
+        {
+          "connective_template_id": "supporting_evidence",
+          "ledger_claim_id": "7e6cce42-bcea-5e5e-b2cc-abe3a40ba0ec",
+          "reviewer_approval_id": "60000000-0000-0000-0000-000000000401",
+          "stance": "supporting",
+          "placement": "primary",
+          "entailment": "Strong",
+          "approved_factual_statement": "Schools reported lower completion rates compared with baseline classes."
+        }
+      ]
+    },
+    {
+      "section_type": "opposing",
+      "heading": "Opposing Evidence",
+      "items": [
+        {
+          "connective_template_id": "opposing_evidence",
+          "ledger_claim_id": "9239fc0b-5c39-5ce4-84ae-d5d5353992d4",
+          "reviewer_approval_id": "60000000-0000-0000-0000-000000000402",
+          "stance": "opposing",
+          "placement": "secondary",
+          "entailment": "Strong",
+          "approved_factual_statement": "Surveyed families reported a 20% decline in student satisfaction after the fixture rollout."
+        }
+      ]
+    }
+  ]
+}

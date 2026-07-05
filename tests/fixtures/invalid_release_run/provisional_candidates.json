@@ -1,0 +1,32 @@
+[
+  {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "stance": "supporting",
+    "source_url": "https://example.test/phase6/support-source",
+    "retrieval_attempt_id": "60000000-0000-0000-0000-000000000201",
+    "query_id": "60000000-0000-0000-0000-000000000101",
+    "query_round": 1,
+    "search_rank": 1,
+    "snapshot_id": "60000000-0000-0000-0000-000000000211",
+    "snapshot_sha256": "b74ff0ecd8b7c0d50ec70fcb7a20ed6c1b49f2bb04d759c0e015b98164209161",
+    "extracted_quote_block": "[District report introduces the fixture policy evaluation.] \"policy evidence shows 50% growth in student outcomes across a controlled fixture cohort because schools reported higher completion rates compared with baseline classes, and the authors state the improvement was consistent across participating campuses during the measured term while noting implementation quality remained important for interpreting the observed gains overall.\" [The report cautions that longer follow-up would improve confidence.]",
+    "extraction_prompt_version": "phase6-extractor-fixture-v1",
+    "extraction_model_name": "deterministic-fixture",
+    "extracted_at": "2026-07-04T12:00:00+00:00"
+  },
+  {
+    "run_id": "60000000-0000-0000-0000-000000000002",
+    "stance": "opposing",
+    "source_url": "https://example.test/phase6/oppose-source",
+    "retrieval_attempt_id": "60000000-0000-0000-0000-000000000202",
+    "query_id": "60000000-0000-0000-0000-000000000111",
+    "query_round": 1,
+    "search_rank": 1,
+    "snapshot_id": "60000000-0000-0000-0000-000000000212",
+    "snapshot_sha256": "d47f32d05cd6fd466793f276a7d2f327e4187321ad02a3420a28782f7199ba28",
+    "extracted_quote_block": "[Independent evaluator describes implementation costs.] \"policy evidence shows a 20% decline in student satisfaction among surveyed families after the fixture rollout, and administrators reported that average workload increased across pilot schools, which the evaluator linked to training demands, schedule disruptions, and limited support during the first semester of implementation in participating districts overall that year.\" [The evaluator states that later adjustments reduced some burden.]",
+    "extraction_prompt_version": "phase6-extractor-fixture-v1",
+    "extraction_model_name": "deterministic-fixture",
+    "extracted_at": "2026-07-04T12:00:00+00:00"
+  }
+]

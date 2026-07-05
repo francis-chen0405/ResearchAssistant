@@ -1,5 +1,66 @@
 # Status
 
+## 2026-07-04 - Phase 6 Fixture-Only Complete Pipeline
+
+Status: Complete.
+
+Completed:
+
+- Added a fixture-only offline orchestrator in `orchestrator.py` that loads local
+  fixture artifacts into strict Pydantic models, filters provisional candidates through
+  the deterministic Phase 3 gate, admits Reviewer-approved statements through the Phase
+  4 Ledger helper, validates fixture `SynthesisOutput` through the Phase 5 release
+  validator, and returns an explicit released or blocked typed result.
+- Added `cli.py` with `run-fixture`, where released results and expected validation
+  blocks both exit `0`, while malformed fixtures and internal pipeline failures exit
+  nonzero.
+- Added deterministic valid and invalid fixture runs under `tests/fixtures/`.
+- Added Phase 6 tests for valid release, invalid validation block, stable hash, typed
+  artifacts, run ID preservation, inspectable audit trail, idempotent reruns, database
+  reopening, useful validation errors, explicit fixture failures, no network/provider
+  behavior, and CLI behavior.
+- Updated the phase-plan index so it identifies Phase 6 as complete and Phase 7 as the
+  next explicit phase boundary.
+- Persisted deterministic local `audit.json`, `result.json`, and SQLite output in a
+  fixture-local `.phase6_output/` directory ignored by each fixture directory.
+- No dependencies, provider abstractions, live retrieval, scraping, LLM/API calls,
+  API-key reads, async code, web frameworks, ORMs, HTTP clients, or Phase 7 behavior
+  were added.
+
+Verification:
+
+- Exact `python cli.py run-fixture tests/fixtures/basic_valid_run`: failed before
+  project execution with `zsh:1: command not found: python`.
+- Exact `python cli.py run-fixture tests/fixtures/invalid_release_run`: failed before
+  project execution with `zsh:1: command not found: python`.
+- Exact `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py -q`:
+  failed before project execution with `zsh:1: command not found: python`.
+- Exact `python -m ruff check .` and `python -m ruff format --check .`: failed before
+  project execution with `zsh:1: command not found: python`.
+- `PATH="$PWD/.venv/bin:$PATH" python cli.py run-fixture tests/fixtures/basic_valid_run`:
+  passed and released hash `cfb4182d7469c05f269150605aa24907fbc850ea7f70e4e86633a9c96f60f1ed`.
+- `PATH="$PWD/.venv/bin:$PATH" python cli.py run-fixture tests/fixtures/invalid_release_run`:
+  passed and returned a blocked result with an `altered_statement` validation error.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase6.py -q`: passed with
+  11 passed in 1.63s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py -q`:
+  passed with 182 passed in 3.38s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 20 files
+  already formatted.
+
+Known limitations:
+
+- Bare `python` remains unavailable in this shell unless `.venv/bin` is placed on
+  `PATH`.
+- Phase 6 uses fixture Analyst, Reviewer, and synthesis artifacts only; it is not a live
+  provider-backed or semantically generative pipeline.
+- Real search and scraping provider interfaces remain unstarted and belong to Phase 7.
+
+Next exact task:
+
+- Phase 7 search and scraping provider interfaces, only after explicit user direction.
+
 ## 2026-07-04 - Post-Phase-5 Documentation State Audit
 
 Status: Complete.

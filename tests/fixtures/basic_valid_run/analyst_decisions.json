@@ -1,0 +1,28 @@
+[
+  {
+    "run_id": "60000000-0000-0000-0000-000000000001",
+    "quote_block_id": "9d23236b-f2d5-5478-a812-3f5d02b62fa5",
+    "evidence_quality": 5,
+    "claim_fit": 5,
+    "ledger_score": 5,
+    "placement": "primary",
+    "approved": true,
+    "rationale": "Fixture support evidence directly addresses the claim.",
+    "analyst_prompt_version": "phase6-analyst-fixture-v1",
+    "analyst_model_name": "deterministic-fixture",
+    "scored_at": "2026-07-04T12:00:00+00:00"
+  },
+  {
+    "run_id": "60000000-0000-0000-0000-000000000001",
+    "quote_block_id": "fc0abae9-66a1-5d0e-b390-3302812738ca",
+    "evidence_quality": 4,
+    "claim_fit": 4,
+    "ledger_score": 4,
+    "placement": "secondary",
+    "approved": true,
+    "rationale": "Fixture opposing evidence identifies a relevant limitation.",
+    "analyst_prompt_version": "phase6-analyst-fixture-v1",
+    "analyst_model_name": "deterministic-fixture",
+    "scored_at": "2026-07-04T12:00:00+00:00"
+  }
+]
