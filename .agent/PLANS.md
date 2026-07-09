@@ -4,15 +4,15 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
-## Current Project State After Phase 6
+## Current Project State After Phase 7A
 
-Phases 0 through 6 are complete. Phase 7 has not started and should begin only after explicit user direction.
+Phases 0 through 6 and Phase 7A are complete. Phase 7B has not started and should begin only after explicit user direction.
 
-Active deterministic modules now include `models.py`, `store.py`, `utils.py`, `agents/researcher.py`, `agents/analyst.py`, `agents/reviewer.py`, `agents/synthesizer.py`, `agents/renderer.py`, `orchestrator.py`, and `cli.py`. The `agents/planner.py`, `agents/supportingresearcher.py`, and `agents/opposingresearcher.py` files remain placeholders until their later roadmap phases.
+Active deterministic modules now include `models.py`, `store.py`, `utils.py`, `agents/researcher.py`, `agents/analyst.py`, `agents/reviewer.py`, `agents/synthesizer.py`, `agents/renderer.py`, `orchestrator.py`, `cli.py`, and `frontend/streamlit_app.py`. The `agents/planner.py`, `agents/supportingresearcher.py`, and `agents/opposingresearcher.py` files remain placeholders until their later roadmap phases.
 
-Tests currently cover Phase 0 scaffold checks, Phase 1 Pydantic contracts, Phase 2 SQLite persistence, Phase 3 snapshot and quotation integrity, Phase 4 Analyst/Reviewer/Ledger admission policy, Phase 5 synthesis/rendering/release validation, and Phase 6 fixture-only complete pipeline behavior. The latest documented full verification is the Phase 1 through Phase 6 targeted suite with 182 tests passing, plus `python -m ruff check .` and `python -m ruff format --check .` passing.
+Tests currently cover Phase 0 scaffold checks, Phase 1 Pydantic contracts, Phase 2 SQLite persistence, Phase 3 snapshot and quotation integrity, Phase 4 Analyst/Reviewer/Ledger admission policy, Phase 5 synthesis/rendering/release validation, Phase 6 fixture-only complete pipeline behavior, and Phase 7A frontend helper behavior. The latest documented full verification is the full pytest suite with 188 tests passing, plus `python -m ruff check .` and `python -m ruff format --check .` passing.
 
-The next exact phase is Phase 7 search and scraping provider interfaces, only after explicit user direction. Do not add LLM integration, live-network tests by default, semantic scoring, rendering, or final orchestration in Phase 7.
+The next exact phase is Phase 7B search and scraping provider interfaces, only after explicit user direction. Do not add LLM integration, live-network tests by default, semantic scoring, rendering, final orchestration, production UI, authentication, uploads, user accounts, or dashboards in Phase 7B.
 
 ## Phase 0: Repository Foundation
 
@@ -187,7 +187,37 @@ Explicitly out of scope:
 
 Completion signal: A valid fixture run releases a final brief with a stable hash. An invalid fixture run is blocked with useful errors. The audit trail is inspectable, all stages pass typed artifacts, reruns do not corrupt state, and no real network/API/LLM calls occur.
 
-## Phase 7: Search and Scraping Provider Interfaces
+## Phase 7A: Extremely Basic Local Frontend
+
+Purpose: Add a minimal local Streamlit frontend around the existing Phase 6 fixture-only
+pipeline.
+
+Main files expected:
+
+- `frontend/streamlit_app.py`
+- `frontend/README.md`
+- `tests/test_phase7_frontend.py`
+- `.agent/plans/phase-07a-local-frontend.md`
+
+Explicitly out of scope:
+
+- Core Phase 6 pipeline behavior changes
+- Live LLM calls
+- Web retrieval or scraping
+- React
+- FastAPI
+- Authentication
+- User accounts
+- Uploads
+- Project dashboards
+- Database changes
+- Phase 7B or Phase 8 work
+
+Completion signal: Local helper tests prove fixture discovery, valid fixture execution,
+invalid fixture execution, and structured display information without browser UI tests.
+The frontend launches with `streamlit run frontend/streamlit_app.py`.
+
+## Phase 7B: Search and Scraping Provider Interfaces
 
 Purpose: Implement vendor-isolated search and scraping provider abstractions plus deterministic retrieval behavior using fake providers in tests.
 

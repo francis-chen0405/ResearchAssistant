@@ -1,5 +1,98 @@
 # Handoff
 
+## 2026-07-09 - Phase 7A Extremely Basic Local Frontend
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 7A Extremely Basic Local Frontend.
+- Phase 7B has not started.
+
+Files changed:
+
+- `frontend/streamlit_app.py`
+- `frontend/README.md`
+- `tests/test_phase7_frontend.py`
+- `tests/test_phase0_foundation.py`
+- `pyproject.toml`
+- `.agent/plans/phase-07a-local-frontend.md`
+- `.agent/PLANS.md`
+- `README.md`
+- `AGENTS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 7A as a thin local Streamlit wrapper around the existing Phase 6
+  `run_fixture_pipeline()` API.
+- Keep helper logic pure and testable through strict Pydantic UI summary models rather
+  than browser UI tests.
+- Add `streamlit>=1.37,<2.0` as the only new dependency because the phase explicitly
+  requires Streamlit.
+- Keep output behavior delegated to the Phase 6 fixture pipeline; default UI runs use the
+  fixture-local `.phase6_output/` behavior already implemented by the orchestrator.
+- Do not change `orchestrator.py`, `cli.py`, Ledger validation, renderer, synthesizer,
+  analyst, researcher, or planner behavior.
+- Do not add live LLM calls, live retrieval, scraping, providers, React, FastAPI,
+  authentication, uploads, dashboards, user accounts, database changes, Phase 7B work, or
+  Phase 8 work.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase7_frontend.py -q`:
+  passed with 4 passed in 0.23s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase0_foundation.py tests/test_phase7_frontend.py -q`:
+  passed with 6 passed in 0.19s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 188 passed in 1.73s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 22 files
+  already formatted.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pip install "streamlit>=1.37,<2.0"`: passed;
+  Streamlit 1.59.1 was already installed in the virtual environment.
+- Sandboxed `streamlit run frontend/streamlit_app.py --server.headless true --server.address 127.0.0.1 --server.port 8501`:
+  failed with `PermissionError: [Errno 1] Operation not permitted` while binding to
+  localhost.
+- Approved local server launch with `.venv/bin/streamlit`: passed and started
+  `http://127.0.0.1:8501`.
+- Approved `curl -I --max-time 5 http://127.0.0.1:8501`: passed with
+  `HTTP/1.1 200 OK`.
+
+Exact results:
+
+- Phase 7A focused tests: 4 passed.
+- Phase 0 plus Phase 7A targeted tests: 6 passed.
+- Full pytest suite: 188 passed.
+- Ruff check: all checks passed.
+- Ruff format check: 22 files already formatted.
+- Local Streamlit launch: passed at `http://127.0.0.1:8501` after localhost bind
+  approval.
+- Localhost response check: passed with `HTTP/1.1 200 OK`.
+
+Known limitations:
+
+- The frontend is intentionally basic and local-only.
+- The helper tests verify display data and wrapper behavior, not browser rendering.
+- Phase 7A still depends entirely on fixture artifacts; it does not add live retrieval,
+  scraping, LLM calls, provider-backed orchestration, uploads, dashboards, or accounts.
+- Streamlit introduces local web-serving transitive packages in the environment, but no
+  project web framework or HTTP-provider behavior was implemented.
+
+Next exact task:
+
+- Phase 7B search and scraping provider interfaces, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 7B without explicit user direction.
+- Do not add live LLM calls, live retrieval, scraping, provider integrations, API-key
+  reads, SDK integrations, React, FastAPI, uploads, authentication, dashboards, user
+  accounts, database changes, or Phase 8 behavior as part of Phase 7A follow-up.
+
 ## 2026-07-04 - Phase 6 Fixture-Only Complete Pipeline
 
 Current branch:

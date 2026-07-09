@@ -27,13 +27,14 @@ def test_phase0_scaffold_exists() -> None:
     assert missing == []
 
 
-def test_pyproject_declares_only_phase0_dependencies() -> None:
+def test_pyproject_declares_phase_dependencies() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert pyproject["project"]["requires-python"] == ">=3.11"
     assert pyproject["project"]["dependencies"] == [
         "pydantic>=2.0,<3.0",
         "python-dotenv>=1.0,<2.0",
+        "streamlit>=1.37,<2.0",
     ]
     assert pyproject["project"]["optional-dependencies"]["dev"] == [
         "pytest>=8.0,<9.0",
