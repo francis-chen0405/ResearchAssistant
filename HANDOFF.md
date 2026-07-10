@@ -1,5 +1,102 @@
 # Handoff
 
+## 2026-07-10 - Phase 7B Search and Scraping Provider Interfaces
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 7B Search and Scraping Provider Interfaces.
+- Phase 8 has not started.
+
+Files changed:
+
+- `providers/search.py`
+- `providers/scraper.py`
+- `agents/supportingresearcher.py`
+- `agents/opposingresearcher.py`
+- `tests/test_phase7.py`
+- `models.py` (freeze `SourceSnapshot` compatibility fix)
+- `frontend/streamlit_app.py` (import-only compatibility fix for required Ruff checks)
+- `.agent/plans/phase-07-retrieval.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Keep search and scraper vendors behind runtime-checkable synchronous Protocols and
+  strict Pydantic request/response artifacts.
+- Preserve the existing persisted `RetrievalRecord`; place scrape-specific status,
+  content type, retry, failure, snapshot, and duplicate metadata in a new strict typed
+  `RetrievalOutcome` handoff.
+- Make balanced retrieval the cross-stance deduplication boundary and enforce nine
+  intended attempts per side and 18 total.
+- Retry timeouts according to `RetryPolicy`; fail non-timeout provider errors explicitly
+  without retrying them.
+- Reject malformed non-Pydantic provider responses explicitly at the provider boundary,
+  and validate consistency among retrieval status, scrape status, retry metadata,
+  content type, and snapshot provenance.
+- Treat PDF and binary content as explicitly unsupported; accept normalized text and
+  XML-family types only.
+- Freeze `SourceSnapshot` as the smallest earlier-file compatibility fix required for
+  immutable snapshot creation.
+- Apply only an import consolidation to the Phase 7A frontend because its committed
+  duplicate/misplaced imports blocked the required full-repository Ruff verification.
+- Use `.agent/plans/phase-07-retrieval.md`, the canonical path in the repository
+  roadmap, rather than creating the conflicting alternate plan filename from the prompt.
+- Add no dependencies, real adapters, network-dependent tests, LLM behavior, prompts,
+  semantic scoring, renderer behavior, async code, or Phase 8 work.
+
+Commands run:
+
+- Exact bare required pytest command for Phase 1 through Phase 7: failed before project
+  execution with `zsh: command not found: python`.
+- Exact bare required Ruff check and format commands: failed before project execution
+  with `zsh: command not found: python`.
+- The identical three commands with `PATH="$PWD/.venv/bin:$PATH"`: all passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: full suite passed.
+
+Exact results:
+
+- Required Phase 1 through Phase 7 tests: 203 passed in 2.19s.
+- Full pytest suite: 209 passed in 1.98s.
+- Ruff check: all checks passed.
+- Ruff format check: 25 files already formatted.
+- Bare exact commands: unavailable because this shell has no `python` on `PATH`.
+
+Audit note:
+
+- The claim that Ruff formatted 25 files was inaccurate: `ruff format --check .`
+  reported that 25 files were already formatted. No repository-wide formatting-only
+  changes were present or reverted.
+- The frontend import-only compatibility patch was retained because the committed file
+  produces seven Ruff errors; the application body is unchanged.
+
+Known limitations:
+
+- Bare `python` remains unavailable unless `.venv/bin` is placed on `PATH`.
+- Phase 7B provides interfaces and deterministic behavior only; it does not include a
+  live search or scraper vendor implementation.
+- Standalone stance calls deduplicate within their own call. Use `retrieve_balanced()`
+  for shared support/opposition deduplication.
+- Search errors or short search result sets fail explicitly before URL-bearing records
+  can be constructed for missing ranks.
+- Scraper adapters must return textual content; Phase 7B does not parse raw HTML.
+- Persistence wiring and full provider-backed orchestration are deferred to their
+  roadmap phase.
+
+Next exact task:
+
+- Phase 8 LLM provider and structured prompts, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 8 without explicit user direction.
+- Do not add LLM providers, prompts, live network adapters, API keys, semantic scoring,
+  renderer changes, async orchestration, or later-phase behavior as Phase 7B follow-up.
+
 ## 2026-07-09 - Phase 7A Extremely Basic Local Frontend
 
 Current branch:

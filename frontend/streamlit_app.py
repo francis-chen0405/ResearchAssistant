@@ -1,23 +1,20 @@
 from __future__ import annotations
-from pathlib import Path
+
 import sys
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from models import StrictModel
+from models import StrictModel  # noqa: E402
+from orchestrator import FixturePipelineResult, run_fixture_pipeline  # noqa: E402
 
-
-from pathlib import Path
-from typing import Literal
-
-from pydantic import Field
-
-from orchestrator import FixturePipelineResult, run_fixture_pipeline
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PROJECT_ROOT
 DEFAULT_FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 REQUIRED_FIXTURE_FILES = (
     "raw_claim.txt",

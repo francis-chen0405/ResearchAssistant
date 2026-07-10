@@ -1,5 +1,72 @@
 # Status
 
+## 2026-07-10 - Phase 7B Search and Scraping Provider Interfaces
+
+Status: Complete.
+
+Completed:
+
+- Added Protocol-based synchronous `SearchProvider` and `ScraperProvider` interfaces
+  with strict typed Pydantic request/response artifacts and explicit provider errors.
+- Added deterministic supporting, opposing, and balanced retrieval entry points.
+- Enforced three queries per side, top three per query, exactly 18 intended balanced
+  attempts, equal side depth, required query exclusions, stable rank/round records, and
+  original/resolved URL preservation.
+- Added typed scrape outcomes recording scrape status, normalized content type, retry
+  count, failures, snapshots, and duplicate references.
+- Added timeout retry behavior, explicit exhausted timeouts, explicit scrape failures,
+  unsupported PDF/binary handling, 3,000-word truncation, and timezone-aware retrieval
+  timestamps.
+- Added shared original-URL, resolved-URL, and normalized-content-hash deduplication so
+  duplicates do not create duplicate snapshots, including across both sides in balanced
+  retrieval.
+- Ensured trusted snapshots are constructed and integrity-checked before they reach an
+  optional downstream consumer.
+- Froze `SourceSnapshot` through the smallest required compatibility fix in `models.py`
+  so snapshot artifacts are immutable in memory as well as insert-only in SQLite.
+- Cleaned duplicate/misplaced imports in the committed Phase 7A frontend because they
+  prevented the required full-repository Ruff check; frontend behavior was unchanged.
+- Added 21 deterministic offline tests attacking provider protocols, exact depth,
+  exclusions, ranking, URL/content deduplication, retries, failures, unsupported content,
+  content types, snapshot ordering, truncation, timestamp awareness, immutability,
+  malformed provider outputs, typed outcome consistency, deterministic IDs, and
+  real-network prohibition.
+- Audited provider boundaries and added explicit rejection of non-Pydantic search and
+  scrape responses before malformed values can cross typed internal boundaries.
+- Strengthened retrieval outcome and batch validation so statuses, attempt counts,
+  content types, snapshot provenance, and newly created snapshot collections cannot
+  contradict one another.
+- Added no dependency, real provider adapter, live network call, API key, LLM behavior,
+  prompt, semantic scoring, renderer change, async behavior, or Phase 8 work.
+
+Verification:
+
+- Exact bare `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py tests/test_phase7.py -q`:
+  failed before project execution with `zsh: command not found: python`.
+- Exact bare `python -m ruff check .` and `python -m ruff format --check .`: failed
+  before project execution with `zsh: command not found: python`.
+- Required Phase 1-7 command using `.venv/bin/python` directly: passed with 203 tests
+  in 2.19s; Ruff check passed, and Ruff reported 25 files already formatted.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: full suite passed with 205 tests in
+  2.15s before the audit; the final direct-venv run passed with 209 tests in 1.98s.
+
+Known limitations:
+
+- Bare `python` is unavailable unless the repository `.venv/bin` directory is placed
+  on `PATH`.
+- No real vendor adapter or live-network test exists; Phase 7B intentionally verifies
+  behavior only through injected fake providers.
+- Cross-stance deduplication is provided by `retrieve_balanced()`; standalone stance
+  calls use isolated deduplication state.
+- Search failures before URLs exist raise explicit `SearchProviderError` exceptions.
+- Text normalization is deterministic and intentionally simple; scraper adapters must
+  return extracted text rather than raw HTML interpretation.
+- Provider-backed persistence and full orchestration remain later-phase work.
+
+Next exact task:
+
+- Phase 8 LLM provider and structured prompts, only after explicit user direction.
+
 ## 2026-07-09 - Phase 7A Extremely Basic Local Frontend
 
 Status: Complete.

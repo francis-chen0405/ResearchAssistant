@@ -238,6 +238,8 @@ class RetrievalRecord(StrictModel):
 
 
 class SourceSnapshot(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     run_id: UUID
     retrieval_attempt_id: UUID
     snapshot_id: UUID
