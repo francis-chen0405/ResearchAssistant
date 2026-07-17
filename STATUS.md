@@ -1,5 +1,63 @@
 # Status
 
+## 2026-07-16 - Phase 8 LLM Provider and Structured Prompts
+
+Status: Complete.
+
+Completed:
+
+- Added a vendor-isolated synchronous `LLMProvider` Protocol with strict typed requests,
+  provider capability declarations, exact requested-output revalidation, and typed
+  success/failure invocation provenance.
+- Added validated per-stage routing with exactly one primary, up to two ordered distinct
+  fallbacks, the required MiMo-first defaults, recommended temperatures, optional pinned
+  model snapshot provenance, and explicit rejection of unsupported provider controls.
+- Added versioned, hashed structured prompts for Planner, Extractor, Analyst, Reviewer,
+  and Synthesizer with application-owned model/prompt/schema/validator authority rules.
+- Added typed Planner, Extractor, Analyst, and Synthesizer LLM inputs while preserving
+  the existing narrow Reviewer input.
+- Added an explicit `UNTRUSTED_SOURCE_TEXT` envelope and instruction policy, plus
+  snapshot/candidate integrity rechecks before source text reaches Extractor or Analyst
+  prompts.
+- Enforced Pydantic-only model output, exact requested schema, extra-field rejection,
+  complete input artifact ID and timing provenance, typed failure/retry metadata, and no
+  approved artifact on invocation failure.
+- Added 34 deterministic offline Phase 8 tests covering valid stage artifacts, raw and
+  malformed responses, extra fields, prompt hashing, success/failure records, retry
+  metadata, forbidden Reviewer fields, prompt injection, no-network behavior, optional
+  integration gating, routing validation/defaults, generation settings, provider
+  capabilities, and absence of runtime failover.
+- Documented the blank `RUN_LLM_INTEGRATION_TESTS` opt-in gate in `.env.example`; no
+  API-key variable was added.
+- Added no dependency, live adapter, API key, network call, database change, runtime
+  retry/failover, real orchestration, async behavior, evaluation corpus, or Phase 9 work.
+
+Verification:
+
+- The exact bare `python` pytest and Ruff commands failed before project execution with
+  `zsh: command not found: python`.
+- The identical required commands with `PATH="$PWD/.venv/bin:$PATH"` passed without
+  setting `PYTHONPATH`: 237 passed, 1 skipped in 2.14s; Ruff check passed; Ruff format
+  reported 27 files already formatted.
+- Focused Phase 8 suite: 34 passed, 1 skipped in 0.18s.
+- Full pytest suite: 243 passed, 1 skipped in 2.28s.
+- The single skip is the optional integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+
+Known limitations:
+
+- No real LLM vendor adapter or live integration test is included; normal execution is
+  verified with injected fake providers only.
+- Phase 8 records configured fallback order but deliberately executes neither retry nor
+  fallback. Those behaviors belong to Phase 9.
+- Invocation persistence and provider-backed stage coordination remain future work.
+- Bare `python` is unavailable unless `.venv/bin` is placed on `PATH`.
+
+Next exact task:
+
+- Phase 9 real orchestration and controlled concurrency, only after explicit user
+  direction.
+
 ## 2026-07-10 - Phase 7B Search and Scraping Provider Interfaces
 
 Status: Complete.

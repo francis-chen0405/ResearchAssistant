@@ -8,9 +8,11 @@ from uuid import UUID
 from pydantic import Field, field_validator, model_validator
 
 from agents.researcher import verify_candidate_against_snapshot
+from agents.supportingresearcher import UntrustedSourceText
 from models import (
     ApprovedScore,
     CandidateQuoteBlock,
+    ClaimDefinition,
     Entailment,
     LedgerRecord,
     Placement,
@@ -38,6 +40,51 @@ QUALIFICATION_MARKERS = (
     "under",
     "within",
 )
+
+
+class AnalystLLMInput(StrictModel):
+    """Typed Analyst input with source text held behind the untrusted-data boundary."""
+
+    run_id: UUID
+    claim_definition: ClaimDefinition
+    candidate: CandidateQuoteBlock
+    source: UntrustedSourceText
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> AnalystLLMInput:
+        if self.claim_definition.run_id != self.run_id or self.candidate.run_id != self.run_id:
+            raise ValueError("Analyst input artifacts must share the run_id")
+        if self.source.snapshot_id != self.candidate.snapshot_id:
+            raise ValueError("Analyst source snapshot_id must match the candidate")
+        if self.source.snapshot_sha256 != self.candidate.snapshot_sha256:
+            raise ValueError("Analyst source hash must match the candidate")
+        return self
+
+
+def build_analyst_llm_input(
+    *,
+    claim_definition: ClaimDefinition,
+    candidate: CandidateQuoteBlock,
+    snapshot: SourceSnapshot,
+) -> AnalystLLMInput:
+    """Construct the semantic-analysis input without allowing raw source instructions."""
+    if snapshot.run_id != candidate.run_id:
+        raise ValueError("snapshot run_id must match the candidate")
+    if snapshot.snapshot_id != candidate.snapshot_id:
+        raise ValueError("snapshot_id must match the candidate")
+    if snapshot.snapshot_sha256 != candidate.snapshot_sha256:
+        raise ValueError("snapshot hash must match the candidate")
+    verify_candidate_against_snapshot(snapshot, candidate)
+    return AnalystLLMInput(
+        run_id=candidate.run_id,
+        claim_definition=claim_definition,
+        candidate=candidate,
+        source=UntrustedSourceText(
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_sha256=snapshot.snapshot_sha256,
+            text=snapshot.normalized_text,
+        ),
+    )
 
 
 class ScorePairPolicy(StrictModel):

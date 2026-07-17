@@ -1,5 +1,99 @@
 # Handoff
 
+## 2026-07-16 - Phase 8 LLM Provider and Structured Prompts
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 8 LLM Provider and Structured Prompts.
+- Phase 9 has not started.
+
+Files changed:
+
+- `providers/llm.py`
+- `prompts/planner.md`
+- `prompts/extractor.md`
+- `prompts/analyst.md`
+- `prompts/reviewer.md`
+- `prompts/synthesizer.md`
+- `agents/planner.py`
+- `agents/supportingresearcher.py`
+- `agents/analyst.py`
+- `agents/synthesizer.py`
+- `tests/test_phase8.py`
+- `.env.example`
+- `.agent/plans/phase-08-llm-integration.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Keep the LLM boundary synchronous, vendor-neutral, Pydantic-only, and one-call-at-a-
+  time. Phase 8 does not perform orchestration.
+- Make model routing strict application configuration: exactly one primary and up to two
+  ordered distinct fallbacks for every stage.
+- Reserve MiMo Pro for Planner, Analyst, and Synthesizer high-leverage reasoning; use
+  MiMo normal for repeated grounded Extractor and Reviewer work.
+- Treat DeepSeek aliases as third-line availability fallbacks that never bypass
+  deterministic checks, independent Reviewer approval, Ledger admission, or final
+  validation.
+- Record configured fallbacks while enforcing `fallback_executed: false`; runtime retry,
+  failover, restart, cancellation, budgets, and controlled concurrency remain Phase 9.
+- Reject unsupported temperature or provider-native structured-output controls
+  explicitly. Callers may disable unsupported controls explicitly, but local exact
+  Pydantic schema validation always remains active.
+- Carry Pydantic instances and requested Pydantic model classes in strict frozen request
+  and result artifacts; never convert internal handoffs to raw dictionaries.
+- Label source text `UNTRUSTED_SOURCE_TEXT`, ignore all embedded instructions, and
+  recheck deterministic integrity before Extractor/Analyst prompt construction.
+- Add no SDK, HTTP client, live vendor adapter, API key, dependency, database migration,
+  async code, evaluation corpus, or Phase 9 behavior.
+- Document only the blank `RUN_LLM_INTEGRATION_TESTS` opt-in gate in `.env.example`.
+
+Commands run:
+
+- Exact bare Phase 1-8 pytest command: failed before execution with
+  `zsh: command not found: python`.
+- Exact bare Ruff check and format commands: failed before execution with the same
+  missing `python` error.
+- Identical required commands with `PATH="$PWD/.venv/bin:$PATH"`: all passed without
+  setting `PYTHONPATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase8.py -q`: passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest -q`: full suite passed.
+
+Exact results:
+
+- Focused Phase 8 suite: 34 passed, 1 skipped in 0.18s.
+- Required Phase 1 through Phase 8 selection: 237 passed, 1 skipped in 2.14s.
+- Full pytest suite: 243 passed, 1 skipped in 2.28s.
+- Ruff check: all checks passed.
+- Ruff format check: 27 files already formatted.
+- The one skipped test is the optional integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+
+Known limitations:
+
+- No real LLM vendor adapter, API call, or live integration test exists.
+- The richer invocation record is currently an in-memory typed audit artifact;
+  persistence and provider-backed stage coordination remain Phase 9 work.
+- Phase 8 validates fallback order but does not execute automatic retry or failover.
+- Bare `python` remains unavailable unless `.venv/bin` is placed on `PATH`.
+
+Next exact task:
+
+- Phase 9 real orchestration and controlled concurrency, only after explicit user
+  direction.
+
+Do not start:
+
+- Do not begin Phase 9 without explicit user direction.
+- Do not add real orchestration, sync-worker concurrency, runtime retry/restart/fallback,
+  cancellation, budgets, provider-backed persistence, evaluation corpus, or Phase 10
+  work as a Phase 8 follow-up.
+
 ## 2026-07-10 - Phase 7B Search and Scraping Provider Interfaces
 
 Current branch:

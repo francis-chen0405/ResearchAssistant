@@ -4,6 +4,8 @@ from collections.abc import Iterable, Sequence
 from datetime import datetime
 from uuid import UUID
 
+from pydantic import Field, model_validator
+
 from agents.renderer import (
     OPPOSING_EVIDENCE_TEMPLATE_ID,
     PARTIAL_ENTAILMENT_TEMPLATE_ID,
@@ -17,6 +19,7 @@ from models import (
     Placement,
     SectionType,
     Stance,
+    StrictModel,
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
@@ -31,6 +34,21 @@ _PLACEMENT_ORDER = {
     Placement.SUPPORTING: 2,
     Placement.QUALIFIED_ONLY: 3,
 }
+
+
+class SynthesizerLLMInput(StrictModel):
+    """Typed immutable-Ledger input for the structured Synthesizer call."""
+
+    run_id: UUID
+    title: str = Field(min_length=1)
+    claim_definition: str = Field(min_length=1)
+    ledger_records: tuple[LedgerRecord, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_ledger_runs(self) -> SynthesizerLLMInput:
+        if any(record.run_id != self.run_id for record in self.ledger_records):
+            raise ValueError("all Ledger records must match the synthesis run_id")
+        return self
 
 
 def build_synthesis_output(
