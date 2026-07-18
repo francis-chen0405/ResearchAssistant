@@ -1,0 +1,6 @@
+{
+  "case_id": "validator-known-attack-declared-unblocked",
+  "mutation": "altered_statement",
+  "expected_blocked": false,
+  "regression_fixture": "regression-fixtures/validator-mutations.json"
+}

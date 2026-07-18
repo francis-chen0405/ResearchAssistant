@@ -1,5 +1,112 @@
 # Status
 
+## 2026-07-17 - Phase 10 Evaluation and Adversarial Testing
+
+Status: Complete.
+
+Completed:
+
+- Added a strict Pydantic, corpus-driven offline evaluation framework under
+  `evaluations/`. JSON is accepted only at the corpus/output boundary; internal
+  evaluation artifacts use `extra="forbid"` and immutable typed models.
+- Added 38 deterministic frozen cases covering snapshot hashes, exact citation offsets,
+  bracket context, final-validator mutations, unsupported claims, prompt injection,
+  Analyst/Reviewer decisions, retrieval parity, primary/retry/backup/third-line routes,
+  model quality, correlated errors, token/cost metadata, and completion time.
+- Exercised the existing snapshot/bracket helpers and existing deterministic final
+  validator directly. No validator, Reviewer rule, Ledger rule, route default, or prior
+  implementation file was changed.
+- Added machine-readable JSON and a human-readable Markdown summary derived from the
+  same strict report, with an agreement guard and deterministic byte output for the same
+  corpus.
+- The final independent audit fixed narrow Phase 10 defects: regression fixture files
+  now carry strict frozen expectations instead of existence-only descriptions; route
+  fixtures must follow the configured aliases and one-retry path; every quality input
+  must compare MiMo normal and Pro; token-bearing aliases require frozen pricing; and
+  correlated-error coverage cannot be emptied or contradicted.
+- Machine and human reports now label quality and pricing as frozen evaluation inputs,
+  and the human summary includes per-stage quality, per-alias failure, route-agreement,
+  token-coverage, and optional-live details from the same report.
+- Added citation accuracy, snapshot integrity, bracket accuracy, unsupported-claim rate,
+  validator escape rate, placement consistency, mutation attack block rate,
+  prompt-injection resistance, score separation, Analyst and Reviewer rejection rates,
+  retrieval parity, completion time, and fallback safety metrics.
+- Added per-stage route outcome counts, primary success, retry, and fallback rates;
+  per-alias malformed-output and exact-quote-failure rates; and frozen primary, retry,
+  backup, and third-line fake-provider attempt paths.
+- Added MiMo V2.5 versus MiMo V2.5 Pro quality deltas overall and by stage, plus the
+  Extractor comparison between MiMo V2.5 and DeepSeek V4 Flash on the same frozen case.
+- Added same-model Analyst/Reviewer correlated-error cases that remain visible by case
+  ID in machine and human output.
+- Added token/pricing recomputation for total cost, cost per successful artifact, and
+  cost per completed run only when metadata is available.
+- Added an optional live-comparison Protocol. Live comparison is skipped unless
+  explicitly enabled, uses the exact frozen input/alias/snapshot identity when enabled,
+  and has no repository live adapter or normal network dependency.
+- Added explicit exit behavior for evaluation failures, configuration/execution
+  failures, and unexpected internal errors. No case can disappear from the
+  evaluated-case inventory.
+- Added 30 Phase 10 tests attacking output production/agreement, metric calculations,
+  snapshot/citation/bracket separation, prompt injection, hidden skipping, regression
+  fixtures, validator immutability, exit codes, determinism, route consistency,
+  fallback safety, live gating, correlated errors, cost arithmetic, failure rates, and
+  strict corpus schemas.
+- Added no dependency, live vendor, production UI, validator weakening, routing-default
+  change, score inflation, hidden skip, or post-MVP hardening work.
+
+Files changed:
+
+- `evaluations/__init__.py`
+- `evaluations/schema.py`
+- `evaluations/evaluator.py`
+- `evaluations/run_evaluations.py`
+- `evaluations/README.md`
+- `evaluations/cases/offline-corpus.json`
+- `evaluations/cases/regression-fixtures/`
+- `evaluations/output/.gitignore`
+- `tests/test_phase10.py`
+- `tests/fixtures/phase10/`
+- `.agent/plans/phase-10-evaluation.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Verification:
+
+- The four exact bare commands failed before project execution with
+  `zsh: command not found: python` because bare `python` is not on `PATH`.
+- The identical commands with `PATH="$PWD/.venv/bin:$PATH"` and without setting
+  `PYTHONPATH` passed: offline evaluation passed; 294 passed and 1 skipped; Ruff check
+  passed; Ruff format reported 33 files already formatted.
+- Focused Phase 10 suite: 30 passed.
+- Full repository suite: 300 passed, 1 skipped.
+- `git diff --check`: passed.
+
+Evaluation results:
+
+- 38 cases evaluated; optional live comparison explicitly skipped.
+- Citation, snapshot, bracket, placement, mutation block, prompt-injection resistance,
+  retrieval parity, and fallback safety: 100%.
+- Unsupported-claim rate and validator escape rate: 0%.
+- Analyst rejection rate: 25%; Reviewer rejection rate: 33.33%; score separation:
+  66.67%.
+- MiMo Pro-minus-normal frozen quality delta: +0.05; Extractor DeepSeek Flash-minus-MiMo
+  delta: -0.05.
+- One same-model correlated error was explicitly reported.
+- Frozen-token total cost: $0.008974; cost per successful artifact and completed run:
+  $0.001495667; maximum completion time: 110 seconds.
+
+Known limitations:
+
+- Offline quality and pricing values are frozen evaluation inputs, not current live
+  provider claims.
+- No live vendor adapter exists; optional live comparison requires an injected provider.
+- Bare `python` remains unavailable unless `.venv/bin` is placed first on `PATH`.
+
+Next exact task:
+
+- Post-MVP hardening based on evaluation results, only after explicit user direction.
+- Post-MVP hardening was not started.
+
 ## 2026-07-17 - Phase 9 Real Orchestration and Controlled Concurrency
 
 Status: Complete.

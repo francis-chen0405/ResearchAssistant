@@ -1,0 +1,37 @@
+{
+  "case_id": "route-reviewer-unsafe-fallback-regression",
+  "run_id": "route-run-reviewer-unsafe-regression",
+  "stage": "reviewer",
+  "expected_primary_alias": "mimo-v2.5",
+  "attempts": [
+    {
+      "model_alias": "mimo-v2.5",
+      "route_index": 0,
+      "attempt_number": 1,
+      "outcome": "malformed_output",
+      "input_tokens": 500,
+      "output_tokens": 80,
+      "gates_passed": []
+    },
+    {
+      "model_alias": "mimo-v2.5",
+      "route_index": 0,
+      "attempt_number": 2,
+      "outcome": "malformed_output",
+      "input_tokens": 500,
+      "output_tokens": 80,
+      "gates_passed": []
+    },
+    {
+      "model_alias": "mimo-v2.5-pro",
+      "route_index": 1,
+      "attempt_number": 1,
+      "outcome": "success",
+      "input_tokens": 500,
+      "output_tokens": 90,
+      "gates_passed": ["pydantic_schema"]
+    }
+  ],
+  "successful_artifacts": 1,
+  "completed_run": true
+}

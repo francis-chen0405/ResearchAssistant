@@ -1,5 +1,109 @@
 # Handoff
 
+## 2026-07-17 - Phase 10 Evaluation and Adversarial Testing
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 10 Evaluation and Adversarial Testing.
+- Post-MVP hardening has not started.
+
+Files changed:
+
+- `evaluations/__init__.py`
+- `evaluations/schema.py`
+- `evaluations/evaluator.py`
+- `evaluations/run_evaluations.py`
+- `evaluations/README.md`
+- `evaluations/cases/offline-corpus.json`
+- `evaluations/cases/regression-fixtures/`
+- `evaluations/output/.gitignore`
+- `tests/test_phase10.py`
+- `tests/fixtures/phase10/`
+- `.agent/plans/phase-10-evaluation.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Keep normal evaluation fully offline, deterministic, corpus-driven, and strict
+  Pydantic throughout internal evaluation flow.
+- Exercise the existing deterministic integrity and final-release gates directly; do
+  not copy, weaken, configure around, or replace them.
+- Score citation membership and macro-bracket correctness independently. A shifted
+  offset can fail citation membership while still identifying the same surrounding
+  sentences, and the corpus records those outcomes separately.
+- Use frozen fake-provider attempt histories for route reliability, retry/fallback,
+  failure-rate, token, and cost metrics. Keep offline semantic quality labels separate
+  from optional live observations.
+- Count fallback output safe only when Pydantic schema, snapshot integrity,
+  post-extraction filter, Reviewer, Ledger admission, and final validator gates are all
+  recorded. An unsafe fallback fixture forces the report to fail.
+- Compare MiMo V2.5 and MiMo V2.5 Pro only on identical frozen input IDs and report
+  stage-level deltas alongside reliability, latency, and cost. Do not change a route
+  based on benchmark preference alone.
+- Keep DeepSeek V4 Flash comparison Extractor-specific and use the same frozen Extractor
+  input. No new provider vendor or route was added.
+- Make optional live comparison an injected Protocol, skipped by default. Enabled calls
+  must preserve exact frozen input, alias, and pinned snapshot identity.
+- Report same-model Analyst/Reviewer correlated errors by case ID instead of removing
+  them from results.
+- Derive the human summary from the machine report and verify agreement before writing.
+- Freeze regression expectations in strict fixture manifests so corpus labels cannot be
+  changed to match a weakened or altered observed outcome.
+- Validate the complete configured route alias path and the documented one-retry limit;
+  reject missing MiMo normal/Pro quality pairs and token-bearing aliases without frozen
+  pricing.
+- Label frozen quality and pricing inputs in both report formats and use distinct runner
+  exit codes `0`, `1`, `2`, and `3` for pass, evaluated failure, expected
+  configuration/execution error, and unexpected internal error.
+- Add no dependencies and make no earlier implementation-file compatibility change.
+
+Commands run:
+
+- Before edits, `git status --short --branch` reported
+  `## master...origin/master` with no uncommitted changes.
+- Before edits, `git log --oneline -10` showed
+  `526a897 Complete Phase 9 orchestration` as the latest commit.
+- All four exact bare verification commands were attempted and failed before project
+  execution with `zsh: command not found: python`.
+- The identical commands with `PATH="$PWD/.venv/bin:$PATH"`, without setting
+  `PYTHONPATH`, all passed.
+- Focused Phase 10 pytest passed.
+- `git diff --check` passed.
+
+Exact results:
+
+- Offline evaluation: passed with 38 evaluated cases, explicit optional-live skip, and
+  no failures.
+- Focused Phase 10 suite: 30 passed.
+- Required Phase 1-through-10 selection: 294 passed, 1 skipped.
+- Full repository suite: 300 passed, 1 skipped.
+- The one skip is the optional Phase 8 integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+- Ruff check: all checks passed.
+- Ruff format check: 33 files already formatted.
+
+Known limitations:
+
+- Frozen quality scores and pricing are evaluation inputs, not current provider claims.
+- No live Search, Scraper, LLM, or live-evaluation adapter exists in the repository.
+- Bare `python` remains unavailable unless `.venv/bin` is placed first on `PATH`.
+
+Next exact task:
+
+- Post-MVP hardening based on evaluation results, only after explicit user direction.
+
+Do not start:
+
+- Do not start post-MVP hardening without explicit user direction.
+- Do not change routing defaults solely from frozen benchmark preference.
+- Do not add live vendors, network-dependent normal evaluation, validator weakening,
+  hidden skips, score inflation, production UI, or later work as a Phase 10 follow-up.
+
 ## 2026-07-17 - Phase 9 Real Orchestration and Controlled Concurrency
 
 Current branch:

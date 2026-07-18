@@ -1,0 +1,29 @@
+{
+  "fixture_version": "phase10-integrity-regression-v1",
+  "cases": [
+    {
+      "case_id": "integrity-valid-control",
+      "expected_snapshot_valid": true,
+      "expected_citation_valid": true,
+      "expected_bracket_valid": true
+    },
+    {
+      "case_id": "integrity-tampered-hash",
+      "expected_snapshot_valid": false,
+      "expected_citation_valid": true,
+      "expected_bracket_valid": true
+    },
+    {
+      "case_id": "integrity-wrong-offset",
+      "expected_snapshot_valid": true,
+      "expected_citation_valid": false,
+      "expected_bracket_valid": true
+    },
+    {
+      "case_id": "integrity-wrong-bracket",
+      "expected_snapshot_valid": true,
+      "expected_citation_valid": true,
+      "expected_bracket_valid": false
+    }
+  ]
+}

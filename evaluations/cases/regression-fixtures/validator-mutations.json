@@ -1,0 +1,55 @@
+{
+  "fixture_version": "phase10-validator-mutation-regression-v1",
+  "cases": [
+    {
+      "case_id": "validator-valid-control",
+      "mutation": "valid_control",
+      "expected_blocked": false
+    },
+    {
+      "case_id": "validator-altered-statement",
+      "mutation": "altered_statement",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-punctuation-change",
+      "mutation": "punctuation_change",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-capitalization-change",
+      "mutation": "capitalization_change",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-placement-change",
+      "mutation": "placement_change",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-reviewer-id-change",
+      "mutation": "reviewer_id_change",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-ledger-id-change",
+      "mutation": "ledger_id_change",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-unknown-template",
+      "mutation": "unknown_template",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-unsupported-claim",
+      "mutation": "unsupported_claim",
+      "expected_blocked": true
+    },
+    {
+      "case_id": "validator-prompt-injection",
+      "mutation": "prompt_injection",
+      "expected_blocked": true
+    }
+  ]
+}
