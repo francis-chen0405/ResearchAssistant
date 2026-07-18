@@ -67,11 +67,15 @@ class ExtractionLLMInput(StrictModel):
     stance: Stance
     claim_definition: ClaimDefinition
     source: UntrustedSourceText
+    retrieval: RetrievalRecord | None = None
 
     @model_validator(mode="after")
     def validate_run(self) -> ExtractionLLMInput:
         if self.claim_definition.run_id != self.run_id:
             raise ValueError("claim definition run_id must match extraction run_id")
+        if self.retrieval is not None:
+            if self.retrieval.run_id != self.run_id:
+                raise ValueError("retrieval run_id must match extraction run_id")
         return self
 
 
@@ -80,10 +84,18 @@ def build_extraction_llm_input(
     planner: PlannerOutput,
     snapshot: SourceSnapshot,
     stance: Stance,
+    retrieval: RetrievalRecord | None = None,
 ) -> ExtractionLLMInput:
     """Wrap immutable snapshot text in the required explicit untrusted-data envelope."""
     if snapshot.run_id != planner.run_id:
         raise ValueError("snapshot run_id must match Planner output")
+    if retrieval is not None:
+        if retrieval.run_id != planner.run_id:
+            raise ValueError("retrieval run_id must match Planner output")
+        if retrieval.retrieval_attempt_id != snapshot.retrieval_attempt_id:
+            raise ValueError("retrieval attempt must match the snapshot")
+        if retrieval.resolved_url != snapshot.source_url:
+            raise ValueError("retrieval resolved URL must match the snapshot source URL")
     validate_snapshot_integrity(snapshot)
     return ExtractionLLMInput(
         run_id=planner.run_id,
@@ -94,6 +106,7 @@ def build_extraction_llm_input(
             snapshot_sha256=snapshot.snapshot_sha256,
             text=snapshot.normalized_text,
         ),
+        retrieval=retrieval,
     )
 
 

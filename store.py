@@ -17,10 +17,16 @@ from models import (
     CandidateQuoteBlock,
     ClaimDefinition,
     LedgerRecord,
+    ModelAttemptStatus,
     ModelInvocationRecord,
+    ModelRouteAttempt,
+    ModelUsageMetadata,
+    OrchestrationCheckpoint,
+    PersistedStageArtifact,
     PlannerOutput,
     ProvisionalCandidate,
     RetrievalRecord,
+    RunCancellationRequest,
     RunManifest,
     ScoreDecision,
     SearchQuery,
@@ -72,6 +78,14 @@ def init_db(db_path: str) -> None:
                     1,
                     'phase-2 initial sqlite schema',
                     '2026-06-26T00:00:00+00:00'
+                );
+
+            INSERT OR IGNORE INTO schema_migrations
+                (version, description, applied_at)
+                VALUES (
+                    2,
+                    'phase-9 orchestration audit and checkpoint schema',
+                    '2026-07-17T00:00:00+00:00'
                 );
 
             -- runs --------------------------------------------------------
@@ -170,6 +184,10 @@ def init_db(db_path: str) -> None:
                 extraction_model_name    TEXT NOT NULL,
                 extracted_at             TEXT NOT NULL
             );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS
+                provisional_extractions_run_snapshot_stance
+                ON provisional_extractions(run_id, snapshot_id, stance);
 
             -- candidates ---------------------------------------------------
             CREATE TABLE IF NOT EXISTS candidates (
@@ -339,6 +357,66 @@ def init_db(db_path: str) -> None:
                 status               TEXT NOT NULL,
                 invoked_at           TEXT NOT NULL
             );
+
+            -- Phase 9 orchestration ---------------------------------------
+            CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
+                run_id          TEXT NOT NULL REFERENCES runs(run_id),
+                stage_key       TEXT NOT NULL,
+                status          TEXT NOT NULL,
+                failure_reason  TEXT,
+                updated_at      TEXT NOT NULL,
+                PRIMARY KEY (run_id, stage_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS orchestration_stage_artifacts (
+                run_id          TEXT NOT NULL REFERENCES runs(run_id),
+                artifact_key    TEXT NOT NULL,
+                artifact_type   TEXT NOT NULL,
+                payload_json    TEXT NOT NULL,
+                created_at      TEXT NOT NULL,
+                PRIMARY KEY (run_id, artifact_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS model_route_attempts (
+                attempt_id              TEXT PRIMARY KEY,
+                run_id                  TEXT NOT NULL REFERENCES runs(run_id),
+                operation_id            TEXT NOT NULL,
+                stage                   TEXT NOT NULL,
+                output_type             TEXT NOT NULL,
+                model_alias             TEXT NOT NULL,
+                pinned_model_snapshot   TEXT,
+                route_index             INTEGER NOT NULL,
+                attempt_number          INTEGER NOT NULL,
+                input_artifact_ids      TEXT NOT NULL,
+                status                  TEXT NOT NULL,
+                retry_reason            TEXT,
+                escalation_reason       TEXT,
+                failure_code            TEXT,
+                failure_reason          TEXT,
+                started_at              TEXT NOT NULL,
+                ended_at                TEXT,
+                latency_ms              REAL,
+                input_tokens            INTEGER,
+                output_tokens           INTEGER,
+                total_tokens            INTEGER,
+                cost_usd                REAL,
+                output_json             TEXT,
+                UNIQUE (
+                    run_id,
+                    operation_id,
+                    route_index,
+                    attempt_number
+                )
+            );
+
+            CREATE INDEX IF NOT EXISTS model_route_attempts_run_operation
+                ON model_route_attempts(run_id, operation_id, route_index, attempt_number);
+
+            CREATE TABLE IF NOT EXISTS run_cancellations (
+                run_id          TEXT PRIMARY KEY REFERENCES runs(run_id),
+                requested_at    TEXT NOT NULL,
+                reason          TEXT NOT NULL
+            );
             """
         )
         conn.commit()
@@ -405,6 +483,30 @@ def read_run(db_path: str, run_id: UUID) -> RunManifest:
         if row is None:
             raise KeyError(f"run {run_id} not found")
         return _row_to_run(row)
+    finally:
+        conn.close()
+
+
+def update_run(db_path: str, manifest: RunManifest) -> None:
+    """Update mutable run state while leaving insert-only evidence tables untouched."""
+    conn = _connect(db_path)
+    try:
+        cursor = conn.execute(
+            """UPDATE runs
+               SET status = ?, raw_claim = ?, current_stage = ?, updated_at = ?, completed_at = ?
+               WHERE run_id = ?""",
+            (
+                manifest.status.value,
+                manifest.raw_claim,
+                manifest.current_stage.value,
+                _dt_to_iso(manifest.updated_at),
+                _dt_to_iso(manifest.completed_at) if manifest.completed_at else None,
+                str(manifest.run_id),
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise KeyError(f"run {manifest.run_id} not found")
+        conn.commit()
     finally:
         conn.close()
 
@@ -1332,6 +1434,376 @@ def read_model_invocation(db_path: str, invocation_id: UUID) -> ModelInvocationR
             ),
             status=row["status"],
             invoked_at=_iso_to_dt(row["invoked_at"]),
+        )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 orchestration checkpoints and route-attempt audit
+# ---------------------------------------------------------------------------
+
+
+class ModelAttemptBudgetError(RuntimeError):
+    """Raised before a provider call when its persisted run budget is exhausted."""
+
+
+def upsert_orchestration_checkpoint(
+    db_path: str,
+    checkpoint: OrchestrationCheckpoint,
+) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO orchestration_checkpoints
+               (run_id, stage_key, status, failure_reason, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(run_id, stage_key) DO UPDATE SET
+                   status = excluded.status,
+                   failure_reason = excluded.failure_reason,
+                   updated_at = excluded.updated_at""",
+            (
+                str(checkpoint.run_id),
+                checkpoint.stage_key,
+                checkpoint.status.value,
+                checkpoint.failure_reason,
+                _dt_to_iso(checkpoint.updated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_orchestration_checkpoint(
+    db_path: str,
+    run_id: UUID,
+    stage_key: str,
+) -> OrchestrationCheckpoint:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """SELECT * FROM orchestration_checkpoints
+               WHERE run_id = ? AND stage_key = ?""",
+            (str(run_id), stage_key),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"checkpoint {stage_key} for run {run_id} not found")
+        return OrchestrationCheckpoint(
+            run_id=UUID(row["run_id"]),
+            stage_key=row["stage_key"],
+            status=row["status"],
+            failure_reason=row["failure_reason"],
+            updated_at=_iso_to_dt(row["updated_at"]),
+        )
+    finally:
+        conn.close()
+
+
+def read_orchestration_checkpoints(
+    db_path: str,
+    run_id: UUID,
+) -> list[OrchestrationCheckpoint]:
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            """SELECT * FROM orchestration_checkpoints
+               WHERE run_id = ? ORDER BY updated_at, stage_key""",
+            (str(run_id),),
+        ).fetchall()
+        return [
+            OrchestrationCheckpoint(
+                run_id=UUID(row["run_id"]),
+                stage_key=row["stage_key"],
+                status=row["status"],
+                failure_reason=row["failure_reason"],
+                updated_at=_iso_to_dt(row["updated_at"]),
+            )
+            for row in rows
+        ]
+    finally:
+        conn.close()
+
+
+def insert_stage_artifact(db_path: str, artifact: PersistedStageArtifact) -> None:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """SELECT * FROM orchestration_stage_artifacts
+               WHERE run_id = ? AND artifact_key = ?""",
+            (str(artifact.run_id), artifact.artifact_key),
+        ).fetchone()
+        if row is not None:
+            existing = _row_to_stage_artifact(row)
+            if (
+                existing.artifact_type != artifact.artifact_type
+                or existing.payload_json != artifact.payload_json
+            ):
+                raise sqlite3.IntegrityError(
+                    f"stage artifact {artifact.artifact_key} already exists with different data"
+                )
+            return
+        conn.execute(
+            """INSERT INTO orchestration_stage_artifacts
+               (run_id, artifact_key, artifact_type, payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                str(artifact.run_id),
+                artifact.artifact_key,
+                artifact.artifact_type,
+                artifact.payload_json,
+                _dt_to_iso(artifact.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_stage_artifact(
+    db_path: str,
+    run_id: UUID,
+    artifact_key: str,
+) -> PersistedStageArtifact:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """SELECT * FROM orchestration_stage_artifacts
+               WHERE run_id = ? AND artifact_key = ?""",
+            (str(run_id), artifact_key),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"stage artifact {artifact_key} for run {run_id} not found")
+        return _row_to_stage_artifact(row)
+    finally:
+        conn.close()
+
+
+def _row_to_stage_artifact(row: sqlite3.Row) -> PersistedStageArtifact:
+    return PersistedStageArtifact(
+        run_id=UUID(row["run_id"]),
+        artifact_key=row["artifact_key"],
+        artifact_type=row["artifact_type"],
+        payload_json=row["payload_json"],
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
+def reserve_model_route_attempt(
+    db_path: str,
+    attempt: ModelRouteAttempt,
+    *,
+    max_model_calls: int,
+) -> ModelRouteAttempt:
+    if attempt.status is not ModelAttemptStatus.RUNNING:
+        raise ValueError("only running model attempts may be reserved")
+    conn = _connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT * FROM model_route_attempts WHERE attempt_id = ?",
+            (str(attempt.attempt_id),),
+        ).fetchone()
+        if row is not None:
+            conn.commit()
+            return _row_to_model_route_attempt(row)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM model_route_attempts WHERE run_id = ?",
+            (str(attempt.run_id),),
+        ).fetchone()[0]
+        if count >= max_model_calls:
+            raise ModelAttemptBudgetError(
+                f"model call budget {max_model_calls} exhausted for run {attempt.run_id}"
+            )
+        _insert_model_route_attempt_row(conn, attempt)
+        conn.commit()
+        return attempt
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None:
+    if attempt.status is ModelAttemptStatus.RUNNING:
+        raise ValueError("finished model attempt cannot remain running")
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM model_route_attempts WHERE attempt_id = ?",
+            (str(attempt.attempt_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"model attempt {attempt.attempt_id} not found")
+        existing = _row_to_model_route_attempt(row)
+        if existing.status is not ModelAttemptStatus.RUNNING:
+            if existing.model_dump(mode="json") != attempt.model_dump(mode="json"):
+                raise sqlite3.IntegrityError(
+                    f"model attempt {attempt.attempt_id} already finished differently"
+                )
+            return
+        usage = attempt.usage
+        conn.execute(
+            """UPDATE model_route_attempts SET
+                   status = ?, failure_code = ?, failure_reason = ?, ended_at = ?,
+                   latency_ms = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?,
+                   cost_usd = ?, output_json = ?
+               WHERE attempt_id = ?""",
+            (
+                attempt.status.value,
+                attempt.failure_code,
+                attempt.failure_reason,
+                _dt_to_iso(attempt.ended_at),
+                attempt.latency_ms,
+                usage.input_tokens if usage else None,
+                usage.output_tokens if usage else None,
+                usage.total_tokens if usage else None,
+                usage.cost_usd if usage else None,
+                attempt.output_json,
+                str(attempt.attempt_id),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_model_route_attempts(
+    db_path: str,
+    run_id: UUID,
+    operation_id: UUID | None = None,
+) -> list[ModelRouteAttempt]:
+    conn = _connect(db_path)
+    try:
+        if operation_id is None:
+            rows = conn.execute(
+                """SELECT * FROM model_route_attempts WHERE run_id = ?
+                   ORDER BY started_at, operation_id, route_index, attempt_number""",
+                (str(run_id),),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT * FROM model_route_attempts
+                   WHERE run_id = ? AND operation_id = ?
+                   ORDER BY route_index, attempt_number""",
+                (str(run_id), str(operation_id)),
+            ).fetchall()
+        return [_row_to_model_route_attempt(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def _insert_model_route_attempt_row(
+    conn: sqlite3.Connection,
+    attempt: ModelRouteAttempt,
+) -> None:
+    usage = attempt.usage
+    conn.execute(
+        """INSERT INTO model_route_attempts
+           (attempt_id, run_id, operation_id, stage, output_type, model_alias,
+            pinned_model_snapshot, route_index, attempt_number, input_artifact_ids,
+            status, retry_reason, escalation_reason, failure_code, failure_reason,
+            started_at, ended_at, latency_ms, input_tokens, output_tokens, total_tokens,
+            cost_usd, output_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            str(attempt.attempt_id),
+            str(attempt.run_id),
+            str(attempt.operation_id),
+            attempt.stage,
+            attempt.output_type,
+            attempt.model_alias,
+            attempt.pinned_model_snapshot,
+            attempt.route_index,
+            attempt.attempt_number,
+            json.dumps([str(item) for item in attempt.input_artifact_ids]),
+            attempt.status.value,
+            attempt.retry_reason,
+            attempt.escalation_reason,
+            attempt.failure_code,
+            attempt.failure_reason,
+            _dt_to_iso(attempt.started_at),
+            _dt_to_iso(attempt.ended_at) if attempt.ended_at else None,
+            attempt.latency_ms,
+            usage.input_tokens if usage else None,
+            usage.output_tokens if usage else None,
+            usage.total_tokens if usage else None,
+            usage.cost_usd if usage else None,
+            attempt.output_json,
+        ),
+    )
+
+
+def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
+    usage_values = (
+        row["input_tokens"],
+        row["output_tokens"],
+        row["total_tokens"],
+        row["cost_usd"],
+    )
+    usage = None
+    if any(value is not None for value in usage_values):
+        usage = ModelUsageMetadata(
+            input_tokens=row["input_tokens"],
+            output_tokens=row["output_tokens"],
+            total_tokens=row["total_tokens"],
+            cost_usd=row["cost_usd"],
+        )
+    return ModelRouteAttempt(
+        run_id=UUID(row["run_id"]),
+        operation_id=UUID(row["operation_id"]),
+        attempt_id=UUID(row["attempt_id"]),
+        stage=row["stage"],
+        output_type=row["output_type"],
+        model_alias=row["model_alias"],
+        pinned_model_snapshot=row["pinned_model_snapshot"],
+        route_index=row["route_index"],
+        attempt_number=row["attempt_number"],
+        input_artifact_ids=tuple(UUID(value) for value in json.loads(row["input_artifact_ids"])),
+        status=row["status"],
+        retry_reason=row["retry_reason"],
+        escalation_reason=row["escalation_reason"],
+        failure_code=row["failure_code"],
+        failure_reason=row["failure_reason"],
+        started_at=_iso_to_dt(row["started_at"]),
+        ended_at=_iso_to_dt(row["ended_at"]) if row["ended_at"] else None,
+        latency_ms=row["latency_ms"],
+        usage=usage,
+        output_json=row["output_json"],
+    )
+
+
+def insert_cancellation_request(
+    db_path: str,
+    request: RunCancellationRequest,
+) -> RunCancellationRequest:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO run_cancellations (run_id, requested_at, reason)
+               VALUES (?, ?, ?)""",
+            (str(request.run_id), _dt_to_iso(request.requested_at), request.reason),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return read_cancellation_request(db_path, request.run_id)
+
+
+def read_cancellation_request(db_path: str, run_id: UUID) -> RunCancellationRequest:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM run_cancellations WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"cancellation request for run {run_id} not found")
+        return RunCancellationRequest(
+            run_id=UUID(row["run_id"]),
+            requested_at=_iso_to_dt(row["requested_at"]),
+            reason=row["reason"],
         )
     finally:
         conn.close()

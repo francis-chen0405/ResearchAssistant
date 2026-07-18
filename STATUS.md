@@ -1,5 +1,109 @@
 # Status
 
+## 2026-07-17 - Phase 9 Real Orchestration and Controlled Concurrency
+
+Status: Complete.
+
+Completed:
+
+- Added a provider-backed synchronous `run_provider_pipeline()` alongside the unchanged
+  Phase 6 fixture pipeline. It creates or resumes a run and connects Planner,
+  supporting/opposing Researchers, trusted snapshots, Extractor, deterministic
+  post-extraction filtering, Analyst, one possible Reviewer revision, Ledger admission,
+  Synthesizer, deterministic final validation/rendering, and release or block.
+- Added `ThreadPoolExecutor(max_workers=2)` Researcher execution. Workers return strict
+  typed result artifacts, receive equal nine-attempt retrieval limits, and never share a
+  SQLite connection, cursor, or transaction.
+- Added strict typed Researcher-side, paired-Researcher, analysis/Ledger, configuration,
+  budget, inspection, checkpoint, cancellation, usage, and route-attempt artifacts. All
+  inherit `extra="forbid"`; JSON remains confined to SQLite and CLI/export boundaries.
+- Added exact Phase 8 route execution with one retry per alias for objective transient,
+  timeout, malformed-output, schema, exact-quote, or deterministic validation failures.
+  Every retry and fallback records the stage, alias, pinned snapshot when configured,
+  attempt number, failure, retry reason, escalation reason, latency, and optional typed
+  token/cost metadata.
+- Enforced the Extractor route `mimo-v2.5` -> `mimo-v2.5-pro` ->
+  `deepseek-v4-flash`. MiMo Pro requires an objective escalation reason; DeepSeek Flash
+  is reachable only as the third-line availability fallback after MiMo Pro availability
+  exhaustion.
+- Kept semantic disagreement out of routing. Reviewer rejection creates the one
+  architecture-approved Analyst revision and a second independent review; it does not
+  silently switch models.
+- Preserved every deterministic gate for fallback output. DeepSeek extraction remains
+  subject to exact local Pydantic validation, snapshot integrity, exact quote/filter
+  checks, Analyst and Reviewer stages, Ledger admission, and final validation.
+- Added deterministic operation/attempt IDs, atomic persisted model-call reservations,
+  cached typed output reuse, interrupted-attempt handling, completed-stage checkpoints,
+  partial-run inspection, database-backed cancellation between stages, explicit
+  released/blocked/failed/cancelled status, and restart-safe attempt history.
+- Added model-call, equal per-side retrieval, optional token, and optional cost budgets.
+  Budget exhaustion produces a clean explicit failed run and never creates a final hash.
+- Preserved provider-reported usage on route attempts whose typed output later fails an
+  exact-quote or other deterministic validation gate, so retry usage remains persisted
+  and enforceable instead of being undercounted.
+- Added an SQLite schema migration in `store.py` for Phase 9 checkpoints, typed stage
+  artifact payloads, route attempts, and cancellation requests. This is the smallest
+  compatibility change required by restart-safe Phase 9 behavior and preserves the
+  convention that all schema definitions live in `init_db()`.
+- Added a uniqueness guard for one provisional extraction per run/snapshot/stance and
+  idempotent compare-before-insert behavior for snapshots, candidates, drafts, reviews,
+  Ledger records, synthesis, and validation. Snapshots and Ledger records remain
+  insert-only.
+- Added the narrow Extractor-input compatibility fix needed to carry a typed
+  `RetrievalRecord`, so required query/rank/retrieval provenance is never invented by a
+  model.
+- Added `inspect-run` and `cancel-run` CLI commands for Phase 9 databases while
+  preserving `run-fixture` behavior.
+- Added 27 deterministic offline Phase 9 tests covering full release, one/both
+  Researcher failures, partial retrieval, extraction and Analyst failures, Reviewer
+  revision and second rejection, validator block, retry/fallback policy, objective MiMo
+  Pro escalation, no semantic escalation, DeepSeek gate preservation, restart,
+  duplicate prevention, cancellation, database reopen, worker connection isolation,
+  equal limits, budgets, usage metadata, and explicit terminal status.
+- Added no dependency, live adapter, network-dependent normal test, async rewrite,
+  evaluation corpus, Phase 10 metric, production UI, or Phase 10 behavior.
+
+Files changed:
+
+- `orchestrator.py`
+- `cli.py`
+- `agents/supportingresearcher.py`
+- `providers/llm.py`
+- `models.py` (Phase 9 typed persistence/status compatibility extension)
+- `store.py` (Phase 9 schema/store compatibility extension)
+- `tests/test_phase9.py`
+- `.agent/plans/phase-09-orchestration.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Verification:
+
+- The three exact bare commands from the Phase 9 prompt were run first. All failed
+  before project execution with `zsh: command not found: python` because this shell does
+  not expose a bare `python` executable.
+- The identical required commands were run without setting `PYTHONPATH`, with
+  `PATH="$PWD/.venv/bin:$PATH"`: 264 passed, 1 skipped in 4.54s; Ruff check passed; Ruff
+  format reported 28 files already formatted.
+- Focused Phase 9 suite: 27 passed in 2.89s.
+- Full repository suite: 270 passed, 1 skipped in 4.51s.
+- The single skip is the optional Phase 8 integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+
+Known limitations:
+
+- The provider-backed API requires injected Search, Scraper, and LLM implementations;
+  no live vendor adapter or API-key integration exists in the repository.
+- Token and cost metadata is recorded and budgeted only when a provider exposes the
+  strict optional `usage_for()` result. Missing usage is recorded as unavailable and is
+  never guessed.
+- Bare `python` remains unavailable unless the repository `.venv/bin` directory is
+  placed first on `PATH`.
+
+Next exact task:
+
+- Phase 10 evaluation and adversarial testing, only after explicit user direction.
+- Phase 10 was not started.
+
 ## 2026-07-16 - Phase 8 LLM Provider and Structured Prompts
 
 Status: Complete.

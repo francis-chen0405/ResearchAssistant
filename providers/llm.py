@@ -221,14 +221,14 @@ class InvocationFailureCode(StrEnum):
 
 
 class RetryMetadata(StrictModel):
-    """Audit metadata only; Phase 8 never performs an automatic retry."""
+    """Per-call retry position; Phase 9 may set the automatic-retry flag."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     attempt_number: int = Field(default=1, ge=1)
     max_attempts: int = Field(default=1, ge=1)
     retry_count: int = Field(default=0, ge=0)
-    automatic_retry_performed: Literal[False] = False
+    automatic_retry_performed: bool = False
 
     @model_validator(mode="after")
     def validate_counts(self) -> RetryMetadata:
@@ -236,6 +236,8 @@ class RetryMetadata(StrictModel):
             raise ValueError("attempt_number cannot exceed max_attempts")
         if self.retry_count != self.attempt_number - 1:
             raise ValueError("retry_count must equal attempt_number minus one")
+        if self.automatic_retry_performed and self.retry_count == 0:
+            raise ValueError("automatic retry requires a retry_count greater than zero")
         return self
 
 
@@ -425,8 +427,10 @@ def build_stage_request(
     prompt_directory: Path = PROMPT_DIRECTORY,
     generation_settings: GenerationSettings | None = None,
     pinned_model_snapshot: str | None = None,
+    model_alias: ModelAlias | None = None,
+    run_id: UUID | None = None,
 ) -> LLMRequest:
-    """Select only the configured primary route and build one immutable request."""
+    """Build one immutable request for the primary or an ordered configured fallback."""
     if not isinstance(input_artifact, BaseModel):
         raise TypeError("input_artifact must be a Pydantic model instance")
     if not isinstance(requested_output_type, type) or not issubclass(
@@ -436,22 +440,30 @@ def build_stage_request(
 
     stage = LLMStage(stage)
     route = routing.for_stage(stage)
+    ordered_aliases = (route.primary, *route.fallbacks)
+    selected_alias = model_alias or route.primary
+    if selected_alias not in ordered_aliases:
+        raise ValueError("model_alias must belong to the configured stage route")
+    selected_index = ordered_aliases.index(selected_alias)
     prompt = load_prompt(stage, prompt_directory=prompt_directory)
     settings = generation_settings or route.generation
-    run_id = getattr(input_artifact, "run_id", None)
-    if not isinstance(run_id, UUID):
+    artifact_run_id = getattr(input_artifact, "run_id", None)
+    request_run_id = run_id or artifact_run_id
+    if not isinstance(request_run_id, UUID):
         raise ValueError("input artifact must carry a UUID run_id")
+    if artifact_run_id is not None and artifact_run_id != request_run_id:
+        raise ValueError("explicit run_id must match the input artifact run_id")
     return LLMRequest(
-        run_id=run_id,
+        run_id=request_run_id,
         stage=stage,
         prompt=prompt,
         rendered_prompt=render_stage_prompt(prompt, input_artifact, requested_output_type),
         input_artifact=input_artifact,
         input_artifact_ids=tuple(input_artifact_ids),
         requested_output_type=requested_output_type,
-        model_alias=route.primary,
+        model_alias=selected_alias,
         pinned_model_snapshot=pinned_model_snapshot,
-        configured_fallbacks=route.fallbacks,
+        configured_fallbacks=ordered_aliases[selected_index + 1 :],
         generation=settings,
     )
 

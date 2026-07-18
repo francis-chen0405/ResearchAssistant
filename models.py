@@ -28,6 +28,22 @@ class RunStatus(StrEnum):
     PLANNED = "planned"
     RUNNING = "running"
     COMPLETED = "completed"
+    BLOCKED = "blocked"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class CheckpointStatus(StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    BLOCKED = "blocked"
+
+
+class ModelAttemptStatus(StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
     FAILED = "failed"
 
 
@@ -546,6 +562,122 @@ class RunManifest(StrictModel):
         if self.status is RunStatus.COMPLETED and self.completed_at is None:
             raise ValueError("completed runs require completed_at")
         return self
+
+
+class OrchestrationCheckpoint(StrictModel):
+    run_id: UUID
+    stage_key: NonEmptyStr
+    status: CheckpointStatus
+    failure_reason: NonEmptyStr | None = None
+    updated_at: datetime
+
+    _updated_at_is_aware = field_validator("updated_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_status_shape(self) -> OrchestrationCheckpoint:
+        if self.status is CheckpointStatus.FAILED and self.failure_reason is None:
+            raise ValueError("failed checkpoints require a failure reason")
+        if self.status is not CheckpointStatus.FAILED and self.failure_reason is not None:
+            raise ValueError("only failed checkpoints may carry a failure reason")
+        return self
+
+
+class PersistedStageArtifact(StrictModel):
+    run_id: UUID
+    artifact_key: NonEmptyStr
+    artifact_type: NonEmptyStr
+    payload_json: NonEmptyStr
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class ModelUsageMetadata(StrictModel):
+    input_tokens: NonNegativeInt | None = None
+    output_tokens: NonNegativeInt | None = None
+    total_tokens: NonNegativeInt | None = None
+    cost_usd: Annotated[float, Field(ge=0.0)] | None = None
+
+    @model_validator(mode="after")
+    def validate_token_total(self) -> ModelUsageMetadata:
+        if (
+            self.input_tokens is not None
+            and self.output_tokens is not None
+            and self.total_tokens is not None
+            and self.total_tokens != self.input_tokens + self.output_tokens
+        ):
+            raise ValueError("total_tokens must equal input_tokens plus output_tokens")
+        return self
+
+
+class ModelRouteAttempt(StrictModel):
+    run_id: UUID
+    operation_id: UUID
+    attempt_id: UUID
+    stage: NonEmptyStr
+    output_type: NonEmptyStr
+    model_alias: NonEmptyStr
+    pinned_model_snapshot: NonEmptyStr | None = None
+    route_index: NonNegativeInt
+    attempt_number: PositiveInt
+    input_artifact_ids: Annotated[tuple[UUID, ...], Field(min_length=1)]
+    status: ModelAttemptStatus
+    retry_reason: NonEmptyStr | None = None
+    escalation_reason: NonEmptyStr | None = None
+    failure_code: NonEmptyStr | None = None
+    failure_reason: NonEmptyStr | None = None
+    started_at: datetime
+    ended_at: datetime | None = None
+    latency_ms: Annotated[float, Field(ge=0.0)] | None = None
+    usage: ModelUsageMetadata | None = None
+    output_json: str | None = None
+
+    _started_at_is_aware = field_validator("started_at")(_validate_aware_datetime)
+    _ended_at_is_aware = field_validator("ended_at")(_validate_aware_datetime)
+
+    @field_validator("input_artifact_ids")
+    @classmethod
+    def validate_input_artifact_ids(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
+        if len(set(value)) != len(value):
+            raise ValueError("input_artifact_ids must be unique")
+        return value
+
+    @model_validator(mode="after")
+    def validate_attempt_shape(self) -> ModelRouteAttempt:
+        if self.ended_at is not None and self.ended_at < self.started_at:
+            raise ValueError("attempt ended_at cannot precede started_at")
+        if self.status is ModelAttemptStatus.RUNNING:
+            if any(
+                value is not None
+                for value in (
+                    self.ended_at,
+                    self.latency_ms,
+                    self.failure_code,
+                    self.failure_reason,
+                    self.output_json,
+                )
+            ):
+                raise ValueError("running attempts cannot carry completion fields")
+            return self
+        if self.ended_at is None or self.latency_ms is None:
+            raise ValueError("finished attempts require end time and latency")
+        if self.status is ModelAttemptStatus.COMPLETED:
+            if self.output_json is None:
+                raise ValueError("completed attempts require serialized typed output")
+            if self.failure_code is not None or self.failure_reason is not None:
+                raise ValueError("completed attempts cannot carry failure metadata")
+        else:
+            if self.failure_code is None or self.failure_reason is None:
+                raise ValueError("failed attempts require failure code and reason")
+        return self
+
+
+class RunCancellationRequest(StrictModel):
+    run_id: UUID
+    requested_at: datetime
+    reason: NonEmptyStr
+
+    _requested_at_is_aware = field_validator("requested_at")(_validate_aware_datetime)
 
 
 class ModelInvocationRecord(StrictModel):

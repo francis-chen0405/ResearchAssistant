@@ -1,5 +1,114 @@
 # Handoff
 
+## 2026-07-17 - Phase 9 Real Orchestration and Controlled Concurrency
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 9 Real Orchestration and Controlled Concurrency.
+- Phase 10 has not started.
+
+Files changed:
+
+- `orchestrator.py`
+- `cli.py`
+- `agents/supportingresearcher.py`
+- `providers/llm.py`
+- `models.py` (strict Phase 9 persistence and terminal-state compatibility models)
+- `store.py` (Phase 9 migration and typed checkpoint/attempt/cancellation operations)
+- `tests/test_phase9.py`
+- `.agent/plans/phase-09-orchestration.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Preserve `run_fixture_pipeline()` and add `run_provider_pipeline()` as a separate
+  synchronous provider-backed surface.
+- Use `ThreadPoolExecutor(max_workers=2)` only for the supporting and opposing
+  Researchers. Workers return strict Pydantic results and use only short-lived
+  worker-local SQLite connections for attempt audit reservations/finalization.
+- Keep every SQLite schema definition in `store.py:init_db()`. The new schema migration
+  is the minimal compatibility change required because Phase 8 intentionally kept rich
+  route attempts in memory while Phase 9 requires restart-safe audit history.
+- Assign deterministic operation and attempt IDs. Persist a running reservation before
+  each provider call, finalize it with objective failure or typed output, and reuse
+  completed typed output after restart.
+- Retry an alias once only for objective transient, timeout, malformed-output, schema,
+  exact-quote, interrupted, or deterministic validation failures. Record retry and
+  escalation reasons explicitly.
+- Enforce Extractor order `mimo-v2.5`, `mimo-v2.5-pro`, then
+  `deepseek-v4-flash`. MiMo Pro requires an objective escalation reason. DeepSeek Flash
+  remains a third-line availability fallback only.
+- Never route on semantic disagreement or confidence prose. Reviewer rejection triggers
+  one Analyst revision and one second review with the configured Reviewer primary unless
+  an objective invocation failure independently authorizes retry/fallback.
+- Subject all fallback output, including DeepSeek output, to the same local Pydantic,
+  snapshot, exact-quote, post-filter, Analyst, Reviewer, Ledger, and final-validator
+  requirements.
+- Treat one Researcher-side failure as explicit partial evidence and allow the other
+  side to continue. Treat both-side failure or no passing candidates as an explicit
+  failed run.
+- Persist explicit released, blocked, failed, and cancelled terminal states. Blocked,
+  failed, and cancelled runs never carry a final hash.
+- Retain provider-reported usage when typed output later fails an exact-quote or other
+  deterministic validation gate, so failed retries remain represented in persisted
+  token and cost totals.
+- Keep snapshots and Ledger records insert-only. Reruns compare deterministic existing
+  artifacts and never update, delete, or duplicate them.
+- Carry typed `RetrievalRecord` provenance in Phase 9 Extractor input so the model never
+  invents query ID, round, rank, URL, or retrieval-attempt metadata.
+- Add no dependency, live adapter, async rewrite, evaluation corpus, Phase 10 metric,
+  production UI, or Phase 10 behavior.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master`, with no
+  uncommitted changes.
+- `git log --oneline -10`: latest commit before Phase 9 edits was `dee6176 phase-08`.
+- Exact bare Phase 1-through-9 pytest command: failed before project execution with
+  `zsh: command not found: python`.
+- Exact bare Ruff check and Ruff format commands: both failed before project execution
+  with the same missing `python` error.
+- Identical required commands with `PATH="$PWD/.venv/bin:$PATH"`, without setting
+  `PYTHONPATH`: all passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase9.py -q`: passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest -q`: full repository suite passed.
+- `git diff --check`: passed.
+
+Exact results:
+
+- Focused Phase 9 suite: 27 passed in 2.89s.
+- Required Phase 1-through-9 selection: 264 passed, 1 skipped in 4.54s.
+- Full repository suite: 270 passed, 1 skipped in 4.51s.
+- Ruff check: all checks passed.
+- Ruff format check: 28 files already formatted.
+- The one skipped test is the optional Phase 8 integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+
+Known limitations:
+
+- No live Search, Scraper, or LLM vendor adapter exists. Phase 9 normal tests use only
+  injected deterministic fake providers and make no live-service call.
+- Optional token/cost totals require a provider to return strict
+  `ModelUsageMetadata` through `usage_for()`; unavailable metadata remains explicit
+  `None` rather than an estimate.
+- Bare `python` remains unavailable unless `.venv/bin` is placed on `PATH`.
+
+Next exact task:
+
+- Phase 10 evaluation and adversarial testing, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 10 without explicit user direction.
+- Do not add an evaluation corpus, Phase 10 metrics, new live vendor adapters,
+  network-dependent normal tests, validator weakening, production UI, async rewrite, or
+  later-phase behavior as a Phase 9 follow-up.
+
 ## 2026-07-16 - Phase 8 LLM Provider and Structured Prompts
 
 Current branch:
