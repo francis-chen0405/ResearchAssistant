@@ -1,5 +1,28 @@
 # Status
 
+## 2026-07-19 - Daily Expanded CI Maintenance
+
+Status: Complete.
+
+Completed:
+
+- Changed GitHub Actions from weekly to daily at 1:17 AM Pacific time and enabled push
+  runs on every branch while retaining `master` pull requests and manual runs.
+- Split CI into a Python 3.11/3.12 pytest matrix, one Ruff job, and one deterministic
+  offline adversarial-evaluation job.
+- Added the explicitly approved `pytest-cov` development dependency and branch-coverage
+  reporting with missing lines and no minimum threshold.
+- Added no live provider, API key, network-dependent test, or product runtime change.
+
+Verification:
+
+- Full pytest with branch coverage: 310 passed, 1 skipped; total coverage was 85% with
+  missing lines reported and no minimum threshold.
+- Offline evaluation: passed all 38 deterministic cases; optional live comparison was
+  skipped.
+- Ruff lint and format checks passed.
+- Workflow YAML parsed successfully; `git diff --check` passed.
+
 ## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
 
 Status: Complete.

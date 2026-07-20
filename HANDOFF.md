@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-07-19 - Daily Expanded CI Maintenance
+
+Current branch:
+
+- `master`
+
+Maintenance changes:
+
+- `.github/workflows/ci.yml` runs on every pushed branch, pull requests targeting
+  `master`, manual dispatch, and daily at 1:17 AM `America/Los_Angeles`.
+- Pytest runs with branch coverage on Python 3.11 and 3.12. Ruff and the deterministic
+  38-case offline evaluation each run once per workflow invocation.
+- `pytest-cov>=6.0,<7.0` is an explicitly approved development dependency. Coverage is
+  reported with missing lines but has no failure threshold.
+- This is CI/tooling maintenance only. No new product phase, live provider, API key,
+  network-dependent test, or runtime behavior was started.
+
+Verification:
+
+- Full pytest with branch coverage: 310 passed, 1 skipped; total coverage was 85%.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison was
+  skipped.
+- Ruff lint and format checks, workflow YAML parsing, and `git diff --check` passed.
+
 ## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
 
 Current branch:

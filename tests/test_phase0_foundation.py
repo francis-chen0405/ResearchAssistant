@@ -38,5 +38,6 @@ def test_pyproject_declares_phase_dependencies() -> None:
     ]
     assert pyproject["project"]["optional-dependencies"]["dev"] == [
         "pytest>=8.0,<9.0",
+        "pytest-cov>=6.0,<7.0",
         "ruff>=0.8,<1.0",
     ]

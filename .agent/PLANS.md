@@ -4,6 +4,12 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
+## CI Maintenance After MVP-1
+
+The user-authorized CI maintenance plan is
+`.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
+tooling only; it does not start another product phase or alter runtime behavior.
+
 ## Current Project State After Phase 10
 
 Phases 0 through 10 are complete. Phase MVP-1 Release-Contract Correctness is the active
