@@ -185,6 +185,11 @@ The Statement Reviewer is a separate LLM call receiving only the extracted quote
 
 If all conditions are met, the Reviewer returns `approved: true` and the statement enters the Ledger unchanged. On any failure it returns `approved: false` with a failure code and brief rationale. The Analyst may revise and resubmit once; a second failure rejects the quote block entirely. The Reviewer must not suggest replacement wording; its role is audit only.
 
+The model-facing Reviewer decision never contains an approval ID. After the application
+validates the exact reviewed statement and approved decision shape, it derives the
+versioned `rappr_v1_<sha256>` approval ID from the canonical stable review input.
+Persisted legacy UUID approval IDs remain readable.
+
 ### G. Ledger Record Schema
 
 ```json
@@ -211,7 +216,7 @@ If all conditions are met, the Reviewer returns `approved: true` and the stateme
   "reviewer_prompt_version": "string",
   "reviewer_model_name": "string",
   "reviewed_at": "UTC ISO-8601 timestamp",
-  "reviewer_approval_id": "UUID string",
+  "reviewer_approval_id": "legacy UUID string or rappr_v1_<sha256>",
   "ledger_validated_at": "UTC ISO-8601 timestamp"
 }
 ```
@@ -239,15 +244,12 @@ Constructs the debate brief from approved Ledger records. It returns a typed `Sy
   "synthesizer_prompt_version": "string",
   "synthesizer_model_name": "string",
   "created_at": "UTC ISO-8601 timestamp",
-  "title": "string",
-  "claim_definition": "exact non-factual Planner framing",
   "sections": [{
-    "section_type": "supporting | opposing | limitations | conclusion",
-    "heading": "non-factual string",
+    "section_type": "supporting | opposing | limitations",
     "items": [{
       "connective_template_id": "string",
       "ledger_claim_id": "UUID string",
-      "reviewer_approval_id": "UUID string",
+      "reviewer_approval_id": "legacy UUID string or rappr_v1_<sha256>",
       "stance": "supporting | opposing",
       "placement": "must match Ledger value exactly",
       "entailment": "must match Ledger value exactly",
@@ -258,6 +260,9 @@ Constructs the debate brief from approved Ledger records. It returns a typed `Sy
 ```
 
 Within the application, this structure must be validated, instantiated, and passed to the Renderer as a `SynthesisOutput` Pydantic model. The JSON form above is a serialization representation only and must not be used as a raw-dictionary agent handoff. The `stance`, `placement`, `entailment`, `ledger_claim_id`, `reviewer_approval_id`, and `approved_factual_statement` fields are copied from the Ledger unchanged.
+
+The Synthesizer cannot provide the brief title, displayed claim, claim label, section
+headings, or other framing prose. Those fields are application-owned release structure.
 
 ## 6. Deterministic Final Renderer & Validator
 
@@ -276,11 +281,15 @@ This source's reliability is limited:
 
 ### B. Exact Claim Validation
 
-For every rendered item confirm: `ledger_claim_id` exists in the Ledger; `reviewer_approval_id` matches the Ledger record; statement exactly matches the Ledger string; `placement`, `stance`, and `entailment` match the Ledger values; statement appears no more than permitted; supporting Ledger items appear only in supporting-compatible sections and opposing Ledger items appear only in opposing-compatible sections, except explicitly configured limitations or conclusion references; `qualified_only` items use a qualification template; Partial and Weak items use the entailment template; no unrecognized field contains renderable prose. Any mismatch blocks release.
+For every rendered item confirm: `ledger_claim_id` exists in the Ledger; `reviewer_approval_id` matches the Ledger record; statement exactly matches the Ledger string; `placement`, `stance`, and `entailment` match the Ledger values; statement appears no more than permitted; supporting Ledger items appear only in supporting-compatible sections and opposing Ledger items appear only in opposing-compatible sections, except within explicitly configured limitations sections; `qualified_only` items use a qualification template; Partial and Weak items use the entailment template; no unrecognized field contains renderable prose. Any mismatch blocks release.
 
 ### C. Rendering
 
-Assembled mechanically from fixed templates, Planner framing, Ledger statements, and source citations. The Synthesizer may never submit free-form prose directly.
+Assembled mechanically from the fixed title `Research Brief`, the fixed label
+`Claim under review`, the exact persisted authoritative submitted claim, the fixed
+Supporting Evidence, Opposing Evidence, and Limitations headings in canonical order,
+approved templates, Ledger statements, and source citations. The Synthesizer may never
+submit free-form prose or structural framing directly.
 
 ### D. Validation Result
 

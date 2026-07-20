@@ -31,6 +31,7 @@ from models import (
 
 _NOW = datetime(2026, 7, 3, 12, 0, tzinfo=UTC)
 _RUN_ID = UUID("50000000-0000-0000-0000-000000000001")
+_CLAIM = "Fixture claim framing without factual findings."
 _EXPECTED_BRIEF = Path(__file__).parent / "fixtures" / "phase5_expected_valid_brief.txt"
 
 
@@ -127,8 +128,6 @@ def _partial_ledger(entailment: Entailment = Entailment.PARTIAL) -> LedgerRecord
 def _synthesis(ledgers: list[LedgerRecord]) -> SynthesisOutput:
     return build_synthesis_output(
         run_id=_RUN_ID,
-        title="Fixture Debate Brief",
-        claim_definition="Fixture claim framing without factual findings.",
         ledger_records=ledgers,
         created_at=_NOW,
     )
@@ -163,7 +162,12 @@ def _assert_invalid(
     ledgers: list[LedgerRecord],
     code: ValidationErrorCode,
 ) -> None:
-    result = validate_final_release(synthesis, ledgers, validated_at=_NOW)
+    result = validate_final_release(
+        synthesis,
+        ledgers,
+        authoritative_claim=_CLAIM,
+        validated_at=_NOW,
+    )
     assert result.valid is False
     assert result.rendered_brief_hash is None
     assert any(error.code is code for error in result.errors)
@@ -175,8 +179,6 @@ def test_synthesizer_rejects_raw_dictionary_ledger_handoff() -> None:
     with pytest.raises(TypeError, match="LedgerRecord"):
         build_synthesis_output(
             run_id=_RUN_ID,
-            title="Fixture Debate Brief",
-            claim_definition="Fixture claim framing without factual findings.",
             ledger_records=[ledger_payload],
             created_at=_NOW,
         )
@@ -190,6 +192,7 @@ def test_final_validator_rejects_raw_dictionary_ledger_handoff() -> None:
     result = validate_final_release(
         synthesis,
         [ledger_payload, *ledgers[1:]],
+        authoritative_claim=_CLAIM,
         validated_at=_NOW,
     )
 
@@ -206,6 +209,7 @@ def test_empty_approved_ledger_statement_blocks_release() -> None:
     result = validate_final_release(
         synthesis,
         [empty_statement_ledger, *ledgers[1:]],
+        authoritative_claim=_CLAIM,
         validated_at=_NOW,
     )
 
@@ -369,7 +373,6 @@ def test_opposing_and_supporting_items_cannot_cross_sections(
     item = synthesis.sections[item_index].items[0]
     bad_section = SynthesisSection.model_construct(
         section_type=section_type,
-        heading="Wrong Side",
         items=[item],
     )
     mutated = synthesis.model_copy(update={"sections": [bad_section]})
@@ -468,10 +471,15 @@ def test_render_statement_not_in_ledger_blocks_release() -> None:
 def test_valid_output_produces_stable_hash() -> None:
     ledgers = _valid_ledgers()
     synthesis = _synthesis(ledgers)
-    rendered = render_brief(synthesis, ledgers)
+    rendered = render_brief(synthesis, ledgers, authoritative_claim=_CLAIM)
     expected = _EXPECTED_BRIEF.read_text(encoding="utf-8")
 
-    result = validate_final_release(synthesis, ledgers, validated_at=_NOW)
+    result = validate_final_release(
+        synthesis,
+        ledgers,
+        authoritative_claim=_CLAIM,
+        validated_at=_NOW,
+    )
 
     assert rendered == expected
     assert result.valid is True
@@ -479,7 +487,7 @@ def test_valid_output_produces_stable_hash() -> None:
     assert result.validator_config_version == VALIDATOR_CONFIG_VERSION
     assert result.rendered_brief_hash == hashlib.sha256(expected.encode("utf-8")).hexdigest()
     assert result.rendered_brief_hash == (
-        "eadfdfa0a69f2e966383b7457ae6a33dd813e151f641382abd2ca69323380c55"
+        "7895588120c041b61196d3c36326de35c6de5a8d5bafdd6f6269e6c381677240"
     )
     assert set(APPROVED_CONNECTIVE_TEMPLATES) == {
         "supporting_evidence",
@@ -501,6 +509,7 @@ def test_invalid_output_returns_invalid_result_with_no_hash() -> None:
     result = validate_final_release(
         _replace_item(synthesis, 0, 0, mutated),
         ledgers,
+        authoritative_claim=_CLAIM,
         validated_at=_NOW,
     )
 

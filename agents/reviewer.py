@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
-from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from agents.researcher import parse_extracted_quote_block
 from models import (
@@ -29,6 +30,27 @@ class ReviewChecks(StrictModel):
     qualifications_preserved: bool
     neutral_framing: bool
     claim_fit_scope_valid: bool
+
+
+class ReviewerDecision(StrictModel):
+    """Narrow model-facing Reviewer output with no application-owned identifiers."""
+
+    reviewed_statement: str = Field(min_length=1)
+    approved: bool
+    failure_code: ReviewerFailureCode | None = None
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_decision_shape(self) -> ReviewerDecision:
+        if self.approved and self.failure_code is not None:
+            raise ValueError("approved Reviewer decisions cannot include a failure code")
+        if not self.approved and self.failure_code is None:
+            raise ValueError("rejected Reviewer decisions require a failure code")
+        return self
+
+
+REVIEWER_DECISION_SCHEMA_VERSION = "reviewer-decision-v1"
+REVIEWER_APPROVAL_DERIVATION_VERSION = "rappr_v1"
 
 
 def build_reviewer_input(
@@ -60,40 +82,93 @@ def review_statement(
     reviewer_prompt_version: str,
     reviewer_model_name: str,
     reviewed_at: datetime,
-    reviewer_approval_id: UUID | None = None,
 ) -> StatementReviewResult:
-    _validate_aware_datetime(reviewed_at, "reviewed_at")
+    failure_code = _first_failure_code(checks)
+    if failure_code is None:
+        decision = ReviewerDecision(
+            reviewed_statement=draft.draft_statement,
+            approved=True,
+            rationale="Reviewer checks passed.",
+        )
+    else:
+        decision = ReviewerDecision(
+            reviewed_statement=draft.draft_statement,
+            approved=False,
+            failure_code=failure_code,
+            rationale=_failure_rationale(failure_code),
+        )
+    return build_statement_review_result(
+        draft,
+        reviewer_input,
+        decision,
+        reviewer_prompt_version=reviewer_prompt_version,
+        reviewer_model_name=reviewer_model_name,
+        reviewed_at=reviewed_at,
+    )
+
+
+def validate_reviewer_decision(
+    draft: StatementDraft,
+    reviewer_input: ReviewerInput,
+    decision: ReviewerDecision,
+) -> None:
     if reviewer_input.draft_statement != draft.draft_statement:
         raise ValueError("Reviewer input draft statement must match the StatementDraft")
     if reviewer_input.claim_fit != draft.claim_fit:
         raise ValueError("Reviewer input Claim Fit must match the StatementDraft")
+    if decision.reviewed_statement != draft.draft_statement:
+        raise ValueError("Reviewer decision text must exactly match the reviewed StatementDraft")
 
-    failure_code = _first_failure_code(checks)
-    if failure_code is None:
-        if reviewer_approval_id is None:
-            raise ValueError("approved reviews require reviewer_approval_id")
-        return StatementReviewResult(
-            run_id=draft.run_id,
-            statement_draft_id=draft.statement_draft_id,
-            quote_block_id=draft.quote_block_id,
-            approved=True,
-            reviewer_approval_id=reviewer_approval_id,
-            approved_factual_statement=draft.draft_statement,
-            rationale="Reviewer checks passed.",
-            reviewer_prompt_version=reviewer_prompt_version,
-            reviewer_model_name=reviewer_model_name,
-            reviewed_at=reviewed_at,
-        )
 
-    if reviewer_approval_id is not None:
-        raise ValueError("rejected reviews cannot include reviewer_approval_id")
+def derive_reviewer_approval_id(
+    draft: StatementDraft,
+    decision: ReviewerDecision,
+) -> str:
+    if not decision.approved:
+        raise ValueError("only approved Reviewer decisions receive an approval ID")
+    if decision.reviewed_statement != draft.draft_statement:
+        raise ValueError("Reviewer decision text must exactly match the reviewed StatementDraft")
+    canonical_input = {
+        "decision": "approved",
+        "derivation_version": REVIEWER_APPROVAL_DERIVATION_VERSION,
+        "quote_block_id": str(draft.quote_block_id),
+        "reviewed_statement": decision.reviewed_statement,
+        "reviewer_schema_version": REVIEWER_DECISION_SCHEMA_VERSION,
+        "statement_draft_id": str(draft.statement_draft_id),
+    }
+    canonical_json = json.dumps(
+        canonical_input,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    return f"{REVIEWER_APPROVAL_DERIVATION_VERSION}_{digest}"
+
+
+def build_statement_review_result(
+    draft: StatementDraft,
+    reviewer_input: ReviewerInput,
+    decision: ReviewerDecision,
+    *,
+    reviewer_prompt_version: str,
+    reviewer_model_name: str,
+    reviewed_at: datetime,
+) -> StatementReviewResult:
+    _validate_aware_datetime(reviewed_at, "reviewed_at")
+    validate_reviewer_decision(draft, reviewer_input, decision)
+    reviewer_approval_id = (
+        derive_reviewer_approval_id(draft, decision) if decision.approved else None
+    )
     return StatementReviewResult(
         run_id=draft.run_id,
         statement_draft_id=draft.statement_draft_id,
         quote_block_id=draft.quote_block_id,
-        approved=False,
-        failure_code=failure_code,
-        rationale=_failure_rationale(failure_code),
+        approved=decision.approved,
+        reviewer_approval_id=reviewer_approval_id,
+        approved_factual_statement=(decision.reviewed_statement if decision.approved else None),
+        failure_code=decision.failure_code,
+        rationale=decision.rationale,
         reviewer_prompt_version=reviewer_prompt_version,
         reviewer_model_name=reviewer_model_name,
         reviewed_at=reviewed_at,

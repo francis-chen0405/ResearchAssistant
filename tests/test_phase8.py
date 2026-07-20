@@ -13,7 +13,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from agents.planner import PlannerLLMInput
-from agents.reviewer import ReviewerInput
+from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import (
     UNTRUSTED_SOURCE_INSTRUCTION_POLICY,
     UNTRUSTED_SOURCE_LABEL,
@@ -24,7 +24,6 @@ from models import (
     ProvisionalCandidate,
     ScoreDecision,
     SourceSnapshot,
-    StatementReviewResult,
     StrictModel,
     SynthesisOutput,
 )
@@ -109,8 +108,14 @@ def _stage_outputs() -> list[tuple[LLMStage, type[BaseModel], BaseModel]]:
         ),
         (
             LLMStage.REVIEWER,
-            StatementReviewResult,
-            _load_model("reviewer_decisions.json", StatementReviewResult, 0),
+            ReviewerDecision,
+            ReviewerDecision(
+                reviewed_statement=(
+                    "Schools reported higher completion rates compared with baseline classes."
+                ),
+                approved=True,
+                rationale="Reviewer checks passed.",
+            ),
         ),
         (
             LLMStage.SYNTHESIZER,

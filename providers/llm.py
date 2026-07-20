@@ -24,12 +24,12 @@ from pydantic import (
     model_validator,
 )
 
+from agents.reviewer import ReviewerDecision
 from models import (
     PlannerOutput,
     ProvisionalCandidate,
     ScoreDecision,
     StatementDraft,
-    StatementReviewResult,
     StrictModel,
     SynthesisOutput,
 )
@@ -587,7 +587,7 @@ def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.ANALYST:
         return (ScoreDecision, StatementDraft)
     if stage is LLMStage.REVIEWER:
-        return (StatementReviewResult,)
+        return (ReviewerDecision,)
     return (SynthesisOutput,)
 
 

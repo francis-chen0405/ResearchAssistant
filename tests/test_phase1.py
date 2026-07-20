@@ -141,7 +141,6 @@ def synthesis_item_kwargs() -> dict[str, object]:
 def synthesis_section_kwargs() -> dict[str, object]:
     return {
         "section_type": SectionType.SUPPORTING,
-        "heading": "Supporting evidence",
         "items": [SynthesisItem(**synthesis_item_kwargs())],
     }
 
@@ -152,8 +151,6 @@ def synthesis_output_kwargs() -> dict[str, object]:
         "synthesizer_prompt_version": "synth-v1",
         "synthesizer_model_name": "test-model",
         "created_at": aware_now(),
-        "title": "Brief title",
-        "claim_definition": "Claim framing",
         "sections": [SynthesisSection(**synthesis_section_kwargs())],
     }
 
@@ -206,7 +203,6 @@ def test_valid_candidate_ledger_synthesis_and_validation_models_construct() -> N
     )
     section = SynthesisSection(
         section_type=SectionType.SUPPORTING,
-        heading="Supporting evidence",
         items=[item],
     )
     validation = ValidationResult(
@@ -399,7 +395,7 @@ def test_invalid_synthesizer_section_types_are_rejected() -> None:
     )
 
     with pytest.raises(PydanticValidationError):
-        SynthesisSection(section_type="background", heading="Background", items=[item])
+        SynthesisSection(section_type="background", items=[item])
 
 
 def test_synthesizer_rejects_incompatible_stance_for_section() -> None:
@@ -414,7 +410,7 @@ def test_synthesizer_rejects_incompatible_stance_for_section() -> None:
     )
 
     with pytest.raises(PydanticValidationError):
-        SynthesisSection(section_type=SectionType.SUPPORTING, heading="Support", items=[item])
+        SynthesisSection(section_type=SectionType.SUPPORTING, items=[item])
 
 
 def test_malformed_validation_errors_are_rejected() -> None:

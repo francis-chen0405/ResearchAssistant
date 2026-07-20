@@ -13,6 +13,9 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from models import (
+    BRIEF_TITLE,
+    CLAIM_LABEL,
+    RELEASE_SECTION_HEADINGS,
     AmbiguityRecord,
     CandidateQuoteBlock,
     ClaimDefinition,
@@ -1103,9 +1106,7 @@ def _row_to_review_result(row: sqlite3.Row) -> StatementReviewResult:
         statement_draft_id=UUID(row["statement_draft_id"]),
         quote_block_id=UUID(row["quote_block_id"]),
         approved=bool(row["approved"]),
-        reviewer_approval_id=(
-            UUID(row["reviewer_approval_id"]) if row["reviewer_approval_id"] else None
-        ),
+        reviewer_approval_id=row["reviewer_approval_id"],
         approved_factual_statement=row["approved_factual_statement"],
         failure_code=row["failure_code"],
         rationale=row["rationale"],
@@ -1203,7 +1204,7 @@ def _row_to_ledger_record(row: sqlite3.Row) -> LedgerRecord:
         reviewer_prompt_version=row["reviewer_prompt_version"],
         reviewer_model_name=row["reviewer_model_name"],
         reviewed_at=_iso_to_dt(row["reviewed_at"]),
-        reviewer_approval_id=UUID(row["reviewer_approval_id"]),
+        reviewer_approval_id=row["reviewer_approval_id"],
         ledger_validated_at=_iso_to_dt(row["ledger_validated_at"]),
     )
 
@@ -1226,8 +1227,8 @@ def insert_synthesis(db_path: str, synthesis: SynthesisOutput) -> None:
                 synthesis.synthesizer_prompt_version,
                 synthesis.synthesizer_model_name,
                 _dt_to_iso(synthesis.created_at),
-                synthesis.title,
-                synthesis.claim_definition,
+                BRIEF_TITLE,
+                CLAIM_LABEL,
             ),
         )
         for sec_idx, section in enumerate(synthesis.sections):
@@ -1235,7 +1236,12 @@ def insert_synthesis(db_path: str, synthesis: SynthesisOutput) -> None:
                 """INSERT INTO synthesis_sections
                    (run_id, section_type, heading, section_order)
                    VALUES (?, ?, ?, ?)""",
-                (str(synthesis.run_id), section.section_type.value, section.heading, sec_idx),
+                (
+                    str(synthesis.run_id),
+                    section.section_type.value,
+                    RELEASE_SECTION_HEADINGS.get(section.section_type, section.section_type.value),
+                    sec_idx,
+                ),
             )
             for item_idx, item in enumerate(section.items):
                 conn.execute(
@@ -1289,7 +1295,7 @@ def read_synthesis(db_path: str, run_id: UUID) -> SynthesisOutput:
                 SynthesisItem(
                     connective_template_id=r["connective_template_id"],
                     ledger_claim_id=UUID(r["ledger_claim_id"]),
-                    reviewer_approval_id=UUID(r["reviewer_approval_id"]),
+                    reviewer_approval_id=r["reviewer_approval_id"],
                     stance=r["stance"],
                     placement=r["placement"],
                     entailment=r["entailment"],
@@ -1300,7 +1306,6 @@ def read_synthesis(db_path: str, run_id: UUID) -> SynthesisOutput:
             sections.append(
                 SynthesisSection(
                     section_type=sec_row["section_type"],
-                    heading=sec_row["heading"],
                     items=items,
                 )
             )
@@ -1310,8 +1315,6 @@ def read_synthesis(db_path: str, run_id: UUID) -> SynthesisOutput:
             synthesizer_prompt_version=sa_row["synthesizer_prompt_version"],
             synthesizer_model_name=sa_row["synthesizer_model_name"],
             created_at=_iso_to_dt(sa_row["created_at"]),
-            title=sa_row["title"],
-            claim_definition=sa_row["claim_definition"],
             sections=sections,
         )
     finally:

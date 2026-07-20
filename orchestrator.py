@@ -27,7 +27,12 @@ from agents.researcher import (
     filter_provisional_candidate,
     validate_snapshot_integrity,
 )
-from agents.reviewer import build_reviewer_input
+from agents.reviewer import (
+    ReviewerDecision,
+    build_reviewer_input,
+    build_statement_review_result,
+    validate_reviewer_decision,
+)
 from agents.supportingresearcher import (
     ATTEMPTS_PER_STANCE,
     ResearcherRetrievalBatch,
@@ -240,22 +245,21 @@ def run_fixture_pipeline(
 
     init_db(str(db_path))
 
-    run_manifest = RunManifest(
+    initial_manifest = RunManifest(
         run_id=planner.run_id,
-        status=RunStatus.COMPLETED,
+        status=RunStatus.RUNNING,
         raw_claim=raw_claim,
         current_stage=Stage.FINAL_RENDERER_VALIDATOR,
         created_at=planner.planned_at,
         updated_at=synthesis.created_at,
-        completed_at=synthesis.created_at,
     )
-    _persist_model(
-        str(db_path),
-        run_manifest,
-        insert_run,
-        lambda: read_run(str(db_path), run_manifest.run_id),
-        "run manifest",
-    )
+    try:
+        existing_manifest = read_run(str(db_path), planner.run_id)
+    except KeyError:
+        insert_run(str(db_path), initial_manifest)
+    else:
+        if existing_manifest.raw_claim != raw_claim:
+            raise FixturePipelineError("persisted fixture run claim does not match raw_claim.txt")
     _persist_model(
         str(db_path),
         planner,
@@ -341,6 +345,7 @@ def run_fixture_pipeline(
     validation = validate_final_release(
         synthesis,
         ledger_records,
+        authoritative_claim=raw_claim,
         validated_at=synthesis.created_at,
     )
     _persist_model(
@@ -363,7 +368,21 @@ def run_fixture_pipeline(
         ledger_count=len(ledger_records),
     )
 
-    final_brief = render_brief(synthesis, ledger_records) if validation.valid else None
+    terminal_manifest = RunManifest(
+        run_id=planner.run_id,
+        status=RunStatus.COMPLETED if validation.valid else RunStatus.BLOCKED,
+        raw_claim=raw_claim,
+        current_stage=Stage.FINAL_RENDERER_VALIDATOR,
+        created_at=planner.planned_at,
+        updated_at=synthesis.created_at,
+        completed_at=synthesis.created_at,
+    )
+    update_run(str(db_path), terminal_manifest)
+    final_brief = (
+        render_brief(synthesis, ledger_records, authoritative_claim=raw_claim)
+        if validation.valid
+        else None
+    )
     status: Literal["released", "blocked"] = "released" if validation.valid else "blocked"
     audit_trail = _build_audit_trail(
         run_id=planner.run_id,
@@ -1251,7 +1270,13 @@ def run_provider_pipeline(
         active_stage = Stage.DEBATE_SYNTHESIZER
         _after_stage(path, resolved_run_id, PHASE9_SYNTHESIS_CHECKPOINT, now, stage_hook)
 
-        validation = _run_validation_stage(path, synthesis, analysis, now)
+        validation = _run_validation_stage(
+            path,
+            synthesis,
+            analysis,
+            manifest.raw_claim,
+            now,
+        )
         active_stage = Stage.FINAL_RENDERER_VALIDATOR
         terminal_status = RunStatus.COMPLETED if validation.valid else RunStatus.BLOCKED
         _finish_run(path, resolved_run_id, terminal_status, active_stage, now)
@@ -1332,7 +1357,11 @@ def inspect_provider_run(
         and validation is not None
         and validation.valid
     ):
-        final_brief = render_brief(synthesis, analysis.ledger_records)
+        final_brief = render_brief(
+            synthesis,
+            analysis.ledger_records,
+            authoritative_claim=manifest.raw_claim,
+        )
         rendered_hash = validation.rendered_brief_hash
 
     usages = [attempt.usage for attempt in attempts if attempt.usage is not None]
@@ -2393,32 +2422,33 @@ def _invoke_statement_review(
         draft.statement_draft_id,
     )
 
+    validated_alias: ModelAlias | None = None
+
     def validate_review(output: BaseModel, alias: ModelAlias) -> BaseModel:
-        review = _require_output(output, StatementReviewResult)
-        if (
-            review.run_id != candidate.run_id
-            or review.quote_block_id != candidate.quote_block_id
-            or review.statement_draft_id != draft.statement_draft_id
-        ):
-            raise _validation_failure("Reviewer output does not match the reviewed draft")
-        if review.approved and review.approved_factual_statement != draft.draft_statement:
-            raise _validation_failure("Reviewer approval altered the Analyst draft")
+        nonlocal validated_alias
+        decision = _require_output(output, ReviewerDecision)
+        try:
+            validate_reviewer_decision(draft, reviewer_input, decision)
+        except ValueError as exc:
+            raise _validation_failure(str(exc)) from exc
+        prompt_version = load_prompt(LLMStage.REVIEWER).version
         _validate_llm_provenance(
-            review.reviewer_prompt_version,
-            review.reviewer_model_name,
+            prompt_version,
+            alias.value,
             LLMStage.REVIEWER,
             alias,
         )
-        return review
+        validated_alias = alias
+        return decision
 
-    return cast(
-        StatementReviewResult,
+    decision = cast(
+        ReviewerDecision,
         _invoke_routed(
             db_path=db_path,
             provider=provider,
             stage=LLMStage.REVIEWER,
             input_artifact=reviewer_input,
-            requested_output_type=StatementReviewResult,
+            requested_output_type=ReviewerDecision,
             input_artifact_ids=(draft.statement_draft_id, candidate.quote_block_id),
             operation_id=operation_id,
             config=config,
@@ -2426,6 +2456,16 @@ def _invoke_statement_review(
             objective_validator=validate_review,
             run_id=candidate.run_id,
         ),
+    )
+    if validated_alias is None:
+        raise RuntimeError("Reviewer route validation did not record the selected model alias")
+    return build_statement_review_result(
+        draft,
+        reviewer_input,
+        decision,
+        reviewer_prompt_version=load_prompt(LLMStage.REVIEWER).version,
+        reviewer_model_name=validated_alias.value,
+        reviewed_at=_aware_phase9_time(clock(), "reviewed_at"),
     )
 
 
@@ -2483,8 +2523,6 @@ def _run_synthesis_stage(
     )
     synthesis_input = SynthesizerLLMInput(
         run_id=planner.run_id,
-        title="Debate Research Brief",
-        claim_definition=planner.claim_definition.claim_text,
         ledger_records=analysis.ledger_records,
     )
     ledger_ids = tuple(record.ledger_claim_id for record in analysis.ledger_records)
@@ -2538,6 +2576,7 @@ def _run_validation_stage(
     db_path: str,
     synthesis: SynthesisOutput,
     analysis: AnalysisStageResult,
+    authoritative_claim: str,
     clock: Callable[[], datetime],
 ) -> ValidationResult:
     existing = _read_optional_validation(db_path, synthesis.run_id)
@@ -2553,6 +2592,7 @@ def _run_validation_stage(
     validation = validate_final_release(
         synthesis,
         analysis.ledger_records,
+        authoritative_claim=authoritative_claim,
         validated_at=_aware_phase9_time(clock(), "validated_at"),
     )
     _persist_model(

@@ -4,15 +4,17 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
-## Current Project State After Phase 7A
+## Current Project State After Phase 10
 
-Phases 0 through 6 and Phase 7A are complete. Phase 7B has not started and should begin only after explicit user direction.
+Phases 0 through 10 are complete. Phase MVP-1 Release-Contract Correctness is the active
+user-authorized post-MVP hardening phase. Its canonical focused plan is
+`.agent/plans/phase-mvp-1-release-contract-correctness.md`.
 
-Active deterministic modules now include `models.py`, `store.py`, `utils.py`, `agents/researcher.py`, `agents/analyst.py`, `agents/reviewer.py`, `agents/synthesizer.py`, `agents/renderer.py`, `orchestrator.py`, `cli.py`, and `frontend/streamlit_app.py`. The `agents/planner.py`, `agents/supportingresearcher.py`, and `agents/opposingresearcher.py` files remain placeholders until their later roadmap phases.
-
-Tests currently cover Phase 0 scaffold checks, Phase 1 Pydantic contracts, Phase 2 SQLite persistence, Phase 3 snapshot and quotation integrity, Phase 4 Analyst/Reviewer/Ledger admission policy, Phase 5 synthesis/rendering/release validation, Phase 6 fixture-only complete pipeline behavior, and Phase 7A frontend helper behavior. The latest documented full verification is the full pytest suite with 188 tests passing, plus `python -m ruff check .` and `python -m ruff format --check .` passing.
-
-The next exact phase is Phase 7B search and scraping provider interfaces, only after explicit user direction. Do not add LLM integration, live-network tests by default, semantic scoring, rendering, final orchestration, production UI, authentication, uploads, user accounts, or dashboards in Phase 7B.
+MVP-1 is limited to application-owned brief framing, application-owned Reviewer
+approval IDs, validation-blocked fixture terminal persistence, their compatibility
+effects, and regression verification. It must not add live providers, network calls,
+dependencies, frontend changes, `.env` loading, a live CLI command, multi-candidate
+extraction, cross-stance deduplication, database triggers, or unrelated redesign work.
 
 ## Phase 0: Repository Foundation
 

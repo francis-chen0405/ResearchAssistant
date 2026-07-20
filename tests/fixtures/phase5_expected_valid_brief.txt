@@ -1,6 +1,6 @@
-# Fixture Debate Brief
+# Research Brief
 
-Claim definition: Fixture claim framing without factual findings.
+Claim under review: Fixture claim framing without factual findings.
 
 ## Supporting Evidence
 - Supporting evidence: The audit reported a 12% decrease in processing time. [source: https://example.test/source-1]

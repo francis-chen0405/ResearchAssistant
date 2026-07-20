@@ -12,6 +12,11 @@ ApprovedScore = Annotated[int, Field(ge=3, le=5)]
 PositiveInt = Annotated[int, Field(ge=1)]
 NonNegativeInt = Annotated[int, Field(ge=0)]
 NonEmptyStr = Annotated[str, Field(min_length=1)]
+ApplicationReviewerApprovalId = Annotated[
+    str,
+    Field(pattern=r"^rappr_v1_[0-9a-f]{64}$"),
+]
+ReviewerApprovalId = UUID | ApplicationReviewerApprovalId
 REQUIRED_QUERY_EXCLUSIONS = (
     "-site:reddit.com",
     "-site:quora.com",
@@ -94,6 +99,20 @@ class SectionType(StrEnum):
     OPPOSING = "opposing"
     LIMITATIONS = "limitations"
     CONCLUSION = "conclusion"
+
+
+BRIEF_TITLE = "Research Brief"
+CLAIM_LABEL = "Claim under review"
+RELEASE_SECTION_ORDER = (
+    SectionType.SUPPORTING,
+    SectionType.OPPOSING,
+    SectionType.LIMITATIONS,
+)
+RELEASE_SECTION_HEADINGS = {
+    SectionType.SUPPORTING: "Supporting Evidence",
+    SectionType.OPPOSING: "Opposing Evidence",
+    SectionType.LIMITATIONS: "Limitations",
+}
 
 
 class ValidationErrorCode(StrEnum):
@@ -400,7 +419,7 @@ class StatementReviewResult(StrictModel):
     statement_draft_id: UUID
     quote_block_id: UUID
     approved: bool
-    reviewer_approval_id: UUID | None = None
+    reviewer_approval_id: ReviewerApprovalId | None = None
     approved_factual_statement: NonEmptyStr | None = None
     failure_code: ReviewerFailureCode | None = None
     rationale: NonEmptyStr
@@ -452,7 +471,7 @@ class LedgerRecord(StrictModel):
     reviewer_prompt_version: NonEmptyStr
     reviewer_model_name: NonEmptyStr
     reviewed_at: datetime
-    reviewer_approval_id: UUID
+    reviewer_approval_id: ReviewerApprovalId
     ledger_validated_at: datetime
 
     _segment_offsets_are_ordered = field_validator("segment_offsets")(_validate_offsets)
@@ -476,7 +495,7 @@ class LedgerRecord(StrictModel):
 class SynthesisItem(StrictModel):
     connective_template_id: NonEmptyStr
     ledger_claim_id: UUID
-    reviewer_approval_id: UUID
+    reviewer_approval_id: ReviewerApprovalId
     stance: Stance
     placement: Placement
     entailment: Entailment
@@ -485,7 +504,6 @@ class SynthesisItem(StrictModel):
 
 class SynthesisSection(StrictModel):
     section_type: SectionType
-    heading: NonEmptyStr
     items: list[SynthesisItem]
 
     @model_validator(mode="after")
@@ -508,8 +526,6 @@ class SynthesisOutput(StrictModel):
     synthesizer_prompt_version: NonEmptyStr
     synthesizer_model_name: NonEmptyStr
     created_at: datetime
-    title: NonEmptyStr
-    claim_definition: NonEmptyStr
     sections: list[SynthesisSection]
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)

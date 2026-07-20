@@ -539,12 +539,9 @@ class TestRoundTrips:
             synthesizer_prompt_version="v1",
             synthesizer_model_name="model",
             created_at=_NOW,
-            title="Test Brief",
-            claim_definition="Claim framing",
             sections=[
                 SynthesisSection(
                     section_type=SectionType.SUPPORTING,
-                    heading="Supporting",
                     items=[
                         SynthesisItem(
                             connective_template_id="tmpl_support",
@@ -561,7 +558,7 @@ class TestRoundTrips:
         )
         insert_synthesis(db_path, synthesis)
         loaded = read_synthesis(db_path, run.run_id)
-        assert loaded.title == synthesis.title
+        assert loaded == synthesis
         assert len(loaded.sections) == 1
         assert len(loaded.sections[0].items) == 1
         assert loaded.sections[0].items[0].ledger_claim_id == ledger.ledger_claim_id
@@ -726,12 +723,9 @@ class TestTransactionRollback:
             synthesizer_prompt_version="v1",
             synthesizer_model_name="model",
             created_at=_NOW,
-            title="Test",
-            claim_definition="Framing",
             sections=[
                 SynthesisSection(
                     section_type=SectionType.SUPPORTING,
-                    heading="Supporting",
                     items=[
                         SynthesisItem(
                             connective_template_id="t1",
@@ -753,7 +747,7 @@ class TestTransactionRollback:
             insert_synthesis(db_path, synthesis)
         # Original data must still be readable
         loaded = read_synthesis(db_path, run.run_id)
-        assert loaded.title == "Test"
+        assert loaded == synthesis
 
 
 # ---------------------------------------------------------------------------
@@ -841,12 +835,9 @@ class TestInvalidForeignKeys:
             synthesizer_prompt_version="v1",
             synthesizer_model_name="model",
             created_at=_NOW,
-            title="Test",
-            claim_definition="Framing",
             sections=[
                 SynthesisSection(
                     section_type=SectionType.SUPPORTING,
-                    heading="Supporting",
                     items=[
                         SynthesisItem(
                             connective_template_id="t1",

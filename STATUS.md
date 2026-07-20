@@ -1,5 +1,87 @@
 # Status
 
+## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
+
+Status: Complete.
+
+Completed:
+
+- Removed model-authored title, displayed claim, and section headings from the
+  Synthesizer input/output contracts.
+- Added fixed application framing: `Research Brief`, `Claim under review`, the exact
+  authoritative submitted claim, and fixed Supporting Evidence, Opposing Evidence, and
+  Limitations headings.
+- Added release validation for unknown/duplicate sections, canonical present-section
+  order, hidden framing fields, extra model framing, and the existing complete Ledger,
+  exact statement, stance, placement, entailment, template, and one-use rules.
+- Added strict model-facing `ReviewerDecision`; provider-supplied approval IDs and other
+  unknown fields are rejected.
+- Added application-owned deterministic `rappr_v1_<sha256>` derivation after exact
+  reviewed-text and decision validation, then construct the existing persisted/domain
+  `StatementReviewResult`.
+- Preserved legacy UUID Reviewer-result, Ledger, synthesis, and fixture readability at
+  persistence boundaries. New approvals use `rappr_v1`; old serialized Synthesizer
+  payloads containing framing fields are intentionally rejected and checked-in
+  synthesis fixtures were updated.
+- Kept legacy SQLite synthesis framing columns for database compatibility; their values
+  no longer influence reconstructed synthesis or released framing.
+- Fixed fixture terminal persistence so validation-blocked runs reopen as
+  `RunStatus.BLOCKED`; released fixtures reopen as `RunStatus.COMPLETED`.
+- Added ten focused MVP-1 tests for framing-field rejection, fixed rendering,
+  adversarial framing/section attacks, application-generated stable/different IDs,
+  pre-ID exact-text rejection, rejected decisions, legacy ID compatibility, and reopened
+  fixture statuses, heading-like body text, and legacy SQLite framing. Existing revision,
+  retry, restart, checkpoint, and persistence tests remain active.
+- The independent verification pass corrected malformed nested synthesis handling so it
+  blocks with a schema error instead of raising `AttributeError`, made provider validation
+  use the persisted submitted claim directly, and aligned `ARCHITECTURE.md` with MVP-1.
+- Added no dependency, live provider, network call, `.env` loading, live CLI command,
+  frontend change, extraction-candidate work, cross-stance deduplication, database
+  trigger, or unrelated schema redesign.
+
+Compatibility effects:
+
+- Existing persisted UUID approval IDs remain readable; new generated IDs are strings
+  in the versioned `rappr_v1_<digest>` format.
+- Existing SQLite synthesis rows remain readable, but their legacy title, claim, and
+  heading columns are ignored by the domain/release path.
+- Serialized pre-MVP-1 `SynthesisOutput` JSON with `title`, `claim_definition`, or
+  `heading` is now rejected by design. Completed synthesis checkpoints backed by legacy
+  SQLite rows remain readable; an interrupted run that has only a cached pre-MVP-1
+  serialized synthesis result cannot resume through that artifact and requires a fresh
+  run.
+- Released brief text and hashes changed because framing is now fixed. The valid Phase 6
+  fixture hash is `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`.
+
+Verification:
+
+- Focused MVP-1 suite: 10 passed.
+- Relevant Phase 5, 6, 8, 9, and 10 suites: 126 passed, 1 skipped.
+- Full repository suite: 310 passed, 1 skipped.
+- The skip is the optional live Phase 8 integration test; no live option was enabled.
+- Offline evaluation outside the repository: passed, 38 cases, no failures, optional
+  live comparison skipped.
+- Valid and invalid fixture CLI smoke runs outside the repository: released and blocked.
+- Reopened fixture SQLite statuses: valid `completed`, invalid `blocked`.
+- Ruff lint passed; Ruff format check reported 34 files already formatted and changed no
+  files.
+- `git diff --check`: passed.
+
+Remaining risks:
+
+- The SQLite synthesis tables retain ignored legacy framing columns until a separately
+  authorized schema-cleanup phase.
+- Release APIs rely on their caller to supply the authoritative submitted claim;
+  fixture and provider orchestrators now pass and cross-check that value.
+- Any consumer that treated the old model-authored framing fields or old rendered hashes
+  as a stable external contract must migrate to the framing-free synthesis schema and
+  new fixed release format.
+
+Next exact task:
+
+- No next phase was started. Further post-MVP hardening requires explicit user direction.
+
+
 ## 2026-07-17 - Phase 10 Evaluation and Adversarial Testing
 
 Status: Complete.

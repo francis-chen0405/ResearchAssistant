@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 import threading
 from collections import defaultdict
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 
 from agents.analyst import AnalystLLMInput
 from agents.planner import PlannerLLMInput
-from agents.reviewer import ReviewerInput
+from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import ExtractionLLMInput
 from agents.synthesizer import SynthesizerLLMInput, build_synthesis_output
 from models import (
@@ -30,7 +31,6 @@ from models import (
     SearchQuery,
     Stance,
     StatementDraft,
-    StatementReviewResult,
 )
 from orchestrator import (
     OrchestrationBudget,
@@ -318,37 +318,25 @@ class FakeLLMProvider:
             drafted_at=NOW,
         )
 
-    def _reviewer(self, request: LLMRequest) -> StatementReviewResult:
+    def _reviewer(self, request: LLMRequest) -> ReviewerDecision:
         reviewer_input = request.input_artifact
         assert isinstance(reviewer_input, ReviewerInput)
-        draft_id, quote_block_id = request.input_artifact_ids
+        _, quote_block_id = request.input_artifact_ids
         with self._lock:
             review_index = self.review_counts[quote_block_id]
             self.review_counts[quote_block_id] += 1
         rejected = review_index < self.reject_reviewer_attempts
         if rejected:
-            return StatementReviewResult(
-                run_id=request.run_id,
-                statement_draft_id=draft_id,
-                quote_block_id=quote_block_id,
+            return ReviewerDecision(
+                reviewed_statement=reviewer_input.draft_statement,
                 approved=False,
                 failure_code=ReviewerFailureCode.MISSING_QUALIFICATION,
                 rationale="Fake Reviewer rejection.",
-                reviewer_prompt_version=request.prompt.version,
-                reviewer_model_name=request.model_alias.value,
-                reviewed_at=NOW,
             )
-        return StatementReviewResult(
-            run_id=request.run_id,
-            statement_draft_id=draft_id,
-            quote_block_id=quote_block_id,
+        return ReviewerDecision(
+            reviewed_statement=reviewer_input.draft_statement,
             approved=True,
-            reviewer_approval_id=uuid5(NAMESPACE_URL, f"phase9-review::{draft_id}"),
-            approved_factual_statement=reviewer_input.draft_statement,
             rationale="Fake Reviewer approval.",
-            reviewer_prompt_version=request.prompt.version,
-            reviewer_model_name=request.model_alias.value,
-            reviewed_at=NOW,
         )
 
     def _synthesizer(self, request: LLMRequest) -> BaseModel:
@@ -356,8 +344,6 @@ class FakeLLMProvider:
         assert isinstance(synthesis_input, SynthesizerLLMInput)
         synthesis = build_synthesis_output(
             run_id=request.run_id,
-            title=synthesis_input.title,
-            claim_definition=synthesis_input.claim_definition,
             ledger_records=synthesis_input.ledger_records,
             created_at=NOW,
             synthesizer_prompt_version=request.prompt.version,
@@ -400,11 +386,19 @@ def test_successful_full_orchestration_releases_with_explicit_status(tmp_path: P
     assert result.validation_result is not None and result.validation_result.valid
     assert result.final_brief is not None
     assert result.rendered_brief_hash is not None
+    assert (
+        result.rendered_brief_hash == hashlib.sha256(result.final_brief.encode("utf-8")).hexdigest()
+    )
     assert result.researcher_result is not None
     assert result.researcher_result.supporting.status is ResearcherSideStatus.COMPLETED
     assert result.researcher_result.opposing.status is ResearcherSideStatus.COMPLETED
     assert result.retrieval_attempts_used == 18
     assert len(result.analysis_result.ledger_records) == 2
+    assert all(
+        isinstance(record.reviewer_approval_id, str)
+        and record.reviewer_approval_id.startswith("rappr_v1_")
+        for record in result.analysis_result.ledger_records
+    )
     assert read_run(result.db_path, result.run_id).status is RunStatus.COMPLETED
 
 
@@ -653,6 +647,10 @@ def test_duplicate_retry_and_terminal_rerun_create_no_duplicate_artifacts(
 
     assert second.status is ProviderRunStatus.RELEASED
     assert len(llm.requests) == call_count
+    assert first.analysis_result is not None and second.analysis_result is not None
+    assert [record.reviewer_approval_id for record in first.analysis_result.ledger_records] == [
+        record.reviewer_approval_id for record in second.analysis_result.ledger_records
+    ]
     with sqlite3.connect(first.db_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM ledger_records").fetchone()[0] == 2

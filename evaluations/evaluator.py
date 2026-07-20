@@ -280,12 +280,9 @@ def _baseline_release_artifacts() -> tuple[LedgerRecord, SynthesisOutput]:
         synthesizer_prompt_version="phase10-fixture-synthesizer-v1",
         synthesizer_model_name=MIMO_PRO,
         created_at=_FIXED_TIME,
-        title="Frozen evaluation brief",
-        claim_definition="Frozen non-factual evaluation framing.",
         sections=[
             SynthesisSection(
                 section_type=SectionType.SUPPORTING,
-                heading="Supporting evidence",
                 items=[item],
             )
         ],
@@ -296,7 +293,12 @@ def _baseline_release_artifacts() -> tuple[LedgerRecord, SynthesisOutput]:
 def _evaluate_mutation_case(case: MutationCase) -> MutationCaseResult:
     ledger, synthesis = _baseline_release_artifacts()
     mutated = _mutate_synthesis(synthesis, case.mutation)
-    validation = validate_final_release(mutated, [ledger], validated_at=_FIXED_TIME)
+    validation = validate_final_release(
+        mutated,
+        [ledger],
+        authoritative_claim="Frozen evaluation claim.",
+        validated_at=_FIXED_TIME,
+    )
     blocked = not validation.valid
     return MutationCaseResult(
         case_id=case.case_id,

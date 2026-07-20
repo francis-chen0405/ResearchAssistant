@@ -1,5 +1,38 @@
 # Decisions
 
+## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
+
+- Treat brief title, displayed-claim label and text, section headings, and section order
+  as application-owned release framing. The fixed title is `Research Brief`; the fixed
+  label is `Claim under review`; the displayed value is the exact authoritative claim
+  passed by the orchestrator.
+- Remove `title`, `claim_definition`, and section `heading` from `SynthesisOutput` and
+  `SynthesizerLLMInput`. The Synthesizer selects only typed sections, approved templates,
+  and exact Ledger-backed items.
+- Allow only supporting, opposing, and limitations sections, at most once each, in that
+  application-defined order. Reject hidden or extra framing fields before release hash
+  creation.
+- Use a narrow `ReviewerDecision` as the LLM output. It contains exact reviewed text,
+  normalized approval/rejection, an optional rejection code, and rationale; unknown
+  fields, including `reviewer_approval_id`, are forbidden.
+- Derive approved IDs in application code as `rappr_v1_<sha256>`, after decision-shape
+  and exact-text validation. Canonical sorted compact JSON contains derivation version,
+  Reviewer schema version, statement draft ID, quote block ID, exact reviewed text, and
+  normalized `approved` decision only.
+- Exclude timestamps, provider request/response metadata, formatting, routes, token
+  usage, cost, and other unstable metadata from approval-ID derivation.
+- Preserve the persisted/domain `StatementReviewResult`. Continue reading legacy UUID
+  approval IDs while writing new application-owned `rappr_v1` IDs.
+- Retain legacy SQLite synthesis framing columns for schema compatibility, write only
+  fixed application constants into them, and ignore their contents when reconstructing
+  framing-free `SynthesisOutput` artifacts.
+- Preserve completed synthesis checkpoints backed by SQLite rows. Reject pre-MVP-1
+  serialized synthesis payloads during an interrupted pre-checkpoint restart; those runs
+  require a fresh run rather than silently accepting model-owned framing.
+- Persist fixture runs as `RunStatus.RUNNING` until final validation, then update them to
+  `RunStatus.COMPLETED` for release or `RunStatus.BLOCKED` for validation block.
+
+
 ## 2026-06-26 - Phase 0 Foundation
 
 - Keep Phase 0 documentation-only plus scaffold-only. No working agents, database behavior, retrieval, scraping, or LLM calls are implemented.

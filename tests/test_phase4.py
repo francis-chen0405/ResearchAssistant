@@ -67,7 +67,6 @@ def _uuid(value: int) -> UUID:
 
 
 _DEFAULT_DRAFT_ID = _uuid(10)
-_DEFAULT_APPROVAL_ID = _uuid(11)
 _DEFAULT_LEDGER_CLAIM_ID = _uuid(12)
 
 
@@ -159,7 +158,6 @@ def _checks_pass() -> ReviewChecks:
 def _approved_review(
     candidate: CandidateQuoteBlock,
     draft: StatementDraft,
-    approval_id: UUID = _DEFAULT_APPROVAL_ID,
 ) -> StatementReviewResult:
     return review_statement(
         draft,
@@ -168,7 +166,6 @@ def _approved_review(
         reviewer_prompt_version="reviewer-v1",
         reviewer_model_name="fixture-model",
         reviewed_at=_NOW,
-        reviewer_approval_id=approval_id,
     )
 
 
@@ -372,7 +369,7 @@ def test_invalid_revision_count_is_rejected() -> None:
         )
         for i in range(3)
     ]
-    reviews = [_approved_review(candidate, draft, _uuid(30 + i)) for i, draft in enumerate(drafts)]
+    reviews = [_approved_review(candidate, draft) for draft in drafts]
     request = LedgerAdmissionRequest(
         ledger_claim_id=_uuid(40),
         candidate=candidate,
@@ -449,8 +446,8 @@ def test_multiple_separately_reviewed_ledger_claims_can_use_one_quote_block() ->
     second_statement = "The study reported policy evidence among surveyed adults."
     first_draft = _draft(candidate, decision, first_statement, _uuid(50))
     second_draft = _draft(candidate, decision, second_statement, _uuid(51))
-    first_review = _approved_review(candidate, first_draft, _uuid(52))
-    second_review = _approved_review(candidate, second_draft, _uuid(53))
+    first_review = _approved_review(candidate, first_draft)
+    second_review = _approved_review(candidate, second_draft)
 
     first = admit_ledger_record(
         _admission_request(
@@ -496,7 +493,7 @@ def test_rejected_analyst_decision_cannot_enter_ledger() -> None:
         analyst_model_name="fixture-model",
         drafted_at=_NOW,
     )
-    review = _approved_review(candidate, draft, _uuid(61))
+    review = _approved_review(candidate, draft)
     request = _admission_request(
         snapshot,
         candidate,

@@ -40,8 +40,6 @@ class SynthesizerLLMInput(StrictModel):
     """Typed immutable-Ledger input for the structured Synthesizer call."""
 
     run_id: UUID
-    title: str = Field(min_length=1)
-    claim_definition: str = Field(min_length=1)
     ledger_records: tuple[LedgerRecord, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -54,8 +52,6 @@ class SynthesizerLLMInput(StrictModel):
 def build_synthesis_output(
     *,
     run_id: UUID,
-    title: str,
-    claim_definition: str,
     ledger_records: Sequence[LedgerRecord],
     created_at: datetime,
     synthesizer_prompt_version: str = DEFAULT_SYNTHESIZER_PROMPT_VERSION,
@@ -89,7 +85,6 @@ def build_synthesis_output(
         sections.append(
             SynthesisSection(
                 section_type=SectionType.SUPPORTING,
-                heading="Supporting Evidence",
                 items=[_item_from_ledger(record) for record in supporting],
             )
         )
@@ -97,7 +92,6 @@ def build_synthesis_output(
         sections.append(
             SynthesisSection(
                 section_type=SectionType.OPPOSING,
-                heading="Opposing Evidence",
                 items=[_item_from_ledger(record) for record in opposing],
             )
         )
@@ -105,7 +99,6 @@ def build_synthesis_output(
         sections.append(
             SynthesisSection(
                 section_type=SectionType.LIMITATIONS,
-                heading="Limitations",
                 items=[_item_from_ledger(record) for record in limitations],
             )
         )
@@ -115,8 +108,6 @@ def build_synthesis_output(
         synthesizer_prompt_version=synthesizer_prompt_version,
         synthesizer_model_name=synthesizer_model_name,
         created_at=created_at,
-        title=title,
-        claim_definition=claim_definition,
         sections=sections,
     )
 

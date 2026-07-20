@@ -1,5 +1,111 @@
 # Handoff
 
+## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- Phase MVP-1 Release-Contract Correctness.
+- No later post-MVP phase has started.
+
+Implementation handoff:
+
+- `SynthesisOutput` and `SynthesizerLLMInput` no longer contain title, displayed claim,
+  or arbitrary heading fields. `SynthesisSection` contains only `section_type` and typed
+  Ledger-backed items.
+- `agents/renderer.py` owns the fixed title, claim label, exact authoritative claim
+  insertion, structural headings, and present-section order. Release allows supporting,
+  opposing, and limitations sections once each in canonical order.
+- `ReviewerDecision` is the only model-facing Reviewer result. It forbids unknown fields
+  and cannot carry an approval ID. Application code validates its exact reviewed text,
+  derives an ID, and constructs the existing `StatementReviewResult`.
+- Approval IDs use canonical sorted compact JSON over `rappr_v1`,
+  `reviewer-decision-v1`, statement draft ID, quote block ID, exact reviewed text, and
+  normalized `approved`. The SHA-256 result is prefixed `rappr_v1_`.
+- Legacy UUID approval IDs remain accepted on persisted/domain review, Ledger, synthesis,
+  and fixture records. New provider-backed approvals use `rappr_v1` strings.
+- Existing SQLite synthesis title/claim/heading columns were not migrated or dropped;
+  fixed constants are written and legacy contents are ignored when reading the new
+  synthesis domain schema.
+- Completed synthesis checkpoints backed by SQLite synthesis rows remain readable. An
+  interrupted pre-MVP-1 run with only a cached serialized synthesis result is rejected
+  on restart and must be restarted as a fresh run; it is not treated as a completed
+  current-schema checkpoint.
+- Fixture runs are inserted as running and finalized only after validation. Released
+  fixtures persist as `RunStatus.COMPLETED`; validation blocks persist as
+  `RunStatus.BLOCKED`.
+
+Exact files changed:
+
+- `.agent/PLANS.md`
+- `.agent/plans/phase-mvp-1-release-contract-correctness.md`
+- `ARCHITECTURE.md`
+- `DECISIONS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `models.py`
+- `agents/reviewer.py`
+- `agents/synthesizer.py`
+- `agents/renderer.py`
+- `providers/llm.py`
+- `orchestrator.py`
+- `store.py`
+- `prompts/reviewer.md`
+- `prompts/synthesizer.md`
+- `evaluations/evaluator.py`
+- `tests/test_mvp1.py`
+- `tests/test_phase1.py`
+- `tests/test_phase2.py`
+- `tests/test_phase4.py`
+- `tests/test_phase5.py`
+- `tests/test_phase8.py`
+- `tests/test_phase9.py`
+- `tests/fixtures/basic_valid_run/synthesis.json`
+- `tests/fixtures/invalid_release_run/synthesis.json`
+- `tests/fixtures/phase5_expected_valid_brief.txt`
+
+Independent verification corrections:
+
+- Malformed nested synthesis structures now return a blocked schema validation result
+  instead of raising `AttributeError`.
+- Provider final validation now receives the persisted authoritative submitted claim
+  directly, and the released hash is regression-checked against the reopened rendering.
+- Architecture and restart/checkpoint compatibility documentation now match the MVP-1
+  contract.
+
+Verification results:
+
+- Focused MVP-1: 10 passed.
+- Relevant Phase 5/6/8/9/10: 126 passed, 1 skipped.
+- Full pytest: 310 passed, 1 skipped.
+- Offline evaluation: 38 cases passed; output was written under `/tmp`, not the repo.
+- Fixture CLI smoke: valid released with hash
+  `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`;
+  invalid blocked with no hash.
+- Reopened SQLite: valid status `completed`; invalid status `blocked`.
+- Ruff check passed; Ruff format check reported 34 files already formatted and changed
+  no files; `git diff --check` passed.
+
+Remaining risks:
+
+- Old serialized synthesis JSON carrying framing fields is intentionally incompatible
+  and must be regenerated. Old SQLite synthesis rows remain readable.
+- Ignored legacy synthesis framing columns remain in SQLite pending separately approved
+  cleanup.
+- A caller outside the repository orchestrators must pass the true authoritative claim
+  to render/validate; the two repository orchestrators do so.
+
+Do not start:
+
+- Do not add live providers, network calls, dependencies, frontend changes, `.env`
+  loading, live CLI behavior, multi-candidate extraction, cross-stance deduplication,
+  database triggers, or another post-MVP phase without explicit direction.
+
+
 ## 2026-07-17 - Phase 10 Evaluation and Adversarial Testing
 
 Current branch:
