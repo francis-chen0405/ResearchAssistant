@@ -10,17 +10,58 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State After Phase 10
+## Current Project State After MVP-2A
 
-Phases 0 through 10 are complete. Phase MVP-1 Release-Contract Correctness is the active
-user-authorized post-MVP hardening phase. Its canonical focused plan is
-`.agent/plans/phase-mvp-1-release-contract-correctness.md`.
+Phases 0 through 10 and MVP-1 Release-Contract Correctness are complete. MVP-2A is the
+completed **Architecture Gate** for live provider work. Its canonical plan is
+`.agent/plans/phase-mvp-2a-architecture-gate.md`.
 
-MVP-1 is limited to application-owned brief framing, application-owned Reviewer
-approval IDs, validation-blocked fixture terminal persistence, their compatibility
-effects, and regression verification. It must not add live providers, network calls,
-dependencies, frontend changes, `.env` loading, a live CLI command, multi-candidate
-extraction, cross-stance deduplication, database triggers, or unrelated redesign work.
+MVP-2A approves a future live-provider design but changes no runtime code. The repository
+still contains no live Search, Scraper, or LLM adapter, vendor SDK, provider API-key
+loading, or provider-run launch command. MVP-2B implementation has not started and
+requires explicit user direction. Any MVP-2B work must first reconcile the current fake-
+provider contracts and tests with the approved MVP-2A acquisition, model-routing,
+snapshot, retry, budget, and restart contracts.
+
+## MVP-2A: Architecture Gate
+
+Purpose: Select and freeze a concrete live-provider architecture before any live adapter
+or dependency is added.
+
+Canonical plan:
+
+- `.agent/plans/phase-mvp-2a-architecture-gate.md`
+
+Completed decisions:
+
+- Primary acquisition stack: pinned local Wigolo `0.2.1` for discovery and controlled
+  fetching, with ResearchAssistant-owned normalization and snapshots.
+- Primary LLM stack: OpenRouter with `xiaomi/mimo-v2.5-pro` for every role and
+  `minimax/minimax-m3` as the only objective-failure fallback.
+- Narrow deterministic support for digitally generated PDFs; scanned, encrypted,
+  malformed, empty, or unusably extracted PDFs return a typed unsupported result.
+- Six searches return five discovery candidates each; each stance worker attempts them
+  in rank order until three usable unique snapshots exist per query. Eighteen snapshots
+  remain the normal Extractor ceiling; thirty acquisitions are the structural maximum.
+- Source snapshots are immutable ResearchAssistant-owned normalized plain text with
+  exact character offsets, versioned normalization, and separate original, final, and
+  advisory canonical URL provenance.
+- Live runs are public/non-sensitive only, use one total retry/fallback budget, and fail
+  closed when price or resume compatibility cannot be established.
+
+Explicitly out of scope:
+
+- Provider or process-manager implementation
+- Dependency or environment-template changes
+- Live calls, secrets, network-dependent tests, or provider CLI commands
+- Database/schema migrations
+- Changes to existing protocol, routing, orchestration, or normalization code
+- MVP-2B or any later phase
+
+Completion signal: The primary and alternative stacks, acquisition contract, PDF policy,
+normalization and quotation contract, data handling, retries, budgets, persistence,
+restart compatibility, canary evidence, implementation boundary, and approval-required
+open items are documented consistently. Existing offline verification remains green.
 
 ## Phase 0: Repository Foundation
 

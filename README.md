@@ -6,11 +6,11 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The MVP is complete through Phase 10. The repository includes strict Pydantic contracts, SQLite
+The MVP is complete through Phase 10 and MVP-1. MVP-2A Architecture Gate is also complete. The repository includes strict Pydantic contracts, SQLite
 audit persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, an offline fixture CLI and Streamlit UI, and a
-deterministic adversarial evaluation framework. It does **not** include live search, scraping, or
-LLM vendor adapters.
+deterministic adversarial evaluation framework. MVP-2A selects the future live-provider stack, but
+the repository still does **not** include live search, scraping, or LLM vendor adapters.
 
 ## How the system works
 
@@ -35,9 +35,10 @@ records are insert-only SQLite audit artifacts.
 
 - **Claim Planner** defines the claim scope, ambiguity log, and exactly six searches without
   judging whether the claim is true.
-- **Supporting and Opposing Researchers** use the same search depth and rules. They retrieve three
-  results for each of three queries per side, create immutable snapshots, ask the Extractor for
-  candidate quotations, and apply deterministic offset, bracket, length, and relevance checks.
+- **Supporting and Opposing Researchers** use the same search depth and rules. The currently
+  implemented fake-provider contract processes three results for each query. MVP-2A approves a
+  future live policy that ranks five and attempts them until three usable unique snapshots exist,
+  then applies the same deterministic quotation gates.
 - **Evidence Analyst** rechecks snapshot and quotation integrity, scores evidence quality and claim
   fit separately, assigns placement, and drafts canonical factual statements.
 - **Statement Reviewer** sees only the quote, bracket context, draft, and claim-fit score. It audits
@@ -68,9 +69,11 @@ Provider orchestration records deterministic operation and attempt IDs, model al
 versions and hashes, timing, failures, escalation reasons, and optional token/cost usage. Each model
 alias may be attempted twice by default. Objective transient, timeout, malformed/schema,
 exact-quote, interrupted, or deterministic-validation failures can retry or advance through the
-configured fallback route; semantic disagreement alone cannot switch models. Extractor routing is
-MiMo V2.5, then MiMo V2.5 Pro, then DeepSeek V4 Flash, and every fallback output still passes the
-same snapshot, quotation, Reviewer, Ledger, and final validation gates.
+configured fallback route; semantic disagreement alone cannot switch models. The current code still
+uses the earlier MiMo/DeepSeek alias defaults. MVP-2A approves a future replacement route for every
+role: OpenRouter `xiaomi/mimo-v2.5-pro` primary and `minimax/minimax-m3` as the only fallback. MVP-2B
+must migrate the aliases and tests; every fallback output will remain subject to the same snapshot,
+quotation, Reviewer, Ledger, and final validation gates.
 
 Completed-stage checkpoints and typed stage artifacts are persisted for restart-safe reuse.
 Cancellation is honored at stage boundaries. Model-call, per-side retrieval, and optional token or
@@ -185,6 +188,12 @@ python cli.py inspect-run PATH_TO_DATABASE RUN_UUID
 python cli.py cancel-run PATH_TO_DATABASE RUN_UUID --reason "requested by operator"
 ```
 
+MVP-2A approves pinned local Wigolo `0.2.1` for future discovery/acquisition and OpenRouter for
+future LLM calls. It also approves narrow digital-PDF support, ResearchAssistant-owned normalized
+plain-text snapshots, and exact offsets into those immutable snapshots. None of that live behavior
+is implemented yet, and users should not add API keys or manually run Wigolo on behalf of the
+current fixture application.
+
 ## Tests and code quality
 
 Run the full test suite, lint checks, and formatting check:
@@ -236,13 +245,14 @@ See `evaluations/README.md` for metric and exit-code details.
 
 ## Project status
 
-Phases 0 through 10 are complete, including Phase 7A (local fixture frontend) and Phase 7B
-(provider interfaces and deterministic retrieval). Phase 9 completed provider-backed orchestration,
-and Phase 10 added the offline evaluation and adversarial testing framework. The latest documented
-full verification is 300 passed and 1 optional integration test skipped, with the 38-case offline
-evaluation and both Ruff checks passing.
+Phases 0 through 10, MVP-1 Release-Contract Correctness, and MVP-2A Architecture Gate are complete.
+MVP-2A is documentation-only: it selected the primary and alternative provider stacks, acquisition
+and PDF policy, normalization/quotation contract, retry and budget rules, data handling, restart
+fingerprint, and canary limits. MVP-2B implementation has not started.
+The MVP-2A documentation pass verified the unchanged repository with 310 tests passing and one
+optional live-integration test skipped; both Ruff checks also passed.
 
-Post-MVP hardening has not started. Known limitations are:
+Known limitations are:
 
 - No live Search, Scraper, LLM, or live-evaluation adapter is included, so live research requires
   externally supplied provider implementations.
@@ -255,6 +265,9 @@ Post-MVP hardening has not started. Known limitations are:
   not full NLP or raw-HTML parsing.
 - Final validation is deliberately syntactic and provenance-based. Semantic quality depends on the
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
+
+The approved future architecture and decisions still requiring implementation-phase approval are
+documented in `.agent/plans/phase-mvp-2a-architecture-gate.md`.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

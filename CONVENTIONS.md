@@ -73,6 +73,12 @@ No additional dependencies without flagging it first.
 Do not add an LLM SDK, web framework, ORM, scraper, or HTTP library until a later phase explicitly approves it.
 API client to be added in a later phase — skip any LLM call stubs for now.
 
+MVP-2A Architecture Gate selects future `httpx` and `markdown-it-py` use with pinned
+Wigolo `0.2.1`, plus OpenRouter's direct HTTP API, but does not add or finally approve
+those dependencies. MVP-2B must obtain explicit approval before changing dependency or
+runtime declarations. Do not add a second general provider framework: implement the
+existing Protocols for the approved concrete stack when that phase is authorized.
+
 ## 4. Coding Style
 
   - Type hints on every function signature, no exceptions
@@ -99,12 +105,22 @@ API client to be added in a later phase — skip any LLM call stubs for now.
   Never hardcode keys or paths.
   Required variables are documented in .env.example only.
 
+MVP-2A proposes `OPENROUTER_API_KEY` as the only required vendor secret for the primary
+stack. Do not add it to `.env.example`, load it, or use it until MVP-2B is explicitly
+authorized. Never expose the key to Wigolo, logs, SQLite, checkpoints, or exported
+artifacts. Live MVP claims are public/non-sensitive only.
+
 ## 7. Phase-Gated Development
 
   Development is phase-gated.
   Before editing, Codex must check `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the current phase plan.
   Codex must not begin the next phase until the current phase is tested, documented, and committed.
   Codex must run pytest and Ruff before marking a phase complete.
+
+MVP-2A is a documentation-only Architecture Gate. Completion approves the documented
+design, not provider implementation. MVP-2B remains a distinct phase and must reconcile
+the current top-three/PDF-unsupported/legacy-model test contracts with the approved
+rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
 ## 8. Done Criteria Per Phase
 

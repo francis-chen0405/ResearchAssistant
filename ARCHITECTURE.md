@@ -23,7 +23,7 @@ Claim Planner (6 queries: 3 Support, 3 Oppose)
 ┌──────────────────────────────────────────────────────────────┐
 │ Supporting Researcher              Opposing Researcher        │
 │ Execute S1, S2, S3                 Execute O1, O2, O3        │
-│ Retrieve Top 3 per query           Retrieve Top 3 per query  │
+│ Rank 5; keep 3 snapshots/query   Rank 5; keep 3 snapshots/query │
 │           ↓                                  ↓               │
 │ Trusted Snapshot Creation          Trusted Snapshot Creation  │
 │           ↓                                  ↓               │
@@ -58,6 +58,107 @@ Retrieval, semantic approval, and deterministic release are strictly separated. 
 
 `ARCHITECTURE.md` defines system invariants, evidence rules, and release rules. Phase sequencing lives in `.agent/PLANS.md` and individual `.agent/plans/phase-XX-*.md` files. If a phase prompt conflicts with architecture, architecture wins unless the user explicitly approves an architecture change.
 
+## MVP-2A Live Provider Architecture Gate
+
+MVP-2A approves the design below for a future MVP-2B implementation. It does not claim
+that the live adapters, process management, dependency changes, migrations, or live-run
+surface already exist.
+
+### Approved Stack and Role Mapping
+
+- Search and source acquisition: pinned local Wigolo `0.2.1` over loopback. Search is
+  discovery only; provider snippets, evidence fields, relevance scores, and summaries
+  can rank attempts but can never become trusted source content.
+- LLM gateway: OpenRouter. Planner, Extractor, Analyst, Reviewer, and Synthesizer all use
+  `xiaomi/mimo-v2.5-pro` as primary. `minimax/minimax-m3` is the only fallback and is
+  reachable only after objective invocation or deterministic output failure.
+- Structured output: strict JSON Schema derived from the exact requested Pydantic model,
+  followed by local Pydantic revalidation. No response-healing layer is permitted.
+- ResearchAssistant remains vendor-independent at the existing Protocol boundaries, but
+  MVP-2B should implement only these concrete adapters. Do not create an additional
+  general multi-provider framework without a separately demonstrated need.
+
+The complete stack comparison, observed canaries, deadlines, cost model, dependencies,
+environment, and acceptance limits are in
+`.agent/plans/phase-mvp-2a-architecture-gate.md`.
+
+### Discovery and Acquisition Contract
+
+Each of the six Planner queries requests five ranked discovery results with no search-
+time fetch. Each Researcher attempts candidates in rank order until three usable unique
+snapshots exist for that query or all five candidates are exhausted. Therefore eighteen
+snapshots remain the normal Extractor ceiling while thirty ranked acquisitions are the
+structural maximum. Supporting and opposing workers retain equal limits.
+
+Every candidate is fetched independently. Persist the original discovery URL and final
+redirected URL separately. A source-declared canonical URL is advisory metadata and may
+not replace either. Independently determine source media type from bounded HTTP metadata
+and, when ambiguous, a bounded signature check; Wigolo's extracted Markdown is not proof
+of the origin `Content-Type`.
+
+Use a direct non-rendered fetch first. Only an explicit challenge or JavaScript-required
+outcome permits one final Chromium-rendered attempt. No authentication, clicks, typing,
+browser profiles, or general browser automation are allowed. Paywalls, persistent bot
+protection, inaccessible pages, and failed rendering produce typed unusable-source
+outcomes and cause the worker to continue down the ranked list. Use at most five
+redirects. The proposed implementation caps are 10 MiB for HTML/text and 25 MiB for PDF;
+MVP-2B must obtain dependency, deadline, and cap approval before implementation.
+
+### Supported Content and PDF Policy
+
+The MVP supports extracted HTML/article text, plain text, and a narrow deterministic
+digital-PDF path. PDFs must be unencrypted, parseable, within configured size/page/time
+limits, and contain usable embedded text. Scanned/image-only, encrypted, malformed,
+empty, or unusably extracted PDFs return a normalized unsupported-content result; OCR is
+out of scope. Page markers, headers, and footnotes may remain in extracted PDF text.
+
+### Authoritative Snapshot and Quotation Contract
+
+Provider Markdown, raw HTML, and PDF bytes are acquisition representations, not the
+authoritative quotation surface. ResearchAssistant deterministically converts supported
+content to normalized plain text, applies its 3,000-word limit, and persists an immutable
+snapshot before any Extractor call.
+
+The versioned normalizer must use deterministic charset handling; normalize Unicode to
+NFC and line endings to `\n`; convert non-breaking spaces to spaces; collapse horizontal
+whitespace; trim line edges; limit blank-line runs; retain visible link text but not
+Markdown syntax or link destinations; and remove boilerplate only through deterministic
+rules. The snapshot SHA-256 and word count are computed from the exact stored text.
+
+All quote offsets refer to that normalized stored text. The LLM proposes exact quote
+strings, and Python locates segments sequentially and accepts each only when
+`normalized_text[start_char:end_char] == exact_quote`. Persist the normalization version,
+source media type, acquisition version, original/final/canonical URLs, and optional
+provider-payload hash with the snapshot provenance. A refetch may create a new snapshot
+but can never replace an existing one.
+
+### Live Retry, Budget, Data, and Restart Rules
+
+- A logical LLM operation may attempt primary, retry primary once, fallback, and retry
+  fallback once. Only timeout, 408/429/retryable 5xx, malformed JSON, schema/Pydantic, or
+  deterministic validation failures qualify. Semantic disagreement and low scores do
+  not. Every physical attempt consumes the same run budget.
+- Atomically reserve conservative tokens and capped price before each call; reconcile
+  exact provider usage afterward. Retain usage from malformed, failed, and locally
+  rejected responses. Do not call a fallback the remaining budget cannot cover, and
+  fail closed when current pricing or route identity is unknown.
+- The proposed hard run ceiling is USD 1.00, 1,000,000 tokens, and 160 physical LLM
+  calls. Search and extraction still receive explicit usage/cost records, including zero
+  local cost. These limits require explicit MVP-2B approval.
+- Live MVP research is public and non-sensitive only. Wigolo receives public queries,
+  URLs, and content locally. OpenRouter and the selected upstream receive role-specific
+  claims/prompts and necessary source text. Configure data collection denied and prompt
+  logging off, but do not claim a confidential/sensitive mode.
+- Persist provider identity, adapter version, exact returned model/upstream, prompt and
+  schema versions/hashes, normalization/PDF/retry/budget/pricing policy versions,
+  repository revision, timing, status, and usage/cost per attempt or checkpoint. Resume
+  only on an exact run-fingerprint match; changed code, adapter, model, prompt, schema,
+  acquisition, normalization, or policy requires a new run.
+- One future managed Wigolo process may serve both synchronous Researcher workers. The
+  adapter must be thread-safe; workers retain separate SQLite connections and no shared
+  mutable handoffs. Start only the pinned loopback service after health/identity checks,
+  and stop only a child process ResearchAssistant owns.
+
 ## Run Provenance
 
 Every persisted artifact and every Pydantic handoff that can affect release must carry provenance. At minimum, release-relevant records include `run_id`, UTC ISO-8601 timestamps for creation or validation, and the stage-specific fields listed below. Retrieval records include `retrieval_attempt_id`, `query_id`, `query_round`, search rank, URL, status, and timestamp. LLM-produced records include `prompt_version`, `model_name`, and timestamp. Deterministic validators include the validator or filter version and validation timestamp.
@@ -82,7 +183,14 @@ Defines the research boundary and search strategy. Evaluates the logical structu
 
 ### A. Retrieval Protocol
 
-Execute the Planner's three supporting queries in sequential rounds. For each query, retrieve the Top 3 results; record search rank, query text, timestamp, resolved URL, and scrape status; scrape only the first 3,000 words; treat all web content as untrusted input. Set `truncated: true` whenever the word limit is reached.
+Execute the Planner's three supporting queries in sequential rounds. For each query,
+rank five discovery results and attempt them in order until three usable unique snapshots
+exist or all five are exhausted. Record search rank, query text, timestamp, original URL,
+final redirected URL, advisory canonical URL when present, discovery score metadata,
+source media type, and acquisition status. Independently fetch every source; search
+snippets and provider summaries are never snapshots. Normalize and retain only the first
+3,000 words as authoritative snapshot text; set `truncated: true` whenever normalized
+content is omitted. Treat all acquired content as untrusted input.
 
 ### B. Trusted Snapshot Creation
 
@@ -315,7 +423,11 @@ submit free-form prose or structural framing directly.
 
 ## Stopping Criteria
 
-Research stops after three rounds per side: all six queries executed, Top 3 results per query processed, snapshots created, candidates filtered, and passing candidates submitted to the Analyst. No iterative feedback loop is included in the MVP.
+Research stops after three rounds per side: all six queries are executed and each query
+has either produced three usable unique snapshots or exhausted its five ranked
+candidates. At most eighteen snapshots proceed to extraction and at most thirty ranked
+source acquisitions are attempted. Snapshots are filtered and passing candidates are
+submitted to the Analyst. No iterative feedback loop is included in the MVP.
 
 ## MVP Evaluation Metrics
 

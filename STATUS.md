@@ -1,5 +1,64 @@
 # Status
 
+## 2026-07-21 - MVP-2A Architecture Gate
+
+Status: Complete as a documentation-only architecture gate.
+
+Completed:
+
+- Inspected the repository's synchronous Search, Scraper, and LLM Protocols; strict
+  prompt/output contracts; current aliases; call/retry paths; two-worker orchestration;
+  budgets; snapshots/offsets; persistence/checkpoints; and attempt/version metadata.
+- Evaluated two concrete stacks capable of a future live run: local Wigolo plus
+  OpenRouter, and Brave Search plus local Python extraction plus OpenRouter.
+- Selected pinned local Wigolo `0.2.1` for discovery/acquisition and OpenRouter with
+  `xiaomi/mimo-v2.5-pro` for every LLM role plus `minimax/minimax-m3` as the only
+  objective-failure fallback.
+- Approved search as discovery-only, independent source fetches, rank-five/keep-three
+  acquisition, separate original/final/advisory-canonical URLs, one controlled browser
+  fallback, and no provider summary as snapshot content.
+- Approved narrow deterministic digital-PDF support and explicit unsupported results for
+  scanned, encrypted, malformed, empty, or unusably extracted PDFs.
+- Defined ResearchAssistant-owned normalized plain-text snapshots, immutable refetch
+  behavior, versioned normalization, a 3,000-word cap, and Python-verified exact quote
+  offsets into persisted text.
+- Defined strict OpenRouter JSON Schema/Pydantic handling, exact model provenance,
+  objective retry/fallback, request deadlines, usage/cost reservation and reconciliation,
+  public/non-sensitive data handling, secret protection, two-worker thread safety, and
+  exact-fingerprint restart compatibility.
+- Recorded expected normal and retry-heavy costs, proposed hard canary limits, observed
+  Wigolo search/HTML/PDF/block canaries, minimum future modules, MVP-2B acceptance
+  criteria, and decisions that still require user approval.
+- Added no provider, dependency, environment variable, secret, network call, migration,
+  live CLI behavior, test behavior, or MVP-2B implementation.
+
+Files changed:
+
+- `.agent/PLANS.md`
+- `.agent/plans/phase-mvp-2a-architecture-gate.md`
+- `ARCHITECTURE.md`
+- `CONVENTIONS.md`
+- `DECISIONS.md`
+- `README.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `AGENTS.md`
+
+Verification:
+
+- Full pytest: 310 passed, 1 skipped. The skip is the existing optional live Phase 8
+  integration gate; no live option was enabled.
+- Ruff lint passed; Ruff formatting check reported 34 files already formatted.
+- Documentation consistency search found stale phase wording only inside dated
+  historical handoffs/status entries, which remain point-in-time records.
+- `git diff --check` passed.
+
+Next exact task:
+
+- MVP-2B live-provider implementation only after explicit user direction and approval
+  of dependencies, limits/deadlines, environment-template changes, operator surface,
+  and any persistence migration. MVP-2B has not started.
+
 ## 2026-07-19 - Daily Expanded CI Maintenance
 
 Status: Complete.

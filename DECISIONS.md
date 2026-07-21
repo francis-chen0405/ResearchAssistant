@@ -1,5 +1,52 @@
 # Decisions
 
+## 2026-07-21 - MVP-2A Architecture Gate
+
+- Name this documentation phase **MVP-2A Architecture Gate**. It selects a live-provider
+  design but does not authorize implementation, dependencies, secrets, migrations, live
+  calls, or MVP-2B.
+- Select pinned local Wigolo `0.2.1` for discovery and controlled source acquisition.
+  Search results are discovery metadata only; every source is independently fetched and
+  provider snippets, scores, evidence fields, or summaries never substitute for a
+  ResearchAssistant snapshot.
+- Request five ranked results for each of six queries and attempt them in rank order
+  until three usable unique snapshots exist per query. Keep eighteen snapshots as the
+  normal Extractor ceiling and thirty acquisition candidates as the structural maximum.
+- Preserve original, final redirected, and advisory canonical URLs separately. Determine
+  origin content type independently because Wigolo's REST extraction does not expose the
+  original HTTP `Content-Type`.
+- Allow one direct fetch and one controlled Chromium-render fallback only after a
+  challenge or JavaScript-required result. Do not add authentication, clicks, typing,
+  profiles, or general browser automation.
+- Support digital PDFs through a narrow deterministic path. Reject scanned/image-only,
+  encrypted, malformed, empty, oversized, timed-out, or unusably extracted PDFs without
+  OCR. Headers, footnotes, and page markers may remain.
+- Make the immutable, 3,000-word, ResearchAssistant-normalized plain-text snapshot the
+  only quote authority. Normalize deterministically and version the contract. Character
+  offsets always refer to stored normalized text and Python must verify
+  `text[start:end] == exact_quote`. Refetches never replace snapshots.
+- Use OpenRouter as the single LLM gateway. Route all five roles to
+  `xiaomi/mimo-v2.5-pro`; use `minimax/minimax-m3` as the only objective-failure fallback.
+  Require strict JSON Schema and exact local Pydantic revalidation.
+- Permit at most primary, primary retry, fallback, and fallback retry per logical call.
+  Semantic disagreement or low scores do not trigger routing. All attempts share one
+  run-wide call, token, and monetary budget.
+- Reserve conservative usage and capped price before calls and reconcile exact usage
+  afterward. Retain usage from failed, malformed, and locally rejected outputs; fail
+  closed when pricing or returned route identity cannot be established.
+- Restrict live MVP research to public, non-sensitive claims. Configure OpenRouter data
+  collection denied and prompt logging off, protect the API key from logs/persistence,
+  and bind the unauthenticated Wigolo service to loopback only.
+- Require an exact checkpoint fingerprint over repository, provider/adapter, exact
+  model/upstream, prompt/schema, acquisition, normalization/PDF, retry/budget/pricing,
+  and Wigolo configuration versions. Changed fingerprints require a new run; silent
+  cross-version resume is unsupported.
+- Keep Brave Search plus local `httpx`/`trafilatura`/`pypdf` extraction and the same
+  OpenRouter route as the concrete alternative, not an additional implementation target.
+- Defer approval of `httpx`, `markdown-it-py`, Node/Wigolo runtime requirements,
+  response limits, deadlines, hard USD/token/call limits, environment-template changes,
+  CLI/UI behavior, and schema migrations to MVP-2B.
+
 ## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
 
 - Treat brief title, displayed-claim label and text, section headings, and section order

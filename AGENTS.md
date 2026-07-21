@@ -1,6 +1,10 @@
 # AI Assistant Instructions
 
-This repository has completed Phase 7A for the Debate Research Agent System. Phase 7B has not started. Before editing any file, read `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the relevant current phase plan completely.
+This repository has completed Phases 0-10, MVP-1, and the documentation-only MVP-2A
+Architecture Gate for the Debate Research Agent System. MVP-2B live-provider
+implementation has not started. Before editing any file, read `ARCHITECTURE.md`,
+`CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the
+relevant current phase plan completely.
 
 Required rules for every future assistant:
 

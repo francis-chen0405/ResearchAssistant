@@ -1,5 +1,84 @@
 # Handoff
 
+## 2026-07-21 - MVP-2A Architecture Gate
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-2A Architecture Gate, documentation only.
+- MVP-2B implementation has not started.
+
+Approved primary design:
+
+- Use pinned local Wigolo `0.2.1` for discovery and controlled source acquisition. A
+  future ResearchAssistant process manager owns startup/health/identity/shutdown; users
+  should not manually enter searches or operate a separate normal-run terminal.
+- Search is discovery metadata only. Make six balanced discovery calls, rank five URLs
+  per query, and attempt them until three usable unique snapshots exist. Search snippets,
+  scores, evidence fields, and generated summaries never become source snapshots.
+- Fetch directly first and allow one Chromium-rendered retry only for explicit challenge
+  or JavaScript-required outcomes. No authentication, clicks, typing, profiles, or
+  general browser automation.
+- Support ordinary extracted HTML/text and a narrow digital-PDF path. Reject scanned,
+  encrypted, malformed, empty, oversized/timed-out, or unusably extracted PDFs without
+  OCR.
+- Independently classify origin media type, preserve original/final/advisory-canonical
+  URLs, deterministically normalize provider content to immutable 3,000-word plain-text
+  snapshots, and make exact Python-verified offsets reference only that stored text.
+- Use OpenRouter for all LLM calls: `xiaomi/mimo-v2.5-pro` primary for Planner,
+  Extractor, Analyst, Reviewer, and Synthesizer; `minimax/minimax-m3` as the only fallback.
+  Require strict JSON Schema and local exact Pydantic revalidation.
+- Retry only objective failures: primary, primary retry, fallback, fallback retry. All
+  physical calls share one run budget; reserve conservatively before calls, reconcile
+  exact usage after, retain usage on failures, and fail closed on unknown price/route.
+- Public/non-sensitive claims only. Configure OpenRouter data collection denied and
+  prompt logging off. Keep `OPENROUTER_API_KEY` out of Wigolo, logs, SQLite, checkpoints,
+  and exports; bind Wigolo to loopback.
+- Resume only when repository/provider/adapter/model/prompt/schema/acquisition/
+  normalization/PDF/retry/budget/pricing fingerprints match exactly.
+
+Current-versus-approved warning:
+
+- Current code and tests still implement fixed top-three retrieval, PDF unsupported,
+  and the earlier MiMo/DeepSeek alias route. MVP-2A deliberately did not change them.
+  MVP-2B must migrate these contracts explicitly and add regression tests; do not treat
+  documentation completion as runtime completion.
+
+Future implementation dependencies and limits requiring approval:
+
+- Proposed dependencies: `httpx` and `markdown-it-py`; Node.js and Wigolo `0.2.1` are
+  runtime prerequisites. No LLM SDK is proposed.
+- Proposed hard maximum per live canary/run: USD 1.00, 1,000,000 tokens, 160 physical LLM
+  calls, six searches, thirty acquisition candidates, and eighteen Extractor snapshots.
+- Proposed response caps: 10 MiB HTML/text, 25 MiB PDF. Proposed deadlines are in the
+  canonical plan.
+- `.env.example` changes, live CLI/UI behavior, and any SQLite migration also require
+  explicit approval.
+
+Canonical details:
+
+- `.agent/plans/phase-mvp-2a-architecture-gate.md` contains the two-stack evaluation,
+  exact request policy, calls/costs, failures, normalization/PDF contract, data handling,
+  deadlines, canary evidence, proof plan, acceptance criteria, and approval list.
+
+Verification:
+
+- Full pytest: 310 passed, 1 skipped; the skip is the existing optional live Phase 8
+  integration gate and no live option was enabled.
+- Ruff check passed; Ruff format check reported 34 files already formatted.
+- `git diff --check` passed. Only documentation and assistant-governance files changed;
+  no provider, dependency, environment template, schema, code, or test file changed.
+
+Do not start:
+
+- Do not add dependencies, providers, API keys, network-dependent tests, migrations,
+  process management, live commands, or any MVP-2B code without explicit user direction
+  and the approvals listed above.
+
 ## 2026-07-19 - Daily Expanded CI Maintenance
 
 Current branch:
