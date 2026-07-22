@@ -8,7 +8,7 @@
     "claim_fit": 5,
     "analyst_prompt_version": "phase6-analyst-fixture-v1",
     "analyst_model_name": "deterministic-fixture",
-    "drafted_at": "2026-07-04T12:00:00+00:00"
+    "drafted_at": "2026-07-04T12:00:00.300000+00:00"
   },
   {
     "run_id": "60000000-0000-0000-0000-000000000002",
@@ -19,6 +19,6 @@
     "claim_fit": 4,
     "analyst_prompt_version": "phase6-analyst-fixture-v1",
     "analyst_model_name": "deterministic-fixture",
-    "drafted_at": "2026-07-04T12:00:00+00:00"
+    "drafted_at": "2026-07-04T12:00:00.300000+00:00"
   }
 ]

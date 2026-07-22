@@ -77,6 +77,19 @@ def test_run_id_is_preserved_across_release_relevant_artifacts(tmp_path: Path) -
     assert result.validation_result.run_id == run_id
 
 
+def test_fixture_validation_events_have_explicit_chronological_times(tmp_path: Path) -> None:
+    result = run_fixture_pipeline(_VALID_FIXTURE, output_dir=tmp_path / "valid")
+
+    assert all(
+        candidate.post_filter_validated_at > candidate.extracted_at
+        for candidate in result.candidates
+    )
+    assert all(
+        ledger.reviewed_at < ledger.ledger_validated_at < result.synthesis_output.created_at
+        for ledger in result.ledger_records
+    )
+
+
 def test_audit_trail_is_persisted_and_inspectable(tmp_path: Path) -> None:
     result = run_fixture_pipeline(_VALID_FIXTURE, output_dir=tmp_path / "valid")
 

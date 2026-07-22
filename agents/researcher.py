@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from uuid import UUID
 
@@ -227,15 +227,16 @@ def filter_provisional_candidate(
     *,
     claim_keywords: Iterable[str],
     post_filter_version: str,
-    post_filter_validated_at: datetime,
+    validation_clock: Callable[[], datetime],
 ) -> PostExtractionFilterResult:
     try:
-        _validate_filter_metadata(post_filter_version, post_filter_validated_at)
         validate_snapshot_integrity(snapshot)
         _validate_provisional_snapshot_match(provisional, snapshot)
         parsed_quote = parse_extracted_quote_block(provisional.extracted_quote_block)
         offsets = _find_offsets_with_valid_context(snapshot, parsed_quote)
         metrics = validate_quote_substance(parsed_quote, claim_keywords)
+        post_filter_validated_at = validation_clock()
+        _validate_filter_metadata(post_filter_version, post_filter_validated_at)
     except ValueError as exc:
         return _reject("deterministic_filter_failed", str(exc))
 

@@ -10,7 +10,7 @@
     "rationale": "Reviewer checks passed.",
     "reviewer_prompt_version": "phase6-reviewer-fixture-v1",
     "reviewer_model_name": "deterministic-fixture",
-    "reviewed_at": "2026-07-04T12:00:00+00:00"
+    "reviewed_at": "2026-07-04T12:00:00.400000+00:00"
   },
   {
     "run_id": "60000000-0000-0000-0000-000000000001",
@@ -23,6 +23,6 @@
     "rationale": "Reviewer checks passed.",
     "reviewer_prompt_version": "phase6-reviewer-fixture-v1",
     "reviewer_model_name": "deterministic-fixture",
-    "reviewed_at": "2026-07-04T12:00:00+00:00"
+    "reviewed_at": "2026-07-04T12:00:00.400000+00:00"
   }
 ]

@@ -13,7 +13,6 @@ from pydantic import Field, model_validator
 
 from agents.researcher import build_source_snapshot, validate_snapshot_integrity
 from models import (
-    REQUIRED_QUERY_EXCLUSIONS,
     ClaimDefinition,
     PlannerOutput,
     RetrievalRecord,
@@ -22,6 +21,7 @@ from models import (
     SourceSnapshot,
     Stance,
     StrictModel,
+    missing_required_query_exclusions,
 )
 from providers.scraper import (
     RetryPolicy,
@@ -587,11 +587,7 @@ def _queries_for_stance(planner: PlannerOutput, stance: Stance) -> list[SearchQu
 
 
 def _query_with_exclusions(query: SearchQuery) -> str:
-    missing = [
-        exclusion
-        for exclusion in REQUIRED_QUERY_EXCLUSIONS
-        if exclusion not in query.exclusion_parameters
-    ]
+    missing = missing_required_query_exclusions(query.exclusion_parameters)
     if missing:
         raise ValueError(f"query is missing required exclusions: {', '.join(missing)}")
     return f"{query.query_text} {query.exclusion_parameters}".strip()

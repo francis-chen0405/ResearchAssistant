@@ -56,6 +56,11 @@ The flow is:
 
 Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the Ledger.
 
+Deliberately narrow model-facing schemas may keep forbidden contextual provenance outside
+the model payload only when a typed application-owned request/result envelope and the
+persisted domain artifact carry it. This exception applies to the narrow Reviewer input
+and decision contracts; it does not permit provenance-free application handoffs.
+
 IDs are assigned only after the deterministic validation gate for that artifact passes. Failed candidates, rejected statements, and invalid rendered briefs receive no release-relevant IDs.
 
 Evidence scoring remains two-axis: `evidence_quality` and `claim_fit` are recorded and validated separately. The derived `ledger_score` is allowed only after both axis thresholds pass and must never compensate for a failing axis.

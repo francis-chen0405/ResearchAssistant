@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -111,7 +111,7 @@ def _snapshot_and_candidate() -> tuple[SourceSnapshot, CandidateQuoteBlock]:
         snapshot,
         claim_keywords=["policy"],
         post_filter_version="phase4-filter-v1",
-        post_filter_validated_at=_NOW,
+        validation_clock=lambda: _NOW,
     )
     assert result.valid is True
     assert result.candidate is not None
@@ -197,11 +197,9 @@ def _admission_request(
     *,
     statement: str,
     entailment: Entailment = Entailment.STRONG,
-    ledger_claim_id: UUID = _DEFAULT_LEDGER_CLAIM_ID,
     placement: Placement | None = None,
 ) -> LedgerAdmissionRequest:
     return LedgerAdmissionRequest(
-        ledger_claim_id=ledger_claim_id,
         candidate=candidate,
         snapshot=snapshot,
         score_decision=decision,
@@ -209,8 +207,18 @@ def _admission_request(
         review_results=[review],
         approved_factual_statement=statement,
         entailment=entailment,
-        ledger_validated_at=_NOW,
         placement=placement,
+    )
+
+
+def _admit(
+    request: LedgerAdmissionRequest,
+    ledger_claim_id: UUID = _DEFAULT_LEDGER_CLAIM_ID,
+) -> LedgerRecord:
+    return admit_ledger_record(
+        request,
+        derive_ledger_claim_id=lambda _payload: ledger_claim_id,
+        validation_clock=lambda: _NOW,
     )
 
 
@@ -300,7 +308,76 @@ def test_unauthorized_placement_changes_are_rejected() -> None:
     )
 
     with pytest.raises(ValueError, match="unauthorized placement"):
-        admit_ledger_record(request)
+        _admit(request)
+
+
+def test_failed_admission_does_not_derive_ledger_claim_id() -> None:
+    snapshot, candidate = _snapshot_and_candidate()
+    decision = _decision(candidate, eq=4, cf=4)
+    statement = "The study reported 50% growth among surveyed adults."
+    draft = _draft(candidate, decision, statement)
+    review = _approved_review(candidate, draft)
+    request = _admission_request(
+        snapshot,
+        candidate,
+        decision,
+        draft,
+        review,
+        statement=statement,
+        placement=Placement.PRIMARY,
+    )
+    derivation_called = False
+    validation_clock_called = False
+
+    def derive_ledger_claim_id(_payload: object) -> UUID:
+        nonlocal derivation_called
+        derivation_called = True
+        return _DEFAULT_LEDGER_CLAIM_ID
+
+    def validation_clock() -> datetime:
+        nonlocal validation_clock_called
+        validation_clock_called = True
+        return _NOW
+
+    with pytest.raises(ValueError, match="unauthorized placement"):
+        admit_ledger_record(
+            request,
+            derive_ledger_claim_id=derive_ledger_claim_id,
+            validation_clock=validation_clock,
+        )
+
+    assert derivation_called is False
+    assert validation_clock_called is False
+
+
+def test_admission_request_cannot_preallocate_release_fields() -> None:
+    assert "ledger_claim_id" not in LedgerAdmissionRequest.model_fields
+    assert "ledger_validated_at" not in LedgerAdmissionRequest.model_fields
+
+
+def test_ledger_admission_uses_its_validation_clock() -> None:
+    snapshot, candidate = _snapshot_and_candidate()
+    decision = _decision(candidate)
+    statement = "The study reported 50% growth among surveyed adults."
+    draft = _draft(candidate, decision, statement)
+    review = _approved_review(candidate, draft)
+    validation_time = _NOW + timedelta(seconds=1)
+
+    ledger = admit_ledger_record(
+        _admission_request(
+            snapshot,
+            candidate,
+            decision,
+            draft,
+            review,
+            statement=statement,
+        ),
+        derive_ledger_claim_id=lambda _payload: _DEFAULT_LEDGER_CLAIM_ID,
+        validation_clock=lambda: validation_time,
+    )
+
+    assert ledger.reviewed_at == _NOW
+    assert ledger.ledger_validated_at == validation_time
 
 
 def test_missing_reviewer_approval_id_is_rejected_at_ledger_admission() -> None:
@@ -322,7 +399,6 @@ def test_missing_reviewer_approval_id_is_rejected_at_ledger_admission() -> None:
         reviewed_at=_NOW,
     )
     request = LedgerAdmissionRequest.model_construct(
-        ledger_claim_id=_uuid(12),
         candidate=candidate,
         snapshot=snapshot,
         score_decision=decision,
@@ -330,12 +406,11 @@ def test_missing_reviewer_approval_id_is_rejected_at_ledger_admission() -> None:
         review_results=[bad_review],
         approved_factual_statement=statement,
         entailment=Entailment.STRONG,
-        ledger_validated_at=_NOW,
         placement=None,
     )
 
     with pytest.raises(ValueError, match="reviewer_approval_id"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_statement_altered_after_reviewer_approval_is_rejected() -> None:
@@ -354,7 +429,7 @@ def test_statement_altered_after_reviewer_approval_is_rejected() -> None:
     )
 
     with pytest.raises(ValueError, match="exact Reviewer-approved"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_invalid_revision_count_is_rejected() -> None:
@@ -371,7 +446,6 @@ def test_invalid_revision_count_is_rejected() -> None:
     ]
     reviews = [_approved_review(candidate, draft) for draft in drafts]
     request = LedgerAdmissionRequest(
-        ledger_claim_id=_uuid(40),
         candidate=candidate,
         snapshot=snapshot,
         score_decision=decision,
@@ -379,11 +453,10 @@ def test_invalid_revision_count_is_rejected() -> None:
         review_results=reviews,
         approved_factual_statement=drafts[-1].draft_statement,
         entailment=Entailment.STRONG,
-        ledger_validated_at=_NOW,
     )
 
     with pytest.raises(ValueError, match="one revision maximum"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_snapshot_hash_mismatch_blocks_ledger_admission() -> None:
@@ -414,7 +487,7 @@ def test_snapshot_hash_mismatch_blocks_ledger_admission() -> None:
     )
 
     with pytest.raises(ValueError, match="hash"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_correct_hash_but_incorrect_quote_offsets_are_rejected() -> None:
@@ -436,7 +509,7 @@ def test_correct_hash_but_incorrect_quote_offsets_are_rejected() -> None:
     )
 
     with pytest.raises(ValueError, match="offsets"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_multiple_separately_reviewed_ledger_claims_can_use_one_quote_block() -> None:
@@ -449,7 +522,7 @@ def test_multiple_separately_reviewed_ledger_claims_can_use_one_quote_block() ->
     first_review = _approved_review(candidate, first_draft)
     second_review = _approved_review(candidate, second_draft)
 
-    first = admit_ledger_record(
+    first = _admit(
         _admission_request(
             snapshot,
             candidate,
@@ -457,10 +530,10 @@ def test_multiple_separately_reviewed_ledger_claims_can_use_one_quote_block() ->
             first_draft,
             first_review,
             statement=first_statement,
-            ledger_claim_id=_uuid(54),
-        )
+        ),
+        ledger_claim_id=_uuid(54),
     )
-    second = admit_ledger_record(
+    second = _admit(
         _admission_request(
             snapshot,
             candidate,
@@ -468,8 +541,8 @@ def test_multiple_separately_reviewed_ledger_claims_can_use_one_quote_block() ->
             second_draft,
             second_review,
             statement=second_statement,
-            ledger_claim_id=_uuid(55),
-        )
+        ),
+        ledger_claim_id=_uuid(55),
     )
 
     assert first.quote_block_id == second.quote_block_id == candidate.quote_block_id
@@ -504,7 +577,7 @@ def test_rejected_analyst_decision_cannot_enter_ledger() -> None:
     )
 
     with pytest.raises(ValueError, match="rejected Analyst"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_reviewer_rejected_draft_statement_cannot_enter_ledger() -> None:
@@ -523,7 +596,7 @@ def test_reviewer_rejected_draft_statement_cannot_enter_ledger() -> None:
     )
 
     with pytest.raises(ValueError, match="Reviewer-rejected"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_reviewer_second_failure_rejects_quote_block() -> None:
@@ -544,7 +617,6 @@ def test_reviewer_second_failure_rejects_quote_block() -> None:
     first_review = _rejected_review(candidate, first_draft)
     second_review = _rejected_review(candidate, second_draft)
     request = LedgerAdmissionRequest(
-        ledger_claim_id=_uuid(72),
         candidate=candidate,
         snapshot=snapshot,
         score_decision=decision,
@@ -552,11 +624,10 @@ def test_reviewer_second_failure_rejects_quote_block() -> None:
         review_results=[first_review, second_review],
         approved_factual_statement=second_draft.draft_statement,
         entailment=Entailment.STRONG,
-        ledger_validated_at=_NOW,
     )
 
     with pytest.raises(ValueError, match="second Reviewer failure"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_claim_fit_3_full_claim_overclaim_is_rejected() -> None:
@@ -575,7 +646,7 @@ def test_claim_fit_3_full_claim_overclaim_is_rejected() -> None:
     )
 
     with pytest.raises(ValueError, match="explicit qualification"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_reviewer_input_rejects_forbidden_fields() -> None:
@@ -608,7 +679,7 @@ def test_partial_or_weak_entailment_requires_qualification(entailment: Entailmen
     )
 
     with pytest.raises(ValueError, match="explicit qualification"):
-        admit_ledger_record(request)
+        _admit(request)
 
 
 def test_ledger_records_remain_append_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -619,7 +690,7 @@ def test_ledger_records_remain_append_only(tmp_path) -> None:  # type: ignore[no
     statement = "The study reported 50% growth among surveyed adults."
     draft = _draft(candidate, decision, statement)
     review = _approved_review(candidate, draft)
-    ledger = admit_ledger_record(
+    ledger = _admit(
         _admission_request(
             snapshot,
             candidate,
@@ -648,7 +719,7 @@ def test_no_composite_score_is_produced_or_stored() -> None:
     statement = "The study reported 50% growth among surveyed adults."
     draft = _draft(candidate, decision, statement)
     review = _approved_review(candidate, draft)
-    ledger = admit_ledger_record(
+    ledger = _admit(
         _admission_request(
             snapshot,
             candidate,

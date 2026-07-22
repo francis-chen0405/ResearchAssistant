@@ -176,6 +176,31 @@ def test_balanced_retrieval_records_exactly_eighteen_intended_attempts() -> None
     )
 
 
+def test_retrieval_rejects_substring_exclusion_lookalikes() -> None:
+    planner = _planner()
+    malformed_query = planner.search_queries[0].model_copy(
+        update={
+            "exclusion_parameters": " ".join(
+                f"{exclusion}.evil" for exclusion in REQUIRED_QUERY_EXCLUSIONS
+            )
+        }
+    )
+    malformed_planner = planner.model_copy(
+        update={"search_queries": [malformed_query, *planner.search_queries[1:]]}
+    )
+    search = FakeSearchProvider()
+
+    with pytest.raises(ValueError, match="missing required exclusions"):
+        retrieve_supporting(
+            malformed_planner,
+            search,
+            FakeScraperProvider(),
+            clock=lambda: NOW,
+        )
+
+    assert search.requests == []
+
+
 def test_ranks_rounds_and_original_resolved_urls_are_preserved() -> None:
     result = retrieve_balanced(
         _planner(), FakeSearchProvider(), FakeScraperProvider(), clock=lambda: NOW

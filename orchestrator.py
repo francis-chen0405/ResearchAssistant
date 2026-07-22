@@ -12,11 +12,12 @@ from pathlib import Path
 from typing import Literal, TypeVar, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from pydantic import BaseModel, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from agents.analyst import (
     LedgerAdmissionRequest,
+    ValidatedLedgerPayload,
     admit_ledger_record,
     build_analyst_llm_input,
 )
@@ -64,6 +65,7 @@ from models import (
     StatementDraft,
     StatementReviewResult,
     StrictModel,
+    SynthesisItem,
     SynthesisOutput,
     ValidationResult,
 )
@@ -187,6 +189,33 @@ class FixturePipelineResult(StrictModel):
         return self
 
 
+def _aware_fixture_time(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("fixture validation timestamps must be timezone-aware")
+    return value
+
+
+class FixtureValidationTimes(StrictModel):
+    """Explicit deterministic validation-event times for one fixture run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    post_filter_validated_at: datetime
+    ledger_validated_at: datetime
+
+    _timestamps_are_aware = field_validator(
+        "post_filter_validated_at",
+        "ledger_validated_at",
+    )(_aware_fixture_time)
+
+    @model_validator(mode="after")
+    def validate_order(self) -> FixtureValidationTimes:
+        if self.ledger_validated_at < self.post_filter_validated_at:
+            raise ValueError("Ledger validation cannot precede post-filter validation")
+        return self
+
+
 def run_fixture_pipeline(
     fixture_dir: str | Path,
     *,
@@ -220,6 +249,12 @@ def run_fixture_pipeline(
         StatementReviewResult,
     )
     synthesis = _load_model(fixture_path / "synthesis.json", SynthesisOutput)
+    validation_times = _load_model(
+        fixture_path / "validation_times.json",
+        FixtureValidationTimes,
+    )
+    if validation_times.run_id != planner.run_id:
+        raise FixturePipelineError("fixture validation times run_id does not match Planner run_id")
 
     _validate_fixture_run_ids(
         raw_claim,
@@ -273,7 +308,12 @@ def run_fixture_pipeline(
     _persist_snapshots(str(db_path), snapshots, retrievals)
     _persist_provisionals(str(db_path), provisionals, planner.run_id)
 
-    candidates = _filter_candidates(planner, snapshots, provisionals)
+    candidates = _filter_candidates(
+        planner,
+        snapshots,
+        provisionals,
+        validation_clock=lambda: validation_times.post_filter_validated_at,
+    )
     candidate_batches = _candidate_batches(planner.run_id, candidates, synthesis.created_at)
     for candidate in candidates:
         _persist_model(
@@ -324,6 +364,7 @@ def run_fixture_pipeline(
         statement_drafts,
         reviewer_decisions,
         synthesis,
+        validation_clock=lambda: validation_times.ledger_validated_at,
     )
     for ledger in ledger_records:
         _persist_model(
@@ -432,9 +473,9 @@ def run_fixture_pipeline(
 
 
 def derive_fixture_ledger_claim_id(
-    run_id: UUID,
-    review: StatementReviewResult,
+    payload: ValidatedLedgerPayload,
 ) -> UUID:
+    review = payload.approved_review
     if not review.approved or review.reviewer_approval_id is None:
         raise FixturePipelineError(
             "approved Reviewer decision is required for Ledger ID derivation"
@@ -444,7 +485,7 @@ def derive_fixture_ledger_claim_id(
     return uuid5(
         URL_NAMESPACE,
         (
-            f"{LEDGER_ID_VERSION}::{run_id}::ledger::"
+            f"{LEDGER_ID_VERSION}::{payload.candidate.run_id}::ledger::"
             f"{review.reviewer_approval_id}::{review.approved_factual_statement}"
         ),
     )
@@ -567,6 +608,8 @@ def _filter_candidates(
     planner: PlannerOutput,
     snapshots: Sequence[SourceSnapshot],
     provisionals: Sequence[ProvisionalCandidate],
+    *,
+    validation_clock: Callable[[], datetime],
 ) -> list[CandidateQuoteBlock]:
     snapshot_by_id = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
     candidates: list[CandidateQuoteBlock] = []
@@ -580,7 +623,7 @@ def _filter_candidates(
             snapshot,
             claim_keywords=claim_keywords,
             post_filter_version=POST_FILTER_VERSION,
-            post_filter_validated_at=provisional.extracted_at,
+            validation_clock=validation_clock,
         )
         if not result.valid or result.candidate is None:
             raise FixturePipelineError(
@@ -621,14 +664,14 @@ def _admit_ledger_records(
     statement_drafts: Sequence[StatementDraft],
     reviewer_decisions: Sequence[StatementReviewResult],
     synthesis: SynthesisOutput,
+    *,
+    validation_clock: Callable[[], datetime],
 ) -> list[LedgerRecord]:
     snapshot_by_id = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
     candidate_by_id = {candidate.quote_block_id: candidate for candidate in candidates}
     decision_by_quote = {decision.quote_block_id: decision for decision in analyst_decisions}
     drafts_by_quote: dict[UUID, list[StatementDraft]] = defaultdict(list)
     reviews_by_quote: dict[UUID, list[StatementReviewResult]] = defaultdict(list)
-    synthesis_items = _synthesis_items_by_ledger_id(synthesis)
-
     for draft in statement_drafts:
         drafts_by_quote[draft.quote_block_id].append(draft)
     for review in reviewer_decisions:
@@ -653,14 +696,12 @@ def _admit_ledger_records(
         if not drafts or not reviews:
             raise FixturePipelineError("approved Analyst decision is missing Reviewer fixture data")
         final_review = reviews[-1]
-        ledger_claim_id = derive_fixture_ledger_claim_id(candidate.run_id, final_review)
-        synthesis_item = synthesis_items.get(ledger_claim_id)
+        synthesis_item = _synthesis_item_for_review(synthesis, final_review)
         entailment = synthesis_item.entailment if synthesis_item is not None else Entailment.STRONG
         if final_review.approved_factual_statement is None:
             raise FixturePipelineError("approved Reviewer decision is missing approved statement")
         ledger = admit_ledger_record(
             LedgerAdmissionRequest(
-                ledger_claim_id=ledger_claim_id,
                 candidate=candidate,
                 snapshot=snapshot,
                 score_decision=decision,
@@ -668,19 +709,29 @@ def _admit_ledger_records(
                 review_results=reviews,
                 approved_factual_statement=final_review.approved_factual_statement,
                 entailment=entailment,
-                ledger_validated_at=synthesis.created_at,
-            )
+            ),
+            derive_ledger_claim_id=derive_fixture_ledger_claim_id,
+            validation_clock=validation_clock,
         )
         ledgers.append(ledger)
     return sorted(ledgers, key=lambda ledger: str(ledger.ledger_claim_id))
 
 
-def _synthesis_items_by_ledger_id(synthesis: SynthesisOutput) -> dict[UUID, object]:
-    items: dict[UUID, object] = {}
+def _synthesis_item_for_review(
+    synthesis: SynthesisOutput,
+    review: StatementReviewResult,
+) -> SynthesisItem | None:
+    matches: list[SynthesisItem] = []
     for section in synthesis.sections:
         for item in section.items:
-            items[item.ledger_claim_id] = item
-    return items
+            if (
+                item.reviewer_approval_id == review.reviewer_approval_id
+                and item.approved_factual_statement == review.approved_factual_statement
+            ):
+                matches.append(item)
+    if len(matches) > 1:
+        raise FixturePipelineError("Reviewer decision matches multiple synthesis items")
+    return matches[0] if matches else None
 
 
 def _sorted_drafts(drafts: Sequence[StatementDraft]) -> list[StatementDraft]:
@@ -1889,7 +1940,7 @@ def _run_researcher_side(
                 snapshot,
                 claim_keywords=claim_keywords,
                 post_filter_version=PHASE9_POST_FILTER_VERSION,
-                post_filter_validated_at=provisional.extracted_at,
+                validation_clock=clock,
             )
             if not filtered.valid or filtered.candidate is None:
                 message = filtered.rejection_message or "deterministic extraction filter failed"
@@ -1921,7 +1972,7 @@ def _run_researcher_side(
                 snapshot,
                 claim_keywords=claim_keywords,
                 post_filter_version=PHASE9_POST_FILTER_VERSION,
-                post_filter_validated_at=provisional.extracted_at,
+                validation_clock=clock,
             )
             if not filtered.valid or filtered.candidate is None:
                 raise RuntimeError("completed Extractor output failed deterministic revalidation")
@@ -2306,7 +2357,6 @@ def _run_analysis_stage(
             continue
         ledger = admit_ledger_record(
             LedgerAdmissionRequest(
-                ledger_claim_id=derive_phase9_ledger_claim_id(candidate.run_id, final_review),
                 candidate=candidate,
                 snapshot=snapshot,
                 score_decision=decision,
@@ -2314,8 +2364,9 @@ def _run_analysis_stage(
                 review_results=candidate_reviews,
                 approved_factual_statement=final_review.approved_factual_statement,
                 entailment=(Entailment.PARTIAL if decision.claim_fit == 3 else Entailment.STRONG),
-                ledger_validated_at=final_review.reviewed_at,
-            )
+            ),
+            derive_ledger_claim_id=derive_phase9_ledger_claim_id,
+            validation_clock=clock,
         )
         ledgers.append(ledger)
         _persist_model(
@@ -2470,9 +2521,9 @@ def _invoke_statement_review(
 
 
 def derive_phase9_ledger_claim_id(
-    run_id: UUID,
-    review: StatementReviewResult,
+    payload: ValidatedLedgerPayload,
 ) -> UUID:
+    review = payload.approved_review
     if (
         not review.approved
         or review.reviewer_approval_id is None
@@ -2482,7 +2533,7 @@ def derive_phase9_ledger_claim_id(
     return uuid5(
         URL_NAMESPACE,
         (
-            f"{PHASE9_LEDGER_ID_VERSION}::{run_id}::"
+            f"{PHASE9_LEDGER_ID_VERSION}::{payload.candidate.run_id}::"
             f"{review.reviewer_approval_id}::{review.approved_factual_statement}"
         ),
     )

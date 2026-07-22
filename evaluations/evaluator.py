@@ -340,8 +340,8 @@ def _mutate_synthesis(synthesis: SynthesisOutput, mutation: MutationKind) -> Syn
     else:
         raise ValueError(f"unsupported mutation kind: {mutation}")
     mutated_item = item.model_copy(update=updates)
-    mutated_section = section.model_copy(update={"items": [mutated_item]})
-    return synthesis.model_copy(update={"sections": [mutated_section]})
+    mutated_section = section.model_copy(update={"items": (mutated_item,)})
+    return synthesis.model_copy(update={"sections": (mutated_section,)})
 
 
 def _evaluate_prompt_injection_case(case: PromptInjectionCase) -> PromptInjectionCaseResult:

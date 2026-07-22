@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from models import (
+    REQUIRED_QUERY_EXCLUSIONS,
     AmbiguityRecord,
     CandidateQuoteBlock,
     ClaimDefinition,
@@ -383,7 +384,8 @@ def test_empty_approved_factual_statements_are_rejected() -> None:
         LedgerRecord(**kwargs)
 
 
-def test_invalid_synthesizer_section_types_are_rejected() -> None:
+@pytest.mark.parametrize("section_type", ["background", "conclusion"])
+def test_invalid_synthesizer_section_types_are_rejected(section_type: str) -> None:
     item = SynthesisItem(
         connective_template_id="supporting-evidence",
         ledger_claim_id=LEDGER_CLAIM_ID,
@@ -395,7 +397,7 @@ def test_invalid_synthesizer_section_types_are_rejected() -> None:
     )
 
     with pytest.raises(PydanticValidationError):
-        SynthesisSection(section_type="background", items=[item])
+        SynthesisSection(section_type=section_type, items=[item])
 
 
 def test_synthesizer_rejects_incompatible_stance_for_section() -> None:
@@ -547,6 +549,30 @@ def test_planner_output_rejects_mismatched_child_run_ids() -> None:
 def test_planner_output_requires_standard_exclusions() -> None:
     planner = _valid_planner()
     bad_query = planner.search_queries[0].model_copy(update={"exclusion_parameters": ""})
+
+    with pytest.raises(PydanticValidationError):
+        PlannerOutput(
+            **planner.model_dump(exclude={"search_queries"}),
+            search_queries=[bad_query, *planner.search_queries[1:]],
+        )
+
+
+@pytest.mark.parametrize(
+    "exclusion_parameters",
+    [
+        " ".join(f"{exclusion}.evil" for exclusion in REQUIRED_QUERY_EXCLUSIONS),
+        " ".join(f"prefix{exclusion}" for exclusion in REQUIRED_QUERY_EXCLUSIONS),
+        "".join(REQUIRED_QUERY_EXCLUSIONS),
+        " ".join(REQUIRED_QUERY_EXCLUSIONS[:-1]),
+    ],
+)
+def test_planner_output_requires_exact_exclusion_tokens(
+    exclusion_parameters: str,
+) -> None:
+    planner = _valid_planner()
+    bad_query = planner.search_queries[0].model_copy(
+        update={"exclusion_parameters": exclusion_parameters}
+    )
 
     with pytest.raises(PydanticValidationError):
         PlannerOutput(

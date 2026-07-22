@@ -5,9 +5,10 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
+from types import MappingProxyType
 from typing import TypeVar
 
-from pydantic import Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from models import (
@@ -30,7 +31,6 @@ from models import (
 )
 
 VALIDATOR_CONFIG_VERSION = "mvp1-release-validator-v1"
-MAX_LEDGER_CLAIM_USES = 1
 
 SUPPORTING_EVIDENCE_TEMPLATE_ID = "supporting_evidence"
 OPPOSING_EVIDENCE_TEMPLATE_ID = "opposing_evidence"
@@ -44,6 +44,8 @@ _EnumT = TypeVar("_EnumT", bound=StrEnum)
 
 
 class ApprovedConnectiveTemplate(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     template_id: str = Field(min_length=1)
     text: str = Field(min_length=1)
     allowed_stances: tuple[Stance, ...]
@@ -62,56 +64,74 @@ class ApprovedConnectiveTemplate(StrictModel):
         return value
 
 
-APPROVED_CONNECTIVE_TEMPLATES: Mapping[str, ApprovedConnectiveTemplate] = {
-    SUPPORTING_EVIDENCE_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=SUPPORTING_EVIDENCE_TEMPLATE_ID,
-        text="Supporting evidence:",
-        allowed_stances=(Stance.SUPPORTING,),
-        allowed_sections=(SectionType.SUPPORTING,),
-    ),
-    OPPOSING_EVIDENCE_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=OPPOSING_EVIDENCE_TEMPLATE_ID,
-        text="Opposing evidence:",
-        allowed_stances=(Stance.OPPOSING,),
-        allowed_sections=(SectionType.OPPOSING,),
-    ),
-    LIMITATION_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=LIMITATION_TEMPLATE_ID,
-        text="A limitation is:",
-        allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
-        allowed_sections=(SectionType.LIMITATIONS,),
-    ),
-    PARTIAL_ENTAILMENT_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=PARTIAL_ENTAILMENT_TEMPLATE_ID,
-        text="The source provides partial support:",
-        allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
-        allowed_sections=(SectionType.SUPPORTING, SectionType.OPPOSING, SectionType.LIMITATIONS),
-        qualifies_limited_evidence=True,
-        entailment_warning=Entailment.PARTIAL,
-    ),
-    WEAK_ENTAILMENT_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=WEAK_ENTAILMENT_TEMPLATE_ID,
-        text="The source provides weak support:",
-        allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
-        allowed_sections=(SectionType.SUPPORTING, SectionType.OPPOSING, SectionType.LIMITATIONS),
-        qualifies_limited_evidence=True,
-        entailment_warning=Entailment.WEAK,
-    ),
-    SCOPE_QUALIFICATION_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=SCOPE_QUALIFICATION_TEMPLATE_ID,
-        text="This source addresses a narrower version of the claim:",
-        allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
-        allowed_sections=(SectionType.SUPPORTING, SectionType.OPPOSING, SectionType.LIMITATIONS),
-        qualifies_limited_evidence=True,
-    ),
-    RELIABILITY_QUALIFICATION_TEMPLATE_ID: ApprovedConnectiveTemplate(
-        template_id=RELIABILITY_QUALIFICATION_TEMPLATE_ID,
-        text="This source's reliability is limited:",
-        allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
-        allowed_sections=(SectionType.SUPPORTING, SectionType.OPPOSING, SectionType.LIMITATIONS),
-        qualifies_limited_evidence=True,
-    ),
-}
+APPROVED_CONNECTIVE_TEMPLATES: Mapping[str, ApprovedConnectiveTemplate] = MappingProxyType(
+    {
+        SUPPORTING_EVIDENCE_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=SUPPORTING_EVIDENCE_TEMPLATE_ID,
+            text="Supporting evidence:",
+            allowed_stances=(Stance.SUPPORTING,),
+            allowed_sections=(SectionType.SUPPORTING,),
+        ),
+        OPPOSING_EVIDENCE_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=OPPOSING_EVIDENCE_TEMPLATE_ID,
+            text="Opposing evidence:",
+            allowed_stances=(Stance.OPPOSING,),
+            allowed_sections=(SectionType.OPPOSING,),
+        ),
+        LIMITATION_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=LIMITATION_TEMPLATE_ID,
+            text="A limitation is:",
+            allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
+            allowed_sections=(SectionType.LIMITATIONS,),
+        ),
+        PARTIAL_ENTAILMENT_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=PARTIAL_ENTAILMENT_TEMPLATE_ID,
+            text="The source provides partial support:",
+            allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
+            allowed_sections=(
+                SectionType.SUPPORTING,
+                SectionType.OPPOSING,
+                SectionType.LIMITATIONS,
+            ),
+            qualifies_limited_evidence=True,
+            entailment_warning=Entailment.PARTIAL,
+        ),
+        WEAK_ENTAILMENT_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=WEAK_ENTAILMENT_TEMPLATE_ID,
+            text="The source provides weak support:",
+            allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
+            allowed_sections=(
+                SectionType.SUPPORTING,
+                SectionType.OPPOSING,
+                SectionType.LIMITATIONS,
+            ),
+            qualifies_limited_evidence=True,
+            entailment_warning=Entailment.WEAK,
+        ),
+        SCOPE_QUALIFICATION_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=SCOPE_QUALIFICATION_TEMPLATE_ID,
+            text="This source addresses a narrower version of the claim:",
+            allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
+            allowed_sections=(
+                SectionType.SUPPORTING,
+                SectionType.OPPOSING,
+                SectionType.LIMITATIONS,
+            ),
+            qualifies_limited_evidence=True,
+        ),
+        RELIABILITY_QUALIFICATION_TEMPLATE_ID: ApprovedConnectiveTemplate(
+            template_id=RELIABILITY_QUALIFICATION_TEMPLATE_ID,
+            text="This source's reliability is limited:",
+            allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
+            allowed_sections=(
+                SectionType.SUPPORTING,
+                SectionType.OPPOSING,
+                SectionType.LIMITATIONS,
+            ),
+            qualifies_limited_evidence=True,
+        ),
+    }
+)
 
 
 def validate_final_release(
@@ -121,7 +141,6 @@ def validate_final_release(
     authoritative_claim: str,
     validated_at: datetime,
     validator_config_version: str = VALIDATOR_CONFIG_VERSION,
-    max_ledger_claim_uses: int = MAX_LEDGER_CLAIM_USES,
 ) -> ValidationResult:
     framing_errors = _authoritative_claim_errors(authoritative_claim)
     ledger_lookup, ledger_errors = _ledger_lookup(synthesis, ledger_records)
@@ -131,7 +150,7 @@ def validate_final_release(
         *_hidden_field_errors(synthesis),
         *ledger_errors,
         *_section_structure_errors(synthesis),
-        *_content_errors(synthesis, ledger_lookup, max_ledger_claim_uses),
+        *_content_errors(synthesis, ledger_lookup),
     ]
 
     if errors:
@@ -160,7 +179,6 @@ def render_brief(
     ledger_records: Sequence[LedgerRecord],
     *,
     authoritative_claim: str,
-    max_ledger_claim_uses: int = MAX_LEDGER_CLAIM_USES,
 ) -> str:
     framing_errors = _authoritative_claim_errors(authoritative_claim)
     ledger_lookup, ledger_errors = _ledger_lookup(synthesis, ledger_records)
@@ -170,7 +188,7 @@ def render_brief(
         *_hidden_field_errors(synthesis),
         *ledger_errors,
         *_section_structure_errors(synthesis),
-        *_content_errors(synthesis, ledger_lookup, max_ledger_claim_uses),
+        *_content_errors(synthesis, ledger_lookup),
     ]
     if errors:
         raise ValueError("invalid SynthesisOutput cannot be rendered")
@@ -268,7 +286,7 @@ def _hidden_field_errors(synthesis: SynthesisOutput) -> list[ValidationError]:
             _error(
                 ValidationErrorCode.SCHEMA_ERROR,
                 "sections",
-                "SynthesisOutput sections must be a list of SynthesisSection instances.",
+                "SynthesisOutput sections must be a tuple of SynthesisSection instances.",
             )
         )
         return errors
@@ -285,12 +303,12 @@ def _hidden_field_errors(synthesis: SynthesisOutput) -> list[ValidationError]:
             continue
         _append_hidden_instance_fields(section, section_location, errors)
         items = getattr(section, "items", None)
-        if not isinstance(items, list):
+        if not isinstance(items, tuple):
             errors.append(
                 _error(
                     ValidationErrorCode.SCHEMA_ERROR,
                     f"{section_location}.items",
-                    "SynthesisSection items must be a list of SynthesisItem instances.",
+                    "SynthesisSection items must be a tuple of SynthesisItem instances.",
                 )
             )
             continue
@@ -352,7 +370,6 @@ def _section_structure_errors(synthesis: SynthesisOutput) -> list[ValidationErro
 def _content_errors(
     synthesis: SynthesisOutput,
     ledger_lookup: Mapping[object, LedgerRecord],
-    max_ledger_claim_uses: int,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     claim_use_counts: Counter[object] = Counter()
@@ -363,7 +380,7 @@ def _content_errors(
         section_type = _enum_or_none(SectionType, getattr(section, "section_type", None))
         section_location = f"sections[{section_index}]"
         items = getattr(section, "items", None)
-        if not isinstance(items, list):
+        if not isinstance(items, tuple):
             continue
         for item_index, item in enumerate(items):
             if not isinstance(item, SynthesisItem):
@@ -391,8 +408,17 @@ def _content_errors(
             if template is not None:
                 _append_template_policy_errors(errors, ledger, template, item, item_location)
 
-    for ledger_claim_id, count in claim_use_counts.items():
-        if count > max_ledger_claim_uses:
+    for ledger_claim_id in ledger_lookup:
+        count = claim_use_counts[ledger_claim_id]
+        if count == 0:
+            errors.append(
+                _error(
+                    ValidationErrorCode.LEDGER_MISMATCH,
+                    f"ledger_claim_id:{ledger_claim_id}",
+                    "Approved Ledger claim is missing from the final brief.",
+                )
+            )
+        elif count > 1:
             errors.append(
                 _error(
                     ValidationErrorCode.LEDGER_MISMATCH,
@@ -606,9 +632,9 @@ def _append_hidden_instance_fields(
         )
 
 
-def _safe_sections(synthesis: SynthesisOutput) -> list[object] | None:
+def _safe_sections(synthesis: SynthesisOutput) -> tuple[object, ...] | None:
     sections = getattr(synthesis, "sections", None)
-    return sections if isinstance(sections, list) else None
+    return sections if isinstance(sections, tuple) else None
 
 
 def _enum_or_none(enum_type: type[_EnumT], value: object) -> _EnumT | None:

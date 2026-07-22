@@ -18,7 +18,6 @@ from agents.reviewer import (
 from models import (
     ReviewerFailureCode,
     RunStatus,
-    SectionType,
     StatementDraft,
     SynthesisOutput,
 )
@@ -120,9 +119,9 @@ def test_heading_like_phrases_in_approved_body_text_remain_valid(tmp_path: Path)
         else record
         for record in result.ledger_records
     ]
-    section = result.synthesis_output.sections[0].model_copy(update={"items": [item]})
+    section = result.synthesis_output.sections[0].model_copy(update={"items": (item,)})
     synthesis = result.synthesis_output.model_copy(
-        update={"sections": [section, *result.synthesis_output.sections[1:]]}
+        update={"sections": (section, *result.synthesis_output.sections[1:])}
     )
 
     validation = validate_final_release(
@@ -147,17 +146,17 @@ def test_final_validator_rejects_hidden_framing_extra_sections_and_reordering(
     altered_claim.__dict__["claim_definition"] = "The policy always improves outcomes."
     mutated_heading = synthesis.model_copy(deep=True)
     mutated_heading.sections[0].__dict__["heading"] = "Evidence proving the claim"
-    reordered = synthesis.model_copy(update={"sections": list(reversed(synthesis.sections))})
+    reordered = synthesis.model_copy(update={"sections": tuple(reversed(synthesis.sections))})
     extra_section = synthesis.model_copy(
         update={
-            "sections": [
+            "sections": (
                 *synthesis.sections,
-                synthesis.sections[0].model_copy(update={"section_type": SectionType.CONCLUSION}),
-            ]
+                synthesis.sections[0].model_copy(update={"section_type": "conclusion"}),
+            )
         }
     )
     duplicated = synthesis.model_copy(
-        update={"sections": [synthesis.sections[0], *synthesis.sections]}
+        update={"sections": (synthesis.sections[0], *synthesis.sections)}
     )
     malformed = synthesis.model_copy(
         update={"sections": [{"section_type": "supporting", "items": []}]}

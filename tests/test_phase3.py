@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -80,7 +80,7 @@ def _filter(
         snapshot,
         claim_keywords=keywords or ["policy"],
         post_filter_version="phase3-filter-v1",
-        post_filter_validated_at=_NOW,
+        validation_clock=lambda: _NOW,
     )
 
 
@@ -116,6 +116,24 @@ def test_valid_statistical_quote_gets_deterministic_candidate_id() -> None:
         first.candidate,
         claim_keywords=["policy"],
     )
+
+
+def test_post_filter_uses_validation_clock_instead_of_extraction_time() -> None:
+    snapshot, _, quote_block = _valid_statistical_case()
+    validation_time = _NOW + timedelta(seconds=1)
+
+    result = filter_provisional_candidate(
+        _provisional(snapshot, quote_block),
+        snapshot,
+        claim_keywords=["policy"],
+        post_filter_version="phase3-filter-v1",
+        validation_clock=lambda: validation_time,
+    )
+
+    assert result.valid is True
+    assert result.candidate is not None
+    assert result.candidate.extracted_at == _NOW
+    assert result.candidate.post_filter_validated_at == validation_time
 
 
 def test_valid_repeated_segment_uses_occurrence_with_matching_brackets() -> None:
@@ -309,7 +327,7 @@ def test_invalid_filter_metadata_rejects_without_candidate_id() -> None:
         snapshot,
         claim_keywords=["policy"],
         post_filter_version="",
-        post_filter_validated_at=_NOW,
+        validation_clock=lambda: _NOW,
     )
 
     _assert_rejected(result)

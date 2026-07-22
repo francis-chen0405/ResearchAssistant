@@ -2,7 +2,7 @@
   "run_id": "60000000-0000-0000-0000-000000000001",
   "synthesizer_prompt_version": "phase6-synthesizer-fixture-v1",
   "synthesizer_model_name": "deterministic-fixture",
-  "created_at": "2026-07-04T12:00:00+00:00",
+  "created_at": "2026-07-04T12:00:00.600000+00:00",
   "sections": [
     {
       "section_type": "supporting",

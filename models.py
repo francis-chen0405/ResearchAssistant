@@ -25,6 +25,12 @@ REQUIRED_QUERY_EXCLUSIONS = (
 )
 
 
+def missing_required_query_exclusions(exclusion_parameters: str) -> tuple[str, ...]:
+    """Return required search exclusions absent as exact whitespace-delimited tokens."""
+    tokens = set(exclusion_parameters.split())
+    return tuple(exclusion for exclusion in REQUIRED_QUERY_EXCLUSIONS if exclusion not in tokens)
+
+
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -98,7 +104,6 @@ class SectionType(StrEnum):
     SUPPORTING = "supporting"
     OPPOSING = "opposing"
     LIMITATIONS = "limitations"
-    CONCLUSION = "conclusion"
 
 
 BRIEF_TITLE = "Research Brief"
@@ -131,7 +136,9 @@ def _validate_aware_datetime(value: datetime | None) -> datetime | None:
     return value
 
 
-def _validate_offsets(offsets: list[SegmentOffset]) -> list[SegmentOffset]:
+def _validate_offsets(
+    offsets: list[SegmentOffset] | tuple[SegmentOffset, ...],
+) -> list[SegmentOffset] | tuple[SegmentOffset, ...]:
     previous_end: int | None = None
     for offset in offsets:
         if previous_end is not None and offset.start_char < previous_end:
@@ -165,6 +172,8 @@ def _expected_placement(evidence_quality: int, claim_fit: int) -> Placement:
 
 
 class SegmentOffset(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     start_char: NonNegativeInt
     end_char: PositiveInt
 
@@ -247,11 +256,7 @@ class PlannerOutput(StrictModel):
         for query in self.search_queries:
             if query.run_id != self.run_id:
                 raise ValueError("search query run_id must match planner run_id")
-            missing = [
-                exclusion
-                for exclusion in REQUIRED_QUERY_EXCLUSIONS
-                if exclusion not in query.exclusion_parameters
-            ]
+            missing = missing_required_query_exclusions(query.exclusion_parameters)
             if missing:
                 raise ValueError("search query is missing required exclusion parameters")
         return self
@@ -449,6 +454,8 @@ class StatementReviewResult(StrictModel):
 
 
 class LedgerRecord(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     run_id: UUID
     ledger_claim_id: UUID
     quote_block_id: UUID
@@ -464,7 +471,7 @@ class LedgerRecord(StrictModel):
     retrieval_attempt_id: UUID
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    segment_offsets: Annotated[list[SegmentOffset], Field(min_length=1)]
+    segment_offsets: Annotated[tuple[SegmentOffset, ...], Field(min_length=1)]
     analyst_prompt_version: NonEmptyStr
     analyst_model_name: NonEmptyStr
     analyst_completed_at: datetime
@@ -493,6 +500,8 @@ class LedgerRecord(StrictModel):
 
 
 class SynthesisItem(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     connective_template_id: NonEmptyStr
     ledger_claim_id: UUID
     reviewer_approval_id: ReviewerApprovalId
@@ -503,8 +512,10 @@ class SynthesisItem(StrictModel):
 
 
 class SynthesisSection(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     section_type: SectionType
-    items: list[SynthesisItem]
+    items: tuple[SynthesisItem, ...]
 
     @model_validator(mode="after")
     def validate_item_compatibility(self) -> SynthesisSection:
@@ -522,11 +533,13 @@ class SynthesisSection(StrictModel):
 
 
 class SynthesisOutput(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     run_id: UUID
     synthesizer_prompt_version: NonEmptyStr
     synthesizer_model_name: NonEmptyStr
     created_at: datetime
-    sections: list[SynthesisSection]
+    sections: tuple[SynthesisSection, ...]
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -442,7 +443,7 @@ def _iso_to_dt(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def _offsets_to_json(offsets: list[SegmentOffset]) -> str:
+def _offsets_to_json(offsets: Sequence[SegmentOffset]) -> str:
     return json.dumps([{"start_char": o.start_char, "end_char": o.end_char} for o in offsets])
 
 

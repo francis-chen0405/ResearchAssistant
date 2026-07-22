@@ -63,6 +63,27 @@ normalization and quotation contract, data handling, retries, budgets, persisten
 restart compatibility, canary evidence, implementation boundary, and approval-required
 open items are documented consistently. Existing offline verification remains green.
 
+## Future MVP Sequence (Prompts Only)
+
+These canonical prompts define the intended order after MVP-2A. Their presence does not
+authorize or mark any phase complete. Start exactly one phase only after explicit user
+direction and its prerequisites/approvals are satisfied.
+
+1. MVP-2B Production Provider Adapters and Boundary Proof:
+   `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`
+2. MVP-3A Mocked Full-Provider Pipeline Integration:
+   `.agent/plans/phase-mvp-3a-mocked-full-provider-pipeline.md`
+3. MVP-3B Full Live-Canary Stabilization:
+   `.agent/plans/phase-mvp-3b-live-canary-stabilization.md`
+4. MVP-4 Usable Live CLI and MVP Release:
+   `.agent/plans/phase-mvp-4-live-cli-release.md`
+5. MVP-5 Scheduled Live Validation and Operational Proof:
+   `.agent/plans/phase-mvp-5-scheduled-live-validation.md`
+
+The controlled Wigolo `render_js: "always"` retry is the only approved rendering
+exception. “No browser automation” in later prompts means no ResearchAssistant-owned
+browser driver, actions, authentication, typing, profiles, or additional automation.
+
 ## Phase 0: Repository Foundation
 
 Purpose: Establish project documentation, repository rules, scaffold, pyproject configuration, assistant instructions, status tracking, handoff tracking, and phase planning.

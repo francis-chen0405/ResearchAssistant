@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from agents.renderer import (
     APPROVED_CONNECTIVE_TEMPLATES,
@@ -142,8 +144,8 @@ def _replace_item(
     sections = list(synthesis.sections)
     items = list(sections[section_index].items)
     items[item_index] = item
-    sections[section_index] = sections[section_index].model_copy(update={"items": items})
-    return synthesis.model_copy(update={"sections": sections})
+    sections[section_index] = sections[section_index].model_copy(update={"items": tuple(items)})
+    return synthesis.model_copy(update={"sections": tuple(sections)})
 
 
 def _append_item(
@@ -152,9 +154,9 @@ def _append_item(
     item: SynthesisItem,
 ) -> SynthesisOutput:
     sections = list(synthesis.sections)
-    items = [*sections[section_index].items, item]
+    items = (*sections[section_index].items, item)
     sections[section_index] = sections[section_index].model_copy(update={"items": items})
-    return synthesis.model_copy(update={"sections": sections})
+    return synthesis.model_copy(update={"sections": tuple(sections)})
 
 
 def _assert_invalid(
@@ -182,6 +184,34 @@ def test_synthesizer_rejects_raw_dictionary_ledger_handoff() -> None:
             ledger_records=[ledger_payload],
             created_at=_NOW,
         )
+
+
+def test_release_artifacts_reject_field_and_nested_collection_mutation() -> None:
+    ledger = _valid_ledgers()[0]
+    synthesis = _synthesis([ledger])
+
+    with pytest.raises(PydanticValidationError):
+        ledger.approved_factual_statement = "Mutated after validation."
+    with pytest.raises(AttributeError):
+        ledger.segment_offsets.append(SegmentOffset(start_char=11, end_char=12))
+    with pytest.raises(PydanticValidationError):
+        ledger.segment_offsets[0].start_char = 11
+    with pytest.raises(PydanticValidationError):
+        synthesis.synthesizer_model_name = "mutated-model"
+    with pytest.raises(AttributeError):
+        synthesis.sections.append(synthesis.sections[0])
+    with pytest.raises(AttributeError):
+        synthesis.sections[0].items.clear()
+
+
+def test_renderer_template_configuration_is_read_only() -> None:
+    assert isinstance(APPROVED_CONNECTIVE_TEMPLATES, MappingProxyType)
+    template = APPROVED_CONNECTIVE_TEMPLATES[SUPPORTING_EVIDENCE_TEMPLATE_ID]
+
+    with pytest.raises(TypeError):
+        APPROVED_CONNECTIVE_TEMPLATES["mutated_template"] = template  # type: ignore[index]
+    with pytest.raises(PydanticValidationError):
+        template.text = "Mutated template:"
 
 
 def test_final_validator_rejects_raw_dictionary_ledger_handoff() -> None:
@@ -373,9 +403,9 @@ def test_opposing_and_supporting_items_cannot_cross_sections(
     item = synthesis.sections[item_index].items[0]
     bad_section = SynthesisSection.model_construct(
         section_type=section_type,
-        items=[item],
+        items=(item,),
     )
-    mutated = synthesis.model_copy(update={"sections": [bad_section]})
+    mutated = synthesis.model_copy(update={"sections": (bad_section,)})
 
     _assert_invalid(mutated, ledgers, ValidationErrorCode.INVALID_SECTION)
 
@@ -449,6 +479,35 @@ def test_reuse_one_ledger_claim_too_many_times_blocks_release() -> None:
     duplicated = _append_item(synthesis, 0, synthesis.sections[0].items[0])
 
     _assert_invalid(duplicated, ledgers, ValidationErrorCode.LEDGER_MISMATCH)
+
+
+def test_omitting_all_ledger_claims_blocks_release() -> None:
+    ledgers = _valid_ledgers()
+    synthesis = _synthesis(ledgers).model_copy(update={"sections": ()})
+
+    _assert_invalid(synthesis, ledgers, ValidationErrorCode.LEDGER_MISMATCH)
+
+
+def test_omitting_one_ledger_claim_blocks_release() -> None:
+    ledgers = _valid_ledgers()
+    synthesis = _synthesis(ledgers)
+    incomplete = synthesis.model_copy(update={"sections": synthesis.sections[:-1]})
+
+    _assert_invalid(incomplete, ledgers, ValidationErrorCode.LEDGER_MISMATCH)
+
+
+def test_empty_ledger_and_empty_synthesis_remain_valid() -> None:
+    synthesis = _synthesis([])
+
+    result = validate_final_release(
+        synthesis,
+        [],
+        authoritative_claim=_CLAIM,
+        validated_at=_NOW,
+    )
+
+    assert result.valid is True
+    assert result.rendered_brief_hash is not None
 
 
 def test_render_statement_not_in_ledger_blocks_release() -> None:

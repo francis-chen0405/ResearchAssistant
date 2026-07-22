@@ -161,7 +161,7 @@ but can never replace an existing one.
 
 ## Run Provenance
 
-Every persisted artifact and every Pydantic handoff that can affect release must carry provenance. At minimum, release-relevant records include `run_id`, UTC ISO-8601 timestamps for creation or validation, and the stage-specific fields listed below. Retrieval records include `retrieval_attempt_id`, `query_id`, `query_round`, search rank, URL, status, and timestamp. LLM-produced records include `prompt_version`, `model_name`, and timestamp. Deterministic validators include the validator or filter version and validation timestamp.
+Every persisted artifact and every application-owned Pydantic handoff or envelope that can affect release must carry provenance. At minimum, release-relevant records include `run_id`, UTC ISO-8601 timestamps for creation or validation, and the stage-specific fields listed below. Retrieval records include `retrieval_attempt_id`, `query_id`, `query_round`, search rank, URL, status, and timestamp. LLM-produced records include `prompt_version`, `model_name`, and timestamp. Deterministic validators include the validator or filter version and validation timestamp. A deliberately narrow model-facing schema may omit contextual provenance fields only when its enclosing typed application request/result envelope and persisted domain artifact carry them; fields forbidden by that model-facing contract must not be exposed to the model merely to duplicate envelope provenance.
 
 IDs are not preallocated. An ID is assigned only after the deterministic validation gate for that artifact succeeds: quote block IDs after post-extraction validation, Ledger claim IDs after Ledger schema validation and Reviewer approval, and rendered brief hashes only after final validation succeeds.
 
@@ -411,7 +411,7 @@ submit free-form prose or structural framing directly.
 - `placement` is set by the Analyst, passed through the Synthesizer unchanged, and verified by the Validator; no stage may alter it.
 - No canonical factual statement may enter the Ledger without passing Statement Reviewer approval.
 - The Synthesizer must not produce unrestricted factual prose.
-- Source snapshots must be immutable and readable by the Analyst and Reviewer; a hash proves integrity only — quotation membership must be verified through exact text and offsets.
+- Source snapshots must be immutable and readable by the Analyst and deterministic validators; a hash proves integrity only — quotation membership must be verified through exact text and offsets.
 - Supporting and opposing researchers receive comparable search depth, standards, and limits; source quality must be judged independently of stance.
 - The system must not manufacture balance when evidence is one-sided.
 - Queries, prompts, model versions, timestamps, snapshots, search ranks, and rounds must be logged immutably.

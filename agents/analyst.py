@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from agents.researcher import verify_candidate_against_snapshot
 from agents.supportingresearcher import UntrustedSourceText
@@ -288,7 +288,6 @@ _SCORE_PAIR_LOOKUP = {
 
 
 class LedgerAdmissionRequest(StrictModel):
-    ledger_claim_id: UUID
     candidate: CandidateQuoteBlock
     snapshot: SourceSnapshot
     score_decision: ScoreDecision
@@ -296,12 +295,22 @@ class LedgerAdmissionRequest(StrictModel):
     review_results: list[StatementReviewResult] = Field(min_length=1)
     approved_factual_statement: str = Field(min_length=1)
     entailment: Entailment
-    ledger_validated_at: datetime
     placement: Placement | None = None
 
-    _ledger_validated_at_is_aware = field_validator("ledger_validated_at")(
-        lambda value: _validate_aware_datetime(value, "ledger_validated_at")
-    )
+
+class ValidatedLedgerPayload(StrictModel):
+    """ID-free Ledger content produced only after deterministic admission succeeds."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    candidate: CandidateQuoteBlock
+    score_decision: ScoreDecision
+    approved_review: StatementReviewResult
+    approved_factual_statement: str = Field(min_length=1)
+    entailment: Entailment
+
+
+LedgerClaimIdDeriver = Callable[[ValidatedLedgerPayload], UUID]
 
 
 def interpret_score_pair(evidence_quality: int, claim_fit: int) -> ScorePairPolicy:
@@ -361,7 +370,7 @@ def create_statement_draft(
     )
 
 
-def admit_ledger_record(request: LedgerAdmissionRequest) -> LedgerRecord:
+def validate_ledger_admission(request: LedgerAdmissionRequest) -> ValidatedLedgerPayload:
     verify_candidate_against_snapshot(request.snapshot, request.candidate)
     _validate_candidate_score_decision(request.candidate, request.score_decision)
 
@@ -389,31 +398,56 @@ def admit_ledger_record(request: LedgerAdmissionRequest) -> LedgerRecord:
         request.entailment,
     )
 
-    return LedgerRecord(
-        run_id=request.candidate.run_id,
-        ledger_claim_id=request.ledger_claim_id,
-        quote_block_id=request.candidate.quote_block_id,
-        stance=request.candidate.stance,
+    return ValidatedLedgerPayload(
+        candidate=request.candidate,
+        score_decision=request.score_decision,
+        approved_review=approved_review,
         approved_factual_statement=request.approved_factual_statement,
-        approved_claim_text=request.candidate.extracted_quote_block,
-        evidence_quality=request.score_decision.evidence_quality,
-        claim_fit=request.score_decision.claim_fit,
-        ledger_score=request.score_decision.ledger_score,
-        placement=request.score_decision.placement,
         entailment=request.entailment,
-        source_url=request.candidate.source_url,
-        retrieval_attempt_id=request.candidate.retrieval_attempt_id,
-        snapshot_id=request.candidate.snapshot_id,
-        snapshot_sha256=request.candidate.snapshot_sha256,
-        segment_offsets=request.candidate.segment_offsets,
-        analyst_prompt_version=request.score_decision.analyst_prompt_version,
-        analyst_model_name=request.score_decision.analyst_model_name,
-        analyst_completed_at=request.score_decision.scored_at,
+    )
+
+
+def admit_ledger_record(
+    request: LedgerAdmissionRequest,
+    *,
+    derive_ledger_claim_id: LedgerClaimIdDeriver,
+    validation_clock: Callable[[], datetime],
+) -> LedgerRecord:
+    payload = validate_ledger_admission(request)
+    ledger_validated_at = _validate_aware_datetime(
+        validation_clock(),
+        "ledger_validated_at",
+    )
+    ledger_claim_id = derive_ledger_claim_id(payload)
+    candidate = payload.candidate
+    score_decision = payload.score_decision
+    approved_review = payload.approved_review
+
+    return LedgerRecord(
+        run_id=candidate.run_id,
+        ledger_claim_id=ledger_claim_id,
+        quote_block_id=candidate.quote_block_id,
+        stance=candidate.stance,
+        approved_factual_statement=payload.approved_factual_statement,
+        approved_claim_text=candidate.extracted_quote_block,
+        evidence_quality=score_decision.evidence_quality,
+        claim_fit=score_decision.claim_fit,
+        ledger_score=score_decision.ledger_score,
+        placement=score_decision.placement,
+        entailment=payload.entailment,
+        source_url=candidate.source_url,
+        retrieval_attempt_id=candidate.retrieval_attempt_id,
+        snapshot_id=candidate.snapshot_id,
+        snapshot_sha256=candidate.snapshot_sha256,
+        segment_offsets=candidate.segment_offsets,
+        analyst_prompt_version=score_decision.analyst_prompt_version,
+        analyst_model_name=score_decision.analyst_model_name,
+        analyst_completed_at=score_decision.scored_at,
         reviewer_prompt_version=approved_review.reviewer_prompt_version,
         reviewer_model_name=approved_review.reviewer_model_name,
         reviewed_at=approved_review.reviewed_at,
         reviewer_approval_id=approved_review.reviewer_approval_id,
-        ledger_validated_at=request.ledger_validated_at,
+        ledger_validated_at=ledger_validated_at,
     )
 
 

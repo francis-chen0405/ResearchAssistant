@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-07-22 - Narrow Model-Facing Provenance Envelopes
+
+- Keep required release provenance in typed application-owned request/result envelopes
+  and persisted domain artifacts when a deliberately narrow model-facing schema forbids
+  contextual metadata.
+- Apply this rule to `ReviewerInput` and `ReviewerDecision`: do not expose run IDs,
+  timestamps, model metadata, or application-owned identifiers merely to duplicate the
+  provenance already carried by `LLMRequest`, invocation records, and
+  `StatementReviewResult`.
+- This is a narrow exception for model context isolation, not permission for
+  provenance-free application handoffs.
+
 ## 2026-07-21 - MVP-2A Architecture Gate
 
 - Name this documentation phase **MVP-2A Architecture Gate**. It selects a live-provider
