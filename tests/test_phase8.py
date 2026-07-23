@@ -413,31 +413,31 @@ def test_stage_route_accepts_one_primary_and_up_to_two_ordered_fallbacks() -> No
     assert route.fallbacks == (ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO)
 
 
-def test_default_routes_match_required_mimo_first_table() -> None:
+def test_default_routes_match_approved_mvp2b_table() -> None:
     expected = {
         LLMStage.PLANNER: (
             ModelAlias.MIMO_V25_PRO,
-            (ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO),
+            (ModelAlias.MINIMAX_M3,),
             0.2,
         ),
         LLMStage.EXTRACTOR: (
-            ModelAlias.MIMO_V25,
-            (ModelAlias.MIMO_V25_PRO, ModelAlias.DEEPSEEK_V4_FLASH),
+            ModelAlias.MIMO_V25_PRO,
+            (ModelAlias.MINIMAX_M3,),
             0.0,
         ),
         LLMStage.ANALYST: (
             ModelAlias.MIMO_V25_PRO,
-            (ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO),
+            (ModelAlias.MINIMAX_M3,),
             0.1,
         ),
         LLMStage.REVIEWER: (
-            ModelAlias.MIMO_V25,
-            (ModelAlias.MIMO_V25_PRO, ModelAlias.DEEPSEEK_V4_PRO),
+            ModelAlias.MIMO_V25_PRO,
+            (ModelAlias.MINIMAX_M3,),
             0.0,
         ),
         LLMStage.SYNTHESIZER: (
             ModelAlias.MIMO_V25_PRO,
-            (ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO),
+            (ModelAlias.MINIMAX_M3,),
             0.15,
         ),
     }
@@ -557,8 +557,5 @@ def test_phase8_does_not_execute_runtime_failover() -> None:
         invoke_llm(provider, request, clock=lambda: next(clock_values))
 
     assert len(provider.requests) == 1
-    assert request.configured_fallbacks == (
-        ModelAlias.MIMO_V25,
-        ModelAlias.DEEPSEEK_V4_PRO,
-    )
+    assert request.configured_fallbacks == (ModelAlias.MINIMAX_M3,)
     assert exc_info.value.record.fallback_executed is False

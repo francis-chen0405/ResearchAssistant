@@ -47,6 +47,8 @@ class LLMStage(StrEnum):
 
 class ModelAlias(StrEnum):
     MIMO_V25_PRO = "mimo-v2.5-pro"
+    MINIMAX_M3 = "minimax-m3"
+    # Legacy aliases remain readable for existing persisted Phase 8/9 artifacts.
     MIMO_V25 = "mimo-v2.5"
     DEEPSEEK_V4_PRO = "deepseek-v4-pro"
     DEEPSEEK_V4_FLASH = "deepseek-v4-flash"
@@ -96,27 +98,27 @@ class LLMRoutingConfig(StrictModel):
 DEFAULT_LLM_ROUTING = LLMRoutingConfig(
     planner=StageRoute(
         primary=ModelAlias.MIMO_V25_PRO,
-        fallbacks=(ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO),
+        fallbacks=(ModelAlias.MINIMAX_M3,),
         generation=GenerationSettings(temperature=0.2),
     ),
     extractor=StageRoute(
-        primary=ModelAlias.MIMO_V25,
-        fallbacks=(ModelAlias.MIMO_V25_PRO, ModelAlias.DEEPSEEK_V4_FLASH),
+        primary=ModelAlias.MIMO_V25_PRO,
+        fallbacks=(ModelAlias.MINIMAX_M3,),
         generation=GenerationSettings(temperature=0.0),
     ),
     analyst=StageRoute(
         primary=ModelAlias.MIMO_V25_PRO,
-        fallbacks=(ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO),
+        fallbacks=(ModelAlias.MINIMAX_M3,),
         generation=GenerationSettings(temperature=0.1),
     ),
     reviewer=StageRoute(
-        primary=ModelAlias.MIMO_V25,
-        fallbacks=(ModelAlias.MIMO_V25_PRO, ModelAlias.DEEPSEEK_V4_PRO),
+        primary=ModelAlias.MIMO_V25_PRO,
+        fallbacks=(ModelAlias.MINIMAX_M3,),
         generation=GenerationSettings(temperature=0.0),
     ),
     synthesizer=StageRoute(
         primary=ModelAlias.MIMO_V25_PRO,
-        fallbacks=(ModelAlias.MIMO_V25, ModelAlias.DEEPSEEK_V4_PRO),
+        fallbacks=(ModelAlias.MINIMAX_M3,),
         generation=GenerationSettings(temperature=0.15),
     ),
 )

@@ -13,6 +13,20 @@ from models import StrictModel
 class ScraperProviderError(RuntimeError):
     """Raised when a scraper provider fails to retrieve a source."""
 
+    def __init__(
+        self,
+        code: str,
+        message: str | None = None,
+        *,
+        retryable: bool = False,
+    ) -> None:
+        if message is None:
+            message = code
+            code = "provider_error"
+        super().__init__(message)
+        self.code = code
+        self.retryable = retryable
+
 
 class ScraperTimeoutError(ScraperProviderError):
     """Raised when a scraper provider exceeds its configured timeout."""
@@ -36,6 +50,16 @@ class ScrapeResponse(StrictModel):
     resolved_url: str = Field(min_length=1)
     content_type: str = Field(min_length=1)
     text: str
+    original_url: str | None = None
+    canonical_url: str | None = None
+    snapshot_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    word_count: int | None = Field(default=None, ge=1, le=3000)
+    truncated: bool = False
+    normalization_version: str | None = None
+    acquisition_version: str | None = None
+    provider_name: str = "unknown"
+    provider_version: str = "unknown"
+    rendered: bool = False
 
 
 class RetryPolicy(StrictModel):

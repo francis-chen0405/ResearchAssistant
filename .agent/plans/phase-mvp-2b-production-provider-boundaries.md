@@ -1,5 +1,22 @@
 # Phase MVP-2B - Production Provider Adapters and Boundary Proof
 
+## Implementation Record - 2026-07-22
+
+Status: Complete offline. The user explicitly approved `httpx`, `markdown-it-py`, `pypdf`,
+Node.js/Wigolo `0.2.1`, the documented deadlines/size caps, full-run ceilings, environment-template
+changes, and the gated smoke path. The user prohibited a SQLite migration and separately withheld
+permission to execute live calls.
+
+Implemented the concrete Wigolo Search/acquisition, ResearchAssistant normalization/digital-PDF,
+and OpenRouter single-call boundaries. Migrated defaults to MiMo Pro -> MiniMax M3, added frozen
+HTML/PDF and mocked HTTP boundary tests, and added an explicitly gated standalone smoke script.
+No complete orchestration, live product command, UI, migration, second provider, browser driver, or
+later-phase behavior was added.
+
+Verification at completion: 40 focused tests passed; 366 complete offline tests passed with one
+pre-existing explicit opt-in skip; all 38 offline evaluation cases passed; Ruff lint/format passed;
+the live smoke was not run.
+
 ## Prerequisite and Purpose
 
 MVP-2A Architecture Gate is complete. Implement production-intended adapters for only
@@ -165,4 +182,3 @@ Report exact files changed; Search boundary result; HTML and PDF determinism/off
 proof; representative structured-output result; observed usage/cost if live smoke was
 approved; normalized errors; configuration and secret protections; remaining provider
 incompatibilities; and whether the stack is ready for MVP-3A. Leave changes uncommitted.
-

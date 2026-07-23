@@ -866,11 +866,12 @@ def _collect_failures(
         ),
         (
             any(
-                attempt.route_index == 2 and attempt.outcome is RouteOutcome.SUCCESS
+                operation.stage == LLMStage.EXTRACTOR.value
                 for operation in corpus.route_operations
                 for attempt in operation.attempts
+                if attempt.route_index == 1 and attempt.outcome is RouteOutcome.SUCCESS
             ),
-            "third-line-success route coverage is missing",
+            "approved Extractor fallback-success route coverage is missing",
         ),
     )
     failures.extend(message for covered, message in route_coverage_checks if not covered)

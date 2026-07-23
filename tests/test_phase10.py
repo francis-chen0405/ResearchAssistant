@@ -112,7 +112,7 @@ def test_machine_and_human_outputs_are_derived_from_same_report(tmp_path: Path) 
     assert machine["metrics"]["costs"]["pricing_kind"] == "frozen_evaluation_input"
     assert "Frozen MiMo Pro minus MiMo normal quality delta: +0.050000" in human
     assert "Frozen Extractor DeepSeek Flash-minus-MiMo delta: -0.050000" in human
-    assert "Total cost from frozen pricing with metadata: $0.008974000" in human
+    assert "Total cost from frozen pricing with metadata: $0.011896000" in human
 
 
 def test_metrics_include_every_required_phase10_surface() -> None:
@@ -402,7 +402,7 @@ def test_fallback_route_requires_the_documented_single_retry() -> None:
         CorpusManifest.model_validate(payload)
 
 
-def test_fake_route_corpus_covers_primary_retry_backup_and_third_line_paths(
+def test_fake_route_corpus_covers_primary_retry_and_approved_fallback_paths(
     tmp_path: Path,
 ) -> None:
     corpus, _ = load_corpus(CORPUS)
@@ -425,7 +425,9 @@ def test_fake_route_corpus_covers_primary_retry_backup_and_third_line_paths(
     )
     assert any(
         any(
-            attempt.route_index == 2 and attempt.outcome is RouteOutcome.SUCCESS
+            operation.stage == "extractor"
+            and attempt.route_index == 1
+            and attempt.outcome is RouteOutcome.SUCCESS
             for attempt in operation.attempts
         )
         for operation in corpus.route_operations
@@ -436,7 +438,7 @@ def test_fake_route_corpus_covers_primary_retry_backup_and_third_line_paths(
     route_operations.pop()
     report = evaluate_corpus(_write_mutated_corpus(tmp_path, payload))
     assert not report.passed
-    assert "third-line-success route coverage is missing" in report.failures
+    assert "approved Extractor fallback-success route coverage is missing" in report.failures
 
 
 def test_unsafe_fallback_fixture_forces_failure_and_cannot_bypass_gates(
@@ -529,14 +531,13 @@ def test_cost_calculations_match_recorded_tokens_and_frozen_pricing() -> None:
 
 def test_failure_rates_are_reported_by_exact_model_alias() -> None:
     report = evaluate_corpus(CORPUS)
-    normal = _rate_by_alias(report, "mimo-v2.5")
     pro = _rate_by_alias(report, "mimo-v2.5-pro")
-    flash = _rate_by_alias(report, "deepseek-v4-flash")
+    minimax = _rate_by_alias(report, "minimax-m3")
 
-    assert normal.malformed_output_failure_rate.numerator == 2
-    assert normal.exact_quote_failure_rate.numerator == 2
-    assert pro.malformed_output_failure_rate.numerator == 0
-    assert flash.exact_quote_failure_rate.value == 0.0
+    assert pro.malformed_output_failure_rate.numerator == 2
+    assert pro.exact_quote_failure_rate.numerator == 2
+    assert minimax.malformed_output_failure_rate.value == 0.0
+    assert minimax.exact_quote_failure_rate.value == 0.0
 
 
 def test_quality_delta_uses_same_frozen_cases_and_includes_extractor_comparison() -> None:

@@ -10,18 +10,17 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State After MVP-2A
+## Current Project State After MVP-2B
 
 Phases 0 through 10 and MVP-1 Release-Contract Correctness are complete. MVP-2A is the
 completed **Architecture Gate** for live provider work. Its canonical plan is
 `.agent/plans/phase-mvp-2a-architecture-gate.md`.
 
-MVP-2A approves a future live-provider design but changes no runtime code. The repository
-still contains no live Search, Scraper, or LLM adapter, vendor SDK, provider API-key
-loading, or provider-run launch command. MVP-2B implementation has not started and
-requires explicit user direction. Any MVP-2B work must first reconcile the current fake-
-provider contracts and tests with the approved MVP-2A acquisition, model-routing,
-snapshot, retry, budget, and restart contracts.
+MVP-2B Production Provider Adapters and Boundary Proof is complete with production-intended
+Wigolo/OpenRouter boundaries, deterministic HTML/PDF normalization, strict process-environment
+configuration, migrated default routing, and an explicitly gated smoke path. No live call was
+made. Full orchestration wiring, a live product command, process lifecycle integration,
+persistence migration, and MVP-3A remain unstarted.
 
 ## MVP-2A: Architecture Gate
 

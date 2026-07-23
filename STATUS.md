@@ -1,5 +1,64 @@
 # Status
 
+## 2026-07-22 - MVP-2B Production Provider Adapters and Boundary Proof
+
+Status: Complete offline; live boundary smoke not executed.
+
+Completed:
+
+- Added production-intended synchronous adapters for pinned loopback Wigolo `0.2.1` Search and
+  bounded acquisition, plus direct strict-schema OpenRouter calls using MiMo Pro and MiniMax M3.
+- Extended existing strict Search/Scraper contracts compatibly with provider identity, rank,
+  discovery metadata, engine telemetry, URL/acquisition provenance, normalization/hash data, and
+  retryable normalized failure classifications.
+- Added explicit health/search/fetch/LLM deadlines, five redirects, streaming 10 MiB HTML/text and
+  25 MiB PDF limits, content-type/signature checks, and exactly one controlled render retry after
+  an explicit challenge or JavaScript-required result.
+- Added versioned deterministic HTML, Markdown, plain-text, and narrow digital-PDF normalization;
+  frozen fixtures prove byte-identical results, hashes, and exact quote offsets. Image-only and
+  malformed PDFs are explicit unsupported content; OCR remains absent.
+- Added direct OpenRouter JSON Schema requests with strict mode, parameter support required, data
+  collection denied, no response healing, exact local Pydantic validation, exact returned-model
+  checks, refusal/truncation/error normalization, and strict usage/cost handling.
+- Added conservative per-model price caps, pre-call reservation checks, provider-cost recording,
+  estimated-cap cost labeling when cost is absent, and full-run USD 1/token/call ceiling models.
+- Migrated every default route to `mimo-v2.5-pro` with `minimax-m3` as the only fallback. Legacy
+  aliases remain readable for existing artifacts; the offline evaluation corpus now tests the
+  approved route while retaining frozen legacy quality comparisons as historical inputs.
+- Added strict process-environment configuration and secret-safe representations. No `.env` file,
+  alternate credential store, or implicit source is loaded.
+- Added an ignored, fail-closed boundary smoke script requiring `--execute`, two explicit enable /
+  approval gates, exact one-call limits, explicit token/cost caps, and an unused absolute output
+  path. Credentials alone cannot run it.
+- Added approved runtime dependencies: `httpx`, `markdown-it-py`, and `pypdf`. Node.js and pinned
+  Wigolo `0.2.1` are documented live prerequisites.
+- Added no SQLite migration, complete orchestration wiring, live product CLI/UI command, Streamlit
+  change, browser automation, second provider stack, or MVP-3A behavior.
+
+Verification:
+
+- Focused MVP-2B boundary suite: 40 passed.
+- Complete offline suite: 366 passed, 1 skipped. The skip remains explicitly opt-in.
+- Offline evaluation: passed all 38 cases; default-route agreement 100%; optional live comparison
+  skipped.
+- Ruff lint and format checks passed.
+- No live provider call or boundary smoke was executed, so observed live usage and cost are zero /
+  unavailable. Mocked structured-output proof recorded 30 tokens and USD 0.001; cap-estimation
+  proof recorded USD 0.0003.
+
+Remaining:
+
+- A separately approved live boundary smoke must validate the exact installed Wigolo response
+  shape, OpenRouter route/model capability, upstream identity, and current cost reporting.
+- Wigolo process lifecycle ownership is not connected; MVP-2B verifies a pre-existing loopback
+  service identity. Full provider orchestration remains intentionally unconnected.
+- No persistence schema was added for the new acquisition/model metadata because migration was
+  explicitly prohibited.
+
+Next exact task:
+
+- MVP-3A mocked full-provider pipeline integration only after explicit user direction.
+
 ## 2026-07-21 - MVP-2A Architecture Gate
 
 Status: Complete as a documentation-only architecture gate.

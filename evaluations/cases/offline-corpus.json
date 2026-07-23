@@ -210,10 +210,10 @@
       "case_id": "route-extractor-primary-success",
       "run_id": "route-run-extractor-primary",
       "stage": "extractor",
-      "expected_primary_alias": "mimo-v2.5",
+      "expected_primary_alias": "mimo-v2.5-pro",
       "attempts": [
         {
-          "model_alias": "mimo-v2.5",
+          "model_alias": "mimo-v2.5-pro",
           "route_index": 0,
           "attempt_number": 1,
           "outcome": "success",
@@ -257,10 +257,10 @@
       "case_id": "route-reviewer-backup-success",
       "run_id": "route-run-reviewer-backup",
       "stage": "reviewer",
-      "expected_primary_alias": "mimo-v2.5",
+      "expected_primary_alias": "mimo-v2.5-pro",
       "attempts": [
         {
-          "model_alias": "mimo-v2.5",
+          "model_alias": "mimo-v2.5-pro",
           "route_index": 0,
           "attempt_number": 1,
           "outcome": "malformed_output",
@@ -269,7 +269,7 @@
           "gates_passed": []
         },
         {
-          "model_alias": "mimo-v2.5",
+          "model_alias": "mimo-v2.5-pro",
           "route_index": 0,
           "attempt_number": 2,
           "outcome": "malformed_output",
@@ -278,7 +278,7 @@
           "gates_passed": []
         },
         {
-          "model_alias": "mimo-v2.5-pro",
+          "model_alias": "minimax-m3",
           "route_index": 1,
           "attempt_number": 1,
           "outcome": "success",
@@ -317,13 +317,13 @@
       "completed_run": true
     },
     {
-      "case_id": "route-extractor-third-line-success",
-      "run_id": "route-run-extractor-third-line",
+      "case_id": "route-extractor-fallback-success",
+      "run_id": "route-run-extractor-fallback",
       "stage": "extractor",
-      "expected_primary_alias": "mimo-v2.5",
+      "expected_primary_alias": "mimo-v2.5-pro",
       "attempts": [
         {
-          "model_alias": "mimo-v2.5",
+          "model_alias": "mimo-v2.5-pro",
           "route_index": 0,
           "attempt_number": 1,
           "outcome": "exact_quote_failure",
@@ -332,7 +332,7 @@
           "gates_passed": []
         },
         {
-          "model_alias": "mimo-v2.5",
+          "model_alias": "mimo-v2.5-pro",
           "route_index": 0,
           "attempt_number": 2,
           "outcome": "exact_quote_failure",
@@ -341,26 +341,8 @@
           "gates_passed": []
         },
         {
-          "model_alias": "mimo-v2.5-pro",
+          "model_alias": "minimax-m3",
           "route_index": 1,
-          "attempt_number": 1,
-          "outcome": "transient_failure",
-          "input_tokens": 1300,
-          "output_tokens": 0,
-          "gates_passed": []
-        },
-        {
-          "model_alias": "mimo-v2.5-pro",
-          "route_index": 1,
-          "attempt_number": 2,
-          "outcome": "transient_failure",
-          "input_tokens": 1300,
-          "output_tokens": 0,
-          "gates_passed": []
-        },
-        {
-          "model_alias": "deepseek-v4-flash",
-          "route_index": 2,
           "attempt_number": 1,
           "outcome": "success",
           "input_tokens": 1300,
@@ -466,6 +448,7 @@
   "pricing": [
     {"model_alias": "mimo-v2.5", "input_usd_per_million": 0.20, "output_usd_per_million": 0.80},
     {"model_alias": "mimo-v2.5-pro", "input_usd_per_million": 0.60, "output_usd_per_million": 2.40},
+    {"model_alias": "minimax-m3", "input_usd_per_million": 0.50, "output_usd_per_million": 2.00},
     {"model_alias": "deepseek-v4-flash", "input_usd_per_million": 0.10, "output_usd_per_million": 0.40}
   ]
 }

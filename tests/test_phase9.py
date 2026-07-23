@@ -454,9 +454,8 @@ def test_validator_rejection_blocks_release_without_hash(tmp_path: Path) -> None
 
 def test_extraction_failure_is_explicit_and_has_no_ledger(tmp_path: Path) -> None:
     failures = {
-        (LLMStage.EXTRACTOR, ModelAlias.MIMO_V25): 99,
         (LLMStage.EXTRACTOR, ModelAlias.MIMO_V25_PRO): 99,
-        (LLMStage.EXTRACTOR, ModelAlias.DEEPSEEK_V4_FLASH): 99,
+        (LLMStage.EXTRACTOR, ModelAlias.MINIMAX_M3): 99,
     }
     result = _run(tmp_path, llm=FakeLLMProvider(transient_failures=failures))
 
@@ -476,8 +475,7 @@ def test_extraction_failure_is_explicit_and_has_no_ledger(tmp_path: Path) -> Non
 def test_analyst_failure_ends_run_without_bypassing_ledger(tmp_path: Path) -> None:
     failures = {
         (LLMStage.ANALYST, ModelAlias.MIMO_V25_PRO): 99,
-        (LLMStage.ANALYST, ModelAlias.MIMO_V25): 99,
-        (LLMStage.ANALYST, ModelAlias.DEEPSEEK_V4_PRO): 99,
+        (LLMStage.ANALYST, ModelAlias.MINIMAX_M3): 99,
     }
     result = _run(tmp_path, llm=FakeLLMProvider(transient_failures=failures))
 
@@ -543,28 +541,28 @@ def test_malformed_primary_output_retries_then_records_fallback(tmp_path: Path) 
     assert [item.model_alias for item in planner_attempts] == [
         ModelAlias.MIMO_V25_PRO.value,
         ModelAlias.MIMO_V25_PRO.value,
-        ModelAlias.MIMO_V25.value,
+        ModelAlias.MINIMAX_M3.value,
     ]
     assert planner_attempts[0].failure_code == "malformed_output"
     assert planner_attempts[2].escalation_reason is not None
 
 
-def test_extractor_exact_quote_failure_objectively_escalates_to_mimo_pro(
+def test_extractor_exact_quote_failure_objectively_escalates_to_minimax(
     tmp_path: Path,
 ) -> None:
-    llm = FakeLLMProvider(invalid_extractor_aliases={ModelAlias.MIMO_V25})
+    llm = FakeLLMProvider(invalid_extractor_aliases={ModelAlias.MIMO_V25_PRO})
     result = _run(tmp_path, llm=llm)
     extractor_attempts = [item for item in result.model_attempts if item.stage == "extractor"]
 
     assert result.status is ProviderRunStatus.RELEASED
     assert any(
-        item.model_alias == ModelAlias.MIMO_V25_PRO.value
+        item.model_alias == ModelAlias.MINIMAX_M3.value
         and item.escalation_reason is not None
         and "exact_quote_failure" in item.escalation_reason
         for item in extractor_attempts
     )
     assert all(
-        attempts[0].model_alias == ModelAlias.MIMO_V25.value
+        attempts[0].model_alias == ModelAlias.MIMO_V25_PRO.value
         for attempts in _attempts_by_operation(extractor_attempts).values()
     )
 
@@ -575,14 +573,13 @@ def test_semantic_reviewer_disagreement_does_not_switch_models(tmp_path: Path) -
 
     assert result.status is ProviderRunStatus.RELEASED
     assert reviewer_attempts
-    assert {item.model_alias for item in reviewer_attempts} == {ModelAlias.MIMO_V25.value}
+    assert {item.model_alias for item in reviewer_attempts} == {ModelAlias.MIMO_V25_PRO.value}
     assert all(item.route_index == 0 for item in reviewer_attempts)
     assert all(item.escalation_reason is None for item in reviewer_attempts)
 
 
-def test_deepseek_third_line_output_still_passes_all_truth_gates(tmp_path: Path) -> None:
+def test_minimax_fallback_output_still_passes_all_truth_gates(tmp_path: Path) -> None:
     failures = {
-        (LLMStage.EXTRACTOR, ModelAlias.MIMO_V25): 99,
         (LLMStage.EXTRACTOR, ModelAlias.MIMO_V25_PRO): 99,
     }
     result = _run(tmp_path, llm=FakeLLMProvider(transient_failures=failures))
@@ -590,7 +587,7 @@ def test_deepseek_third_line_output_still_passes_all_truth_gates(tmp_path: Path)
     assert result.status is ProviderRunStatus.RELEASED
     assert any(
         item.stage == "extractor"
-        and item.model_alias == ModelAlias.DEEPSEEK_V4_FLASH.value
+        and item.model_alias == ModelAlias.MINIMAX_M3.value
         and item.status.value == "completed"
         for item in result.model_attempts
     )
@@ -601,14 +598,13 @@ def test_deepseek_third_line_output_still_passes_all_truth_gates(tmp_path: Path)
     assert result.validation_result.valid
 
 
-def test_invalid_deepseek_extraction_is_blocked_by_deterministic_filter(tmp_path: Path) -> None:
+def test_invalid_minimax_extraction_is_blocked_by_deterministic_filter(tmp_path: Path) -> None:
     failures = {
-        (LLMStage.EXTRACTOR, ModelAlias.MIMO_V25): 99,
         (LLMStage.EXTRACTOR, ModelAlias.MIMO_V25_PRO): 99,
     }
     llm = FakeLLMProvider(
         transient_failures=failures,
-        invalid_extractor_aliases={ModelAlias.DEEPSEEK_V4_FLASH},
+        invalid_extractor_aliases={ModelAlias.MINIMAX_M3},
     )
     result = _run(tmp_path, llm=llm)
 
@@ -802,7 +798,7 @@ def test_usage_metadata_survives_deterministic_route_failure(tmp_path: Path) -> 
         cost_usd=0.002,
     )
     llm = FakeLLMProvider(
-        invalid_extractor_aliases={ModelAlias.MIMO_V25},
+        invalid_extractor_aliases={ModelAlias.MIMO_V25_PRO},
         usage=usage,
     )
     result = _run(tmp_path, llm=llm)

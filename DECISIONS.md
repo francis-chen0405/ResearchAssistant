@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-07-22 - MVP-2B Production Provider Boundaries
+
+- Implement only pinned loopback Wigolo `0.2.1` and direct OpenRouter HTTP adapters; add
+  `httpx`, `markdown-it-py`, and `pypdf` with no LLM SDK or second provider stack.
+- Make `ra-normalization-v1` normalized plain text the quote surface. Support deterministic
+  HTML/Markdown/plain text and unencrypted digital PDFs; reject unusable PDFs without OCR.
+- Migrate every default LLM route to MiMo Pro with MiniMax M3 as the sole fallback while
+  retaining legacy aliases only for persisted-artifact compatibility.
+- Use conservative frozen price caps above observed July 22, 2026 provider prices, reconcile
+  provider-reported cost when present, and mark cap-calculated cost as estimated.
+- Read `OPENROUTER_API_KEY` only from an explicitly supplied process environment mapping.
+  Do not silently load `.env` or another credential source.
+- Keep the boundary smoke outside the product CLI and require every enable, approval,
+  call-count, token, cost, deadline, and dedicated-output gate. Credentials alone never run it.
+- Make no SQLite migration and do not connect the complete orchestration in MVP-2B.
+
 ## 2026-07-22 - Narrow Model-Facing Provenance Envelopes
 
 - Keep required release provenance in typed application-owned request/result envelopes

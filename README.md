@@ -6,11 +6,13 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The MVP is complete through Phase 10 and MVP-1. MVP-2A Architecture Gate is also complete. The repository includes strict Pydantic contracts, SQLite
+The MVP is complete through Phase 10, MVP-1, MVP-2A, and the offline-verified MVP-2B
+provider-boundary phase. The repository includes strict Pydantic contracts, SQLite
 audit persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, an offline fixture CLI and Streamlit UI, and a
-deterministic adversarial evaluation framework. MVP-2A selects the future live-provider stack, but
-the repository still does **not** include live search, scraping, or LLM vendor adapters.
+deterministic adversarial evaluation framework. MVP-2B adds production-intended Wigolo and
+OpenRouter adapters, but intentionally does not connect them to complete orchestration or add a
+live product command.
 
 ## How the system works
 
@@ -49,8 +51,9 @@ records are insert-only SQLite audit artifacts.
   approved factual statements or introduce unrestricted factual prose.
 - **Renderer and Validator** check exact statement text, Ledger and Reviewer IDs, stance,
   placement, entailment, section and template compatibility, and claim reuse before rendering.
-- **Search, Scraper, and LLM providers** are synchronous vendor-neutral Protocols. Tests inject fake
-  providers; the repository supplies no live adapter, SDK, HTTP client, or API-key integration.
+- **Search, Scraper, and LLM providers** are synchronous vendor-neutral Protocols. Normal tests use
+  injected offline transports. Concrete MVP-2B adapters support loopback Wigolo `0.2.1`, bounded
+  acquisition/normalization, narrow digital PDFs, and strict-schema OpenRouter calls.
 
 See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLANS.md` plus
 `.agent/plans/` for phase history and boundaries.
@@ -69,11 +72,10 @@ Provider orchestration records deterministic operation and attempt IDs, model al
 versions and hashes, timing, failures, escalation reasons, and optional token/cost usage. Each model
 alias may be attempted twice by default. Objective transient, timeout, malformed/schema,
 exact-quote, interrupted, or deterministic-validation failures can retry or advance through the
-configured fallback route; semantic disagreement alone cannot switch models. The current code still
-uses the earlier MiMo/DeepSeek alias defaults. MVP-2A approves a future replacement route for every
-role: OpenRouter `xiaomi/mimo-v2.5-pro` primary and `minimax/minimax-m3` as the only fallback. MVP-2B
-must migrate the aliases and tests; every fallback output will remain subject to the same snapshot,
-quotation, Reviewer, Ledger, and final validation gates.
+configured fallback route; semantic disagreement alone cannot switch models. Every default role now
+uses OpenRouter `xiaomi/mimo-v2.5-pro` primary and `minimax/minimax-m3` as the only fallback. Legacy
+aliases remain readable for persisted artifacts. Every fallback output remains subject to the same
+snapshot, quotation, Reviewer, Ledger, and final validation gates.
 
 Completed-stage checkpoints and typed stage artifacts are persisted for restart-safe reuse.
 Cancellation is honored at stage boundaries. Model-call, per-side retrieval, and optional token or
@@ -108,7 +110,8 @@ STATUS.md / HANDOFF.md   Chronological implementation and verification records
 
 ## Installation
 
-Python 3.11 or newer is required. From the repository root, create a virtual environment with an
+Python 3.11 or newer is required. Live Wigolo use additionally requires Node.js and pinned
+`wigolo@0.2.1`, bound to loopback. From the repository root, create a virtual environment with an
 available Python 3.11+ executable, then install the declared runtime and development dependencies:
 
 ```bash
@@ -130,15 +133,18 @@ on `PATH`, so the commands below include that step.
 No environment variable or API key is required for the fixture pipeline, Streamlit frontend,
 offline tests, or normal Phase 10 evaluation.
 
-`.env.example` documents one optional test gate:
+`.env.example` documents the optional legacy test gate and blank MVP-2B smoke gates. Provider
+configuration reads the process environment only and does not discover or load `.env` files.
 
 ```dotenv
 RUN_LLM_INTEGRATION_TESTS=
 ```
 
 Export `RUN_LLM_INTEGRATION_TESTS=1` only when intentionally enabling the optional Phase 8 gate.
-That test currently verifies explicit opt-in; it does not call a live provider. The repository does
-not define vendor API-key variables or load environment values from `.env` automatically.
+That test currently verifies explicit opt-in; it does not call a live provider. The separate
+`scripts/mvp2b_live_smoke.py` path requires an enable flag, the exact execution-time approval
+phrase, explicit one-call limits, token/cost caps, an absolute unused output path, and `--execute`.
+Credentials alone cannot enable it. Do not run it without explicit approval for that execution.
 
 ## Running the project
 

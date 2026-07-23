@@ -1,5 +1,66 @@
 # Handoff
 
+## 2026-07-22 - MVP-2B Production Provider Adapters and Boundary Proof
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-2B is complete offline. No live provider call was made.
+
+Implementation handoff:
+
+- `providers/wigolo.py` is the thread-safe discovery-only Search adapter. It verifies loopback
+  Wigolo identity/version, sends the fixed five-result/no-fetch request, preserves provider/rank /
+  telemetry metadata, removes duplicate URLs after their first rank, and raises secret-safe typed
+  failures.
+- `providers/acquisition.py` independently preflights original/final/canonical URL and media type,
+  streams under approved caps, uses direct Wigolo extraction first, and permits one controlled
+  rendered retry only after an explicit challenge/JavaScript-required status.
+- `providers/normalization.py` owns `ra-normalization-v1` and `ra-digital-pdf-v1`; every quote
+  offset refers to its final normalized text. PDF support is digital embedded text only, without
+  OCR.
+- `providers/openrouter.py` performs exactly one physical call. It sends the exact requested
+  Pydantic JSON Schema in strict mode, rejects wrapper/fenced/malformed/truncated/refused output,
+  records exact model/upstream/usage/cost metadata, and exposes typed usage to existing callers.
+- `providers/config.py` contains strict deadlines, caps, loopback/HTTPS validation, full-run
+  ceilings, and live-smoke gates. OpenRouter secrets come only from an explicitly provided process
+  environment mapping and remain redacted.
+- `providers/pricing.py` uses a dated conservative upper cap of USD 5/M input and USD 20/M output
+  for both approved models. Provider-reported cost wins; otherwise the result is explicitly marked
+  estimated. Unknown models/prices fail before a call.
+- Default routing is now MiMo Pro then MiniMax M3 for every stage. Legacy enum aliases remain only
+  for persisted compatibility and frozen historical quality evaluation.
+- The standalone boundary smoke is `scripts/mvp2b_live_smoke.py`; it is not a product CLI command.
+  Do not execute it without separate explicit approval for that exact run.
+
+Verification:
+
+- Focused MVP-2B: 40 passed.
+- Full offline suite: 366 passed, 1 skipped.
+- Offline evaluation: all 38 cases passed; approved default-route agreement is 100%.
+- Live smoke: not run. Live observed calls, usage, and cost are therefore unavailable.
+
+Known incompatibilities and next-phase cautions:
+
+- Exact live Wigolo `0.2.1` payload compatibility remains to be proven by the approved smoke. The
+  adapter accepts documented `results`, engine telemetry, fetch `status`, and Markdown/content
+  fields and rejects malformed variants rather than guessing.
+- A managed Node/Wigolo child-process lifecycle is not wired. The adapter requires and verifies an
+  already running pinned loopback service; do not add lifecycle or product commands in MVP-3A
+  unless its phase explicitly authorizes them.
+- The new provenance is not persisted in SQLite because the user prohibited a migration. Keep it
+  in typed boundary artifacts until a separately approved exact migration exists.
+- The stack is suitable for MVP-3A mocked integration. It is not yet live-production proven.
+
+Do not start:
+
+- Do not run the live smoke, connect full orchestration, add a live CLI/UI, modify Streamlit, add a
+  migration/provider/browser path, or begin MVP-3A without explicit user direction.
+
 ## 2026-07-21 - MVP-2A Architecture Gate
 
 Current branch:
