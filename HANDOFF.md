@@ -1,5 +1,73 @@
 # Handoff
 
+## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-3A is complete offline. No live provider call was made.
+
+Implementation handoff:
+
+- `providers/factory.py` is the sole configured construction boundary. Its frozen strict
+  models validate Wigolo `0.2.1`, OpenRouter, all five MiMo Pro primary routes,
+  MiniMax M3 as the only fallback, explicit temperatures, strict structured output,
+  usage support, exact price-cap coverage, rank-five/keep-three acquisition, hard
+  ceilings, and a caller-supplied repository revision.
+- `run_mvp3a_pipeline()` constructs that bundle and delegates to
+  `run_provider_pipeline()` with strict reservation and fingerprint enforcement. The
+  existing direct injection surface remains available for older offline Phase 9 tests.
+- Immutable configuration and thread-safe HTTP clients are shared. Wigolo Search locks
+  health verification, OpenRouter uses thread-local call metadata, acquisition has no
+  mutable per-request state, and each worker opens only short-lived SQLite connections.
+- `ProviderRunContract` and SQLite migration 3 persist exact provider/adapter/model/
+  prompt/schema/normalization/PDF/acquisition/retry/budget/pricing/repository/policy
+  identity. A changed claim or incompatible fingerprint is rejected.
+- `ModelRouteAttempt` now persists conservative token/cost reservation as well as exact
+  usage. Reservations are atomic; completed exact usage replaces the active reservation
+  in subsequent budget calculations. Failed, malformed, and locally rejected responses
+  retain reported usage.
+- The approved route is exactly primary, primary retry, fallback, fallback retry for
+  objective failures. Semantic Reviewer disagreement still performs the one allowed
+  revision and does not route.
+- Cancellation is checked before/after Search, acquisition, and LLM calls and at stage
+  boundaries. An in-flight synchronous request may finish; no immediate-interruption
+  claim is made.
+- Released and blocked terminal reinvocations return reconstructed persistence without
+  new calls. Failed runs may resume only with the same claim/fingerprint. Cancelled runs
+  remain terminal. Valid checkpoints, attempts, budgets, snapshots, Ledger records, and
+  released output are not duplicated.
+
+Verification:
+
+- MVP-2B prerequisite: 40 passed.
+- Focused MVP-3A: 16 passed.
+- Full suite: 382 passed, 1 skipped.
+- The remaining skip is explicitly opt-in; no live gate was enabled.
+- Offline evaluation: all 38 cases passed; optional live comparison was skipped.
+- Fixture CLI smokes: valid released with hash
+  `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`;
+  invalid blocked with no hash.
+- Mocked full-pipeline smoke: passed.
+- Ruff lint/format and `git diff --check`: passed. Final Git status showed only the
+  intended uncommitted MVP-3A files.
+
+Remaining risks:
+
+- Exact live response compatibility, upstream identity, current price/cost reporting,
+  and real deadline behavior remain MVP-3B work.
+- The caller must provide an exact trustworthy repository revision for a live run.
+- Cancellation remains cooperative around blocking synchronous HTTP deadlines.
+
+Do not start:
+
+- Do not run a live canary, add a live CLI, modify Streamlit, add another provider or
+  browser path, or begin MVP-3B without explicit user direction.
+
 ## 2026-07-22 - MVP-2B Production Provider Adapters and Boundary Proof
 
 Current branch:

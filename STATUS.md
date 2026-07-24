@@ -1,5 +1,73 @@
 # Status
 
+## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
+
+Status: Complete offline; no live canary or product-surface work occurred.
+
+Completed:
+
+- Added a strict immutable provider factory/configuration boundary that constructs only
+  Wigolo `0.2.1` Search/acquisition and OpenRouter adapters, validates the approved
+  MiMo Pro/MiniMax M3 routes, explicit temperatures, strict structured output, usage,
+  and exact pricing coverage, and keeps `OPENROUTER_API_KEY` redacted.
+- Added `run_mvp3a_pipeline()` as the narrow configured entry into the existing
+  `run_provider_pipeline()`; no live CLI command was added.
+- Added the approved rank-five/keep-three policy without removing the legacy
+  fake-provider default. Mocked full runs execute six five-result discoveries and keep
+  three usable snapshots per query, producing at most 18 snapshots from at most 30
+  acquisitions.
+- Preserved the production normalizer's exact text/hash/word count as the immutable
+  snapshot quote surface and continued deterministic exact-offset filtering.
+- Added SQLite migration 3 for immutable provider run contracts plus pre-call token/cost
+  reservation columns on normalized model route attempts.
+- Persisted provider, adapter, model, prompt, schema, normalization/PDF/acquisition,
+  retry, budget, pricing, repository revision, and policy identities in one exact run
+  fingerprint. Same run ID/claim/fingerprint resumes; changed claim or fingerprint is
+  rejected before resumption.
+- Added atomic call/token/cost reservation before strict physical calls, exact usage
+  reconciliation, usage retention on malformed and deterministic failures, shared
+  persisted totals for retries/fallback, and fail-closed unknown route/pricing behavior.
+- Normalized objective routing so authentication, permanent failure, refusal,
+  returned-model mismatch, unknown pricing, malformed usage, and budget failure do not
+  trigger fallback. Only approved objective failures permit primary, primary retry,
+  fallback, and fallback retry.
+- Added provider-boundary cancellation checks. Requests are persisted, no new call
+  starts after observation, and an active synchronous request is allowed to finish and
+  be recorded before cancellation completes.
+- Added realistic mocked HTTP tests covering full release, deterministic block,
+  authentication/provider failure, malformed discovery, inaccessible and unsupported
+  sources, fallback, fallback exhaustion, token/cost exhaustion, restart, fingerprint
+  and claim incompatibility, terminal reinvocation, and cancellation after active LLM
+  and Search boundaries.
+- Added no live canary, live product CLI, Streamlit/frontend change, provider, browser
+  automation, FastAPI, hosting, Docker, accounts, or MVP-3B work.
+
+Verification:
+
+- MVP-2B prerequisite boundary suite: 40 passed before implementation.
+- Focused MVP-3A suite: 16 passed.
+- Complete offline suite: 382 passed, 1 skipped; the skip is the existing explicitly
+  opt-in live integration test.
+- Offline evaluation: all 38 cases passed; optional live comparison skipped.
+- Fixture CLI smokes: valid released with the expected stable hash; invalid blocked with
+  no hash.
+- Mocked full-provider smoke: passed.
+- Ruff lint and format checks passed.
+- `git diff --check` passed; final Git status is recorded in `HANDOFF.md`.
+
+Remaining:
+
+- Live Wigolo/OpenRouter payload, upstream identity, current pricing, deadlines, and cost
+  reporting remain unproven until the separately authorized MVP-3B canary.
+- Cancellation is cooperative and cannot interrupt an already-blocking synchronous HTTP
+  request before it returns or reaches its deadline.
+- The immutable fingerprint uses the caller-supplied repository revision; a future live
+  command must supply a trustworthy exact revision/dirty-state identity.
+
+Next exact task:
+
+- MVP-3B live-canary stabilization only after explicit user direction.
+
 ## 2026-07-22 - MVP-2B Production Provider Adapters and Boundary Proof
 
 Status: Complete offline; live boundary smoke not executed.

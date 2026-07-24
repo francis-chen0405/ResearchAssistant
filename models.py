@@ -268,7 +268,7 @@ class RetrievalRecord(StrictModel):
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
     query_text: NonEmptyStr
-    search_rank: Annotated[int, Field(ge=1, le=3)]
+    search_rank: Annotated[int, Field(ge=1, le=5)]
     source_url: NonEmptyStr
     resolved_url: NonEmptyStr
     status: RetrievalStatus
@@ -302,7 +302,7 @@ class ProvisionalCandidate(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
-    search_rank: Annotated[int, Field(ge=1, le=3)]
+    search_rank: Annotated[int, Field(ge=1, le=5)]
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     extracted_quote_block: NonEmptyStr
@@ -321,7 +321,7 @@ class CandidateQuoteBlock(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
-    search_rank: Annotated[int, Field(ge=1, le=3)]
+    search_rank: Annotated[int, Field(ge=1, le=5)]
     retrieved_at: datetime
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -621,6 +621,25 @@ class PersistedStageArtifact(StrictModel):
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
 
 
+class ProviderRunContract(StrictModel):
+    """Immutable compatibility identity required to create or resume a provider run."""
+
+    run_id: UUID
+    fingerprint_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    provider_identity: NonEmptyStr
+    adapter_identity: NonEmptyStr
+    model_identity: NonEmptyStr
+    prompt_identity: NonEmptyStr
+    schema_identity: NonEmptyStr
+    normalization_identity: NonEmptyStr
+    policy_identity: NonEmptyStr
+    repository_revision: NonEmptyStr
+    payload_json: NonEmptyStr
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
 class ModelUsageMetadata(StrictModel):
     input_tokens: NonNegativeInt | None = None
     output_tokens: NonNegativeInt | None = None
@@ -658,6 +677,8 @@ class ModelRouteAttempt(StrictModel):
     started_at: datetime
     ended_at: datetime | None = None
     latency_ms: Annotated[float, Field(ge=0.0)] | None = None
+    reserved_tokens: NonNegativeInt | None = None
+    reserved_cost_usd: Annotated[float, Field(ge=0.0)] | None = None
     usage: ModelUsageMetadata | None = None
     output_json: str | None = None
 

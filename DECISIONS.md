@@ -1,5 +1,32 @@
 # Decisions
 
+## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
+
+- Construct the approved stack only through an immutable strict `ProviderFactoryConfig`.
+  The factory creates Wigolo Search/acquisition and OpenRouter adapters and rejects any
+  role mapping other than MiMo Pro primary with MiniMax M3 as the sole fallback.
+- Share immutable configuration and thread-safe `httpx.Client` instances. Wigolo Search
+  protects health state with a lock, OpenRouter keeps call metadata in thread-local
+  storage, acquisition keeps no mutable request state, and SQLite connections remain
+  short-lived and worker-local.
+- Add a typed rank-five/keep-three acquisition policy. Existing Phase 7/9 fake-provider
+  defaults remain readable, while `run_mvp3a_pipeline()` always uses the approved
+  five-candidate/three-snapshot policy.
+- Persist one immutable provider run contract containing exact provider, adapter, model,
+  prompt, schema, normalization/PDF/acquisition, retry, budget, pricing, repository, and
+  policy identities. Resume requires the same run ID, claim, and fingerprint.
+- Reserve calls, conservative tokens, and capped cost atomically before each physical
+  call in strict MVP-3A runs; reconcile with exact reported usage afterward. A retry or
+  fallback uses the same persisted totals and cannot start if its reservation does not
+  fit.
+- Preserve provider-reported usage for malformed, schema-invalid, model-mismatched,
+  refused, and deterministically rejected responses when OpenRouter reports it.
+- Observe cooperative cancellation before and after provider calls and at orchestration
+  boundaries. An already-active synchronous request may finish; its attempt is persisted
+  before cancellation terminates the run.
+- Add SQLite migration 3 only for immutable provider-run contracts and route-attempt
+  reservation columns. Do not change snapshot/Ledger insert-only behavior.
+
 ## 2026-07-22 - MVP-2B Production Provider Boundaries
 
 - Implement only pinned loopback Wigolo `0.2.1` and direct OpenRouter HTTP adapters; add

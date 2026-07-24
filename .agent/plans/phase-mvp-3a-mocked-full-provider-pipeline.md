@@ -1,5 +1,16 @@
 # Phase MVP-3A - Mocked Full-Provider Pipeline Integration
 
+## Completion Record - 2026-07-24
+
+Status: Complete offline.
+
+The approved Wigolo/OpenRouter adapters are connected through a strict immutable factory
+to `run_provider_pipeline()`. Mocked HTTP proves released, blocked, failed, cancelled,
+fallback, fallback-exhausted, budget-exhausted, restart, and terminal reinvocation
+behavior. SQLite migration 3 persists the exact provider-run fingerprint and conservative
+pre-call token/cost reservations. Full verification is recorded in `STATUS.md` and
+`HANDOFF.md`. No live canary, live CLI, Streamlit/frontend change, or MVP-3B work occurred.
+
 ## Prerequisite and Purpose
 
 Begin only after the production-intended MVP-2B adapters and boundary tests pass.
@@ -85,4 +96,3 @@ Report exact files, factory design, aliases, thread strategy, pipeline states, r
 fallback behavior, budget accounting, restart/cancellation guarantees, remaining risks,
 and confirmation that no live canary/CLI/frontend work occurred. Leave changes
 uncommitted.
-

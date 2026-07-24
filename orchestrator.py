@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
@@ -36,6 +36,8 @@ from agents.reviewer import (
 )
 from agents.supportingresearcher import (
     ATTEMPTS_PER_STANCE,
+    AcquisitionPolicy,
+    CooperativeCancellation,
     ResearcherRetrievalBatch,
     build_extraction_llm_input,
     retrieve_supporting,
@@ -53,6 +55,7 @@ from models import (
     OrchestrationCheckpoint,
     PersistedStageArtifact,
     PlannerOutput,
+    ProviderRunContract,
     ProvisionalCandidate,
     RetrievalRecord,
     RunCancellationRequest,
@@ -74,6 +77,7 @@ from providers.llm import (
     InvocationFailureCode,
     LLMInvocationError,
     LLMProvider,
+    LLMRequest,
     LLMRoutingConfig,
     LLMStage,
     ModelAlias,
@@ -82,6 +86,7 @@ from providers.llm import (
     invoke_llm,
     load_prompt,
 )
+from providers.pricing import DEFAULT_PRICE_CAPS, conservative_token_estimate
 from providers.scraper import RetryPolicy, ScraperProvider
 from providers.search import SearchProvider
 from store import (
@@ -93,6 +98,7 @@ from store import (
     insert_candidate,
     insert_ledger_record,
     insert_planner_output,
+    insert_provider_run_contract,
     insert_provisional_extraction,
     insert_retrieval_attempt,
     insert_run,
@@ -110,6 +116,7 @@ from store import (
     read_orchestration_checkpoint,
     read_orchestration_checkpoints,
     read_planner_output,
+    read_provider_run_contract,
     read_provisional_extractions,
     read_retrieval_attempt,
     read_run,
@@ -124,6 +131,9 @@ from store import (
     upsert_orchestration_checkpoint,
 )
 from utils import URL_NAMESPACE, compute_sha256
+
+if TYPE_CHECKING:
+    from providers.factory import ProviderFactoryClients, ProviderFactoryConfig
 
 DEFAULT_OUTPUT_DIR_NAME = ".phase6_output"
 FIXTURE_DB_NAME = "fixture_pipeline.sqlite3"
@@ -1049,7 +1059,7 @@ class Phase9OrchestrationError(RuntimeError):
         self.stage = stage
 
 
-class Phase9Cancellation(RuntimeError):
+class Phase9Cancellation(CooperativeCancellation):
     """Internal signal used only at synchronous stage boundaries."""
 
 
@@ -1085,7 +1095,10 @@ class ProviderOrchestrationConfig(StrictModel):
     routing: LLMRoutingConfig = DEFAULT_LLM_ROUTING
     retries: OrchestrationRetryPolicy = OrchestrationRetryPolicy()
     retrieval_retry: RetryPolicy = RetryPolicy()
+    acquisition_policy: AcquisitionPolicy = AcquisitionPolicy()
     budget: OrchestrationBudget = OrchestrationBudget()
+    require_budget_reservations: bool = False
+    reserved_output_tokens_per_call: int = Field(default=4096, ge=1, le=32768)
     pinned_model_snapshots: tuple[PinnedModelSnapshot, ...] = ()
 
     @model_validator(mode="after")
@@ -1241,6 +1254,7 @@ def run_provider_pipeline(
     llm_provider: LLMProvider,
     run_id: UUID | None = None,
     config: ProviderOrchestrationConfig | None = None,
+    provider_contract: ProviderRunContract | None = None,
     clock: Callable[[], datetime] | None = None,
     stage_hook: _StageHook | None = None,
 ) -> ProviderPipelineResult:
@@ -1255,12 +1269,30 @@ def run_provider_pipeline(
     now = clock or _phase9_utc_now
     resolved_run_id = run_id or uuid4()
     init_db(path)
+    if provider_contract is not None:
+        if provider_contract.run_id != resolved_run_id:
+            raise ValueError("provider contract run_id must match the requested run")
+        try:
+            existing_contract = read_provider_run_contract(path, resolved_run_id)
+        except KeyError:
+            existing_contract = None
+        else:
+            if (
+                existing_contract.fingerprint_sha256 != provider_contract.fingerprint_sha256
+                or existing_contract.payload_json != provider_contract.payload_json
+            ):
+                raise ValueError(
+                    "existing run fingerprint is incompatible with the requested restart"
+                )
     manifest = _create_or_resume_provider_run(path, resolved_run_id, claim, now)
+    if provider_contract is not None and existing_contract is None:
+        insert_provider_run_contract(path, provider_contract)
     if manifest.status in {RunStatus.COMPLETED, RunStatus.BLOCKED, RunStatus.CANCELLED}:
         return inspect_provider_run(path, resolved_run_id)
 
     active_stage = manifest.current_stage
     try:
+        _raise_if_cancelled(path, resolved_run_id)
         planner = _run_planner_stage(
             path,
             manifest,
@@ -1364,6 +1396,48 @@ def run_provider_pipeline(
         return inspect_provider_run(path, resolved_run_id, failure_reason=reason)
 
     return inspect_provider_run(path, resolved_run_id)
+
+
+def run_mvp3a_pipeline(
+    raw_claim: str,
+    *,
+    db_path: str | Path,
+    factory_config: ProviderFactoryConfig,
+    clients: ProviderFactoryClients | None = None,
+    run_id: UUID | None = None,
+    clock: Callable[[], datetime] | None = None,
+    stage_hook: _StageHook | None = None,
+) -> ProviderPipelineResult:
+    """Construct the approved adapters, fingerprint them, and run MVP-3A offline/live-neutral."""
+    from providers.factory import build_provider_bundle
+
+    now = clock or _phase9_utc_now
+    resolved_run_id = run_id or uuid4()
+    bundle = build_provider_bundle(factory_config, clients=clients)
+    settings = ProviderOrchestrationConfig(
+        acquisition_policy=bundle.config.acquisition,
+        budget=OrchestrationBudget(
+            max_model_calls=bundle.config.ceilings.max_llm_calls,
+            retrieval_attempts_per_side=(bundle.config.acquisition.maximum_attempts_per_stance),
+            max_total_tokens=bundle.config.ceilings.max_tokens,
+            max_total_cost_usd=float(bundle.config.ceilings.max_cost_usd),
+        ),
+        require_budget_reservations=True,
+        reserved_output_tokens_per_call=bundle.config.openrouter.max_output_tokens,
+    )
+    contract = bundle.contract(resolved_run_id, _aware_phase9_time(now(), "contract created_at"))
+    return run_provider_pipeline(
+        raw_claim,
+        db_path=db_path,
+        search_provider=bundle.search,
+        scraper_provider=bundle.acquisition,
+        llm_provider=bundle.llm,
+        run_id=resolved_run_id,
+        config=settings,
+        provider_contract=contract,
+        clock=now,
+        stage_hook=stage_hook,
+    )
 
 
 def inspect_provider_run(
@@ -1508,6 +1582,7 @@ def _begin_stage(
     stage_key: str,
     clock: Callable[[], datetime],
 ) -> None:
+    _raise_if_cancelled(db_path, run_id)
     manifest = read_run(db_path, run_id)
     updated_at = _aware_phase9_time(clock(), "updated_at")
     update_run(
@@ -1591,6 +1666,11 @@ def _after_stage(
 ) -> None:
     if stage_hook is not None:
         stage_hook(run_id, stage_key)
+    _raise_if_cancelled(db_path, run_id)
+
+
+def _raise_if_cancelled(db_path: str, run_id: UUID) -> None:
+    """Observe cooperative cancellation at a provider or orchestration boundary."""
     try:
         cancellation = read_cancellation_request(db_path, run_id)
     except KeyError:
@@ -1794,12 +1874,13 @@ def _run_researcher_stage(
                 "completed Researcher checkpoint has no typed stage artifact",
             )
         return stored
-    if config.budget.retrieval_attempts_per_side < ATTEMPTS_PER_STANCE:
+    required_attempts = config.acquisition_policy.maximum_attempts_per_stance
+    if config.budget.retrieval_attempts_per_side < required_attempts:
         raise Phase9OrchestrationError(
             Stage.SUPPORTING_RESEARCHER,
             (
                 "retrieval budget exceeded: each side requires "
-                f"{ATTEMPTS_PER_STANCE} attempts but budget allows "
+                f"{required_attempts} attempts but budget allows "
                 f"{config.budget.retrieval_attempts_per_side}"
             ),
         )
@@ -1853,7 +1934,10 @@ def _run_researcher_stage(
         supporting.status is ResearcherSideStatus.FAILED
         and opposing.status is ResearcherSideStatus.FAILED
     ):
-        messages = [failure.message for failure in (*supporting.failures, *opposing.failures)]
+        messages = [
+            f"{failure.code}: {failure.message}"
+            for failure in (*supporting.failures, *opposing.failures)
+        ]
         raise Phase9OrchestrationError(
             Stage.OPPOSING_RESEARCHER,
             f"both Researcher sides failed: {'; '.join(messages)}",
@@ -1886,7 +1970,9 @@ def _run_researcher_side(
                 search_provider,
                 scraper_provider,
                 retry_policy=config.retrieval_retry,
+                acquisition_policy=config.acquisition_policy,
                 clock=clock,
+                boundary_check=lambda: _raise_if_cancelled(db_path, planner.run_id),
             )
         else:
             batch = retrieve_opposing(
@@ -1894,9 +1980,15 @@ def _run_researcher_side(
                 search_provider,
                 scraper_provider,
                 retry_policy=config.retrieval_retry,
+                acquisition_policy=config.acquisition_policy,
                 clock=clock,
+                boundary_check=lambda: _raise_if_cancelled(db_path, planner.run_id),
             )
+    except Phase9Cancellation:
+        raise
     except Exception as exc:
+        raw_failure_code = getattr(exc, "code", None)
+        failure_code = getattr(raw_failure_code, "value", raw_failure_code)
         return ResearcherStageResult(
             run_id=planner.run_id,
             stance=stance,
@@ -1904,7 +1996,7 @@ def _run_researcher_side(
             failures=(
                 ResearcherFailure(
                     stage=f"{stance}_retrieval",
-                    code="retrieval_failure",
+                    code=failure_code or "retrieval_failure",
                     message=str(exc) or type(exc).__name__,
                 ),
             ),
@@ -1917,6 +2009,15 @@ def _run_researcher_side(
     retrievals_by_id = {
         outcome.retrieval.retrieval_attempt_id: outcome.retrieval for outcome in batch.outcomes
     }
+    failures.extend(
+        ResearcherFailure(
+            stage=f"{stance}_retrieval",
+            code=outcome.failure_code,
+            message=outcome.failure_message or outcome.failure_code,
+        )
+        for outcome in batch.outcomes
+        if outcome.failure_code is not None
+    )
     for snapshot in batch.snapshots:
         retrieval = retrievals_by_id[snapshot.retrieval_attempt_id]
         extraction_input = build_extraction_llm_input(
@@ -2683,6 +2784,7 @@ def _invoke_routed(
     previous_failure: ModelRouteAttempt | None = None
 
     while route_index < len(aliases):
+        _raise_if_cancelled(db_path, resolved_run_id)
         alias = aliases[route_index]
         attempts = read_model_route_attempts(db_path, resolved_run_id, operation_id)
         existing = next(
@@ -2743,6 +2845,17 @@ def _invoke_routed(
             route_index,
             attempt_number,
         )
+        request = build_stage_request(
+            stage=stage,
+            input_artifact=input_artifact,
+            requested_output_type=requested_output_type,
+            input_artifact_ids=input_artifact_ids,
+            routing=config.routing,
+            pinned_model_snapshot=config.pinned_snapshot_for(alias),
+            model_alias=alias,
+            run_id=resolved_run_id,
+        )
+        reserved_tokens, reserved_cost = _conservative_reservation(request, alias, config)
         started_at = _aware_phase9_time(clock(), "attempt started_at")
         reservation = ModelRouteAttempt(
             run_id=resolved_run_id,
@@ -2759,28 +2872,26 @@ def _invoke_routed(
             retry_reason=retry_reason,
             escalation_reason=escalation_reason,
             started_at=started_at,
+            reserved_tokens=reserved_tokens,
+            reserved_cost_usd=reserved_cost,
         )
         try:
             reserved = reserve_model_route_attempt(
                 db_path,
                 reservation,
                 max_model_calls=config.budget.max_model_calls,
+                max_total_tokens=(
+                    config.budget.max_total_tokens if config.require_budget_reservations else None
+                ),
+                max_total_cost_usd=(
+                    config.budget.max_total_cost_usd if config.require_budget_reservations else None
+                ),
             )
         except ModelAttemptBudgetError as exc:
             raise Phase9OrchestrationError(_agent_stage(stage), str(exc)) from exc
         if reserved.status is not ModelAttemptStatus.RUNNING:
             previous_failure = reserved
             continue
-        request = build_stage_request(
-            stage=stage,
-            input_artifact=input_artifact,
-            requested_output_type=requested_output_type,
-            input_artifact_ids=input_artifact_ids,
-            routing=config.routing,
-            pinned_model_snapshot=config.pinned_snapshot_for(alias),
-            model_alias=alias,
-            run_id=resolved_run_id,
-        )
         output: _ModelT | None = None
         usage: ModelUsageMetadata | None = None
         try:
@@ -2810,10 +2921,12 @@ def _invoke_routed(
             )
         except LLMInvocationError as exc:
             code = _invocation_failure_code(exc)
+            usage = _failure_usage(provider, exc)
             finished = _finished_attempt(
                 reservation,
                 status=ModelAttemptStatus.FAILED,
                 ended_at=exc.record.ended_at,
+                usage=usage,
                 failure_code=code,
                 failure_reason=exc.record.failure.message if exc.record.failure else str(exc),
             )
@@ -2838,6 +2951,7 @@ def _invoke_routed(
                 output_json=output.model_dump_json() if output is not None else None,
             )
         finish_model_route_attempt(db_path, finished)
+        _raise_if_cancelled(db_path, resolved_run_id)
         if finished.status is ModelAttemptStatus.COMPLETED:
             _enforce_usage_budget(db_path, resolved_run_id, config, stage)
             return requested_output_type.model_validate_json(finished.output_json)
@@ -2917,6 +3031,8 @@ def _finished_attempt(
         started_at=reservation.started_at,
         ended_at=ended_at,
         latency_ms=latency_ms,
+        reserved_tokens=reservation.reserved_tokens,
+        reserved_cost_usd=reservation.reserved_cost_usd,
         usage=usage,
         output_json=output_json,
     )
@@ -2955,6 +3071,52 @@ def _read_provider_usage(
     if not isinstance(usage, ModelUsageMetadata):
         raise ValueError("provider usage metadata must be a ModelUsageMetadata artifact")
     return usage
+
+
+def _conservative_reservation(
+    request: LLMRequest,
+    alias: ModelAlias,
+    config: ProviderOrchestrationConfig,
+) -> tuple[int | None, float | None]:
+    if not config.require_budget_reservations:
+        return None, None
+    if config.budget.max_total_tokens is None or config.budget.max_total_cost_usd is None:
+        raise Phase9OrchestrationError(
+            _agent_stage(request.stage),
+            "strict provider runs require token and cost ceilings before every call",
+        )
+    model = {
+        ModelAlias.MIMO_V25_PRO: "xiaomi/mimo-v2.5-pro",
+        ModelAlias.MINIMAX_M3: "minimax/minimax-m3",
+    }.get(alias)
+    if model is None or model not in DEFAULT_PRICE_CAPS:
+        raise Phase9OrchestrationError(
+            _agent_stage(request.stage),
+            "route identity or pricing is unknown; reservation failed closed",
+        )
+    input_tokens = conservative_token_estimate(request.rendered_prompt)
+    output_tokens = config.reserved_output_tokens_per_call
+    return (
+        input_tokens + output_tokens,
+        float(DEFAULT_PRICE_CAPS[model].upper_bound(input_tokens, output_tokens)),
+    )
+
+
+def _failure_usage(
+    provider: LLMProvider,
+    exc: LLMInvocationError,
+) -> ModelUsageMetadata | None:
+    cause = exc.__cause__
+    usage = getattr(cause, "usage", None)
+    if isinstance(usage, ModelUsageMetadata):
+        return usage
+    reader = getattr(provider, "failure_usage_for", None)
+    if callable(reader):
+        usage = reader()
+        if usage is not None and not isinstance(usage, ModelUsageMetadata):
+            raise ValueError("provider failure usage must be ModelUsageMetadata")
+        return usage
+    return None
 
 
 def _enforce_usage_budget(
@@ -3023,6 +3185,26 @@ def _invocation_failure_code(exc: LLMInvocationError) -> str:
     if failure.code is InvocationFailureCode.SCHEMA_VALIDATION_FAILED:
         return "schema_validation_failure"
     cause = exc.__cause__
+    provider_code = getattr(cause, "code", None)
+    code_value = getattr(provider_code, "value", provider_code)
+    if code_value in {"timeout", "rate_limit", "transient_outage"}:
+        return "timeout" if code_value == "timeout" else "transient_failure"
+    if code_value in {"malformed_json", "malformed_success_response", "truncated_output"}:
+        return "malformed_output"
+    if code_value == "schema_validation_failure":
+        return "schema_validation_failure"
+    if code_value in {
+        "authentication_failure",
+        "permanent_request_failure",
+        "provider_refusal",
+        "returned_model_mismatch",
+        "unknown_pricing",
+        "cost_ceiling_exceeded",
+        "malformed_usage_metadata",
+        "capability_mismatch",
+        "missing_configuration",
+    }:
+        return str(code_value)
     if isinstance(cause, TimeoutError):
         return "timeout"
     return "transient_failure"

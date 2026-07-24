@@ -84,6 +84,9 @@ those dependencies. MVP-2B must obtain explicit approval before changing depende
 runtime declarations. Do not add a second general provider framework: implement the
 existing Protocols for the approved concrete stack when that phase is authorized.
 
+MVP-2B obtained that approval and added `httpx`, `markdown-it-py`, and `pypdf`. MVP-3A
+adds no dependency and constructs only those approved Wigolo/OpenRouter boundaries.
+
 ## 4. Coding Style
 
   - Type hints on every function signature, no exceptions
@@ -126,6 +129,9 @@ MVP-2A is a documentation-only Architecture Gate. Completion approves the docume
 design, not provider implementation. MVP-2B remains a distinct phase and must reconcile
 the current top-three/PDF-unsupported/legacy-model test contracts with the approved
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
+
+MVP-2B and MVP-3A are now complete offline. MVP-3B live-canary stabilization is the next
+phase boundary and requires separate explicit direction.
 
 ## 8. Done Criteria Per Phase
 

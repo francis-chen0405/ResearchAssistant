@@ -28,6 +28,7 @@ from models import (
     OrchestrationCheckpoint,
     PersistedStageArtifact,
     PlannerOutput,
+    ProviderRunContract,
     ProvisionalCandidate,
     RetrievalRecord,
     RunCancellationRequest,
@@ -90,6 +91,14 @@ def init_db(db_path: str) -> None:
                     2,
                     'phase-9 orchestration audit and checkpoint schema',
                     '2026-07-17T00:00:00+00:00'
+                );
+
+            INSERT OR IGNORE INTO schema_migrations
+                (version, description, applied_at)
+                VALUES (
+                    3,
+                    'mvp-3a provider fingerprints and budget reservations',
+                    '2026-07-24T00:00:00+00:00'
                 );
 
             -- runs --------------------------------------------------------
@@ -381,6 +390,21 @@ def init_db(db_path: str) -> None:
                 PRIMARY KEY (run_id, artifact_key)
             );
 
+            CREATE TABLE IF NOT EXISTS provider_run_contracts (
+                run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
+                fingerprint_sha256      TEXT NOT NULL,
+                provider_identity       TEXT NOT NULL,
+                adapter_identity        TEXT NOT NULL,
+                model_identity          TEXT NOT NULL,
+                prompt_identity         TEXT NOT NULL,
+                schema_identity         TEXT NOT NULL,
+                normalization_identity  TEXT NOT NULL,
+                policy_identity         TEXT NOT NULL,
+                repository_revision     TEXT NOT NULL,
+                payload_json            TEXT NOT NULL,
+                created_at              TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS model_route_attempts (
                 attempt_id              TEXT PRIMARY KEY,
                 run_id                  TEXT NOT NULL REFERENCES runs(run_id),
@@ -400,6 +424,8 @@ def init_db(db_path: str) -> None:
                 started_at              TEXT NOT NULL,
                 ended_at                TEXT,
                 latency_ms              REAL,
+                reserved_tokens         INTEGER,
+                reserved_cost_usd       REAL,
                 input_tokens            INTEGER,
                 output_tokens           INTEGER,
                 total_tokens            INTEGER,
@@ -423,6 +449,14 @@ def init_db(db_path: str) -> None:
             );
             """
         )
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+        }
+        if "reserved_tokens" not in columns:
+            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_tokens INTEGER")
+        if "reserved_cost_usd" not in columns:
+            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd REAL")
         conn.commit()
     finally:
         conn.close()
@@ -1452,6 +1486,79 @@ class ModelAttemptBudgetError(RuntimeError):
     """Raised before a provider call when its persisted run budget is exhausted."""
 
 
+def insert_provider_run_contract(db_path: str, contract: ProviderRunContract) -> None:
+    """Insert one immutable provider compatibility contract or verify exact identity."""
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM provider_run_contracts WHERE run_id = ?",
+            (str(contract.run_id),),
+        ).fetchone()
+        if row is not None:
+            existing = _row_to_provider_run_contract(row)
+            if existing != contract:
+                raise sqlite3.IntegrityError(
+                    f"provider run contract for {contract.run_id} is immutable"
+                )
+            return
+        conn.execute(
+            """INSERT INTO provider_run_contracts
+               (run_id, fingerprint_sha256, provider_identity, adapter_identity,
+                model_identity, prompt_identity, schema_identity,
+                normalization_identity, policy_identity, repository_revision,
+                payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(contract.run_id),
+                contract.fingerprint_sha256,
+                contract.provider_identity,
+                contract.adapter_identity,
+                contract.model_identity,
+                contract.prompt_identity,
+                contract.schema_identity,
+                contract.normalization_identity,
+                contract.policy_identity,
+                contract.repository_revision,
+                contract.payload_json,
+                _dt_to_iso(contract.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_provider_run_contract(db_path: str, run_id: UUID) -> ProviderRunContract:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM provider_run_contracts WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"provider run contract for {run_id} not found")
+        return _row_to_provider_run_contract(row)
+    finally:
+        conn.close()
+
+
+def _row_to_provider_run_contract(row: sqlite3.Row) -> ProviderRunContract:
+    return ProviderRunContract(
+        run_id=UUID(row["run_id"]),
+        fingerprint_sha256=row["fingerprint_sha256"],
+        provider_identity=row["provider_identity"],
+        adapter_identity=row["adapter_identity"],
+        model_identity=row["model_identity"],
+        prompt_identity=row["prompt_identity"],
+        schema_identity=row["schema_identity"],
+        normalization_identity=row["normalization_identity"],
+        policy_identity=row["policy_identity"],
+        repository_revision=row["repository_revision"],
+        payload_json=row["payload_json"],
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
 def upsert_orchestration_checkpoint(
     db_path: str,
     checkpoint: OrchestrationCheckpoint,
@@ -1598,6 +1705,8 @@ def reserve_model_route_attempt(
     attempt: ModelRouteAttempt,
     *,
     max_model_calls: int,
+    max_total_tokens: int | None = None,
+    max_total_cost_usd: float | None = None,
 ) -> ModelRouteAttempt:
     if attempt.status is not ModelAttemptStatus.RUNNING:
         raise ValueError("only running model attempts may be reserved")
@@ -1619,6 +1728,46 @@ def reserve_model_route_attempt(
             raise ModelAttemptBudgetError(
                 f"model call budget {max_model_calls} exhausted for run {attempt.run_id}"
             )
+        if max_total_tokens is not None:
+            reserved_tokens = attempt.reserved_tokens
+            if reserved_tokens is None:
+                raise ModelAttemptBudgetError(
+                    "token budget requires a conservative reservation before every call"
+                )
+            used_tokens = conn.execute(
+                """SELECT COALESCE(SUM(
+                       CASE WHEN status = 'running'
+                            THEN COALESCE(reserved_tokens, 0)
+                            ELSE COALESCE(total_tokens, reserved_tokens, 0)
+                       END
+                   ), 0)
+                   FROM model_route_attempts WHERE run_id = ?""",
+                (str(attempt.run_id),),
+            ).fetchone()[0]
+            if used_tokens + reserved_tokens > max_total_tokens:
+                raise ModelAttemptBudgetError(
+                    f"model token budget {max_total_tokens} cannot reserve the next call"
+                )
+        if max_total_cost_usd is not None:
+            reserved_cost = attempt.reserved_cost_usd
+            if reserved_cost is None:
+                raise ModelAttemptBudgetError(
+                    "cost budget requires a conservative reservation before every call"
+                )
+            used_cost = conn.execute(
+                """SELECT COALESCE(SUM(
+                       CASE WHEN status = 'running'
+                            THEN COALESCE(reserved_cost_usd, 0)
+                            ELSE COALESCE(cost_usd, reserved_cost_usd, 0)
+                       END
+                   ), 0.0)
+                   FROM model_route_attempts WHERE run_id = ?""",
+                (str(attempt.run_id),),
+            ).fetchone()[0]
+            if used_cost + reserved_cost > max_total_cost_usd:
+                raise ModelAttemptBudgetError(
+                    f"model cost budget {max_total_cost_usd} cannot reserve the next call"
+                )
         _insert_model_route_attempt_row(conn, attempt)
         conn.commit()
         return attempt
@@ -1708,9 +1857,9 @@ def _insert_model_route_attempt_row(
            (attempt_id, run_id, operation_id, stage, output_type, model_alias,
             pinned_model_snapshot, route_index, attempt_number, input_artifact_ids,
             status, retry_reason, escalation_reason, failure_code, failure_reason,
-            started_at, ended_at, latency_ms, input_tokens, output_tokens, total_tokens,
-            cost_usd, output_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            started_at, ended_at, latency_ms, reserved_tokens, reserved_cost_usd,
+            input_tokens, output_tokens, total_tokens, cost_usd, output_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             str(attempt.attempt_id),
             str(attempt.run_id),
@@ -1730,6 +1879,8 @@ def _insert_model_route_attempt_row(
             _dt_to_iso(attempt.started_at),
             _dt_to_iso(attempt.ended_at) if attempt.ended_at else None,
             attempt.latency_ms,
+            attempt.reserved_tokens,
+            attempt.reserved_cost_usd,
             usage.input_tokens if usage else None,
             usage.output_tokens if usage else None,
             usage.total_tokens if usage else None,
@@ -1773,6 +1924,8 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
         started_at=_iso_to_dt(row["started_at"]),
         ended_at=_iso_to_dt(row["ended_at"]) if row["ended_at"] else None,
         latency_ms=row["latency_ms"],
+        reserved_tokens=row["reserved_tokens"],
+        reserved_cost_usd=row["reserved_cost_usd"],
         usage=usage,
         output_json=row["output_json"],
     )

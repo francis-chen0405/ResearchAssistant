@@ -6,13 +6,13 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The MVP is complete through Phase 10, MVP-1, MVP-2A, and the offline-verified MVP-2B
-provider-boundary phase. The repository includes strict Pydantic contracts, SQLite
+The MVP is complete through Phase 10, MVP-1, MVP-2A, MVP-2B, and the offline-verified
+MVP-3A mocked full-provider integration phase. The repository includes strict Pydantic contracts, SQLite
 audit persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, an offline fixture CLI and Streamlit UI, and a
-deterministic adversarial evaluation framework. MVP-2B adds production-intended Wigolo and
-OpenRouter adapters, but intentionally does not connect them to complete orchestration or add a
-live product command.
+deterministic adversarial evaluation framework. MVP-3A connects the production-intended Wigolo
+and OpenRouter adapters to complete orchestration with mocked HTTP, exact run fingerprints, and
+strict budgets, but intentionally adds no live canary or live product command.
 
 ## How the system works
 

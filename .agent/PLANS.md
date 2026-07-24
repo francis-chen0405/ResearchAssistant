@@ -10,17 +10,18 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State After MVP-2B
+## Current Project State After MVP-3A
 
 Phases 0 through 10 and MVP-1 Release-Contract Correctness are complete. MVP-2A is the
 completed **Architecture Gate** for live provider work. Its canonical plan is
 `.agent/plans/phase-mvp-2a-architecture-gate.md`.
 
-MVP-2B Production Provider Adapters and Boundary Proof is complete with production-intended
-Wigolo/OpenRouter boundaries, deterministic HTML/PDF normalization, strict process-environment
-configuration, migrated default routing, and an explicitly gated smoke path. No live call was
-made. Full orchestration wiring, a live product command, process lifecycle integration,
-persistence migration, and MVP-3A remain unstarted.
+MVP-2B Production Provider Adapters and Boundary Proof and MVP-3A Mocked Full-Provider
+Pipeline Integration are complete offline. The strict factory now connects only the
+approved Wigolo/OpenRouter adapters to `run_provider_pipeline()`, with rank-five/
+keep-three acquisition, exact fingerprints, atomic budget reservations, restart-safe
+persistence, and cooperative cancellation proven through mocked HTTP. No live call was
+made. A live product command, process lifecycle integration, and MVP-3B remain unstarted.
 
 ## MVP-2A: Architecture Gate
 

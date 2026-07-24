@@ -94,6 +94,7 @@ class OpenRouterAdapter:
         self._thread_state = local()
 
     def generate(self, request: LLMRequest) -> BaseModel:
+        self._thread_state.last_failure_usage = None
         model = _model_for_alias(request.model_alias)
         cap = self._price_caps.get(model)
         if cap is None:
@@ -131,6 +132,7 @@ class OpenRouterAdapter:
                 retryable=True,
             ) from exc
         elapsed = time.monotonic() - started
+        self._record_failure_usage(response, cap)
         if response.status_code != 200:
             raise _http_error(response.status_code)
         body = _json_object(response)
@@ -216,6 +218,7 @@ class OpenRouterAdapter:
             cost_estimated=estimated,
         )
         self._thread_state.last_metadata = metadata
+        self._thread_state.last_failure_usage = None
         return output
 
     def usage_for(
@@ -240,6 +243,21 @@ class OpenRouterAdapter:
                 retryable=False,
             )
         return metadata
+
+    def failure_usage_for(self) -> ModelUsageMetadata | None:
+        """Return usage reported for the current thread's failed physical call."""
+        usage = getattr(self._thread_state, "last_failure_usage", None)
+        return usage if isinstance(usage, ModelUsageMetadata) else None
+
+    def _record_failure_usage(self, response: httpx.Response, cap: ModelPriceCap) -> None:
+        try:
+            body = response.json()
+            if not isinstance(body, dict) or body.get("usage") is None:
+                return
+            usage, _ = _usage(body["usage"], cap)
+        except Exception:
+            return
+        self._thread_state.last_failure_usage = usage
 
 
 def _request_payload(request: LLMRequest, model: str, max_tokens: int) -> dict[str, Any]:

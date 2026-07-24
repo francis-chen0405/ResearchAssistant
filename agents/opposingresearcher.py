@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from agents.supportingresearcher import (
+    AcquisitionPolicy,
     Clock,
     ResearcherRetrievalBatch,
     SnapshotConsumer,
@@ -20,8 +23,10 @@ def retrieve_opposing(
     scraper_provider: ScraperProvider,
     *,
     retry_policy: RetryPolicy | None = None,
+    acquisition_policy: AcquisitionPolicy | None = None,
     clock: Clock | None = None,
     snapshot_consumer: SnapshotConsumer | None = None,
+    boundary_check: Callable[[], None] | None = None,
 ) -> ResearcherRetrievalBatch:
     """Retrieve the three opposing rounds at a fixed depth of three."""
     from agents.supportingresearcher import _utc_now
@@ -32,7 +37,9 @@ def retrieve_opposing(
         search_provider,
         scraper_provider,
         retry_policy=retry_policy or RetryPolicy(),
+        acquisition_policy=acquisition_policy or AcquisitionPolicy(),
         clock=clock or _utc_now,
         deduplication=_DeduplicationState(),
         snapshot_consumer=snapshot_consumer,
+        boundary_check=boundary_check,
     )

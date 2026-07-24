@@ -64,6 +64,13 @@ MVP-2A approves the design below for a future MVP-2B implementation. It does not
 that the live adapters, process management, dependency changes, migrations, or live-run
 surface already exist.
 
+MVP-2B subsequently implemented the approved production-intended boundaries, and MVP-3A
+connected them to the existing provider pipeline through a strict immutable factory for
+mocked HTTP execution. MVP-3A persists an exact compatibility fingerprint and conservative
+pre-call reservations, uses rank-five/keep-three acquisition, and observes cooperative
+cancellation at provider/orchestration boundaries. It does not claim live-canary proof,
+managed Wigolo lifecycle, a live CLI, or MVP-3B completion.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: pinned local Wigolo `0.2.1` over loopback. Search is

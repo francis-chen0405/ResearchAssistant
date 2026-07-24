@@ -60,6 +60,33 @@ class UntrustedSourceText(StrictModel):
     text: str = Field(min_length=1)
 
 
+class AcquisitionPolicy(StrictModel):
+    """Bounded rank/keep policy for one Researcher query."""
+
+    discovery_results_per_query: int = Field(default=3, ge=3, le=5)
+    usable_snapshots_per_query: int = Field(default=3, ge=1, le=3)
+
+    @model_validator(mode="after")
+    def validate_keep_limit(self) -> AcquisitionPolicy:
+        if self.usable_snapshots_per_query > self.discovery_results_per_query:
+            raise ValueError("usable snapshot target cannot exceed discovery depth")
+        return self
+
+    @property
+    def maximum_attempts_per_stance(self) -> int:
+        return self.discovery_results_per_query * QUERIES_PER_STANCE
+
+
+MVP3A_ACQUISITION_POLICY = AcquisitionPolicy(
+    discovery_results_per_query=5,
+    usable_snapshots_per_query=3,
+)
+
+
+class CooperativeCancellation(RuntimeError):
+    """Shared signal that provider-boundary code must never normalize as a provider error."""
+
+
 class ExtractionLLMInput(StrictModel):
     """Typed extraction input; source content cannot carry application instructions."""
 
@@ -114,8 +141,14 @@ class RetrievalOutcome(StrictModel):
     retrieval: RetrievalRecord
     scrape_status: ScrapeStatus
     content_type: str | None = None
+    provider_name: str | None = None
+    provider_version: str | None = None
+    canonical_url: str | None = None
+    normalization_version: str | None = None
+    acquisition_version: str | None = None
     snapshot_id: UUID | None = None
     attempts_made: int = Field(ge=0)
+    failure_code: str | None = None
     failure_message: str | None = None
     duplicate_of_snapshot_id: UUID | None = None
 
@@ -123,6 +156,7 @@ class RetrievalOutcome(StrictModel):
     def validate_shape(self) -> RetrievalOutcome:
         successful = self.scrape_status is ScrapeStatus.RETRIEVED
         failed = self.scrape_status in {ScrapeStatus.FAILED, ScrapeStatus.TIMEOUT}
+        normalized_failure = failed or self.scrape_status is ScrapeStatus.UNSUPPORTED
         duplicate = self.scrape_status in {
             ScrapeStatus.DUPLICATE_URL,
             ScrapeStatus.DUPLICATE_CONTENT,
@@ -131,6 +165,8 @@ class RetrievalOutcome(StrictModel):
             raise ValueError("only retrieved outcomes may reference a new snapshot")
         if failed != (self.failure_message is not None):
             raise ValueError("failed outcomes require exactly one failure message")
+        if normalized_failure != (self.failure_code is not None):
+            raise ValueError("failed or unsupported outcomes require exactly one failure code")
         if duplicate != (self.duplicate_of_snapshot_id is not None):
             raise ValueError("duplicate outcomes require the existing snapshot ID")
         if self.scrape_status is ScrapeStatus.RETRIEVED:
@@ -160,27 +196,39 @@ class RetrievalOutcome(StrictModel):
 class ResearcherRetrievalBatch(StrictModel):
     run_id: UUID
     stance: Stance
-    intended_attempt_count: Literal[9] = ATTEMPTS_PER_STANCE
+    intended_attempt_count: int = Field(default=ATTEMPTS_PER_STANCE, ge=3, le=15)
+    discovery_results_per_query: int = Field(default=RESULTS_PER_QUERY, ge=3, le=5)
+    usable_snapshots_per_query: int = Field(default=RESULTS_PER_QUERY, ge=1, le=3)
     outcomes: list[RetrievalOutcome]
     snapshots: list[SourceSnapshot]
 
     @model_validator(mode="after")
     def validate_batch(self) -> ResearcherRetrievalBatch:
-        if len(self.outcomes) != ATTEMPTS_PER_STANCE:
-            raise ValueError("each researcher must record exactly nine intended attempts")
-        expected_pairs = {
-            (query_round, rank)
-            for query_round in range(1, QUERIES_PER_STANCE + 1)
-            for rank in range(1, RESULTS_PER_QUERY + 1)
-        }
-        actual_pairs = {
-            (outcome.retrieval.query_round, outcome.retrieval.search_rank)
-            for outcome in self.outcomes
-        }
-        if actual_pairs != expected_pairs:
-            raise ValueError("researcher outcomes must preserve three ranks for all three rounds")
+        if self.intended_attempt_count != (self.discovery_results_per_query * QUERIES_PER_STANCE):
+            raise ValueError("intended attempt count must match configured discovery depth")
+        pairs_by_round: dict[int, list[int]] = {}
+        for outcome in self.outcomes:
+            pairs_by_round.setdefault(outcome.retrieval.query_round, []).append(
+                outcome.retrieval.search_rank
+            )
+        if set(pairs_by_round) != set(range(1, QUERIES_PER_STANCE + 1)):
+            raise ValueError("researcher outcomes must cover all three query rounds")
+        for ranks in pairs_by_round.values():
+            ordered = sorted(ranks)
+            if ordered != list(range(1, len(ordered) + 1)):
+                raise ValueError("researcher ranks must be contiguous from rank one")
+            if len(ordered) > self.discovery_results_per_query:
+                raise ValueError("researcher outcomes exceed configured discovery depth")
         if any(outcome.retrieval.run_id != self.run_id for outcome in self.outcomes):
             raise ValueError("retrieval run IDs must match the batch")
+        snapshots_by_round: dict[int, int] = {}
+        for outcome in self.outcomes:
+            if outcome.snapshot_id is not None:
+                snapshots_by_round[outcome.retrieval.query_round] = (
+                    snapshots_by_round.get(outcome.retrieval.query_round, 0) + 1
+                )
+        if any(count > self.usable_snapshots_per_query for count in snapshots_by_round.values()):
+            raise ValueError("researcher snapshots exceed the per-query keep target")
         snapshot_ids = {snapshot.snapshot_id for snapshot in self.snapshots}
         outcome_snapshot_ids = {
             outcome.snapshot_id for outcome in self.outcomes if outcome.snapshot_id is not None
@@ -236,8 +284,10 @@ def retrieve_supporting(
     scraper_provider: ScraperProvider,
     *,
     retry_policy: RetryPolicy | None = None,
+    acquisition_policy: AcquisitionPolicy | None = None,
     clock: Clock | None = None,
     snapshot_consumer: SnapshotConsumer | None = None,
+    boundary_check: Callable[[], None] | None = None,
 ) -> ResearcherRetrievalBatch:
     """Retrieve the three supporting rounds at a fixed depth of three."""
     return _retrieve_stance(
@@ -246,9 +296,11 @@ def retrieve_supporting(
         search_provider,
         scraper_provider,
         retry_policy=retry_policy or RetryPolicy(),
+        acquisition_policy=acquisition_policy or AcquisitionPolicy(),
         clock=clock or _utc_now,
         deduplication=_DeduplicationState(),
         snapshot_consumer=snapshot_consumer,
+        boundary_check=boundary_check,
     )
 
 
@@ -258,11 +310,14 @@ def retrieve_balanced(
     scraper_provider: ScraperProvider,
     *,
     retry_policy: RetryPolicy | None = None,
+    acquisition_policy: AcquisitionPolicy | None = None,
     clock: Clock | None = None,
     snapshot_consumer: SnapshotConsumer | None = None,
+    boundary_check: Callable[[], None] | None = None,
 ) -> BalancedRetrievalResult:
     """Retrieve both sides with one shared deduplication boundary."""
     policy = retry_policy or RetryPolicy()
+    acquisition = acquisition_policy or AcquisitionPolicy()
     now = clock or _utc_now
     deduplication = _DeduplicationState()
     supporting = _retrieve_stance(
@@ -271,9 +326,11 @@ def retrieve_balanced(
         search_provider,
         scraper_provider,
         retry_policy=policy,
+        acquisition_policy=acquisition,
         clock=now,
         deduplication=deduplication,
         snapshot_consumer=snapshot_consumer,
+        boundary_check=boundary_check,
     )
     opposing = _retrieve_stance(
         planner,
@@ -281,9 +338,11 @@ def retrieve_balanced(
         search_provider,
         scraper_provider,
         retry_policy=policy,
+        acquisition_policy=acquisition,
         clock=now,
         deduplication=deduplication,
         snapshot_consumer=snapshot_consumer,
+        boundary_check=boundary_check,
     )
     return BalancedRetrievalResult(
         run_id=planner.run_id,
@@ -299,9 +358,11 @@ def _retrieve_stance(
     scraper_provider: ScraperProvider,
     *,
     retry_policy: RetryPolicy,
+    acquisition_policy: AcquisitionPolicy,
     clock: Clock,
     deduplication: _DeduplicationState,
     snapshot_consumer: SnapshotConsumer | None,
+    boundary_check: Callable[[], None] | None,
 ) -> ResearcherRetrievalBatch:
     queries = _queries_for_stance(planner, stance)
     outcomes: list[RetrievalOutcome] = []
@@ -310,24 +371,39 @@ def _retrieve_stance(
     for query in queries:
         request = SearchRequest(
             query_text=_query_with_exclusions(query),
-            limit=RESULTS_PER_QUERY,
+            limit=acquisition_policy.discovery_results_per_query,
         )
+        if boundary_check is not None:
+            boundary_check()
         try:
             response = search_provider.search(request)
+        except CooperativeCancellation:
+            raise
         except SearchProviderError:
             raise
         except Exception as exc:
             raise SearchProviderError(
                 f"search failed for {stance.value} round {query.query_round}: {exc}"
             ) from exc
+        if boundary_check is not None:
+            boundary_check()
         if not isinstance(response, SearchResponse):
             raise SearchProviderError("search provider returned a non-SearchResponse value")
-        if len(response.results) < RESULTS_PER_QUERY:
+        if len(response.results) < acquisition_policy.discovery_results_per_query:
+            expected = (
+                "three"
+                if acquisition_policy.discovery_results_per_query == 3
+                else str(acquisition_policy.discovery_results_per_query)
+            )
             raise SearchProviderError(
-                f"search returned {len(response.results)} results; expected at least three"
+                f"search returned {len(response.results)} results; expected at least {expected}"
             )
 
-        for rank, result in enumerate(response.results[:RESULTS_PER_QUERY], start=1):
+        usable_for_query = 0
+        for rank, result in enumerate(
+            response.results[: acquisition_policy.discovery_results_per_query],
+            start=1,
+        ):
             outcome, snapshot = _retrieve_result(
                 planner.run_id,
                 query,
@@ -337,16 +413,23 @@ def _retrieve_stance(
                 retry_policy,
                 clock,
                 deduplication,
+                boundary_check,
             )
             outcomes.append(outcome)
             if snapshot is not None:
                 snapshots.append(snapshot)
+                usable_for_query += 1
                 if snapshot_consumer is not None:
                     snapshot_consumer(snapshot)
+                if usable_for_query >= acquisition_policy.usable_snapshots_per_query:
+                    break
 
     return ResearcherRetrievalBatch(
         run_id=planner.run_id,
         stance=stance,
+        intended_attempt_count=acquisition_policy.maximum_attempts_per_stance,
+        discovery_results_per_query=acquisition_policy.discovery_results_per_query,
+        usable_snapshots_per_query=acquisition_policy.usable_snapshots_per_query,
         outcomes=outcomes,
         snapshots=snapshots,
     )
@@ -361,6 +444,7 @@ def _retrieve_result(
     retry_policy: RetryPolicy,
     clock: Clock,
     deduplication: _DeduplicationState,
+    boundary_check: Callable[[], None] | None,
 ) -> tuple[RetrievalOutcome, SourceSnapshot | None]:
     retrieval_attempt_id = uuid5(
         NAMESPACE_URL,
@@ -389,13 +473,35 @@ def _retrieve_result(
             None,
         )
 
-    response, failure_status, failure_message, attempts_made = _scrape_with_retry(
+    response, failure_status, failure_code, failure_message, attempts_made = _scrape_with_retry(
         scraper_provider,
         original_url,
         retry_policy,
+        boundary_check,
     )
     retrieved_at = clock()
     if response is None:
+        if failure_status is ScrapeStatus.UNSUPPORTED:
+            record = _retrieval_record(
+                run_id,
+                retrieval_attempt_id,
+                query,
+                rank,
+                original_url,
+                original_url,
+                RetrievalStatus.SKIPPED,
+                retrieved_at,
+            )
+            return (
+                RetrievalOutcome(
+                    retrieval=record,
+                    scrape_status=ScrapeStatus.UNSUPPORTED,
+                    content_type="application/octet-stream",
+                    attempts_made=attempts_made,
+                    failure_code=failure_code,
+                ),
+                None,
+            )
         record = _retrieval_record(
             run_id,
             retrieval_attempt_id,
@@ -411,6 +517,7 @@ def _retrieve_result(
                 retrieval=record,
                 scrape_status=failure_status,
                 attempts_made=attempts_made,
+                failure_code=failure_code,
                 failure_message=failure_message,
             ),
             None,
@@ -433,7 +540,13 @@ def _retrieve_result(
                 retrieval=record,
                 scrape_status=ScrapeStatus.UNSUPPORTED,
                 content_type=content_type,
+                provider_name=response.provider_name,
+                provider_version=response.provider_version,
+                canonical_url=response.canonical_url,
+                normalization_version=response.normalization_version,
+                acquisition_version=response.acquisition_version,
                 attempts_made=attempts_made,
+                failure_code="unsupported_content",
             ),
             None,
         )
@@ -463,7 +576,21 @@ def _retrieve_result(
             None,
         )
 
-    normalized_text, truncated = _truncate_text(response.text)
+    if response.normalization_version is not None:
+        normalized_text = response.text
+        truncated = response.truncated
+        if response.snapshot_sha256 != compute_sha256(normalized_text):
+            raise ScraperProviderError(
+                "normalization_integrity",
+                "adapter snapshot hash does not match normalized text",
+            )
+        if response.word_count != len(normalized_text.split()):
+            raise ScraperProviderError(
+                "normalization_integrity",
+                "adapter word count does not match normalized text",
+            )
+    else:
+        normalized_text, truncated = _truncate_text(response.text)
     if not normalized_text:
         record = _retrieval_record(
             run_id,
@@ -546,6 +673,11 @@ def _retrieve_result(
             retrieval=record,
             scrape_status=ScrapeStatus.RETRIEVED,
             content_type=content_type,
+            provider_name=response.provider_name,
+            provider_version=response.provider_version,
+            canonical_url=response.canonical_url,
+            normalization_version=response.normalization_version,
+            acquisition_version=response.acquisition_version,
             snapshot_id=snapshot_id,
             attempts_made=attempts_made,
         ),
@@ -557,22 +689,43 @@ def _scrape_with_retry(
     scraper_provider: ScraperProvider,
     url: str,
     retry_policy: RetryPolicy,
-) -> tuple[ScrapeResponse | None, ScrapeStatus, str | None, int]:
+    boundary_check: Callable[[], None] | None,
+) -> tuple[ScrapeResponse | None, ScrapeStatus, str | None, str | None, int]:
     for attempt in range(1, retry_policy.max_attempts + 1):
+        if boundary_check is not None:
+            boundary_check()
         try:
             response = scraper_provider.scrape(
                 ScrapeRequest(url=url, timeout_seconds=retry_policy.timeout_seconds)
             )
             if not isinstance(response, ScrapeResponse):
                 raise ScraperProviderError("scraper provider returned a non-ScrapeResponse value")
-            return response, ScrapeStatus.RETRIEVED, None, attempt
+            if boundary_check is not None:
+                boundary_check()
+            return response, ScrapeStatus.RETRIEVED, None, None, attempt
+        except CooperativeCancellation:
+            raise
         except (ScraperTimeoutError, TimeoutError) as exc:
             if attempt == retry_policy.max_attempts:
-                return None, ScrapeStatus.TIMEOUT, str(exc) or "scrape timed out", attempt
+                return (
+                    None,
+                    ScrapeStatus.TIMEOUT,
+                    "timeout",
+                    str(exc) or "scrape timed out",
+                    attempt,
+                )
         except ScraperProviderError as exc:
-            return None, ScrapeStatus.FAILED, str(exc) or "scrape failed", attempt
+            if exc.code in {"unsupported_content", "invalid_content_type"}:
+                return None, ScrapeStatus.UNSUPPORTED, exc.code, None, attempt
+            return None, ScrapeStatus.FAILED, exc.code, str(exc) or "scrape failed", attempt
         except Exception as exc:
-            return None, ScrapeStatus.FAILED, f"unexpected scraper failure: {exc}", attempt
+            return (
+                None,
+                ScrapeStatus.FAILED,
+                "unexpected_failure",
+                f"unexpected scraper failure: {exc}",
+                attempt,
+            )
     raise RuntimeError("retry loop ended without a result")
 
 
