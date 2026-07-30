@@ -123,6 +123,29 @@ DEFAULT_LLM_ROUTING = LLMRoutingConfig(
     ),
 )
 
+DIRECT_MIMO_ROUTING = LLMRoutingConfig(
+    planner=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.2),
+    ),
+    extractor=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.0),
+    ),
+    analyst=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.1),
+    ),
+    reviewer=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.0),
+    ),
+    synthesizer=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.15),
+    ),
+)
+
 
 class PromptTemplate(StrictModel):
     """Loaded prompt text with application-controlled version and content hash."""

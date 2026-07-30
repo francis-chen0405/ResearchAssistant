@@ -23,6 +23,10 @@ keep-three acquisition, exact fingerprints, atomic budget reservations, restart-
 persistence, and cooperative cancellation proven through mocked HTTP. No live call was
 made. A live product command, process lifecycle integration, and MVP-3B remain unstarted.
 
+MVP-3B is now active by explicit user direction. Its authorized architecture amendment
+replaces OpenRouter with Xiaomi's direct MiMo API as the sole live LLM gateway while
+preserving the historical MVP-3A implementation and tests. No MVP-4 work is authorized.
+
 ## MVP-2A: Architecture Gate
 
 Purpose: Select and freeze a concrete live-provider architecture before any live adapter

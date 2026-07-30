@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-07-29 - MVP-3B Direct Xiaomi MiMo Gateway Amendment
+
+- Replace OpenRouter with Xiaomi's direct OpenAI-compatible MiMo API as the sole MVP-3B
+  LLM gateway, using `mimo-v2.5-pro` for Planner, Extractor, Analyst, Reviewer, and
+  Synthesizer.
+- Retain the OpenRouter implementation and mocked MVP-3A coverage as historical
+  compatibility proof, but do not permit an OpenRouter or MiniMax physical call in an
+  MVP-3B run.
+- Use Xiaomi JSON mode plus the existing application-rendered schema and exact local
+  Pydantic validation. Do not claim provider-enforced strict JSON Schema and do not add
+  response healing.
+- Retry the direct MiMo route once only for approved objective failures. Do not add a
+  cross-provider fallback.
+- Freeze conservative caps above Xiaomi's July 15, 2026 overseas pay-as-you-go prices
+  and mark calculated cost as estimated because Chat Completions usage reports tokens
+  without a reliable per-response USD charge.
+- Read `MIMO_API_KEY` only from an explicitly supplied environment mapping and preserve
+  every existing live safety gate, public/non-sensitive restriction, deterministic
+  validator, persistence fingerprint, deadline, token, call, and USD ceiling.
+
 ## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
 
 - Construct the approved stack only through an immutable strict `ProviderFactoryConfig`.

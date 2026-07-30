@@ -86,6 +86,8 @@ existing Protocols for the approved concrete stack when that phase is authorized
 
 MVP-2B obtained that approval and added `httpx`, `markdown-it-py`, and `pypdf`. MVP-3A
 adds no dependency and constructs only those approved Wigolo/OpenRouter boundaries.
+MVP-3B uses the already-approved direct `httpx` boundary to call Xiaomi MiMo and adds no
+SDK or dependency.
 
 ## 4. Coding Style
 
@@ -117,6 +119,11 @@ MVP-2A proposes `OPENROUTER_API_KEY` as the only required vendor secret for the 
 stack. Do not add it to `.env.example`, load it, or use it until MVP-2B is explicitly
 authorized. Never expose the key to Wigolo, logs, SQLite, checkpoints, or exported
 artifacts. Live MVP claims are public/non-sensitive only.
+
+The authorized MVP-3B direct-Xiaomi amendment instead uses `MIMO_API_KEY`,
+`MIMO_BASE_URL`, and `MIMO_MODEL`. The key is read only from an explicitly supplied
+mapping and remains blank in `.env.example`. Direct MiMo replaces OpenRouter for MVP-3B;
+it is not a second simultaneously active live gateway.
 
 ## 7. Phase-Gated Development
 

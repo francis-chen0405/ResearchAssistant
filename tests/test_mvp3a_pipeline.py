@@ -35,14 +35,16 @@ from orchestrator import (
     inspect_provider_run,
     request_run_cancellation,
     run_mvp3a_pipeline,
+    run_mvp3b_pipeline,
 )
-from providers.config import OpenRouterConfig, ProviderConfigurationError, RunCeilings
+from providers.config import MimoConfig, OpenRouterConfig, ProviderConfigurationError, RunCeilings
 from providers.factory import (
     ProviderFactoryClients,
     ProviderFactoryConfig,
     build_provider_bundle,
 )
 from providers.llm import ModelAlias
+from providers.mimo_factory import MimoProviderFactoryConfig
 from store import read_provider_run_contract, read_run
 
 NOW = datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
@@ -173,10 +175,15 @@ class MockProviderHTTP:
     def _llm(self, request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         model = payload["model"]
-        name = payload["response_format"]["json_schema"]["name"]
+        response_format = payload["response_format"]
+        if response_format["type"] == "json_schema":
+            name = response_format["json_schema"]["name"]
+        else:
+            prompt = payload["messages"][0]["content"]
+            name = re.search(r"Requested Pydantic artifact: ([A-Za-z0-9_]+)", prompt).group(1)
         alias = (
             ModelAlias.MIMO_V25_PRO.value
-            if model == "xiaomi/mimo-v2.5-pro"
+            if model in {"xiaomi/mimo-v2.5-pro", "mimo-v2.5-pro"}
             else ModelAlias.MINIMAX_M3.value
         )
         with self._lock:
@@ -403,6 +410,51 @@ def _run(tmp_path: Path, mock: MockProviderHTTP, *, run_id: UUID = RUN_ID, confi
         run_id=run_id,
         clock=lambda: NOW,
     )
+
+
+def _mimo_config() -> MimoProviderFactoryConfig:
+    return MimoProviderFactoryConfig(
+        mimo=MimoConfig(api_key="mock-mimo-secret"),
+        repository_revision="direct-mimo-test-revision",
+    )
+
+
+def _mimo_clients(mock: MockProviderHTTP) -> ProviderFactoryClients:
+    clients = _clients(mock)
+    return clients.model_copy(
+        update={
+            "llm": httpx.Client(
+                transport=httpx.MockTransport(mock),
+                base_url="https://api.xiaomimimo.com/v1",
+            )
+        }
+    )
+
+
+def test_mocked_full_direct_mimo_pipeline_releases_without_fallback(
+    tmp_path: Path,
+) -> None:
+    mock = MockProviderHTTP()
+    result = run_mvp3b_pipeline(
+        CLAIM,
+        db_path=tmp_path / "mvp3b.sqlite3",
+        factory_config=_mimo_config(),
+        clients=_mimo_clients(mock),
+        run_id=RUN_ID,
+        clock=lambda: NOW,
+    )
+
+    assert result.status is ProviderRunStatus.RELEASED
+    assert result.rendered_brief_hash
+    assert result.retrieval_attempts_used == 18
+    assert all(attempt.model_alias == ModelAlias.MIMO_V25_PRO for attempt in result.model_attempts)
+    assert all(attempt.route_index == 0 for attempt in result.model_attempts)
+    contract = read_provider_run_contract(result.db_path, result.run_id)
+    assert "xiaomi-mimo:https://api.xiaomimimo.com/v1" in contract.provider_identity
+    assert contract.model_identity == "mimo-v2.5-pro"
+    reopened = inspect_provider_run(result.db_path, result.run_id)
+    assert reopened.final_brief == result.final_brief
+    assert reopened.rendered_brief_hash == result.rendered_brief_hash
 
 
 def test_mocked_full_approved_provider_pipeline_releases_and_persists_identity(

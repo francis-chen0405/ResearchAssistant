@@ -1,5 +1,15 @@
 # Phase MVP-3B - Full Live-Canary Stabilization
 
+## Authorized Direct MiMo Amendment - 2026-07-29
+
+The user explicitly replaced OpenRouter with Xiaomi's direct MiMo platform for MVP-3B.
+Use direct `mimo-v2.5-pro` as the sole LLM route for all five roles. Preserve the
+historical MVP-2B/MVP-3A OpenRouter implementation and tests, but an MVP-3B run must make
+no OpenRouter or MiniMax call. Xiaomi JSON mode is followed by exact local Pydantic
+validation; there is no response healing and no cross-provider fallback. Direct MiMo
+cost is calculated conservatively from a frozen dated price cap and labeled estimated.
+All other phase scope and safety limits below remain binding.
+
 ## Prerequisite and Purpose
 
 Begin only after MVP-3A passes with realistic mocked provider responses. This phase is
@@ -44,4 +54,3 @@ reconstruction, `git diff --check`, and Git status.
 Report exact files, both exact claims and terminal states, actual Search/acquisition/LLM
 counts, tokens, estimated/confirmed cost, incompatibilities, narrow fixes, final
 validation/hash, suitability for the CLI MVP, and limitations. Leave changes uncommitted.
-

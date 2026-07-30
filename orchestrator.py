@@ -74,6 +74,7 @@ from models import (
 )
 from providers.llm import (
     DEFAULT_LLM_ROUTING,
+    DIRECT_MIMO_ROUTING,
     InvocationFailureCode,
     LLMInvocationError,
     LLMProvider,
@@ -86,7 +87,11 @@ from providers.llm import (
     invoke_llm,
     load_prompt,
 )
-from providers.pricing import DEFAULT_PRICE_CAPS, conservative_token_estimate
+from providers.pricing import (
+    DEFAULT_PRICE_CAPS,
+    DIRECT_MIMO_PRICE_CAP,
+    conservative_token_estimate,
+)
 from providers.scraper import RetryPolicy, ScraperProvider
 from providers.search import SearchProvider
 from store import (
@@ -1099,6 +1104,7 @@ class ProviderOrchestrationConfig(StrictModel):
     budget: OrchestrationBudget = OrchestrationBudget()
     require_budget_reservations: bool = False
     reserved_output_tokens_per_call: int = Field(default=4096, ge=1, le=32768)
+    pricing_policy: Literal["openrouter", "direct_mimo"] = "openrouter"
     pinned_model_snapshots: tuple[PinnedModelSnapshot, ...] = ()
 
     @model_validator(mode="after")
@@ -1426,6 +1432,58 @@ def run_mvp3a_pipeline(
         reserved_output_tokens_per_call=bundle.config.openrouter.max_output_tokens,
     )
     contract = bundle.contract(resolved_run_id, _aware_phase9_time(now(), "contract created_at"))
+    return run_provider_pipeline(
+        raw_claim,
+        db_path=db_path,
+        search_provider=bundle.search,
+        scraper_provider=bundle.acquisition,
+        llm_provider=bundle.llm,
+        run_id=resolved_run_id,
+        config=settings,
+        provider_contract=contract,
+        clock=now,
+        stage_hook=stage_hook,
+    )
+
+
+def run_mvp3b_pipeline(
+    raw_claim: str,
+    *,
+    db_path: str | Path,
+    factory_config: object,
+    clients: ProviderFactoryClients | None = None,
+    run_id: UUID | None = None,
+    clock: Callable[[], datetime] | None = None,
+    stage_hook: _StageHook | None = None,
+) -> ProviderPipelineResult:
+    """Run the authorized Wigolo plus direct Xiaomi MiMo MVP-3B stack."""
+    from providers.mimo_factory import (
+        MimoProviderFactoryConfig,
+        build_mimo_provider_bundle,
+    )
+
+    if not isinstance(factory_config, MimoProviderFactoryConfig):
+        raise TypeError("MVP-3B requires MimoProviderFactoryConfig")
+    now = clock or _phase9_utc_now
+    resolved_run_id = run_id or uuid4()
+    bundle = build_mimo_provider_bundle(factory_config, clients=clients)
+    settings = ProviderOrchestrationConfig(
+        routing=DIRECT_MIMO_ROUTING,
+        acquisition_policy=bundle.config.acquisition,
+        budget=OrchestrationBudget(
+            max_model_calls=bundle.config.ceilings.max_llm_calls,
+            retrieval_attempts_per_side=bundle.config.acquisition.maximum_attempts_per_stance,
+            max_total_tokens=bundle.config.ceilings.max_tokens,
+            max_total_cost_usd=float(bundle.config.ceilings.max_cost_usd),
+        ),
+        require_budget_reservations=True,
+        reserved_output_tokens_per_call=bundle.config.mimo.max_completion_tokens,
+        pricing_policy="direct_mimo",
+    )
+    contract = bundle.contract(
+        resolved_run_id,
+        _aware_phase9_time(now(), "contract created_at"),
+    )
     return run_provider_pipeline(
         raw_claim,
         db_path=db_path,
@@ -3085,11 +3143,20 @@ def _conservative_reservation(
             _agent_stage(request.stage),
             "strict provider runs require token and cost ceilings before every call",
         )
-    model = {
-        ModelAlias.MIMO_V25_PRO: "xiaomi/mimo-v2.5-pro",
-        ModelAlias.MINIMAX_M3: "minimax/minimax-m3",
-    }.get(alias)
-    if model is None or model not in DEFAULT_PRICE_CAPS:
+    if config.pricing_policy == "direct_mimo":
+        if alias is not ModelAlias.MIMO_V25_PRO:
+            raise Phase9OrchestrationError(
+                _agent_stage(request.stage),
+                "direct MiMo pricing permits only MiMo Pro",
+            )
+        cap = DIRECT_MIMO_PRICE_CAP
+    else:
+        model = {
+            ModelAlias.MIMO_V25_PRO: "xiaomi/mimo-v2.5-pro",
+            ModelAlias.MINIMAX_M3: "minimax/minimax-m3",
+        }.get(alias)
+        cap = DEFAULT_PRICE_CAPS.get(model) if model is not None else None
+    if cap is None:
         raise Phase9OrchestrationError(
             _agent_stage(request.stage),
             "route identity or pricing is unknown; reservation failed closed",
@@ -3098,7 +3165,7 @@ def _conservative_reservation(
     output_tokens = config.reserved_output_tokens_per_call
     return (
         input_tokens + output_tokens,
-        float(DEFAULT_PRICE_CAPS[model].upper_bound(input_tokens, output_tokens)),
+        float(cap.upper_bound(input_tokens, output_tokens)),
     )
 
 

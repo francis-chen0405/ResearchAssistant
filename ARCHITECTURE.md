@@ -71,14 +71,38 @@ pre-call reservations, uses rank-five/keep-three acquisition, and observes coope
 cancellation at provider/orchestration boundaries. It does not claim live-canary proof,
 managed Wigolo lifecycle, a live CLI, or MVP-3B completion.
 
+### MVP-3B Direct Xiaomi MiMo Amendment
+
+On 2026-07-29 the user explicitly replaced OpenRouter with Xiaomi's direct MiMo API as
+the sole MVP-3B LLM gateway. This amendment applies to MVP-3B and future live work; the
+MVP-2B/MVP-3A OpenRouter implementation and tests remain historical compatibility proof.
+
+- Every LLM role uses direct `mimo-v2.5-pro` at the configured Xiaomi HTTPS base URL.
+- No OpenRouter or MiniMax call is permitted in an MVP-3B run. Objective failures may
+  retry the same MiMo route once; there is no cross-provider fallback.
+- Xiaomi JSON mode is a syntax control, not strict schema enforcement. Requests use
+  `response_format: {"type": "json_object"}`, explicitly demand JSON matching the
+  application-provided schema, and undergo exact local Pydantic revalidation without
+  response healing.
+- The adapter reads `MIMO_API_KEY` only from an explicitly supplied environment mapping.
+  Secrets remain redacted and must never enter logs, persistence, fingerprints, or
+  exported artifacts.
+- Returned model identity must equal `mimo-v2.5-pro`. Usage tokens are parsed strictly.
+  Because the Chat Completions response does not provide a reliable per-response USD
+  charge, cost is conservatively calculated from a frozen, dated price cap and labeled
+  estimated.
+- The approved live ceilings, public/non-sensitive restriction, deadlines, immutable
+  fingerprints, rank-five/keep-three acquisition, deterministic release gate, and
+  explicit per-run approval requirement remain unchanged.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: pinned local Wigolo `0.2.1` over loopback. Search is
   discovery only; provider snippets, evidence fields, relevance scores, and summaries
   can rank attempts but can never become trusted source content.
-- LLM gateway: OpenRouter. Planner, Extractor, Analyst, Reviewer, and Synthesizer all use
-  `xiaomi/mimo-v2.5-pro` as primary. `minimax/minimax-m3` is the only fallback and is
-  reachable only after objective invocation or deterministic output failure.
+- Historical MVP-2B/MVP-3A LLM gateway: OpenRouter with
+  `xiaomi/mimo-v2.5-pro` primary and `minimax/minimax-m3` fallback. MVP-3B live runs use
+  the direct Xiaomi MiMo amendment above instead.
 - Structured output: strict JSON Schema derived from the exact requested Pydantic model,
   followed by local Pydantic revalidation. No response-healing layer is permitted.
 - ResearchAssistant remains vendor-independent at the existing Protocol boundaries, but

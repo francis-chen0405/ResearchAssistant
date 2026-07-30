@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, SecretStr, field_validator
@@ -96,6 +97,48 @@ class OpenRouterConfig(StrictModel):
                 "OPENROUTER_API_KEY is required in the process environment"
             )
         return cls(api_key=SecretStr(value))
+
+
+class MimoConfig(StrictModel):
+    """Strict direct Xiaomi MiMo configuration for MVP-3B."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["xiaomi-mimo"] = "xiaomi-mimo"
+    adapter_version: Literal["mvp3b-xiaomi-mimo-v1"] = "mvp3b-xiaomi-mimo-v1"
+    base_url: str = "https://api.xiaomimimo.com/v1"
+    api_key: SecretStr
+    model: Literal["mimo-v2.5-pro"] = "mimo-v2.5-pro"
+    max_completion_tokens: int = Field(default=4096, ge=1, le=32768)
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("Xiaomi MiMo base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Xiaomi MiMo base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> MimoConfig:
+        api_key = environment.get("MIMO_API_KEY", "").strip()
+        if not api_key:
+            raise ProviderConfigurationError(
+                "MIMO_API_KEY is required in the explicitly supplied environment"
+            )
+        base_url = environment.get(
+            "MIMO_BASE_URL",
+            "https://api.xiaomimimo.com/v1",
+        ).strip()
+        model = environment.get("MIMO_MODEL", "mimo-v2.5-pro").strip()
+        return cls(
+            api_key=SecretStr(api_key),
+            base_url=base_url,
+            model=model,
+        )
 
 
 class LiveSmokeConfig(StrictModel):
