@@ -176,6 +176,44 @@ def test_wigolo_search_normalizes_transport_timeout_and_wrong_health_identity() 
     assert exc_info.value.code is SearchFailureCode.MISSING_CONFIGURATION
 
 
+def test_wigolo_health_uses_openapi_identity_when_health_omits_it() -> None:
+    requests: list[str] = []
+
+    def live_shape(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        if request.url.path == "/health":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "healthy",
+                    "searxng": "not_configured",
+                    "browsers": "ready",
+                    "cache": "active",
+                    "uptime_seconds": 1,
+                },
+                request=request,
+            )
+        return httpx.Response(
+            200,
+            json={
+                "openapi": "3.1.0",
+                "info": {"title": "wigolo REST API", "version": "0.2.1"},
+            },
+            request=request,
+        )
+
+    client = httpx.Client(
+        base_url="http://127.0.0.1:3333",
+        transport=httpx.MockTransport(live_shape),
+    )
+    WigoloSearchAdapter(
+        WigoloConfig(base_url="http://127.0.0.1:3333"),
+        client=client,
+    ).verify_health()
+
+    assert requests == ["/health", "/openapi.json"]
+
+
 def test_frozen_html_normalization_is_byte_deterministic_with_exact_offsets() -> None:
     payload = (FIXTURES / "article.html").read_bytes()
     first = normalize_html(payload, declared_charset="utf-8")

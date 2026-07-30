@@ -69,6 +69,8 @@ class WigoloSearchAdapter:
             payload = _json_object(response, operation="health")
             identity = str(payload.get("name") or payload.get("service") or "").lower()
             version = str(payload.get("version") or "")
+            if not identity and not version:
+                identity, version = self._openapi_identity()
             if "wigolo" not in identity or version != self._config.provider_version:
                 raise SearchProviderError(
                     SearchFailureCode.MISSING_CONFIGURATION,
@@ -76,6 +78,35 @@ class WigoloSearchAdapter:
                     retryable=False,
                 )
             self._health_verified = True
+
+    def _openapi_identity(self) -> tuple[str, str]:
+        try:
+            response = self._client.get(
+                "/openapi.json",
+                timeout=self._config.deadlines.health_seconds,
+            )
+        except httpx.TimeoutException as exc:
+            raise SearchTimeoutError(
+                SearchFailureCode.TIMEOUT,
+                "Wigolo identity check timed out",
+                retryable=True,
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise SearchProviderError(
+                SearchFailureCode.CONNECTION,
+                "Wigolo identity check could not connect to loopback service",
+                retryable=True,
+            ) from exc
+        if response.status_code != 200:
+            raise _http_error(response.status_code, "Wigolo identity check failed")
+        payload = _json_object(response, operation="identity")
+        info = payload.get("info")
+        if not isinstance(info, Mapping):
+            return "", ""
+        return (
+            str(info.get("title") or "").lower(),
+            str(info.get("version") or ""),
+        )
 
     def search(self, request: SearchRequest) -> SearchResponse:
         self.verify_health()
