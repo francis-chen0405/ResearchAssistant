@@ -93,6 +93,45 @@ def test_wigolo_search_preserves_rank_identity_telemetry_and_unusual_urls() -> N
     assert "unexpected" not in response.results[0].model_dump()
 
 
+def test_wigolo_search_maps_site_tokens_to_native_domain_exclusions() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed.update(json.loads(request.content))
+        return httpx.Response(200, json=_valid_search_payload(), request=request)
+
+    client = httpx.Client(
+        base_url="http://127.0.0.1:8000",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = WigoloSearchAdapter(WigoloConfig(), client=client, health_verified=True)
+    adapter.search(
+        SearchRequest(
+            query_text=(
+                "frozen query -site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com"
+            ),
+            limit=5,
+        )
+    )
+
+    assert observed["query"] == "frozen query"
+    assert observed["exclude_domains"] == [
+        "reddit.com",
+        "quora.com",
+        "youtube.com",
+        "tiktok.com",
+    ]
+
+
+def test_wigolo_search_rejects_malformed_site_exclusions() -> None:
+    adapter = _search_adapter(_valid_search_payload())
+
+    with pytest.raises(SearchProviderError, match="site exclusion") as exc_info:
+        adapter.search(SearchRequest(query_text="frozen query -site:https://reddit.com", limit=5))
+
+    assert exc_info.value.code is SearchFailureCode.PERMANENT_FAILURE
+
+
 def test_wigolo_search_deduplicates_urls_without_reordering_survivors() -> None:
     payload = _valid_search_payload()
     payload["results"] = [

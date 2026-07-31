@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from threading import Lock
@@ -110,8 +111,9 @@ class WigoloSearchAdapter:
 
     def search(self, request: SearchRequest) -> SearchResponse:
         self.verify_health()
+        query, excluded_domains = _native_wigolo_query(request.query_text)
         payload = {
-            "query": request.query_text,
+            "query": query,
             "max_results": 5,
             "max_fetches": 0,
             "include_content": False,
@@ -119,6 +121,8 @@ class WigoloSearchAdapter:
             "force_refresh": True,
             "include_full_markdown": False,
         }
+        if excluded_domains:
+            payload["exclude_domains"] = list(excluded_domains)
         try:
             response = self._client.post(
                 "/v1/search",
@@ -230,6 +234,35 @@ def _json_object(response: httpx.Response, *, operation: str) -> dict[str, Any]:
             retryable=True,
         )
     return payload
+
+
+_DOMAIN_PATTERN = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}")
+
+
+def _native_wigolo_query(query_text: str) -> tuple[str, tuple[str, ...]]:
+    query_tokens: list[str] = []
+    exclusions: list[str] = []
+    for token in query_text.split():
+        if not token.startswith("-site:"):
+            query_tokens.append(token)
+            continue
+        domain = token.removeprefix("-site:").lower()
+        if not _DOMAIN_PATTERN.fullmatch(domain):
+            raise SearchProviderError(
+                SearchFailureCode.PERMANENT_FAILURE,
+                "search query contained an invalid site exclusion",
+                retryable=False,
+            )
+        if domain not in exclusions:
+            exclusions.append(domain)
+    query = " ".join(query_tokens).strip()
+    if not query:
+        raise SearchProviderError(
+            SearchFailureCode.PERMANENT_FAILURE,
+            "search query contained only site exclusions",
+            retryable=False,
+        )
+    return query, tuple(exclusions)
 
 
 def _http_error(status: int, message: str) -> SearchProviderError:

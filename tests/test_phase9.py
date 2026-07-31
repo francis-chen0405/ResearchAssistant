@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from agents.analyst import AnalystLLMInput
 from agents.planner import PlannerLLMInput
 from agents.reviewer import ReviewerDecision, ReviewerInput
-from agents.supportingresearcher import ExtractionLLMInput
+from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, ExtractionLLMInput
 from agents.synthesizer import SynthesizerLLMInput, build_synthesis_output
 from models import (
     REQUIRED_QUERY_EXCLUSIONS,
@@ -420,6 +420,28 @@ def test_one_researcher_failure_is_explicit_and_other_side_continues(tmp_path: P
     assert result.researcher_result.opposing.status is ResearcherSideStatus.FAILED
     assert result.researcher_result.opposing.failures
     assert len(result.analysis_result.ledger_records) == 1
+
+
+def test_one_researcher_failure_does_not_invent_a_legacy_retrieval_limit(
+    tmp_path: Path,
+) -> None:
+    config = ProviderOrchestrationConfig(
+        acquisition_policy=MVP3A_ACQUISITION_POLICY,
+        budget=OrchestrationBudget(retrieval_attempts_per_side=15),
+    )
+
+    result = _run(
+        tmp_path,
+        search=FakeSearchProvider(fail_side="opposing"),
+        config=config,
+    )
+
+    assert result.status is ProviderRunStatus.RELEASED
+    assert result.researcher_result is not None
+    assert result.researcher_result.supporting.retrieval_batch is not None
+    assert result.researcher_result.supporting.retrieval_batch.intended_attempt_count == 15
+    assert result.researcher_result.opposing.status is ResearcherSideStatus.FAILED
+    assert result.researcher_result.opposing.retrieval_batch is None
 
 
 def test_both_researcher_failures_end_in_clean_failed_state(tmp_path: Path) -> None:

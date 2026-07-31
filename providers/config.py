@@ -47,7 +47,7 @@ class WigoloConfig(StrictModel):
 
     provider_name: str = "wigolo"
     provider_version: str = "0.2.1"
-    adapter_version: str = "mvp2b-wigolo-v1"
+    adapter_version: str = "mvp3b-wigolo-v2"
     base_url: str = "http://127.0.0.1:8000"
     reranker: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     max_redirects: int = Field(default=5, ge=0, le=5)

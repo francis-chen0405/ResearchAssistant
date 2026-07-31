@@ -1166,17 +1166,12 @@ class ResearcherPairResult(StrictModel):
             raise ValueError("both researcher sides must match the run_id")
         if self.supporting.stance != "supporting" or self.opposing.stance != "opposing":
             raise ValueError("researcher pair has incorrect stance assignment")
-        support_limit = (
-            self.supporting.retrieval_batch.intended_attempt_count
-            if self.supporting.retrieval_batch is not None
-            else ATTEMPTS_PER_STANCE
-        )
-        oppose_limit = (
-            self.opposing.retrieval_batch.intended_attempt_count
-            if self.opposing.retrieval_batch is not None
-            else ATTEMPTS_PER_STANCE
-        )
-        if support_limit != oppose_limit:
+        if (
+            self.supporting.retrieval_batch is not None
+            and self.opposing.retrieval_batch is not None
+            and self.supporting.retrieval_batch.intended_attempt_count
+            != self.opposing.retrieval_batch.intended_attempt_count
+        ):
             raise ValueError("supporting and opposing retrieval limits must be equal")
         return self
 
