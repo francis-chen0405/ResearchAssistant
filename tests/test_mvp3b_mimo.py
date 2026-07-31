@@ -123,6 +123,14 @@ def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -
     assert payload["response_format"] == {"type": "json_object"}
     assert payload["stream"] is False
     assert payload["max_completion_tokens"] == 4096
+    assert (
+        "Any *_model_name field must equal exactly: mimo-v2.5-pro"
+        in payload["messages"][0]["content"]
+    )
+    assert (
+        "Any *_prompt_version field must equal exactly: phase8-reviewer-v2"
+        in payload["messages"][0]["content"]
+    )
     assert "provider" not in payload
     assert metadata.returned_model == "mimo-v2.5-pro"
     assert metadata.cost_estimated is True
@@ -176,3 +184,87 @@ def test_direct_mimo_fails_closed_on_live_response_incompatibilities(
     with pytest.raises(MimoProviderError) as exc_info:
         adapter.generate(_request())
     assert exc_info.value.code is code
+
+
+@pytest.mark.parametrize(
+    ("status", "message"),
+    [
+        (401, "Xiaomi MiMo authentication failed (HTTP 401, request_id=req-401)"),
+        (403, "Xiaomi MiMo request was forbidden (HTTP 403, request_id=req-403)"),
+    ],
+)
+def test_direct_mimo_auth_errors_preserve_safe_diagnostic_identity(
+    status: int,
+    message: str,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status,
+            json={"error": {"message": "must never be persisted"}},
+            headers={"x-request-id": f"req-{status}"},
+            request=request,
+        )
+
+    adapter = XiaomiMimoAdapter(
+        MimoConfig(api_key=SecretStr("secret")),
+        client=httpx.Client(
+            base_url="https://api.xiaomimimo.com/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    with pytest.raises(MimoProviderError) as exc_info:
+        adapter.generate(_request())
+
+    error = exc_info.value
+    assert error.code is MimoFailureCode.AUTHENTICATION
+    assert error.http_status == status
+    assert error.request_id == f"req-{status}"
+    assert str(error) == message
+    assert "must never be persisted" not in str(error)
+
+
+def test_direct_mimo_auth_error_omits_unsafe_request_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            headers={"x-request-id": "unsafe request id with spaces"},
+            request=request,
+        )
+
+    adapter = XiaomiMimoAdapter(
+        MimoConfig(api_key=SecretStr("secret")),
+        client=httpx.Client(
+            base_url="https://api.xiaomimimo.com/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    with pytest.raises(MimoProviderError) as exc_info:
+        adapter.generate(_request())
+
+    assert exc_info.value.request_id is None
+    assert str(exc_info.value) == "Xiaomi MiMo request was forbidden (HTTP 403)"
+
+
+def test_direct_mimo_schema_error_reports_only_redacted_locations_and_types() -> None:
+    rejected_value = "must-never-be-persisted"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _response(request, content=f'{{"unexpected":"{rejected_value}"}}')
+
+    adapter = XiaomiMimoAdapter(
+        MimoConfig(api_key=SecretStr("secret")),
+        client=httpx.Client(
+            base_url="https://api.xiaomimimo.com/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    with pytest.raises(MimoProviderError) as exc_info:
+        adapter.generate(_request())
+
+    message = str(exc_info.value)
+    assert exc_info.value.code is MimoFailureCode.SCHEMA
+    assert "schema diagnostics:" in message
+    assert "reviewed_statement:missing" in message
+    assert "<extra>:extra_forbidden" in message
+    assert rejected_value not in message
+    assert "input" not in message

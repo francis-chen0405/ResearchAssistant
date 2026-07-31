@@ -32,7 +32,13 @@ from providers.scraper import (
     ScraperTimeoutError,
     ScrapeStatus,
 )
-from providers.search import SearchProvider, SearchProviderError, SearchRequest, SearchResponse
+from providers.search import (
+    SearchFailureCode,
+    SearchProvider,
+    SearchProviderError,
+    SearchRequest,
+    SearchResponse,
+)
 from utils import compute_sha256
 
 RESULTS_PER_QUERY = 3
@@ -389,14 +395,11 @@ def _retrieve_stance(
             boundary_check()
         if not isinstance(response, SearchResponse):
             raise SearchProviderError("search provider returned a non-SearchResponse value")
-        if len(response.results) < acquisition_policy.discovery_results_per_query:
-            expected = (
-                "three"
-                if acquisition_policy.discovery_results_per_query == 3
-                else str(acquisition_policy.discovery_results_per_query)
-            )
+        if not response.results:
             raise SearchProviderError(
-                f"search returned {len(response.results)} results; expected at least {expected}"
+                SearchFailureCode.EMPTY_RESULTS,
+                "search returned no discovery results",
+                retryable=False,
             )
 
         usable_for_query = 0

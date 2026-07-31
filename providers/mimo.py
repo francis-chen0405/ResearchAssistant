@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from decimal import Decimal
 from enum import StrEnum
@@ -44,10 +45,14 @@ class MimoProviderError(RuntimeError):
         message: str,
         *,
         retryable: bool,
+        http_status: int | None = None,
+        request_id: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+        self.http_status = http_status
+        self.request_id = request_id
 
 
 class MimoCallMetadata(StrictModel):
@@ -106,7 +111,7 @@ class XiaomiMimoAdapter:
                 "direct Xiaomi MiMo supports only the approved MiMo Pro alias",
                 retryable=False,
             )
-        input_estimate = conservative_token_estimate(request.rendered_prompt)
+        input_estimate = conservative_token_estimate(_direct_mimo_prompt(request))
         reserved_tokens = input_estimate + self._config.max_completion_tokens
         reserved_cost = self._price_cap.upper_bound(
             input_estimate,
@@ -141,7 +146,7 @@ class XiaomiMimoAdapter:
         elapsed = time.monotonic() - started
         self._record_failure_usage(response)
         if response.status_code != 200:
-            raise _http_error(response.status_code)
+            raise _http_error(response)
         body = _json_object(response)
         if body.get("error"):
             raise MimoProviderError(
@@ -195,7 +200,10 @@ class XiaomiMimoAdapter:
         except ValidationError as exc:
             raise MimoProviderError(
                 MimoFailureCode.SCHEMA,
-                "Xiaomi MiMo content failed the exact requested schema",
+                (
+                    "Xiaomi MiMo content failed the exact requested schema "
+                    f"(schema diagnostics: {_schema_diagnostics(exc)})"
+                ),
                 retryable=True,
             ) from exc
         usage = _usage(body.get("usage"), self._price_cap)
@@ -261,7 +269,7 @@ class XiaomiMimoAdapter:
 def _request_payload(request: LLMRequest, config: MimoConfig) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": config.model,
-        "messages": [{"role": "user", "content": request.rendered_prompt}],
+        "messages": [{"role": "user", "content": _direct_mimo_prompt(request)}],
         "response_format": {"type": "json_object"},
         "stream": False,
         "max_completion_tokens": config.max_completion_tokens,
@@ -269,6 +277,17 @@ def _request_payload(request: LLMRequest, config: MimoConfig) -> dict[str, Any]:
     if request.generation.temperature is not None:
         payload["temperature"] = request.generation.temperature
     return payload
+
+
+def _direct_mimo_prompt(request: LLMRequest) -> str:
+    return (
+        f"{request.rendered_prompt}\n\n"
+        "<DIRECT_MIMO_PROVENANCE_COMPATIBILITY>\n"
+        f"Any *_model_name field must equal exactly: {request.model_alias.value}\n"
+        f"Any *_prompt_version field must equal exactly: {request.prompt.version}\n"
+        "Preserve capitalization and punctuation exactly.\n"
+        "</DIRECT_MIMO_PROVENANCE_COMPATIBILITY>"
+    )
 
 
 def _deadline_for(stage: LLMStage, config: MimoConfig) -> float:
@@ -325,12 +344,27 @@ def _usage(raw: Any, cap: ModelPriceCap) -> ModelUsageMetadata:
     )
 
 
-def _http_error(status: int) -> MimoProviderError:
-    if status in {401, 403}:
+def _http_error(response: httpx.Response) -> MimoProviderError:
+    status = response.status_code
+    request_id = _safe_request_id(response.headers.get("x-request-id"))
+    diagnostic = f"HTTP {status}"
+    if request_id is not None:
+        diagnostic += f", request_id={request_id}"
+    if status == 401:
         return MimoProviderError(
             MimoFailureCode.AUTHENTICATION,
-            "Xiaomi MiMo authentication failed",
+            f"Xiaomi MiMo authentication failed ({diagnostic})",
             retryable=False,
+            http_status=status,
+            request_id=request_id,
+        )
+    if status == 403:
+        return MimoProviderError(
+            MimoFailureCode.AUTHENTICATION,
+            f"Xiaomi MiMo request was forbidden ({diagnostic})",
+            retryable=False,
+            http_status=status,
+            request_id=request_id,
         )
     if status == 408:
         return MimoProviderError(
@@ -367,3 +401,40 @@ def _malformed(message: str) -> MimoProviderError:
 
 def _optional_text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _safe_request_id(value: Any) -> str | None:
+    if not isinstance(value, str) or not 1 <= len(value) <= 128:
+        return None
+    return value if re.fullmatch(r"[A-Za-z0-9._:-]+", value) else None
+
+
+def _schema_diagnostics(exc: ValidationError) -> str:
+    diagnostics: list[str] = []
+    errors = exc.errors(include_url=False, include_input=False)
+    for error in errors[:8]:
+        error_type = str(error.get("type") or "validation_error")
+        if not re.fullmatch(r"[a-z0-9_]{1,64}", error_type):
+            error_type = "validation_error"
+        location = _redacted_error_location(error.get("loc"), error_type)
+        diagnostics.append(f"{location}:{error_type}")
+    if len(errors) > len(diagnostics):
+        diagnostics.append(f"+{len(errors) - len(diagnostics)}_more")
+    summary = ", ".join(diagnostics) or "validation_error"
+    return summary[:400]
+
+
+def _redacted_error_location(raw: Any, error_type: str) -> str:
+    if error_type == "extra_forbidden":
+        return "<extra>"
+    if not isinstance(raw, tuple):
+        return "<root>"
+    segments: list[str] = []
+    for segment in raw:
+        if isinstance(segment, int) and not isinstance(segment, bool):
+            segments.append(f"[{segment}]")
+        elif isinstance(segment, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", segment):
+            segments.append(segment)
+        else:
+            segments.append("<field>")
+    return ".".join(segments) if segments else "<root>"

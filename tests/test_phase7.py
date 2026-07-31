@@ -428,11 +428,24 @@ def test_source_snapshots_are_immutable_after_creation() -> None:
         result.snapshots[0].normalized_text = "tampered"
 
 
-def test_short_search_result_set_fails_explicitly() -> None:
+def test_short_nonempty_search_result_set_is_processed_in_rank_order() -> None:
     search = FakeSearchProvider([["https://original.example/only-one"]])
 
-    with pytest.raises(SearchProviderError, match="expected at least three"):
+    result = retrieve_supporting(_planner(), search, FakeScraperProvider(), clock=lambda: NOW)
+
+    assert len(search.requests) == 3
+    assert len(result.outcomes) == 7
+    assert result.outcomes[0].retrieval.search_rank == 1
+    assert result.outcomes[0].retrieval.source_url == "https://original.example/only-one"
+
+
+def test_empty_search_result_set_fails_with_typed_reason() -> None:
+    search = FakeSearchProvider([[]])
+
+    with pytest.raises(SearchProviderError, match="no discovery results") as exc_info:
         retrieve_supporting(_planner(), search, FakeScraperProvider(), clock=lambda: NOW)
+
+    assert exc_info.value.code.value == "empty_results"
 
 
 def test_malformed_provider_outputs_fail_at_the_typed_boundary() -> None:
