@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import base64
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 import httpx
@@ -121,6 +124,40 @@ def test_wigolo_search_maps_site_tokens_to_native_domain_exclusions() -> None:
         "youtube.com",
         "tiktok.com",
     ]
+
+
+def test_wigolo_search_serializes_concurrent_provider_requests() -> None:
+    state_lock = Lock()
+    active = 0
+    maximum_active = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal active, maximum_active
+        with state_lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+        time.sleep(0.02)
+        with state_lock:
+            active -= 1
+        return httpx.Response(200, json=_valid_search_payload(), request=request)
+
+    client = httpx.Client(
+        base_url="http://127.0.0.1:8000",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = WigoloSearchAdapter(WigoloConfig(), client=client, health_verified=True)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(
+                adapter.search,
+                SearchRequest(query_text=f"frozen query {index}", limit=5),
+            )
+            for index in range(2)
+        ]
+        for future in futures:
+            future.result()
+
+    assert maximum_active == 1
 
 
 def test_wigolo_search_rejects_malformed_site_exclusions() -> None:

@@ -1,5 +1,67 @@
 # Status
 
+## 2026-07-31 - MVP-3B Full Live-Canary Stabilization
+
+Status: Complete; the approved direct-MiMo positive canary released and the controlled
+negative canary failed safely. MVP-4 has not started.
+
+Completed:
+
+- Replaced the MVP-3B LLM route with direct Xiaomi `mimo-v2.5-pro` for all five roles;
+  no OpenRouter or MiniMax call occurred in either accepted canary.
+- Proved pinned loopback Wigolo `0.2.1` discovery/acquisition with native SearXNG and
+  Python 3.12.13. Core-only search degraded to irrelevant results; the bootstrapped
+  SearXNG backend returned relevant medical sources while retaining the fixed balanced,
+  five-result, no-fetch request and 15-second Search deadline.
+- Added only live-demonstrated compatibility fixes: Wigolo native domain exclusions and
+  serialized Search calls; thread-safe cross-stance URL/content deduplication; direct-MiMo
+  prompt/schema diagnostics and deterministic Planner/Extractor/Analyst/draft/synthesis
+  identity or policy fields; exact source whitespace/context and non-contiguous quote
+  normalization; stance-bound Analyst scoring; usage/cost parsing; and approved connective
+  template stamping from immutable Ledger records.
+- Positive claim: `For adults with hypertension, regular aerobic exercise lowers resting
+  systolic blood pressure.` Run `2eb99893-b919-40c9-b5b8-b482b61e1c57` released after
+  deterministic final validation. It used 6 Search calls, 13 acquisitions, 9 snapshots,
+  34 physical MiMo calls, 145,738 tokens, and an estimated USD 0.080223. Its persisted
+  brief reconstructs stably with SHA-256
+  `4f17c54f0b2d475552266026d5b6c0dd84b91a0044c1e60970dfc2e9526551ba`.
+- Negative claim: `The Moon is Earth's only natural satellite.` Run
+  `4defb64a-1fe2-4249-b67f-fb61cd4a2974` reached the expected typed `failed` state at the
+  Researcher boundary when its approved one-call LLM ceiling was consumed by the Planner.
+  It used 6 Search calls, 29 acquisitions, 12 snapshots, 1 physical MiMo call, 3,255
+  tokens, and an estimated USD 0.0025555. Persistence reconstruction and secret-redaction
+  checks passed.
+- Both canaries used dedicated `/tmp` SQLite databases, public non-sensitive claims,
+  explicit one-run approval and enable gates, strict deadlines/retries, fail-closed frozen
+  pricing, and explicit maxima of 6 Search calls, 30 acquisitions, 18 snapshots, 160
+  physical LLM calls, 1,000,000 tokens, and USD 1.00 for the positive run. No credential
+  was found in either persisted database.
+
+Verification:
+
+- Focused provider, mocked pipeline, restart, and cancellation suite: 108 passed.
+- Complete offline suite: 408 passed, 1 skipped.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison skipped.
+- Ruff lint and format checks passed.
+- Persisted positive reconstruction, `git diff --check`, and final Git status passed.
+- Changes remain intentionally uncommitted.
+
+Remaining:
+
+- Wigolo core-engine quality is unstable when only Bing remains healthy. MVP-3B success
+  depends on an already bootstrapped native SearXNG sidecar and Python 3.10+; this machine
+  used the Codex runtime's Python 3.12.13. Process lifecycle remains external.
+- One warmed balanced SearXNG probe completed in 11.28 seconds, but the preceding cold
+  probe took 16.09 seconds. The fixed 15-second deadline remains fail-closed, so cold or
+  degraded searches may still time out.
+- Direct-MiMo costs are frozen-policy estimates, not provider-confirmed billing amounts.
+- The stack is suitable to begin the separately approved CLI MVP, subject to explicit
+  Wigolo/SearXNG lifecycle and preflight handling. Do not begin MVP-4 without approval.
+
+Next exact task:
+
+- MVP-4 live CLI release only after explicit user direction.
+
 ## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
 
 Status: Complete offline; no live canary or product-surface work occurred.

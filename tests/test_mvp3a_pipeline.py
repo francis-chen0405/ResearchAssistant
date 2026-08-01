@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import httpx
 import pytest
@@ -100,6 +100,8 @@ class MockProviderHTTP:
         malformed_search: bool = False,
         source_status: int | None = None,
         unsupported_source: bool = False,
+        mismatched_draft_identity: bool = False,
+        invalid_synthesis_template: bool = False,
     ) -> None:
         self.malformed_primary_planner = malformed_primary_planner
         self.malformed_fallback_planner = malformed_fallback_planner
@@ -110,6 +112,8 @@ class MockProviderHTTP:
         self.malformed_search = malformed_search
         self.source_status = source_status
         self.unsupported_source = unsupported_source
+        self.mismatched_draft_identity = mismatched_draft_identity
+        self.invalid_synthesis_template = invalid_synthesis_template
         self.requests: list[httpx.Request] = []
         self.search_threads: set[str] = set()
         self.calls: Counter[tuple[str, str]] = Counter()
@@ -207,6 +211,10 @@ class MockProviderHTTP:
             return self._completion(request, model, '{"broken":', usage=True)
         input_payload = _stage_input(payload["messages"][0]["content"])
         output = self._output(name, input_payload, alias)
+        if name == "SynthesisOutput" and self.invalid_synthesis_template:
+            output["sections"][0]["items"][0]["connective_template_id"] = (
+                "standard_evidence_citation"
+            )
         if name == "SynthesisOutput" and self.invalidate_synthesis:
             output["sections"][0]["items"][0]["approved_factual_statement"] += " Altered."
         response = self._completion(request, model, json.dumps(output), usage=True)
@@ -300,10 +308,16 @@ class MockProviderHTTP:
                     scored_at=NOW,
                 ).model_dump(mode="json")
             return StatementDraft(
-                run_id=item.run_id,
+                run_id=uuid4() if self.mismatched_draft_identity else item.run_id,
                 statement_draft_id=uuid5(NAMESPACE_URL, f"mvp3a-draft::{candidate.quote_block_id}"),
-                quote_block_id=candidate.quote_block_id,
-                stance=candidate.stance,
+                quote_block_id=(
+                    uuid4() if self.mismatched_draft_identity else candidate.quote_block_id
+                ),
+                stance=(
+                    Stance.OPPOSING
+                    if self.mismatched_draft_identity and candidate.stance is Stance.SUPPORTING
+                    else candidate.stance
+                ),
                 draft_statement=(
                     "Schools reported higher completion rates compared with baseline classes."
                     if candidate.stance is Stance.SUPPORTING
@@ -312,9 +326,11 @@ class MockProviderHTTP:
                         "after the fixture rollout."
                     )
                 ),
-                claim_fit=4,
-                analyst_prompt_version="phase8-analyst-v1",
-                analyst_model_name=alias,
+                claim_fit=1 if self.mismatched_draft_identity else 4,
+                analyst_prompt_version=(
+                    "wrong-prompt" if self.mismatched_draft_identity else "phase8-analyst-v1"
+                ),
+                analyst_model_name="wrong-model" if self.mismatched_draft_identity else alias,
                 drafted_at=NOW,
             ).model_dump(mode="json")
         if name == "ReviewerDecision":
@@ -434,7 +450,10 @@ def _mimo_clients(mock: MockProviderHTTP) -> ProviderFactoryClients:
 def test_mocked_full_direct_mimo_pipeline_releases_without_fallback(
     tmp_path: Path,
 ) -> None:
-    mock = MockProviderHTTP()
+    mock = MockProviderHTTP(
+        mismatched_draft_identity=True,
+        invalid_synthesis_template=True,
+    )
     result = run_mvp3b_pipeline(
         CLAIM,
         db_path=tmp_path / "mvp3b.sqlite3",
@@ -449,6 +468,11 @@ def test_mocked_full_direct_mimo_pipeline_releases_without_fallback(
     assert result.retrieval_attempts_used == 18
     assert all(attempt.model_alias == ModelAlias.MIMO_V25_PRO for attempt in result.model_attempts)
     assert all(attempt.route_index == 0 for attempt in result.model_attempts)
+    assert result.analysis_result is not None
+    assert all(
+        draft.statement_draft_id == uuid5(NAMESPACE_URL, f"phase9-draft::{draft.quote_block_id}::0")
+        for draft in result.analysis_result.statement_drafts
+    )
     contract = read_provider_run_contract(result.db_path, result.run_id)
     assert "xiaomi-mimo:https://api.xiaomimimo.com/v1" in contract.provider_identity
     assert contract.model_identity == "mimo-v2.5-pro"

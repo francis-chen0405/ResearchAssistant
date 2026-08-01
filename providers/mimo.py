@@ -9,11 +9,24 @@ from decimal import Decimal
 from enum import StrEnum
 from threading import local
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from models import ModelUsageMetadata, StrictModel
+from agents.synthesizer import _template_for_record
+from models import (
+    ModelUsageMetadata,
+    Placement,
+    PlannerOutput,
+    ProvisionalCandidate,
+    ScoreDecision,
+    StrictModel,
+    SynthesisOutput,
+    _derive_ledger_score,
+    _expected_placement,
+    _is_ledger_eligible,
+)
 from providers.config import MimoConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
 from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap, conservative_token_estimate
@@ -196,7 +209,8 @@ class XiaomiMimoAdapter:
                 retryable=True,
             ) from exc
         try:
-            output = request.requested_output_type.model_validate(raw_output)
+            normalized_output = _normalize_direct_mimo_output(request, raw_output)
+            output = request.requested_output_type.model_validate(normalized_output)
         except ValidationError as exc:
             raise MimoProviderError(
                 MimoFailureCode.SCHEMA,
@@ -280,14 +294,326 @@ def _request_payload(request: LLMRequest, config: MimoConfig) -> dict[str, Any]:
 
 
 def _direct_mimo_prompt(request: LLMRequest) -> str:
+    stage_compatibility = ""
+    if request.stage is LLMStage.EXTRACTOR:
+        stage_compatibility = (
+            "\n<DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
+            "The extracted_quote_block string must be formatted exactly: "
+            '[preceding context] "exact quoted segment" [following context]\n'
+            "Use literal square brackets around both context portions and literal double "
+            "quotes around every exact source segment. Use only exact snapshot text or an "
+            "allowed boundary marker. Do not return an unquoted sentence or plain text.\n"
+            "The combined exact quoted segments must contain at least 100 whitespace-separated "
+            "words. Preserve material qualifications and do not use unrelated padding.\n"
+            "</DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
+        )
+    elif request.stage is LLMStage.ANALYST and request.requested_output_type is ScoreDecision:
+        stage_compatibility = (
+            "\n<DIRECT_MIMO_ANALYST_STANCE_COMPATIBILITY>\n"
+            "The candidate stance is binding. Supporting evidence must support the defined "
+            "claim. Opposing evidence must contradict, limit, or materially qualify the claim. "
+            "If an opposing candidate instead supports the claim, assign claim_fit at most 2 "
+            "and approved=false; apply the converse rule to a supporting candidate that only "
+            "opposes the claim.\n"
+            "ScoreDecision.approved is the Analyst routing decision for whether the candidate "
+            "may proceed to drafting. It is not final factual approval; a separate Reviewer "
+            "controls that later decision. It must be true exactly when evidence_quality >= 2, "
+            "claim_fit >= 3, and their sum >= 5. The application derives approved, ledger_score, "
+            "and placement from the semantic scores.\n"
+            "</DIRECT_MIMO_ANALYST_STANCE_COMPATIBILITY>\n"
+        )
     return (
         f"{request.rendered_prompt}\n\n"
+        f"{stage_compatibility}"
         "<DIRECT_MIMO_PROVENANCE_COMPATIBILITY>\n"
         f"Any *_model_name field must equal exactly: {request.model_alias.value}\n"
         f"Any *_prompt_version field must equal exactly: {request.prompt.version}\n"
         "Preserve capitalization and punctuation exactly.\n"
         "</DIRECT_MIMO_PROVENANCE_COMPATIBILITY>"
     )
+
+
+_MIMO_QUOTE_BLOCK_RE = re.compile(
+    r'^\s*\[(?P<before>[^\[\]]+)\]\s+"(?P<quote>.+?)"\s+\[(?P<after>[^\[\]]+)\]\s*$',
+    re.DOTALL,
+)
+_MIMO_RELAXED_BLOCK_RE = re.compile(
+    r"^\s*\[[^\[\]]+\]\s*(?P<quote>.+?)\s*\[[^\[\]]+\]\s*$",
+    re.DOTALL,
+)
+_MIMO_SENTENCE_RE = re.compile(r"[^.!?]+[.!?]+|[^.!?]+$", re.DOTALL)
+
+
+def _normalize_direct_mimo_output(request: LLMRequest, raw_output: Any) -> Any:
+    """Stamp application-owned identities and repair only exact Extractor source text."""
+    if not isinstance(raw_output, dict):
+        return raw_output
+    if request.stage is LLMStage.PLANNER and request.requested_output_type is PlannerOutput:
+        return _normalize_direct_mimo_planner_output(request, raw_output)
+    if request.stage is LLMStage.ANALYST and request.requested_output_type is ScoreDecision:
+        return _normalize_direct_mimo_score_decision(request, raw_output)
+    if request.stage is LLMStage.SYNTHESIZER and request.requested_output_type is SynthesisOutput:
+        return _normalize_direct_mimo_synthesis_output(request, raw_output)
+    if (
+        request.stage is not LLMStage.EXTRACTOR
+        or request.requested_output_type is not ProvisionalCandidate
+    ):
+        return raw_output
+
+    extraction_input = request.input_artifact
+    source = getattr(extraction_input, "source", None)
+    retrieval = getattr(extraction_input, "retrieval", None)
+    stance = getattr(extraction_input, "stance", None)
+    source_text = getattr(source, "text", None)
+    normalized = dict(raw_output)
+
+    normalized["run_id"] = str(request.run_id)
+    if stance is not None:
+        normalized["stance"] = getattr(stance, "value", stance)
+    if source is not None:
+        normalized["snapshot_id"] = str(source.snapshot_id)
+        normalized["snapshot_sha256"] = source.snapshot_sha256
+    if retrieval is not None:
+        normalized.update(
+            {
+                "source_url": retrieval.resolved_url,
+                "retrieval_attempt_id": str(retrieval.retrieval_attempt_id),
+                "query_id": str(retrieval.query_id),
+                "query_round": retrieval.query_round,
+                "search_rank": retrieval.search_rank,
+            }
+        )
+    normalized["extraction_prompt_version"] = request.prompt.version
+    normalized["extraction_model_name"] = request.model_alias.value
+
+    quote_block = normalized.get("extracted_quote_block")
+    if isinstance(source_text, str) and isinstance(quote_block, str):
+        normalized["extracted_quote_block"] = _normalize_exact_quote_block(
+            quote_block,
+            source_text,
+        )
+    return normalized
+
+
+def _normalize_direct_mimo_score_decision(
+    request: LLMRequest,
+    raw_output: dict[str, Any],
+) -> dict[str, Any]:
+    """Stamp Analyst provenance and reconcile only application-owned routing fields."""
+    normalized = dict(raw_output)
+    candidate = getattr(request.input_artifact, "candidate", None)
+    normalized["run_id"] = str(request.run_id)
+    if candidate is not None:
+        normalized["quote_block_id"] = str(candidate.quote_block_id)
+    normalized["analyst_prompt_version"] = request.prompt.version
+    normalized["analyst_model_name"] = request.model_alias.value
+
+    evidence_quality = normalized.get("evidence_quality")
+    claim_fit = normalized.get("claim_fit")
+    if not (
+        isinstance(evidence_quality, int)
+        and not isinstance(evidence_quality, bool)
+        and isinstance(claim_fit, int)
+        and not isinstance(claim_fit, bool)
+    ):
+        return normalized
+
+    eligible = _is_ledger_eligible(evidence_quality, claim_fit)
+    normalized["approved"] = eligible
+    if not eligible:
+        normalized["ledger_score"] = None
+        normalized["placement"] = None
+    else:
+        normalized["ledger_score"] = _derive_ledger_score(evidence_quality, claim_fit)
+        placement: Placement = _expected_placement(evidence_quality, claim_fit)
+        normalized["placement"] = placement.value
+    return normalized
+
+
+def _normalize_direct_mimo_synthesis_output(
+    request: LLMRequest,
+    raw_output: dict[str, Any],
+) -> dict[str, Any]:
+    """Stamp provenance and approved connective IDs without changing factual content."""
+    normalized = dict(raw_output)
+    normalized["run_id"] = str(request.run_id)
+    normalized["synthesizer_prompt_version"] = request.prompt.version
+    normalized["synthesizer_model_name"] = request.model_alias.value
+    records = getattr(request.input_artifact, "ledger_records", ())
+    records_by_id = {str(record.ledger_claim_id): record for record in records}
+    sections = normalized.get("sections")
+    if not isinstance(sections, list):
+        return normalized
+
+    normalized_sections: list[Any] = []
+    for section in sections:
+        if not isinstance(section, dict):
+            normalized_sections.append(section)
+            continue
+        normalized_section = dict(section)
+        items = normalized_section.get("items")
+        if isinstance(items, list):
+            normalized_items: list[Any] = []
+            for item in items:
+                if isinstance(item, dict):
+                    normalized_item = dict(item)
+                    record = records_by_id.get(str(item.get("ledger_claim_id")))
+                    if record is not None:
+                        normalized_item["connective_template_id"] = _template_for_record(record)
+                    normalized_items.append(normalized_item)
+                else:
+                    normalized_items.append(item)
+            normalized_section["items"] = normalized_items
+        normalized_sections.append(normalized_section)
+    normalized["sections"] = normalized_sections
+    return normalized
+
+
+def _normalize_direct_mimo_planner_output(
+    request: LLMRequest,
+    raw_output: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(raw_output)
+    normalized["run_id"] = str(request.run_id)
+    normalized["planner_prompt_version"] = request.prompt.version
+    normalized["planner_model_name"] = request.model_alias.value
+
+    claim_definition = normalized.get("claim_definition")
+    if isinstance(claim_definition, dict):
+        normalized["claim_definition"] = {
+            **claim_definition,
+            "run_id": str(request.run_id),
+        }
+    ambiguities = normalized.get("ambiguities")
+    if isinstance(ambiguities, list):
+        normalized["ambiguities"] = [
+            {
+                **item,
+                "run_id": str(request.run_id),
+                "ambiguity_id": str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        f"direct-mimo-planner::{request.run_id}::ambiguity::{index}",
+                    )
+                ),
+            }
+            if isinstance(item, dict)
+            else item
+            for index, item in enumerate(ambiguities, start=1)
+        ]
+    search_queries = normalized.get("search_queries")
+    if isinstance(search_queries, list):
+        normalized["search_queries"] = [
+            {
+                **item,
+                "run_id": str(request.run_id),
+                "query_id": str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        f"direct-mimo-planner::{request.run_id}::query::{index}",
+                    )
+                ),
+            }
+            if isinstance(item, dict)
+            else item
+            for index, item in enumerate(search_queries, start=1)
+        ]
+    return normalized
+
+
+def _normalize_exact_quote_block(raw_block: str, source_text: str) -> str:
+    """Rebuild brackets only when the proposed quote is already exact source text."""
+    candidates = _quote_candidates(raw_block)
+    if not candidates:
+        return raw_block
+    exact_segments: list[str] = []
+    locations: list[tuple[int, int]] = []
+    search_start = 0
+    for candidate in candidates:
+        location = _find_exact_or_whitespace_equivalent(source_text, candidate, search_start)
+        if location is None:
+            return raw_block
+        start, end = location
+        exact_segments.append(source_text[start:end])
+        locations.append(location)
+        search_start = end
+    start = locations[0][0]
+    end = locations[-1][1]
+
+    spans = _mimo_sentence_spans(source_text)
+    before = next(
+        (text for _, span_end, text in reversed(spans) if span_end <= start),
+        None,
+    )
+    after = next(
+        (text for span_start, _, text in spans if span_start >= end),
+        None,
+    )
+    if before is None:
+        if source_text[:start].strip():
+            return raw_block
+        before = "Start of Text"
+    if after is None:
+        if source_text[end:].strip():
+            return raw_block
+        original = _MIMO_QUOTE_BLOCK_RE.match(raw_block)
+        original_after = original.group("after").strip() if original is not None else None
+        if original_after not in {"End of Text", "Truncated End of Snapshot"}:
+            return raw_block
+        after = original_after
+    if any(char in before or char in after for char in "[]"):
+        return raw_block
+    quoted = " ... ".join(exact_segments)
+    return f'[{before}] "{quoted}" [{after}]'
+
+
+def _quote_candidates(raw_block: str) -> list[str]:
+    exact = _MIMO_QUOTE_BLOCK_RE.match(raw_block)
+    if exact is not None:
+        candidate = exact.group("quote").strip()
+    else:
+        relaxed = _MIMO_RELAXED_BLOCK_RE.match(raw_block)
+        if relaxed is None:
+            candidate = raw_block.strip().strip('"').strip()
+        else:
+            candidate = relaxed.group("quote").strip().strip('"').strip()
+    if not candidate:
+        return []
+    pieces = [piece.strip().strip('"').strip() for piece in re.split(r"\s+\.\.\.\s+", candidate)]
+    if len(pieces) > 1 and all(pieces):
+        return pieces
+    return [candidate]
+
+
+def _find_exact_or_whitespace_equivalent(
+    source_text: str,
+    candidate: str,
+    search_start: int,
+) -> tuple[int, int] | None:
+    start = source_text.find(candidate, search_start)
+    if start >= 0:
+        return start, start + len(candidate)
+    words = candidate.split()
+    if not words:
+        return None
+    pattern = r"\s+".join(re.escape(word) for word in words)
+    match = re.search(pattern, source_text[search_start:])
+    if match is None:
+        return None
+    return search_start + match.start(), search_start + match.end()
+
+
+def _mimo_sentence_spans(text: str) -> list[tuple[int, int, str]]:
+    spans: list[tuple[int, int, str]] = []
+    for match in _MIMO_SENTENCE_RE.finditer(text):
+        raw = match.group(0)
+        if not raw.strip():
+            continue
+        start = match.start() + len(raw) - len(raw.lstrip())
+        end = match.start() + len(raw.rstrip())
+        if start < end:
+            spans.append((start, end, text[start:end]))
+    return spans
 
 
 def _deadline_for(stage: LLMStage, config: MimoConfig) -> float:

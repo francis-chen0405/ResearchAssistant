@@ -1,5 +1,73 @@
 # Handoff
 
+## 2026-07-31 - MVP-3B Full Live-Canary Stabilization
+
+Current branch:
+
+- `master`
+- All MVP-3B changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-3B is complete. A direct-MiMo positive canary released, its final hash and brief
+  reconstructed from SQLite, and the controlled negative canary failed safely.
+
+Live evidence:
+
+- Positive: `For adults with hypertension, regular aerobic exercise lowers resting
+  systolic blood pressure.` Run `2eb99893-b919-40c9-b5b8-b482b61e1c57`, terminal state
+  `released`, 6 Search / 13 acquisition / 9 snapshot / 34 physical LLM calls, 145,738
+  tokens, estimated USD 0.080223, valid final output, hash
+  `4f17c54f0b2d475552266026d5b6c0dd84b91a0044c1e60970dfc2e9526551ba`.
+- Negative: `The Moon is Earth's only natural satellite.` Run
+  `4defb64a-1fe2-4249-b67f-fb61cd4a2974`, terminal state `failed` at the Researcher
+  boundary, 6 Search / 29 acquisition / 12 snapshot / 1 physical LLM call, 3,255 tokens,
+  estimated USD 0.0025555. The one-call ceiling was consumed by Planner; subsequent
+  Extractor calls failed closed and no candidate reached the Ledger.
+- Both databases reconstructed, remained inside their approved ceilings, and contained no
+  MiMo credential. No accepted canary made an OpenRouter or MiniMax call.
+
+Implementation handoff:
+
+- `providers/mimo.py` is the direct Xiaomi JSON-mode adapter. Exact Pydantic validation
+  remains mandatory; deterministic normalization is limited to application-owned identity,
+  provenance, score-pair routing fields, approved connective templates, and exact text found
+  in the immutable snapshot.
+- `providers/wigolo.py` sends native `exclude_domains`, serializes calls for the local
+  SearXNG process, and retains strict 15-second balanced Search behavior.
+- Supporting/opposing live workers share one locked deduplication state, preventing
+  cross-stance duplicate URLs/content from producing conflicting immutable snapshots.
+- Direct-MiMo Analyst routing is derived from the fixed score-pair table after MiMo supplies
+  semantic quality/fit scores; stance compatibility is explicit and an independent Reviewer
+  still controls factual admission.
+- StatementDraft and synthesis connective identities are stamped from their immutable input
+  candidates/Ledger records; semantic draft text and approved factual statements are never
+  healed or rewritten.
+
+Verification:
+
+- Focused provider/mocked integration/restart/cancellation tests: 108 passed.
+- Full offline suite: 408 passed, 1 skipped.
+- Offline evaluation: all 38 cases passed.
+- Ruff lint, Ruff format, `git diff --check`, persistence reconstruction, and secret scans
+  passed.
+
+Known limitations and CLI suitability:
+
+- Native SearXNG must be bootstrapped with Python 3.10+ before Wigolo starts. On this Mac,
+  `/usr/bin/python3` 3.9 was incompatible; Python 3.12.13 bootstrapped successfully.
+- Core-only Wigolo can collapse to one engine and return unrelated results. The successful
+  canary used `WIGOLO_SEARCH=searxng`, `SEARXNG_MODE=native`, loopback port 3333, and an
+  already warmed sidecar. A cold balanced probe exceeded 15 seconds; a warmed probe passed.
+- Wigolo process ownership and SearXNG preflight are not implemented in this phase. They are
+  requirements for a usable live CLI, not permission to begin MVP-4.
+- MiMo cost is conservatively estimated from frozen pricing; billing confirmation is external.
+
+Do not start:
+
+- Do not add the live CLI, modify Streamlit, redesign orchestration, add another provider,
+  or begin MVP-4 without explicit user approval.
+
 ## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
 
 Current branch:

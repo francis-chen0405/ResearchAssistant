@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -273,11 +274,12 @@ class BalancedRetrievalResult(StrictModel):
 
 
 @dataclass
-class _DeduplicationState:
+class DeduplicationState:
     original_urls: dict[str, UUID] = field(default_factory=dict)
     resolved_urls: dict[str, UUID] = field(default_factory=dict)
     content_hashes: dict[str, UUID] = field(default_factory=dict)
     resolved_by_original: dict[str, str] = field(default_factory=dict)
+    lock: Lock = field(default_factory=Lock, repr=False)
 
 
 Clock = Callable[[], datetime]
@@ -294,6 +296,7 @@ def retrieve_supporting(
     clock: Clock | None = None,
     snapshot_consumer: SnapshotConsumer | None = None,
     boundary_check: Callable[[], None] | None = None,
+    deduplication: DeduplicationState | None = None,
 ) -> ResearcherRetrievalBatch:
     """Retrieve the three supporting rounds at a fixed depth of three."""
     return _retrieve_stance(
@@ -304,7 +307,7 @@ def retrieve_supporting(
         retry_policy=retry_policy or RetryPolicy(),
         acquisition_policy=acquisition_policy or AcquisitionPolicy(),
         clock=clock or _utc_now,
-        deduplication=_DeduplicationState(),
+        deduplication=deduplication or DeduplicationState(),
         snapshot_consumer=snapshot_consumer,
         boundary_check=boundary_check,
     )
@@ -325,7 +328,7 @@ def retrieve_balanced(
     policy = retry_policy or RetryPolicy()
     acquisition = acquisition_policy or AcquisitionPolicy()
     now = clock or _utc_now
-    deduplication = _DeduplicationState()
+    deduplication = DeduplicationState()
     supporting = _retrieve_stance(
         planner,
         Stance.SUPPORTING,
@@ -366,7 +369,7 @@ def _retrieve_stance(
     retry_policy: RetryPolicy,
     acquisition_policy: AcquisitionPolicy,
     clock: Clock,
-    deduplication: _DeduplicationState,
+    deduplication: DeduplicationState,
     snapshot_consumer: SnapshotConsumer | None,
     boundary_check: Callable[[], None] | None,
 ) -> ResearcherRetrievalBatch:
@@ -446,16 +449,17 @@ def _retrieve_result(
     scraper_provider: ScraperProvider,
     retry_policy: RetryPolicy,
     clock: Clock,
-    deduplication: _DeduplicationState,
+    deduplication: DeduplicationState,
     boundary_check: Callable[[], None] | None,
 ) -> tuple[RetrievalOutcome, SourceSnapshot | None]:
     retrieval_attempt_id = uuid5(
         NAMESPACE_URL,
         f"phase-7b-retrieval::{run_id}::{query.query_id}::{rank}::{original_url}",
     )
-    if original_url in deduplication.original_urls:
-        snapshot_id = deduplication.original_urls[original_url]
-        resolved_url = deduplication.resolved_by_original[original_url]
+    with deduplication.lock:
+        snapshot_id = deduplication.original_urls.get(original_url)
+        resolved_url = deduplication.resolved_by_original.get(original_url)
+    if snapshot_id is not None and resolved_url is not None:
         record = _retrieval_record(
             run_id,
             retrieval_attempt_id,
@@ -554,10 +558,12 @@ def _retrieve_result(
             None,
         )
 
-    if response.resolved_url in deduplication.resolved_urls:
-        snapshot_id = deduplication.resolved_urls[response.resolved_url]
-        deduplication.original_urls[original_url] = snapshot_id
-        deduplication.resolved_by_original[original_url] = response.resolved_url
+    with deduplication.lock:
+        snapshot_id = deduplication.resolved_urls.get(response.resolved_url)
+        if snapshot_id is not None:
+            deduplication.original_urls[original_url] = snapshot_id
+            deduplication.resolved_by_original[original_url] = response.resolved_url
+    if snapshot_id is not None:
         record = _retrieval_record(
             run_id,
             retrieval_attempt_id,
@@ -617,10 +623,54 @@ def _retrieve_result(
         )
 
     content_hash = compute_sha256(normalized_text)
-    if content_hash in deduplication.content_hashes:
-        snapshot_id = deduplication.content_hashes[content_hash]
+    with deduplication.lock:
+        snapshot_id = deduplication.resolved_urls.get(response.resolved_url)
+        duplicate_status = ScrapeStatus.DUPLICATE_URL
+        if snapshot_id is None:
+            snapshot_id = deduplication.content_hashes.get(content_hash)
+            duplicate_status = ScrapeStatus.DUPLICATE_CONTENT
+        if snapshot_id is not None:
+            deduplication.original_urls[original_url] = snapshot_id
+            deduplication.resolved_urls[response.resolved_url] = snapshot_id
+            deduplication.resolved_by_original[original_url] = response.resolved_url
+            record = _retrieval_record(
+                run_id,
+                retrieval_attempt_id,
+                query,
+                rank,
+                original_url,
+                response.resolved_url,
+                RetrievalStatus.SKIPPED,
+                retrieved_at,
+            )
+            return (
+                RetrievalOutcome(
+                    retrieval=record,
+                    scrape_status=duplicate_status,
+                    content_type=content_type,
+                    attempts_made=attempts_made,
+                    duplicate_of_snapshot_id=snapshot_id,
+                ),
+                None,
+            )
+
+        snapshot_id = uuid5(
+            NAMESPACE_URL,
+            f"phase-7b-snapshot::{run_id}::{response.resolved_url}::{content_hash}",
+        )
+        snapshot = build_source_snapshot(
+            run_id=run_id,
+            retrieval_attempt_id=retrieval_attempt_id,
+            snapshot_id=snapshot_id,
+            source_url=response.resolved_url,
+            retrieved_at=retrieved_at,
+            normalized_text=normalized_text,
+            truncated=truncated,
+            created_at=clock(),
+        )
         deduplication.original_urls[original_url] = snapshot_id
         deduplication.resolved_urls[response.resolved_url] = snapshot_id
+        deduplication.content_hashes[content_hash] = snapshot_id
         deduplication.resolved_by_original[original_url] = response.resolved_url
         record = _retrieval_record(
             run_id,
@@ -629,63 +679,24 @@ def _retrieve_result(
             rank,
             original_url,
             response.resolved_url,
-            RetrievalStatus.SKIPPED,
+            RetrievalStatus.RETRIEVED,
             retrieved_at,
         )
         return (
             RetrievalOutcome(
                 retrieval=record,
-                scrape_status=ScrapeStatus.DUPLICATE_CONTENT,
+                scrape_status=ScrapeStatus.RETRIEVED,
                 content_type=content_type,
+                provider_name=response.provider_name,
+                provider_version=response.provider_version,
+                canonical_url=response.canonical_url,
+                normalization_version=response.normalization_version,
+                acquisition_version=response.acquisition_version,
+                snapshot_id=snapshot_id,
                 attempts_made=attempts_made,
-                duplicate_of_snapshot_id=snapshot_id,
             ),
-            None,
+            snapshot,
         )
-
-    snapshot_id = uuid5(
-        NAMESPACE_URL,
-        f"phase-7b-snapshot::{run_id}::{response.resolved_url}::{content_hash}",
-    )
-    snapshot = build_source_snapshot(
-        run_id=run_id,
-        retrieval_attempt_id=retrieval_attempt_id,
-        snapshot_id=snapshot_id,
-        source_url=response.resolved_url,
-        retrieved_at=retrieved_at,
-        normalized_text=normalized_text,
-        truncated=truncated,
-        created_at=clock(),
-    )
-    deduplication.original_urls[original_url] = snapshot_id
-    deduplication.resolved_urls[response.resolved_url] = snapshot_id
-    deduplication.content_hashes[content_hash] = snapshot_id
-    deduplication.resolved_by_original[original_url] = response.resolved_url
-    record = _retrieval_record(
-        run_id,
-        retrieval_attempt_id,
-        query,
-        rank,
-        original_url,
-        response.resolved_url,
-        RetrievalStatus.RETRIEVED,
-        retrieved_at,
-    )
-    return (
-        RetrievalOutcome(
-            retrieval=record,
-            scrape_status=ScrapeStatus.RETRIEVED,
-            content_type=content_type,
-            provider_name=response.provider_name,
-            provider_version=response.provider_version,
-            canonical_url=response.canonical_url,
-            normalization_version=response.normalization_version,
-            acquisition_version=response.acquisition_version,
-            snapshot_id=snapshot_id,
-            attempts_made=attempts_made,
-        ),
-        snapshot,
-    )
 
 
 def _scrape_with_retry(

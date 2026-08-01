@@ -1,5 +1,15 @@
 # Phase MVP-3B - Full Live-Canary Stabilization
 
+## Completion Record - 2026-07-31
+
+MVP-3B is complete. The approved positive direct-MiMo canary released with a valid
+deterministic final result and persistence-stable SHA-256
+`4f17c54f0b2d475552266026d5b6c0dd84b91a0044c1e60970dfc2e9526551ba`; the controlled
+negative canary reached its expected typed failed state and persisted its bounded reason.
+Exact claims, run IDs, usage, costs, incompatibilities, fixes, verification, limitations,
+and CLI suitability are recorded at the top of `STATUS.md` and `HANDOFF.md`. Changes remain
+uncommitted. Stop here; MVP-4 requires separate explicit approval.
+
 ## Authorized Direct MiMo Amendment - 2026-07-29
 
 The user explicitly replaced OpenRouter with Xiaomi's direct MiMo platform for MVP-3B.

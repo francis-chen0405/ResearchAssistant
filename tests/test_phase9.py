@@ -98,8 +98,14 @@ OPPOSE_QUOTE = (
 
 
 class FakeSearchProvider:
-    def __init__(self, *, fail_side: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        fail_side: str | None = None,
+        overlap_sides: bool = False,
+    ) -> None:
         self.fail_side = fail_side
+        self.overlap_sides = overlap_sides
         self.requests: list[SearchRequest] = []
         self.thread_names: set[str] = set()
         self._lock = threading.Lock()
@@ -115,7 +121,11 @@ class FakeSearchProvider:
         return SearchResponse(
             results=[
                 SearchResult(
-                    original_url=f"https://research.test/{side}/{query_round}/{rank}",
+                    original_url=(
+                        f"https://research.test/shared/{query_round}/{rank}"
+                        if self.overlap_sides
+                        else f"https://research.test/{side}/{query_round}/{rank}"
+                    ),
                     title=f"{side} result {rank}",
                 )
                 for rank in range(1, 4)
@@ -442,6 +452,17 @@ def test_one_researcher_failure_does_not_invent_a_legacy_retrieval_limit(
     assert result.researcher_result.supporting.retrieval_batch.intended_attempt_count == 15
     assert result.researcher_result.opposing.status is ResearcherSideStatus.FAILED
     assert result.researcher_result.opposing.retrieval_batch is None
+
+
+def test_concurrent_researchers_share_cross_stance_url_deduplication(
+    tmp_path: Path,
+) -> None:
+    result = _run(tmp_path, search=FakeSearchProvider(overlap_sides=True))
+
+    assert "duplicate snapshot ID" not in (result.failure_reason or "")
+    assert result.retrieval_attempts_used == 18
+    with sqlite3.connect(result.db_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 1
 
 
 def test_both_researcher_failures_end_in_clean_failed_state(tmp_path: Path) -> None:

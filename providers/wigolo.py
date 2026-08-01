@@ -42,6 +42,7 @@ class WigoloSearchAdapter:
         )
         self._health_verified = health_verified
         self._health_lock = Lock()
+        self._search_lock = Lock()
 
     def verify_health(self) -> None:
         if self._health_verified:
@@ -123,22 +124,23 @@ class WigoloSearchAdapter:
         }
         if excluded_domains:
             payload["exclude_domains"] = list(excluded_domains)
-        try:
-            response = self._client.post(
-                "/v1/search",
-                json=payload,
-                timeout=self._config.deadlines.search_seconds,
-            )
-        except httpx.TimeoutException as exc:
-            raise SearchTimeoutError(
-                SearchFailureCode.TIMEOUT, "Wigolo search timed out", retryable=True
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise SearchProviderError(
-                SearchFailureCode.CONNECTION,
-                "Wigolo search could not connect to loopback service",
-                retryable=True,
-            ) from exc
+        with self._search_lock:
+            try:
+                response = self._client.post(
+                    "/v1/search",
+                    json=payload,
+                    timeout=self._config.deadlines.search_seconds,
+                )
+            except httpx.TimeoutException as exc:
+                raise SearchTimeoutError(
+                    SearchFailureCode.TIMEOUT, "Wigolo search timed out", retryable=True
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise SearchProviderError(
+                    SearchFailureCode.CONNECTION,
+                    "Wigolo search could not connect to loopback service",
+                    retryable=True,
+                ) from exc
         if response.status_code != 200:
             raise _http_error(response.status_code, "Wigolo search failed")
         body = _json_object(response, operation="search")

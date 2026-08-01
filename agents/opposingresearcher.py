@@ -7,9 +7,9 @@ from collections.abc import Callable
 from agents.supportingresearcher import (
     AcquisitionPolicy,
     Clock,
+    DeduplicationState,
     ResearcherRetrievalBatch,
     SnapshotConsumer,
-    _DeduplicationState,
     _retrieve_stance,
 )
 from models import PlannerOutput, Stance
@@ -27,6 +27,7 @@ def retrieve_opposing(
     clock: Clock | None = None,
     snapshot_consumer: SnapshotConsumer | None = None,
     boundary_check: Callable[[], None] | None = None,
+    deduplication: DeduplicationState | None = None,
 ) -> ResearcherRetrievalBatch:
     """Retrieve the three opposing rounds at a fixed depth of three."""
     from agents.supportingresearcher import _utc_now
@@ -39,7 +40,7 @@ def retrieve_opposing(
         retry_policy=retry_policy or RetryPolicy(),
         acquisition_policy=acquisition_policy or AcquisitionPolicy(),
         clock=clock or _utc_now,
-        deduplication=_DeduplicationState(),
+        deduplication=deduplication or DeduplicationState(),
         snapshot_consumer=snapshot_consumer,
         boundary_check=boundary_check,
     )

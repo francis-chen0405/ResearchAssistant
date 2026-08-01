@@ -38,6 +38,7 @@ from agents.supportingresearcher import (
     ATTEMPTS_PER_STANCE,
     AcquisitionPolicy,
     CooperativeCancellation,
+    DeduplicationState,
     ResearcherRetrievalBatch,
     build_extraction_llm_input,
     retrieve_supporting,
@@ -1945,6 +1946,7 @@ def _run_researcher_stage(
         clock,
     )
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="phase9-researcher") as executor:
+        deduplication = DeduplicationState()
         supporting_future = executor.submit(
             _run_researcher_side,
             db_path,
@@ -1955,6 +1957,7 @@ def _run_researcher_stage(
             llm_provider,
             config,
             clock,
+            deduplication,
         )
         opposing_future = executor.submit(
             _run_researcher_side,
@@ -1966,6 +1969,7 @@ def _run_researcher_stage(
             llm_provider,
             config,
             clock,
+            deduplication,
         )
         supporting = supporting_future.result()
         opposing = opposing_future.result()
@@ -2014,6 +2018,7 @@ def _run_researcher_side(
     llm_provider: LLMProvider,
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
+    deduplication: DeduplicationState,
 ) -> ResearcherStageResult:
     failures: list[ResearcherFailure] = []
     try:
@@ -2026,6 +2031,7 @@ def _run_researcher_side(
                 acquisition_policy=config.acquisition_policy,
                 clock=clock,
                 boundary_check=lambda: _raise_if_cancelled(db_path, planner.run_id),
+                deduplication=deduplication,
             )
         else:
             batch = retrieve_opposing(
@@ -2036,6 +2042,7 @@ def _run_researcher_side(
                 acquisition_policy=config.acquisition_policy,
                 clock=clock,
                 boundary_check=lambda: _raise_if_cancelled(db_path, planner.run_id),
+                deduplication=deduplication,
             )
     except Phase9Cancellation:
         raise
@@ -2576,6 +2583,21 @@ def _invoke_statement_draft(
 
     def validate_draft(output: BaseModel, alias: ModelAlias) -> BaseModel:
         draft = _require_output(output, StatementDraft)
+        if config.pricing_policy == "direct_mimo":
+            draft = draft.model_copy(
+                update={
+                    "run_id": candidate.run_id,
+                    "statement_draft_id": uuid5(
+                        NAMESPACE_URL,
+                        f"phase9-draft::{candidate.quote_block_id}::{revision_number}",
+                    ),
+                    "quote_block_id": candidate.quote_block_id,
+                    "stance": candidate.stance,
+                    "claim_fit": decision.claim_fit,
+                    "analyst_prompt_version": load_prompt(LLMStage.ANALYST).version,
+                    "analyst_model_name": alias.value,
+                }
+            )
         if (
             draft.run_id != candidate.run_id
             or draft.quote_block_id != candidate.quote_block_id
