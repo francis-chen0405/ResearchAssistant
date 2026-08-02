@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 live-smoke-output/
 .researchassistant/
+.DS_Store
