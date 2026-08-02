@@ -146,9 +146,11 @@ Reviewer continues to require literal statement entailment, neutral framing, and
 material qualifications, but does not require one approved fact to prove the complete
 debated claim. Claim Fit 5 is rendered as direct evidence, Claim Fit 4 as indirect
 evidence that is not independently decisive, and Claim Fit 3 as contextual evidence that
-does not independently establish the claim. Partial and Weak evidence remain explicitly
-qualified. A one-sided Ledger produces a deterministic not-balanced coverage warning;
-zero approved Ledger statements still fail closed.
+does not independently establish the claim. Partial evidence is qualified by the
+application-owned indirect connective; Claim Fit 3, qualified-only, and Weak statements
+also require explicit statement scope qualification. A one-sided Ledger produces a
+deterministic not-balanced coverage warning; zero approved Ledger statements still fail
+closed.
 
 ### Approved Stack and Role Mapping
 

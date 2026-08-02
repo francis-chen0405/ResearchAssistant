@@ -531,7 +531,12 @@ def _retrieve_result(
         )
 
     content_type = _normalized_content_type(response.content_type)
-    if not _is_supported_content_type(content_type):
+    normalized_pdf = (
+        content_type == "application/pdf" and response.normalization_version is not None
+    )
+    if not _is_supported_content_type(content_type) or (
+        content_type == "application/pdf" and not normalized_pdf
+    ):
         record = _retrieval_record(
             run_id,
             retrieval_attempt_id,
@@ -617,6 +622,7 @@ def _retrieve_result(
                 scrape_status=ScrapeStatus.FAILED,
                 content_type=content_type,
                 attempts_made=attempts_made,
+                failure_code="empty_content",
                 failure_message="scraper returned no textual content",
             ),
             None,
@@ -798,6 +804,7 @@ def _normalized_content_type(content_type: str) -> str:
 
 def _is_supported_content_type(content_type: str) -> bool:
     return content_type.startswith("text/") or content_type in {
+        "application/pdf",
         "application/xhtml+xml",
         "application/xml",
     }

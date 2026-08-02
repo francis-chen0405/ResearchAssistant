@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
-import time
+import socket
+from collections.abc import Callable, Sequence
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
@@ -59,6 +61,7 @@ class WigoloAcquisitionAdapter:
         *,
         source_client: httpx.Client | None = None,
         wigolo_client: httpx.Client | None = None,
+        host_resolver: Callable[[str], Sequence[str]] | None = None,
     ) -> None:
         self._config = config
         self._source_client = source_client or httpx.Client(
@@ -71,16 +74,14 @@ class WigoloAcquisitionAdapter:
             timeout=httpx.Timeout(config.deadlines.browser_fetch_seconds),
             follow_redirects=False,
         )
+        self._host_resolver = (
+            host_resolver
+            if host_resolver is not None
+            else (_resolve_host_addresses if source_client is None else None)
+        )
 
     def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
-        started = time.monotonic()
         preflight = self._preflight(request)
-        if time.monotonic() - started > self._config.deadlines.candidate_seconds:
-            raise ScraperTimeoutError(
-                AcquisitionFailureCode.TIMEOUT,
-                "candidate acquisition exceeded its total deadline",
-                retryable=True,
-            )
         media_type = preflight["media_type"]
         payload = preflight["payload"]
         rendered = False
@@ -125,13 +126,18 @@ class WigoloAcquisitionAdapter:
         )
 
     def _preflight(self, request: ScrapeRequest) -> dict[str, Any]:
-        _validate_public_url(request.url)
+        _validate_public_url(request.url, resolver=self._host_resolver)
         try:
             with self._source_client.stream(
                 "GET",
                 request.url,
                 timeout=min(request.timeout_seconds, self._config.deadlines.pdf_fetch_seconds),
             ) as response:
+                for redirect_response in (*response.history, response):
+                    _validate_public_url(
+                        str(redirect_response.url),
+                        resolver=self._host_resolver,
+                    )
                 if len(response.history) > self._config.max_redirects:
                     raise ScraperProviderError(
                         AcquisitionFailureCode.REDIRECT,
@@ -284,7 +290,11 @@ def _canonical_url(link: str | None, payload: bytes, final_url: str, media_type:
     return None
 
 
-def _validate_public_url(url: str) -> None:
+def _validate_public_url(
+    url: str,
+    *,
+    resolver: Callable[[str], Sequence[str]] | None = None,
+) -> None:
     parsed = urlsplit(url)
     if (
         parsed.scheme not in {"http", "https"}
@@ -297,6 +307,58 @@ def _validate_public_url(url: str) -> None:
             "source URL must be an absolute credential-free HTTP(S) URL",
             retryable=False,
         )
+    hostname = parsed.hostname
+    assert hostname is not None
+    lowered = hostname.rstrip(".").casefold()
+    if lowered == "localhost" or lowered.endswith(".localhost"):
+        raise _non_public_url()
+    try:
+        literal = ipaddress.ip_address(lowered)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if not literal.is_global:
+            raise _non_public_url()
+        return
+    if resolver is None:
+        return
+    try:
+        addresses = tuple(resolver(lowered))
+    except OSError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname could not be resolved",
+            retryable=True,
+        ) from exc
+    if not addresses:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname did not resolve to an address",
+            retryable=True,
+        )
+    if any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise _non_public_url()
+
+
+def _resolve_host_addresses(hostname: str) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            sockaddr[0]
+            for _, _, _, _, sockaddr in socket.getaddrinfo(
+                hostname,
+                None,
+                type=socket.SOCK_STREAM,
+            )
+        )
+    )
+
+
+def _non_public_url() -> ScraperProviderError:
+    return ScraperProviderError(
+        AcquisitionFailureCode.INACCESSIBLE,
+        "source URL must resolve only to public internet addresses",
+        retryable=False,
+    )
 
 
 def _raise_source_status(status: int) -> None:

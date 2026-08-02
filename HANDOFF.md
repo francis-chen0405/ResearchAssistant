@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-01 - Post-Audit Boundary Corrections
+
+- Verified Python-normalized digital PDFs now continue into immutable source snapshots without
+  falsifying their content type. Unnormalized PDF payloads still fail closed.
+- The obsolete 40-second aggregate acquisition deadline was removed. The approved per-operation
+  preflight, HTML, PDF, and browser deadlines remain in force.
+- Candidate verification itself now enforces the current 75-word minimum; the direct MiMo prompt
+  also says 75 rather than 100.
+- Live display redaction covers the raw values and assignment labels for MiMo, Exa, and Firecrawl
+  keys.
+- The direct orchestration boundary rejects leading/trailing claim whitespace rather than silently
+  trimming the authoritative claim.
+- Package metadata now matches the tested Python 3.11 and 3.12 support range.
+- Acquisition rejects non-public initial URLs, DNS answers, and redirect targets.
+- Claims are immutable after run creation; inspection recomputes the released brief hash; SQLite
+  migration 4 rejects cross-run parent references.
+- Direct MiMo returns semantic content only. Python constructs all application-owned identity,
+  timestamps, provenance, score routing, and templates. No quote or metadata healing remains.
+- One live worker may use a given SQLite database at a time; separate database files can still
+  run concurrently.
+- `python-dotenv` was removed. Configuration is read from the explicit process environment and
+  `.env` files are never loaded automatically.
+- Verification: 468 passed and 2 skipped; 38/38 offline evaluations; Ruff lint/format,
+  launcher syntax, and diff checks passed.
+- No live provider call or MVP-6 work occurred. The unused dotenv dependency was removed and
+  migration 4 added same-run integrity triggers.
+
 ## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
 
 - New runs use a 75-word minimum for all exact quote candidates.
@@ -13,9 +40,16 @@
   must be restarted and the next run must leave Run ID blank.
 - Frozen fixture replay explicitly retains its historical 50-statistical/100-
   non-statistical threshold; this compatibility route is not used by new live runs.
+- Follow-up live-run correction: Claim Fit 4 Partial evidence relies on the deterministic
+  indirect renderer connective and does not require a magic qualification keyword. Claim
+  Fit 3, qualified-only, and Weak statements remain explicitly qualification-gated.
+  Failure stage is set before stage execution, and per-stance model-attempt counts are
+  joined through persisted snapshot/candidate IDs instead of generic stage-name text.
+- Evidence policy identity is now `post-mvp5-bounded-inference-v2`; restart and use a new
+  run ID. The failed v1 run must not be resumed under v2.
 - This is an explicitly authorized post-MVP-5 policy correction, not MVP-6. No dependency
   or SQLite migration was added.
-- Verification: 454 passed and 2 skipped in the full suite; 38/38 offline evaluations;
+- Verification: 461 passed and 2 skipped in the full suite; 38/38 offline evaluations;
   Ruff lint/format, launcher syntax, and diff checks passed. No live call or spend
   occurred.
 

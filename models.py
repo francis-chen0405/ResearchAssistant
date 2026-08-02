@@ -87,6 +87,18 @@ class Entailment(StrEnum):
     WEAK = "Weak"
 
 
+def entailment_for_claim_fit(claim_fit: int) -> Entailment:
+    """Return the single application-owned entailment label for a Ledger-eligible fit."""
+    try:
+        return {
+            3: Entailment.WEAK,
+            4: Entailment.PARTIAL,
+            5: Entailment.STRONG,
+        }[claim_fit]
+    except KeyError as exc:
+        raise ValueError("Ledger Claim Fit must be 3, 4, or 5") from exc
+
+
 class RetrievalStatus(StrEnum):
     RETRIEVED = "retrieved"
     FAILED = "failed"
@@ -496,6 +508,8 @@ class LedgerRecord(StrictModel):
             raise ValueError("Ledger records require the derived Ledger score")
         if self.placement is not _expected_placement(self.evidence_quality, self.claim_fit):
             raise ValueError("Ledger records require the derived placement")
+        if self.entailment is not entailment_for_claim_fit(self.claim_fit):
+            raise ValueError("Ledger entailment must be derived from Claim Fit")
         return self
 
 

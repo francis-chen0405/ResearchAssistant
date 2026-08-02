@@ -26,7 +26,6 @@ class DeadlineConfig(StrictModel):
     html_fetch_seconds: float = Field(default=15.0, gt=0, le=15.0)
     pdf_fetch_seconds: float = Field(default=30.0, gt=0, le=30.0)
     browser_fetch_seconds: float = Field(default=25.0, gt=0, le=25.0)
-    candidate_seconds: float = Field(default=40.0, gt=0, le=40.0)
     planner_seconds: float = Field(default=90.0, gt=0, le=90.0)
     extractor_seconds: float = Field(default=180.0, gt=0, le=180.0)
     analyst_seconds: float = Field(default=120.0, gt=0, le=120.0)

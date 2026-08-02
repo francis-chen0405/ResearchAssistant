@@ -13,7 +13,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from agents.analyst import AnalystLLMInput
+from agents.analyst import AnalystLLMInput, StatementDraftLLMInput
 from agents.planner import PlannerLLMInput
 from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import ExtractionLLMInput
@@ -211,18 +211,18 @@ class MockProviderHTTP:
         with self._lock:
             call_number = self.calls[(name, model)]
             self.calls[(name, model)] += 1
-        if name == "PlannerOutput" and self.planner_status is not None:
+        if name in {"PlannerOutput", "MimoPlannerResponse"} and self.planner_status is not None:
             return self._json(
                 request, {"error": {"message": "planner failed"}}, self.planner_status
             )
         if (
-            name == "PlannerOutput"
+            name in {"PlannerOutput", "MimoPlannerResponse"}
             and model == "xiaomi/mimo-v2.5-pro"
             and call_number < self.malformed_primary_planner
         ):
             return self._completion(request, model, '{"broken":', usage=True)
         if (
-            name == "PlannerOutput"
+            name in {"PlannerOutput", "MimoPlannerResponse"}
             and model == "minimax/minimax-m3"
             and call_number < self.malformed_fallback_planner
         ):
@@ -235,12 +235,87 @@ class MockProviderHTTP:
             )
         if name == "SynthesisOutput" and self.invalidate_synthesis:
             output["sections"][0]["items"][0]["approved_factual_statement"] += " Altered."
+        if name == "MimoSynthesisResponse" and self.invalidate_synthesis:
+            output["sections"][0]["section_type"] = "limitations"
         response = self._completion(request, model, json.dumps(output), usage=True)
-        if name == "PlannerOutput" and self.on_planner_response is not None:
+        if (
+            name in {"PlannerOutput", "MimoPlannerResponse"}
+            and self.on_planner_response is not None
+        ):
             self.on_planner_response()
         return response
 
     def _output(self, name: str, payload: dict[str, object], alias: str) -> dict[str, object]:
+        if name == "MimoPlannerResponse":
+            full = self._output("PlannerOutput", payload, alias)
+            return {
+                "claim_definition": {
+                    key: value
+                    for key, value in full["claim_definition"].items()
+                    if key not in {"run_id", "created_at"}
+                },
+                "ambiguities": [
+                    {
+                        "description": item["description"],
+                        "impact": item["impact"],
+                    }
+                    for item in full["ambiguities"]
+                ],
+                "search_queries": [
+                    {
+                        key: value
+                        for key, value in item.items()
+                        if key not in {"run_id", "query_id", "created_at"}
+                    }
+                    for item in full["search_queries"]
+                ],
+            }
+        if name == "MimoExtractionResponse":
+            item = ExtractionLLMInput.model_validate(payload)
+            return {
+                "extracted_quote_block": (
+                    SUPPORT_QUOTE if item.stance is Stance.SUPPORTING else OPPOSE_QUOTE
+                )
+            }
+        if name == "MimoScoreResponse":
+            return {
+                "evidence_quality": 4,
+                "claim_fit": 4,
+                "rationale": "Mocked Analyst approval.",
+            }
+        if name == "MimoStatementDraftResponse":
+            item = StatementDraftLLMInput.model_validate(payload)
+            candidate = item.analyst_input.candidate
+            return {
+                "draft_statement": (
+                    "Schools reported higher completion rates compared with baseline classes."
+                    if candidate.stance is Stance.SUPPORTING
+                    else (
+                        "Surveyed families reported a 20% decline in student satisfaction "
+                        "after the fixture rollout."
+                    )
+                )
+            }
+        if name == "MimoSynthesisResponse":
+            item = SynthesizerLLMInput.model_validate(payload)
+            output = build_synthesis_output(
+                run_id=item.run_id,
+                ledger_records=item.ledger_records,
+                created_at=NOW,
+                synthesizer_prompt_version="phase8-synthesizer-v2",
+                synthesizer_model_name=alias,
+            )
+            return {
+                "sections": [
+                    {
+                        "section_type": section.section_type.value,
+                        "ledger_claim_ids": [
+                            str(synthesis_item.ledger_claim_id) for synthesis_item in section.items
+                        ],
+                    }
+                    for section in output.sections
+                ]
+            }
         if name == "PlannerOutput":
             planner_input = PlannerLLMInput.model_validate(payload)
             queries = [

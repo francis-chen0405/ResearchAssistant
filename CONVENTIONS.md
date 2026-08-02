@@ -67,10 +67,9 @@ Evidence scoring remains two-axis: `evidence_quality` and `claim_fit` are record
 
 ## 3. Tech Stack
 
-  Python 3.11+
+  Python 3.11 or 3.12
   Pydantic v2           # data models and validation
   sqlite3               # stdlib, no ORM
-  python-dotenv         # loading .env
   pytest                # all tests
   ruff                  # linting and formatting
 
@@ -111,9 +110,10 @@ SDK or dependency.
 
 ## 6. Environment Variables
 
-  Load with python-dotenv at the top of any file that needs them.
+  Read live secrets only from the explicitly supplied process-environment mapping.
+  Never load `.env` files or shell profiles automatically.
   Never hardcode keys or paths.
-  Required variables are documented in .env.example only.
+  Required variables are documented with blank values in `.env.example` only.
 
 MVP-2A proposes `OPENROUTER_API_KEY` as the only required vendor secret for the primary
 stack. Do not add it to `.env.example`, load it, or use it until MVP-2B is explicitly

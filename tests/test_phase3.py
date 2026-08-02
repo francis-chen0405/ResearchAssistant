@@ -10,6 +10,7 @@ from agents.researcher import (
     STATISTICAL_MIN_WORDS,
     PostExtractionFilterResult,
     build_source_snapshot,
+    derive_quote_block_id,
     filter_provisional_candidate,
     verify_candidate_against_snapshot,
 )
@@ -382,3 +383,41 @@ def test_verify_rejects_tampered_candidate_offsets_even_when_hash_matches() -> N
 
     with pytest.raises(ValueError, match="offsets"):
         verify_candidate_against_snapshot(snapshot, tampered, claim_keywords=["policy"])
+
+
+def test_verify_rejects_underlength_candidate_without_keyword_recheck() -> None:
+    segment = _non_statistical_sentence(74)
+    snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
+    rejected = _filter(snapshot, f'[{_BEFORE}] "{segment}" [{_AFTER}]')
+    assert rejected.valid is False
+
+    accepted_segment = _non_statistical_sentence(75)
+    accepted_snapshot = _snapshot(f"{_BEFORE} {accepted_segment} {_AFTER}")
+    accepted = _filter(
+        accepted_snapshot,
+        f'[{_BEFORE}] "{accepted_segment}" [{_AFTER}]',
+    )
+    assert accepted.candidate is not None
+    short_snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
+    start_char = short_snapshot.normalized_text.index(segment)
+    offsets = [SegmentOffset(start_char=start_char, end_char=start_char + len(segment))]
+    underlength = accepted.candidate.model_copy(
+        update={
+            "extracted_quote_block": f'[{_BEFORE}] "{segment}" [{_AFTER}]',
+            "segment_offsets": offsets,
+            "raw_segment_word_count": 74,
+        }
+    )
+    underlength = underlength.model_copy(
+        update={
+            "snapshot_sha256": short_snapshot.snapshot_sha256,
+            "quote_block_id": derive_quote_block_id(
+                underlength.source_url,
+                short_snapshot.snapshot_sha256,
+                offsets,
+            ),
+        }
+    )
+
+    with pytest.raises(ValueError, match="need 75"):
+        verify_candidate_against_snapshot(short_snapshot, underlength)

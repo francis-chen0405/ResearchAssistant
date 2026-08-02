@@ -120,6 +120,7 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
     first = controller.start(request)
     assert entered.wait(timeout=2)
     second = controller.start(request)
+    same_database_other_run = controller.start(_request(tmp_path, run_id=uuid4()))
     release.set()
     snapshot = controller.snapshot(request.db_path, run_id)
     deadline = monotonic() + 2
@@ -130,6 +131,9 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
     assert first.started is True
     assert second.started is False
     assert second.classification == "duplicate_active"
+    assert same_database_other_run.started is False
+    assert same_database_other_run.classification == "duplicate_active"
+    assert "already has an active research run" in same_database_other_run.message
     assert snapshot.classification == "failed"
     assert calls == 1
 
@@ -181,10 +185,12 @@ def test_history_reconnects_from_authoritative_database(tmp_path: Path) -> None:
         (ProviderRunStatus.BLOCKED, CLIExitCode.BLOCKED),
         (ProviderRunStatus.FAILED, CLIExitCode.FAILED),
         (ProviderRunStatus.CANCELLED, CLIExitCode.CANCELLED),
-        (ProviderRunStatus.RUNNING, CLIExitCode.RELEASED),
+        (ProviderRunStatus.RUNNING, None),
     ],
 )
-def test_exact_mvp4_exit_code_mapping(status: ProviderRunStatus, expected: CLIExitCode) -> None:
+def test_exact_mvp4_exit_code_mapping(
+    status: ProviderRunStatus, expected: CLIExitCode | None
+) -> None:
     assert exit_code_for_status(status) is expected
 
 
@@ -197,6 +203,19 @@ def test_redaction_covers_explicit_key_authorization_and_assignments() -> None:
     assert "abc.def" not in safe
     assert "another-secret" not in safe
     assert "final-secret" not in safe
+
+
+def test_live_controller_redacts_every_provider_key_value() -> None:
+    secrets = {
+        "MIMO_API_KEY": "mimo-raw-secret",
+        "EXA_API_KEY": "exa-raw-secret",
+        "FIRECRAWL_API_KEY": "firecrawl-raw-secret",
+    }
+    controller = LiveResearchController(environment=secrets)
+
+    safe = controller._redact(" ".join(secrets.values()))
+
+    assert all(secret not in safe for secret in secrets.values())
 
 
 def test_service_probe_requires_exact_wigolo_identity(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -379,6 +398,10 @@ def test_mocked_released_run_reconnects_in_live_streamlit(
     assert SECRET not in process.stdout + process.stderr + db_path.read_bytes().decode(
         "utf-8", errors="ignore"
     )
+
+    snapshot = LiveResearchController(environment={}).snapshot(db_path, run_id)
+    assert snapshot.supporting.model_attempts > 0
+    assert snapshot.opposing.model_attempts > 0
 
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
     app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()

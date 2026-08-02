@@ -1,5 +1,36 @@
 # Status
 
+## 2026-08-01 - Post-Audit Boundary Corrections
+
+Status: Implemented. MVP-6 has not started.
+
+- Connected already-normalized digital PDF text to the researcher snapshot path while rejecting
+  unnormalized PDF payloads and preserving the `application/pdf` origin type.
+- Removed the aggregate candidate-acquisition deadline; individual HTTP/PDF/browser deadlines
+  remain bounded.
+- Enforced the current 75-word minimum during every downstream candidate verification and aligned
+  the direct MiMo extractor instruction with 75 words.
+- Expanded live redaction to all MiMo, Exa, and Firecrawl key values.
+- Rejected leading/trailing claim whitespace at the direct pipeline boundary instead of silently
+  changing the authoritative claim.
+- Restricted package metadata to the tested Python 3.11/3.12 range.
+- Enforced public-only acquisition targets across initial URLs, DNS resolution, and redirects.
+- Made persisted claims immutable, verified released brief hashes on inspection, and added
+  migration 4 guards against cross-run artifact splicing.
+- Replaced MiMo's full artifact output contract with semantic-only response models; application
+  code now constructs IDs, timestamps, provenance, routing fields, and synthesis templates.
+  Extractor output is no longer silently rewritten.
+- Aligned live concurrency with the per-database lock: different database files may run in
+  parallel, but two runs cannot write the same SQLite database concurrently.
+- Removed the unused `python-dotenv` dependency and any implied automatic `.env` loading.
+
+Verification:
+
+- Focused regression tests passed; the full offline suite passed with 468 tests and 2 skips.
+- All 38 deterministic evaluation cases, Ruff lint/format, launcher syntax, and diff checks passed.
+- No provider call was made. One unused dependency was removed and SQLite migration 4 added
+  same-run integrity triggers.
+
 ## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
 
 Status: Implemented; final full-suite verification is recorded below. MVP-6 has not
@@ -18,10 +49,17 @@ started.
 - Preserved deterministic replay of frozen fixture runs through an explicit legacy
   50-statistical/100-non-statistical quote policy. New provider-backed runs always use
   the current 75-word policy.
+- Corrected the live-run conflict discovered by run
+  `fabaaaf4-6624-4543-a745-9884791fd612`: Claim Fit 4 Partial evidence no longer needs an
+  artificial in-statement keyword after exact-source and Reviewer approval, while Claim
+  Fit 3, qualified-only, and Weak evidence remain gated. Failures now identify the stage
+  being attempted, and stance model-attempt cards use persisted artifact provenance.
+- Bumped the evidence policy identity to `post-mvp5-bounded-inference-v2`; use a new run
+  ID after restarting the launcher.
 
 Verification:
 
-- Full offline suite: 454 passed, 2 skipped.
+- Full offline suite: 461 passed, 2 skipped.
 - Offline evaluation: all 38 deterministic cases passed.
 - Ruff lint/format, launcher syntax, and `git diff --check` passed.
 - No Exa, Wigolo, Firecrawl, or MiMo call was made; added provider cost is zero.

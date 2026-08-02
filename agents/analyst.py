@@ -7,7 +7,11 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, model_validator
 
-from agents.researcher import verify_candidate_against_snapshot
+from agents.researcher import (
+    CURRENT_QUOTE_LENGTH_POLICY,
+    QuoteLengthPolicy,
+    verify_candidate_against_snapshot,
+)
 from agents.supportingresearcher import UntrustedSourceText
 from models import (
     ApprovedScore,
@@ -22,6 +26,7 @@ from models import (
     StatementDraft,
     StatementReviewResult,
     StrictModel,
+    entailment_for_claim_fit,
 )
 
 QUALIFICATION_MARKERS = (
@@ -58,6 +63,24 @@ class AnalystLLMInput(StrictModel):
             raise ValueError("Analyst source snapshot_id must match the candidate")
         if self.source.snapshot_sha256 != self.candidate.snapshot_sha256:
             raise ValueError("Analyst source hash must match the candidate")
+        return self
+
+
+class StatementDraftLLMInput(StrictModel):
+    """Application-owned context for a semantic statement-drafting response."""
+
+    analyst_input: AnalystLLMInput
+    score_decision: ScoreDecision
+    revision_number: int = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> StatementDraftLLMInput:
+        if self.score_decision.run_id != self.analyst_input.run_id:
+            raise ValueError("score decision run_id must match Analyst input")
+        if self.score_decision.quote_block_id != self.analyst_input.candidate.quote_block_id:
+            raise ValueError("score decision quote_block_id must match Analyst candidate")
+        if not self.score_decision.approved:
+            raise ValueError("only approved score decisions may be drafted")
         return self
 
 
@@ -296,6 +319,7 @@ class LedgerAdmissionRequest(StrictModel):
     approved_factual_statement: str = Field(min_length=1)
     entailment: Entailment
     placement: Placement | None = None
+    quote_length_policy: QuoteLengthPolicy = CURRENT_QUOTE_LENGTH_POLICY
 
 
 class ValidatedLedgerPayload(StrictModel):
@@ -371,7 +395,11 @@ def create_statement_draft(
 
 
 def validate_ledger_admission(request: LedgerAdmissionRequest) -> ValidatedLedgerPayload:
-    verify_candidate_against_snapshot(request.snapshot, request.candidate)
+    verify_candidate_against_snapshot(
+        request.snapshot,
+        request.candidate,
+        quote_length_policy=request.quote_length_policy,
+    )
     _validate_candidate_score_decision(request.candidate, request.score_decision)
 
     if not request.score_decision.approved:
@@ -556,15 +584,14 @@ def _validate_entailment_and_qualification(
     placement: Placement,
     entailment: Entailment,
 ) -> None:
+    if entailment is not entailment_for_claim_fit(claim_fit):
+        raise ValueError("entailment must be derived from Claim Fit")
     qualification_required = (
-        claim_fit == 3
-        or placement is Placement.QUALIFIED_ONLY
-        or entailment in {Entailment.PARTIAL, Entailment.WEAK}
+        claim_fit == 3 or placement is Placement.QUALIFIED_ONLY or entailment is Entailment.WEAK
     )
     if qualification_required and not statement_has_required_qualification(statement):
         raise ValueError(
-            "Claim Fit 3, qualified-only, Partial, and Weak statements require "
-            "an explicit qualification"
+            "Claim Fit 3, qualified-only, and Weak statements require an explicit qualification"
         )
 
 

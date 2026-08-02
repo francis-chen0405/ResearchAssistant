@@ -29,6 +29,7 @@ from models import (
     SynthesisOutput,
     SynthesisSection,
     ValidationErrorCode,
+    entailment_for_claim_fit,
 )
 
 _NOW = datetime(2026, 7, 3, 12, 0, tzinfo=UTC)
@@ -59,7 +60,7 @@ def _ledger(
     statement: str,
     evidence_quality: int,
     claim_fit: int,
-    entailment: Entailment = Entailment.STRONG,
+    entailment: Entailment | None = None,
 ) -> LedgerRecord:
     ledger_score, placement = _score_and_placement(evidence_quality, claim_fit)
     return LedgerRecord(
@@ -73,7 +74,7 @@ def _ledger(
         claim_fit=claim_fit,
         ledger_score=ledger_score,
         placement=placement,
-        entailment=entailment,
+        entailment=entailment or entailment_for_claim_fit(claim_fit),
         source_url=f"https://example.test/source-{value}",
         retrieval_attempt_id=_uuid(300 + value),
         snapshot_id=_uuid(400 + value),
@@ -122,7 +123,7 @@ def _partial_ledger(entailment: Entailment = Entailment.PARTIAL) -> LedgerRecord
         stance=Stance.SUPPORTING,
         statement="Among surveyed families, the source reported limited program support.",
         evidence_quality=4,
-        claim_fit=4,
+        claim_fit=3 if entailment is Entailment.WEAK else 4,
         entailment=entailment,
     )
 
@@ -565,7 +566,7 @@ def test_valid_output_produces_stable_hash() -> None:
     assert result.validator_config_version == VALIDATOR_CONFIG_VERSION
     assert result.rendered_brief_hash == hashlib.sha256(expected.encode("utf-8")).hexdigest()
     assert result.rendered_brief_hash == (
-        "ee60e0d4053e209695a254022ab41611e178f6d74467d32fb1c1c0076922db29"
+        "39ad6b8bad395870a3e3ff50e242cf4ce163c1d53a5334e73612dd9f7ecef2a0"
     )
     assert set(APPROVED_CONNECTIVE_TEMPLATES) == {
         "supporting_evidence",

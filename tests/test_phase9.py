@@ -12,6 +12,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 import pytest
 from pydantic import BaseModel
 
+import orchestrator as orchestrator_module
 from agents.analyst import AnalystLLMInput
 from agents.planner import PlannerLLMInput
 from agents.reviewer import ReviewerDecision, ReviewerInput
@@ -30,6 +31,7 @@ from models import (
     RunStatus,
     ScoreDecision,
     SearchQuery,
+    Stage,
     Stance,
     StatementDraft,
 )
@@ -429,6 +431,21 @@ def test_successful_full_orchestration_releases_with_explicit_status(tmp_path: P
     assert entailment_by_fit[4] is Entailment.PARTIAL
 
 
+def test_direct_pipeline_rejects_claim_whitespace_instead_of_changing_it(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="leading or trailing whitespace"):
+        run_provider_pipeline(
+            " The fixture policy improves student outcomes. ",
+            db_path=tmp_path / "phase9.sqlite3",
+            search_provider=FakeSearchProvider(),
+            scraper_provider=FakeScraperProvider(),
+            llm_provider=FakeLLMProvider(),
+            run_id=RUN_ID,
+            clock=lambda: NOW,
+        )
+
+    assert not (tmp_path / "phase9.sqlite3").exists()
+
+
 def test_researchers_use_at_most_two_workers_and_equal_limits(tmp_path: Path) -> None:
     search = FakeSearchProvider()
     result = _run(tmp_path, search=search)
@@ -738,6 +755,24 @@ def test_restart_after_researchers_does_not_duplicate_snapshots(tmp_path: Path) 
         assert connection.execute("SELECT COUNT(*) FROM ledger_records").fetchone()[0] == 2
 
 
+def test_analysis_exception_is_attributed_to_claim_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_analysis(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise ValueError("injected Ledger admission failure")
+
+    monkeypatch.setattr(orchestrator_module, "_run_analysis_stage", fail_analysis)
+
+    result = _run(tmp_path)
+
+    assert result.status is ProviderRunStatus.FAILED
+    assert result.current_stage is Stage.CLAIM_LEDGER
+    checkpoint_by_key = {checkpoint.stage_key: checkpoint for checkpoint in result.checkpoints}
+    assert checkpoint_by_key["analysis-ledger"].status.value == "failed"
+
+
 def test_cancellation_is_honored_between_stages_and_has_no_hash(tmp_path: Path) -> None:
     db_path = tmp_path / "phase9.sqlite3"
 
@@ -773,6 +808,20 @@ def test_database_reopening_preserves_partial_and_attempt_metadata(tmp_path: Pat
         item.model_alias and item.stage and item.attempt_number >= 1
         for item in reopened.model_attempts
     )
+
+
+def test_inspection_rejects_claim_tampering_after_release(tmp_path: Path) -> None:
+    result = _run(tmp_path)
+    assert result.status is ProviderRunStatus.RELEASED
+
+    with sqlite3.connect(result.db_path) as connection:
+        connection.execute(
+            "UPDATE runs SET raw_claim = ? WHERE run_id = ?",
+            ("A tampered claim.", str(result.run_id)),
+        )
+
+    with pytest.raises(ValueError, match="persisted released brief"):
+        inspect_provider_run(result.db_path, result.run_id)
 
 
 def test_worker_threads_never_share_sqlite_connections(

@@ -1,5 +1,33 @@
 # Decisions
 
+## 2026-08-01 - Post-Audit Boundary Corrections
+
+- Require public HTTP(S) destinations for acquisition, including literal IPs, DNS answers,
+  and every redirect target; reject local, private, link-local, reserved, and otherwise
+  non-global addresses before content is accepted.
+- Make run claims immutable, verify released brief hashes during reconstruction, and add
+  database guards preventing artifacts from referencing parents owned by another run.
+- Give MiMo narrow semantic response schemas. Python alone creates IDs, timestamps,
+  provenance, derived score routing, and synthesis templates; extra model-supplied metadata
+  fails schema validation. Preserve Extractor text byte-for-byte and reject invalid quotes
+  downstream instead of silently rewriting them.
+- Permit live workers concurrently only when they use different SQLite database files. One
+  database has one active worker, regardless of run ID, matching the cross-process file lock.
+- Remove the unused `python-dotenv` dependency. Runtime configuration comes only from the
+  explicitly supplied process-environment mapping; the application never auto-loads `.env`.
+- Accept `application/pdf` retrieval results only after the approved Python PDF normalizer
+  has produced verified plain text, a matching hash, and a matching word count. Preserve the
+  truthful `application/pdf` origin type rather than relabeling extracted text as XML. Reject
+  unnormalized, scanned, encrypted, malformed, empty, or otherwise unusable PDFs.
+- Remove the misleading aggregate candidate-acquisition deadline. Keep the explicit preflight,
+  HTML, PDF, and browser-fetch request deadlines so individual blocking operations remain bounded.
+- Recheck the current 75-word quote minimum whenever a candidate is verified for Analyst or
+  Ledger use, even when claim keywords do not need to be recomputed.
+- Require direct provider-pipeline callers to supply the byte-exact claim without leading or
+  trailing whitespace; reject invalid framing rather than silently trimming it.
+- Explicitly redact the MiMo, Exa, and Firecrawl key values at the live display boundary.
+- Declare the actually tested Python support range, 3.11 through 3.12, in package metadata.
+
 ## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
 
 - Set the deterministic minimum quoted evidence length to 75 words for statistical and
@@ -10,14 +38,19 @@
   it must still reject every factual addition or inference absent from the quotation.
 - Assign Strong/direct evidence only at Claim Fit 5, Partial/indirect evidence at Claim
   Fit 4, and Weak/contextual evidence at Claim Fit 3. Partial and Weak statements retain
-  deterministic qualification requirements and receive application-owned warning
-  connectives in the rendered brief.
+  application-owned warning connectives in the rendered brief. Claim Fit 3,
+  qualified-only placement, and Weak evidence require explicit in-statement scope
+  qualification; Claim Fit 4 Partial evidence does not require an artificial keyword
+  when its literal statement and material source qualifications passed Reviewer checks.
 - When approved evidence exists for only one stance, release may continue but the brief
   must state that it is not balanced and identify the missing Reviewer-approved stance.
   A run with no Reviewer-approved Ledger statement still fails closed; an empty report is
   not presented as research evidence.
 - Fingerprint the new evidence policy and prompt/validator versions. Existing run IDs are
   not reinterpreted under the more permissive policy.
+- Attribute a failure to the stage being attempted rather than the previously completed
+  stage. Count stance model attempts through persisted snapshot/candidate artifact IDs,
+  because model route stages are generic (`extractor`, `analyst`, and `reviewer`).
 
 ## 2026-08-01 - Post-MVP-5 Retrieval Provider Correction
 

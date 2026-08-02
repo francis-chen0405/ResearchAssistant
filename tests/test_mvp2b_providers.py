@@ -14,8 +14,13 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from agents.reviewer import ReviewerDecision, ReviewerInput
-from providers.acquisition import AcquisitionFailureCode, WigoloAcquisitionAdapter
+from providers.acquisition import (
+    AcquisitionFailureCode,
+    WigoloAcquisitionAdapter,
+    _validate_public_url,
+)
 from providers.config import (
+    DeadlineConfig,
     LiveSmokeConfig,
     OpenRouterConfig,
     ProviderConfigurationError,
@@ -41,6 +46,35 @@ from providers.search import SearchFailureCode, SearchProviderError, SearchReque
 from providers.wigolo import WigoloSearchAdapter
 
 FIXTURES = Path(__file__).parent / "fixtures" / "mvp2b"
+
+
+def test_deadline_config_has_no_aggregate_candidate_deadline() -> None:
+    assert "candidate_seconds" not in DeadlineConfig.model_fields
+    with pytest.raises(ValidationError):
+        DeadlineConfig(candidate_seconds=40)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost/source",
+        "http://127.0.0.1/source",
+        "http://10.0.0.1/source",
+        "http://169.254.169.254/latest/meta-data",
+        "http://[::1]/source",
+    ],
+)
+def test_acquisition_rejects_non_public_url_targets(url: str) -> None:
+    with pytest.raises(ScraperProviderError, match="public internet"):
+        _validate_public_url(url)
+
+
+def test_acquisition_rejects_hostname_resolving_to_private_address() -> None:
+    with pytest.raises(ScraperProviderError, match="public internet"):
+        _validate_public_url(
+            "https://apparently-public.example/source",
+            resolver=lambda hostname: ("203.0.113.1", "10.0.0.4"),
+        )
 
 
 def _search_adapter(payload: object, *, status: int = 200) -> WigoloSearchAdapter:

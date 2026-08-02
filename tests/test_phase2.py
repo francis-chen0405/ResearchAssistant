@@ -70,6 +70,7 @@ from store import (
     read_statement_review,
     read_synthesis,
     read_validation,
+    update_run,
 )
 
 # ---------------------------------------------------------------------------
@@ -238,7 +239,7 @@ def _make_ledger(
         claim_fit=4,
         ledger_score=4,
         placement=Placement.SECONDARY,
-        entailment=Entailment.STRONG,
+        entailment=Entailment.PARTIAL,
         source_url="https://example.com/source",
         retrieval_attempt_id=retrieval_attempt_id,
         snapshot_id=snapshot_id,
@@ -970,3 +971,26 @@ class TestDuplicateRejection:
         insert_model_invocation(db_path, inv)
         with pytest.raises(sqlite3.IntegrityError):
             insert_model_invocation(db_path, inv)
+
+
+def test_run_claim_is_immutable_after_creation(db_path: str) -> None:
+    run = _make_run()
+    insert_run(db_path, run)
+
+    with pytest.raises(ValueError, match="raw_claim is immutable"):
+        update_run(db_path, run.model_copy(update={"raw_claim": "Changed claim"}))
+
+    assert read_run(db_path, run.run_id).raw_claim == "Test claim"
+
+
+def test_retrieval_cannot_reference_query_from_another_run(db_path: str) -> None:
+    first_run, _, first_query = _insert_run_and_planner(db_path)
+    second_run = _make_run()
+    insert_run(db_path, second_run)
+    insert_planner_output(db_path, _make_planner(second_run.run_id))
+    cross_run = _make_retrieval(second_run.run_id, first_query.query_id)
+
+    with pytest.raises(sqlite3.IntegrityError, match="another run"):
+        insert_retrieval_attempt(db_path, cross_run)
+
+    assert first_run.run_id != second_run.run_id

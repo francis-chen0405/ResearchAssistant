@@ -35,7 +35,7 @@ STATISTICAL_MARKERS = (
     "decline",
 )
 
-EVIDENCE_POLICY_VERSION = "post-mvp5-bounded-inference-v1"
+EVIDENCE_POLICY_VERSION = "post-mvp5-bounded-inference-v2"
 STATISTICAL_MIN_WORDS = 75
 NON_STATISTICAL_MIN_WORDS = 75
 
@@ -333,6 +333,16 @@ def verify_candidate_against_snapshot(
         raise ValueError("candidate raw word count does not match quoted segments")
     if candidate.has_statistical_markers != has_statistical_markers(quoted_text):
         raise ValueError("candidate statistical marker flag does not match quoted segments")
+    minimum_words = (
+        quote_length_policy.statistical_min_words
+        if candidate.has_statistical_markers
+        else quote_length_policy.non_statistical_min_words
+    )
+    if candidate.raw_segment_word_count < minimum_words:
+        raise ValueError(
+            f"quoted segments contain {candidate.raw_segment_word_count} words; "
+            f"need {minimum_words}"
+        )
     if claim_keywords is not None:
         metrics = validate_quote_substance(
             parsed_quote,

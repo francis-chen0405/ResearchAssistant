@@ -201,6 +201,20 @@ class LiveResearchController:
                         "starting a worker."
                     ),
                 )
+            database_active = any(
+                active_key[0] == str(db_path) and not active_run.future.done()
+                for active_key, active_run in self._active.items()
+            )
+            if database_active:
+                return LiveStartResult(
+                    started=False,
+                    run_id=run_id,
+                    classification="duplicate_active",
+                    message=(
+                        "This SQLite database already has an active research run. "
+                        "Wait for it to finish or use a different database file."
+                    ),
+                )
         try:
             ceilings = RunCeilings(
                 max_tokens=request.max_tokens,
@@ -389,12 +403,13 @@ class LiveResearchController:
             pass
         classification = result.status.value
         checkpoint = result.checkpoints[-1].stage_key if result.checkpoints else None
+        exit_code = exit_code_for_status(result.status)
         return LiveRunSnapshot(
             run_id=result.run_id,
             db_path=result.db_path,
             raw_claim=result.raw_claim,
             classification=classification,
-            exit_code=int(exit_code_for_status(result.status)),
+            exit_code=int(exit_code) if exit_code is not None else None,
             stage=result.current_stage.value,
             latest_checkpoint=checkpoint,
             message=_result_message(result),
@@ -468,16 +483,22 @@ class LiveResearchController:
         )
 
     def _redact(self, value: object) -> str:
-        return redact_text(value, secrets=(self._environment.get("MIMO_API_KEY", ""),))
+        return redact_text(
+            value,
+            secrets=tuple(
+                self._environment.get(name, "")
+                for name in ("MIMO_API_KEY", "EXA_API_KEY", "FIRECRAWL_API_KEY")
+            ),
+        )
 
 
-def exit_code_for_status(status: ProviderRunStatus) -> CLIExitCode:
+def exit_code_for_status(status: ProviderRunStatus) -> CLIExitCode | None:
     return {
         ProviderRunStatus.RELEASED: CLIExitCode.RELEASED,
         ProviderRunStatus.BLOCKED: CLIExitCode.BLOCKED,
         ProviderRunStatus.FAILED: CLIExitCode.FAILED,
         ProviderRunStatus.CANCELLED: CLIExitCode.CANCELLED,
-        ProviderRunStatus.RUNNING: CLIExitCode.RELEASED,
+        ProviderRunStatus.RUNNING: None,
     }[status]
 
 
@@ -490,13 +511,12 @@ def _research_progress(
     result: ProviderPipelineResult,
     stance: Literal["supporting", "opposing"],
 ) -> ResearchProgress:
-    attempts = sum(1 for attempt in result.model_attempts if stance in attempt.stage)
     if result.researcher_result is None:
         status = "running" if result.status is ProviderRunStatus.RUNNING else "not available"
         return ResearchProgress(
             stance=stance,
             status=status,
-            model_attempts=attempts,
+            model_attempts=0,
             retrieval_attempts=0,
             usable_snapshots=0,
             candidates=0,
@@ -504,6 +524,16 @@ def _research_progress(
     side = getattr(result.researcher_result, stance)
     outcomes = side.retrieval_batch.outcomes if side.retrieval_batch is not None else ()
     usable = sum(1 for outcome in outcomes if outcome.snapshot_id is not None)
+    stance_artifact_ids = {candidate.quote_block_id for candidate in side.candidates}
+    if side.retrieval_batch is not None:
+        stance_artifact_ids.update(
+            snapshot.snapshot_id for snapshot in side.retrieval_batch.snapshots
+        )
+    attempts = sum(
+        1
+        for attempt in result.model_attempts
+        if any(artifact_id in stance_artifact_ids for artifact_id in attempt.input_artifact_ids)
+    )
     return ResearchProgress(
         stance=stance,
         status=side.status.value,

@@ -38,6 +38,7 @@ from models import (
     Stance,
     StatementDraft,
     StatementReviewResult,
+    entailment_for_claim_fit,
 )
 from store import (
     init_db,
@@ -196,7 +197,7 @@ def _admission_request(
     review: StatementReviewResult,
     *,
     statement: str,
-    entailment: Entailment = Entailment.STRONG,
+    entailment: Entailment | None = None,
     placement: Placement | None = None,
 ) -> LedgerAdmissionRequest:
     return LedgerAdmissionRequest(
@@ -206,7 +207,7 @@ def _admission_request(
         statement_drafts=[draft],
         review_results=[review],
         approved_factual_statement=statement,
-        entailment=entailment,
+        entailment=entailment or entailment_for_claim_fit(decision.claim_fit),
         placement=placement,
     )
 
@@ -661,8 +662,7 @@ def test_reviewer_input_rejects_forbidden_fields() -> None:
         )
 
 
-@pytest.mark.parametrize("entailment", [Entailment.PARTIAL, Entailment.WEAK])
-def test_partial_or_weak_entailment_requires_qualification(entailment: Entailment) -> None:
+def test_claim_fit_4_partial_entailment_does_not_require_artificial_keyword() -> None:
     snapshot, candidate = _snapshot_and_candidate()
     decision = _decision(candidate, eq=4, cf=4)
     statement = "The policy improves outcomes."
@@ -675,7 +675,29 @@ def test_partial_or_weak_entailment_requires_qualification(entailment: Entailmen
         draft,
         review,
         statement=statement,
-        entailment=entailment,
+        entailment=Entailment.PARTIAL,
+    )
+
+    ledger = _admit(request)
+
+    assert ledger.claim_fit == 4
+    assert ledger.entailment is Entailment.PARTIAL
+
+
+def test_claim_fit_3_weak_entailment_requires_qualification() -> None:
+    snapshot, candidate = _snapshot_and_candidate()
+    decision = _decision(candidate, eq=4, cf=3)
+    statement = "The policy improves outcomes."
+    draft = _draft(candidate, decision, statement)
+    review = _approved_review(candidate, draft)
+    request = _admission_request(
+        snapshot,
+        candidate,
+        decision,
+        draft,
+        review,
+        statement=statement,
+        entailment=Entailment.WEAK,
     )
 
     with pytest.raises(ValueError, match="explicit qualification"):

@@ -95,7 +95,7 @@ def ledger_kwargs() -> dict[str, object]:
         "claim_fit": 4,
         "ledger_score": 4,
         "placement": Placement.SECONDARY,
-        "entailment": Entailment.STRONG,
+        "entailment": Entailment.PARTIAL,
         "source_url": "https://example.test/source",
         "retrieval_attempt_id": RETRIEVAL_ATTEMPT_ID,
         "snapshot_id": SNAPSHOT_ID,
@@ -134,7 +134,7 @@ def synthesis_item_kwargs() -> dict[str, object]:
         "reviewer_approval_id": REVIEWER_APPROVAL_ID,
         "stance": Stance.SUPPORTING,
         "placement": Placement.SECONDARY,
-        "entailment": Entailment.STRONG,
+        "entailment": Entailment.PARTIAL,
         "approved_factual_statement": "The approved factual statement is exact.",
     }
 

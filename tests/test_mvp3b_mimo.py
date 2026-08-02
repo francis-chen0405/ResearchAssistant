@@ -8,26 +8,28 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from agents.researcher import find_segment_offsets, parse_extracted_quote_block
 from agents.reviewer import ReviewerDecision, ReviewerInput
+from agents.supportingresearcher import ExtractionLLMInput, UntrustedSourceText
 from models import (
+    ClaimDefinition,
     PlannerOutput,
     ProvisionalCandidate,
     RetrievalRecord,
     RetrievalStatus,
     ScoreDecision,
     Stance,
-    StrictModel,
 )
 from providers.config import MimoConfig, ProviderConfigurationError
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, build_stage_request
 from providers.mimo import (
+    MimoExtractionResponse,
     MimoFailureCode,
+    MimoPlannerResponse,
     MimoProviderError,
+    MimoScoreResponse,
     XiaomiMimoAdapter,
+    _assemble_direct_mimo_output,
     _direct_mimo_prompt,
-    _normalize_direct_mimo_output,
-    _normalize_exact_quote_block,
 )
 from providers.pricing import DIRECT_MIMO_PRICE_CAP
 
@@ -50,18 +52,6 @@ def _request() -> object:
     )
 
 
-class _ExtractorSource(StrictModel):
-    snapshot_id: object
-    snapshot_sha256: str
-    text: str
-
-
-class _ExtractorInput(StrictModel):
-    stance: Stance
-    source: _ExtractorSource
-    retrieval: RetrievalRecord
-
-
 def _extractor_request() -> object:
     run_id = uuid4()
     retrieval = RetrievalRecord(
@@ -76,15 +66,27 @@ def _extractor_request() -> object:
         status=RetrievalStatus.RETRIEVED,
         retrieved_at=datetime(2026, 7, 31, tzinfo=UTC),
     )
-    source = _ExtractorSource(
+    source = UntrustedSourceText(
         snapshot_id=uuid4(),
         snapshot_sha256="a" * 64,
         text="Opening context. Exact public evidence sentence. Closing context.",
     )
     return build_stage_request(
         stage=LLMStage.EXTRACTOR,
-        input_artifact=_ExtractorInput(
+        input_artifact=ExtractionLLMInput(
+            run_id=run_id,
             stance=Stance.OPPOSING,
+            claim_definition=ClaimDefinition(
+                run_id=run_id,
+                claim_text="Public claim.",
+                population="Adults",
+                jurisdiction="Global",
+                time_period="Current evidence",
+                comparison_baseline="No intervention",
+                intervention_or_exposure="Public intervention",
+                causal_or_comparative_meaning="Comparative effect",
+                created_at=datetime(2026, 7, 31, tzinfo=UTC),
+            ),
             source=source,
             retrieval=retrieval,
         ),
@@ -165,7 +167,7 @@ def test_direct_mimo_extractor_prompt_requires_exact_quote_envelope() -> None:
 
     assert 'exactly: [preceding context] "exact quoted segment" [following context]' in prompt
     assert "Do not return an unquoted sentence or plain text." in prompt
-    assert "at least 100 whitespace-separated words" in prompt
+    assert "at least 75 whitespace-separated words" in prompt
 
 
 def test_direct_mimo_analyst_prompt_binds_candidate_stance() -> None:
@@ -183,158 +185,47 @@ def test_direct_mimo_analyst_prompt_binds_candidate_stance() -> None:
     assert "It is not final factual approval" in prompt
 
 
-def test_direct_mimo_normalizes_only_deterministic_analyst_fields() -> None:
+def test_direct_mimo_semantic_score_schema_rejects_application_owned_fields() -> None:
     request = _request().model_copy(
         update={
             "stage": LLMStage.ANALYST,
             "requested_output_type": ScoreDecision,
         }
     )
-    raw = {
-        "run_id": str(uuid4()),
-        "quote_block_id": str(uuid4()),
-        "evidence_quality": 4,
-        "claim_fit": 5,
-        "ledger_score": 3,
-        "placement": "qualified_only",
-        "approved": True,
-        "rationale": "The evidence directly supports the claim.",
-        "analyst_prompt_version": "wrong",
-        "analyst_model_name": "wrong",
-        "scored_at": "2026-07-31T00:00:00Z",
-    }
-
-    normalized = _normalize_direct_mimo_output(request, raw)
-    output = ScoreDecision.model_validate(normalized)
-
-    assert output.run_id == request.run_id
-    assert output.evidence_quality == 4
-    assert output.claim_fit == 5
-    assert output.approved is True
-    assert output.ledger_score == 5
-    assert output.placement.value == "primary"
-
-    normalized_ineligible = _normalize_direct_mimo_output(
-        request,
+    assert MimoScoreResponse.model_validate(
         {
-            **raw,
-            "evidence_quality": 1,
+            "evidence_quality": 4,
             "claim_fit": 5,
-            "approved": True,
-        },
-    )
-    ineligible = ScoreDecision.model_validate(normalized_ineligible)
-    assert ineligible.approved is False
-    assert ineligible.ledger_score is None
-    assert ineligible.placement is None
-    assert output.rationale == raw["rationale"]
-    assert output.analyst_prompt_version == request.prompt.version
-    assert output.analyst_model_name == request.model_alias.value
-
-
-def test_direct_mimo_analyst_normalization_applies_score_pair_policy() -> None:
-    request = _request().model_copy(
-        update={
-            "stage": LLMStage.ANALYST,
-            "requested_output_type": ScoreDecision,
+            "rationale": "The evidence directly supports the claim.",
         }
     )
-    raw = {
-        "run_id": str(request.run_id),
-        "quote_block_id": str(uuid4()),
-        "evidence_quality": 5,
-        "claim_fit": 5,
-        "ledger_score": 5,
-        "placement": "primary",
-        "approved": False,
-        "rationale": "The candidate is rejected on semantic grounds.",
-        "analyst_prompt_version": request.prompt.version,
-        "analyst_model_name": request.model_alias.value,
-        "scored_at": "2026-07-31T00:00:00Z",
-    }
-
-    normalized = _normalize_direct_mimo_output(request, raw)
-    output = ScoreDecision.model_validate(normalized)
-
-    assert output.approved is True
-    assert output.ledger_score == 5
-    assert output.placement.value == "primary"
-
-
-def test_direct_mimo_normalizes_only_exact_quote_context() -> None:
-    assert (
-        _normalize_exact_quote_block(
-            '[Invented context.] "Exact public evidence sentence." [Also invented.]',
-            "Opening context. Exact public evidence sentence. Closing context.",
+    with pytest.raises(ValueError):
+        MimoScoreResponse.model_validate(
+            {
+                "run_id": str(request.run_id),
+                "evidence_quality": 4,
+                "claim_fit": 5,
+                "rationale": "The evidence directly supports the claim.",
+            }
         )
-        == '[Opening context.] "Exact public evidence sentence." [Closing context.]'
-    )
-    non_exact = '[Invented.] "Paraphrased evidence." [Invented.]'
-    assert (
-        _normalize_exact_quote_block(
-            non_exact,
-            "Opening context. Exact public evidence sentence. Closing context.",
-        )
-        == non_exact
-    )
-    assert (
-        _normalize_exact_quote_block(
-            "Exact public evidence sentence.",
-            "Opening context. Exact public evidence sentence. Closing context.",
-        )
-        == '[Opening context.] "Exact public evidence sentence." [Closing context.]'
-    )
-    assert (
-        _normalize_exact_quote_block(
-            "[Previous sentence: Objective:] Exact public evidence sentence. "
-            "[Next sentence: Method:]",
-            "Opening context. Exact public evidence sentence. Closing context.",
-        )
-        == '[Opening context.] "Exact public evidence sentence." [Closing context.]'
-    )
-    source = (
-        "Opening context. First exact evidence has line\nbreaks and enough detail. "
-        "Bridge sentence. Second exact evidence follows later. Closing context."
-    )
-    normalized = _normalize_exact_quote_block(
-        'First exact evidence has line breaks and enough detail. ... "Second exact evidence '
-        'follows later."',
-        source,
-    )
-    assert normalized == (
-        '[Opening context.] "First exact evidence has line\nbreaks and enough detail. ... '
-        'Second exact evidence follows later." [Closing context.]'
-    )
-    parsed = parse_extracted_quote_block(normalized)
-    offsets = find_segment_offsets(source, parsed.segments)
-    assert [source[item.start_char : item.end_char] for item in offsets] == parsed.segments
 
 
-def test_direct_mimo_stamps_application_owned_extractor_identity() -> None:
+def test_direct_mimo_assembles_extractor_identity_without_rewriting_quote() -> None:
     request = _extractor_request()
-    raw = {
-        "run_id": str(uuid4()),
-        "stance": "supporting",
-        "source_url": "https://invented.example/wrong",
-        "retrieval_attempt_id": str(uuid4()),
-        "query_id": str(uuid4()),
-        "query_round": 1,
-        "search_rank": 1,
-        "snapshot_id": str(uuid4()),
-        "snapshot_sha256": "b" * 64,
-        "extracted_quote_block": (
+    semantic = MimoExtractionResponse(
+        extracted_quote_block=(
             '[Invented context.] "Exact public evidence sentence." [Also invented.]'
-        ),
-        "extraction_prompt_version": "wrong",
-        "extraction_model_name": "wrong",
-        "extracted_at": "2026-07-31T00:00:00Z",
-    }
-
-    normalized = _normalize_direct_mimo_output(request, raw)
-    output = ProvisionalCandidate.model_validate(normalized)
+        )
+    )
+    output = _assemble_direct_mimo_output(
+        request,
+        semantic,
+        created_at=datetime(2026, 7, 31, tzinfo=UTC),
+    )
     extractor_input = request.input_artifact
 
-    assert isinstance(extractor_input, _ExtractorInput)
+    assert isinstance(output, ProvisionalCandidate)
+    assert isinstance(extractor_input, ExtractionLLMInput)
     assert output.run_id == request.run_id
     assert output.stance is Stance.OPPOSING
     assert output.source_url == extractor_input.retrieval.resolved_url
@@ -346,9 +237,7 @@ def test_direct_mimo_stamps_application_owned_extractor_identity() -> None:
     assert output.snapshot_sha256 == extractor_input.source.snapshot_sha256
     assert output.extraction_prompt_version == request.prompt.version
     assert output.extraction_model_name == request.model_alias.value
-    assert output.extracted_quote_block == (
-        '[Opening context.] "Exact public evidence sentence." [Closing context.]'
-    )
+    assert output.extracted_quote_block == semantic.extracted_quote_block
 
 
 def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
@@ -358,11 +247,9 @@ def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
             "requested_output_type": PlannerOutput,
         }
     )
-    created_at = "2026-07-31T00:00:00Z"
+    created_at = datetime(2026, 7, 31, tzinfo=UTC)
     raw = {
-        "run_id": str(uuid4()),
         "claim_definition": {
-            "run_id": str(uuid4()),
             "claim_text": "Public claim.",
             "population": "Adults",
             "jurisdiction": "Global",
@@ -370,21 +257,15 @@ def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
             "comparison_baseline": "No intervention",
             "intervention_or_exposure": "Public intervention",
             "causal_or_comparative_meaning": "Comparative effect",
-            "created_at": created_at,
         },
         "ambiguities": [
             {
-                "run_id": str(uuid4()),
-                "ambiguity_id": "not-a-uuid",
                 "description": "Scope ambiguity.",
                 "impact": "May affect interpretation.",
-                "created_at": created_at,
             }
         ],
         "search_queries": [
             {
-                "run_id": str(uuid4()),
-                "query_id": f"query-{index}",
                 "stance": stance,
                 "query_round": round_number,
                 "strategy": "Public evidence search.",
@@ -392,7 +273,6 @@ def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
                 "exclusion_parameters": (
                     "-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com"
                 ),
-                "created_at": created_at,
             }
             for index, (stance, round_number) in enumerate(
                 [
@@ -406,13 +286,11 @@ def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
                 start=1,
             )
         ],
-        "planner_prompt_version": "wrong",
-        "planner_model_name": "wrong",
-        "planned_at": created_at,
     }
 
-    first = _normalize_direct_mimo_output(request, raw)
-    second = _normalize_direct_mimo_output(request, raw)
+    semantic = MimoPlannerResponse.model_validate(raw)
+    first = _assemble_direct_mimo_output(request, semantic, created_at=created_at)
+    second = _assemble_direct_mimo_output(request, semantic, created_at=created_at)
     output = PlannerOutput.model_validate(first)
 
     assert first == second
@@ -424,6 +302,9 @@ def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
     assert len({item.query_id for item in output.search_queries}) == 6
     assert output.planner_prompt_version == request.prompt.version
     assert output.planner_model_name == request.model_alias.value
+
+    with pytest.raises(ValueError):
+        MimoPlannerResponse.model_validate({**raw, "run_id": str(uuid4())})
 
 
 def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -> None:
@@ -455,14 +336,7 @@ def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -
     assert payload["response_format"] == {"type": "json_object"}
     assert payload["stream"] is False
     assert payload["max_completion_tokens"] == 4096
-    assert (
-        "Any *_model_name field must equal exactly: mimo-v2.5-pro"
-        in payload["messages"][0]["content"]
-    )
-    assert (
-        "Any *_prompt_version field must equal exactly: phase8-reviewer-v3"
-        in payload["messages"][0]["content"]
-    )
+    assert "Never create IDs, timestamps, model names" in payload["messages"][0]["content"]
     assert "provider" not in payload
     assert metadata.returned_model == "mimo-v2.5-pro"
     assert metadata.cost_estimated is True

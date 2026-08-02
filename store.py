@@ -88,6 +88,14 @@ def init_db(db_path: str) -> None:
             INSERT OR IGNORE INTO schema_migrations
                 (version, description, applied_at)
                 VALUES (
+                    4,
+                    'same-run provenance triggers and immutable raw claim',
+                    '2026-08-01T00:00:00+00:00'
+                );
+
+            INSERT OR IGNORE INTO schema_migrations
+                (version, description, applied_at)
+                VALUES (
                     2,
                     'phase-9 orchestration audit and checkpoint schema',
                     '2026-07-17T00:00:00+00:00'
@@ -447,6 +455,71 @@ def init_db(db_path: str) -> None:
                 requested_at    TEXT NOT NULL,
                 reason          TEXT NOT NULL
             );
+
+            -- Same-run provenance guards ------------------------------------
+            CREATE TRIGGER IF NOT EXISTS retrieval_attempt_same_run
+            BEFORE INSERT ON retrieval_attempts
+            WHEN (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'retrieval query belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS snapshot_same_run
+            BEFORE INSERT ON snapshots
+            WHEN (SELECT run_id FROM retrieval_attempts
+                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'snapshot retrieval belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS provisional_extraction_same_run
+            BEFORE INSERT ON provisional_extractions
+            WHEN (SELECT run_id FROM retrieval_attempts
+                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+              OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+              OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'provisional provenance belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS candidate_same_run
+            BEFORE INSERT ON candidates
+            WHEN (SELECT run_id FROM retrieval_attempts
+                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+              OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+              OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'candidate provenance belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS analyst_decision_same_run
+            BEFORE INSERT ON analyst_decisions
+            WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+                 != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'analyst candidate belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS statement_draft_same_run
+            BEFORE INSERT ON statement_drafts
+            WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+                 != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'draft candidate belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS statement_review_same_run
+            BEFORE INSERT ON statement_review_attempts
+            WHEN (SELECT run_id FROM statement_drafts
+                  WHERE statement_draft_id = NEW.statement_draft_id) != NEW.run_id
+              OR (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+                 != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'review provenance belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS ledger_record_same_run
+            BEFORE INSERT ON ledger_records
+            WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+                 != NEW.run_id
+              OR (SELECT run_id FROM retrieval_attempts
+                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+              OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+              OR (SELECT run_id FROM statement_review_attempts
+                  WHERE reviewer_approval_id = NEW.reviewer_approval_id) != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'Ledger provenance belongs to another run'); END;
+
+            CREATE TRIGGER IF NOT EXISTS synthesis_item_same_run
+            BEFORE INSERT ON synthesis_items
+            WHEN (SELECT run_id FROM ledger_records
+                  WHERE ledger_claim_id = NEW.ledger_claim_id) != NEW.run_id
+            BEGIN SELECT RAISE(ABORT, 'synthesis Ledger record belongs to another run'); END;
             """
         )
         columns = {
@@ -544,13 +617,19 @@ def update_run(db_path: str, manifest: RunManifest) -> None:
     """Update mutable run state while leaving insert-only evidence tables untouched."""
     conn = _connect(db_path)
     try:
+        existing = conn.execute(
+            "SELECT raw_claim FROM runs WHERE run_id = ?", (str(manifest.run_id),)
+        ).fetchone()
+        if existing is None:
+            raise KeyError(f"run {manifest.run_id} not found")
+        if existing["raw_claim"] != manifest.raw_claim:
+            raise ValueError("raw_claim is immutable after run creation")
         cursor = conn.execute(
             """UPDATE runs
-               SET status = ?, raw_claim = ?, current_stage = ?, updated_at = ?, completed_at = ?
+               SET status = ?, current_stage = ?, updated_at = ?, completed_at = ?
                WHERE run_id = ?""",
             (
                 manifest.status.value,
-                manifest.raw_claim,
                 manifest.current_stage.value,
                 _dt_to_iso(manifest.updated_at),
                 _dt_to_iso(manifest.completed_at) if manifest.completed_at else None,

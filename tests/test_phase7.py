@@ -42,6 +42,7 @@ from providers.search import (
     SearchResponse,
     SearchResult,
 )
+from utils import compute_sha256
 
 NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 EXCLUSIONS = " ".join(REQUIRED_QUERY_EXCLUSIONS)
@@ -349,12 +350,19 @@ def test_exhausted_timeout_and_failed_scrape_are_explicit() -> None:
     assert timeout.snapshot_id is failed.snapshot_id is None
 
 
-@pytest.mark.parametrize("content_type", ["application/pdf", "application/octet-stream"])
-def test_pdf_and_binary_content_are_explicitly_unsupported(content_type: str) -> None:
+def test_binary_content_is_explicitly_unsupported() -> None:
     url = "https://original.example/unsupported"
     responses = [[url, "https://original.example/2", "https://original.example/3"]]
     scraper = FakeScraperProvider(
-        {url: [_response(url, content_type=content_type, text="untrusted binary-like payload")]}
+        {
+            url: [
+                _response(
+                    url,
+                    content_type="application/octet-stream",
+                    text="untrusted binary-like payload",
+                )
+            ]
+        }
     )
 
     result = retrieve_supporting(
@@ -363,9 +371,49 @@ def test_pdf_and_binary_content_are_explicitly_unsupported(content_type: str) ->
 
     outcome = result.outcomes[0]
     assert outcome.scrape_status is ScrapeStatus.UNSUPPORTED
-    assert outcome.content_type == content_type
+    assert outcome.content_type == "application/octet-stream"
     assert outcome.retrieval.status is RetrievalStatus.SKIPPED
     assert outcome.snapshot_id is None
+
+
+def test_python_normalized_pdf_text_is_accepted_without_relabeling_content_type() -> None:
+    url = "https://original.example/document.pdf"
+    text = "digitally extracted PDF text"
+    responses = [[url, "https://original.example/2", "https://original.example/3"]]
+    response = ScrapeResponse(
+        resolved_url=url,
+        content_type="application/pdf",
+        text=text,
+        snapshot_sha256=compute_sha256(text),
+        word_count=len(text.split()),
+        normalization_version="ra-normalization-v1",
+        acquisition_version="wigolo-acquisition-v1",
+    )
+    scraper = FakeScraperProvider({url: [response]})
+
+    result = retrieve_supporting(
+        _planner(), FakeSearchProvider(responses), scraper, clock=lambda: NOW
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.scrape_status is ScrapeStatus.RETRIEVED
+    assert outcome.content_type == "application/pdf"
+    assert result.snapshots[0].normalized_text == text
+
+
+def test_unnormalized_pdf_payload_is_rejected() -> None:
+    url = "https://original.example/untrusted.pdf"
+    responses = [[url, "https://original.example/2", "https://original.example/3"]]
+    scraper = FakeScraperProvider(
+        {url: [_response(url, content_type="application/pdf", text="unverified PDF payload")]}
+    )
+
+    result = retrieve_supporting(
+        _planner(), FakeSearchProvider(responses), scraper, clock=lambda: NOW
+    )
+
+    assert result.outcomes[0].scrape_status is ScrapeStatus.UNSUPPORTED
+    assert result.outcomes[0].snapshot_id is None
 
 
 def test_supported_content_type_is_normalized_and_recorded() -> None:
@@ -381,6 +429,21 @@ def test_supported_content_type_is_normalized_and_recorded() -> None:
 
     assert result.outcomes[0].content_type == "text/plain"
     assert result.outcomes[0].scrape_status is ScrapeStatus.RETRIEVED
+
+
+def test_empty_scraper_text_returns_typed_failure() -> None:
+    url = "https://original.example/empty"
+    responses = [[url, "https://original.example/2", "https://original.example/3"]]
+    scraper = FakeScraperProvider({url: [_response(url, text="")]})
+
+    result = retrieve_supporting(
+        _planner(), FakeSearchProvider(responses), scraper, clock=lambda: NOW
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.scrape_status is ScrapeStatus.FAILED
+    assert outcome.failure_code == "empty_content"
+    assert outcome.failure_message == "scraper returned no textual content"
 
 
 def test_snapshot_exists_before_downstream_consumer_runs() -> None:

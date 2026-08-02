@@ -5,24 +5,34 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from threading import local
 from typing import Any
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agents.synthesizer import _template_for_record
+from agents.analyst import AnalystLLMInput, StatementDraftLLMInput
+from agents.supportingresearcher import ExtractionLLMInput
+from agents.synthesizer import SynthesizerLLMInput, _item_from_ledger
 from models import (
+    AmbiguityRecord,
+    ClaimDefinition,
     ModelUsageMetadata,
-    Placement,
     PlannerOutput,
     ProvisionalCandidate,
+    Score,
     ScoreDecision,
+    SearchQuery,
+    SectionType,
+    Stance,
+    StatementDraft,
     StrictModel,
     SynthesisOutput,
+    SynthesisSection,
     _derive_ledger_score,
     _expected_placement,
     _is_ledger_eligible,
@@ -79,6 +89,58 @@ class MimoCallMetadata(StrictModel):
     elapsed_seconds: float = Field(ge=0)
     usage: ModelUsageMetadata
     cost_estimated: bool
+
+
+class MimoClaimDefinitionResponse(StrictModel):
+    claim_text: str = Field(min_length=1)
+    population: str = Field(min_length=1)
+    jurisdiction: str = Field(min_length=1)
+    time_period: str = Field(min_length=1)
+    comparison_baseline: str = Field(min_length=1)
+    intervention_or_exposure: str = Field(min_length=1)
+    causal_or_comparative_meaning: str = Field(min_length=1)
+
+
+class MimoAmbiguityResponse(StrictModel):
+    description: str = Field(min_length=1)
+    impact: str = Field(min_length=1)
+
+
+class MimoSearchQueryResponse(StrictModel):
+    stance: Stance
+    query_round: int = Field(ge=1, le=3)
+    strategy: str = Field(min_length=1)
+    query_text: str = Field(min_length=1)
+    exclusion_parameters: str = Field(min_length=1)
+
+
+class MimoPlannerResponse(StrictModel):
+    claim_definition: MimoClaimDefinitionResponse
+    ambiguities: tuple[MimoAmbiguityResponse, ...]
+    search_queries: tuple[MimoSearchQueryResponse, ...] = Field(min_length=6, max_length=6)
+
+
+class MimoExtractionResponse(StrictModel):
+    extracted_quote_block: str = Field(min_length=1)
+
+
+class MimoScoreResponse(StrictModel):
+    evidence_quality: Score
+    claim_fit: Score
+    rationale: str = Field(min_length=1)
+
+
+class MimoStatementDraftResponse(StrictModel):
+    draft_statement: str = Field(min_length=1)
+
+
+class MimoSynthesisSectionResponse(StrictModel):
+    section_type: SectionType
+    ledger_claim_ids: tuple[UUID, ...] = Field(min_length=1)
+
+
+class MimoSynthesisResponse(StrictModel):
+    sections: tuple[MimoSynthesisSectionResponse, ...] = Field(min_length=1)
 
 
 class XiaomiMimoAdapter:
@@ -209,14 +271,24 @@ class XiaomiMimoAdapter:
                 retryable=True,
             ) from exc
         try:
-            normalized_output = _normalize_direct_mimo_output(request, raw_output)
-            output = request.requested_output_type.model_validate(normalized_output)
-        except ValidationError as exc:
+            semantic_type = _semantic_response_type(request)
+            semantic_output = semantic_type.model_validate(raw_output)
+            output = _assemble_direct_mimo_output(
+                request,
+                semantic_output,
+                created_at=datetime.now(UTC),
+            )
+        except (ValidationError, ValueError, TypeError) as exc:
+            diagnostics = (
+                _schema_diagnostics(exc)
+                if isinstance(exc, ValidationError)
+                else "semantic_assembly:validation_error"
+            )
             raise MimoProviderError(
                 MimoFailureCode.SCHEMA,
                 (
-                    "Xiaomi MiMo content failed the exact requested schema "
-                    f"(schema diagnostics: {_schema_diagnostics(exc)})"
+                    "Xiaomi MiMo content failed the semantic response contract "
+                    f"(schema diagnostics: {diagnostics})"
                 ),
                 retryable=True,
             ) from exc
@@ -303,7 +375,7 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
             "Use literal square brackets around both context portions and literal double "
             "quotes around every exact source segment. Use only exact snapshot text or an "
             "allowed boundary marker. Do not return an unquoted sentence or plain text.\n"
-            "The combined exact quoted segments must contain at least 100 whitespace-separated "
+            "The combined exact quoted segments must contain at least 75 whitespace-separated "
             "words. Preserve material qualifications and do not use unrelated padding.\n"
             "</DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
         )
@@ -322,298 +394,219 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
             "and placement from the semantic scores.\n"
             "</DIRECT_MIMO_ANALYST_STANCE_COMPATIBILITY>\n"
         )
+    response_type = _semantic_response_type(request)
+    schema_json = json.dumps(
+        response_type.model_json_schema(),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     return (
-        f"{request.rendered_prompt}\n\n"
+        f"{request.prompt.text.rstrip()}\n\n"
         f"{stage_compatibility}"
-        "<DIRECT_MIMO_PROVENANCE_COMPATIBILITY>\n"
-        f"Any *_model_name field must equal exactly: {request.model_alias.value}\n"
-        f"Any *_prompt_version field must equal exactly: {request.prompt.version}\n"
-        "Preserve capitalization and punctuation exactly.\n"
-        "</DIRECT_MIMO_PROVENANCE_COMPATIBILITY>"
+        "<DIRECT_MIMO_SEMANTIC_OUTPUT_CONTRACT>\n"
+        f"Requested Pydantic artifact: {response_type.__name__}\n"
+        f"Return only one JSON object matching {response_type.__name__}.\n"
+        "Return semantic judgments and text only. Never create IDs, timestamps, model names, "
+        "prompt versions, provenance, scores derived by policy, or connective templates. "
+        "When the schema accepts an existing ledger_claim_id, copy it exactly from the input; "
+        "do not invent one. Extra fields are forbidden.\n"
+        f"{schema_json}\n"
+        "</DIRECT_MIMO_SEMANTIC_OUTPUT_CONTRACT>\n\n"
+        "<APPLICATION_CONTROLLED_STAGE_INPUT>\n"
+        f"{request.input_artifact.model_dump_json(indent=2)}\n"
+        "</APPLICATION_CONTROLLED_STAGE_INPUT>"
     )
 
 
-_MIMO_QUOTE_BLOCK_RE = re.compile(
-    r'^\s*\[(?P<before>[^\[\]]+)\]\s+"(?P<quote>.+?)"\s+\[(?P<after>[^\[\]]+)\]\s*$',
-    re.DOTALL,
-)
-_MIMO_RELAXED_BLOCK_RE = re.compile(
-    r"^\s*\[[^\[\]]+\]\s*(?P<quote>.+?)\s*\[[^\[\]]+\]\s*$",
-    re.DOTALL,
-)
-_MIMO_SENTENCE_RE = re.compile(r"[^.!?]+[.!?]+|[^.!?]+$", re.DOTALL)
-
-
-def _normalize_direct_mimo_output(request: LLMRequest, raw_output: Any) -> Any:
-    """Stamp application-owned identities and repair only exact Extractor source text."""
-    if not isinstance(raw_output, dict):
-        return raw_output
+def _semantic_response_type(request: LLMRequest) -> type[BaseModel]:
     if request.stage is LLMStage.PLANNER and request.requested_output_type is PlannerOutput:
-        return _normalize_direct_mimo_planner_output(request, raw_output)
-    if request.stage is LLMStage.ANALYST and request.requested_output_type is ScoreDecision:
-        return _normalize_direct_mimo_score_decision(request, raw_output)
-    if request.stage is LLMStage.SYNTHESIZER and request.requested_output_type is SynthesisOutput:
-        return _normalize_direct_mimo_synthesis_output(request, raw_output)
+        return MimoPlannerResponse
     if (
-        request.stage is not LLMStage.EXTRACTOR
-        or request.requested_output_type is not ProvisionalCandidate
+        request.stage is LLMStage.EXTRACTOR
+        and request.requested_output_type is ProvisionalCandidate
     ):
-        return raw_output
-
-    extraction_input = request.input_artifact
-    source = getattr(extraction_input, "source", None)
-    retrieval = getattr(extraction_input, "retrieval", None)
-    stance = getattr(extraction_input, "stance", None)
-    source_text = getattr(source, "text", None)
-    normalized = dict(raw_output)
-
-    normalized["run_id"] = str(request.run_id)
-    if stance is not None:
-        normalized["stance"] = getattr(stance, "value", stance)
-    if source is not None:
-        normalized["snapshot_id"] = str(source.snapshot_id)
-        normalized["snapshot_sha256"] = source.snapshot_sha256
-    if retrieval is not None:
-        normalized.update(
-            {
-                "source_url": retrieval.resolved_url,
-                "retrieval_attempt_id": str(retrieval.retrieval_attempt_id),
-                "query_id": str(retrieval.query_id),
-                "query_round": retrieval.query_round,
-                "search_rank": retrieval.search_rank,
-            }
-        )
-    normalized["extraction_prompt_version"] = request.prompt.version
-    normalized["extraction_model_name"] = request.model_alias.value
-
-    quote_block = normalized.get("extracted_quote_block")
-    if isinstance(source_text, str) and isinstance(quote_block, str):
-        normalized["extracted_quote_block"] = _normalize_exact_quote_block(
-            quote_block,
-            source_text,
-        )
-    return normalized
+        return MimoExtractionResponse
+    if request.stage is LLMStage.ANALYST and request.requested_output_type is ScoreDecision:
+        return MimoScoreResponse
+    if request.stage is LLMStage.ANALYST and request.requested_output_type is StatementDraft:
+        return MimoStatementDraftResponse
+    if request.stage is LLMStage.SYNTHESIZER and request.requested_output_type is SynthesisOutput:
+        return MimoSynthesisResponse
+    return request.requested_output_type
 
 
-def _normalize_direct_mimo_score_decision(
+def _assemble_direct_mimo_output(
     request: LLMRequest,
-    raw_output: dict[str, Any],
-) -> dict[str, Any]:
-    """Stamp Analyst provenance and reconcile only application-owned routing fields."""
-    normalized = dict(raw_output)
-    candidate = getattr(request.input_artifact, "candidate", None)
-    normalized["run_id"] = str(request.run_id)
-    if candidate is not None:
-        normalized["quote_block_id"] = str(candidate.quote_block_id)
-    normalized["analyst_prompt_version"] = request.prompt.version
-    normalized["analyst_model_name"] = request.model_alias.value
-
-    evidence_quality = normalized.get("evidence_quality")
-    claim_fit = normalized.get("claim_fit")
-    if not (
-        isinstance(evidence_quality, int)
-        and not isinstance(evidence_quality, bool)
-        and isinstance(claim_fit, int)
-        and not isinstance(claim_fit, bool)
-    ):
-        return normalized
-
-    eligible = _is_ledger_eligible(evidence_quality, claim_fit)
-    normalized["approved"] = eligible
-    if not eligible:
-        normalized["ledger_score"] = None
-        normalized["placement"] = None
-    else:
-        normalized["ledger_score"] = _derive_ledger_score(evidence_quality, claim_fit)
-        placement: Placement = _expected_placement(evidence_quality, claim_fit)
-        normalized["placement"] = placement.value
-    return normalized
+    response: BaseModel,
+    *,
+    created_at: datetime,
+) -> BaseModel:
+    if isinstance(response, MimoPlannerResponse):
+        return _assemble_planner(request, response, created_at)
+    if isinstance(response, MimoExtractionResponse):
+        return _assemble_extraction(request, response, created_at)
+    if isinstance(response, MimoScoreResponse):
+        return _assemble_score(request, response, created_at)
+    if isinstance(response, MimoStatementDraftResponse):
+        return _assemble_statement_draft(request, response, created_at)
+    if isinstance(response, MimoSynthesisResponse):
+        return _assemble_synthesis(request, response, created_at)
+    return request.requested_output_type.model_validate(response)
 
 
-def _normalize_direct_mimo_synthesis_output(
+def _assemble_planner(
     request: LLMRequest,
-    raw_output: dict[str, Any],
-) -> dict[str, Any]:
-    """Stamp provenance and approved connective IDs without changing factual content."""
-    normalized = dict(raw_output)
-    normalized["run_id"] = str(request.run_id)
-    normalized["synthesizer_prompt_version"] = request.prompt.version
-    normalized["synthesizer_model_name"] = request.model_alias.value
-    records = getattr(request.input_artifact, "ledger_records", ())
-    records_by_id = {str(record.ledger_claim_id): record for record in records}
-    sections = normalized.get("sections")
-    if not isinstance(sections, list):
-        return normalized
-
-    normalized_sections: list[Any] = []
-    for section in sections:
-        if not isinstance(section, dict):
-            normalized_sections.append(section)
-            continue
-        normalized_section = dict(section)
-        items = normalized_section.get("items")
-        if isinstance(items, list):
-            normalized_items: list[Any] = []
-            for item in items:
-                if isinstance(item, dict):
-                    normalized_item = dict(item)
-                    record = records_by_id.get(str(item.get("ledger_claim_id")))
-                    if record is not None:
-                        normalized_item["connective_template_id"] = _template_for_record(record)
-                    normalized_items.append(normalized_item)
-                else:
-                    normalized_items.append(item)
-            normalized_section["items"] = normalized_items
-        normalized_sections.append(normalized_section)
-    normalized["sections"] = normalized_sections
-    return normalized
-
-
-def _normalize_direct_mimo_planner_output(
-    request: LLMRequest,
-    raw_output: dict[str, Any],
-) -> dict[str, Any]:
-    normalized = dict(raw_output)
-    normalized["run_id"] = str(request.run_id)
-    normalized["planner_prompt_version"] = request.prompt.version
-    normalized["planner_model_name"] = request.model_alias.value
-
-    claim_definition = normalized.get("claim_definition")
-    if isinstance(claim_definition, dict):
-        normalized["claim_definition"] = {
-            **claim_definition,
-            "run_id": str(request.run_id),
-        }
-    ambiguities = normalized.get("ambiguities")
-    if isinstance(ambiguities, list):
-        normalized["ambiguities"] = [
-            {
-                **item,
-                "run_id": str(request.run_id),
-                "ambiguity_id": str(
-                    uuid5(
-                        NAMESPACE_URL,
-                        f"direct-mimo-planner::{request.run_id}::ambiguity::{index}",
-                    )
-                ),
-            }
-            if isinstance(item, dict)
-            else item
-            for index, item in enumerate(ambiguities, start=1)
-        ]
-    search_queries = normalized.get("search_queries")
-    if isinstance(search_queries, list):
-        normalized["search_queries"] = [
-            {
-                **item,
-                "run_id": str(request.run_id),
-                "query_id": str(
-                    uuid5(
-                        NAMESPACE_URL,
-                        f"direct-mimo-planner::{request.run_id}::query::{index}",
-                    )
-                ),
-            }
-            if isinstance(item, dict)
-            else item
-            for index, item in enumerate(search_queries, start=1)
-        ]
-    return normalized
-
-
-def _normalize_exact_quote_block(raw_block: str, source_text: str) -> str:
-    """Rebuild brackets only when the proposed quote is already exact source text."""
-    candidates = _quote_candidates(raw_block)
-    if not candidates:
-        return raw_block
-    exact_segments: list[str] = []
-    locations: list[tuple[int, int]] = []
-    search_start = 0
-    for candidate in candidates:
-        location = _find_exact_or_whitespace_equivalent(source_text, candidate, search_start)
-        if location is None:
-            return raw_block
-        start, end = location
-        exact_segments.append(source_text[start:end])
-        locations.append(location)
-        search_start = end
-    start = locations[0][0]
-    end = locations[-1][1]
-
-    spans = _mimo_sentence_spans(source_text)
-    before = next(
-        (text for _, span_end, text in reversed(spans) if span_end <= start),
-        None,
+    response: MimoPlannerResponse,
+    created_at: datetime,
+) -> PlannerOutput:
+    claim = ClaimDefinition(
+        run_id=request.run_id,
+        created_at=created_at,
+        **response.claim_definition.model_dump(),
     )
-    after = next(
-        (text for span_start, _, text in spans if span_start >= end),
-        None,
+    ambiguities = [
+        AmbiguityRecord(
+            run_id=request.run_id,
+            ambiguity_id=uuid5(
+                NAMESPACE_URL,
+                f"direct-mimo-planner::{request.run_id}::ambiguity::{index}",
+            ),
+            created_at=created_at,
+            **item.model_dump(),
+        )
+        for index, item in enumerate(response.ambiguities, start=1)
+    ]
+    queries = [
+        SearchQuery(
+            run_id=request.run_id,
+            query_id=uuid5(
+                NAMESPACE_URL,
+                f"direct-mimo-planner::{request.run_id}::query::{index}",
+            ),
+            created_at=created_at,
+            **item.model_dump(),
+        )
+        for index, item in enumerate(response.search_queries, start=1)
+    ]
+    return PlannerOutput(
+        run_id=request.run_id,
+        claim_definition=claim,
+        ambiguities=ambiguities,
+        search_queries=queries,
+        planner_prompt_version=request.prompt.version,
+        planner_model_name=request.model_alias.value,
+        planned_at=created_at,
     )
-    if before is None:
-        if source_text[:start].strip():
-            return raw_block
-        before = "Start of Text"
-    if after is None:
-        if source_text[end:].strip():
-            return raw_block
-        original = _MIMO_QUOTE_BLOCK_RE.match(raw_block)
-        original_after = original.group("after").strip() if original is not None else None
-        if original_after not in {"End of Text", "Truncated End of Snapshot"}:
-            return raw_block
-        after = original_after
-    if any(char in before or char in after for char in "[]"):
-        return raw_block
-    quoted = " ... ".join(exact_segments)
-    return f'[{before}] "{quoted}" [{after}]'
 
 
-def _quote_candidates(raw_block: str) -> list[str]:
-    exact = _MIMO_QUOTE_BLOCK_RE.match(raw_block)
-    if exact is not None:
-        candidate = exact.group("quote").strip()
-    else:
-        relaxed = _MIMO_RELAXED_BLOCK_RE.match(raw_block)
-        if relaxed is None:
-            candidate = raw_block.strip().strip('"').strip()
-        else:
-            candidate = relaxed.group("quote").strip().strip('"').strip()
-    if not candidate:
-        return []
-    pieces = [piece.strip().strip('"').strip() for piece in re.split(r"\s+\.\.\.\s+", candidate)]
-    if len(pieces) > 1 and all(pieces):
-        return pieces
-    return [candidate]
+def _assemble_extraction(
+    request: LLMRequest,
+    response: MimoExtractionResponse,
+    created_at: datetime,
+) -> ProvisionalCandidate:
+    artifact = request.input_artifact
+    if not isinstance(artifact, ExtractionLLMInput) or artifact.retrieval is None:
+        raise TypeError("direct MiMo extraction requires a retrieval-backed ExtractionLLMInput")
+    return ProvisionalCandidate(
+        run_id=request.run_id,
+        stance=artifact.stance,
+        source_url=artifact.retrieval.resolved_url,
+        retrieval_attempt_id=artifact.retrieval.retrieval_attempt_id,
+        query_id=artifact.retrieval.query_id,
+        query_round=artifact.retrieval.query_round,
+        search_rank=artifact.retrieval.search_rank,
+        snapshot_id=artifact.source.snapshot_id,
+        snapshot_sha256=artifact.source.snapshot_sha256,
+        extracted_quote_block=response.extracted_quote_block,
+        extraction_prompt_version=request.prompt.version,
+        extraction_model_name=request.model_alias.value,
+        extracted_at=created_at,
+    )
 
 
-def _find_exact_or_whitespace_equivalent(
-    source_text: str,
-    candidate: str,
-    search_start: int,
-) -> tuple[int, int] | None:
-    start = source_text.find(candidate, search_start)
-    if start >= 0:
-        return start, start + len(candidate)
-    words = candidate.split()
-    if not words:
-        return None
-    pattern = r"\s+".join(re.escape(word) for word in words)
-    match = re.search(pattern, source_text[search_start:])
-    if match is None:
-        return None
-    return search_start + match.start(), search_start + match.end()
+def _assemble_score(
+    request: LLMRequest,
+    response: MimoScoreResponse,
+    created_at: datetime,
+) -> ScoreDecision:
+    artifact = request.input_artifact
+    if not isinstance(artifact, AnalystLLMInput):
+        raise TypeError("direct MiMo scoring requires AnalystLLMInput")
+    eligible = _is_ledger_eligible(response.evidence_quality, response.claim_fit)
+    return ScoreDecision(
+        run_id=request.run_id,
+        quote_block_id=artifact.candidate.quote_block_id,
+        evidence_quality=response.evidence_quality,
+        claim_fit=response.claim_fit,
+        ledger_score=(
+            _derive_ledger_score(response.evidence_quality, response.claim_fit)
+            if eligible
+            else None
+        ),
+        placement=(
+            _expected_placement(response.evidence_quality, response.claim_fit) if eligible else None
+        ),
+        approved=eligible,
+        rationale=response.rationale,
+        analyst_prompt_version=request.prompt.version,
+        analyst_model_name=request.model_alias.value,
+        scored_at=created_at,
+    )
 
 
-def _mimo_sentence_spans(text: str) -> list[tuple[int, int, str]]:
-    spans: list[tuple[int, int, str]] = []
-    for match in _MIMO_SENTENCE_RE.finditer(text):
-        raw = match.group(0)
-        if not raw.strip():
-            continue
-        start = match.start() + len(raw) - len(raw.lstrip())
-        end = match.start() + len(raw.rstrip())
-        if start < end:
-            spans.append((start, end, text[start:end]))
-    return spans
+def _assemble_statement_draft(
+    request: LLMRequest,
+    response: MimoStatementDraftResponse,
+    created_at: datetime,
+) -> StatementDraft:
+    artifact = request.input_artifact
+    if not isinstance(artifact, StatementDraftLLMInput):
+        raise TypeError("direct MiMo drafting requires StatementDraftLLMInput")
+    candidate = artifact.analyst_input.candidate
+    return StatementDraft(
+        run_id=request.run_id,
+        statement_draft_id=uuid5(
+            NAMESPACE_URL,
+            f"phase9-draft::{candidate.quote_block_id}::{artifact.revision_number}",
+        ),
+        quote_block_id=candidate.quote_block_id,
+        stance=candidate.stance,
+        draft_statement=response.draft_statement,
+        claim_fit=artifact.score_decision.claim_fit,
+        analyst_prompt_version=request.prompt.version,
+        analyst_model_name=request.model_alias.value,
+        drafted_at=created_at,
+    )
+
+
+def _assemble_synthesis(
+    request: LLMRequest,
+    response: MimoSynthesisResponse,
+    created_at: datetime,
+) -> SynthesisOutput:
+    artifact = request.input_artifact
+    if not isinstance(artifact, SynthesizerLLMInput):
+        raise TypeError("direct MiMo synthesis requires SynthesizerLLMInput")
+    records = {record.ledger_claim_id: record for record in artifact.ledger_records}
+    selected = [claim_id for section in response.sections for claim_id in section.ledger_claim_ids]
+    if len(selected) != len(set(selected)) or set(selected) != set(records):
+        raise ValueError("synthesis must reference every input Ledger ID exactly once")
+    sections = tuple(
+        SynthesisSection(
+            section_type=section.section_type,
+            items=tuple(
+                _item_from_ledger(records[claim_id]) for claim_id in section.ledger_claim_ids
+            ),
+        )
+        for section in response.sections
+    )
+    return SynthesisOutput(
+        run_id=request.run_id,
+        synthesizer_prompt_version=request.prompt.version,
+        synthesizer_model_name=request.model_alias.value,
+        created_at=created_at,
+        sections=sections,
+    )
 
 
 def _deadline_for(stage: LLMStage, config: MimoConfig) -> float:

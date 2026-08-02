@@ -30,8 +30,9 @@ Keep `frontend/streamlit_app.py` visibly fixture-only and create a separate live
 Use the database as the authority for runs, checkpoints, attempts, budgets, status, and
 release artifacts. UI session state may hold only presentation preferences and worker
 handles; it must never be the authoritative run record. Execute live work outside the
-Streamlit rerun thread so the page stays responsive. Use a duplicate-start guard keyed
-by database and run ID, plus persisted MVP-4 compatibility checks, so reruns, refreshes,
+Streamlit rerun thread so the page stays responsive. Permit only one active worker per
+SQLite database, while allowing different database files to run concurrently. Combine that
+database-wide guard with persisted MVP-4 compatibility checks so reruns, refreshes,
 and reopened pages reconnect rather than duplicate calls, releases, snapshots, Ledger
 entries, or workers.
 

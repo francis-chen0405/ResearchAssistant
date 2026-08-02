@@ -30,13 +30,12 @@ def test_phase0_scaffold_exists() -> None:
 def test_pyproject_declares_phase_dependencies() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert pyproject["project"]["requires-python"] == ">=3.11"
+    assert pyproject["project"]["requires-python"] == ">=3.11,<3.13"
     assert pyproject["project"]["dependencies"] == [
         "httpx>=0.27,<1.0",
         "markdown-it-py>=3.0,<4.0",
         "pydantic>=2.0,<3.0",
         "pypdf>=5.0,<6.0",
-        "python-dotenv>=1.0,<2.0",
         "streamlit>=1.37,<2.0",
     ]
     assert pyproject["project"]["optional-dependencies"]["dev"] == [

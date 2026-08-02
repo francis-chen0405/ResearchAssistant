@@ -22,12 +22,12 @@
       "section_type": "opposing",
       "items": [
         {
-          "connective_template_id": "opposing_evidence",
+          "connective_template_id": "partial_entailment",
           "ledger_claim_id": "2d47d49e-c651-5891-b63c-72129473a9ca",
           "reviewer_approval_id": "60000000-0000-0000-0000-000000000402",
           "stance": "opposing",
           "placement": "secondary",
-          "entailment": "Strong",
+          "entailment": "Partial",
           "approved_factual_statement": "Surveyed families reported a 20% decline in student satisfaction after the fixture rollout."
         }
       ]

@@ -16,7 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 from pydantic import ValidationError as PydanticValidationError
 
 from agents.analyst import (
+    AnalystLLMInput,
     LedgerAdmissionRequest,
+    StatementDraftLLMInput,
     ValidatedLedgerPayload,
     admit_ledger_record,
     build_analyst_llm_input,
@@ -73,6 +75,7 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     ValidationResult,
+    entailment_for_claim_fit,
 )
 from providers.llm import (
     DEFAULT_LLM_ROUTING,
@@ -727,6 +730,7 @@ def _admit_ledger_records(
                 review_results=reviews,
                 approved_factual_statement=final_review.approved_factual_statement,
                 entailment=entailment,
+                quote_length_policy=LEGACY_FIXTURE_QUOTE_LENGTH_POLICY,
             ),
             derive_ledger_claim_id=derive_fixture_ledger_claim_id,
             validation_clock=validation_clock,
@@ -1240,6 +1244,9 @@ class ProviderPipelineResult(StrictModel):
                 or self.rendered_brief_hash is None
             ):
                 raise ValueError("released runs require valid validation, final brief, and hash")
+            actual_hash = sha256(self.final_brief.encode("utf-8")).hexdigest()
+            if self.rendered_brief_hash != actual_hash:
+                raise ValueError("released final brief does not match its rendered hash")
         elif self.status is ProviderRunStatus.BLOCKED:
             if self.validation_result is None or self.validation_result.valid:
                 raise ValueError("blocked runs require an invalid validation result")
@@ -1271,9 +1278,11 @@ def run_provider_pipeline(
     stage_hook: _StageHook | None = None,
 ) -> ProviderPipelineResult:
     """Run or restart the synchronous provider-backed Phase 9 pipeline."""
-    claim = raw_claim.strip()
+    claim = raw_claim
     if not claim:
         raise ValueError("raw_claim must not be empty")
+    if claim != claim.strip():
+        raise ValueError("raw_claim must not contain leading or trailing whitespace")
     database_path = Path(db_path).resolve()
     database_path.parent.mkdir(parents=True, exist_ok=True)
     path = str(database_path)
@@ -1305,6 +1314,7 @@ def run_provider_pipeline(
     active_stage = manifest.current_stage
     try:
         _raise_if_cancelled(path, resolved_run_id)
+        active_stage = Stage.CLAIM_PLANNER
         planner = _run_planner_stage(
             path,
             manifest,
@@ -1312,9 +1322,9 @@ def run_provider_pipeline(
             settings,
             now,
         )
-        active_stage = Stage.CLAIM_PLANNER
         _after_stage(path, resolved_run_id, PHASE9_PLANNER_CHECKPOINT, now, stage_hook)
 
+        active_stage = Stage.SUPPORTING_RESEARCHER
         researchers = _run_researcher_stage(
             path,
             planner,
@@ -1338,6 +1348,7 @@ def run_provider_pipeline(
                 "researchers produced no candidate that passed deterministic filtering",
             )
 
+        active_stage = Stage.CLAIM_LEDGER
         analysis = _run_analysis_stage(
             path,
             planner,
@@ -1346,7 +1357,6 @@ def run_provider_pipeline(
             settings,
             now,
         )
-        active_stage = Stage.CLAIM_LEDGER
         _after_stage(path, resolved_run_id, PHASE9_ANALYSIS_CHECKPOINT, now, stage_hook)
         if not analysis.ledger_records:
             raise Phase9OrchestrationError(
@@ -1354,6 +1364,7 @@ def run_provider_pipeline(
                 "no Reviewer-approved statement was eligible for the Ledger",
             )
 
+        active_stage = Stage.DEBATE_SYNTHESIZER
         synthesis = _run_synthesis_stage(
             path,
             planner,
@@ -1362,9 +1373,9 @@ def run_provider_pipeline(
             settings,
             now,
         )
-        active_stage = Stage.DEBATE_SYNTHESIZER
         _after_stage(path, resolved_run_id, PHASE9_SYNTHESIS_CHECKPOINT, now, stage_hook)
 
+        active_stage = Stage.FINAL_RENDERER_VALIDATOR
         validation = _run_validation_stage(
             path,
             synthesis,
@@ -1372,7 +1383,6 @@ def run_provider_pipeline(
             manifest.raw_claim,
             now,
         )
-        active_stage = Stage.FINAL_RENDERER_VALIDATOR
         terminal_status = RunStatus.COMPLETED if validation.valid else RunStatus.BLOCKED
         _finish_run(path, resolved_run_id, terminal_status, active_stage, now)
         _checkpoint(
@@ -1552,6 +1562,8 @@ def inspect_provider_run(
             authoritative_claim=manifest.raw_claim,
         )
         rendered_hash = validation.rendered_brief_hash
+        if rendered_hash != sha256(final_brief.encode("utf-8")).hexdigest():
+            raise ValueError("persisted released brief does not match its validation hash")
 
     usages = [attempt.usage for attempt in attempts if attempt.usage is not None]
     token_values = [usage.total_tokens for usage in usages if usage.total_tokens is not None]
@@ -2536,11 +2548,7 @@ def _run_analysis_stage(
                 statement_drafts=candidate_drafts,
                 review_results=candidate_reviews,
                 approved_factual_statement=final_review.approved_factual_statement,
-                entailment={
-                    3: Entailment.WEAK,
-                    4: Entailment.PARTIAL,
-                    5: Entailment.STRONG,
-                }[decision.claim_fit],
+                entailment=entailment_for_claim_fit(decision.claim_fit),
             ),
             derive_ledger_claim_id=derive_phase9_ledger_claim_id,
             validation_clock=clock,
@@ -2591,6 +2599,13 @@ def _invoke_statement_draft(
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
 ) -> StatementDraft:
+    if not isinstance(analyst_input, AnalystLLMInput):
+        raise TypeError("analyst_input must be an AnalystLLMInput")
+    draft_input = StatementDraftLLMInput(
+        analyst_input=analyst_input,
+        score_decision=decision,
+        revision_number=revision_number,
+    )
     operation_id = _operation_id(
         candidate.run_id,
         f"analyst-draft-{revision_number}",
@@ -2599,21 +2614,6 @@ def _invoke_statement_draft(
 
     def validate_draft(output: BaseModel, alias: ModelAlias) -> BaseModel:
         draft = _require_output(output, StatementDraft)
-        if config.pricing_policy == "direct_mimo":
-            draft = draft.model_copy(
-                update={
-                    "run_id": candidate.run_id,
-                    "statement_draft_id": uuid5(
-                        NAMESPACE_URL,
-                        f"phase9-draft::{candidate.quote_block_id}::{revision_number}",
-                    ),
-                    "quote_block_id": candidate.quote_block_id,
-                    "stance": candidate.stance,
-                    "claim_fit": decision.claim_fit,
-                    "analyst_prompt_version": load_prompt(LLMStage.ANALYST).version,
-                    "analyst_model_name": alias.value,
-                }
-            )
         if (
             draft.run_id != candidate.run_id
             or draft.quote_block_id != candidate.quote_block_id
@@ -2637,13 +2637,16 @@ def _invoke_statement_draft(
             db_path=db_path,
             provider=provider,
             stage=LLMStage.ANALYST,
-            input_artifact=analyst_input,
+            input_artifact=(
+                draft_input if config.pricing_policy == "direct_mimo" else analyst_input
+            ),
             requested_output_type=StatementDraft,
             input_artifact_ids=(candidate.quote_block_id,),
             operation_id=operation_id,
             config=config,
             clock=clock,
             objective_validator=validate_draft,
+            run_id=candidate.run_id,
         ),
     )
 
