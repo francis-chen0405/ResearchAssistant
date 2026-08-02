@@ -114,6 +114,28 @@ after provider calls and at orchestration boundaries. An active synchronous requ
 or reach its deadline, but no new call starts after cancellation is observed. The fixture-only
 Streamlit frontend remains unchanged and cannot launch live research.
 
+### MVP-5 Local Live Web Interface Contract
+
+MVP-5 adds a separate local Streamlit interface around the unchanged MVP-4 live
+application/orchestrator and SQLite contracts. The fixture frontend remains explicitly
+fixture-only. The live page uses SQLite as authority, executes the synchronous live run
+in a background worker, and prevents duplicate database workers with application and
+cross-process locks. Refresh and reopen operations inspect persistence rather than
+recreating calls or release artifacts.
+
+The local service manager verifies exact Wigolo `0.2.1` identity on loopback, starts only
+the pinned `npx -y wigolo@0.2.1 serve` stack with native SearXNG configuration, monitors
+bounded redacted output, and stops only its owned process group. Health is not inferred
+from a port or process alone. The existing 15-second Search deadline is unchanged;
+Wigolo, SearXNG, retrieval, MiMo, validation, and stage failures remain explicit.
+
+The browser never receives a MiMo key. Configuration comes only from the explicitly
+supplied server-process environment. The macOS launcher may request the key through a
+native hidden-input dialog and exports it only to the local Streamlit server process; it
+does not persist it or place it in URLs or command arguments. Cooperative cancellation,
+fingerprints, budgets, restart compatibility, terminal semantics, and human review
+remain exactly as released in MVP-4.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: pinned local Wigolo `0.2.1` over loopback. Search is

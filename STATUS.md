@@ -1,5 +1,77 @@
 # Status
 
+## 2026-08-01 - MVP-5 Polished Local Live Web Interface
+
+Status: Complete. The earlier scheduled-live-validation placeholder was superseded by
+the user's explicit MVP-5 web-interface direction. MVP-6 has not started.
+
+Completed:
+
+- Added a separate polished live Streamlit page with exact-claim input, explicit token/
+  USD/call budgets, optional run ID, safe selectable SQLite location, persisted run
+  history/inspection, authoritative stage/checkpoint/usage/cost and stance progress,
+  cooperative cancellation, deterministic terminal displays, released brief/hash, copy-
+  friendly rendering, download, and prominent human-review warnings.
+- Reused `run_mvp3b_pipeline()`, `inspect_provider_run()`, SQLite, provider contracts,
+  fingerprints, checkpoints, budgets, restart behavior, cancellation, and exact MVP-4
+  exit semantics. No second pipeline, provider, dependency, schema migration, or timeout
+  change was added.
+- Kept the original Streamlit page explicitly fixture-only. It never implies that
+  fixtures use MiMo, Wigolo, or live search.
+- Added a background live controller plus per-database cross-process lock. Streamlit
+  reruns, refreshes, and browser sessions reconnect to SQLite and cannot start duplicate
+  workers for the same database while one is active.
+- Added pinned Wigolo `0.2.1`/native-SearXNG health, launch, progress, monitoring,
+  redaction, and process-group ownership. Only application-owned children may be stopped;
+  exact health is required and unrelated listeners are never killed.
+- Added a macOS click launcher. It uses a native hidden-input dialog when the launch
+  environment lacks `MIMO_API_KEY`, exports the value only to the local server process,
+  and never persists it or puts it in browser state, URLs, logs, SQLite, or arguments.
+- Added strict Pydantic live UI/service artifacts, safe existing-SQLite validation,
+  bounded diagnostic classification for Wigolo/SearXNG/retrieval/MiMo/validation/stages,
+  and a read-only persisted run-history store helper.
+
+Verification:
+
+- Focused MVP-5: 16 passed.
+- MVP-5 plus MVP-4 subprocess and fixture-frontend suites: 32 passed, 1 skipped.
+- Full offline suite: 436 passed, 2 skipped.
+- Offline evaluation: all 38 deterministic cases passed.
+- Fixture smokes: valid released with hash
+  `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`; invalid blocked
+  with the expected `altered_statement` error.
+- Mocked live-web smoke released, persisted, reopened through the Streamlit page, and
+  exposed final brief/hash/download without the test credential appearing in process
+  output, rendered messages, or SQLite.
+- In-app browser smoke verified responsive missing-configuration/service displays,
+  disabled unsafe start, readable desktop layout, exact live identity, and prominent
+  human review. No actual provider call was made.
+- Clean Python 3.12.13 environment installed `requirements.txt`; live UI/service imports
+  and Streamlit 1.60.0 CLI passed. Python 3.11 was not locally installed and remains in
+  the existing CI matrix. Local Node.js 24.18.0 and npm/npx 11.16.0 exceed the documented
+  Node.js 20+ requirement.
+- Ruff lint/format, launcher syntax, `git diff --check`, restart/cancellation subprocess
+  coverage, service ownership/cleanup, and final Git status passed.
+- Optional real MiMo/Wigolo browser test was not run; additional live cost is zero.
+
+Known limitations:
+
+- First-time Python/Node installation and Wigolo/SearXNG downloads remain setup steps.
+  Normal macOS use thereafter is click-to-launch, with a secure key prompt when needed,
+  but a visible local server process must remain running while the website is open.
+- Cold/degraded native SearXNG can still exceed the unchanged fail-closed 15-second
+  Search deadline. The page surfaces the responsible component/stage; it does not hide
+  or indefinitely extend timeouts.
+- Cancellation remains cooperative. An active synchronous provider request may finish
+  or reach its deadline, and arbitrary cross-version crash recovery is not promised.
+- The website is loopback/local-only with no accounts, authentication, hosting, uploads,
+  cloud deployment, or scheduled automation. Direct-MiMo cost remains estimated.
+- Public/non-sensitive claims and human review are mandatory.
+
+Next exact task:
+
+- None authorized. Do not begin MVP-6.
+
 ## 2026-08-01 - MVP-4 Usable Live CLI and MVP Release
 
 Status: Complete. The repository is honestly a usable command-line MVP within the

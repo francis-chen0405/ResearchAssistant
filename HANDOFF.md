@@ -1,5 +1,85 @@
 # Handoff
 
+## 2026-08-01 - MVP-5 Polished Local Live Web Interface
+
+Current branch and state:
+
+- `master`; all MVP-5 changes are intentionally uncommitted.
+- MVP-5 is complete. The obsolete scheduled-validation placeholder is superseded. MVP-6
+  is not authorized.
+
+Operator surface:
+
+- macOS: double-click `Launch ResearchAssistant.command`. With no inherited key, a native
+  hidden-input dialog requests `MIMO_API_KEY` for that server process only. Streamlit
+  opens on loopback and its Terminal/server process must remain running.
+- `frontend/live_app.py` is the live website. It controls exact claim, explicit budgets,
+  optional run ID, SQLite location, local service health/start/owned stop, live persisted
+  progress, cancellation, history, inspection, and released brief/hash/download.
+- `frontend/streamlit_app.py` remains fixture-only and is explicitly labeled as using no
+  MiMo, Wigolo, live search, or credentials.
+- Live identity remains pinned Wigolo `0.2.1` plus native SearXNG and direct Xiaomi
+  `mimo-v2.5-pro`. No `.env` or shell profile is loaded.
+
+Lifecycle, restart, and cancellation:
+
+- The live controller directly calls the stable MVP-4 application service in a background
+  worker. SQLite is authoritative. A process-local registry and per-database `flock`
+  prevent duplicate workers across reruns, sessions, and local processes.
+- Start stack runs exactly `npx -y wigolo@0.2.1 serve` with loopback/native-SearXNG
+  environment. Health verifies exact identity; output is bounded/redacted. Stop sends
+  termination only to the application-owned process group, including at server exit.
+- Same run ID still requires byte-exact claim and exact provider/model/prompt/schema/
+  adapter/normalization/policy/budget/repository fingerprint. Budget or identity changes
+  require a new run. Consumed usage is never reset.
+- Released, blocked, and cancelled runs reconstruct without calls. Failed runs may resume
+  only under the exact same contract. Cancellation is persisted and cooperative; an
+  active request may finish or reach its deadline, then no new call starts.
+- Status/exit mapping is released `0`, blocked `10`, failed `11`, cancelled `12`,
+  configuration error `20`, invalid input `21`.
+
+Security:
+
+- The browser and Streamlit session state never receive the MiMo key. The key is absent
+  from URLs, SQLite, subprocess arguments, launcher arguments, logs, downloaded briefs,
+  and rendered errors. Provider and child-process errors pass through bounded redaction.
+- The Wigolo child receives only a small allowlisted environment and never inherits
+  `MIMO_API_KEY`. User-selected existing database files must have a valid SQLite header.
+- Claims remain public/non-sensitive and all released output requires human review.
+
+Files changed:
+
+- `.agent/PLANS.md`, `.agent/plans/phase-mvp-5-scheduled-live-validation.md`
+- `.gitignore`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `STATUS.md`, `HANDOFF.md`
+- `frontend/README.md`, `frontend/streamlit_app.py`, `frontend/live_app.py`,
+  `frontend/live_service.py`, `frontend/security.py`, `frontend/service_manager.py`
+- `store.py`, `tests/test_mvp5_live_web.py`, `Launch ResearchAssistant.command`
+
+Verification handoff:
+
+- Focused MVP-5: 16 passed. Full suite: 436 passed, 2 skipped.
+- Offline evaluation: 38 passed. Fixture release/block, mocked released live-web reopen,
+  restart/cancellation subprocess, secret scans, child ownership/cleanup, browser visual
+  smoke, Ruff lint/format, launcher syntax, and `git diff --check` passed.
+- Clean Python 3.12.13 installed requirements and imported the live surface with
+  Streamlit 1.60.0. Python 3.11 was unavailable locally but remains in CI. Node.js
+  24.18.0 and npm/npx 11.16.0 were present.
+- Optional real live web test was not approved/run; additional live cost is zero.
+
+Known limitations:
+
+- Initial dependency/Wigolo resource installation remains a setup step. Native SearXNG
+  cold/degraded searches may still exceed the unchanged 15-second deadline.
+- The local Streamlit server must remain alive. Cancellation is cooperative and arbitrary
+  cross-version crash recovery is unsupported. Cost is estimated.
+- No hosted UI, accounts, authentication, uploads, Docker, scheduling, or MVP-6 work.
+
+Do not start:
+
+- Do not begin MVP-6, scheduled validation, hosting, authentication, another provider,
+  or a timeout-policy change without explicit user direction.
+
 ## 2026-08-01 - MVP-4 Usable Live CLI and MVP Release
 
 Current branch and state:

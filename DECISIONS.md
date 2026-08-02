@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-08-01 - MVP-5 Polished Local Live Web Interface
+
+- Supersede the earlier scheduled-live-validation placeholder with the user's explicit
+  MVP-5 live-web specification; scheduled automation is not implemented.
+- Keep `frontend/streamlit_app.py` fixture-only and add a separate live Streamlit page
+  that invokes the stable MVP-4 orchestrator service directly in a background worker.
+- Treat SQLite as authoritative and use a per-database cross-process lock plus an
+  in-server worker registry to prevent Streamlit reruns, refreshes, or parallel browser
+  sessions from starting duplicate workers.
+- Preserve released MVP-4 fingerprints, explicit budgets, restart rules, cooperative
+  cancellation, provider identities, and exit mappings without a second pipeline or
+  timeout-policy change.
+- Manage only pinned loopback Wigolo `0.2.1` with native SearXNG settings. Verify exact
+  health before enabling research, capture bounded redacted diagnostics, and terminate
+  only the application-owned process group.
+- Keep `MIMO_API_KEY` exclusively in the local server process environment. The macOS
+  launcher uses a native hidden-input dialog when the environment lacks the key and does
+  not persist it or put it in browser state, URLs, SQLite, logs, or arguments.
+- Add no dependency or schema migration. Streamlit, `httpx`, SQLite, subprocess support,
+  and Pydantic were already approved.
+
 ## 2026-08-01 - MVP-4 Usable Live CLI Release
 
 - Expose `run`, `inspect-run`, and `cancel-run` around the approved direct-MiMo pipeline;

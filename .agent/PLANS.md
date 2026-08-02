@@ -10,13 +10,14 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State After MVP-4
+## Current Project State After MVP-5
 
-Phases 0 through 10 and MVP-1 through MVP-4 are complete. The live CLI exposes only the
-approved loopback Wigolo `0.2.1` plus direct Xiaomi `mimo-v2.5-pro` stack with exact
-fingerprints, explicit budgets, restart-safe persistence, stable exit codes, detailed
-inspection, and cooperative second-process cancellation. The fixture-only Streamlit
-frontend is unchanged. MVP-5 remains unstarted and requires explicit user direction.
+Phases 0 through 10 and MVP-1 through MVP-5 are complete. The live CLI and separate local
+live Streamlit page expose only the approved loopback Wigolo `0.2.1` plus direct Xiaomi
+`mimo-v2.5-pro` stack with exact fingerprints, explicit budgets, restart-safe persistence,
+stable exit codes, detailed inspection, cooperative cancellation, persisted history,
+duplicate-worker prevention, and application-owned local service lifecycle. The original
+Streamlit frontend remains fixture-only. MVP-6 has not started.
 
 ## MVP-2A: Architecture Gate
 
@@ -58,11 +59,9 @@ normalization and quotation contract, data handling, retries, budgets, persisten
 restart compatibility, canary evidence, implementation boundary, and approval-required
 open items are documented consistently. Existing offline verification remains green.
 
-## Future MVP Sequence (Prompts Only)
+## MVP Sequence
 
-These canonical prompts define the intended order after MVP-2A. Their presence does not
-authorize or mark any phase complete. Start exactly one phase only after explicit user
-direction and its prerequisites/approvals are satisfied.
+These canonical plans record the completed MVP sequence. No later phase is authorized.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
    `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`
@@ -72,8 +71,12 @@ direction and its prerequisites/approvals are satisfied.
    `.agent/plans/phase-mvp-3b-live-canary-stabilization.md`
 4. MVP-4 Usable Live CLI and MVP Release:
    `.agent/plans/phase-mvp-4-live-cli-release.md`
-5. MVP-5 Scheduled Live Validation and Operational Proof:
+5. MVP-5 Polished Local Live Web Interface:
    `.agent/plans/phase-mvp-5-scheduled-live-validation.md`
+
+The canonical MVP-5 plan path is retained for history, but its earlier scheduled-live-
+validation placeholder was superseded by the user's 2026-08-01 explicit MVP-5 web-
+interface direction. Scheduled automation is not part of MVP-5.
 
 The controlled Wigolo `render_js: "always"` retry is the only approved rendering
 exception. “No browser automation” in later prompts means no ResearchAssistant-owned

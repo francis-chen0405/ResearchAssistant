@@ -525,6 +525,21 @@ def read_run(db_path: str, run_id: UUID) -> RunManifest:
         conn.close()
 
 
+def list_runs(db_path: str, *, limit: int = 100) -> list[RunManifest]:
+    """Return the most recently updated runs for local inspection."""
+    if limit < 1 or limit > 1000:
+        raise ValueError("run history limit must be between 1 and 1000")
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM runs ORDER BY updated_at DESC, run_id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_row_to_run(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def update_run(db_path: str, manifest: RunManifest) -> None:
     """Update mutable run state while leaving insert-only evidence tables untouched."""
     conn = _connect(db_path)

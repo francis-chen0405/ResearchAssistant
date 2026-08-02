@@ -6,12 +6,12 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-4. It includes strict Pydantic contracts, SQLite audit
+The repository is complete through MVP-5. It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
-synchronous provider-backed orchestration, a live command-line interface, an offline fixture CLI
-and fixture-only Streamlit UI, and a deterministic adversarial evaluation framework. MVP-3B
-released a positive live canary and failed a bounded negative canary safely. MVP-4 exposes that
-validated direct-MiMo pipeline without changing the fixture-only frontend.
+synchronous provider-backed orchestration, live CLI and local live website, a separate offline
+fixture CLI/UI, and a deterministic adversarial evaluation framework. MVP-3B released a positive
+live canary and failed a bounded negative canary safely. MVP-4 released the CLI; MVP-5 exposes the
+same validated direct-MiMo pipeline through a responsive persisted web surface.
 
 ## How the system works
 
@@ -95,7 +95,7 @@ agents/                 Planner, Researchers, Analyst, Reviewer, Synthesizer, Re
 providers/              Search, scraper, and LLM Protocols and routing contracts
 prompts/                Versioned structured prompts for all LLM stages
 evaluations/            Phase 10 corpus, evaluator, CLI runner, and generated output location
-frontend/               Minimal fixture-only Streamlit application
+frontend/               Separate fixture-only and live Streamlit applications
 tests/                  Phase 0-10 tests, frontend tests, fixtures, and adversarial cases
 models.py               Strict Pydantic handoff and persistence models
 store.py                SQLite schema, migrations, and typed persistence operations
@@ -109,9 +109,9 @@ STATUS.md / HANDOFF.md   Chronological implementation and verification records
 
 ## Installation
 
-Python 3.11 and 3.12 are supported. Live Wigolo use additionally requires Node.js, pinned
-`wigolo@0.2.1`, and a bootstrapped native SearXNG sidecar, all bound to loopback. Process lifecycle
-remains operator-managed. From the repository root, create a virtual environment and install the
+Python 3.11 and 3.12 are supported. Live Wigolo use additionally requires Node.js 20+, pinned
+`wigolo@0.2.1`, and native SearXNG resources, all bound to loopback. MVP-5 can manage this local
+stack from the website. From the repository root, create a virtual environment and install the
 declared runtime and development dependencies:
 
 ```bash
@@ -185,6 +185,24 @@ streamlit run frontend/streamlit_app.py
 
 The UI discovers runnable directories under `tests/fixtures/` and displays release or block status,
 the final brief when available, validation errors, hashes, artifact counts, and audit metadata.
+
+### Launch the live website on macOS
+
+After first-time installation, double-click `Launch ResearchAssistant.command`. If the key is not
+already in the launcher environment, macOS requests `MIMO_API_KEY` in a native hidden-input dialog
+for that launch only. No terminal commands are required during normal use. The launcher opens the
+live page at `127.0.0.1:8501`; its Terminal window/local server must remain running while the page
+is open.
+
+The sidebar checks exact Wigolo `0.2.1` identity and can start the pinned stack with native SearXNG.
+It never treats a listener or child PID as proof of health and stops only its own process group.
+The page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path. It
+shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,
+run history, cooperative cancellation, and released brief/hash copy/download controls.
+
+The browser never receives `MIMO_API_KEY`; it stays in the local server process. The app does not
+load `.env` or shell profiles. Errors and bounded child output are redacted. Claims must be public
+and non-sensitive, and every released brief requires human review.
 
 Run or resume the approved live stack with an exact claim, explicit SQLite path, and explicit token
 and cost ceilings:
@@ -283,15 +301,15 @@ See `evaluations/README.md` for metric and exit-code details.
 
 ## Project status
 
-Phases 0 through 10 and MVP-1 through MVP-4 are complete. MVP-4 is the release boundary; MVP-5 has
-not started.
+Phases 0 through 10 and MVP-1 through MVP-5 are complete. MVP-5 is the local live web release
+boundary. No MVP-6 work has started.
 
 Known limitations are:
 
-- Wigolo/native SearXNG startup, warming, supervision, and shutdown remain external. Cold or
-  degraded search can exceed the fixed fail-closed deadline.
-- The Streamlit UI remains fixture-only. There is no production web UI, authentication, accounts,
-  uploads, hosting, or dashboard.
+- Wigolo/native SearXNG startup can require first-use downloads and warming. Cold or degraded
+  search can still exceed the unchanged fixed fail-closed 15-second deadline.
+- The website is local-only. It has no authentication, accounts, uploads, hosting, cloud service,
+  or arbitrary cross-version crash recovery.
 - Direct-MiMo cost is a conservative frozen-policy estimate, not provider-confirmed billing.
 - Offline model-quality labels and prices are frozen evaluation data, not live benchmarks.
 - Token and cost totals are available only when an injected LLM provider supplies strict usage
@@ -301,8 +319,8 @@ Known limitations are:
 - Final validation is deliberately syntactic and provenance-based. Semantic quality depends on the
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
-Every released brief still requires human review before high-stakes or external use. MVP-5
-scheduled live validation is out of scope until explicitly approved.
+Every released brief still requires human review before high-stakes or external use. Scheduled
+live validation and MVP-6 are out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

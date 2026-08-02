@@ -187,8 +187,12 @@ def summarize_fixture_result(result: FixturePipelineResult) -> FrontendRunSummar
 
 def main() -> None:
     st = _load_streamlit()
-    st.set_page_config(page_title="Fixture Pipeline", layout="wide")
-    st.title("Fixture Pipeline")
+    st.set_page_config(page_title="Fixture-Only Pipeline", layout="wide")
+    st.title("Fixture-Only Pipeline")
+    st.warning(
+        "Offline fixtures only. This page does not use Xiaomi MiMo, Wigolo, live web search, "
+        "or provider credentials. Use `frontend/live_app.py` for live research."
+    )
 
     fixture_options = discover_fixture_runs()
     if not fixture_options:

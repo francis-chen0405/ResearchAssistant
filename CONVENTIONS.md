@@ -137,8 +137,10 @@ design, not provider implementation. MVP-2B remains a distinct phase and must re
 the current top-three/PDF-unsupported/legacy-model test contracts with the approved
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
-MVP-2B, MVP-3A, MVP-3B, and MVP-4 are complete. MVP-4 is the current release boundary.
-Do not begin MVP-5 without separate explicit direction.
+MVP-2B, MVP-3A, MVP-3B, MVP-4, and MVP-5 are complete. MVP-5 is the current local live
+web release boundary. The original Streamlit app remains fixture-only; the separate live
+app must reuse MVP-4 persistence, fingerprint, cancellation, and terminal contracts.
+Do not begin MVP-6 without separate explicit direction.
 
 ## 8. Done Criteria Per Phase
 
