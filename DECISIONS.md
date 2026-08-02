@@ -1,5 +1,44 @@
 # Decisions
 
+## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
+
+- Set the deterministic minimum quoted evidence length to 75 words for statistical and
+  non-statistical candidates. Exact source membership, ordering, immediate bracket
+  context, hashes, offsets, and qualification preservation remain mandatory.
+- Separate statement entailment from full-claim proof. A Reviewer may approve a literal,
+  materially relevant fact even when it does not independently prove the complete claim;
+  it must still reject every factual addition or inference absent from the quotation.
+- Assign Strong/direct evidence only at Claim Fit 5, Partial/indirect evidence at Claim
+  Fit 4, and Weak/contextual evidence at Claim Fit 3. Partial and Weak statements retain
+  deterministic qualification requirements and receive application-owned warning
+  connectives in the rendered brief.
+- When approved evidence exists for only one stance, release may continue but the brief
+  must state that it is not balanced and identify the missing Reviewer-approved stance.
+  A run with no Reviewer-approved Ledger statement still fails closed; an empty report is
+  not presented as research evidence.
+- Fingerprint the new evidence policy and prompt/validator versions. Existing run IDs are
+  not reinterpreted under the more permissive policy.
+
+## 2026-08-01 - Post-MVP-5 Retrieval Provider Correction
+
+- Replace native SearXNG discovery in new live runs with Exa Search `auto`, using only
+  titles, URLs, and discovery metadata; Exa snippets or generated content never become
+  evidence.
+- Keep pinned loopback Wigolo `0.2.1` as the primary public-page acquisition and exact
+  evidence surface. Add Firecrawl scrape as an optional automatic fallback only when
+  Wigolo itself cannot connect, times out, returns malformed output, or cannot extract a
+  public HTML page.
+- Never use Firecrawl to bypass authentication, paywalls, legal restrictions, access
+  denial, unsupported content, size limits, redirect limits, or source-side failures.
+- Require `EXA_API_KEY` for new live runs. Treat `FIRECRAWL_API_KEY` as optional; absence
+  disables fallback without disabling Wigolo acquisition. Keep both secrets only in the
+  local server process and exclude them from browser state, SQLite, logs, arguments, and
+  the Wigolo child environment.
+- Preserve the completed MVP-5 interface, direct MiMo route, SQLite schema,
+  deterministic validation, budgets, restart rules, and rank-five/keep-three research
+  policy. This is a narrow provider correction explicitly authorized by the user, not
+  the start of MVP-6.
+
 ## 2026-08-01 - MVP-5 Polished Local Live Web Interface
 
 - Supersede the earlier scheduled-live-validation placeholder with the user's explicit

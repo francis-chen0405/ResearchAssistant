@@ -30,7 +30,7 @@ from models import (
     ValidationResult,
 )
 
-VALIDATOR_CONFIG_VERSION = "mvp1-release-validator-v1"
+VALIDATOR_CONFIG_VERSION = "post-mvp5-release-validator-v2"
 
 SUPPORTING_EVIDENCE_TEMPLATE_ID = "supporting_evidence"
 OPPOSING_EVIDENCE_TEMPLATE_ID = "opposing_evidence"
@@ -68,13 +68,13 @@ APPROVED_CONNECTIVE_TEMPLATES: Mapping[str, ApprovedConnectiveTemplate] = Mappin
     {
         SUPPORTING_EVIDENCE_TEMPLATE_ID: ApprovedConnectiveTemplate(
             template_id=SUPPORTING_EVIDENCE_TEMPLATE_ID,
-            text="Supporting evidence:",
+            text="Direct supporting evidence:",
             allowed_stances=(Stance.SUPPORTING,),
             allowed_sections=(SectionType.SUPPORTING,),
         ),
         OPPOSING_EVIDENCE_TEMPLATE_ID: ApprovedConnectiveTemplate(
             template_id=OPPOSING_EVIDENCE_TEMPLATE_ID,
-            text="Opposing evidence:",
+            text="Direct opposing evidence:",
             allowed_stances=(Stance.OPPOSING,),
             allowed_sections=(SectionType.OPPOSING,),
         ),
@@ -86,7 +86,7 @@ APPROVED_CONNECTIVE_TEMPLATES: Mapping[str, ApprovedConnectiveTemplate] = Mappin
         ),
         PARTIAL_ENTAILMENT_TEMPLATE_ID: ApprovedConnectiveTemplate(
             template_id=PARTIAL_ENTAILMENT_TEMPLATE_ID,
-            text="The source provides partial support:",
+            text="Indirect evidence—relevant but not independently decisive:",
             allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
             allowed_sections=(
                 SectionType.SUPPORTING,
@@ -98,7 +98,7 @@ APPROVED_CONNECTIVE_TEMPLATES: Mapping[str, ApprovedConnectiveTemplate] = Mappin
         ),
         WEAK_ENTAILMENT_TEMPLATE_ID: ApprovedConnectiveTemplate(
             template_id=WEAK_ENTAILMENT_TEMPLATE_ID,
-            text="The source provides weak support:",
+            text="Contextual evidence—does not independently establish the claim:",
             allowed_stances=(Stance.SUPPORTING, Stance.OPPOSING),
             allowed_sections=(
                 SectionType.SUPPORTING,
@@ -596,6 +596,19 @@ def _render_validated_brief(
         "",
         f"{CLAIM_LABEL}: {authoritative_claim}",
     ]
+    present_stances = {record.stance for record in ledger_lookup.values()}
+    missing_stances = [
+        stance for stance in (Stance.SUPPORTING, Stance.OPPOSING) if stance not in present_stances
+    ]
+    if missing_stances:
+        missing = " and ".join(stance.value for stance in missing_stances)
+        lines.extend(
+            (
+                "",
+                "Evidence coverage: This brief is not balanced; no Reviewer-approved "
+                f"{missing} evidence was available.",
+            )
+        )
     for section in synthesis.sections:
         lines.extend(("", f"## {RELEASE_SECTION_HEADINGS[section.section_type]}"))
         for item in section.items:

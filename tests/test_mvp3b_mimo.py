@@ -460,7 +460,7 @@ def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -
         in payload["messages"][0]["content"]
     )
     assert (
-        "Any *_prompt_version field must equal exactly: phase8-reviewer-v2"
+        "Any *_prompt_version field must equal exactly: phase8-reviewer-v3"
         in payload["messages"][0]["content"]
     )
     assert "provider" not in payload

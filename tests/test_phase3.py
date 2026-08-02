@@ -118,6 +118,28 @@ def test_valid_statistical_quote_gets_deterministic_candidate_id() -> None:
     )
 
 
+def test_non_statistical_quote_requires_at_least_seventy_five_words() -> None:
+    assert STATISTICAL_MIN_WORDS == NON_STATISTICAL_MIN_WORDS == 75
+    accepted_segment = _non_statistical_sentence(75)
+    accepted_snapshot = _snapshot(f"{_BEFORE} {accepted_segment} {_AFTER}")
+    accepted = _filter(
+        accepted_snapshot,
+        f'[{_BEFORE}] "{accepted_segment}" [{_AFTER}]',
+    )
+    rejected_segment = _non_statistical_sentence(74)
+    rejected_snapshot = _snapshot(f"{_BEFORE} {rejected_segment} {_AFTER}")
+    rejected = _filter(
+        rejected_snapshot,
+        f'[{_BEFORE}] "{rejected_segment}" [{_AFTER}]',
+    )
+
+    assert accepted.valid is True
+    assert accepted.candidate is not None
+    assert accepted.candidate.raw_segment_word_count == 75
+    assert rejected.valid is False
+    assert rejected.rejection_message == "quoted segments contain 74 words; need 75"
+
+
 def test_post_filter_uses_validation_clock_instead_of_extraction_time() -> None:
     snapshot, _, quote_block = _valid_statistical_case()
     validation_time = _NOW + timedelta(seconds=1)
@@ -273,7 +295,7 @@ def test_valid_truncated_boundary_marker_passes_at_snapshot_boundary() -> None:
     assert result.candidate is not None
 
 
-def test_non_statistical_quote_below_100_words_rejected_without_id() -> None:
+def test_non_statistical_quote_below_75_words_rejected_without_id() -> None:
     segment = _non_statistical_sentence(NON_STATISTICAL_MIN_WORDS - 1)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
     quote_block = f'[{_BEFORE}] "{segment}" [{_AFTER}]'
@@ -283,7 +305,7 @@ def test_non_statistical_quote_below_100_words_rejected_without_id() -> None:
     _assert_rejected(result)
 
 
-def test_statistical_quote_below_50_words_rejected_without_id() -> None:
+def test_statistical_quote_below_75_words_rejected_without_id() -> None:
     segment = _statistical_sentence(STATISTICAL_MIN_WORDS - 1)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
     quote_block = f'[{_BEFORE}] "{segment}" [{_AFTER}]'
@@ -296,8 +318,8 @@ def test_statistical_quote_below_50_words_rejected_without_id() -> None:
 @pytest.mark.parametrize(
     "segment",
     [
-        f"{_words(['policy', 'evidence', 'shows', '2026'], STATISTICAL_MIN_WORDS)}.",
-        f"{_words(['policy', 'evidence', 'shows', 'growth'], STATISTICAL_MIN_WORDS)}.",
+        f"{_words(['policy', 'evidence', 'shows', '2026'], STATISTICAL_MIN_WORDS - 1)}.",
+        f"{_words(['policy', 'evidence', 'shows', 'growth'], STATISTICAL_MIN_WORDS - 1)}.",
     ],
 )
 def test_digit_or_marker_alone_does_not_unlock_statistical_threshold(segment: str) -> None:
@@ -310,7 +332,7 @@ def test_digit_or_marker_alone_does_not_unlock_statistical_threshold(segment: st
 
 
 def test_marker_substrings_do_not_unlock_statistical_threshold() -> None:
-    segment = f"{_words(['policy', 'corporate', 'reporting', '2026'], STATISTICAL_MIN_WORDS)}."
+    segment = f"{_words(['policy', 'corporate', 'reporting', '2026'], STATISTICAL_MIN_WORDS - 1)}."
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
     quote_block = f'[{_BEFORE}] "{segment}" [{_AFTER}]'
 
@@ -334,8 +356,8 @@ def test_invalid_filter_metadata_rejects_without_candidate_id() -> None:
 
 
 def test_ellipsis_is_not_counted_as_a_quoted_word() -> None:
-    first = _words(["policy"], 25) + "."
-    second = _words(["evidence", "50%", "growth"], 25) + "."
+    first = _words(["policy"], 37) + "."
+    second = _words(["evidence", "50%", "growth"], 38) + "."
     snapshot = _snapshot(f"{_BEFORE} {first} Bridge sentence. {second} {_AFTER}")
     quote_block = f'[{_BEFORE}] "{first}... {second}" [{_AFTER}]'
 

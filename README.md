@@ -50,9 +50,9 @@ records are insert-only SQLite audit artifacts.
 - **Renderer and Validator** check exact statement text, Ledger and Reviewer IDs, stance,
   placement, entailment, section and template compatibility, and claim reuse before rendering.
 - **Search, Scraper, and LLM providers** are synchronous vendor-neutral Protocols. Normal tests use
-  injected offline transports. The approved live stack is loopback Wigolo `0.2.1` with native
-  SearXNG for discovery/acquisition and direct Xiaomi `mimo-v2.5-pro` for every LLM role. Historical
-  OpenRouter adapters remain covered but are not used by the live CLI.
+  injected offline transports. New live runs use Exa Search `auto` for metadata-only discovery,
+  loopback Wigolo `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback, and
+  direct Xiaomi `mimo-v2.5-pro` for every LLM role. Historical adapters remain covered.
 
 See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLANS.md` plus
 `.agent/plans/` for phase history and boundaries.
@@ -109,10 +109,10 @@ STATUS.md / HANDOFF.md   Chronological implementation and verification records
 
 ## Installation
 
-Python 3.11 and 3.12 are supported. Live Wigolo use additionally requires Node.js 20+, pinned
-`wigolo@0.2.1`, and native SearXNG resources, all bound to loopback. MVP-5 can manage this local
-stack from the website. From the repository root, create a virtual environment and install the
-declared runtime and development dependencies:
+Python 3.11 and 3.12 are supported. Live Wigolo acquisition additionally requires Node.js 20+ and
+pinned `wigolo@0.2.1` on loopback. Exa search requires an API key; Firecrawl fallback is optional.
+MVP-5 can manage the local Wigolo service from the website. From the repository root, create a
+virtual environment and install the declared runtime and development dependencies:
 
 ```bash
 python3.11 -m venv .venv
@@ -188,21 +188,25 @@ the final brief when available, validation errors, hashes, artifact counts, and 
 
 ### Launch the live website on macOS
 
-After first-time installation, double-click `Launch ResearchAssistant.command`. If the key is not
-already in the launcher environment, macOS requests `MIMO_API_KEY` in a native hidden-input dialog
-for that launch only. No terminal commands are required during normal use. The launcher opens the
-live page at `127.0.0.1:8501`; its Terminal window/local server must remain running while the page
-is open.
+After first-time installation, double-click `Launch ResearchAssistant.command`. When absent from
+the launcher environment, macOS requests required `MIMO_API_KEY` and `EXA_API_KEY` values in native
+hidden-input dialogs for that launch only, then offers an optional `FIRECRAWL_API_KEY` field. No
+terminal commands are required during normal use. The launcher opens the live page at
+`127.0.0.1:8501`; its Terminal window/local server must remain running while the page is open.
 
-The sidebar checks exact Wigolo `0.2.1` identity and can start the pinned stack with native SearXNG.
+The sidebar checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
 It never treats a listener or child PID as proof of health and stops only its own process group.
 The page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path. It
 shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,
 run history, cooperative cancellation, and released brief/hash copy/download controls.
 
-The browser never receives `MIMO_API_KEY`; it stays in the local server process. The app does not
-load `.env` or shell profiles. Errors and bounded child output are redacted. Claims must be public
-and non-sensitive, and every released brief requires human review.
+The browser never receives provider API keys; they stay in the local server process. The app does
+not load `.env` or shell profiles. Errors and bounded child output are redacted. Claims must be
+public and non-sensitive, and every released brief requires human review.
+
+The website's USD ceiling and estimated-cost card apply to MiMo model calls. Exa search charges
+and any Firecrawl credits are reported by their provider dashboards and are not silently counted
+as MiMo spend.
 
 Run or resume the approved live stack with an exact claim, explicit SQLite path, and explicit token
 and cost ceilings:

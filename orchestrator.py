@@ -25,6 +25,7 @@ from agents.opposingresearcher import retrieve_opposing
 from agents.planner import PlannerLLMInput
 from agents.renderer import render_brief, validate_final_release
 from agents.researcher import (
+    LEGACY_FIXTURE_QUOTE_LENGTH_POLICY,
     filter_provisional_candidate,
     validate_snapshot_integrity,
 )
@@ -640,6 +641,7 @@ def _filter_candidates(
             claim_keywords=claim_keywords,
             post_filter_version=POST_FILTER_VERSION,
             validation_clock=validation_clock,
+            quote_length_policy=LEGACY_FIXTURE_QUOTE_LENGTH_POLICY,
         )
         if not result.valid or result.candidate is None:
             raise FixturePipelineError(
@@ -2534,7 +2536,11 @@ def _run_analysis_stage(
                 statement_drafts=candidate_drafts,
                 review_results=candidate_reviews,
                 approved_factual_statement=final_review.approved_factual_statement,
-                entailment=(Entailment.PARTIAL if decision.claim_fit == 3 else Entailment.STRONG),
+                entailment={
+                    3: Entailment.WEAK,
+                    4: Entailment.PARTIAL,
+                    5: Entailment.STRONG,
+                }[decision.claim_fit],
             ),
             derive_ledger_claim_id=derive_phase9_ledger_claim_id,
             validation_clock=clock,

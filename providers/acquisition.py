@@ -46,6 +46,8 @@ class AcquisitionFailureCode:
     CONTENT_TYPE = "invalid_content_type"
     MALFORMED = "malformed_response"
     EXTRACTION = "extraction_failure"
+    WIGOLO_CONNECTION = "wigolo_connection_failure"
+    WIGOLO_TIMEOUT = "wigolo_timeout"
 
 
 class WigoloAcquisitionAdapter:
@@ -221,11 +223,11 @@ class WigoloAcquisitionAdapter:
             )
         except httpx.TimeoutException as exc:
             raise ScraperTimeoutError(
-                AcquisitionFailureCode.TIMEOUT, "Wigolo fetch timed out", retryable=True
+                AcquisitionFailureCode.WIGOLO_TIMEOUT, "Wigolo fetch timed out", retryable=True
             ) from exc
         except httpx.HTTPError as exc:
             raise ScraperProviderError(
-                AcquisitionFailureCode.CONNECTION,
+                AcquisitionFailureCode.WIGOLO_CONNECTION,
                 "Wigolo fetch could not connect to loopback service",
                 retryable=True,
             ) from exc

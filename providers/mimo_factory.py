@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, model_validator
 
 from agents.analyst import AnalystLLMInput
+from agents.researcher import EVIDENCE_POLICY_VERSION
 from agents.reviewer import ReviewerDecision
 from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, AcquisitionPolicy
 from agents.synthesizer import SynthesizerLLMInput
@@ -24,8 +25,10 @@ from models import (
     SynthesisOutput,
 )
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
-from providers.config import MimoConfig, RunCeilings, WigoloConfig
+from providers.config import ExaConfig, FirecrawlConfig, MimoConfig, RunCeilings, WigoloConfig
+from providers.exa import ExaSearchAdapter
 from providers.factory import ProviderFactoryClients
+from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, load_prompt
 from providers.mimo import XiaomiMimoAdapter
 from providers.normalization import NORMALIZATION_VERSION, PDF_POLICY_VERSION
@@ -34,7 +37,6 @@ from providers.pricing import (
     DIRECT_MIMO_PRICING_POLICY_VERSION,
     ModelPriceCap,
 )
-from providers.wigolo import WigoloSearchAdapter
 
 MIMO_FACTORY_VERSION = "mvp3b-direct-mimo-factory-v1"
 MIMO_RETRY_POLICY_VERSION = "mvp3b-direct-mimo-one-retry-v1"
@@ -48,6 +50,8 @@ class MimoProviderFactoryConfig(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     wigolo: WigoloConfig = WigoloConfig()
+    exa: ExaConfig
+    firecrawl: FirecrawlConfig | None = None
     mimo: MimoConfig
     ceilings: RunCeilings = RunCeilings()
     acquisition: AcquisitionPolicy = MVP3A_ACQUISITION_POLICY
@@ -57,6 +61,8 @@ class MimoProviderFactoryConfig(StrictModel):
     def validate_exact_route(self) -> MimoProviderFactoryConfig:
         if self.wigolo.provider_name != "wigolo" or self.wigolo.provider_version != "0.2.1":
             raise ValueError("MVP-3B requires Wigolo 0.2.1")
+        if self.exa.provider_name != "exa" or self.exa.search_type != "auto":
+            raise ValueError("new live runs require Exa auto discovery")
         if self.mimo.provider_name != "xiaomi-mimo" or self.mimo.model != "mimo-v2.5-pro":
             raise ValueError("MVP-3B requires direct Xiaomi mimo-v2.5-pro")
         if self.acquisition != MVP3A_ACQUISITION_POLICY:
@@ -76,9 +82,13 @@ class MimoProviderFactoryConfig(StrictModel):
         wigolo: WigoloConfig | None = None,
         ceilings: RunCeilings | None = None,
     ) -> MimoProviderFactoryConfig:
+        mimo = MimoConfig.from_environment(environment)
+        exa = ExaConfig.from_environment(environment)
         return cls(
             wigolo=wigolo or WigoloConfig(),
-            mimo=MimoConfig.from_environment(environment),
+            exa=exa,
+            firecrawl=FirecrawlConfig.from_environment(environment),
+            mimo=mimo,
             ceilings=ceilings or RunCeilings(),
             repository_revision=repository_revision,
         )
@@ -92,8 +102,8 @@ class MimoProviderBundle(StrictModel):
     )
 
     config: MimoProviderFactoryConfig
-    search: WigoloSearchAdapter
-    acquisition: WigoloAcquisitionAdapter
+    search: ExaSearchAdapter
+    acquisition: FallbackAcquisitionAdapter
     llm: XiaomiMimoAdapter
     fingerprint_payload_json: str
     fingerprint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -125,16 +135,21 @@ def build_mimo_provider_bundle(
     if not isinstance(config, MimoProviderFactoryConfig):
         raise TypeError("direct MiMo factory requires MimoProviderFactoryConfig")
     injected = clients or ProviderFactoryClients()
-    search = WigoloSearchAdapter(
-        config.wigolo,
+    search = ExaSearchAdapter(
+        config.exa,
         client=injected.search,
-        health_verified=injected.health_verified,
     )
-    acquisition = WigoloAcquisitionAdapter(
+    primary_acquisition = WigoloAcquisitionAdapter(
         config.wigolo,
         source_client=injected.source,
         wigolo_client=injected.acquisition,
     )
+    fallback = (
+        FirecrawlAcquisitionAdapter(config.firecrawl, client=injected.fallback_acquisition)
+        if config.firecrawl is not None
+        else None
+    )
+    acquisition = FallbackAcquisitionAdapter(primary=primary_acquisition, fallback=fallback)
     llm = XiaomiMimoAdapter(
         config.mimo,
         client=injected.llm,
@@ -178,6 +193,12 @@ def _fingerprint_payload(
     operational_policy_json = json.dumps(
         {
             "wigolo": config.wigolo.model_dump(mode="json"),
+            "exa": config.exa.model_dump(mode="json", exclude={"api_key"}),
+            "firecrawl": (
+                config.firecrawl.model_dump(mode="json", exclude={"api_key"})
+                if config.firecrawl is not None
+                else {"enabled": False}
+            ),
             "mimo": {
                 "max_completion_tokens": config.mimo.max_completion_tokens,
                 "deadlines": config.mimo.deadlines.model_dump(mode="json"),
@@ -191,10 +212,14 @@ def _fingerprint_payload(
     return {
         "fingerprint_version": MIMO_FINGERPRINT_VERSION,
         "provider_identity": (
-            f"wigolo:{config.wigolo.provider_version}|xiaomi-mimo:{config.mimo.base_url}"
+            f"exa:{config.exa.base_url}|wigolo:{config.wigolo.provider_version}|"
+            f"firecrawl:{config.firecrawl.base_url if config.firecrawl else 'disabled'}|"
+            f"xiaomi-mimo:{config.mimo.base_url}"
         ),
         "adapter_identity": (
-            f"{config.wigolo.adapter_version}|{config.mimo.adapter_version}|{MIMO_FACTORY_VERSION}"
+            f"{config.exa.adapter_version}|{config.wigolo.adapter_version}|"
+            f"{config.firecrawl.adapter_version if config.firecrawl else 'firecrawl-disabled'}|"
+            f"{config.mimo.adapter_version}|{MIMO_FACTORY_VERSION}"
         ),
         "model_identity": config.mimo.model,
         "prompt_identity": sha256(json.dumps(prompts, sort_keys=True).encode("utf-8")).hexdigest(),
@@ -207,6 +232,7 @@ def _fingerprint_payload(
             f"{DIRECT_MIMO_PRICING_POLICY_VERSION}|"
             f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|"
             f"{sha256(operational_policy_json.encode('utf-8')).hexdigest()}|rank5-keep3"
+            f"|{EVIDENCE_POLICY_VERSION}"
         ),
         "repository_revision": config.repository_revision,
     }

@@ -22,7 +22,7 @@ from frontend.live_service import (
     exit_code_for_status,
 )
 from frontend.security import redact_text
-from frontend.service_manager import WigoloServiceManager
+from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
 from models import RunManifest, RunStatus, Stage
 from orchestrator import ProviderPipelineResult, ProviderRunStatus
 from providers.search import SearchFailureCode, SearchProviderError
@@ -113,7 +113,10 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
         release.wait(timeout=5)
         return _terminal_result(str(kwargs["db_path"]), UUID(str(kwargs["run_id"])))
 
-    controller = LiveResearchController(environment={"MIMO_API_KEY": SECRET}, runner=runner)
+    controller = LiveResearchController(
+        environment={"MIMO_API_KEY": SECRET, "EXA_API_KEY": "exa-test-secret"},
+        runner=runner,
+    )
     first = controller.start(request)
     assert entered.wait(timeout=2)
     second = controller.start(request)
@@ -137,7 +140,10 @@ def test_worker_exception_is_redacted_from_ui_snapshot(tmp_path: Path) -> None:
     def runner(*args: object, **kwargs: object) -> ProviderPipelineResult:
         raise RuntimeError(f"Authorization: Bearer {SECRET}")
 
-    controller = LiveResearchController(environment={"MIMO_API_KEY": SECRET}, runner=runner)
+    controller = LiveResearchController(
+        environment={"MIMO_API_KEY": SECRET, "EXA_API_KEY": "exa-test-secret"},
+        runner=runner,
+    )
     result = controller.start(request)
     snapshot = controller.snapshot(request.db_path, result.run_id)
 
@@ -269,8 +275,10 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     assert captured["command"] == ["npx", "-y", "wigolo@0.2.1", "serve"]
     assert isinstance(environment, dict)
     assert "MIMO_API_KEY" not in environment
-    assert environment["WIGOLO_SEARCH"] == "searxng"
-    assert environment["SEARXNG_MODE"] == "native"
+    assert "WIGOLO_SEARCH" not in environment
+    assert "SEARXNG_MODE" not in environment
+    assert "EXA_API_KEY" not in environment
+    assert "FIRECRAWL_API_KEY" not in environment
 
     stopped = manager.stop()
     assert stopped.state == "stopped"
@@ -302,6 +310,31 @@ def test_live_streamlit_renders_friendly_missing_configuration(
     assert all(SECRET not in element.value for element in (*app.error, *app.warning))
 
 
+def test_live_streamlit_acknowledgement_does_not_deadlock_submit_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("MIMO_API_KEY", SECRET)
+    monkeypatch.setenv("EXA_API_KEY", "exa-test-secret")
+    monkeypatch.setattr(
+        WigoloServiceManager,
+        "probe",
+        lambda self: ServiceDiagnostic(
+            state="healthy",
+            wigolo_ready=True,
+            searxng_readiness="configured",
+            message="Pinned Wigolo 0.2.1 is healthy.",
+        ),
+    )
+    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
+    start = next(item for item in app.button if item.label == "Start Research")
+
+    assert not start.disabled
+    start.click().run()
+    assert any("confirm" in error.value.lower() for error in app.error)
+
+
 def test_mocked_released_run_reconnects_in_live_streamlit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -312,6 +345,7 @@ def test_mocked_released_run_reconnects_in_live_streamlit(
     environment = {
         **os.environ,
         "MIMO_API_KEY": SECRET,
+        "EXA_API_KEY": "exa-test-secret",
         "MIMO_BASE_URL": "https://api.xiaomimimo.com/v1",
         "MIMO_MODEL": "mimo-v2.5-pro",
         "MVP4_DB_PATH": str(db_path),

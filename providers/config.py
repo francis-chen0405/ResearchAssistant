@@ -67,6 +67,74 @@ class WigoloConfig(StrictModel):
         return value.rstrip("/")
 
 
+class ExaConfig(StrictModel):
+    """Required Exa discovery configuration for new live runs."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["exa"] = "exa"
+    adapter_version: Literal["post-mvp5-exa-search-v1"] = "post-mvp5-exa-search-v1"
+    base_url: str = "https://api.exa.ai"
+    api_key: SecretStr
+    search_type: Literal["auto"] = "auto"
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("Exa base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Exa base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> ExaConfig:
+        api_key = environment.get("EXA_API_KEY", "").strip()
+        if not api_key:
+            raise ProviderConfigurationError(
+                "EXA_API_KEY is required in the explicitly supplied environment"
+            )
+        return cls(
+            api_key=SecretStr(api_key),
+            base_url=environment.get("EXA_BASE_URL", "https://api.exa.ai").strip(),
+        )
+
+
+class FirecrawlConfig(StrictModel):
+    """Optional Firecrawl acquisition-fallback configuration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["firecrawl"] = "firecrawl"
+    provider_version: Literal["v2"] = "v2"
+    adapter_version: Literal["post-mvp5-firecrawl-fallback-v1"] = "post-mvp5-firecrawl-fallback-v1"
+    base_url: str = "https://api.firecrawl.dev"
+    api_key: SecretStr
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("Firecrawl base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Firecrawl base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> FirecrawlConfig | None:
+        api_key = environment.get("FIRECRAWL_API_KEY", "").strip()
+        if not api_key:
+            return None
+        return cls(
+            api_key=SecretStr(api_key),
+            base_url=environment.get("FIRECRAWL_BASE_URL", "https://api.firecrawl.dev").strip(),
+        )
+
+
 class OpenRouterConfig(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

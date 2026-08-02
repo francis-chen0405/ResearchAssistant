@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from models import (
     CandidateQuoteBlock,
@@ -35,8 +35,29 @@ STATISTICAL_MARKERS = (
     "decline",
 )
 
-STATISTICAL_MIN_WORDS = 50
-NON_STATISTICAL_MIN_WORDS = 100
+EVIDENCE_POLICY_VERSION = "post-mvp5-bounded-inference-v1"
+STATISTICAL_MIN_WORDS = 75
+NON_STATISTICAL_MIN_WORDS = 75
+
+
+class QuoteLengthPolicy(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: str = Field(min_length=1)
+    statistical_min_words: int = Field(ge=1)
+    non_statistical_min_words: int = Field(ge=1)
+
+
+CURRENT_QUOTE_LENGTH_POLICY = QuoteLengthPolicy(
+    version=EVIDENCE_POLICY_VERSION,
+    statistical_min_words=STATISTICAL_MIN_WORDS,
+    non_statistical_min_words=NON_STATISTICAL_MIN_WORDS,
+)
+LEGACY_FIXTURE_QUOTE_LENGTH_POLICY = QuoteLengthPolicy(
+    version="phase3-quote-length-v1",
+    statistical_min_words=50,
+    non_statistical_min_words=100,
+)
 
 _BRACKETED_QUOTE_RE = re.compile(
     r'^\s*\[(?P<before>[^\[\]]+)\]\s+"(?P<quote>.+?)"\s+\[(?P<after>[^\[\]]+)\]\s*$',
@@ -198,6 +219,8 @@ def count_claim_keyword_matches(text: str, claim_keywords: Iterable[str]) -> int
 def validate_quote_substance(
     parsed_quote: ParsedQuoteBlock,
     claim_keywords: Iterable[str],
+    *,
+    quote_length_policy: QuoteLengthPolicy = CURRENT_QUOTE_LENGTH_POLICY,
 ) -> QuoteMetrics:
     quoted_text = " ".join(parsed_quote.segments)
     raw_word_count = count_words(quoted_text)
@@ -210,7 +233,11 @@ def validate_quote_substance(
     if keyword_matches < 1:
         raise ValueError("quote block does not contain a configured claim keyword")
 
-    minimum_words = STATISTICAL_MIN_WORDS if statistical else NON_STATISTICAL_MIN_WORDS
+    minimum_words = (
+        quote_length_policy.statistical_min_words
+        if statistical
+        else quote_length_policy.non_statistical_min_words
+    )
     if raw_word_count < minimum_words:
         raise ValueError(f"quoted segments contain {raw_word_count} words; need {minimum_words}")
 
@@ -228,13 +255,18 @@ def filter_provisional_candidate(
     claim_keywords: Iterable[str],
     post_filter_version: str,
     validation_clock: Callable[[], datetime],
+    quote_length_policy: QuoteLengthPolicy = CURRENT_QUOTE_LENGTH_POLICY,
 ) -> PostExtractionFilterResult:
     try:
         validate_snapshot_integrity(snapshot)
         _validate_provisional_snapshot_match(provisional, snapshot)
         parsed_quote = parse_extracted_quote_block(provisional.extracted_quote_block)
         offsets = _find_offsets_with_valid_context(snapshot, parsed_quote)
-        metrics = validate_quote_substance(parsed_quote, claim_keywords)
+        metrics = validate_quote_substance(
+            parsed_quote,
+            claim_keywords,
+            quote_length_policy=quote_length_policy,
+        )
         post_filter_validated_at = validation_clock()
         _validate_filter_metadata(post_filter_version, post_filter_validated_at)
     except ValueError as exc:
@@ -278,6 +310,7 @@ def verify_candidate_against_snapshot(
     candidate: CandidateQuoteBlock,
     *,
     claim_keywords: Iterable[str] | None = None,
+    quote_length_policy: QuoteLengthPolicy = CURRENT_QUOTE_LENGTH_POLICY,
 ) -> bool:
     validate_snapshot_integrity(snapshot)
     if candidate.snapshot_id != snapshot.snapshot_id:
@@ -301,7 +334,11 @@ def verify_candidate_against_snapshot(
     if candidate.has_statistical_markers != has_statistical_markers(quoted_text):
         raise ValueError("candidate statistical marker flag does not match quoted segments")
     if claim_keywords is not None:
-        metrics = validate_quote_substance(parsed_quote, claim_keywords)
+        metrics = validate_quote_substance(
+            parsed_quote,
+            claim_keywords,
+            quote_length_policy=quote_length_policy,
+        )
         if candidate.claim_keyword_match_count != metrics.claim_keyword_match_count:
             raise ValueError("candidate keyword match count does not match quote block")
 

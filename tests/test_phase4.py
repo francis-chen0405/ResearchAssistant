@@ -75,7 +75,7 @@ def _words(prefix: list[str], total: int) -> str:
 
 
 def _segment() -> str:
-    return f"{_words(['policy', 'evidence', 'shows', '50%', 'growth'], 50)}."
+    return f"{_words(['policy', 'evidence', 'shows', '50%', 'growth'], 75)}."
 
 
 def _snapshot_and_candidate() -> tuple[SourceSnapshot, CandidateQuoteBlock]:

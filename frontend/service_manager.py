@@ -1,4 +1,4 @@
-"""Owned local lifecycle for pinned loopback Wigolo and its SearXNG sidecar."""
+"""Owned local lifecycle for pinned loopback Wigolo acquisition."""
 
 from __future__ import annotations
 
@@ -47,9 +47,6 @@ class WigoloLaunchConfig(StrictModel):
     command: tuple[str, ...] = ("npx", "-y", "wigolo@0.2.1", "serve")
     host: Literal["127.0.0.1"] = "127.0.0.1"
     port: Literal[8000] = 8000
-    search_backend: Literal["searxng"] = "searxng"
-    searxng_mode: Literal["native"] = "native"
-    searxng_port: Literal[8888] = 8888
 
 
 class _OwnedProcess:
@@ -142,11 +139,8 @@ class WigoloServiceManager:
         return ServiceDiagnostic(
             state="healthy",
             wigolo_ready=True,
-            searxng_readiness="configured",
-            message=(
-                "Pinned Wigolo 0.2.1 is healthy. Native SearXNG is configured; "
-                "the first tracked Search call remains the authoritative readiness proof."
-            ),
+            searxng_readiness="unavailable",
+            message="Pinned Wigolo 0.2.1 acquisition is healthy.",
             owned_process=owned is not None,
             pid=owned.process.pid if owned is not None else None,
             started_at_monotonic=owned.started_at if owned is not None else None,
@@ -216,7 +210,7 @@ class WigoloServiceManager:
             state="stopped",
             wigolo_ready=False,
             searxng_readiness="unavailable",
-            message="Stopped the application-owned Wigolo/SearXNG process group.",
+            message="Stopped the application-owned Wigolo process group.",
             owned_process=True,
             pid=process.pid,
             started_at_monotonic=owned.started_at,
@@ -237,10 +231,6 @@ class WigoloServiceManager:
             {
                 "WIGOLO_DAEMON_HOST": self._launch.host,
                 "WIGOLO_DAEMON_PORT": str(self._launch.port),
-                "WIGOLO_SEARCH": self._launch.search_backend,
-                "SEARXNG_MODE": self._launch.searxng_mode,
-                "SEARXNG_PORT": str(self._launch.searxng_port),
-                "WIGOLO_EAGER_WARMUP": "1",
                 "LOG_FORMAT": "text",
             }
         )
@@ -265,8 +255,7 @@ class WigoloServiceManager:
             wigolo_ready=False,
             searxng_readiness="not_confirmed",
             message=(
-                "Starting pinned Wigolo 0.2.1 with native SearXNG. Health must pass "
-                "before research begins."
+                "Starting pinned Wigolo 0.2.1 acquisition. Health must pass before research begins."
             ),
             owned_process=True,
             pid=owned.process.pid,

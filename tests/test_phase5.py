@@ -214,6 +214,25 @@ def test_renderer_template_configuration_is_read_only() -> None:
         template.text = "Mutated template:"
 
 
+def test_one_sided_release_is_explicitly_labeled_not_balanced() -> None:
+    ledgers = [_valid_ledgers()[0]]
+    synthesis = _synthesis(ledgers)
+
+    rendered = render_brief(synthesis, ledgers, authoritative_claim=_CLAIM)
+
+    assert "Evidence coverage: This brief is not balanced" in rendered
+    assert "no Reviewer-approved opposing evidence was available" in rendered
+
+
+def test_balanced_release_has_no_evidence_coverage_warning() -> None:
+    ledgers = _valid_ledgers()[:2]
+    synthesis = _synthesis(ledgers)
+
+    rendered = render_brief(synthesis, ledgers, authoritative_claim=_CLAIM)
+
+    assert "Evidence coverage:" not in rendered
+
+
 def test_final_validator_rejects_raw_dictionary_ledger_handoff() -> None:
     ledgers = _valid_ledgers()
     synthesis = _synthesis(ledgers)
@@ -546,7 +565,7 @@ def test_valid_output_produces_stable_hash() -> None:
     assert result.validator_config_version == VALIDATOR_CONFIG_VERSION
     assert result.rendered_brief_hash == hashlib.sha256(expected.encode("utf-8")).hexdigest()
     assert result.rendered_brief_hash == (
-        "7895588120c041b61196d3c36326de35c6de5a8d5bafdd6f6269e6c381677240"
+        "ee60e0d4053e209695a254022ab41611e178f6d74467d32fb1c1c0076922db29"
     )
     assert set(APPROVED_CONNECTIVE_TEMPLATES) == {
         "supporting_evidence",

@@ -131,6 +131,7 @@ class ProviderFactoryClients(StrictModel):
     search: httpx.Client | None = None
     source: httpx.Client | None = None
     acquisition: httpx.Client | None = None
+    fallback_acquisition: httpx.Client | None = None
     llm: httpx.Client | None = None
     health_verified: bool = False
 

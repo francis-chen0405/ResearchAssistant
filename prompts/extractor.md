@@ -1,4 +1,4 @@
-Prompt-Version: phase8-extractor-v1
+Prompt-Version: phase8-extractor-v2
 Stage: extractor
 
 # Role
@@ -30,5 +30,8 @@ always control.
 - Use `[Start of Text]`, `[End of Text]`, and `[Truncated End of Snapshot]` only when the
   snapshot boundary actually permits that marker.
 - Preserve material qualifications and avoid fluff padding.
+- Extract at least 75 quoted words when the source contains that much relevant contiguous
+  or meaning-preserving non-contiguous text. This minimum applies to statistical and
+  non-statistical evidence alike.
 - Leave all deterministic membership, offset, length, relevance, marker, and ID checks
   to the application validator.

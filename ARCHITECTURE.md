@@ -124,23 +124,38 @@ cross-process locks. Refresh and reopen operations inspect persistence rather th
 recreating calls or release artifacts.
 
 The local service manager verifies exact Wigolo `0.2.1` identity on loopback, starts only
-the pinned `npx -y wigolo@0.2.1 serve` stack with native SearXNG configuration, monitors
-bounded redacted output, and stops only its owned process group. Health is not inferred
-from a port or process alone. The existing 15-second Search deadline is unchanged;
-Wigolo, SearXNG, retrieval, MiMo, validation, and stage failures remain explicit.
+the pinned `npx -y wigolo@0.2.1 serve` acquisition service, monitors bounded redacted
+output, and stops only its owned process group. Health is not inferred from a port or
+process alone. New live discovery uses metadata-only Exa Search `auto`. Wigolo remains
+the primary public-page acquisition and exact evidence surface; optional Firecrawl is
+gated behind Wigolo-local timeout/connection/malformed/extraction/challenge failures and
+never bypasses authentication, paywalls, access denial, unsupported content, or source
+policy failures.
 
-The browser never receives a MiMo key. Configuration comes only from the explicitly
-supplied server-process environment. The macOS launcher may request the key through a
-native hidden-input dialog and exports it only to the local Streamlit server process; it
-does not persist it or place it in URLs or command arguments. Cooperative cancellation,
-fingerprints, budgets, restart compatibility, terminal semantics, and human review
-remain exactly as released in MVP-4.
+The browser never receives MiMo, Exa, or Firecrawl keys. Configuration comes only from
+the explicitly supplied server-process environment. The macOS launcher may request keys
+through native hidden-input dialogs and exports them only to the local Streamlit server
+process; it does not persist them or place them in URLs or command arguments.
+Cooperative cancellation, fingerprints, budgets, restart compatibility, terminal
+semantics, and human review remain exactly as released in MVP-4.
+
+### Post-MVP-5 Bounded-Inference Evidence Policy
+
+New runs require at least 75 exactly verified quoted words for every candidate. The
+Reviewer continues to require literal statement entailment, neutral framing, and all
+material qualifications, but does not require one approved fact to prove the complete
+debated claim. Claim Fit 5 is rendered as direct evidence, Claim Fit 4 as indirect
+evidence that is not independently decisive, and Claim Fit 3 as contextual evidence that
+does not independently establish the claim. Partial and Weak evidence remain explicitly
+qualified. A one-sided Ledger produces a deterministic not-balanced coverage warning;
+zero approved Ledger statements still fail closed.
 
 ### Approved Stack and Role Mapping
 
-- Search and source acquisition: pinned local Wigolo `0.2.1` over loopback. Search is
-  discovery only; provider snippets, evidence fields, relevance scores, and summaries
-  can rank attempts but can never become trusted source content.
+- Search and source acquisition: Exa Search `auto` for metadata-only discovery, pinned
+  local Wigolo `0.2.1` over loopback for primary acquisition, and optional Firecrawl for
+  the narrowly approved fallback failures. Search is discovery only; provider snippets,
+  evidence fields, relevance scores, and summaries can never become trusted content.
 - Historical MVP-2B/MVP-3A LLM gateway: OpenRouter with
   `xiaomi/mimo-v2.5-pro` primary and `minimax/minimax-m3` fallback. MVP-3B live runs use
   the direct Xiaomi MiMo amendment above instead.

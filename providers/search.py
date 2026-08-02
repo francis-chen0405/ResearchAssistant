@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
@@ -58,6 +59,7 @@ class SearchDiscoveryMetadata(StrictModel):
     published_at: str | None = None
     display_url: str | None = None
     category: str | None = None
+    author: str | None = None
 
 
 class SearchEngineTelemetry(StrictModel):
@@ -100,6 +102,9 @@ class SearchResponse(StrictModel):
     engine_telemetry: tuple[SearchEngineTelemetry, ...] = ()
     warnings: tuple[str, ...] = ()
     degraded_pool: bool = False
+    request_id: str | None = None
+    search_type: str | None = None
+    cost_usd: Decimal | None = Field(default=None, ge=0)
 
 
 @runtime_checkable

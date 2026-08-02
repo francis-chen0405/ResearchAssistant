@@ -37,7 +37,13 @@ from orchestrator import (
     run_mvp3a_pipeline,
     run_mvp3b_pipeline,
 )
-from providers.config import MimoConfig, OpenRouterConfig, ProviderConfigurationError, RunCeilings
+from providers.config import (
+    ExaConfig,
+    MimoConfig,
+    OpenRouterConfig,
+    ProviderConfigurationError,
+    RunCeilings,
+)
 from providers.factory import (
     ProviderFactoryClients,
     ProviderFactoryConfig,
@@ -57,7 +63,10 @@ SUPPORT_TEXT = (
     "cohort because schools reported higher completion rates compared with baseline "
     "classes, and the authors state the improvement was consistent across participating "
     "campuses during the measured term while noting implementation quality remained "
-    "important for interpreting the observed gains overall. "
+    "important for interpreting the observed gains across multiple reporting periods, "
+    "institutional settings, implementation teams, demographic groups, and operational "
+    "conditions documented in the evaluation during the full observation window for "
+    "participating schools overall. "
     "The report cautions that longer follow-up would improve confidence."
 )
 OPPOSE_TEXT = (
@@ -66,7 +75,10 @@ OPPOSE_TEXT = (
     "after the fixture rollout, and administrators reported that average workload increased "
     "across pilot schools, which the evaluator linked to training demands, schedule "
     "disruptions, and limited support during the first semester of implementation in "
-    "participating districts overall that year. "
+    "participating districts across multiple reporting periods, institutional settings, "
+    "implementation teams, demographic groups, and operational conditions documented in "
+    "the evaluation during the full observation window for participating schools overall "
+    "that year. "
     "The evaluator states that later adjustments reduced some burden."
 )
 SUPPORT_QUOTE = (
@@ -75,14 +87,20 @@ SUPPORT_QUOTE = (
     "reported higher completion rates compared with baseline classes, and the authors state "
     "the improvement was consistent across participating campuses during the measured term "
     "while noting implementation quality remained important for interpreting the observed "
-    'gains overall." [The report cautions that longer follow-up would improve confidence.]'
+    "gains across multiple reporting periods, institutional settings, implementation teams, "
+    "demographic groups, and operational conditions documented in the evaluation during the "
+    'full observation window for participating schools overall." [The report cautions that '
+    "longer follow-up would improve confidence.]"
 )
 OPPOSE_QUOTE = (
     '[Independent evaluator describes implementation costs.] "policy evidence shows a 20% '
     "decline in student satisfaction among surveyed families after the fixture rollout, and "
     "administrators reported that average workload increased across pilot schools, which the "
     "evaluator linked to training demands, schedule disruptions, and limited support during "
-    'the first semester of implementation in participating districts overall that year." '
+    "the first semester of implementation in participating districts across multiple "
+    "reporting periods, institutional settings, implementation teams, demographic groups, "
+    "and operational conditions documented in the evaluation during the full observation "
+    'window for participating schools overall that year." '
     "[The evaluator states that later adjustments reduced some burden.]"
 )
 
@@ -137,7 +155,7 @@ class MockProviderHTTP:
                 text=f"<html><body>{source_text}</body></html>",
                 request=request,
             )
-        if request.url.path == "/v1/search":
+        if request.url.path in {"/v1/search", "/search"}:
             with self._lock:
                 self.search_threads.add(threading.current_thread().name)
             if self.malformed_search:
@@ -286,7 +304,7 @@ class MockProviderHTTP:
                 extracted_quote_block=(
                     SUPPORT_QUOTE if item.stance is Stance.SUPPORTING else OPPOSE_QUOTE
                 ),
-                extraction_prompt_version="phase8-extractor-v1",
+                extraction_prompt_version="phase8-extractor-v2",
                 extraction_model_name=alias,
                 extracted_at=NOW,
             ).model_dump(mode="json")
@@ -303,7 +321,7 @@ class MockProviderHTTP:
                     placement="secondary",
                     approved=True,
                     rationale="Mocked Analyst approval.",
-                    analyst_prompt_version="phase8-analyst-v1",
+                    analyst_prompt_version="phase8-analyst-v2",
                     analyst_model_name=alias,
                     scored_at=NOW,
                 ).model_dump(mode="json")
@@ -328,7 +346,7 @@ class MockProviderHTTP:
                 ),
                 claim_fit=1 if self.mismatched_draft_identity else 4,
                 analyst_prompt_version=(
-                    "wrong-prompt" if self.mismatched_draft_identity else "phase8-analyst-v1"
+                    "wrong-prompt" if self.mismatched_draft_identity else "phase8-analyst-v2"
                 ),
                 analyst_model_name="wrong-model" if self.mismatched_draft_identity else alias,
                 drafted_at=NOW,
@@ -430,6 +448,7 @@ def _run(tmp_path: Path, mock: MockProviderHTTP, *, run_id: UUID = RUN_ID, confi
 
 def _mimo_config() -> MimoProviderFactoryConfig:
     return MimoProviderFactoryConfig(
+        exa=ExaConfig(api_key="mock-exa-secret"),
         mimo=MimoConfig(api_key="mock-mimo-secret"),
         repository_revision="direct-mimo-test-revision",
     )

@@ -1,5 +1,67 @@
 # Status
 
+## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
+
+Status: Implemented; final full-suite verification is recorded below. MVP-6 has not
+started.
+
+- Changed both statistical and non-statistical quote minima to 75 words.
+- Updated Analyst and Reviewer prompts so literal, materially relevant facts need not
+  independently prove the complete claim, while unsupported necessity, sufficiency,
+  causal, or generalized language remains rejectable.
+- Mapped Claim Fit 5/4/3 to Strong/direct, Partial/indirect, and Weak/contextual evidence,
+  retained qualification gates, and added cautious application-owned connective text.
+- Added a deterministic coverage warning to every one-sided released brief. Zero-Ledger
+  runs continue to fail closed.
+- Versioned the extractor, analyst, reviewer, evidence policy, and final validator; new
+  policy identity requires a new run ID. No dependency or database migration was added.
+- Preserved deterministic replay of frozen fixture runs through an explicit legacy
+  50-statistical/100-non-statistical quote policy. New provider-backed runs always use
+  the current 75-word policy.
+
+Verification:
+
+- Full offline suite: 454 passed, 2 skipped.
+- Offline evaluation: all 38 deterministic cases passed.
+- Ruff lint/format, launcher syntax, and `git diff --check` passed.
+- No Exa, Wigolo, Firecrawl, or MiMo call was made; added provider cost is zero.
+
+## 2026-08-01 - Post-MVP-5 Exa/Wigolo/Firecrawl Provider Correction
+
+Status: Complete. This is the user's explicitly authorized retrieval-provider correction;
+MVP-6 has not started.
+
+Completed:
+
+- Replaced SearXNG discovery for new direct-MiMo runs with Exa Search `auto`. Requests
+  contain the query, five-result limit, and explicit domain exclusions only; provider
+  text never enters the evidence surface.
+- Kept pinned loopback Wigolo `0.2.1` as primary acquisition and added optional
+  Firecrawl v2 scrape fallback. Fallback is limited to Wigolo-local connection, timeout,
+  malformed-response, extraction, or challenge failures and cannot bypass source access,
+  paywall, authentication, content-type, size, or redirect failures.
+- Added strict secret-safe Exa/Firecrawl configurations, mocked HTTP adapters, immutable
+  fingerprint identities, and launcher prompts. `EXA_API_KEY` is required;
+  `FIRECRAWL_API_KEY` is optional and its absence leaves Wigolo-only acquisition.
+- Removed native SearXNG launch settings from the application-owned Wigolo process while
+  preserving the completed research pipeline, SQLite schema, validators, MiMo route,
+  and rank-five/keep-three policy.
+
+Verification:
+
+- New provider regression suite: 14 passed.
+- Full offline suite: 451 passed, 2 skipped.
+- Offline evaluation: all 38 deterministic cases passed.
+- Ruff lint/format, launcher syntax, and `git diff --check` passed.
+- No live Exa, Wigolo, Firecrawl, or MiMo call was made; added provider cost is zero.
+
+Operator note:
+
+- Double-click the launcher and enter MiMo and Exa keys. Enter a Firecrawl key in the
+  optional third prompt to enable fallback, or leave it blank for Wigolo-only fetching.
+- Provider changes are fingerprinted. Use a new run ID rather than trying to resume a
+  run created under the former SearXNG identity.
+
 ## 2026-08-01 - MVP-5 Polished Local Live Web Interface
 
 Status: Complete. The earlier scheduled-live-validation placeholder was superseded by
@@ -30,12 +92,15 @@ Completed:
 - Added strict Pydantic live UI/service artifacts, safe existing-SQLite validation,
   bounded diagnostic classification for Wigolo/SearXNG/retrieval/MiMo/validation/stages,
   and a read-only persisted run-history store helper.
+- Fixed the live form acknowledgement deadlock: healthy/configured users can submit the
+  form, while an unchecked public/non-sensitive and human-review confirmation fails
+  visibly before any run or provider spend begins.
 
 Verification:
 
-- Focused MVP-5: 16 passed.
-- MVP-5 plus MVP-4 subprocess and fixture-frontend suites: 32 passed, 1 skipped.
-- Full offline suite: 436 passed, 2 skipped.
+- Focused MVP-5: 17 passed.
+- MVP-5 plus MVP-4 subprocess and fixture-frontend suites: 33 passed, 1 skipped.
+- Full offline suite: 437 passed, 2 skipped.
 - Offline evaluation: all 38 deterministic cases passed.
 - Fixture smokes: valid released with hash
   `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`; invalid blocked

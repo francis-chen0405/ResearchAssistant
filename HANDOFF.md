@@ -1,5 +1,45 @@
 # Handoff
 
+## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
+
+- New runs use a 75-word minimum for all exact quote candidates.
+- Claim Fit 5 is Strong/direct, Claim Fit 4 is Partial/indirect, and Claim Fit 3 is
+  Weak/contextual. Reviewer approval still requires the factual statement itself to be
+  literally entailed and qualified; it no longer requires that fact to independently
+  prove the entire debated claim.
+- One-sided released briefs carry a deterministic not-balanced warning naming the
+  missing stance. No-Ledger runs still fail rather than releasing an empty brief.
+- Prompt, validator, renderer, and evidence-policy identities changed, so the launcher
+  must be restarted and the next run must leave Run ID blank.
+- Frozen fixture replay explicitly retains its historical 50-statistical/100-
+  non-statistical threshold; this compatibility route is not used by new live runs.
+- This is an explicitly authorized post-MVP-5 policy correction, not MVP-6. No dependency
+  or SQLite migration was added.
+- Verification: 454 passed and 2 skipped in the full suite; 38/38 offline evaluations;
+  Ruff lint/format, launcher syntax, and diff checks passed. No live call or spend
+  occurred.
+
+## 2026-08-01 - Post-MVP-5 Exa/Wigolo/Firecrawl Provider Correction
+
+- New direct-MiMo runs now use Exa Search `auto` for metadata-only discovery, pinned
+  Wigolo `0.2.1` for primary acquisition, and optional Firecrawl v2 scrape fallback.
+- Required process secrets are `MIMO_API_KEY` and `EXA_API_KEY`.
+  `FIRECRAWL_API_KEY` is optional. The click launcher prompts for all three without
+  persistence; leaving Firecrawl blank disables fallback without disabling research.
+- Firecrawl is attempted only after Wigolo-local connection, timeout, malformed,
+  extraction, or challenge failures. It is never attempted for authentication, paywall,
+  access-denied, unsupported-content, size, redirect, or source-side failures.
+- The Wigolo child no longer receives native-SearXNG launch settings and never inherits
+  provider secrets. Existing historical Wigolo/SearXNG adapters/tests remain for prior
+  artifact compatibility, but the direct-MiMo factory constructs Exa discovery.
+- The provider/adapter/policy fingerprint includes Exa, Wigolo, and Firecrawl-enabled
+  identity. Old SearXNG runs require their historical executable identity; ordinary use
+  should start a new run ID.
+- Verification: 14 new provider tests; 451 passed and 2 skipped full suite; 38/38 offline
+  evaluations; Ruff lint/format, launcher syntax, and diff checks passed. No live call or
+  spend occurred.
+- This correction did not start MVP-6 and added no dependency or SQLite migration.
+
 ## 2026-08-01 - MVP-5 Polished Local Live Web Interface
 
 Current branch and state:
@@ -46,6 +86,9 @@ Security:
 - The Wigolo child receives only a small allowlisted environment and never inherits
   `MIMO_API_KEY`. User-selected existing database files must have a valid SQLite header.
 - Claims remain public/non-sensitive and all released output requires human review.
+- The confirmation is checked after form submission so Streamlit form batching cannot
+  leave a correctly configured user trapped behind a permanently disabled button; an
+  unchecked confirmation stops before run creation or provider spend.
 
 Files changed:
 
@@ -58,7 +101,7 @@ Files changed:
 
 Verification handoff:
 
-- Focused MVP-5: 16 passed. Full suite: 436 passed, 2 skipped.
+- Focused MVP-5: 17 passed. Full suite: 437 passed, 2 skipped.
 - Offline evaluation: 38 passed. Fixture release/block, mocked released live-web reopen,
   restart/cancellation subprocess, secret scans, child ownership/cleanup, browser visual
   smoke, Ruff lint/format, launcher syntax, and `git diff --check` passed.

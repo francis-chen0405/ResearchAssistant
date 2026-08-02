@@ -28,6 +28,7 @@ def _environment(
     return {
         **os.environ,
         "MIMO_API_KEY": SECRET,
+        "EXA_API_KEY": "exa-test-secret",
         "MIMO_BASE_URL": "https://api.xiaomimimo.com/v1",
         "MIMO_MODEL": "mimo-v2.5-pro",
         "MVP4_DB_PATH": str(db_path),

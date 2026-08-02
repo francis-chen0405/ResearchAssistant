@@ -21,6 +21,7 @@ from models import (
     REQUIRED_QUERY_EXCLUSIONS,
     AmbiguityRecord,
     ClaimDefinition,
+    Entailment,
     ModelRouteAttempt,
     ModelUsageMetadata,
     PlannerOutput,
@@ -67,7 +68,10 @@ SUPPORT_TEXT = (
     "cohort because schools reported higher completion rates compared with baseline "
     "classes, and the authors state the improvement was consistent across participating "
     "campuses during the measured term while noting implementation quality remained "
-    "important for interpreting the observed gains overall. "
+    "important for interpreting the observed gains across multiple reporting periods, "
+    "institutional settings, implementation teams, demographic groups, and operational "
+    "conditions documented in the evaluation during the full observation window for "
+    "participating schools overall. "
     "The report cautions that longer follow-up would improve confidence."
 )
 OPPOSE_TEXT = (
@@ -76,7 +80,10 @@ OPPOSE_TEXT = (
     "after the fixture rollout, and administrators reported that average workload increased "
     "across pilot schools, which the evaluator linked to training demands, schedule "
     "disruptions, and limited support during the first semester of implementation in "
-    "participating districts overall that year. "
+    "participating districts across multiple reporting periods, institutional settings, "
+    "implementation teams, demographic groups, and operational conditions documented in "
+    "the evaluation during the full observation window for participating schools overall "
+    "that year. "
     "The evaluator states that later adjustments reduced some burden."
 )
 SUPPORT_QUOTE = (
@@ -85,14 +92,20 @@ SUPPORT_QUOTE = (
     "reported higher completion rates compared with baseline classes, and the authors state "
     "the improvement was consistent across participating campuses during the measured term "
     "while noting implementation quality remained important for interpreting the observed "
-    'gains overall." [The report cautions that longer follow-up would improve confidence.]'
+    "gains across multiple reporting periods, institutional settings, implementation teams, "
+    "demographic groups, and operational conditions documented in the evaluation during the "
+    'full observation window for participating schools overall." [The report cautions that '
+    "longer follow-up would improve confidence.]"
 )
 OPPOSE_QUOTE = (
     '[Independent evaluator describes implementation costs.] "policy evidence shows a 20% '
     "decline in student satisfaction among surveyed families after the fixture rollout, and "
     "administrators reported that average workload increased across pilot schools, which the "
     "evaluator linked to training demands, schedule disruptions, and limited support during "
-    'the first semester of implementation in participating districts overall that year." '
+    "the first semester of implementation in participating districts across multiple "
+    "reporting periods, institutional settings, implementation teams, demographic groups, "
+    "and operational conditions documented in the evaluation during the full observation "
+    'window for participating schools overall that year." '
     "[The evaluator states that later adjustments reduced some burden.]"
 )
 
@@ -410,6 +423,10 @@ def test_successful_full_orchestration_releases_with_explicit_status(tmp_path: P
         for record in result.analysis_result.ledger_records
     )
     assert read_run(result.db_path, result.run_id).status is RunStatus.COMPLETED
+    entailment_by_fit = {
+        record.claim_fit: record.entailment for record in result.analysis_result.ledger_records
+    }
+    assert entailment_by_fit[4] is Entailment.PARTIAL
 
 
 def test_researchers_use_at_most_two_workers_and_equal_limits(tmp_path: Path) -> None:
@@ -430,6 +447,8 @@ def test_one_researcher_failure_is_explicit_and_other_side_continues(tmp_path: P
     assert result.researcher_result.opposing.status is ResearcherSideStatus.FAILED
     assert result.researcher_result.opposing.failures
     assert len(result.analysis_result.ledger_records) == 1
+    assert result.final_brief is not None
+    assert "Evidence coverage: This brief is not balanced" in result.final_brief
 
 
 def test_one_researcher_failure_does_not_invent_a_legacy_retrieval_limit(

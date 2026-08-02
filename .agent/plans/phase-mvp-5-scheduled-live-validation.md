@@ -1,5 +1,16 @@
 # Phase MVP-5 - Polished Local Live Web Interface
 
+> Post-completion provider correction (2026-08-01): for new live runs, Exa Search
+> replaces native SearXNG discovery; Wigolo remains primary acquisition and optional
+> Firecrawl is a narrowly gated acquisition fallback. The research pipeline, interface,
+> persistence schema, validation, and MVP-5 boundary otherwise remain unchanged. See
+> `DECISIONS.md` for the fail-closed fallback policy.
+
+> Bounded-inference correction (2026-08-01): new runs use a 75-word exact quote minimum,
+> separate literal statement entailment from whether one fact proves the full claim,
+> render Claim Fit 5/4/3 as direct/indirect/contextual evidence, and flag one-sided briefs
+> as not balanced. Exact quote/provenance checks and zero-Ledger failure remain strict.
+
 ## Superseded Placeholder and Authority
 
 The user's explicit 2026-08-01 direction replaces the earlier scheduled-live-validation

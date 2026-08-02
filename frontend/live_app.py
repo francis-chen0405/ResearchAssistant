@@ -51,8 +51,9 @@ def main() -> None:
     st.markdown('<div class="eyebrow">LOCAL · LIVE · PERSISTED</div>', unsafe_allow_html=True)
     st.title("Research Assistant")
     st.caption(
-        "Evidence-constrained research through pinned Wigolo 0.2.1 and direct Xiaomi "
-        "MiMo `mimo-v2.5-pro`. Public, non-sensitive claims only."
+        "Evidence-constrained research through Exa discovery, pinned Wigolo 0.2.1 "
+        "acquisition, optional Firecrawl fallback, and direct Xiaomi MiMo "
+        "`mimo-v2.5-pro`. Public, non-sensitive claims only."
     )
     st.warning(
         "Human review is required before any external or high-stakes use. A released hash "
@@ -85,15 +86,18 @@ def main() -> None:
         st.subheader("Configuration")
         config_error = live.configuration_message()
         if config_error:
-            st.error("MiMo is not configured for this server process.")
+            st.error("A required provider is not configured for this server process.")
             st.caption(config_error)
             st.caption(
-                "Launch with `MIMO_API_KEY` in the process environment. The key is never "
-                "sent to this page, SQLite, logs, URLs, or command arguments."
+                "Launch with `MIMO_API_KEY` and `EXA_API_KEY`. Firecrawl is optional. "
+                "Keys are never sent to this page, SQLite, logs, URLs, or arguments."
             )
         else:
-            st.success("Direct MiMo configuration present")
-            st.caption("Key value hidden · model pinned to mimo-v2.5-pro")
+            st.success("Exa search and direct MiMo configuration present")
+            fallback = "enabled" if os.environ.get("FIRECRAWL_API_KEY", "").strip() else "disabled"
+            st.caption(
+                f"Key values hidden · Firecrawl fallback {fallback} · model pinned to mimo-v2.5-pro"
+            )
         st.divider()
         st.caption(
             "The Streamlit server must remain running while this website is open. Closing "
@@ -134,7 +138,7 @@ def _render_start_form(
         max_tokens = budget_col.number_input(
             "Token ceiling", min_value=1, max_value=1_000_000, value=200_000, step=10_000
         )
-        max_cost = cost_col.text_input("Cost ceiling (USD)", value="0.15")
+        max_cost = cost_col.text_input("MiMo cost ceiling (USD)", value="0.15")
         max_calls = calls_col.number_input(
             "Physical MiMo call ceiling", min_value=1, max_value=160, value=160, step=1
         )
@@ -150,11 +154,17 @@ def _render_start_form(
             "Start Research",
             type="primary",
             use_container_width=True,
-            disabled=bool(config_error) or not wigolo_ready or not acknowledged,
+            disabled=bool(config_error) or not wigolo_ready,
         )
     if not submitted:
         if not wigolo_ready:
             st.info("Start or restore healthy pinned Wigolo before research can begin.")
+        return
+    if not acknowledged:
+        st.error(
+            "Confirm that the claim is public/non-sensitive and that you will "
+            "human-review the result before starting research."
+        )
         return
     try:
         run_id = UUID(run_id_text) if run_id_text.strip() else None
@@ -247,7 +257,7 @@ def _render_snapshot(
     stage_col.metric("Stage", snapshot.stage)
     checkpoint_col.metric("Checkpoint", snapshot.latest_checkpoint or "none")
     cost_col.metric(
-        "Estimated cost",
+        "Estimated MiMo cost",
         f"${snapshot.total_cost_usd:.6f}" if snapshot.total_cost_usd is not None else "unknown",
     )
     calls_col, tokens_col, retrieval_col, exit_col = st.columns(4)
