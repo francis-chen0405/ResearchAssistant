@@ -1,8 +1,8 @@
 # AI Assistant Instructions
 
-This repository has completed Phases 0-10, MVP-1, and the documentation-only MVP-2A
-Architecture Gate for the Debate Research Agent System. MVP-2B live-provider
-implementation has not started. Before editing any file, read `ARCHITECTURE.md`,
+This repository has completed Phases 0-10 and MVP-1 through MVP-4 for the Debate
+Research Agent System. MVP-4 is the usable live CLI release boundary; MVP-5 has not
+started. Before editing any file, read `ARCHITECTURE.md`,
 `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the
 relevant current phase plan completely.
 

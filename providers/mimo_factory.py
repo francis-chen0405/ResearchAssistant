@@ -175,6 +175,19 @@ def _fingerprint_payload(
         separators=(",", ":"),
     )
     pricing_json = price_cap.model_dump_json()
+    operational_policy_json = json.dumps(
+        {
+            "wigolo": config.wigolo.model_dump(mode="json"),
+            "mimo": {
+                "max_completion_tokens": config.mimo.max_completion_tokens,
+                "deadlines": config.mimo.deadlines.model_dump(mode="json"),
+            },
+            "ceilings": config.ceilings.model_dump(mode="json"),
+            "acquisition": config.acquisition.model_dump(mode="json"),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     return {
         "fingerprint_version": MIMO_FINGERPRINT_VERSION,
         "provider_identity": (
@@ -192,7 +205,8 @@ def _fingerprint_payload(
         "policy_identity": (
             f"{MIMO_RETRY_POLICY_VERSION}|{MIMO_BUDGET_POLICY_VERSION}|"
             f"{DIRECT_MIMO_PRICING_POLICY_VERSION}|"
-            f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|rank5-keep3"
+            f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|"
+            f"{sha256(operational_policy_json.encode('utf-8')).hexdigest()}|rank5-keep3"
         ),
         "repository_revision": config.repository_revision,
     }

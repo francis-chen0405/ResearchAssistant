@@ -6,13 +6,12 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The MVP is complete through Phase 10, MVP-1, MVP-2A, MVP-2B, and the offline-verified
-MVP-3A mocked full-provider integration phase. The repository includes strict Pydantic contracts, SQLite
-audit persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
-synchronous provider-backed orchestration, an offline fixture CLI and Streamlit UI, and a
-deterministic adversarial evaluation framework. MVP-3A connects the production-intended Wigolo
-and OpenRouter adapters to complete orchestration with mocked HTTP, exact run fingerprints, and
-strict budgets, but intentionally adds no live canary or live product command.
+The repository is complete through MVP-4. It includes strict Pydantic contracts, SQLite audit
+persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
+synchronous provider-backed orchestration, a live command-line interface, an offline fixture CLI
+and fixture-only Streamlit UI, and a deterministic adversarial evaluation framework. MVP-3B
+released a positive live canary and failed a bounded negative canary safely. MVP-4 exposes that
+validated direct-MiMo pipeline without changing the fixture-only frontend.
 
 ## How the system works
 
@@ -37,10 +36,9 @@ records are insert-only SQLite audit artifacts.
 
 - **Claim Planner** defines the claim scope, ambiguity log, and exactly six searches without
   judging whether the claim is true.
-- **Supporting and Opposing Researchers** use the same search depth and rules. The currently
-  implemented fake-provider contract processes three results for each query. MVP-2A approves a
-  future live policy that ranks five and attempts them until three usable unique snapshots exist,
-  then applies the same deterministic quotation gates.
+- **Supporting and Opposing Researchers** use the same search depth and rules. Live and strict
+  mocked runs rank five results and attempt them until three usable unique snapshots exist for each
+  query, then apply the same deterministic quotation gates.
 - **Evidence Analyst** rechecks snapshot and quotation integrity, scores evidence quality and claim
   fit separately, assigns placement, and drafts canonical factual statements.
 - **Statement Reviewer** sees only the quote, bracket context, draft, and claim-fit score. It audits
@@ -52,30 +50,31 @@ records are insert-only SQLite audit artifacts.
 - **Renderer and Validator** check exact statement text, Ledger and Reviewer IDs, stance,
   placement, entailment, section and template compatibility, and claim reuse before rendering.
 - **Search, Scraper, and LLM providers** are synchronous vendor-neutral Protocols. Normal tests use
-  injected offline transports. Concrete MVP-2B adapters support loopback Wigolo `0.2.1`, bounded
-  acquisition/normalization, narrow digital PDFs, and strict-schema OpenRouter calls.
+  injected offline transports. The approved live stack is loopback Wigolo `0.2.1` with native
+  SearXNG for discovery/acquisition and direct Xiaomi `mimo-v2.5-pro` for every LLM role. Historical
+  OpenRouter adapters remain covered but are not used by the live CLI.
 
 See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLANS.md` plus
 `.agent/plans/` for phase history and boundaries.
 
 ## Orchestration and release behavior
 
-`orchestrator.py` exposes two pipelines:
+`orchestrator.py` exposes fixture, injected-provider, and approved live-stack pipelines:
 
 - `run_fixture_pipeline()` replays frozen local artifacts and is used by `cli.py` and the Streamlit
   UI. It is deterministic and makes no provider or network calls.
 - `run_provider_pipeline()` executes the complete synchronous workflow with injected `SearchProvider`,
   `ScraperProvider`, and `LLMProvider` implementations. Only the two Researcher sides use a
   `ThreadPoolExecutor`, with at most two workers and no shared SQLite connection.
+- `run_mvp3b_pipeline()` constructs only the approved Wigolo/direct-MiMo stack, fingerprints its
+  exact provider, adapter, model, prompt, schema, normalization, policy, budget, and executable
+  repository identities, and is the live CLI launch surface.
 
 Provider orchestration records deterministic operation and attempt IDs, model aliases, prompt
 versions and hashes, timing, failures, escalation reasons, and optional token/cost usage. Each model
-alias may be attempted twice by default. Objective transient, timeout, malformed/schema,
-exact-quote, interrupted, or deterministic-validation failures can retry or advance through the
-configured fallback route; semantic disagreement alone cannot switch models. Every default role now
-uses OpenRouter `xiaomi/mimo-v2.5-pro` primary and `minimax/minimax-m3` as the only fallback. Legacy
-aliases remain readable for persisted artifacts. Every fallback output remains subject to the same
-snapshot, quotation, Reviewer, Ledger, and final validation gates.
+alias may be attempted twice by default. The live CLI retries direct `mimo-v2.5-pro` once only for
+approved objective failures and has no cross-provider fallback. Semantic disagreement never changes
+routes. Historical fallback aliases remain readable for persisted artifacts.
 
 Completed-stage checkpoints and typed stage artifacts are persisted for restart-safe reuse.
 Cancellation is honored at stage boundaries. Model-call, per-side retrieval, and optional token or
@@ -110,9 +109,10 @@ STATUS.md / HANDOFF.md   Chronological implementation and verification records
 
 ## Installation
 
-Python 3.11 or newer is required. Live Wigolo use additionally requires Node.js and pinned
-`wigolo@0.2.1`, bound to loopback. From the repository root, create a virtual environment with an
-available Python 3.11+ executable, then install the declared runtime and development dependencies:
+Python 3.11 and 3.12 are supported. Live Wigolo use additionally requires Node.js, pinned
+`wigolo@0.2.1`, and a bootstrapped native SearXNG sidecar, all bound to loopback. Process lifecycle
+remains operator-managed. From the repository root, create a virtual environment and install the
+declared runtime and development dependencies:
 
 ```bash
 python3.11 -m venv .venv
@@ -131,10 +131,12 @@ on `PATH`, so the commands below include that step.
 ### Environment variables
 
 No environment variable or API key is required for the fixture pipeline, Streamlit frontend,
-offline tests, or normal Phase 10 evaluation.
+offline tests, or normal Phase 10 evaluation. The live CLI reads configuration only from the
+explicit process environment; it never loads `.env` automatically.
 
-`.env.example` documents the optional legacy test gate and blank MVP-2B smoke gates. Provider
-configuration reads the process environment only and does not discover or load `.env` files.
+The live CLI requires `MIMO_API_KEY`. `MIMO_BASE_URL` and `MIMO_MODEL` default to the only approved
+values, and `WIGOLO_BASE_URL` defaults to `http://127.0.0.1:8000`. Claims must be public and
+non-sensitive. Secrets are never printed, persisted, fingerprinted, or exported.
 
 ```dotenv
 RUN_LLM_INTEGRATION_TESTS=
@@ -184,21 +186,51 @@ streamlit run frontend/streamlit_app.py
 The UI discovers runnable directories under `tests/fixtures/` and displays release or block status,
 the final brief when available, validation errors, hashes, artifact counts, and audit metadata.
 
-The provider-backed pipeline currently has no CLI command because it requires concrete provider
-implementations. Embedding code should import `run_provider_pipeline()` and pass objects satisfying
-the `SearchProvider`, `ScraperProvider`, and `LLMProvider` Protocols plus a SQLite `db_path`. A known
-run can then be inspected or cancelled from the CLI:
+Run or resume the approved live stack with an exact claim, explicit SQLite path, and explicit token
+and cost ceilings:
+
+```bash
+export MIMO_API_KEY="..."
+python cli.py run \
+  "For adults with hypertension, regular aerobic exercise lowers resting systolic blood pressure." \
+  --db-path /absolute/path/research-run.sqlite3 \
+  --max-tokens 200000 \
+  --max-cost-usd 0.15
+```
+
+Use `--run-id UUID` to choose a stable ID; otherwise the CLI creates one. `--max-llm-calls` defaults
+to the approved ceiling of 160. At launch the CLI prints the database, run ID, exact claim,
+approved stack, endpoints, model alias/pinned ID, repository identity, and budgets, but never the
+credential.
+
+Inspect or cooperatively cancel a known run from another process:
 
 ```bash
 python cli.py inspect-run PATH_TO_DATABASE RUN_UUID
 python cli.py cancel-run PATH_TO_DATABASE RUN_UUID --reason "requested by operator"
 ```
 
-MVP-2A approves pinned local Wigolo `0.2.1` for future discovery/acquisition and OpenRouter for
-future LLM calls. It also approves narrow digital-PDF support, ResearchAssistant-owned normalized
-plain-text snapshots, and exact offsets into those immutable snapshots. None of that live behavior
-is implemented yet, and users should not add API keys or manually run Wigolo on behalf of the
-current fixture application.
+Cancellation is cooperative: a synchronous request already in flight may continue to its deadline,
+but its attempt is persisted and no new call starts after cancellation is observed. It does not
+promise immediate interruption.
+
+Stable `run` exit codes are:
+
+| Result | Code |
+|---|---:|
+| released | 0 |
+| blocked | 10 |
+| failed | 11 |
+| cancelled | 12 |
+| configuration error | 20 |
+| invalid input | 21 |
+
+Restart requires the same run ID, byte-exact claim, and compatible fingerprint. Any provider,
+adapter, model, prompt, schema, normalization, policy, budget, or executable repository identity
+change requires a new run ID. Budget changes are never applied in place, and consumed usage is
+never reset. Released, blocked, and cancelled runs are reconstructed without new calls; failed runs
+may resume only under the same contract and reuse valid checkpoints. Arbitrary cross-version crash
+recovery is not promised.
 
 ## Tests and code quality
 
@@ -251,19 +283,16 @@ See `evaluations/README.md` for metric and exit-code details.
 
 ## Project status
 
-Phases 0 through 10, MVP-1 Release-Contract Correctness, and MVP-2A Architecture Gate are complete.
-MVP-2A is documentation-only: it selected the primary and alternative provider stacks, acquisition
-and PDF policy, normalization/quotation contract, retry and budget rules, data handling, restart
-fingerprint, and canary limits. MVP-2B implementation has not started.
-The MVP-2A documentation pass verified the unchanged repository with 310 tests passing and one
-optional live-integration test skipped; both Ruff checks also passed.
+Phases 0 through 10 and MVP-1 through MVP-4 are complete. MVP-4 is the release boundary; MVP-5 has
+not started.
 
 Known limitations are:
 
-- No live Search, Scraper, LLM, or live-evaluation adapter is included, so live research requires
-  externally supplied provider implementations.
-- The Streamlit UI and public fixture CLI remain fixture-only; there is no provider-run launch CLI,
-  production UI, authentication, accounts, uploads, or dashboard.
+- Wigolo/native SearXNG startup, warming, supervision, and shutdown remain external. Cold or
+  degraded search can exceed the fixed fail-closed deadline.
+- The Streamlit UI remains fixture-only. There is no production web UI, authentication, accounts,
+  uploads, hosting, or dashboard.
+- Direct-MiMo cost is a conservative frozen-policy estimate, not provider-confirmed billing.
 - Offline model-quality labels and prices are frozen evaluation data, not live benchmarks.
 - Token and cost totals are available only when an injected LLM provider supplies strict usage
   metadata; missing usage is not estimated.
@@ -272,8 +301,8 @@ Known limitations are:
 - Final validation is deliberately syntactic and provenance-based. Semantic quality depends on the
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
-The approved future architecture and decisions still requiring implementation-phase approval are
-documented in `.agent/plans/phase-mvp-2a-architecture-gate.md`.
+Every released brief still requires human review before high-stakes or external use. MVP-5
+scheduled live validation is out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

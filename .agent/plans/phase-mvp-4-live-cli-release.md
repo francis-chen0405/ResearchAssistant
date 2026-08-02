@@ -1,5 +1,34 @@
 # Phase MVP-4 - Usable Live CLI and MVP Release
 
+## Completion Record - 2026-08-01
+
+MVP-4 is complete and stops at the requested release boundary. `run` launches or resumes
+only the approved loopback Wigolo `0.2.1` plus direct Xiaomi `mimo-v2.5-pro` pipeline.
+`inspect-run` reconstructs authoritative status, checkpoints, retrieval/model attempts and
+failures, usage/cost, complete compatibility identity, validation errors, and released
+brief/hash. `cancel-run` persists a request that a separately running process observes at
+the next provider/orchestration boundary.
+
+Stable exit codes are released `0`, blocked `10`, failed `11`, cancelled `12`,
+configuration error `20`, and invalid input `21`. The exact claim may not contain leading
+or trailing whitespace. Token and cost budgets are mandatory; the physical-call ceiling
+defaults to the approved maximum. Any budget change requires a new run ID and can never
+reset consumed usage.
+
+Normal CLI tests use mocked HTTP adapters in subprocesses. They cover valid/missing
+configuration, every terminal state and exact exit code, token exhaustion before a call,
+redaction, inspection, terminal reconstruction, changed claim/fingerprint/budget rejection,
+and second-process cancellation during an active request. The optional live CLI smoke is
+skipped unless both exact enable and execution-time approval gates are supplied; it was not
+approved or executed for completion.
+
+Verification completed with 420 tests passed and 2 explicitly gated tests skipped, all 38
+offline evaluation cases passed, Ruff lint/format passed, fixture and mocked CLI smokes
+passed, Python 3.12 clean runtime installation/import/CLI-help passed, and diff/status audits
+passed. Python 3.11 remains supported by project metadata and the existing CI matrix but was
+not locally available for an additional clean-environment run. No dependency, schema,
+Streamlit, hosting, account, Docker, or MVP-5 change was made.
+
 ## Prerequisite and Purpose
 
 Begin only after MVP-3B produces a released positive live canary and a safe negative
@@ -67,4 +96,3 @@ Report the completion contract, files, commands/exit codes, configuration, resta
 cancellation contracts, clean-install and optional canary results/cost, verification
 counts, limitations, and whether the repository is honestly a usable MVP. Leave changes
 uncommitted.
-

@@ -120,10 +120,10 @@ stack. Do not add it to `.env.example`, load it, or use it until MVP-2B is expli
 authorized. Never expose the key to Wigolo, logs, SQLite, checkpoints, or exported
 artifacts. Live MVP claims are public/non-sensitive only.
 
-The authorized MVP-3B direct-Xiaomi amendment instead uses `MIMO_API_KEY`,
-`MIMO_BASE_URL`, and `MIMO_MODEL`. The key is read only from an explicitly supplied
-mapping and remains blank in `.env.example`. Direct MiMo replaces OpenRouter for MVP-3B;
-it is not a second simultaneously active live gateway.
+The authorized direct-Xiaomi stack uses `MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_MODEL`,
+and optional loopback `WIGOLO_BASE_URL`. The key is read only from an explicitly supplied
+mapping and remains blank in `.env.example`. Direct MiMo replaces OpenRouter for the live
+CLI; it is not a second simultaneously active live gateway.
 
 ## 7. Phase-Gated Development
 
@@ -137,8 +137,8 @@ design, not provider implementation. MVP-2B remains a distinct phase and must re
 the current top-three/PDF-unsupported/legacy-model test contracts with the approved
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
-MVP-2B and MVP-3A are now complete offline. MVP-3B live-canary stabilization is the next
-phase boundary and requires separate explicit direction.
+MVP-2B, MVP-3A, MVP-3B, and MVP-4 are complete. MVP-4 is the current release boundary.
+Do not begin MVP-5 without separate explicit direction.
 
 ## 8. Done Criteria Per Phase
 

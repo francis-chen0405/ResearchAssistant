@@ -1065,6 +1065,14 @@ class Phase9OrchestrationError(RuntimeError):
         self.stage = stage
 
 
+class ClaimMismatchError(ValueError):
+    """A persisted run ID was reused with a different authoritative claim."""
+
+
+class FingerprintMismatchError(ValueError):
+    """A persisted run ID was reused with an incompatible provider contract."""
+
+
 class Phase9Cancellation(CooperativeCancellation):
     """Internal signal used only at synchronous stage boundaries."""
 
@@ -1283,8 +1291,8 @@ def run_provider_pipeline(
                 existing_contract.fingerprint_sha256 != provider_contract.fingerprint_sha256
                 or existing_contract.payload_json != provider_contract.payload_json
             ):
-                raise ValueError(
-                    "existing run fingerprint is incompatible with the requested restart"
+                raise FingerprintMismatchError(
+                    "incompatible fingerprint for existing run; use a new run ID"
                 )
     manifest = _create_or_resume_provider_run(path, resolved_run_id, claim, now)
     if provider_contract is not None and existing_contract is None:
@@ -1614,7 +1622,9 @@ def _create_or_resume_provider_run(
         insert_run(db_path, manifest)
         return manifest
     if existing.raw_claim != raw_claim:
-        raise ValueError("existing run raw claim does not match the requested restart")
+        raise ClaimMismatchError(
+            "existing run raw claim is a different exact claim; use a new run ID"
+        )
     if existing.status is RunStatus.FAILED:
         resumed = existing.model_copy(
             update={

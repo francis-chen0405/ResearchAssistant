@@ -1,5 +1,70 @@
 # Status
 
+## 2026-08-01 - MVP-4 Usable Live CLI and MVP Release
+
+Status: Complete. The repository is honestly a usable command-line MVP within the
+documented external Wigolo/SearXNG and human-review limits. MVP-5 has not started.
+
+Completed:
+
+- Added `run` around the released direct-MiMo pipeline with exact claim input, explicit
+  SQLite path, optional run ID, mandatory token/cost budgets, approved call ceiling,
+  process-environment validation, and secret-free launch disclosure.
+- Froze exit codes: released `0`, blocked `10`, failed `11`, cancelled `12`, configuration
+  error `20`, and invalid input `21`. Released output includes the validated brief/hash;
+  other terminal states print their deterministic validation errors or normalized stage,
+  reason, and cooperative boundary.
+- Expanded `inspect-run` to display authoritative claim/status, all checkpoints,
+  retrieval/model attempts and failures, validation errors, usage/cost, provider/adapter/
+  model/prompt/schema/normalization/policy/repository/fingerprint identities, and released
+  brief/hash.
+- Kept cancellation database-backed and process-independent. A subprocess proof requested
+  cancellation while a mocked Planner call was active; that call completed and persisted,
+  cancellation was then observed, and no subsequent call started.
+- Strengthened the direct-MiMo fingerprint with operational Wigolo/deadline/acquisition,
+  completion-token, call/token/cost budget, and executable source/prompt/project identity.
+  Any budget change requires a new run ID; consumed usage is never reset.
+- Added 12 normal MVP-4 tests plus one doubly gated optional live CLI smoke. Normal
+  subprocess tests use the real CLI/orchestration/factory surfaces with mocked HTTP.
+- Updated only current release documentation and environment examples. The fixture-only
+  Streamlit frontend is unchanged. No dependency, database schema, Docker, hosting,
+  account, broad packaging, or MVP-5 work was added.
+
+Verification:
+
+- Focused MVP-4 suite: 12 passed, 1 skipped.
+- Full offline suite: 420 passed, 2 skipped.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison skipped.
+- Fixture smokes: valid released with hash
+  `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`; invalid blocked
+  with the expected `altered_statement` error.
+- Mocked live CLI smoke: released with hash
+  `8d5cea39448d9e1389497c72a5332bcaac86586282fb8b365ac7f18116059742`.
+- Restart, changed-claim, changed-fingerprint/budget, redaction, inspection, exact exit
+  codes, and second-process cancellation checks passed.
+- A clean Python 3.12.13 virtual environment installed `requirements.txt`; CLI help and
+  clean runtime imports passed. Python 3.11 was not locally available; the declared
+  `>=3.11` support and Python 3.11/3.12 CI matrix remain unchanged.
+- Ruff lint/format and `git diff --check` passed. Changes remain uncommitted.
+- The optional live CLI canary was not run because the exact enable/approval gates were
+  not supplied; observed additional live cost is zero.
+
+Known limitations:
+
+- Native SearXNG must already be bootstrapped/warmed and Wigolo `0.2.1` must already be
+  running on loopback. The CLI validates configuration and provider identity but does not
+  own process startup, supervision, or shutdown.
+- Cold or degraded Search can exceed the fixed fail-closed deadline. Direct-MiMo costs
+  remain conservative frozen-policy estimates rather than provider-confirmed billing.
+- Cancellation is cooperative, not immediate. Arbitrary cross-version crash recovery is
+  unsupported. The Streamlit UI remains fixture-only.
+- Public/non-sensitive claims only. Every release, especially high-stakes use, requires
+  human review.
+
+Next exact task:
+
+- None authorized. Do not begin MVP-5 without explicit user direction.
+
 ## 2026-07-31 - MVP-3B Full Live-Canary Stabilization
 
 Status: Complete; the approved direct-MiMo positive canary released and the controlled

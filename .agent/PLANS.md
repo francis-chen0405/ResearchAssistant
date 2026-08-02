@@ -10,22 +10,13 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State After MVP-3A
+## Current Project State After MVP-4
 
-Phases 0 through 10 and MVP-1 Release-Contract Correctness are complete. MVP-2A is the
-completed **Architecture Gate** for live provider work. Its canonical plan is
-`.agent/plans/phase-mvp-2a-architecture-gate.md`.
-
-MVP-2B Production Provider Adapters and Boundary Proof and MVP-3A Mocked Full-Provider
-Pipeline Integration are complete offline. The strict factory now connects only the
-approved Wigolo/OpenRouter adapters to `run_provider_pipeline()`, with rank-five/
-keep-three acquisition, exact fingerprints, atomic budget reservations, restart-safe
-persistence, and cooperative cancellation proven through mocked HTTP. No live call was
-made. A live product command, process lifecycle integration, and MVP-3B remain unstarted.
-
-MVP-3B is now active by explicit user direction. Its authorized architecture amendment
-replaces OpenRouter with Xiaomi's direct MiMo API as the sole live LLM gateway while
-preserving the historical MVP-3A implementation and tests. No MVP-4 work is authorized.
+Phases 0 through 10 and MVP-1 through MVP-4 are complete. The live CLI exposes only the
+approved loopback Wigolo `0.2.1` plus direct Xiaomi `mimo-v2.5-pro` stack with exact
+fingerprints, explicit budgets, restart-safe persistence, stable exit codes, detailed
+inspection, and cooperative second-process cancellation. The fixture-only Streamlit
+frontend is unchanged. MVP-5 remains unstarted and requires explicit user direction.
 
 ## MVP-2A: Architecture Gate
 

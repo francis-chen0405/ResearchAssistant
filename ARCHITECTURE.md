@@ -95,6 +95,25 @@ MVP-2B/MVP-3A OpenRouter implementation and tests remain historical compatibilit
   fingerprints, rank-five/keep-three acquisition, deterministic release gate, and
   explicit per-run approval requirement remain unchanged.
 
+### MVP-4 Live CLI Release Contract
+
+MVP-4 exposes the validated MVP-3B stack through `run`, `inspect-run`, and `cancel-run`.
+The live command accepts only an exact public/non-sensitive claim, explicit SQLite path,
+optional run ID, and explicit token/cost ceilings. It validates direct-MiMo and loopback
+Wigolo configuration before creating a run and prints only secret-free launch identity.
+
+Resume requires the same run ID, byte-exact claim, and an exact fingerprint over provider,
+adapter, model, prompt, schema, acquisition/normalization, policy, budget, and executable
+repository identities. Any budget change requires a new run; consumed usage is never reset.
+Released, blocked, and cancelled runs reconstruct without new calls. Failed runs may resume
+under the exact same contract and reuse valid checkpoints. Arbitrary cross-version recovery
+is not promised.
+
+Cancellation is persisted and may be requested by another process. Checks occur before and
+after provider calls and at orchestration boundaries. An active synchronous request may finish
+or reach its deadline, but no new call starts after cancellation is observed. The fixture-only
+Streamlit frontend remains unchanged and cannot launch live research.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: pinned local Wigolo `0.2.1` over loopback. Search is

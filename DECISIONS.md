@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-08-01 - MVP-4 Usable Live CLI Release
+
+- Expose `run`, `inspect-run`, and `cancel-run` around the approved direct-MiMo pipeline;
+  keep `run-fixture` and the fixture-only Streamlit frontend unchanged.
+- Freeze process exit codes at released `0`, blocked `10`, failed `11`, cancelled `12`,
+  configuration error `20`, and invalid input `21`.
+- Require a byte-exact non-empty claim, explicit database path, explicit token and cost
+  budgets, and process-environment provider configuration. Print only secret-free stack,
+  endpoint, model, repository, and budget identity at launch.
+- Include the complete operational configuration and budgets in the immutable run
+  fingerprint. Any budget change requires a new run ID; neither tightening nor loosening
+  can reset or reinterpret consumed usage.
+- Derive repository compatibility from a deterministic hash of the executable source,
+  prompt, and project-configuration surface rather than trusting a caller-supplied label.
+- Preserve cooperative cancellation: a second process persists the request, an active
+  synchronous call may finish, its attempt is recorded, and no later call starts after
+  observation.
+- Keep the optional live CLI smoke disabled unless both exact enable/approval gates are
+  supplied. MVP-4 completion does not authorize MVP-5.
+
 ## 2026-07-29 - MVP-3B Direct Xiaomi MiMo Gateway Amendment
 
 - Replace OpenRouter with Xiaomi's direct OpenAI-compatible MiMo API as the sole MVP-3B

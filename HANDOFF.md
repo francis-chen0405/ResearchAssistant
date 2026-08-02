@@ -1,5 +1,58 @@
 # Handoff
 
+## 2026-08-01 - MVP-4 Usable Live CLI and MVP Release
+
+Current branch and state:
+
+- `master`; all MVP-4 changes are intentionally uncommitted.
+- MVP-4 is complete. MVP-5 is not authorized.
+
+Operator surface:
+
+- `python cli.py run EXACT_CLAIM --db-path PATH --max-tokens N --max-cost-usd USD`
+  launches the approved loopback Wigolo `0.2.1` plus direct Xiaomi
+  `mimo-v2.5-pro` stack. `--run-id` is optional and `--max-llm-calls` defaults to 160.
+- Required live secret: `MIMO_API_KEY`. Optional approved defaults are exposed through
+  `MIMO_BASE_URL`, `MIMO_MODEL`, and loopback `WIGOLO_BASE_URL`. No `.env` is loaded.
+- `inspect-run DATABASE RUN_ID` prints the authoritative audit and release reconstruction.
+  `cancel-run DATABASE RUN_ID` persists cancellation for a running process.
+- Exit codes: released `0`, blocked `10`, failed `11`, cancelled `12`, configuration
+  error `20`, invalid input `21`.
+
+Restart/cancellation contract:
+
+- Same run ID requires the byte-exact claim and exact provider/model/prompt/schema/adapter/
+  normalization/policy/budget/repository fingerprint. Any budget change requires a new
+  run ID; usage is never reset.
+- Released, blocked, and cancelled runs reconstruct without calls. Failed runs may resume
+  with the exact same fingerprint and reuse valid checkpoints/attempts without duplicating
+  snapshots, Ledger records, validation, or release artifacts.
+- Cancellation is cooperative. A second process can persist it during an active request;
+  that request may finish or reach its deadline, is recorded, and no later call starts
+  after observation.
+
+Verification handoff:
+
+- Focused MVP-4: 12 passed, 1 skipped. Full suite: 420 passed, 2 skipped.
+- Offline evaluation: 38 passed. Ruff lint/format, diff check, fixture smokes, mocked live
+  CLI smoke, restart/inspection/redaction, and second-process cancellation passed.
+- Clean Python 3.12.13 runtime installation, CLI help, and imports passed. Python 3.11 was
+  unavailable locally but remains in the unchanged supported CI matrix.
+- Optional live CLI smoke: not approved, not run, zero additional live cost.
+
+Known limitations:
+
+- Operators must bootstrap/warm native SearXNG and run pinned Wigolo on loopback. Process
+  lifecycle is external; cold/degraded Search can fail its fixed deadline.
+- MiMo cost is estimated. Public/non-sensitive claims and human review remain mandatory.
+- The Streamlit app is still fixture-only. No production web UI, hosting, accounts, or
+  scheduled validation was added.
+
+Do not start:
+
+- Do not begin MVP-5, modify Streamlit into a live UI, add providers, hosting, accounts,
+  or scheduled live work without explicit user direction.
+
 ## 2026-07-31 - MVP-3B Full Live-Canary Stabilization
 
 Current branch:
