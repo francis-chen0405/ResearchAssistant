@@ -1,5 +1,28 @@
 # Decisions
 
+## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
+
+- Add `CLIExitCode.RUNNING = 13` and map every `ProviderRunStatus` explicitly across
+  direct CLI results, read-only inspection, subprocesses, and the live web surface. Exit
+  0 remains released research or separately documented administrative acceptance; it
+  never means nonterminal research.
+- Use a frozen strict `ModelUsageAccounting` summary. Zero attempts are complete exact
+  zero; incomplete token/cost usage makes the exact aggregate unknown while retaining
+  labeled known subtotals, missing-attempt IDs, and conservative reservation exposure.
+- Treat every persisted physical attempt as potentially charge-capable. Do not infer a
+  free request from failure state or error text. Exact usage replaces reservation only
+  for the component actually known; otherwise reservation remains budget exposure.
+- Fail retry/fallback and later calls when incomplete prior usage has no usable
+  reservation, because remaining budget cannot be proven. Preserve exact-limit,
+  physical-call, and strict per-call reservation behavior.
+- Freeze `ProviderRunContract` and centralize duplicate-key rejection, exact payload
+  shape, canonical serialization, and SHA-256 validation in `provider_contract.py`.
+  Keep the existing payload inputs and fingerprint-version strings; valid canonical
+  historical records remain readable, while inconsistent stored records fail without
+  repair.
+- Add no dependency or SQLite migration, make no live provider call, incur no provider
+  spending, create no commit, and do not start MVP-6.7 or repository-wide type-hint work.
+
 ## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
 
 - Add SQLite migration 5 solely for `runs.raw_claim` immutability and correct migration

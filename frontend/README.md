@@ -43,6 +43,11 @@ released brief requires human review.
 
 The displayed USD ceiling and estimated cost cover MiMo model calls. Exa search charges
 and optional Firecrawl credits remain visible in their respective provider dashboards.
+If any physical MiMo attempt lacks token or cost usage, the page labels that exact total
+incomplete and shows only the known subtotal; it never displays missing usage as zero.
+The persisted reservation remains conservative budget exposure. A running research
+result uses exit code 13 and is explicitly nonterminal; exit code 0 is not used for an
+active research result.
 
 Manual launch for development is:
 

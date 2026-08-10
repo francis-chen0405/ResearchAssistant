@@ -257,12 +257,23 @@ def _render_snapshot(
     stage_col.metric("Stage", snapshot.stage)
     checkpoint_col.metric("Checkpoint", snapshot.latest_checkpoint or "none")
     cost_col.metric(
-        "Estimated MiMo cost",
-        f"${snapshot.total_cost_usd:.6f}" if snapshot.total_cost_usd is not None else "unknown",
+        "MiMo accounted cost",
+        (
+            f"${snapshot.total_cost_usd:.6f}"
+            if snapshot.cost_usage_complete and snapshot.total_cost_usd is not None
+            else f"incomplete (known ${snapshot.known_cost_subtotal_usd:.6f})"
+        ),
     )
     calls_col, tokens_col, retrieval_col, exit_col = st.columns(4)
     calls_col.metric("MiMo calls", snapshot.model_calls_used)
-    tokens_col.metric("Tokens", snapshot.total_tokens if snapshot.total_tokens is not None else "—")
+    tokens_col.metric(
+        "Tokens",
+        (
+            snapshot.total_tokens
+            if snapshot.token_usage_complete and snapshot.total_tokens is not None
+            else f"incomplete (known {snapshot.known_token_subtotal})"
+        ),
+    )
     retrieval_col.metric("Retrievals", snapshot.retrieval_attempts_used)
     exit_col.metric("Exit code", snapshot.exit_code if snapshot.exit_code is not None else "—")
 

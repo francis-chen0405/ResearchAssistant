@@ -24,6 +24,7 @@ from models import (
     StrictModel,
     SynthesisOutput,
 )
+from provider_contract import canonical_provider_contract_payload, parse_provider_contract_payload
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
 from providers.config import ExaConfig, FirecrawlConfig, MimoConfig, RunCeilings, WigoloConfig
 from providers.exa import ExaSearchAdapter
@@ -109,7 +110,7 @@ class MimoProviderBundle(StrictModel):
     fingerprint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     def contract(self, run_id: UUID, created_at: datetime) -> ProviderRunContract:
-        payload = json.loads(self.fingerprint_payload_json)
+        payload = parse_provider_contract_payload(self.fingerprint_payload_json)
         return ProviderRunContract(
             run_id=run_id,
             fingerprint_sha256=self.fingerprint_sha256,
@@ -163,7 +164,7 @@ def build_mimo_provider_bundle(
         max_call_tokens=config.ceilings.max_tokens,
     )
     payload = _fingerprint_payload(config, price_cap)
-    payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload_json = canonical_provider_contract_payload(payload)
     return MimoProviderBundle(
         config=config,
         search=search,

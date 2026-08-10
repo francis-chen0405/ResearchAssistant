@@ -39,6 +39,7 @@ class CLIExitCode(IntEnum):
     BLOCKED = 10
     FAILED = 11
     CANCELLED = 12
+    RUNNING = 13
     CONFIGURATION_ERROR = 20
     INVALID_INPUT = 21
 
@@ -73,7 +74,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = _ArgumentParser(description="Debate Research Agent System CLI")
+    parser = _ArgumentParser(
+        description="Debate Research Agent System CLI",
+        epilog=(
+            "Research exit codes: released=0, blocked=10, failed=11, cancelled=12, "
+            "running/nonterminal=13, configuration=20, invalid-input=21. A successful "
+            "cancel-run administrative request also returns 0."
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command")
     run_fixture = subparsers.add_parser(
         "run-fixture",
@@ -191,6 +199,7 @@ def repository_identity() -> str:
         root / "cli.py",
         root / "models.py",
         root / "orchestrator.py",
+        root / "provider_contract.py",
         root / "store.py",
         root / "utils.py",
         root / "pyproject.toml",
@@ -267,8 +276,11 @@ def _print_provider_result(result: ProviderPipelineResult) -> int:
         print(f"reason: {result.failure_reason}")
         print("An active request was allowed to finish before cancellation was observed.")
         return CLIExitCode.CANCELLED
-    print(f"current stage: {result.current_stage.value}")
-    return CLIExitCode.RELEASED
+    if result.status is ProviderRunStatus.RUNNING:
+        print(f"current stage: {result.current_stage.value}")
+        print("run state: valid and nonterminal")
+        return CLIExitCode.RUNNING
+    raise ValueError(f"unsupported provider run status: {result.status!r}")
 
 
 def _run_fixture_command(fixture_dir: Path, output_dir: Path | None) -> int:
@@ -377,12 +389,24 @@ def _inspect_run_command(db_path: Path, run_id: UUID) -> int:
     print("usage:")
     print(f"- physical model calls: {result.model_calls_used}")
     print(f"- retrieval attempts: {result.retrieval_attempts_used}")
+    accounting = result.usage_accounting
+    if accounting.token_complete:
+        print(f"- exact total tokens: {accounting.exact_total_tokens}")
+    else:
+        print("- exact total tokens: unknown (usage incomplete)")
+        print(f"- known token subtotal: {accounting.known_token_subtotal}")
+    if accounting.cost_complete:
+        print(f"- exact total cost usd: {accounting.exact_total_cost_usd}")
+    else:
+        print("- exact total cost usd: unknown (usage incomplete)")
+        print(f"- known cost subtotal usd: {accounting.known_cost_subtotal_usd}")
+    token_exposure = accounting.conservative_reserved_tokens
+    cost_exposure = accounting.conservative_reserved_cost_usd
+    token_exposure_display = token_exposure if token_exposure is not None else "unprovable"
+    print(f"- conservative token exposure: {token_exposure_display}")
     print(
-        f"- total tokens: {result.total_tokens if result.total_tokens is not None else 'unknown'}"
-    )
-    print(
-        "- total cost usd: "
-        f"{result.total_cost_usd if result.total_cost_usd is not None else 'unknown'}"
+        "- conservative cost exposure usd: "
+        f"{cost_exposure if cost_exposure is not None else 'unprovable'}"
     )
     if contract is None:
         print("provider identity: unavailable (legacy provider run)")
@@ -420,13 +444,17 @@ def _cancel_run_command(db_path: Path, run_id: UUID, reason: str) -> int:
 
 
 def _exit_for_status(status: ProviderRunStatus) -> int:
-    return {
-        ProviderRunStatus.RELEASED: CLIExitCode.RELEASED,
-        ProviderRunStatus.BLOCKED: CLIExitCode.BLOCKED,
-        ProviderRunStatus.FAILED: CLIExitCode.FAILED,
-        ProviderRunStatus.CANCELLED: CLIExitCode.CANCELLED,
-        ProviderRunStatus.RUNNING: CLIExitCode.RELEASED,
-    }[status]
+    if status is ProviderRunStatus.RELEASED:
+        return CLIExitCode.RELEASED
+    if status is ProviderRunStatus.BLOCKED:
+        return CLIExitCode.BLOCKED
+    if status is ProviderRunStatus.FAILED:
+        return CLIExitCode.FAILED
+    if status is ProviderRunStatus.CANCELLED:
+        return CLIExitCode.CANCELLED
+    if status is ProviderRunStatus.RUNNING:
+        return CLIExitCode.RUNNING
+    raise ValueError(f"unsupported provider run status: {status!r}")
 
 
 if __name__ == "__main__":

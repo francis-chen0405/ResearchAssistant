@@ -1,5 +1,61 @@
 # Handoff
 
+## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
+
+- MVP-6.6 is complete and verified; MVP-6.7 and repository-wide type-hint work have not
+  started. RUNNING is exit 13 across direct CLI results, read-only inspection,
+  subprocesses, and live-web snapshots. Exit 0 never means nonterminal research;
+  `cancel-run` retains its separate persisted-administrative-success meaning.
+- `ModelUsageAccounting` is the typed authority for exact totals, known subtotals,
+  completeness, missing-attempt IDs, and conservative exposure. `ProviderPipelineResult`
+  retains `total_tokens` and `total_cost_usd` only as exact compatibility fields: zero
+  for zero attempts and `None` when incomplete.
+- Every persisted model attempt is conservatively potentially charge-capable. Exact
+  component usage replaces its reservation; missing component usage retains its full
+  reservation. No failure string or terminal state implies a free call. Retry/fallback
+  stops when incomplete unreserved usage makes remaining budget unprovable.
+- `provider_contract.py` is the single standard-library canonical identity algorithm.
+  Both factories use it, and the frozen `ProviderRunContract` validates exact keys,
+  duplicate-free canonical JSON, duplicated identities, repository revision, and
+  SHA-256 on creation/read. Stored inconsistency is never normalized or repaired and
+  blocks resume before provider work.
+- Valid historical canonical payloads retain compatibility because payload inputs and
+  fingerprint-version strings did not change. Runtime source changes still alter the
+  normal executable repository identity, and `provider_contract.py` is included in that
+  source hash.
+
+Files changed:
+
+- Runtime/contracts: `cli.py`, `models.py`, `orchestrator.py`, `provider_contract.py`,
+  `store.py`, `providers/factory.py`, `providers/mimo_factory.py`.
+- Live display: `frontend/live_service.py`, `frontend/live_app.py`.
+- Regression coverage: `tests/test_mvp6_6_runtime_integrity.py`,
+  `tests/test_mvp3a_pipeline.py`, `tests/test_mvp5_live_web.py`.
+- Phase/operator documentation: `.agent/PLANS.md`, the canonical MVP-6.6 plan,
+  `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `frontend/README.md`, `STATUS.md`, and `HANDOFF.md`.
+
+Verification handoff:
+
+- Required focused selection: 143 passed, 1 expected opt-in skip.
+- Full suite: 578 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format, 61-file in-memory compilation, launcher syntax, CLI help,
+  `git diff --check`, and final source/diff/artifact audits passed.
+- No dependency, SQLite migration, provider call, spending, generated tracked artifact,
+  commit, or MVP-6.7/type-hint work was added.
+
+Known limitation:
+
+- Historical incomplete usage without a defensible stored reservation remains readable
+  but fails closed before another budgeted call; no historical usage is fabricated.
+  Exa and Firecrawl charges remain external to MiMo model accounting.
+
+Do not start:
+
+- Do not begin MVP-6.7 or the remaining repository-wide type-hint phase without separate
+  explicit direction.
+
 ## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
 
 - MVP-6.5 is complete and verified; MVP-6.6 has not started. SQLite migration 5 is

@@ -99,8 +99,14 @@ class LiveRunSnapshot(StrictModel):
     diagnostic_component: str = Field(min_length=1)
     model_calls_used: int = Field(ge=0)
     retrieval_attempts_used: int = Field(ge=0)
-    total_tokens: int | None = Field(default=None, ge=0)
-    total_cost_usd: float | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=0, ge=0)
+    total_cost_usd: float | None = Field(default=0.0, ge=0)
+    known_token_subtotal: int = Field(default=0, ge=0)
+    known_cost_subtotal_usd: float = Field(default=0.0, ge=0)
+    token_usage_complete: bool = True
+    cost_usage_complete: bool = True
+    conservative_reserved_tokens: int | None = Field(default=0, ge=0)
+    conservative_reserved_cost_usd: float | None = Field(default=0.0, ge=0)
     supporting: ResearchProgress
     opposing: ResearchProgress
     validation_errors: tuple[str, ...] = ()
@@ -422,6 +428,12 @@ class LiveResearchController:
             retrieval_attempts_used=result.retrieval_attempts_used,
             total_tokens=result.total_tokens,
             total_cost_usd=result.total_cost_usd,
+            known_token_subtotal=result.usage_accounting.known_token_subtotal,
+            known_cost_subtotal_usd=result.usage_accounting.known_cost_subtotal_usd,
+            token_usage_complete=result.usage_accounting.token_complete,
+            cost_usage_complete=result.usage_accounting.cost_complete,
+            conservative_reserved_tokens=(result.usage_accounting.conservative_reserved_tokens),
+            conservative_reserved_cost_usd=(result.usage_accounting.conservative_reserved_cost_usd),
             supporting=supporting,
             opposing=opposing,
             validation_errors=validation_errors,
@@ -496,14 +508,18 @@ class LiveResearchController:
         )
 
 
-def exit_code_for_status(status: ProviderRunStatus) -> CLIExitCode | None:
-    return {
-        ProviderRunStatus.RELEASED: CLIExitCode.RELEASED,
-        ProviderRunStatus.BLOCKED: CLIExitCode.BLOCKED,
-        ProviderRunStatus.FAILED: CLIExitCode.FAILED,
-        ProviderRunStatus.CANCELLED: CLIExitCode.CANCELLED,
-        ProviderRunStatus.RUNNING: None,
-    }[status]
+def exit_code_for_status(status: ProviderRunStatus) -> CLIExitCode:
+    if status is ProviderRunStatus.RELEASED:
+        return CLIExitCode.RELEASED
+    if status is ProviderRunStatus.BLOCKED:
+        return CLIExitCode.BLOCKED
+    if status is ProviderRunStatus.FAILED:
+        return CLIExitCode.FAILED
+    if status is ProviderRunStatus.CANCELLED:
+        return CLIExitCode.CANCELLED
+    if status is ProviderRunStatus.RUNNING:
+        return CLIExitCode.RUNNING
+    raise ValueError(f"unsupported provider run status: {status!r}")
 
 
 def prepare_default_database() -> Path:
@@ -571,7 +587,9 @@ def _result_message(result: ProviderPipelineResult) -> str:
         )
     if result.status is ProviderRunStatus.FAILED:
         return f"Failed in {result.current_stage.value}: {result.failure_reason}"
-    return f"Research is running in {result.current_stage.value}."
+    if result.status is ProviderRunStatus.RUNNING:
+        return f"Research is running in {result.current_stage.value}."
+    raise ValueError(f"unsupported provider run status: {result.status!r}")
 
 
 def _diagnostic_component(result: ProviderPipelineResult) -> str:

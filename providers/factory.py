@@ -32,6 +32,7 @@ from models import (
     StrictModel,
     SynthesisOutput,
 )
+from provider_contract import canonical_provider_contract_payload, parse_provider_contract_payload
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
 from providers.config import OpenRouterConfig, ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.llm import DEFAULT_LLM_ROUTING, LLMStage, ModelAlias, load_prompt
@@ -155,7 +156,7 @@ class ProviderBundle(StrictModel):
     fingerprint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     def contract(self, run_id: UUID, created_at: datetime) -> ProviderRunContract:
-        payload = json.loads(self.fingerprint_payload_json)
+        payload = parse_provider_contract_payload(self.fingerprint_payload_json)
         return ProviderRunContract(
             run_id=run_id,
             fingerprint_sha256=self.fingerprint_sha256,
@@ -214,7 +215,7 @@ def build_provider_bundle(
     if not callable(getattr(llm, "usage_for", None)):
         raise ProviderConfigurationError("OpenRouter adapter must expose exact usage")
     payload = _fingerprint_payload(config, caps)
-    payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload_json = canonical_provider_contract_payload(payload)
     return ProviderBundle(
         config=config,
         search=search,

@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-6.5
+## Current Project State: MVP-6.6
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -21,7 +21,10 @@ MVP-6.4 calibrates new provider-backed evidence density to 50 words for quotatio
 both a digit and a recognized statistical marker, and 75 words otherwise. Frozen fixture
 replay alone retains its labeled historical 50/100 contract. MVP-6.5 adds SQLite
 migration 5 for database-enforced `runs.raw_claim` immutability and makes history and
-inspection use validated read-only SQLite sessions. MVP-6.6 has not started.
+inspection use validated read-only SQLite sessions. MVP-6.6 assigns RUNNING exit code
+13, distinguishes exact usage totals from incomplete known subtotals while retaining
+conservative reservations for budget enforcement, and freezes/validates canonical
+provider-run contracts. MVP-6.7 has not started.
 
 New live runs use Exa Search `auto` for metadata-only discovery, pinned loopback Wigolo
 `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback under the
@@ -34,7 +37,7 @@ surfaces for old persisted runs, not the current live-run operating stack.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-6-5-immutable-run-authority-read-only-inspection.md`
+- `.agent/plans/phase-mvp-6-6-runtime-status-budget-contract-integrity.md`
 
 ## MVP-2A: Architecture Gate
 
@@ -78,8 +81,8 @@ open items are documented consistently. Existing offline verification remains gr
 
 ## MVP Sequence
 
-These canonical plans record the earlier completed MVP sequence. MVP-6.5 is the latest
-completed authorized phase; MVP-6.6 has not started.
+These canonical plans record the earlier completed MVP sequence. MVP-6.6 is the latest
+completed authorized phase; MVP-6.7 has not started.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
    `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`
@@ -103,6 +106,8 @@ completed authorized phase; MVP-6.6 has not started.
     `.agent/plans/phase-mvp-6-4-evidence-density-threshold-calibration.md`
 11. MVP-6.5 Immutable Run Authority and Read-Only Inspection:
     `.agent/plans/phase-mvp-6-5-immutable-run-authority-read-only-inspection.md`
+12. MVP-6.6 Runtime Status, Budget, and Contract Integrity:
+    `.agent/plans/phase-mvp-6-6-runtime-status-budget-contract-integrity.md`
 
 The canonical MVP-5 plan path is retained for history, but its earlier scheduled-live-
 validation placeholder was superseded by the user's 2026-08-01 explicit MVP-5 web-

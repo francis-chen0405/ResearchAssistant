@@ -66,7 +66,9 @@ validated. MVP-6.4 completed the evidence-density calibration: new provider-back
 use 50 quoted words for statistical evidence and 75 for all other evidence. It did not
 implement the pending database, CLI-status, usage-accounting, provider-contract, or
 type-hint batches. MVP-6.5 adds database-enforced claim immutability and validated
-read-only history/inspection. MVP-6.6 has not started.
+read-only history/inspection. MVP-6.6 adds distinct nonterminal exit semantics,
+complete/conservative model-usage accounting, and immutable self-consistent provider
+contracts. MVP-6.7 has not started.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -185,6 +187,39 @@ writable run or resume. Newer, invalid, corrupt, missing, and inaccessible datab
 produce explicit compatibility failures. `immutable=1` is not used because live WAL
 writers may coexist with inspection.
 
+### MVP-6.6 Runtime Status, Budget, and Contract Integrity
+
+Every provider result status has an explicit process meaning. RELEASED is 0, BLOCKED is
+10, FAILED is 11, CANCELLED is 12, and RUNNING is 13. RUNNING is a valid nonterminal
+research result and never means that a brief exists. Exit 0 may also acknowledge a
+separate documented administrative action, such as persisting a cancellation request,
+but never represents nonterminal research output. Unknown future statuses fail clearly.
+
+Model-call accounting distinguishes exact totals from known subtotals. Zero attempts are
+complete exact zero. For every physical attempt, token usage is exact only when total
+tokens are reported or both input and output tokens are present; cost is exact only when
+explicitly recorded. Any missing component makes that aggregate exact total unknown,
+while known values remain labeled subtotals. Failed, timed-out, interrupted, and running
+attempts are never presumed free. Exa and Firecrawl billing remains outside MiMo
+model-call accounting.
+
+Before retry, fallback, or another physical model call, budget exposure uses exact usage
+where known and the full stored reservation where usage is unknown. Unknown usage never
+releases its reservation. If an attempt has neither actual usage nor a defensible
+reservation, the next call fails closed because remaining budget cannot be proven.
+Exact-limit exposure is allowed; exposure above a ceiling is rejected. Physical-call and
+per-call reservation ceilings remain unchanged.
+
+`ProviderRunContract` is a frozen strict Pydantic artifact. Its existing payload is the
+exact canonical sorted compact JSON object containing fingerprint version plus provider,
+adapter, model, prompt, schema, normalization, policy, and repository identities.
+Duplicate, missing, extra, non-string, mismatched, noncanonical, or incorrectly hashed
+payloads fail on construction and persisted reconstruction. `run_id` and `created_at`
+remain outside fingerprint inputs. Valid historical canonical payloads remain readable;
+inconsistent stored data is rejected without repair. The payload input set and
+fingerprint version did not change, while the ordinary executable repository identity
+changes because MVP-6.6 changes runtime code.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: Exa Search `auto` for metadata-only discovery, pinned
@@ -271,10 +306,12 @@ but can never replace an existing one.
   fallback once. Only timeout, 408/429/retryable 5xx, malformed JSON, schema/Pydantic, or
   deterministic validation failures qualify. Semantic disagreement and low scores do
   not. Every physical attempt consumes the same run budget.
-- Atomically reserve conservative tokens and capped price before each call; reconcile
-  exact provider usage afterward. Retain usage from malformed, failed, and locally
-  rejected responses. Do not call a fallback the remaining budget cannot cover, and
-  fail closed when current pricing or route identity is unknown.
+- Atomically reserve conservative tokens and capped price before each strict call;
+  reconcile exact provider usage afterward. Retain usage from malformed, failed, and
+  locally rejected responses. Missing final usage retains the full reservation; missing
+  usage without a usable reservation makes the remaining budget unprovable and blocks
+  retry/fallback. Do not call a fallback the remaining budget cannot cover, and fail
+  closed when current pricing or route identity is unknown.
 - The proposed hard run ceiling is USD 1.00, 1,000,000 tokens, and 160 physical LLM
   calls. Search and extraction still receive explicit usage/cost records, including zero
   local cost. These limits require explicit MVP-2B approval.

@@ -55,6 +55,7 @@ from models import (
     LedgerRecord,
     ModelAttemptStatus,
     ModelRouteAttempt,
+    ModelUsageAccounting,
     ModelUsageMetadata,
     OrchestrationCheckpoint,
     PersistedStageArtifact,
@@ -1215,6 +1216,53 @@ class AnalysisStageResult(StrictModel):
         return self
 
 
+def summarize_model_usage(attempts: Sequence[ModelRouteAttempt]) -> ModelUsageAccounting:
+    """Aggregate exact usage separately from conservative unknown-usage exposure."""
+    known_tokens = 0
+    known_cost = 0.0
+    missing_token_ids: list[UUID] = []
+    missing_cost_ids: list[UUID] = []
+    conservative_tokens = 0
+    conservative_cost = 0.0
+    token_exposure_provable = True
+    cost_exposure_provable = True
+    for attempt in attempts:
+        usage_tokens = _usage_token_total(attempt.usage) if attempt.usage is not None else None
+        usage_cost = attempt.usage.cost_usd if attempt.usage is not None else None
+        if usage_tokens is None:
+            missing_token_ids.append(attempt.attempt_id)
+            if attempt.reserved_tokens is None:
+                token_exposure_provable = False
+            else:
+                conservative_tokens += attempt.reserved_tokens
+        else:
+            known_tokens += usage_tokens
+            conservative_tokens += usage_tokens
+        if usage_cost is None:
+            missing_cost_ids.append(attempt.attempt_id)
+            if attempt.reserved_cost_usd is None:
+                cost_exposure_provable = False
+            else:
+                conservative_cost += attempt.reserved_cost_usd
+        else:
+            known_cost += usage_cost
+            conservative_cost += usage_cost
+    token_complete = not missing_token_ids
+    cost_complete = not missing_cost_ids
+    return ModelUsageAccounting(
+        exact_total_tokens=known_tokens if token_complete else None,
+        exact_total_cost_usd=known_cost if cost_complete else None,
+        known_token_subtotal=known_tokens,
+        known_cost_subtotal_usd=known_cost,
+        token_complete=token_complete,
+        cost_complete=cost_complete,
+        missing_token_attempt_ids=tuple(missing_token_ids),
+        missing_cost_attempt_ids=tuple(missing_cost_ids),
+        conservative_reserved_tokens=(conservative_tokens if token_exposure_provable else None),
+        conservative_reserved_cost_usd=(conservative_cost if cost_exposure_provable else None),
+    )
+
+
 class ProviderPipelineResult(StrictModel):
     run_id: UUID
     status: ProviderRunStatus
@@ -1231,13 +1279,23 @@ class ProviderPipelineResult(StrictModel):
     rendered_brief_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     checkpoints: tuple[OrchestrationCheckpoint, ...] = ()
     model_attempts: tuple[ModelRouteAttempt, ...] = ()
+    usage_accounting: ModelUsageAccounting = Field(
+        default_factory=lambda: summarize_model_usage(())
+    )
     retrieval_attempts_used: int = Field(default=0, ge=0)
     model_calls_used: int = Field(default=0, ge=0)
-    total_tokens: int | None = Field(default=None, ge=0)
-    total_cost_usd: float | None = Field(default=None, ge=0.0)
+    total_tokens: int | None = Field(default=0, ge=0)
+    total_cost_usd: float | None = Field(default=0.0, ge=0.0)
 
     @model_validator(mode="after")
     def validate_terminal_shape(self) -> ProviderPipelineResult:
+        expected_accounting = summarize_model_usage(self.model_attempts)
+        if self.usage_accounting != expected_accounting:
+            raise ValueError("usage_accounting must match every persisted physical model attempt")
+        if self.total_tokens != expected_accounting.exact_total_tokens:
+            raise ValueError("total_tokens must contain only the exact complete token total")
+        if self.total_cost_usd != expected_accounting.exact_total_cost_usd:
+            raise ValueError("total_cost_usd must contain only the exact complete cost total")
         if self.status is ProviderRunStatus.RELEASED:
             if (
                 self.validation_result is None
@@ -1259,6 +1317,9 @@ class ProviderPipelineResult(StrictModel):
                 raise ValueError("failed and cancelled runs require an explicit reason")
             if self.final_brief is not None or self.rendered_brief_hash is not None:
                 raise ValueError("failed and cancelled runs cannot carry a final brief or hash")
+        elif self.status is ProviderRunStatus.RUNNING:
+            if self.final_brief is not None or self.rendered_brief_hash is not None:
+                raise ValueError("running runs cannot carry a final brief or hash")
         return self
 
 
@@ -1582,9 +1643,7 @@ def _inspect_provider_run_connection(
         if rendered_hash != sha256(final_brief.encode("utf-8")).hexdigest():
             raise ValueError("persisted released brief does not match its validation hash")
 
-    usages = [attempt.usage for attempt in attempts if attempt.usage is not None]
-    token_values = [usage.total_tokens for usage in usages if usage.total_tokens is not None]
-    cost_values = [usage.cost_usd for usage in usages if usage.cost_usd is not None]
+    usage_accounting = summarize_model_usage(attempts)
     retrieval_count = 0
     if researchers is not None:
         for side in (researchers.supporting, researchers.opposing):
@@ -1606,10 +1665,11 @@ def _inspect_provider_run_connection(
         rendered_brief_hash=rendered_hash,
         checkpoints=checkpoints,
         model_attempts=attempts,
+        usage_accounting=usage_accounting,
         retrieval_attempts_used=retrieval_count,
         model_calls_used=len(attempts),
-        total_tokens=sum(cast(list[int], token_values)) if token_values else None,
-        total_cost_usd=sum(cast(list[float], cost_values)) if cost_values else None,
+        total_tokens=usage_accounting.exact_total_tokens,
+        total_cost_usd=usage_accounting.exact_total_cost_usd,
     )
 
 
@@ -1863,7 +1923,9 @@ def _provider_status_from_manifest(manifest: RunManifest) -> ProviderRunStatus:
         return ProviderRunStatus.CANCELLED
     if manifest.status is RunStatus.FAILED:
         return ProviderRunStatus.FAILED
-    return ProviderRunStatus.RUNNING
+    if manifest.status in {RunStatus.PLANNED, RunStatus.RUNNING}:
+        return ProviderRunStatus.RUNNING
+    raise ValueError(f"unsupported persisted run status: {manifest.status!r}")
 
 
 def _latest_failure_reason(checkpoints: Sequence[OrchestrationCheckpoint]) -> str | None:
@@ -3062,9 +3124,9 @@ def _invoke_routed(
                 output_json=output.model_dump_json() if output is not None else None,
             )
         finish_model_route_attempt(db_path, finished)
+        _enforce_usage_budget(db_path, resolved_run_id, config, stage)
         _raise_if_cancelled(db_path, resolved_run_id)
         if finished.status is ModelAttemptStatus.COMPLETED:
-            _enforce_usage_budget(db_path, resolved_run_id, config, stage)
             return requested_output_type.model_validate_json(finished.output_json)
         previous_failure = finished
         next_position = _next_route_position(
@@ -3246,42 +3308,45 @@ def _enforce_usage_budget(
     stage: LLMStage,
 ) -> None:
     attempts = read_model_route_attempts(db_path, run_id)
-    total_tokens = 0
-    any_tokens = False
-    total_cost = 0.0
-    any_cost = False
-    for attempt in attempts:
-        if attempt.usage is None:
-            continue
-        usage_tokens = _usage_token_total(attempt.usage)
-        if usage_tokens is not None:
-            total_tokens += usage_tokens
-            any_tokens = True
-        if attempt.usage.cost_usd is not None:
-            total_cost += attempt.usage.cost_usd
-            any_cost = True
+    accounting = summarize_model_usage(attempts)
     if (
         config.budget.max_total_tokens is not None
-        and any_tokens
-        and total_tokens > config.budget.max_total_tokens
+        and accounting.conservative_reserved_tokens is None
+    ):
+        raise Phase9OrchestrationError(
+            _agent_stage(stage),
+            "model token usage is incomplete and the remaining token budget cannot be proven",
+        )
+    if (
+        config.budget.max_total_cost_usd is not None
+        and accounting.conservative_reserved_cost_usd is None
+    ):
+        raise Phase9OrchestrationError(
+            _agent_stage(stage),
+            "model cost usage is incomplete and the remaining cost budget cannot be proven",
+        )
+    if (
+        config.budget.max_total_tokens is not None
+        and accounting.conservative_reserved_tokens is not None
+        and accounting.conservative_reserved_tokens > config.budget.max_total_tokens
     ):
         raise Phase9OrchestrationError(
             _agent_stage(stage),
             (
                 f"model token budget {config.budget.max_total_tokens} exceeded "
-                f"with {total_tokens} recorded tokens"
+                f"with {accounting.conservative_reserved_tokens} conservative tokens"
             ),
         )
     if (
         config.budget.max_total_cost_usd is not None
-        and any_cost
-        and total_cost > config.budget.max_total_cost_usd
+        and accounting.conservative_reserved_cost_usd is not None
+        and accounting.conservative_reserved_cost_usd > config.budget.max_total_cost_usd
     ):
         raise Phase9OrchestrationError(
             _agent_stage(stage),
             (
                 f"model cost budget {config.budget.max_total_cost_usd} exceeded "
-                f"with {total_cost:.6f} recorded USD"
+                f"with {accounting.conservative_reserved_cost_usd:.6f} conservative USD"
             ),
         )
 

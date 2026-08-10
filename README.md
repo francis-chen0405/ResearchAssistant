@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.5, immutable run authority and read-only inspection.
+The repository is complete through MVP-6.6, runtime status, budget, and contract integrity.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -18,7 +18,9 @@ MVP-6.2 Batch A corrected current-stack records, MVP-6.3 validates every redirec
 destination before local acquisition and treats Firecrawl provenance URLs as untrusted,
 and MVP-6.4 applies a shared 50-statistical/75-non-statistical exact-quote policy to new
 provider-backed runs. MVP-6.5 enforces submitted claims as immutable in SQLite and makes
-live history and inspection read-only at the connection boundary.
+live history and inspection read-only at the connection boundary. MVP-6.6 gives RUNNING
+its own exit code, distinguishes exact usage from incomplete known subtotals, enforces
+unknown usage conservatively, and validates frozen provider contracts end to end.
 
 ## How the system works
 
@@ -93,8 +95,11 @@ See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLA
   exact provider, adapter, model, prompt, schema, normalization, evidence policy, budget, and executable
   repository identities, and is the live CLI launch surface.
 
-Provider orchestration records deterministic operation and attempt IDs, model aliases, prompt
-versions and hashes, timing, failures, escalation reasons, and optional token/cost usage. Each model
+Provider orchestration records deterministic operation and attempt IDs, model aliases,
+prompt versions and hashes, timing, failures, escalation reasons, and typed token/cost
+usage accounting. Exact totals exist only when every physical attempt reports that
+component; otherwise inspection shows an unknown exact total, a known subtotal, and
+conservative reserved exposure. Each model
 alias may be attempted twice by default. The live CLI retries direct `mimo-v2.5-pro` once only for
 approved objective failures and has no cross-provider fallback. Semantic disagreement never changes
 routes. Historical fallback aliases remain readable for persisted artifacts.
@@ -107,6 +112,7 @@ cost budgets fail explicitly when exhausted. Runs finish in one of these states:
 - `blocked`: final validation rejected the synthesis; no brief or hash is released.
 - `failed`: a provider, budget, integrity, or stage requirement could not be satisfied.
 - `cancelled`: a persisted cancellation request was honored at a stage boundary.
+- `running`: valid nonterminal work is in progress; no brief or release hash exists.
 
 Partial evidence from one Researcher side may continue, but failure on both sides, no passing
 candidates, or no Reviewer-approved Ledger statement fails the run.
@@ -282,8 +288,20 @@ Stable `run` exit codes are:
 | blocked | 10 |
 | failed | 11 |
 | cancelled | 12 |
+| running (valid, nonterminal) | 13 |
 | configuration error | 20 |
 | invalid input | 21 |
+
+Exit code 0 never represents a nonterminal research result. `cancel-run` is a separate
+administrative command and returns 0 after its cancellation request is successfully
+persisted; that acceptance does not claim the research run has released a brief.
+
+Budget enforcement is fail-closed across retry and fallback. Exact recorded usage counts
+when available; otherwise the complete stored token/cost reservation remains exposed.
+An attempt with missing usage and no defensible reservation blocks another physical call
+because the remaining budget cannot be proven. Failed and timed-out requests are not
+assumed free. Exa Search and Firecrawl charges remain external and are not combined with
+MiMo model-call accounting.
 
 Restart requires the same run ID, byte-exact claim, and compatible fingerprint. Any provider,
 adapter, model, prompt, schema, normalization, policy, budget, or executable repository identity
@@ -291,6 +309,14 @@ change requires a new run ID. Budget changes are never applied in place, and con
 never reset. Released, blocked, and cancelled runs are reconstructed without new calls; failed runs
 may resume only under the same contract and reuse valid checkpoints. Arbitrary cross-version crash
 recovery is not promised.
+
+The provider-run contract is a frozen strict Pydantic artifact. Its stored JSON must have
+the exact historical identity shape, contain no duplicate keys, use canonical sorted
+compact bytes, match every duplicated identity column, and hash to its stored SHA-256.
+Construction, inspection, and resumption reject inconsistent records without normalizing
+or repairing them. The payload input set and fingerprint-version label are unchanged in
+MVP-6.6, so valid historical canonical records remain readable; executable code changes
+still produce the ordinary new repository identity.
 
 ## Tests and code quality
 
@@ -312,7 +338,7 @@ python -m ruff format .
 Normal tests are deterministic and offline. Two opt-in tests are expected to skip: the Phase 8
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
-The current MVP-6.5 verification result is recorded in `STATUS.md`; exact focused,
+current MVP-6.6 verification result is recorded in `STATUS.md`; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -351,8 +377,9 @@ Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed wor
 completed its documentation/current-stack correction, MVP-6.3 completed public-acquisition
 redirect safety and Firecrawl provenance validation, and MVP-6.4 completed the 50/75 evidence-
 density calibration. MVP-6.5 completed database-enforced claim immutability and read-only
-history/inspection. Accounting, provider-contract, CLI-status, and type-hint batches remain
-unstarted. MVP-6.6 has not started.
+history/inspection. MVP-6.6 completed CLI-status, usage-accounting/budget, and
+provider-contract integrity. Repository-wide type-hint work remains unstarted. MVP-6.7
+has not started.
 
 Known limitations are:
 
@@ -363,8 +390,9 @@ Known limitations are:
   or arbitrary cross-version crash recovery.
 - Direct-MiMo cost is a conservative frozen-policy estimate, not provider-confirmed billing.
 - Offline model-quality labels and prices are frozen evaluation data, not live benchmarks.
-- Token and cost totals are available only when an injected LLM provider supplies strict usage
-  metadata; missing usage is not estimated.
+- Missing token or cost usage is never presented as zero or as an exact total. Known
+  subtotals remain visible, and configured reservations provide conservative budget
+  exposure without fabricating historical usage.
 - Snapshot sentence boundaries and text normalization are intentionally deterministic and simple,
   not full NLP or raw-HTML parsing.
 - Public-host validation occurs immediately before each source hop, but the HTTP transport performs
@@ -374,7 +402,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.5 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.6 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

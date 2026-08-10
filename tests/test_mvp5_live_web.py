@@ -189,12 +189,10 @@ def test_history_reconnects_from_authoritative_database(tmp_path: Path) -> None:
         (ProviderRunStatus.BLOCKED, CLIExitCode.BLOCKED),
         (ProviderRunStatus.FAILED, CLIExitCode.FAILED),
         (ProviderRunStatus.CANCELLED, CLIExitCode.CANCELLED),
-        (ProviderRunStatus.RUNNING, None),
+        (ProviderRunStatus.RUNNING, CLIExitCode.RUNNING),
     ],
 )
-def test_exact_mvp4_exit_code_mapping(
-    status: ProviderRunStatus, expected: CLIExitCode | None
-) -> None:
+def test_exact_mvp4_exit_code_mapping(status: ProviderRunStatus, expected: CLIExitCode) -> None:
     assert exit_code_for_status(status) is expected
 
 

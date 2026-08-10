@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import threading
 from collections import Counter
 from collections.abc import Callable
@@ -715,6 +716,20 @@ def test_token_exhaustion_prevents_physical_call(tmp_path: Path) -> None:
     assert "token budget" in result.failure_reason
 
 
+def test_unknown_usage_reservation_prevents_retry_from_bypassing_budget(tmp_path: Path) -> None:
+    mock = MockProviderHTTP(planner_status=500)
+    one_call_only = RunCeilings(max_cost_usd="0.20", max_tokens=10_000, max_llm_calls=160)
+    result = _run(tmp_path, mock, config=_config(ceilings=one_call_only))
+    planner = [item for item in result.model_attempts if item.stage == "planner"]
+
+    assert result.status is ProviderRunStatus.FAILED
+    assert len(planner) == 1
+    assert planner[0].usage is None
+    assert planner[0].reserved_tokens is not None
+    assert planner[0].reserved_cost_usd is not None
+    assert "cannot reserve the next call" in result.failure_reason
+
+
 def test_fallback_exhaustion_retains_usage_for_all_four_physical_calls(
     tmp_path: Path,
 ) -> None:
@@ -781,6 +796,21 @@ def test_exact_restart_reuses_checkpoints_and_changed_fingerprint_is_rejected(
             clock=lambda: NOW,
         )
     assert read_run(str(db_path), RUN_ID).status.value == "completed"
+
+
+def test_persisted_contract_tampering_blocks_resume_before_provider_work(tmp_path: Path) -> None:
+    first = _run(tmp_path, MockProviderHTTP())
+    assert first.status is ProviderRunStatus.RELEASED
+    with sqlite3.connect(first.db_path) as connection:
+        connection.execute(
+            "UPDATE provider_run_contracts SET fingerprint_sha256 = ? WHERE run_id = ?",
+            ("0" * 64, str(first.run_id)),
+        )
+    resumed_provider = MockProviderHTTP()
+
+    with pytest.raises(ValidationError, match="fingerprint_sha256"):
+        _run(tmp_path, resumed_provider)
+    assert resumed_provider.requests == []
 
 
 def test_75_75_policy_fingerprint_cannot_resume_as_mvp6_4(

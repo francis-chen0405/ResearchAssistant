@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from provider_contract import parse_provider_contract_payload, provider_contract_fingerprint
+
 Score = Annotated[int, Field(ge=1, le=5)]
 ApprovedScore = Annotated[int, Field(ge=3, le=5)]
 PositiveInt = Annotated[int, Field(ge=1)]
@@ -638,6 +640,8 @@ class PersistedStageArtifact(StrictModel):
 class ProviderRunContract(StrictModel):
     """Immutable compatibility identity required to create or resume a provider run."""
 
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     run_id: UUID
     fingerprint_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     provider_identity: NonEmptyStr
@@ -652,6 +656,63 @@ class ProviderRunContract(StrictModel):
     created_at: datetime
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_canonical_identity(self) -> ProviderRunContract:
+        payload = parse_provider_contract_payload(self.payload_json)
+        for field_name in (
+            "provider_identity",
+            "adapter_identity",
+            "model_identity",
+            "prompt_identity",
+            "schema_identity",
+            "normalization_identity",
+            "policy_identity",
+            "repository_revision",
+        ):
+            if payload[field_name] != getattr(self, field_name):
+                raise ValueError(f"payload_json {field_name} does not match duplicated field")
+        expected_fingerprint = provider_contract_fingerprint(self.payload_json)
+        if self.fingerprint_sha256 != expected_fingerprint:
+            raise ValueError(
+                "fingerprint_sha256 does not match the canonical provider contract payload"
+            )
+        return self
+
+
+class ModelUsageAccounting(StrictModel):
+    """Exact totals, known subtotals, and conservative exposure for model attempts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    exact_total_tokens: NonNegativeInt | None
+    exact_total_cost_usd: Annotated[float, Field(ge=0.0)] | None
+    known_token_subtotal: NonNegativeInt
+    known_cost_subtotal_usd: Annotated[float, Field(ge=0.0)]
+    token_complete: bool
+    cost_complete: bool
+    missing_token_attempt_ids: tuple[UUID, ...] = ()
+    missing_cost_attempt_ids: tuple[UUID, ...] = ()
+    conservative_reserved_tokens: NonNegativeInt | None
+    conservative_reserved_cost_usd: Annotated[float, Field(ge=0.0)] | None
+
+    @model_validator(mode="after")
+    def validate_completeness(self) -> ModelUsageAccounting:
+        if self.token_complete != (not self.missing_token_attempt_ids):
+            raise ValueError("token completeness must match missing token attempts")
+        if self.cost_complete != (not self.missing_cost_attempt_ids):
+            raise ValueError("cost completeness must match missing cost attempts")
+        if self.token_complete:
+            if self.exact_total_tokens != self.known_token_subtotal:
+                raise ValueError("complete token accounting requires its exact known subtotal")
+        elif self.exact_total_tokens is not None:
+            raise ValueError("incomplete token accounting cannot carry an exact total")
+        if self.cost_complete:
+            if self.exact_total_cost_usd != self.known_cost_subtotal_usd:
+                raise ValueError("complete cost accounting requires its exact known subtotal")
+        elif self.exact_total_cost_usd is not None:
+            raise ValueError("incomplete cost accounting cannot carry an exact total")
+        return self
 
 
 class ModelUsageMetadata(StrictModel):

@@ -1,5 +1,59 @@
 # Status
 
+## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
+
+Status: Complete and verified. MVP-6.5 was confirmed complete before implementation.
+MVP-6.7 and the remaining repository-wide type-hint phase have not started.
+
+- Added stable `CLIExitCode.RUNNING = 13`. Direct provider results, `inspect-run`, CLI
+  subprocesses, and live-web snapshots map every `ProviderRunStatus` explicitly and
+  reject unsupported future states. RUNNING output identifies the current stage without
+  printing a final brief. Exit 0 remains released research or separately documented
+  administrative acceptance; `cancel-run` still returns 0 only after persistence.
+- Added frozen strict `ModelUsageAccounting`. Zero attempts are exact complete zero.
+  Complete attempts aggregate exact token/cost values; missing token or cost components
+  make only that exact aggregate unknown while preserving known subtotals, missing
+  attempt IDs, and conservative reserved exposure. CLI and web displays label
+  incompleteness rather than showing zero or a partial value as a total.
+- Budget enforcement now uses total tokens or complete input/output totals when present,
+  otherwise the full reservation. Failed, timed-out, interrupted, and running attempts
+  are not inferred free. Unknown usage never releases reservation exposure; retry and
+  fallback fail when remaining budget cannot be proven. Exact-limit, physical-call, and
+  strict per-call reservation checks remain valid.
+- Added dependency-light canonical provider-contract handling shared by both factories
+  and `ProviderRunContract`. The contract is frozen and rejects invalid/duplicate JSON,
+  missing/extra/non-string keys, noncanonical bytes, duplicated-field mismatch, and an
+  incorrect SHA-256 during construction and persisted reconstruction. Tampering blocks
+  resumption before provider work. Valid historical canonical payloads remain readable;
+  `run_id` and `created_at` remain outside fingerprint inputs.
+- Kept the existing payload inputs and fingerprint-version labels. The executable
+  repository identity naturally changes because runtime code and its new canonical
+  helper changed. Added no dependency or SQLite migration. No provider call or provider
+  spending occurred. No commit was created.
+
+Verification:
+
+- Regression-first baseline: the new focused test module failed during collection on
+  the absent typed `summarize_model_usage` API before implementation.
+- Required focused CLI/subprocess, inspection, usage/budget, retry/fallback/failure,
+  cancellation/reopening, contract persistence/tampering, MVP-4, MVP-5, Phase 9, MVP-3A,
+  and MVP-6.5 selection: 143 passed, 1 expected opt-in skip.
+- Complete offline suite: 578 passed, 2 expected opt-in skips.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison
+  remained skipped.
+- Ruff lint passed; Ruff format check reported 61 files already formatted.
+- In-memory Python compilation passed for 61 files; launcher `zsh -n`, CLI help, and
+  `git diff --check` passed.
+- Final status-mapping, usage calculation/display, provider-contract construction/read,
+  dependency, migration, generated-artifact, provider-call, and diff reviews passed.
+
+Known limitation:
+
+- A historical potentially chargeable attempt with incomplete usage and no stored
+  reservation remains inspectable and cancellable, but another budgeted physical call
+  is refused because remaining budget cannot be proven. MVP-6.6 does not fabricate
+  historical usage. Exa and Firecrawl billing remains external to MiMo accounting.
+
 ## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
 
 Status: Complete and verified. MVP-6.2 Batch A, MVP-6.3, and MVP-6.4 were confirmed

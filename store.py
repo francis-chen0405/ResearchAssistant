@@ -2132,16 +2132,34 @@ def reserve_model_route_attempt(
                 raise ModelAttemptBudgetError(
                     "token budget requires a conservative reservation before every call"
                 )
-            used_tokens = conn.execute(
-                """SELECT COALESCE(SUM(
-                       CASE WHEN status = 'running'
-                            THEN COALESCE(reserved_tokens, 0)
-                            ELSE COALESCE(total_tokens, reserved_tokens, 0)
-                       END
-                   ), 0)
+            rows = conn.execute(
+                """SELECT attempt_id, input_tokens, output_tokens, total_tokens,
+                          reserved_tokens
                    FROM model_route_attempts WHERE run_id = ?""",
                 (str(attempt.run_id),),
-            ).fetchone()[0]
+            ).fetchall()
+            used_tokens = 0
+            for existing_attempt in rows:
+                actual_tokens = existing_attempt["total_tokens"]
+                if (
+                    actual_tokens is None
+                    and existing_attempt["input_tokens"] is not None
+                    and existing_attempt["output_tokens"] is not None
+                ):
+                    actual_tokens = (
+                        existing_attempt["input_tokens"] + existing_attempt["output_tokens"]
+                    )
+                exposure = (
+                    actual_tokens
+                    if actual_tokens is not None
+                    else existing_attempt["reserved_tokens"]
+                )
+                if exposure is None:
+                    raise ModelAttemptBudgetError(
+                        "model usage is incomplete and the remaining token budget cannot be "
+                        f"proven after attempt {existing_attempt['attempt_id']}"
+                    )
+                used_tokens += exposure
             if used_tokens + reserved_tokens > max_total_tokens:
                 raise ModelAttemptBudgetError(
                     f"model token budget {max_total_tokens} cannot reserve the next call"
@@ -2152,16 +2170,24 @@ def reserve_model_route_attempt(
                 raise ModelAttemptBudgetError(
                     "cost budget requires a conservative reservation before every call"
                 )
-            used_cost = conn.execute(
-                """SELECT COALESCE(SUM(
-                       CASE WHEN status = 'running'
-                            THEN COALESCE(reserved_cost_usd, 0)
-                            ELSE COALESCE(cost_usd, reserved_cost_usd, 0)
-                       END
-                   ), 0.0)
+            rows = conn.execute(
+                """SELECT attempt_id, cost_usd, reserved_cost_usd
                    FROM model_route_attempts WHERE run_id = ?""",
                 (str(attempt.run_id),),
-            ).fetchone()[0]
+            ).fetchall()
+            used_cost = 0.0
+            for existing_attempt in rows:
+                exposure = (
+                    existing_attempt["cost_usd"]
+                    if existing_attempt["cost_usd"] is not None
+                    else existing_attempt["reserved_cost_usd"]
+                )
+                if exposure is None:
+                    raise ModelAttemptBudgetError(
+                        "model usage is incomplete and the remaining cost budget cannot be "
+                        f"proven after attempt {existing_attempt['attempt_id']}"
+                    )
+                used_cost += exposure
             if used_cost + reserved_cost > max_total_cost_usd:
                 raise ModelAttemptBudgetError(
                     f"model cost budget {max_total_cost_usd} cannot reserve the next call"
