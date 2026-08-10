@@ -90,7 +90,11 @@ SDK or dependency.
 
 ## 4. Coding Style
 
-  - Type hints on every function signature, no exceptions
+  - Type hints on every function signature, no exceptions: every repository-owned Python
+    `def` and `async def` has an explicit return annotation and every named parameter is
+    annotated except conventional method receivers named `self` or `cls`. This includes
+    production and test code, nested functions, fixtures, callbacks, positional-only,
+    keyword-only, `*args`, and `**kwargs`. `tests/test_type_contracts.py` enforces the rule.
   - Async: no — everything is sync for MVP
   - Error handling: raise exceptions, never silently return None on failure
   - No global state — pass dependencies explicitly
@@ -146,16 +150,17 @@ the current top-three/PDF-unsupported/legacy-model test contracts with the appro
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
 MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3,
-MVP-6.4, MVP-6.5, and MVP-6.6 are complete. Current provider-backed candidates use the strict shared
+MVP-6.4, MVP-6.5, MVP-6.6, and MVP-6.7 are complete. Current provider-backed candidates use the strict shared
 50-statistical/75-non-statistical quote policy; statistical classification requires both
 a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
 explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
 read-only-inspection database batch. MVP-6.6 completed CLI-status, model-usage
-accounting/budget, and provider-contract integrity; repository-wide type-hint work
-remains unstarted. The original
+accounting/budget, and provider-contract integrity. MVP-6.7 completed repository-wide
+function-signature annotation enforcement across production and test code, including
+nested functions. The contradiction-audit remediation sequence is complete. The original
 Streamlit app remains fixture-only; the separate live app reuses the established
 persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
-after MVP-6.6 without separate explicit direction. MVP-6.7 has not started.
+after MVP-6.7 without separate explicit direction. No later phase has started or been authorized.
 
 ## 8. Done Criteria Per Phase
 

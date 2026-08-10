@@ -224,11 +224,13 @@ def test_approval_ids_are_application_owned_stable_and_semantic() -> None:
     assert first.reviewer_approval_id != changed_id
 
 
-def test_altered_reviewed_text_is_rejected_before_id_creation(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_altered_reviewed_text_is_rejected_before_id_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     draft = _draft()
     called = False
 
-    def fail_if_called(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def fail_if_called(*args: object, **kwargs: object) -> None:
         nonlocal called
         called = True
         raise AssertionError("approval ID derivation ran before exact-text validation")

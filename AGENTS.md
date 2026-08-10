@@ -1,8 +1,9 @@
 # AI Assistant Instructions
 
 This repository has completed Phases 0-10, MVP-1 through MVP-6, MVP-6.1, MVP-6.2
-Batch A, MVP-6.3, MVP-6.4, MVP-6.5, and MVP-6.6 for the Debate Research Agent System. MVP-6.6 is the
-latest completed authorized phase. MVP-6.7 has not started. Before editing any file, read `ARCHITECTURE.md`,
+Batch A, MVP-6.3, MVP-6.4, MVP-6.5, MVP-6.6, and MVP-6.7 for the Debate Research Agent
+System. MVP-6.7 is the latest completed authorized phase. No later phase has started or
+been authorized. Before editing any file, read `ARCHITECTURE.md`,
 `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the
 relevant current phase plan completely.
 
@@ -19,6 +20,10 @@ Required rules for every future assistant:
 - Never add dependencies without flagging them first and getting explicit approval when they are outside the current phase.
 - Document any approved dependency change in the relevant status, handoff, and phase-plan files.
 - Never silently return `None` on failure; raise a clear exception or return a typed failure model.
+- Require explicit return annotations and annotations for every named parameter on every
+  repository-owned Python `def` and `async def`; only conventional receivers named `self`
+  or `cls` may be unannotated. The repository-wide AST regression lives in
+  `tests/test_type_contracts.py` and covers production and test code, including nested functions.
 - Never run destructive Git commands such as `git reset --hard`, `git clean -fd`, or force-push unless explicitly instructed by the user.
 - Never delete architecture, convention, status, handoff, or phase-plan content without explaining the exact replacement.
 - Avoid unrelated edits, refactors, formatting churn, and metadata changes.

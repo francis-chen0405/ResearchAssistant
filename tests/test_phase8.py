@@ -36,6 +36,7 @@ from providers.llm import (
     LLMInvocationError,
     LLMProvider,
     LLMProviderCapabilities,
+    LLMRequest,
     LLMResponseValidationError,
     LLMRoutingConfig,
     LLMStage,
@@ -66,7 +67,7 @@ class FakeLLMProvider:
             supports_structured_output_control=True,
         )
 
-    def generate(self, request):  # type: ignore[no-untyped-def]
+    def generate(self, request: LLMRequest) -> BaseModel | dict[str, object]:
         self.requests.append(request)
         response = self.responses.pop(0)
         if isinstance(response, Exception):
@@ -136,7 +137,7 @@ def _request(
     *,
     settings: GenerationSettings | None = None,
     pinned_model_snapshot: str | None = None,
-):
+) -> LLMRequest:
     planner = _planner_output()
     return build_stage_request(
         stage=stage,

@@ -1,5 +1,51 @@
 # Status
 
+## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
+
+Status: Complete and verified. MVP-6.5 and MVP-6.6 were confirmed complete before
+implementation. The contradiction-audit remediation sequence is complete. No phase
+after MVP-6.7 has started or been authorized.
+
+- Added `tests/test_type_contracts.py`, a deterministic dependency-free AST enforcement
+  test. It scans repository-owned Python beneath the repository root while excluding
+  recognized virtual-environment, cache, vendor, coverage, and build-output locations;
+  sorts paths and diagnostics; parses every file; visits sync/async and nested functions;
+  checks all parameter categories and returns; permits only unannotated `self`/`cls`;
+  and reports every violation with relative path, line, qualified name, and missing field.
+- The independent pre-fix inventory found 61 Python files, 1,195 function definitions,
+  and 11 missing annotations across seven signatures in five test files. The enforcement
+  test was added first and failed with all 11 diagnostics before correction.
+- Corrected signatures in `tests/test_mvp1.py`, `tests/test_mvp3a_pipeline.py`,
+  `tests/test_mvp6_3_security.py`, `tests/test_phase4.py`, and `tests/test_phase8.py`.
+  Types use `pytest.MonkeyPatch`, `Path`, `Iterator[bytes]`, existing provider pipeline
+  configuration/result contracts, `LLMRequest`, and the fake provider's accurate narrow
+  result union. The two affected `type: ignore[no-untyped-def]` comments were removed.
+- Function bodies, fixture parameter names, monkeypatch behavior, decorator ordering,
+  assertions, expected values, runtime contracts, Pydantic schemas, and acceptance
+  criteria are unchanged. No broad `Any`, replacement suppression, dependency, SQLite
+  migration, provider call, provider spending, generated tracked artifact, or commit was
+  added.
+
+Verification:
+
+- Regression-first baseline: isolated enforcement failed with all 11 expected
+  diagnostics before corrections; after corrections it passed, 1 passed.
+- Focused suites for every annotation-touched file: 145 passed, 1 expected opt-in skip.
+- Complete offline suite: 579 passed, 2 expected opt-in skips.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison
+  remained skipped.
+- Independent AST inventory after correction found zero missing annotations in 62
+  repository-owned Python files.
+- Ruff lint and format, in-memory Python compilation, launcher `zsh -n`, suppression and
+  assertion-diff audits, dependency/migration/provider/generated-artifact/history scope
+  audits, and `git diff --check` passed.
+
+Known limitation:
+
+- The enforcement is intentionally syntactic. It requires explicit annotations and
+  prevents omissions, but it is not a substitute for a full static type checker and adds
+  no such dependency.
+
 ## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
 
 Status: Complete and verified. MVP-6.5 was confirmed complete before implementation.

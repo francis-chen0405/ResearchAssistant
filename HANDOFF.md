@@ -1,5 +1,50 @@
 # Handoff
 
+## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
+
+- MVP-6.7 is complete and verified. It is the final planned contradiction-audit
+  remediation phase; no later phase has started or been authorized.
+- `tests/test_type_contracts.py` is the repository-wide signature authority. It uses
+  standard-library AST parsing only, scans beneath the repository root with explicit
+  generated/vendor/cache exclusions, sorts paths and diagnostics, visits synchronous,
+  asynchronous, and nested definitions, and checks positional-only, ordinary,
+  keyword-only, `*args`, `**kwargs`, and return annotations. Only receiver parameters
+  named `self` or `cls` may be unannotated.
+- The pre-fix inventory covered 61 Python files and 1,195 functions. It found 11 missing
+  annotations across seven signatures in five test files. The regression test first
+  failed with the complete list, then passed after narrow corrections.
+- Corrected files are `tests/test_mvp1.py`, `tests/test_mvp3a_pipeline.py`,
+  `tests/test_mvp6_3_security.py`, `tests/test_phase4.py`, and `tests/test_phase8.py`.
+  Two old `type: ignore[no-untyped-def]` comments were removed; no new suppression or
+  broad `Any` type was introduced.
+
+Files changed:
+
+- Enforcement and annotations: `tests/test_type_contracts.py`, `tests/test_mvp1.py`,
+  `tests/test_mvp3a_pipeline.py`, `tests/test_mvp6_3_security.py`,
+  `tests/test_phase4.py`, and `tests/test_phase8.py`.
+- Phase records: `.agent/PLANS.md`, the canonical MVP-6.7 plan, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`.
+
+Verification handoff:
+
+- Isolated enforcement: 1 passed after the recorded 11-diagnostic regression-first
+  failure.
+- Affected focused suites: 145 passed, 1 expected opt-in skip.
+- Full suite: 579 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Independent post-fix AST inventory: 62 files, zero missing annotations.
+- Ruff lint/format, in-memory compilation, launcher syntax, suppression/assertion/diff,
+  dependency/migration/provider/artifact/history audits, and `git diff --check` passed.
+- No runtime behavior, assertion, expected value, dependency, Pydantic schema, SQLite
+  migration, provider call, spending, generated tracked artifact, commit, or Git history
+  rewrite occurred.
+
+Do not start:
+
+- Do not begin a phase after MVP-6.7 without separate explicit user direction.
+
 ## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
 
 - MVP-6.6 is complete and verified; MVP-6.7 and repository-wide type-hint work have not

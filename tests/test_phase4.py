@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -751,7 +752,7 @@ def test_claim_fit_3_weak_entailment_requires_qualification() -> None:
         _admit(request)
 
 
-def test_ledger_records_remain_append_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_ledger_records_remain_append_only(tmp_path: Path) -> None:
     db_path = str(tmp_path / "phase4.db")
     init_db(db_path)
     snapshot, candidate = _snapshot_and_candidate()

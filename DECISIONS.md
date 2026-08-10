@@ -1,5 +1,27 @@
 # Decisions
 
+## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
+
+- Enforce the existing no-exceptions convention on every repository-owned Python `def`
+  and `async def`: explicit return annotations and explicit annotations for every named
+  parameter except conventional receiver parameters named `self` or `cls`.
+- Cover production and test code, including positional-only and keyword-only parameters,
+  `*args`, `**kwargs`, fixtures, callbacks, methods, local helpers, nested functions,
+  generators, and async functions. Lambdas remain outside the signature rule.
+- Use `tests/test_type_contracts.py` as the dependency-free authority. It discovers files
+  beneath the repository root, excludes recognized non-owned/generated/vendor locations,
+  parses with standard-library `ast`, sorts paths and diagnostics, and reports all
+  violations or parse failures in one actionable result without invoking Git.
+- Correct 11 missing annotations across seven signatures in five test files with narrow
+  pytest, path, iterator, project configuration/result, request, and response types.
+  Remove the two affected `type: ignore[no-untyped-def]` comments; add no replacement
+  suppression or broad `Any` annotation.
+- Preserve every function body, fixture name, assertion, expected value, runtime
+  contract, and acceptance criterion. Add no dependency, database migration, provider
+  call, spending, or commit.
+- Treat MVP-6.7 as the final contradiction-audit remediation phase. No later phase has
+  started or been authorized.
+
 ## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
 
 - Add `CLIExitCode.RUNNING = 13` and map every `ProviderRunStatus` explicitly across

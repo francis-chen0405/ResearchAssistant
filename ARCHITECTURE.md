@@ -68,7 +68,9 @@ implement the pending database, CLI-status, usage-accounting, provider-contract,
 type-hint batches. MVP-6.5 adds database-enforced claim immutability and validated
 read-only history/inspection. MVP-6.6 adds distinct nonterminal exit semantics,
 complete/conservative model-usage accounting, and immutable self-consistent provider
-contracts. MVP-6.7 has not started.
+contracts. MVP-6.7 enforces complete Python function-signature annotations repository-
+wide. The contradiction-audit remediation sequence is complete; no later phase has
+started or been authorized.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -219,6 +221,23 @@ remain outside fingerprint inputs. Valid historical canonical payloads remain re
 inconsistent stored data is rejected without repair. The payload input set and
 fingerprint version did not change, while the ordinary executable repository identity
 changes because MVP-6.6 changes runtime code.
+
+### MVP-6.7 Repository-Wide Type Contract Enforcement
+
+Every repository-owned Python `def` and `async def` has an explicit return annotation,
+and every named positional-only, positional-or-keyword, keyword-only, variadic
+positional, and variadic keyword parameter has an explicit annotation. Only conventional
+receiver parameters named `self` or `cls` may be unannotated. The contract covers
+production and test code, including fixtures, callbacks, local helpers, nested functions,
+methods, generators, and async functions; lambdas are not function signatures for this
+rule.
+
+`tests/test_type_contracts.py` enforces the contract with deterministic standard-library
+AST parsing over repository-owned Python files. It sorts files and diagnostics, reports
+all missing annotations with path, line, and discoverable qualified name, and treats an
+unparseable owned file as a failure. MVP-6.7 changes annotations and enforcement only;
+runtime behavior, Pydantic schemas, persistence, provider behavior, evidence policy,
+budgets, exit codes, and acceptance criteria are unchanged.
 
 ### Approved Stack and Role Mapping
 

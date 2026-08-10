@@ -33,6 +33,7 @@ from models import (
     StatementDraft,
 )
 from orchestrator import (
+    ProviderPipelineResult,
     ProviderRunStatus,
     inspect_provider_run,
     request_run_cancellation,
@@ -518,7 +519,13 @@ def _clients(mock: MockProviderHTTP) -> ProviderFactoryClients:
     )
 
 
-def _run(tmp_path: Path, mock: MockProviderHTTP, *, run_id: UUID = RUN_ID, config=None):
+def _run(
+    tmp_path: Path,
+    mock: MockProviderHTTP,
+    *,
+    run_id: UUID = RUN_ID,
+    config: ProviderFactoryConfig | None = None,
+) -> ProviderPipelineResult:
     return run_mvp3a_pipeline(
         CLAIM,
         db_path=tmp_path / "mvp3a.sqlite3",

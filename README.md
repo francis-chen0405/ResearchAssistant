@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.6, runtime status, budget, and contract integrity.
+The repository is complete through MVP-6.7, repository-wide type contract enforcement.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -21,6 +21,9 @@ provider-backed runs. MVP-6.5 enforces submitted claims as immutable in SQLite a
 live history and inspection read-only at the connection boundary. MVP-6.6 gives RUNNING
 its own exit code, distinguishes exact usage from incomplete known subtotals, enforces
 unknown usage conservatively, and validates frozen provider contracts end to end.
+MVP-6.7 enforces explicit return and named-parameter annotations on every repository-
+owned Python function except conventional `self`/`cls` receivers, across production and
+test code including nested functions.
 
 ## How the system works
 
@@ -338,7 +341,8 @@ python -m ruff format .
 Normal tests are deterministic and offline. Two opt-in tests are expected to skip: the Phase 8
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
-current MVP-6.6 verification result is recorded in `STATUS.md`; exact focused,
+standard-library AST enforcement test is `tests/test_type_contracts.py`. The current
+MVP-6.7 verification result is recorded in `STATUS.md`; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -378,8 +382,9 @@ completed its documentation/current-stack correction, MVP-6.3 completed public-a
 redirect safety and Firecrawl provenance validation, and MVP-6.4 completed the 50/75 evidence-
 density calibration. MVP-6.5 completed database-enforced claim immutability and read-only
 history/inspection. MVP-6.6 completed CLI-status, usage-accounting/budget, and
-provider-contract integrity. Repository-wide type-hint work remains unstarted. MVP-6.7
-has not started.
+provider-contract integrity. MVP-6.7 completed repository-wide signature enforcement
+for production and test code, including nested functions. The contradiction-audit
+remediation sequence is complete. No later phase has started or been authorized.
 
 Known limitations are:
 
@@ -402,7 +407,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.6 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.7 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from hashlib import sha256
 
 import httpx
@@ -225,7 +225,7 @@ def test_final_stream_is_consumed_before_it_is_closed() -> None:
             self.closed = False
             self.iterated = False
 
-        def __iter__(self):
+        def __iter__(self) -> Iterator[bytes]:
             assert self.closed is False
             self.iterated = True
             yield b"streamed public evidence"
