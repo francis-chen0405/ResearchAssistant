@@ -19,6 +19,7 @@ import httpx
 from pydantic import ConfigDict, Field, model_validator
 
 from agents.analyst import AnalystLLMInput
+from agents.researcher import EVIDENCE_POLICY_VERSION
 from agents.reviewer import ReviewerDecision
 from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, AcquisitionPolicy
 from agents.synthesizer import SynthesizerLLMInput
@@ -42,7 +43,7 @@ from providers.wigolo import WigoloSearchAdapter
 PROVIDER_FACTORY_VERSION = "mvp3a-provider-factory-v1"
 RETRY_POLICY_VERSION = "mvp3a-objective-retry-v1"
 BUDGET_POLICY_VERSION = "mvp3a-reserve-reconcile-v1"
-FINGERPRINT_VERSION = "mvp3a-run-fingerprint-v1"
+FINGERPRINT_VERSION = "mvp6.4-evidence-density-fingerprint-v1"
 
 
 class ApprovedRoleMapping(StrictModel):
@@ -266,7 +267,8 @@ def _fingerprint_payload(
         ),
         "policy_identity": (
             f"{RETRY_POLICY_VERSION}|{BUDGET_POLICY_VERSION}|{PRICING_POLICY_VERSION}|"
-            f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|rank5-keep3"
+            f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|rank5-keep3|"
+            f"{EVIDENCE_POLICY_VERSION}"
         ),
         "repository_revision": config.repository_revision,
     }

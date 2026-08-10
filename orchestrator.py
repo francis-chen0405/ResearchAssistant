@@ -149,7 +149,7 @@ DEFAULT_OUTPUT_DIR_NAME = ".phase6_output"
 FIXTURE_DB_NAME = "fixture_pipeline.sqlite3"
 AUDIT_FILE_NAME = "audit.json"
 RESULT_FILE_NAME = "result.json"
-POST_FILTER_VERSION = "phase6-fixture-post-filter-v1"
+POST_FILTER_VERSION = "legacy-frozen-fixture-post-filter-50-100-v1"
 LEDGER_ID_VERSION = "phase6-fixture-ledger-id-v1"
 
 _ModelT = TypeVar("_ModelT", bound=StrictModel)
@@ -1018,7 +1018,7 @@ def _json_hash(payload: object) -> str:
 # Phase 9 provider-backed orchestration
 # ---------------------------------------------------------------------------
 
-PHASE9_POST_FILTER_VERSION = "phase9-provider-post-filter-v1"
+PHASE9_POST_FILTER_VERSION = "mvp6.4-provider-post-filter-50-75-v1"
 PHASE9_LEDGER_ID_VERSION = "phase9-provider-ledger-id-v1"
 PHASE9_RESEARCHERS_ARTIFACT = "phase9-researchers"
 PHASE9_ANALYSIS_ARTIFACT = "phase9-analysis-ledger"

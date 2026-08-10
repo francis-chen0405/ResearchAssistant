@@ -10,14 +10,17 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-6.3
+## Current Project State: MVP-6.4
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
 integrity/web-interface hardening in `6e0f434`; MVP-6.1 is the committed live-worker test
 fix in `c10c844`. MVP-6.2 Batch A completed the documentation/current-stack correction.
 MVP-6.3 completes public-acquisition redirect safety and Firecrawl provenance validation.
-No phase after MVP-6.3 has started.
+MVP-6.4 calibrates new provider-backed evidence density to 50 words for quotations with
+both a digit and a recognized statistical marker, and 75 words otherwise. Frozen fixture
+replay alone retains its labeled historical 50/100 contract. No phase after MVP-6.4 has
+started.
 
 New live runs use Exa Search `auto` for metadata-only discovery, pinned loopback Wigolo
 `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback under the
@@ -30,7 +33,7 @@ surfaces for old persisted runs, not the current live-run operating stack.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-6-3-public-acquisition-provenance-security.md`
+- `.agent/plans/phase-mvp-6-4-evidence-density-threshold-calibration.md`
 
 ## MVP-2A: Architecture Gate
 
@@ -74,8 +77,8 @@ open items are documented consistently. Existing offline verification remains gr
 
 ## MVP Sequence
 
-These canonical plans record the earlier completed MVP sequence. MVP-6.3 is the latest
-authorized phase; no phase after MVP-6.3 is authorized.
+These canonical plans record the earlier completed MVP sequence. MVP-6.4 is the latest
+authorized phase; no phase after MVP-6.4 is authorized.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
    `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`
@@ -95,6 +98,8 @@ authorized phase; no phase after MVP-6.3 is authorized.
    `.agent/plans/phase-mvp-6-2-integrity-provenance-runtime-contract-hardening.md`
 9. MVP-6.3 Public Acquisition and Provenance Security:
    `.agent/plans/phase-mvp-6-3-public-acquisition-provenance-security.md`
+10. MVP-6.4 Evidence Density Threshold Calibration:
+    `.agent/plans/phase-mvp-6-4-evidence-density-threshold-calibration.md`
 
 The canonical MVP-5 plan path is retained for history, but its earlier scheduled-live-
 validation placeholder was superseded by the user's 2026-08-01 explicit MVP-5 web-

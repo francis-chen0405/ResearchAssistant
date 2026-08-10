@@ -167,7 +167,11 @@ def test_direct_mimo_extractor_prompt_requires_exact_quote_envelope() -> None:
 
     assert 'exactly: [preceding context] "exact quoted segment" [following context]' in prompt
     assert "Do not return an unquoted sentence or plain text." in prompt
-    assert "at least 75 whitespace-separated words" in prompt
+    assert "at least 50 exact quoted words only when" in prompt
+    assert "at least one digit and at least one recognized statistical marker" in prompt
+    assert "Otherwise, use at least 75 exact quoted words" in prompt
+    assert "Python validation is authoritative" in prompt
+    assert "paraphrase, heal, expand, or invent context" in prompt
 
 
 def test_direct_mimo_analyst_prompt_binds_candidate_stance() -> None:

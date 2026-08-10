@@ -52,6 +52,7 @@ from store import (
     insert_statement_review,
     read_ledger_record,
 )
+from utils import derive_quote_block_id
 
 _NOW = datetime(2026, 7, 3, 12, 0, tzinfo=UTC)
 _RUN_ID = UUID("40000000-0000-0000-0000-000000000001")
@@ -489,6 +490,52 @@ def test_snapshot_hash_mismatch_blocks_ledger_admission() -> None:
 
     with pytest.raises(ValueError, match="hash"):
         _admit(request)
+
+
+def test_underlength_tampered_statistical_candidate_is_blocked_before_ledger() -> None:
+    _, accepted_candidate = _snapshot_and_candidate()
+    short_segment = f"{_words(['policy', 'evidence', 'shows', '50%', 'growth'], 49)}."
+    short_snapshot = build_source_snapshot(
+        run_id=_RUN_ID,
+        retrieval_attempt_id=_RETRIEVAL_ID,
+        snapshot_id=_SNAPSHOT_ID,
+        source_url=_SOURCE_URL,
+        retrieved_at=_NOW,
+        normalized_text=f"{_BEFORE} {short_segment} {_AFTER}",
+        truncated=False,
+        created_at=_NOW,
+    )
+    start_char = short_snapshot.normalized_text.index(short_segment)
+    offsets = [SegmentOffset(start_char=start_char, end_char=start_char + len(short_segment))]
+    candidate = accepted_candidate.model_copy(
+        update={
+            "snapshot_sha256": short_snapshot.snapshot_sha256,
+            "extracted_quote_block": f'[{_BEFORE}] "{short_segment}" [{_AFTER}]',
+            "segment_offsets": offsets,
+            "raw_segment_word_count": 49,
+            "quote_block_id": derive_quote_block_id(
+                accepted_candidate.source_url,
+                short_snapshot.snapshot_sha256,
+                offsets,
+            ),
+        }
+    )
+    decision = _decision(candidate)
+    statement = "The study reported 50% growth among surveyed adults."
+    draft = _draft(candidate, decision, statement)
+    review = _approved_review(candidate, draft)
+
+    with pytest.raises(ValueError, match="need 50"):
+        _admit(
+            _admission_request(
+                short_snapshot,
+                candidate,
+                decision,
+                draft,
+                review,
+                statement=statement,
+            )
+        )
 
 
 def test_correct_hash_but_incorrect_quote_offsets_are_rejected() -> None:

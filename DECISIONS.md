@@ -1,5 +1,30 @@
 # Decisions
 
+## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
+
+- Set current provider-backed quotation minima to 50 words only when exact quoted
+  segments contain both a digit and a recognized statistical marker, and 75 words in
+  every other case. A digit alone, marker alone, or incidental marker substring uses 75.
+- Keep marker matching case-insensitive and bounded by whole word/token boundaries under
+  the existing marker list. Preserve ellipsis counting, exact snapshot membership,
+  offsets, brackets, hashes, ordering, truncation, claim keywords, and provenance.
+- Use one strict current `QuoteLengthPolicy` for extraction, Analyst verification, and
+  Ledger admission. Reject short or malformed model output before assigning an ID; do
+  not heal, expand, pad, or rewrite quotations.
+- Preserve the historical 50-statistical/100-non-statistical rule only as the explicitly
+  named frozen-fixture replay policy. New provider-backed runs never select it and
+  historical artifacts are not reinterpreted.
+- Version the evidence policy as `mvp6.4-evidence-density-50-75-v1`, Extractor prompt as
+  `mvp6.4-extractor-50-75-v1`, provider post-filter validator as
+  `mvp6.4-provider-post-filter-50-75-v1`, and provider fingerprint as
+  `mvp6.4-evidence-density-fingerprint-v1`.
+- Require exact fingerprint compatibility. A run recorded under 75/75 cannot resume as
+  50/75; after application restart, use a new run ID. Inspection under recorded
+  historical identities remains unchanged.
+- Do not weaken Reviewer approval, literal entailment, qualification preservation,
+  Ledger admission, or final validation. Add no dependency or SQLite migration, make no
+  provider call, and do not start MVP-6.5.
+
 ## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
 
 - Disable automatic source redirects and validate each initial/redirected destination
@@ -67,7 +92,7 @@
   unnormalized, scanned, encrypted, malformed, empty, or otherwise unusable PDFs.
 - Remove the misleading aggregate candidate-acquisition deadline. Keep the explicit preflight,
   HTML, PDF, and browser-fetch request deadlines so individual blocking operations remain bounded.
-- Recheck the current 75-word quote minimum whenever a candidate is verified for Analyst or
+- Recheck the then-current MVP-6 75-word quote minimum whenever a candidate is verified for Analyst or
   Ledger use, even when claim keywords do not need to be recomputed.
 - Require direct provider-pipeline callers to supply the byte-exact claim without leading or
   trailing whitespace; reject invalid framing rather than silently trimming it.

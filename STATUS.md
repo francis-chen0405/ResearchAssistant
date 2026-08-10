@@ -1,5 +1,56 @@
 # Status
 
+## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
+
+Status: Complete and verified. MVP-6.2 Batch A and MVP-6.3 were confirmed complete
+prerequisites. MVP-6.5 has not started.
+
+- Changed current provider-backed quotation density from 75/75 to 50 words only when
+  exact quoted segments contain both a digit and a recognized statistical marker, and
+  75 words otherwise. A digit alone, marker alone, or incidental substring uses 75;
+  marker matching remains case-insensitive and bounded by whole word/token boundaries.
+- Kept one strict current `QuoteLengthPolicy` shared by initial filtering, Analyst input
+  verification, and Ledger admission verification. Exact membership, segment order,
+  offsets, immediate context, hashes, boundary markers, ellipsis counting, claim
+  keywords, truncation, and provenance are unchanged. Invalid model output is rejected
+  before ID assignment and is never healed or expanded.
+- Preserved frozen fixture replay under the explicitly named
+  `legacy-frozen-fixture-50-100-v1` policy. New provider-backed calls use the current
+  default and never select that legacy object. Historical artifacts remain under their
+  recorded identities and are not reinterpreted.
+- Updated the shared Extractor prompt and direct MiMo instruction to state the exact
+  digit-plus-marker classification, 50/75 thresholds, exact-source/no-healing rule, and
+  authoritative Python validation.
+- New identities are evidence policy `mvp6.4-evidence-density-50-75-v1`, Extractor
+  prompt `mvp6.4-extractor-50-75-v1`, provider post-filter validator
+  `mvp6.4-provider-post-filter-50-75-v1`, and canonical provider fingerprint
+  `mvp6.4-evidence-density-fingerprint-v1`. The Extractor prompt SHA-256 is
+  `a4f95d7468e22f6e95961d409ed7f99910ffe911b1a1788fb409b64bfc9725eb`;
+  the aggregate five-prompt identity is
+  `49cc02aee6025c4d2bf4a50b8ccfd97a23cb896f15ff8ecb650704ad45db33a2`.
+- Both provider factory fingerprints include the current evidence-policy identity. A
+  persisted 75/75 identity fails exact resume compatibility under 50/75 and requires a
+  new run ID after restart. Reviewer approval, literal entailment, qualification,
+  Ledger admission, renderer behavior, and final validation were not weakened.
+- Added no dependency and no SQLite migration. No Exa, Wigolo, Firecrawl, MiMo,
+  OpenRouter, or other live provider call or spending occurred. No commit was created.
+
+Verification:
+
+- Regression-first baseline: the new focused selection failed in 9 expected policy,
+  prompt, and fingerprint assertions before implementation.
+- Focused Researcher, Analyst, Reviewer, Ledger, renderer, final-validator,
+  provider-fingerprint/resume, and frozen-fixture selection: 240 passed, 1 expected
+  opt-in skip.
+- Full offline suite: 517 passed, 2 expected opt-in skips.
+- Offline evaluation: all 38 deterministic cases passed.
+- Ruff lint passed; Ruff format check reported 58 files already formatted.
+- Python compilation, launcher `zsh -n`, and `git diff --check` passed.
+- Full tracked stale-policy search found only clearly dated historical 75/75 or labeled
+  legacy 50/100 references. Final diff inspection found no unrelated behavior,
+  dependency, database migration, generated cache/coverage artifact, or provider-call
+  path execution.
+
 ## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
 
 Status: Complete and verified. MVP-6.2 Batch A was the confirmed prerequisite. No phase
@@ -87,7 +138,7 @@ Status: Complete and committed as MVP-6 work.
   unnormalized PDF payloads and preserving the `application/pdf` origin type.
 - Removed the aggregate candidate-acquisition deadline; individual HTTP/PDF/browser deadlines
   remain bounded.
-- Enforced the current 75-word minimum during every downstream candidate verification and aligned
+- Enforced the then-current MVP-6 75-word minimum during every downstream candidate verification and aligned
   the direct MiMo extractor instruction with 75 words.
 - Expanded live redaction to all MiMo, Exa, and Firecrawl key values.
 - Rejected leading/trailing claim whitespace at the direct pipeline boundary instead of silently

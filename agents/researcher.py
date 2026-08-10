@@ -35,8 +35,8 @@ STATISTICAL_MARKERS = (
     "decline",
 )
 
-EVIDENCE_POLICY_VERSION = "post-mvp5-bounded-inference-v2"
-STATISTICAL_MIN_WORDS = 75
+EVIDENCE_POLICY_VERSION = "mvp6.4-evidence-density-50-75-v1"
+STATISTICAL_MIN_WORDS = 50
 NON_STATISTICAL_MIN_WORDS = 75
 
 
@@ -54,7 +54,7 @@ CURRENT_QUOTE_LENGTH_POLICY = QuoteLengthPolicy(
     non_statistical_min_words=NON_STATISTICAL_MIN_WORDS,
 )
 LEGACY_FIXTURE_QUOTE_LENGTH_POLICY = QuoteLengthPolicy(
-    version="phase3-quote-length-v1",
+    version="legacy-frozen-fixture-50-100-v1",
     statistical_min_words=50,
     non_statistical_min_words=100,
 )

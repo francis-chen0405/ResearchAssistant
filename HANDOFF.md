@@ -1,5 +1,63 @@
 # Handoff
 
+## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
+
+- MVP-6.4 is complete and verified; MVP-6.5 has not started. Current provider-backed
+  evidence requires 50 exact quoted words only when both a digit and a recognized
+  statistical marker are present, and 75 otherwise. Digit-only, marker-only, and
+  incidental-substring cases use 75.
+- `agents/researcher.py` owns the strict current policy
+  `mvp6.4-evidence-density-50-75-v1`. Its existing whole-token, case-insensitive marker
+  classification feeds both initial filtering and downstream verification. Analyst and
+  Ledger paths share that same default policy.
+- Frozen fixture replay explicitly injects `legacy-frozen-fixture-50-100-v1`; this is
+  isolated compatibility behavior, not a current provider option. Historical runs and
+  fixtures are not rewritten or reinterpreted.
+- `prompts/extractor.md` and the direct MiMo compatibility instruction require exact
+  source text, 50 words only for digit-plus-marker evidence, 75 otherwise, no healing or
+  expansion, and authoritative Python validation.
+- Identity values: Extractor prompt `mvp6.4-extractor-50-75-v1`; prompt SHA-256
+  `a4f95d7468e22f6e95961d409ed7f99910ffe911b1a1788fb409b64bfc9725eb`;
+  aggregate prompt identity
+  `49cc02aee6025c4d2bf4a50b8ccfd97a23cb896f15ff8ecb650704ad45db33a2`;
+  provider post-filter validator `mvp6.4-provider-post-filter-50-75-v1`; provider
+  fingerprint version `mvp6.4-evidence-density-fingerprint-v1`.
+- Exact fingerprint matching prevents a 75/75 run from resuming under 50/75. Restart
+  the launcher/application and use a new run ID. Historical inspection remains tied to
+  the persisted identity.
+- Reviewer approval, literal entailment, material qualification, Ledger admission,
+  renderer policy, and deterministic final validation are unchanged.
+
+Files changed:
+
+- Policy and downstream identity: `agents/researcher.py`, `orchestrator.py`, `providers/factory.py`,
+  `providers/mimo_factory.py`.
+- Prompt behavior: `prompts/extractor.md`, `providers/mimo.py`.
+- Regression coverage: `tests/test_phase3.py`, `tests/test_phase4.py`,
+  `tests/test_phase8.py`, `tests/test_mvp3b_mimo.py`,
+  `tests/test_mvp3a_pipeline.py`.
+- Phase records: `.agent/PLANS.md`, the canonical MVP-6.4 plan, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`. Historical Phase 3/MVP-5 plans received explicit supersession labels.
+
+Verification handoff:
+
+- Focused role/integrity/release/fingerprint/fixture selection: 240 passed, 1 expected
+  opt-in skip.
+- Full suite: 517 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed.
+- Ruff lint/format, Python compilation, launcher syntax, `git diff --check`, tracked
+  stale-policy review, dependency/migration review, generated-artifact review, and final
+  diff review passed.
+- No provider call or spend occurred. No dependency or SQLite migration was added. No
+  generated cache/coverage artifact is tracked. Changes are uncommitted.
+
+Do not start:
+
+- Do not begin MVP-6.5 or the database, read-only inspection, CLI-status,
+  usage-accounting, provider-contract, or type-hint batches without separate explicit
+  direction.
+
 ## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
 
 - MVP-6.3 is complete and verified; no later phase has started. The scope was limited to
@@ -87,7 +145,7 @@ Do not start:
   falsifying their content type. Unnormalized PDF payloads still fail closed.
 - The obsolete 40-second aggregate acquisition deadline was removed. The approved per-operation
   preflight, HTML, PDF, and browser deadlines remain in force.
-- Candidate verification itself now enforces the current 75-word minimum; the direct MiMo prompt
+- Candidate verification itself enforced the then-current MVP-6 75-word minimum; the direct MiMo prompt
   also says 75 rather than 100.
 - Live display redaction covers the raw values and assignment labels for MiMo, Exa, and Firecrawl
   keys.

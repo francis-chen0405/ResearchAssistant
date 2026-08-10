@@ -62,9 +62,10 @@ Phases 0-10, MVP-1 through MVP-6, and MVP-6.1 are completed committed work. MVP-
 Batch A completed its records/current-stack correction. MVP-6.3 is the completed public-
 acquisition and provenance-security phase: redirect destinations are validated before
 each local request, and Firecrawl-returned URLs are untrusted until independently
-validated. It did not implement the pending evidence-policy, database, CLI-status,
-usage-accounting, provider-contract, or type-hint batches. No phase after MVP-6.3 has
-started.
+validated. MVP-6.4 is the current evidence-density calibration: new provider-backed runs
+use 50 quoted words for statistical evidence and 75 for all other evidence. It did not
+implement the pending database, CLI-status, usage-accounting, provider-contract, or
+type-hint batches. No phase after MVP-6.4 has started.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -147,9 +148,14 @@ process; it does not persist them or place them in URLs or command arguments.
 Cooperative cancellation, fingerprints, budgets, restart compatibility, terminal
 semantics, and human review remain exactly as released in MVP-4.
 
-### MVP-6 Bounded-Inference Evidence Policy
+### MVP-6.4 Evidence Density Policy
 
-New runs require at least 75 exactly verified quoted words for every candidate. The
+New provider-backed runs require at least 50 exactly verified quoted words when the
+quotation contains both a digit and a recognized statistical marker, and at least 75
+words otherwise. Digit-only and marker-only quotations use 75. Marker matching is
+case-insensitive and respects word/token boundaries, so incidental substrings do not
+qualify. Frozen fixture replay alone retains its explicitly named legacy 50-statistical/
+100-non-statistical contract. The
 Reviewer continues to require literal statement entailment, neutral framing, and all
 material qualifications, but does not require one approved fact to prove the complete
 debated claim. Claim Fit 5 is rendered as direct evidence, Claim Fit 4 as indirect
@@ -326,7 +332,7 @@ Use `[Start of Text]` or `[End of Text]` where applicable only when the snapshot
 For each candidate, Python must: parse the bracketed structure; remove ellipsis tokens for word count; confirm every segment appears exactly in the snapshot in sequential order; record character offsets; confirm bracket sentences are the immediate surrounding snapshot sentences; reject `[End of Text]` when `truncated: true`; apply relevance, length, and marker rules; reject failures before assigning an ID.
 
 **Relevance:** The quote block must contain at least one configured core claim keyword or approved morphological variant.
-**Substance and Data Density:** If the quoted segments contain at least one digit and one statistical marker, the minimum length is 50 words. Otherwise, the minimum length is 100 words. Statistical markers include `%`, `percent`, `rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, and `decline`.
+**Substance and Data Density:** For current provider-backed runs, if the quoted segments contain at least one digit and one recognized statistical marker, the minimum length is 50 words. Otherwise, the minimum length is 75 words. Statistical markers are `%`, `percent`, `rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, and `decline`; matching is case-insensitive and respects word/token boundaries. A digit alone, a marker alone, or an incidental substring uses 75. Frozen historical fixture replay explicitly retains the legacy 50/100 policy and may not supply it to a new provider-backed run.
 
 ### E. ID Assignment
 

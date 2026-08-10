@@ -259,11 +259,22 @@ def test_prompt_hash_is_stable_and_changes_when_file_changes(tmp_path: Path) -> 
     assert edited.sha256 != original.sha256
 
 
+def test_extractor_prompt_matches_mvp6_4_evidence_density_policy() -> None:
+    prompt = load_prompt(LLMStage.EXTRACTOR)
+
+    assert prompt.version == "mvp6.4-extractor-50-75-v1"
+    assert "at least 50 exact quoted words" in prompt.text
+    assert "at least one digit and at least one recognized statistical marker" in prompt.text
+    assert "at least 75 exact quoted words" in prompt.text
+    assert "Python validation is authoritative" in prompt.text
+    assert "paraphrase, heal, expand, or invent context" in prompt.text
+
+
 def test_all_stage_prompts_are_versioned_and_hashed() -> None:
     prompts = [load_prompt(stage) for stage in LLMStage]
 
     assert len({prompt.version for prompt in prompts}) == len(LLMStage)
-    assert all(prompt.version.startswith("phase8-") for prompt in prompts)
+    assert all(prompt.version.startswith(("phase8-", "mvp6.4-")) for prompt in prompts)
     assert all(len(prompt.sha256) == 64 for prompt in prompts)
 
 

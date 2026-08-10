@@ -33,6 +33,10 @@ orchestration.
 
 ## Deterministic Thresholds
 
+These are frozen Phase 3 historical thresholds. MVP-6.4 supersedes them for current
+provider-backed runs with 50-statistical/75-non-statistical behavior. The 50/100 values
+remain only in the explicitly labeled frozen-fixture replay policy.
+
 The architecture explicitly defines these Phase 3 thresholds:
 
 - Statistical quote threshold: quoted segments with at least one digit and at least one

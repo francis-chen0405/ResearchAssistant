@@ -11,6 +11,9 @@
 > separate literal statement entailment from whether one fact proves the full claim,
 > render Claim Fit 5/4/3 as direct/indirect/contextual evidence, and flag one-sided briefs
 > as not balanced. Exact quote/provenance checks and zero-Ledger failure remain strict.
+> MVP-6.4 subsequently calibrates new provider-backed runs to 50 words only when both a
+> digit and recognized statistical marker are present, and 75 words otherwise. The
+> earlier 75/75 statement remains historical; frozen fixture replay remains 50/100.
 
 ## Superseded Placeholder and Authority
 

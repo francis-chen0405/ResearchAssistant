@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from agents.analyst import AnalystLLMInput, StatementDraftLLMInput
 from agents.planner import PlannerLLMInput
+from agents.researcher import EVIDENCE_POLICY_VERSION
 from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import ExtractionLLMInput
 from agents.synthesizer import SynthesizerLLMInput, build_synthesis_output
@@ -45,12 +46,17 @@ from providers.config import (
     RunCeilings,
 )
 from providers.factory import (
+    FINGERPRINT_VERSION,
     ProviderFactoryClients,
     ProviderFactoryConfig,
     build_provider_bundle,
 )
 from providers.llm import ModelAlias
-from providers.mimo_factory import MimoProviderFactoryConfig
+from providers.mimo_factory import (
+    MIMO_FINGERPRINT_VERSION,
+    MimoProviderFactoryConfig,
+    build_mimo_provider_bundle,
+)
 from store import read_provider_run_contract, read_run
 
 NOW = datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
@@ -379,7 +385,7 @@ class MockProviderHTTP:
                 extracted_quote_block=(
                     SUPPORT_QUOTE if item.stance is Stance.SUPPORTING else OPPOSE_QUOTE
                 ),
-                extraction_prompt_version="phase8-extractor-v2",
+                extraction_prompt_version="mvp6.4-extractor-50-75-v1",
                 extraction_model_name=alias,
                 extracted_at=NOW,
             ).model_dump(mode="json")
@@ -576,6 +582,27 @@ def test_mocked_full_direct_mimo_pipeline_releases_without_fallback(
     assert reopened.rendered_brief_hash == result.rendered_brief_hash
 
 
+def test_provider_fingerprints_include_only_the_mvp6_4_live_evidence_policy() -> None:
+    openrouter_bundle = build_provider_bundle(
+        _config(),
+        clients=_clients(MockProviderHTTP()),
+    )
+    mimo_bundle = build_mimo_provider_bundle(
+        _mimo_config(),
+        clients=_mimo_clients(MockProviderHTTP()),
+    )
+    openrouter_payload = json.loads(openrouter_bundle.fingerprint_payload_json)
+    mimo_payload = json.loads(mimo_bundle.fingerprint_payload_json)
+
+    assert EVIDENCE_POLICY_VERSION == "mvp6.4-evidence-density-50-75-v1"
+    assert FINGERPRINT_VERSION == "mvp6.4-evidence-density-fingerprint-v1"
+    assert MIMO_FINGERPRINT_VERSION == "mvp6.4-evidence-density-fingerprint-v1"
+    assert EVIDENCE_POLICY_VERSION in openrouter_payload["policy_identity"]
+    assert EVIDENCE_POLICY_VERSION in mimo_payload["policy_identity"]
+    assert "post-mvp5-bounded-inference-v2" not in openrouter_payload["policy_identity"]
+    assert "post-mvp5-bounded-inference-v2" not in mimo_payload["policy_identity"]
+
+
 def test_mocked_full_approved_provider_pipeline_releases_and_persists_identity(
     tmp_path: Path,
 ) -> None:
@@ -754,6 +781,25 @@ def test_exact_restart_reuses_checkpoints_and_changed_fingerprint_is_rejected(
             clock=lambda: NOW,
         )
     assert read_run(str(db_path), RUN_ID).status.value == "completed"
+
+
+def test_75_75_policy_fingerprint_cannot_resume_as_mvp6_4(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "providers.factory.EVIDENCE_POLICY_VERSION",
+        "post-mvp5-bounded-inference-v2",
+    )
+    first = _run(tmp_path, MockProviderHTTP())
+    assert first.status is ProviderRunStatus.RELEASED
+
+    monkeypatch.setattr(
+        "providers.factory.EVIDENCE_POLICY_VERSION",
+        EVIDENCE_POLICY_VERSION,
+    )
+    with pytest.raises(ValueError, match="fingerprint"):
+        _run(tmp_path, MockProviderHTTP())
 
 
 def test_cancellation_after_active_call_persists_attempt_and_starts_no_new_call(

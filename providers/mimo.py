@@ -375,8 +375,15 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
             "Use literal square brackets around both context portions and literal double "
             "quotes around every exact source segment. Use only exact snapshot text or an "
             "allowed boundary marker. Do not return an unquoted sentence or plain text.\n"
-            "The combined exact quoted segments must contain at least 75 whitespace-separated "
-            "words. Preserve material qualifications and do not use unrelated padding.\n"
+            "Use at least 50 exact quoted words only when the quotation contains at least "
+            "one digit and at least one recognized statistical marker: %, percent, rate, "
+            "ratio, average, median, index, p-value, million, billion, growth, or decline. "
+            "Marker matching uses whole word/token boundaries; incidental substrings do not "
+            "count. Otherwise, use at least 75 exact quoted words. A digit without a marker "
+            "and a marker without a digit both require 75 words. Preserve material "
+            "qualifications and do not use unrelated padding. Return exact source text; never "
+            "paraphrase, heal, expand, or invent context. Never repair a short quote. Python "
+            "validation is authoritative.\n"
             "</DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
         )
     elif request.stage is LLMStage.ANALYST and request.requested_output_type is ScoreDecision:

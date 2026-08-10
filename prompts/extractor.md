@@ -1,4 +1,4 @@
-Prompt-Version: phase8-extractor-v2
+Prompt-Version: mvp6.4-extractor-50-75-v1
 Stage: extractor
 
 # Role
@@ -23,15 +23,22 @@ always control.
 
 # Extraction rules
 
-- Copy exact sentences from the snapshot; never paraphrase.
+- Copy exact source text from the snapshot. Never paraphrase, heal, expand, or invent context.
 - Non-contiguous quoted segments may be joined only with `...` and must remain in source
   order without changing meaning.
 - Include the immediate preceding sentence and immediate following sentence as brackets.
 - Use `[Start of Text]`, `[End of Text]`, and `[Truncated End of Snapshot]` only when the
   snapshot boundary actually permits that marker.
 - Preserve material qualifications and avoid fluff padding.
-- Extract at least 75 quoted words when the source contains that much relevant contiguous
-  or meaning-preserving non-contiguous text. This minimum applies to statistical and
-  non-statistical evidence alike.
+- Use at least 50 exact quoted words only when the quotation contains at least one digit and at least one recognized statistical marker:
+  `%`, `percent`, `rate`, `ratio`,
+  `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, or `decline`.
+  Marker matching uses whole word/token boundaries; incidental substrings do not count.
+- Otherwise, use at least 75 exact quoted words. A digit without a recognized marker and
+  a marker without a digit both require 75 words.
+- Never repair or pad a short quotation. Return model output as extracted and allow an
+  invalid candidate to be rejected rather than rewriting it to meet a threshold.
+- Python validation is authoritative for classification, exact membership, offsets,
+  context, length, relevance, provenance, and ID assignment.
 - Leave all deterministic membership, offset, length, relevance, marker, and ID checks
   to the application validator.

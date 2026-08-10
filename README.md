@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.3, the public-acquisition and provenance-security phase.
+The repository is complete through MVP-6.4, the evidence-density threshold calibration phase.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -14,8 +14,10 @@ fixture CLI/UI, and a deterministic adversarial evaluation framework. MVP-3B rel
 live canary and failed a bounded negative canary safely. MVP-4 released the CLI; MVP-5 exposes the
 same validated direct-MiMo pipeline through a responsive persisted web surface. MVP-6 stabilized
 live research and hardened integrity/web-interface boundaries; MVP-6.1 fixed the live-worker test.
-MVP-6.2 Batch A corrected current-stack records, and MVP-6.3 validates every redirect
-destination before local acquisition and treats Firecrawl provenance URLs as untrusted.
+MVP-6.2 Batch A corrected current-stack records, MVP-6.3 validates every redirect
+destination before local acquisition and treats Firecrawl provenance URLs as untrusted,
+and MVP-6.4 applies a shared 50-statistical/75-non-statistical exact-quote policy to new
+provider-backed runs.
 
 ## How the system works
 
@@ -64,6 +66,16 @@ literal-address, and injected-DNS-answer policy before a local request is sent. 
 receives only the validated final URL. Firecrawl request, returned source, and recognized
 canonical URLs pass the same policy before becoming provenance.
 
+Current provider-backed evidence requires at least 50 exact quoted words only when the
+quoted segments contain both a digit and a recognized statistical marker (`%`, `percent`,
+`rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`,
+or `decline`). Otherwise it requires at least 75 words. Marker matching is
+case-insensitive and respects word/token boundaries, so a digit alone, marker alone, or
+incidental substring does not qualify. Frozen fixture replay alone retains its explicitly
+labeled historical 50/100 policy. Exact membership, offsets, context, provenance,
+entailment, qualification, Reviewer approval, Ledger admission, and final validation are
+unchanged.
+
 See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLANS.md` plus
 `.agent/plans/` for phase history and boundaries.
 
@@ -77,7 +89,7 @@ See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLA
   `ScraperProvider`, and `LLMProvider` implementations. Only the two Researcher sides use a
   `ThreadPoolExecutor`, with at most two workers and no shared SQLite connection.
 - `run_mvp3b_pipeline()` constructs only the approved Wigolo/direct-MiMo stack, fingerprints its
-  exact provider, adapter, model, prompt, schema, normalization, policy, budget, and executable
+  exact provider, adapter, model, prompt, schema, normalization, evidence policy, budget, and executable
   repository identities, and is the live CLI launch surface.
 
 Provider orchestration records deterministic operation and attempt IDs, model aliases, prompt
@@ -288,7 +300,7 @@ python -m ruff format .
 Normal tests are deterministic and offline. Two opt-in tests are expected to skip: the Phase 8
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
-current MVP-6.3 verification result is 501 passed and 2 expected skips; exact focused,
+  current MVP-6.4 verification result is 517 passed and 2 expected skips; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -324,10 +336,10 @@ See `evaluations/README.md` for metric and exit-code details.
 ## Project status
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work. MVP-6.2 Batch A
-completed its documentation/current-stack correction, and MVP-6.3 completed public-acquisition
-redirect safety and Firecrawl provenance validation. The database, accounting, evidence-policy,
-provider-contract, CLI-status, and type-hint batches were not implemented. No phase after MVP-6.3
-has started.
+completed its documentation/current-stack correction, MVP-6.3 completed public-acquisition
+redirect safety and Firecrawl provenance validation, and MVP-6.4 completed the 50/75 evidence-
+density calibration. The database, accounting, provider-contract, CLI-status, and type-hint
+batches were not implemented. No phase after MVP-6.4 has started.
 
 Known limitations are:
 
@@ -349,7 +361,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.3 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.4 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.
