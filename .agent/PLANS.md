@@ -10,14 +10,14 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-6.2 Batch A
+## Current Project State: MVP-6.3
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
 integrity/web-interface hardening in `6e0f434`; MVP-6.1 is the committed live-worker test
-fix in `c10c844`. MVP-6.2 is the current authorized phase. Its implementation is divided
-into separately approved batches, and only Batch A is authorized by the current task.
-No phase after MVP-6.2 has started.
+fix in `c10c844`. MVP-6.2 Batch A completed the documentation/current-stack correction.
+MVP-6.3 completes public-acquisition redirect safety and Firecrawl provenance validation.
+No phase after MVP-6.3 has started.
 
 New live runs use Exa Search `auto` for metadata-only discovery, pinned loopback Wigolo
 `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback under the
@@ -30,7 +30,7 @@ surfaces for old persisted runs, not the current live-run operating stack.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-6-2-integrity-provenance-runtime-contract-hardening.md`
+- `.agent/plans/phase-mvp-6-3-public-acquisition-provenance-security.md`
 
 ## MVP-2A: Architecture Gate
 
@@ -74,8 +74,8 @@ open items are documented consistently. Existing offline verification remains gr
 
 ## MVP Sequence
 
-These canonical plans record the earlier completed MVP sequence. MVP-6.2 is the current
-authorized phase; no phase after MVP-6.2 is authorized.
+These canonical plans record the earlier completed MVP sequence. MVP-6.3 is the latest
+authorized phase; no phase after MVP-6.3 is authorized.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
    `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`
@@ -93,6 +93,8 @@ authorized phase; no phase after MVP-6.2 is authorized.
 7. MVP-6.1 Live Worker Test Fix: committed work recorded under `c10c844`.
 8. MVP-6.2 Integrity, Provenance, and Runtime Contract Hardening:
    `.agent/plans/phase-mvp-6-2-integrity-provenance-runtime-contract-hardening.md`
+9. MVP-6.3 Public Acquisition and Provenance Security:
+   `.agent/plans/phase-mvp-6-3-public-acquisition-provenance-security.md`
 
 The canonical MVP-5 plan path is retained for history, but its earlier scheduled-live-
 validation placeholder was superseded by the user's 2026-08-01 explicit MVP-5 web-

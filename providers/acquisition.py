@@ -26,7 +26,11 @@ from providers.scraper import (
     ScraperTimeoutError,
 )
 
-ACQUISITION_VERSION = "mvp2b-acquisition-v1"
+ACQUISITION_VERSION = "mvp6.3-public-acquisition-v2"
+HostResolver = Callable[[str], Sequence[str]]
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_PROHIBITED_HOST_SUFFIXES = (".localhost", ".local", ".localdomain", ".internal", ".home", ".lan")
 _CANONICAL = re.compile(
     r"<link\b[^>]*\brel=[\"']?canonical[\"']?[^>]*\bhref=[\"']([^\"']+)[\"']",
     re.IGNORECASE,
@@ -61,24 +65,19 @@ class WigoloAcquisitionAdapter:
         *,
         source_client: httpx.Client | None = None,
         wigolo_client: httpx.Client | None = None,
-        host_resolver: Callable[[str], Sequence[str]] | None = None,
+        host_resolver: HostResolver | None = None,
     ) -> None:
         self._config = config
         self._source_client = source_client or httpx.Client(
             timeout=httpx.Timeout(config.deadlines.html_fetch_seconds),
-            follow_redirects=True,
-            max_redirects=config.max_redirects,
+            follow_redirects=False,
         )
         self._wigolo_client = wigolo_client or httpx.Client(
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.browser_fetch_seconds),
             follow_redirects=False,
         )
-        self._host_resolver = (
-            host_resolver
-            if host_resolver is not None
-            else (_resolve_host_addresses if source_client is None else None)
-        )
+        self._host_resolver = host_resolver or _resolve_host_addresses
 
     def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
         preflight = self._preflight(request)
@@ -95,7 +94,7 @@ class WigoloAcquisitionAdapter:
             elif media_type == "text/plain":
                 document = normalize_plain_text(payload, declared_charset=preflight["charset"])
             elif media_type == "text/html":
-                markdown, rendered = self._fetch_markdown(request.url)
+                markdown, rendered = self._fetch_markdown(preflight["final_url"])
                 document = normalize_markdown(markdown)
             else:
                 raise ScraperProviderError(
@@ -126,62 +125,88 @@ class WigoloAcquisitionAdapter:
         )
 
     def _preflight(self, request: ScrapeRequest) -> dict[str, Any]:
-        _validate_public_url(request.url, resolver=self._host_resolver)
         try:
-            with self._source_client.stream(
-                "GET",
-                request.url,
-                timeout=min(request.timeout_seconds, self._config.deadlines.pdf_fetch_seconds),
-            ) as response:
-                for redirect_response in (*response.history, response):
-                    _validate_public_url(
-                        str(redirect_response.url),
-                        resolver=self._host_resolver,
+            current_url = request.url
+            seen_urls: set[str] = set()
+            redirects_followed = 0
+            while True:
+                _validate_public_url(current_url, resolver=self._host_resolver)
+                if current_url in seen_urls:
+                    raise _redirect_failure("source redirect loop was detected")
+                seen_urls.add(current_url)
+                with self._source_client.stream(
+                    "GET",
+                    current_url,
+                    timeout=min(
+                        request.timeout_seconds,
+                        self._config.deadlines.pdf_fetch_seconds,
+                    ),
+                    follow_redirects=False,
+                ) as response:
+                    if response.status_code in _REDIRECT_STATUSES:
+                        location = response.headers.get("location")
+                        if not location or not location.strip():
+                            raise _redirect_failure(
+                                "source redirect did not provide a valid Location header"
+                            )
+                        if redirects_followed >= self._config.max_redirects:
+                            raise _redirect_failure("source exceeded the redirect limit")
+                        try:
+                            next_url = urljoin(str(response.url), location.strip())
+                            _validate_public_url(next_url, resolver=self._host_resolver)
+                        except ScraperProviderError:
+                            raise
+                        except (TypeError, ValueError) as exc:
+                            raise _redirect_failure(
+                                "source redirect Location header was malformed"
+                            ) from exc
+                        if next_url in seen_urls:
+                            raise _redirect_failure("source redirect loop was detected")
+                        current_url = next_url
+                        redirects_followed += 1
+                        continue
+
+                    _raise_source_status(response.status_code)
+                    content_type, charset = _parse_content_type(
+                        response.headers.get("content-type")
                     )
-                if len(response.history) > self._config.max_redirects:
-                    raise ScraperProviderError(
-                        AcquisitionFailureCode.REDIRECT,
-                        "source exceeded the redirect limit",
-                        retryable=False,
+                    limit = (
+                        self._config.max_pdf_bytes
+                        if content_type == "application/pdf" or current_url.lower().endswith(".pdf")
+                        else self._config.max_html_bytes
                     )
-                _raise_source_status(response.status_code)
-                content_type, charset = _parse_content_type(response.headers.get("content-type"))
-                limit = (
-                    self._config.max_pdf_bytes
-                    if content_type == "application/pdf" or request.url.lower().endswith(".pdf")
-                    else self._config.max_html_bytes
-                )
-                declared_length = response.headers.get("content-length")
-                if declared_length and declared_length.isdigit() and int(declared_length) > limit:
-                    raise _too_large()
-                chunks: list[bytes] = []
-                size = 0
-                for chunk in response.iter_bytes():
-                    size += len(chunk)
-                    if size > limit:
+                    declared_length = response.headers.get("content-length")
+                    if (
+                        declared_length
+                        and declared_length.isdigit()
+                        and int(declared_length) > limit
+                    ):
                         raise _too_large()
-                    chunks.append(chunk)
-                payload = b"".join(chunks)
-                if payload.startswith(b"%PDF-"):
-                    content_type = "application/pdf"
-                if content_type not in {"text/html", "text/plain", "application/pdf"}:
-                    raise ScraperProviderError(
-                        AcquisitionFailureCode.CONTENT_TYPE,
-                        "source did not return a supported content type",
-                        retryable=False,
+                    chunks: list[bytes] = []
+                    size = 0
+                    for chunk in response.iter_bytes():
+                        size += len(chunk)
+                        if size > limit:
+                            raise _too_large()
+                        chunks.append(chunk)
+                    payload = b"".join(chunks)
+                    if payload.startswith(b"%PDF-"):
+                        content_type = "application/pdf"
+                    if content_type not in {"text/html", "text/plain", "application/pdf"}:
+                        raise ScraperProviderError(
+                            AcquisitionFailureCode.CONTENT_TYPE,
+                            "source did not return a supported content type",
+                            retryable=False,
+                        )
+                    final_url = str(response.url)
+                    canonical = _canonical_url(
+                        response.headers.get("link"), payload, final_url, content_type
                     )
-                final_url = str(response.url)
-                canonical = _canonical_url(
-                    response.headers.get("link"), payload, final_url, content_type
-                )
+                    if canonical is not None:
+                        _validate_public_url(canonical, resolver=self._host_resolver)
+                    break
         except ScraperProviderError:
             raise
-        except httpx.TooManyRedirects as exc:
-            raise ScraperProviderError(
-                AcquisitionFailureCode.REDIRECT,
-                "source exceeded the redirect limit",
-                retryable=False,
-            ) from exc
         except httpx.TimeoutException as exc:
             raise ScraperTimeoutError(
                 AcquisitionFailureCode.TIMEOUT, "source preflight timed out", retryable=True
@@ -293,14 +318,25 @@ def _canonical_url(link: str | None, payload: bytes, final_url: str, media_type:
 def _validate_public_url(
     url: str,
     *,
-    resolver: Callable[[str], Sequence[str]] | None = None,
+    resolver: HostResolver | None = None,
 ) -> None:
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source URL is malformed",
+            retryable=False,
+        ) from exc
     if (
         parsed.scheme not in {"http", "https"}
         or not parsed.netloc
         or parsed.username
         or parsed.password
+        or port == 0
+        or any(character.isspace() or ord(character) < 32 for character in url)
+        or "\\" in url
     ):
         raise ScraperProviderError(
             AcquisitionFailureCode.INACCESSIBLE,
@@ -308,9 +344,17 @@ def _validate_public_url(
             retryable=False,
         )
     hostname = parsed.hostname
-    assert hostname is not None
-    lowered = hostname.rstrip(".").casefold()
-    if lowered == "localhost" or lowered.endswith(".localhost"):
+    if hostname is None:
+        raise _non_public_url()
+    try:
+        lowered = hostname.rstrip(".").encode("idna").decode("ascii").casefold()
+    except UnicodeError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname is malformed",
+            retryable=False,
+        ) from exc
+    if not lowered or lowered == "localhost" or lowered.endswith(_PROHIBITED_HOST_SUFFIXES):
         raise _non_public_url()
     try:
         literal = ipaddress.ip_address(lowered)
@@ -320,11 +364,26 @@ def _validate_public_url(
         if not literal.is_global:
             raise _non_public_url()
         return
+    labels = lowered.split(".")
+    if (
+        len(lowered) > 253
+        or len(labels) < 2
+        or any(not _DNS_LABEL.fullmatch(label) for label in labels)
+    ):
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname is malformed or not publicly qualified",
+            retryable=False,
+        )
     if resolver is None:
-        return
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname resolver is unavailable",
+            retryable=True,
+        )
     try:
         addresses = tuple(resolver(lowered))
-    except OSError as exc:
+    except Exception as exc:
         raise ScraperProviderError(
             AcquisitionFailureCode.INACCESSIBLE,
             "source hostname could not be resolved",
@@ -336,7 +395,15 @@ def _validate_public_url(
             "source hostname did not resolve to an address",
             retryable=True,
         )
-    if any(not ipaddress.ip_address(address).is_global for address in addresses):
+    try:
+        parsed_addresses = tuple(ipaddress.ip_address(address) for address in addresses)
+    except ValueError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname resolution returned an invalid address",
+            retryable=True,
+        ) from exc
+    if any(not address.is_global for address in parsed_addresses):
         raise _non_public_url()
 
 
@@ -357,6 +424,14 @@ def _non_public_url() -> ScraperProviderError:
     return ScraperProviderError(
         AcquisitionFailureCode.INACCESSIBLE,
         "source URL must resolve only to public internet addresses",
+        retryable=False,
+    )
+
+
+def _redirect_failure(message: str) -> ScraperProviderError:
+    return ScraperProviderError(
+        AcquisitionFailureCode.REDIRECT,
+        message,
         retryable=False,
     )
 

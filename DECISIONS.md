@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
+
+- Disable automatic source redirects and validate each initial/redirected destination
+  before the local request. Follow only 301, 302, 303, 307, and 308 through an exact
+  bounded loop with relative-location resolution, loop detection, and hop-level closing.
+- Require credential-free HTTP(S), valid publicly qualified hostnames or global literal
+  addresses, and exclusively global resolver answers. Resolution failure, malformed
+  answers, and mixed public/prohibited answers fail closed.
+- Send Wigolo only the validated final preflight URL. Treat Firecrawl request URLs,
+  returned `sourceURL`, and recognized canonical metadata as untrusted until the same
+  public URL policy succeeds. Preserve the existing narrow fallback allowlist.
+- Version acquisition as `mvp6.3-public-acquisition-v2`, Firecrawl provenance as
+  `mvp6.3-firecrawl-provenance-v2`, and direct-MiMo fingerprinting as
+  `mvp6.3-public-acquisition-fingerprint-v2`. Earlier persisted runs require a new run
+  ID and historical artifacts are not reinterpreted.
+- Do not claim complete DNS-rebinding protection: validation and transport resolution
+  are separate and the validated address is not pinned to the socket.
+- Add no dependency or SQLite migration and make no live provider call during offline
+  verification. Do not start a phase after MVP-6.3.
+
 ## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
 
 - Treat `37c52a7` and `6e0f434` as completed MVP-6 work and `c10c844` as completed

@@ -48,6 +48,10 @@ from providers.wigolo import WigoloSearchAdapter
 FIXTURES = Path(__file__).parent / "fixtures" / "mvp2b"
 
 
+def _public_resolver(hostname: str) -> tuple[str, ...]:
+    return ("93.184.216.34",)
+
+
 def test_deadline_config_has_no_aggregate_candidate_deadline() -> None:
     assert "candidate_seconds" not in DeadlineConfig.model_fields
     with pytest.raises(ValidationError):
@@ -405,6 +409,7 @@ def test_acquisition_records_original_final_canonical_and_normalized_hash() -> N
         wigolo_client=httpx.Client(
             base_url="http://127.0.0.1:8000", transport=httpx.MockTransport(wigolo_handler)
         ),
+        host_resolver=_public_resolver,
     )
     result = adapter.scrape(ScrapeRequest(url="https://example.org/original", timeout_seconds=15))
     assert result.original_url == "https://example.org/original"
@@ -431,6 +436,7 @@ def test_acquisition_enforces_streaming_size_and_content_type() -> None:
         wigolo_client=httpx.Client(
             base_url=config.base_url, transport=httpx.MockTransport(handler)
         ),
+        host_resolver=_public_resolver,
     )
     with pytest.raises(ScraperProviderError) as exc_info:
         adapter.scrape(ScrapeRequest(url="https://example.org/large", timeout_seconds=15))
@@ -463,6 +469,7 @@ def test_acquisition_allows_exactly_one_controlled_render_retry() -> None:
         wigolo_client=httpx.Client(
             base_url=config.base_url, transport=httpx.MockTransport(wigolo_handler)
         ),
+        host_resolver=_public_resolver,
     )
     result = adapter.scrape(ScrapeRequest(url="https://example.org/challenge", timeout_seconds=15))
     assert result.rendered is True

@@ -1,5 +1,56 @@
 # Handoff
 
+## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
+
+- MVP-6.3 is complete and verified; no later phase has started. The scope was limited to
+  redirect-time local acquisition safety, Firecrawl provenance validation, compatible
+  identity changes, regression tests, and documentation.
+- `providers/acquisition.py` now uses an explicit no-auto-follow redirect loop. It
+  validates the initial URL and every proposed next hop through the injectable resolver
+  before sending, permits exactly the configured number of 301/302/303/307/308 hops,
+  closes every response, rejects malformed locations/loops, and passes only the final
+  validated URL to Wigolo.
+- `providers/firecrawl.py` validates the direct request URL before the provider call and
+  validates returned `sourceURL` and recognized canonical metadata before constructing
+  provenance. Absent `sourceURL` uses only the already validated request URL. Unsafe or
+  malformed provenance fails with typed secret-free errors.
+- The existing fallback allowlist remains narrow. Authentication, paywall, access,
+  content/policy, size, and redirect-safety failures cannot activate Firecrawl.
+- New identities are `mvp6.3-public-acquisition-v2`,
+  `mvp6.3-firecrawl-provenance-v2`, and
+  `mvp6.3-public-acquisition-fingerprint-v2`. Acquisition identity is included in exact
+  run fingerprints, so pre-MVP-6.3 runs require a new run ID and historical artifacts
+  remain unchanged.
+- DNS validation is a pre-request policy check, not socket pinning. `httpx` resolves for
+  transport separately, and Wigolo performs its own fetch; do not describe the result as
+  complete DNS-rebinding protection.
+
+Files changed:
+
+- Provider behavior/identity: `providers/acquisition.py`, `providers/firecrawl.py`,
+  `providers/config.py`, `providers/factory.py`, `providers/mimo_factory.py`.
+- Regression compatibility: `tests/test_mvp6_3_security.py`,
+  `tests/test_mvp2b_providers.py`, `tests/test_post_mvp5_retrieval.py`,
+  `tests/test_mvp3a_pipeline.py`.
+- Phase documentation: `.agent/PLANS.md`, the canonical MVP-6.3 plan, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `frontend/README.md`, `STATUS.md`, and `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused security/provider/persistence selection: 159 passed.
+- Full suite: 501 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed.
+- Ruff lint/format, Python compilation, launcher syntax, and `git diff --check` passed.
+- All new security tests use injected transports and resolvers. No provider call or
+  spend occurred. No dependency or SQLite migration was added. Generated cache and
+  coverage artifacts are absent from the repository worktree. Changes are uncommitted.
+
+Do not start:
+
+- Do not begin MVP-6.4 or any database, accounting, evidence-policy, provider-contract,
+  CLI-status, usage-accounting, or type-hint batch without separate explicit direction.
+
 ## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
 
 - MVP-6 (`37c52a7`, `6e0f434`) and MVP-6.1 (`c10c844`) are completed committed work.

@@ -139,12 +139,13 @@ design, not provider implementation. MVP-2B remains a distinct phase and must re
 the current top-three/PDF-unsupported/legacy-model test contracts with the approved
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
-MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, and MVP-6.1 are complete. MVP-6.2 is the
-current authorized phase and proceeds only through separately approved batches; Batch A
-does not authorize the later security, database, accounting, evidence-policy, or
-model-contract batches. The original Streamlit app remains fixture-only; the separate
-live app reuses the established persistence, fingerprint, cancellation, and terminal
-contracts. Do not begin a phase after MVP-6.2 without separate explicit direction.
+MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, and MVP-6.3 are
+complete. MVP-6.3 is limited to public-acquisition redirect safety and Firecrawl
+provenance validation; it does not authorize the remaining database, accounting,
+evidence-policy, provider-contract, CLI-status, or type-hint work. The original
+Streamlit app remains fixture-only; the separate live app reuses the established
+persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
+after MVP-6.3 without separate explicit direction.
 
 ## 8. Done Criteria Per Phase
 

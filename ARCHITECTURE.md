@@ -58,12 +58,13 @@ Retrieval, semantic approval, and deterministic release are strictly separated. 
 
 `ARCHITECTURE.md` defines system invariants, evidence rules, and release rules. Phase sequencing lives in `.agent/PLANS.md` and individual `.agent/plans/phase-XX-*.md` files. If a phase prompt conflicts with architecture, architecture wins unless the user explicitly approves an architecture change.
 
-Phases 0-10, MVP-1 through MVP-6, and MVP-6.1 are completed committed work. MVP-6.2 is
-the current authorized phase, implemented only through separately approved batches.
-Batch A corrects phase records, current-stack documentation, CLI launch reporting,
-package metadata, verification-skip documentation, and coverage-artifact tracking; it
-does not authorize later MVP-6.2 security, database, accounting, evidence-policy, or
-model-contract work. No phase after MVP-6.2 has started.
+Phases 0-10, MVP-1 through MVP-6, and MVP-6.1 are completed committed work. MVP-6.2
+Batch A completed its records/current-stack correction. MVP-6.3 is the completed public-
+acquisition and provenance-security phase: redirect destinations are validated before
+each local request, and Firecrawl-returned URLs are untrusted until independently
+validated. It did not implement the pending evidence-policy, database, CLI-status,
+usage-accounting, provider-contract, or type-hint batches. No phase after MVP-6.3 has
+started.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -199,6 +200,17 @@ protection, inaccessible pages, and failed rendering produce typed unusable-sour
 outcomes and cause the worker to continue down the ranked list. Use at most five
 redirects. The proposed implementation caps are 10 MiB for HTML/text and 25 MiB for PDF;
 MVP-2B must obtain dependency, deadline, and cap approval before implementation.
+
+MVP-6.3 disables automatic source redirects and implements the five-redirect ceiling as
+an explicit loop over 301, 302, 303, 307, and 308. Every initial or redirected URL is
+validated before its local request: only credential-free HTTP(S), syntactically valid
+public hostnames or global literal addresses, and DNS results containing exclusively
+global addresses are permitted. Relative locations resolve against the current hop;
+missing/malformed locations and loops fail closed. Wigolo receives the validated final
+preflight URL. Firecrawl request URLs, returned source URLs, and recognized canonical
+URLs are untrusted until they pass the same policy. The validation lookup and the HTTP
+transport lookup are separate, so this is not socket-level DNS pinning and does not
+claim complete DNS-rebinding prevention.
 
 ### Supported Content and PDF Policy
 

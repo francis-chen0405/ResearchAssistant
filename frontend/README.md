@@ -17,6 +17,13 @@ Wigolo-local extraction failures. It can run or compatibly resume direct
 `mimo-v2.5-pro` research, inspect persisted history, show live progress, cooperatively
 cancel, and copy or download a released validated brief.
 
+Before any local source request, ResearchAssistant validates the initial URL and every
+redirect target under its public HTTP(S) and resolver policy. Wigolo receives only the
+validated final preflight URL. Firecrawl-returned source and canonical URLs are untrusted
+provider metadata and do not enter provenance unless they independently pass the same
+policy. This closes known-target redirect SSRF exposure but does not pin validated DNS
+answers to transport sockets, so complete DNS-rebinding prevention is not claimed.
+
 First-time setup still requires Python 3.11 or 3.12, the declared requirements, Node.js
 20+, and enough local space for Wigolo. The Start stack control runs the pinned
 `npx -y wigolo@0.2.1 serve` command on loopback.

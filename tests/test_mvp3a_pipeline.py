@@ -507,6 +507,7 @@ def _clients(mock: MockProviderHTTP) -> ProviderFactoryClients:
             base_url="https://openrouter.ai/api/v1",
         ),
         health_verified=True,
+        host_resolver=lambda hostname: ("93.184.216.34",),
     )
 
 
@@ -599,7 +600,9 @@ def test_mocked_full_approved_provider_pipeline_releases_and_persists_identity(
     assert all(outcome.provider_name == "wigolo" for outcome in retrieved)
     assert all(outcome.provider_version == "0.2.1" for outcome in retrieved)
     assert all(outcome.normalization_version == "ra-normalization-v1" for outcome in retrieved)
-    assert all(outcome.acquisition_version == "mvp2b-acquisition-v1" for outcome in retrieved)
+    assert all(
+        outcome.acquisition_version == "mvp6.3-public-acquisition-v2" for outcome in retrieved
+    )
     assert all(
         json.loads(request.content)["max_results"] == 5
         for request in mock.requests

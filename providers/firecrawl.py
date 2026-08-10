@@ -6,7 +6,13 @@ from typing import Any
 
 import httpx
 
-from providers.acquisition import ACQUISITION_VERSION, AcquisitionFailureCode
+from providers.acquisition import (
+    ACQUISITION_VERSION,
+    AcquisitionFailureCode,
+    HostResolver,
+    _resolve_host_addresses,
+    _validate_public_url,
+)
 from providers.config import FirecrawlConfig
 from providers.normalization import NormalizationError, normalize_markdown
 from providers.scraper import (
@@ -43,15 +49,23 @@ class FallbackAcquisitionAdapter:
 
 
 class FirecrawlAcquisitionAdapter:
-    def __init__(self, config: FirecrawlConfig, *, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        config: FirecrawlConfig,
+        *,
+        client: httpx.Client | None = None,
+        host_resolver: HostResolver | None = None,
+    ) -> None:
         self._config = config
         self._client = client or httpx.Client(
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.browser_fetch_seconds),
             follow_redirects=False,
         )
+        self._host_resolver = host_resolver or _resolve_host_addresses
 
     def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+        _validate_public_url(request.url, resolver=self._host_resolver)
         try:
             response = self._client.post(
                 "/v2/scrape",
@@ -109,11 +123,17 @@ class FirecrawlAcquisitionAdapter:
             raise ScraperProviderError(
                 AcquisitionFailureCode.EXTRACTION, str(exc), retryable=exc.retryable
             ) from exc
-        resolved = _text(metadata.get("sourceURL")) or request.url
+        returned_source = _optional_url(metadata, "sourceURL")
+        resolved = returned_source or request.url
+        _validate_public_url(resolved, resolver=self._host_resolver)
+        canonical = _firecrawl_canonical_url(metadata)
+        if canonical is not None:
+            _validate_public_url(canonical, resolver=self._host_resolver)
         content_type = (_text(metadata.get("contentType")) or "text/html").split(";", 1)[0]
         return ScrapeResponse(
             resolved_url=resolved,
             original_url=request.url,
+            canonical_url=canonical,
             content_type=content_type,
             text=document.text,
             snapshot_sha256=document.sha256,
@@ -129,3 +149,31 @@ class FirecrawlAcquisitionAdapter:
 
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _optional_url(metadata: dict[str, Any], key: str) -> str | None:
+    if key not in metadata or metadata[key] is None:
+        return None
+    value = metadata[key]
+    if not isinstance(value, str) or not value.strip():
+        raise ScraperProviderError(
+            AcquisitionFailureCode.MALFORMED,
+            f"Firecrawl returned malformed {key} provenance",
+            retryable=False,
+        )
+    return value.strip()
+
+
+def _firecrawl_canonical_url(metadata: dict[str, Any]) -> str | None:
+    values = [
+        value
+        for key in ("canonicalURL", "canonicalUrl")
+        if (value := _optional_url(metadata, key)) is not None
+    ]
+    if len(set(values)) > 1:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.MALFORMED,
+            "Firecrawl returned conflicting canonical provenance",
+            retryable=False,
+        )
+    return values[0] if values else None

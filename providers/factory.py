@@ -9,7 +9,7 @@ orchestrator continues to use short-lived worker-local SQLite connections.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from hashlib import sha256
 from typing import Literal
@@ -134,6 +134,7 @@ class ProviderFactoryClients(StrictModel):
     fallback_acquisition: httpx.Client | None = None
     llm: httpx.Client | None = None
     health_verified: bool = False
+    host_resolver: Callable[[str], Sequence[str]] | None = None
 
 
 class ProviderBundle(StrictModel):
@@ -195,6 +196,7 @@ def build_provider_bundle(
         config.wigolo,
         source_client=injected.source,
         wigolo_client=injected.acquisition,
+        host_resolver=injected.host_resolver,
     )
     llm = OpenRouterAdapter(
         config.openrouter,

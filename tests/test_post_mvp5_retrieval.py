@@ -165,7 +165,9 @@ def test_firecrawl_scrape_normalizes_markdown_without_provider_metadata_leakage(
         transport=httpx.MockTransport(handler),
     )
     response = FirecrawlAcquisitionAdapter(
-        FirecrawlConfig(api_key="firecrawl-test-secret"), client=client
+        FirecrawlConfig(api_key="firecrawl-test-secret"),
+        client=client,
+        host_resolver=lambda hostname: ("93.184.216.34",),
     ).scrape(ScrapeRequest(url="https://example.org/article", timeout_seconds=10))
 
     assert response.text == "Heading\n\nExact public evidence."

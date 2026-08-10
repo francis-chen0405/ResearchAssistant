@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.1, with MVP-6.2 Batch A as the current authorized work.
+The repository is complete through MVP-6.3, the public-acquisition and provenance-security phase.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -14,6 +14,8 @@ fixture CLI/UI, and a deterministic adversarial evaluation framework. MVP-3B rel
 live canary and failed a bounded negative canary safely. MVP-4 released the CLI; MVP-5 exposes the
 same validated direct-MiMo pipeline through a responsive persisted web surface. MVP-6 stabilized
 live research and hardened integrity/web-interface boundaries; MVP-6.1 fixed the live-worker test.
+MVP-6.2 Batch A corrected current-stack records, and MVP-6.3 validates every redirect
+destination before local acquisition and treats Firecrawl provenance URLs as untrusted.
 
 ## How the system works
 
@@ -55,6 +57,12 @@ records are insert-only SQLite audit artifacts.
   injected offline transports. New live runs use Exa Search `auto` for metadata-only discovery,
   loopback Wigolo `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback, and
   direct Xiaomi `mimo-v2.5-pro` for every LLM role. Historical adapters remain covered.
+
+Primary source acquisition never auto-follows redirects. Each initial URL and each 301,
+302, 303, 307, or 308 target must independently pass the public HTTP(S), hostname,
+literal-address, and injected-DNS-answer policy before a local request is sent. Wigolo
+receives only the validated final URL. Firecrawl request, returned source, and recognized
+canonical URLs pass the same policy before becoming provenance.
 
 See `ARCHITECTURE.md` for evidence rules and release invariants, and `.agent/PLANS.md` plus
 `.agent/plans/` for phase history and boundaries.
@@ -280,7 +288,9 @@ python -m ruff format .
 Normal tests are deterministic and offline. Two opt-in tests are expected to skip: the Phase 8
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
-current Batch A verification result is 469 passed and 2 expected skips.
+current MVP-6.3 verification result is 501 passed and 2 expected skips; exact focused,
+evaluation, lint, format, compilation, launcher, and diff results are recorded in
+`STATUS.md` and `HANDOFF.md`.
 
 ## Phase 10 evaluations
 
@@ -313,10 +323,11 @@ See `evaluations/README.md` for metric and exit-code details.
 
 ## Project status
 
-Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work. MVP-6.2 is the
-current authorized phase and is implemented through separately approved batches. Only Batch A is
-authorized and implemented in the current work; later MVP-6.2 security, database, accounting,
-evidence-policy, and model-contract batches remain pending. No phase after MVP-6.2 has started.
+Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work. MVP-6.2 Batch A
+completed its documentation/current-stack correction, and MVP-6.3 completed public-acquisition
+redirect safety and Firecrawl provenance validation. The database, accounting, evidence-policy,
+provider-contract, CLI-status, and type-hint batches were not implemented. No phase after MVP-6.3
+has started.
 
 Known limitations are:
 
@@ -331,11 +342,14 @@ Known limitations are:
   metadata; missing usage is not estimated.
 - Snapshot sentence boundaries and text normalization are intentionally deterministic and simple,
   not full NLP or raw-HTML parsing.
+- Public-host validation occurs immediately before each source hop, but the HTTP transport performs
+  its own DNS lookup and Wigolo independently fetches the validated final URL. Addresses are not
+  socket-pinned, so complete DNS-rebinding prevention is not claimed.
 - Final validation is deliberately syntactic and provenance-based. Semantic quality depends on the
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.2 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.3 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

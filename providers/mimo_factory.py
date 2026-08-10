@@ -41,7 +41,7 @@ from providers.pricing import (
 MIMO_FACTORY_VERSION = "mvp3b-direct-mimo-factory-v1"
 MIMO_RETRY_POLICY_VERSION = "mvp3b-direct-mimo-one-retry-v1"
 MIMO_BUDGET_POLICY_VERSION = "mvp3b-direct-mimo-reserve-reconcile-v1"
-MIMO_FINGERPRINT_VERSION = "mvp3b-direct-mimo-fingerprint-v1"
+MIMO_FINGERPRINT_VERSION = "mvp6.3-public-acquisition-fingerprint-v2"
 
 
 class MimoProviderFactoryConfig(StrictModel):
@@ -143,9 +143,14 @@ def build_mimo_provider_bundle(
         config.wigolo,
         source_client=injected.source,
         wigolo_client=injected.acquisition,
+        host_resolver=injected.host_resolver,
     )
     fallback = (
-        FirecrawlAcquisitionAdapter(config.firecrawl, client=injected.fallback_acquisition)
+        FirecrawlAcquisitionAdapter(
+            config.firecrawl,
+            client=injected.fallback_acquisition,
+            host_resolver=injected.host_resolver,
+        )
         if config.firecrawl is not None
         else None
     )

@@ -108,7 +108,7 @@ class FirecrawlConfig(StrictModel):
 
     provider_name: Literal["firecrawl"] = "firecrawl"
     provider_version: Literal["v2"] = "v2"
-    adapter_version: Literal["post-mvp5-firecrawl-fallback-v1"] = "post-mvp5-firecrawl-fallback-v1"
+    adapter_version: Literal["mvp6.3-firecrawl-provenance-v2"] = "mvp6.3-firecrawl-provenance-v2"
     base_url: str = "https://api.firecrawl.dev"
     api_key: SecretStr
     deadlines: DeadlineConfig = DeadlineConfig()

@@ -1,5 +1,46 @@
 # Status
 
+## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
+
+Status: Complete and verified. MVP-6.2 Batch A was the confirmed prerequisite. No phase
+after MVP-6.3 has started.
+
+- Disabled automatic source redirects and added an explicit exact-limit loop for 301,
+  302, 303, 307, and 308. Every initial and redirect destination is validated before
+  its request; relative targets, malformed/missing locations, loops, mixed DNS answers,
+  response closing, and exact boundary behavior are covered offline.
+- Strengthened the shared public URL policy for credential-free HTTP(S), valid public
+  hostname syntax, prohibited local forms, global literal IPs, mandatory resolver
+  success, and exclusively global resolved addresses. Unsafe destinations are never
+  requested.
+- Changed HTML acquisition to send Wigolo the validated final preflight URL. Firecrawl
+  now validates its direct request URL, returned `sourceURL`, and recognized canonical
+  provenance, failing closed on malformed, conflicting, or unsafe metadata. The narrow
+  fallback allowlist is unchanged; redirect and public-source policy failures do not
+  activate fallback.
+- Bumped acquisition identity to `mvp6.3-public-acquisition-v2`, Firecrawl adapter
+  identity to `mvp6.3-firecrawl-provenance-v2`, and direct-MiMo fingerprint identity to
+  `mvp6.3-public-acquisition-fingerprint-v2`. Pre-MVP-6.3 persisted runs require a new
+  run ID; historical artifacts are not reinterpreted.
+- Residual limitation: validation DNS and transport DNS are separate lookups, and
+  Wigolo independently fetches the validated final URL. Addresses are not socket-pinned,
+  so complete DNS-rebinding protection is not claimed.
+- Added no dependency and no SQLite migration. No Exa, Wigolo, Firecrawl, MiMo, or other
+  live provider call or spending occurred.
+
+Verification:
+
+- Focused acquisition, Firecrawl, provider-factory, and persistence compatibility:
+  159 passed.
+- Full offline suite: 501 passed, 2 expected opt-in skips.
+- Offline evaluation: all 38 deterministic cases passed.
+- Ruff lint passed; Ruff format check reported 58 files already formatted.
+- Python compilation, launcher `zsh -n`, and `git diff --check` passed.
+- Final diff inspection found only MVP-6.3 implementation, tests, and documentation.
+  `pyproject.toml`, `requirements.txt`, and `store.py` are unchanged. Tests use injected
+  mocked transports and resolvers. Generated repository cache/coverage artifacts were
+  removed, and no commit was created.
+
 ## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
 
 Status: Implemented and verified. MVP-6.2 remains in progress; only Batch A was
