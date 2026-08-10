@@ -150,6 +150,10 @@ def test_worker_exception_is_redacted_from_ui_snapshot(tmp_path: Path) -> None:
     )
     result = controller.start(request)
     snapshot = controller.snapshot(request.db_path, result.run_id)
+    deadline = monotonic() + 2
+    while snapshot.classification == "starting" and monotonic() < deadline:
+        sleep(0.01)
+        snapshot = controller.snapshot(request.db_path, result.run_id)
 
     assert snapshot.classification == "failed"
     assert SECRET not in snapshot.model_dump_json()
