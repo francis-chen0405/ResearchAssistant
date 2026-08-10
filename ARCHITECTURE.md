@@ -58,6 +58,13 @@ Retrieval, semantic approval, and deterministic release are strictly separated. 
 
 `ARCHITECTURE.md` defines system invariants, evidence rules, and release rules. Phase sequencing lives in `.agent/PLANS.md` and individual `.agent/plans/phase-XX-*.md` files. If a phase prompt conflicts with architecture, architecture wins unless the user explicitly approves an architecture change.
 
+Phases 0-10, MVP-1 through MVP-6, and MVP-6.1 are completed committed work. MVP-6.2 is
+the current authorized phase, implemented only through separately approved batches.
+Batch A corrects phase records, current-stack documentation, CLI launch reporting,
+package metadata, verification-skip documentation, and coverage-artifact tracking; it
+does not authorize later MVP-6.2 security, database, accounting, evidence-policy, or
+model-contract work. No phase after MVP-6.2 has started.
+
 ## MVP-2A Live Provider Architecture Gate
 
 MVP-2A approves the design below for a future MVP-2B implementation. It does not claim
@@ -139,7 +146,7 @@ process; it does not persist them or place them in URLs or command arguments.
 Cooperative cancellation, fingerprints, budgets, restart compatibility, terminal
 semantics, and human review remain exactly as released in MVP-4.
 
-### Post-MVP-5 Bounded-Inference Evidence Policy
+### MVP-6 Bounded-Inference Evidence Policy
 
 New runs require at least 75 exactly verified quoted words for every candidate. The
 Reviewer continues to require literal statement entailment, neutral framing, and all

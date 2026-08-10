@@ -6,12 +6,14 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-5. It includes strict Pydantic contracts, SQLite audit
+The repository is complete through MVP-6.1, with MVP-6.2 Batch A as the current authorized work.
+It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
 fixture CLI/UI, and a deterministic adversarial evaluation framework. MVP-3B released a positive
 live canary and failed a bounded negative canary safely. MVP-4 released the CLI; MVP-5 exposes the
-same validated direct-MiMo pipeline through a responsive persisted web surface.
+same validated direct-MiMo pipeline through a responsive persisted web surface. MVP-6 stabilized
+live research and hardened integrity/web-interface boundaries; MVP-6.1 fixed the live-worker test.
 
 ## How the system works
 
@@ -134,9 +136,11 @@ No environment variable or API key is required for the fixture pipeline, Streaml
 offline tests, or normal Phase 10 evaluation. The live CLI reads configuration only from the
 explicit process environment; it never loads `.env` automatically.
 
-The live CLI requires `MIMO_API_KEY`. `MIMO_BASE_URL` and `MIMO_MODEL` default to the only approved
-values, and `WIGOLO_BASE_URL` defaults to `http://127.0.0.1:8000`. Claims must be public and
-non-sensitive. Secrets are never printed, persisted, fingerprinted, or exported.
+The live CLI requires `MIMO_API_KEY` and `EXA_API_KEY`. `FIRECRAWL_API_KEY` is optional; when it is
+absent, the narrow acquisition fallback is disabled and Wigolo remains the primary acquisition
+path. `MIMO_BASE_URL`, `EXA_BASE_URL`, `FIRECRAWL_BASE_URL`, and `WIGOLO_BASE_URL` have approved
+defaults, and `MIMO_MODEL` defaults to `mimo-v2.5-pro`. Claims must be public and non-sensitive.
+Secrets are never printed, persisted, fingerprinted, or exported.
 
 ```dotenv
 RUN_LLM_INTEGRATION_TESTS=
@@ -213,6 +217,8 @@ and cost ceilings:
 
 ```bash
 export MIMO_API_KEY="..."
+export EXA_API_KEY="..."
+# Optional: export FIRECRAWL_API_KEY="..."
 python cli.py run \
   "For adults with hypertension, regular aerobic exercise lowers resting systolic blood pressure." \
   --db-path /absolute/path/research-run.sqlite3 \
@@ -271,8 +277,10 @@ Apply Ruff formatting when intentionally changing Python files with:
 python -m ruff format .
 ```
 
-Normal tests are deterministic and offline. The only normal skip is the optional Phase 8 LLM
-integration gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled.
+Normal tests are deterministic and offline. Two opt-in tests are expected to skip: the Phase 8
+live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
+smoke test unless both of its explicit enable and execution-approval gates are supplied. The
+current Batch A verification result is 469 passed and 2 expected skips.
 
 ## Phase 10 evaluations
 
@@ -305,13 +313,16 @@ See `evaluations/README.md` for metric and exit-code details.
 
 ## Project status
 
-Phases 0 through 10 and MVP-1 through MVP-5 are complete. MVP-5 is the local live web release
-boundary. No MVP-6 work has started.
+Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work. MVP-6.2 is the
+current authorized phase and is implemented through separately approved batches. Only Batch A is
+authorized and implemented in the current work; later MVP-6.2 security, database, accounting,
+evidence-policy, and model-contract batches remain pending. No phase after MVP-6.2 has started.
 
 Known limitations are:
 
-- Wigolo/native SearXNG startup can require first-use downloads and warming. Cold or degraded
-  search can still exceed the unchanged fixed fail-closed 15-second deadline.
+- Pinned Wigolo startup can require a first-use Node package download. New live runs use Exa for
+  discovery, Wigolo for primary acquisition, and optional Firecrawl fallback. Native SearXNG is
+  retained only for historical adapters and old persisted-run compatibility.
 - The website is local-only. It has no authentication, accounts, uploads, hosting, cloud service,
   or arbitrary cross-version crash recovery.
 - Direct-MiMo cost is a conservative frozen-policy estimate, not provider-confirmed billing.
@@ -324,7 +335,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and MVP-6 are out of scope until explicitly approved.
+live validation and any phase after MVP-6.2 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

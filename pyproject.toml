@@ -1,7 +1,7 @@
 [project]
 name = "debate-research-agent-system"
 version = "0.0.0"
-description = "Phase-scoped scaffold for the Debate Research Agent System."
+description = "MVP-6.2 Debate Research Agent System with integrity and provenance hardening."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [

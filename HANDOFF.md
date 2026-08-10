@@ -1,6 +1,36 @@
 # Handoff
 
-## 2026-08-01 - Post-Audit Boundary Corrections
+## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
+
+- MVP-6 (`37c52a7`, `6e0f434`) and MVP-6.1 (`c10c844`) are completed committed work.
+  MVP-6.2 is current, but only Batch A was authorized and implemented. The later
+  security, database, accounting, evidence-policy, and model-contract batches remain
+  pending approval/implementation; MVP-6.2 is not complete, and no later phase started.
+- Current new-run identity is Exa Search `auto` for metadata-only discovery, pinned
+  loopback Wigolo `0.2.1` for primary acquisition, optional narrowly gated Firecrawl
+  fallback, and direct Xiaomi `mimo-v2.5-pro` for every LLM role. Native SearXNG remains
+  only in clearly historical compatibility records and adapters for old persisted runs.
+- The CLI launch summary now prints the configured Exa, Wigolo, and MiMo endpoints and
+  an explicit Firecrawl enabled/disabled state plus its configured endpoint when
+  enabled. It never prints keys. Focused tests cover both fallback states and secret
+  absence from output and SQLite.
+- Package metadata now describes the MVP-6.2 system. README verification documentation
+  names both normal opt-in skips. `.coverage` is deleted from tracking and ignored; its
+  prior binary is recoverable from Git history.
+- Verification passed: focused CLI 13 passed/1 expected skip; full suite 469 passed/2
+  expected skips; offline evaluation 38/38; Ruff lint/format; launcher shell syntax;
+  and `git diff --check`.
+- No provider call or spending occurred. No dependency or database migration was added.
+  Changes remain uncommitted.
+
+## 2026-08-09 - MVP-6.1 Live Worker Test Fix (`c10c844`)
+
+- Completed committed work: the live-worker redaction test waits within a bounded loop
+  for the background result rather than racing the initial starting snapshot.
+- The accidentally committed `.coverage` output is not part of the phase contract and
+  is removed by MVP-6.2 Batch A.
+
+## 2026-08-01 - MVP-6 Post-Audit Boundary Corrections (`6e0f434`)
 
 - Verified Python-normalized digital PDFs now continue into immutable source snapshots without
   falsifying their content type. Unnormalized PDF payloads still fail closed.
@@ -24,10 +54,10 @@
   `.env` files are never loaded automatically.
 - Verification: 468 passed and 2 skipped; 38/38 offline evaluations; Ruff lint/format,
   launcher syntax, and diff checks passed.
-- No live provider call or MVP-6 work occurred. The unused dotenv dependency was removed and
-  migration 4 added same-run integrity triggers.
+- No live provider call occurred. The unused dotenv dependency was removed and migration 4
+  added same-run integrity triggers as committed MVP-6 work.
 
-## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
+## 2026-08-01 - MVP-6 Bounded-Inference Evidence Policy (`37c52a7`)
 
 - New runs use a 75-word minimum for all exact quote candidates.
 - Claim Fit 5 is Strong/direct, Claim Fit 4 is Partial/indirect, and Claim Fit 3 is
@@ -47,13 +77,13 @@
   joined through persisted snapshot/candidate IDs instead of generic stage-name text.
 - Evidence policy identity is now `post-mvp5-bounded-inference-v2`; restart and use a new
   run ID. The failed v1 run must not be resumed under v2.
-- This is an explicitly authorized post-MVP-5 policy correction, not MVP-6. No dependency
-  or SQLite migration was added.
+- This policy correction was committed as part of MVP-6. No dependency or SQLite
+  migration was added.
 - Verification: 461 passed and 2 skipped in the full suite; 38/38 offline evaluations;
   Ruff lint/format, launcher syntax, and diff checks passed. No live call or spend
   occurred.
 
-## 2026-08-01 - Post-MVP-5 Exa/Wigolo/Firecrawl Provider Correction
+## 2026-08-01 - MVP-6 Exa/Wigolo/Firecrawl Provider Correction (`37c52a7`)
 
 - New direct-MiMo runs now use Exa Search `auto` for metadata-only discovery, pinned
   Wigolo `0.2.1` for primary acquisition, and optional Firecrawl v2 scrape fallback.
@@ -72,7 +102,8 @@
 - Verification: 14 new provider tests; 451 passed and 2 skipped full suite; 38/38 offline
   evaluations; Ruff lint/format, launcher syntax, and diff checks passed. No live call or
   spend occurred.
-- This correction did not start MVP-6 and added no dependency or SQLite migration.
+- This correction was committed as part of MVP-6 and added no dependency or SQLite
+  migration.
 
 ## 2026-08-01 - MVP-5 Polished Local Live Web Interface
 

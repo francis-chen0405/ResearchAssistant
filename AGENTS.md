@@ -1,8 +1,9 @@
 # AI Assistant Instructions
 
-This repository has completed Phases 0-10 and MVP-1 through MVP-5 for the Debate
-Research Agent System. MVP-5 is the polished local live web-interface boundary; MVP-6
-has not started. Before editing any file, read `ARCHITECTURE.md`,
+This repository has completed Phases 0-10, MVP-1 through MVP-6, and MVP-6.1 for the
+Debate Research Agent System. MVP-6.2 is the current authorized phase and is divided
+into separately approved batches; only Batch A is currently authorized. No phase after
+MVP-6.2 has started. Before editing any file, read `ARCHITECTURE.md`,
 `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the
 relevant current phase plan completely.
 

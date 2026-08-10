@@ -1,8 +1,46 @@
 # Status
 
-## 2026-08-01 - Post-Audit Boundary Corrections
+## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
 
-Status: Implemented. MVP-6 has not started.
+Status: Implemented and verified. MVP-6.2 remains in progress; only Batch A was
+authorized. Later security, database, accounting, evidence-policy, and model-contract
+batches remain pending approval and implementation. No phase after MVP-6.2 has started.
+
+- Corrected current phase authority and the committed MVP-6/MVP-6.1 record without
+  rewriting legitimately historical earlier chronology. Added the canonical MVP-6.2
+  plan and documented its separately approved batch boundary.
+- Replaced current SearXNG operating guidance with Exa Search `auto` metadata discovery,
+  pinned loopback Wigolo `0.2.1` primary acquisition, optional narrowly gated Firecrawl
+  fallback, and direct Xiaomi `mimo-v2.5-pro`. Historical SearXNG compatibility remains
+  clearly labeled for old persisted runs.
+- Updated secret-free CLI launch reporting and assertions to show Exa, Wigolo, MiMo,
+  configured endpoints, and Firecrawl enabled/disabled state.
+- Corrected the README's two expected opt-in skips and package description. Removed the
+  accidentally tracked `.coverage` binary and ignored future `.coverage` output; the
+  deletion remains recoverable from Git history.
+- Added no dependency, provider behavior, or database migration. No provider call or
+  spending occurred.
+
+Verification:
+
+- Focused CLI suite: 13 passed, 1 expected MVP-4 live-smoke skip.
+- Full suite: 469 passed, 2 expected opt-in skips (Phase 8 live-LLM gate and MVP-4 live
+  CLI smoke).
+- Offline evaluation: all 38 deterministic cases passed.
+- Ruff lint and format, launcher shell syntax, and `git diff --check` passed.
+
+## 2026-08-09 - MVP-6.1 Live Worker Test Fix (`c10c844`)
+
+Status: Complete and committed.
+
+- Added a bounded poll so the live-worker redaction test waits for its background worker
+  to leave the starting state before asserting the failed result.
+- The `.coverage` binary committed alongside the test fix was accidental verification
+  output and is removed from tracking by MVP-6.2 Batch A.
+
+## 2026-08-01 - MVP-6 Post-Audit Boundary Corrections (`6e0f434`)
+
+Status: Complete and committed as MVP-6 work.
 
 - Connected already-normalized digital PDF text to the researcher snapshot path while rejecting
   unnormalized PDF payloads and preserving the `application/pdf` origin type.
@@ -31,10 +69,10 @@ Verification:
 - No provider call was made. One unused dependency was removed and SQLite migration 4 added
   same-run integrity triggers.
 
-## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
+## 2026-08-01 - MVP-6 Bounded-Inference Evidence Policy (`37c52a7`)
 
-Status: Implemented; final full-suite verification is recorded below. MVP-6 has not
-started.
+Status: Complete and committed as part of MVP-6; final full-suite verification is
+recorded below.
 
 - Changed both statistical and non-statistical quote minima to 75 words.
 - Updated Analyst and Reviewer prompts so literal, materially relevant facts need not
@@ -64,10 +102,9 @@ Verification:
 - Ruff lint/format, launcher syntax, and `git diff --check` passed.
 - No Exa, Wigolo, Firecrawl, or MiMo call was made; added provider cost is zero.
 
-## 2026-08-01 - Post-MVP-5 Exa/Wigolo/Firecrawl Provider Correction
+## 2026-08-01 - MVP-6 Exa/Wigolo/Firecrawl Provider Correction (`37c52a7`)
 
-Status: Complete. This is the user's explicitly authorized retrieval-provider correction;
-MVP-6 has not started.
+Status: Complete and committed as part of MVP-6 live research stabilization.
 
 Completed:
 

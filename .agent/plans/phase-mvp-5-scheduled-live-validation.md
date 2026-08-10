@@ -4,7 +4,8 @@
 > replaces native SearXNG discovery; Wigolo remains primary acquisition and optional
 > Firecrawl is a narrowly gated acquisition fallback. The research pipeline, interface,
 > persistence schema, validation, and MVP-5 boundary otherwise remain unchanged. See
-> `DECISIONS.md` for the fail-closed fallback policy.
+> `DECISIONS.md` for the fail-closed fallback policy. This correction was subsequently
+> committed as MVP-6 work in `37c52a7`; the plan remains here as historical context.
 
 > Bounded-inference correction (2026-08-01): new runs use a 75-word exact quote minimum,
 > separate literal statement entailment from whether one fact proves the full claim,
@@ -77,7 +78,11 @@ budget. The live identity is exactly direct Xiaomi `mimo-v2.5-pro` plus pinned l
 Wigolo `0.2.1`. The fixture app remains clearly labeled fixture-only and must not imply
 MiMo or live-search use.
 
-## Wigolo/SearXNG Lifecycle
+## Historical MVP-5 Wigolo/SearXNG Lifecycle
+
+The following records the original MVP-5 operating contract. It is retained for old
+persisted-run compatibility and is not the current live-run stack; new runs use Exa for
+discovery and Wigolo only for primary acquisition, with optional Firecrawl fallback.
 
 Add a typed local service manager that:
 

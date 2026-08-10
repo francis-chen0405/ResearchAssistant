@@ -189,16 +189,55 @@ def test_budget_failure_is_failed_without_a_physical_call(
         assert connection.execute("SELECT COUNT(*) FROM model_route_attempts").fetchone()[0] == 0
 
 
-def test_launch_and_persistence_never_disclose_secret(tmp_path: Path) -> None:
-    result = _run(tmp_path)
-    db_bytes = (tmp_path / "mvp4.sqlite3").read_bytes()
+@pytest.mark.parametrize("firecrawl_enabled", [False, True])
+def test_launch_reports_current_stack_and_never_discloses_secrets(
+    tmp_path: Path,
+    firecrawl_enabled: bool,
+) -> None:
+    run_id = uuid4()
+    db_path = tmp_path / "mvp4.sqlite3"
+    environment = _environment(db_path, run_id)
+    firecrawl_secret = "firecrawl-test-secret"
+    if firecrawl_enabled:
+        environment["FIRECRAWL_API_KEY"] = firecrawl_secret
+        environment["FIRECRAWL_BASE_URL"] = "https://firecrawl.example.test"
+    environment["EXA_BASE_URL"] = "https://exa.example.test"
+    environment["WIGOLO_BASE_URL"] = "http://127.0.0.1:8123"
+    result = subprocess.run(
+        _command(db_path, run_id),
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    db_bytes = db_path.read_bytes()
 
     assert result.returncode == CLIExitCode.RELEASED
-    assert "approved provider stack: Wigolo 0.2.1 + direct Xiaomi MiMo" in result.stdout
+    assert (
+        "approved provider stack: Exa Search auto discovery + Wigolo 0.2.1 primary "
+        "acquisition + optional Firecrawl fallback + direct Xiaomi MiMo"
+    ) in result.stdout
+    assert "exa discovery endpoint: https://exa.example.test" in result.stdout
+    assert "wigolo endpoint: http://127.0.0.1:8123" in result.stdout
+    expected_firecrawl = "enabled" if firecrawl_enabled else "disabled"
+    assert f"firecrawl acquisition fallback: {expected_firecrawl}" in result.stdout
+    if firecrawl_enabled:
+        assert "firecrawl endpoint: https://firecrawl.example.test" in result.stdout
+    else:
+        assert "firecrawl endpoint:" not in result.stdout
+    assert "mimo endpoint: https://api.xiaomimimo.com/v1" in result.stdout
     assert "model alias: mimo-v2.5-pro" in result.stdout
     assert SECRET not in result.stdout
     assert SECRET not in result.stderr
     assert SECRET.encode() not in db_bytes
+    assert "exa-test-secret" not in result.stdout
+    assert "exa-test-secret" not in result.stderr
+    assert b"exa-test-secret" not in db_bytes
+    assert firecrawl_secret not in result.stdout
+    assert firecrawl_secret not in result.stderr
+    assert firecrawl_secret.encode() not in db_bytes
 
 
 def test_inspect_run_reports_authoritative_audit_and_release(tmp_path: Path) -> None:

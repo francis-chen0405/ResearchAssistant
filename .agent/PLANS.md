@@ -10,14 +10,27 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State After MVP-5
+## Current Project State: MVP-6.2 Batch A
 
-Phases 0 through 10 and MVP-1 through MVP-5 are complete. The live CLI and separate local
-live Streamlit page expose only the approved loopback Wigolo `0.2.1` plus direct Xiaomi
-`mimo-v2.5-pro` stack with exact fingerprints, explicit budgets, restart-safe persistence,
-stable exit codes, detailed inspection, cooperative cancellation, persisted history,
-duplicate-worker prevention, and application-owned local service lifecycle. The original
-Streamlit frontend remains fixture-only. MVP-6 has not started.
+Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
+MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
+integrity/web-interface hardening in `6e0f434`; MVP-6.1 is the committed live-worker test
+fix in `c10c844`. MVP-6.2 is the current authorized phase. Its implementation is divided
+into separately approved batches, and only Batch A is authorized by the current task.
+No phase after MVP-6.2 has started.
+
+New live runs use Exa Search `auto` for metadata-only discovery, pinned loopback Wigolo
+`0.2.1` for primary acquisition, optional Firecrawl acquisition fallback under the
+narrow fail-closed policy, and direct Xiaomi `mimo-v2.5-pro` for every LLM role. Exact
+fingerprints, explicit budgets, restart-safe persistence, stable exit codes, detailed
+inspection, cooperative cancellation, persisted history, duplicate-worker prevention,
+and application-owned local service lifecycle remain in force. The original Streamlit
+frontend remains fixture-only. Native SearXNG paths remain historical compatibility
+surfaces for old persisted runs, not the current live-run operating stack.
+
+Canonical current plan:
+
+- `.agent/plans/phase-mvp-6-2-integrity-provenance-runtime-contract-hardening.md`
 
 ## MVP-2A: Architecture Gate
 
@@ -61,7 +74,8 @@ open items are documented consistently. Existing offline verification remains gr
 
 ## MVP Sequence
 
-These canonical plans record the completed MVP sequence. No later phase is authorized.
+These canonical plans record the earlier completed MVP sequence. MVP-6.2 is the current
+authorized phase; no phase after MVP-6.2 is authorized.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
    `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`
@@ -73,6 +87,12 @@ These canonical plans record the completed MVP sequence. No later phase is autho
    `.agent/plans/phase-mvp-4-live-cli-release.md`
 5. MVP-5 Polished Local Live Web Interface:
    `.agent/plans/phase-mvp-5-scheduled-live-validation.md`
+6. MVP-6 Live Research Stabilization and Post-Audit Hardening: committed work recorded
+   in `STATUS.md`, `HANDOFF.md`, and `DECISIONS.md` under commit evidence `37c52a7` and
+   `6e0f434`.
+7. MVP-6.1 Live Worker Test Fix: committed work recorded under `c10c844`.
+8. MVP-6.2 Integrity, Provenance, and Runtime Contract Hardening:
+   `.agent/plans/phase-mvp-6-2-integrity-provenance-runtime-contract-hardening.md`
 
 The canonical MVP-5 plan path is retained for history, but its earlier scheduled-live-
 validation placeholder was superseded by the user's 2026-08-01 explicit MVP-5 web-

@@ -1,6 +1,32 @@
 # Decisions
 
-## 2026-08-01 - Post-Audit Boundary Corrections
+## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
+
+- Treat `37c52a7` and `6e0f434` as completed MVP-6 work and `c10c844` as completed
+  MVP-6.1 work. Preserve earlier dated statements as historical records when they were
+  accurate at the time, while correcting MVP-6 commits that mislabeled themselves as
+  merely post-MVP-5 work.
+- Make MVP-6.2 the current authorized phase, divided into separately approved batches.
+  Batch A does not authorize the pending security, database, accounting,
+  evidence-policy, or model-contract batches, and does not complete MVP-6.2.
+- Report the current live stack as Exa Search `auto` metadata discovery, pinned loopback
+  Wigolo `0.2.1` primary acquisition, optional narrowly gated Firecrawl acquisition
+  fallback, and direct Xiaomi `mimo-v2.5-pro` LLM roles. Keep native SearXNG only as
+  clearly labeled historical compatibility for old persisted runs.
+- Keep launch reporting secret-free while displaying configured provider endpoints and
+  explicit Firecrawl enabled/disabled state.
+- Ignore `.coverage` and remove the accidentally tracked binary introduced by MVP-6.1;
+  it remains recoverable from Git history. Add no dependency or database migration.
+
+## 2026-08-09 - MVP-6.1 Live Worker Test Fix
+
+- Record `c10c844` as completed MVP-6.1 work. The live-worker UI test now polls briefly
+  for its background worker to leave the starting state before asserting the redacted
+  failure result.
+- The `.coverage` binary committed with that fix was accidental build output, not a
+  runtime artifact or phase deliverable.
+
+## 2026-08-01 - MVP-6 Post-Audit Boundary Corrections
 
 - Require public HTTP(S) destinations for acquisition, including literal IPs, DNS answers,
   and every redirect target; reject local, private, link-local, reserved, and otherwise
@@ -28,7 +54,7 @@
 - Explicitly redact the MiMo, Exa, and Firecrawl key values at the live display boundary.
 - Declare the actually tested Python support range, 3.11 through 3.12, in package metadata.
 
-## 2026-08-01 - Post-MVP-5 Bounded-Inference Evidence Policy
+## 2026-08-01 - MVP-6 Bounded-Inference Evidence Policy
 
 - Set the deterministic minimum quoted evidence length to 75 words for statistical and
   non-statistical candidates. Exact source membership, ordering, immediate bracket
@@ -52,7 +78,7 @@
   stage. Count stance model attempts through persisted snapshot/candidate artifact IDs,
   because model route stages are generic (`extractor`, `analyst`, and `reviewer`).
 
-## 2026-08-01 - Post-MVP-5 Retrieval Provider Correction
+## 2026-08-01 - MVP-6 Retrieval Provider Correction
 
 - Replace native SearXNG discovery in new live runs with Exa Search `auto`, using only
   titles, URLs, and discovery metadata; Exa snippets or generated content never become
@@ -69,8 +95,8 @@
   the Wigolo child environment.
 - Preserve the completed MVP-5 interface, direct MiMo route, SQLite schema,
   deterministic validation, budgets, restart rules, and rank-five/keep-three research
-  policy. This is a narrow provider correction explicitly authorized by the user, not
-  the start of MVP-6.
+  policy. This provider correction was committed as part of MVP-6 live research
+  stabilization in `37c52a7`.
 
 ## 2026-08-01 - MVP-5 Polished Local Live Web Interface
 

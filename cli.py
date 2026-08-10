@@ -223,8 +223,17 @@ def _print_launch_summary(
     print(f"database: {db_path}")
     print(f"run_id: {run_id}")
     print(f"claim: {claim}")
-    print("approved provider stack: Wigolo 0.2.1 + direct Xiaomi MiMo")
+    print(
+        "approved provider stack: Exa Search auto discovery + Wigolo 0.2.1 primary "
+        "acquisition + optional Firecrawl fallback + direct Xiaomi MiMo"
+    )
+    print(f"exa discovery endpoint: {config.exa.base_url}")
     print(f"wigolo endpoint: {config.wigolo.base_url}")
+    if config.firecrawl is None:
+        print("firecrawl acquisition fallback: disabled")
+    else:
+        print("firecrawl acquisition fallback: enabled")
+        print(f"firecrawl endpoint: {config.firecrawl.base_url}")
     print(f"mimo endpoint: {config.mimo.base_url}")
     print("model alias: mimo-v2.5-pro")
     print(f"pinned model id: {config.mimo.model}")
