@@ -62,10 +62,11 @@ Phases 0-10, MVP-1 through MVP-6, and MVP-6.1 are completed committed work. MVP-
 Batch A completed its records/current-stack correction. MVP-6.3 is the completed public-
 acquisition and provenance-security phase: redirect destinations are validated before
 each local request, and Firecrawl-returned URLs are untrusted until independently
-validated. MVP-6.4 is the current evidence-density calibration: new provider-backed runs
+validated. MVP-6.4 completed the evidence-density calibration: new provider-backed runs
 use 50 quoted words for statistical evidence and 75 for all other evidence. It did not
 implement the pending database, CLI-status, usage-accounting, provider-contract, or
-type-hint batches. No phase after MVP-6.4 has started.
+type-hint batches. MVP-6.5 adds database-enforced claim immutability and validated
+read-only history/inspection. MVP-6.6 has not started.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -165,6 +166,24 @@ application-owned indirect connective; Claim Fit 3, qualified-only, and Weak sta
 also require explicit statement scope qualification. A one-sided Ledger produces a
 deterministic not-balanced coverage warning; zero approved Ledger statements still fail
 closed.
+
+### MVP-6.5 Immutable Run Authority and Read-Only Inspection
+
+SQLite migration 5 installs `runs_raw_claim_immutable`, a `BEFORE UPDATE OF raw_claim`
+trigger on `runs`. It aborts every actual claim change for every status with the stable
+message `runs.raw_claim is immutable`, while identical-value assignments remain valid.
+Trigger installation and the migration record are atomic. Migration 4 is solely the
+same-run provenance-protection migration; the application-level `update_run()` check
+remains defense in depth.
+
+History and inspection are non-mutating operations. They open an existing database
+through URI `mode=ro`, enable foreign keys and row reconstruction, set connection-local
+`query_only`, validate migration records and required schema objects, and reuse that
+session for transitive reads. They never call `init_db()`, create a missing file, migrate
+an older schema, or fall back to writable access. Older databases require an intentional
+writable run or resume. Newer, invalid, corrupt, missing, and inaccessible databases
+produce explicit compatibility failures. `immutable=1` is not used because live WAL
+writers may coexist with inspection.
 
 ### Approved Stack and Role Mapping
 

@@ -28,7 +28,7 @@ from orchestrator import (
 )
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
-from store import init_db, list_runs, read_provider_run_contract
+from store import list_runs, open_read_only_store, read_provider_run_contract
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIVE_DB = PROJECT_ROOT / ".researchassistant" / "live-runs.sqlite3"
@@ -330,8 +330,11 @@ class LiveResearchController:
         path = Path(db_path).resolve()
         if not path.is_file():
             return ()
-        init_db(str(path))
-        return tuple(self._history_item(manifest) for manifest in list_runs(str(path), limit=limit))
+        with open_read_only_store(path) as store:
+            return tuple(
+                self._history_item(manifest)
+                for manifest in list_runs(store.connection, limit=limit)
+            )
 
     def has_active_runs(self) -> bool:
         with self._lock:
@@ -398,7 +401,8 @@ class LiveResearchController:
             )
         contract = None
         try:
-            contract = read_provider_run_contract(result.db_path, result.run_id)
+            with open_read_only_store(result.db_path) as store:
+                contract = read_provider_run_contract(store.connection, result.run_id)
         except KeyError:
             pass
         classification = result.status.value

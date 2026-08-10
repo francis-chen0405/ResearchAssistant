@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
+
+- Add SQLite migration 5 solely for `runs.raw_claim` immutability and correct migration
+  4's description to same-run provenance protection. Install and verify the
+  `runs_raw_claim_immutable` trigger before recording migration 5 in the same transaction.
+- Reject every actual claim change, regardless of run status or direct-SQL caller, with
+  the stable secret-free message `runs.raw_claim is immutable`; permit identical-value
+  assignments and preserve the application-level comparison as defense in depth.
+- Use one `ReadOnlyStore` session per inspection/history operation, opened with encoded
+  SQLite URI `mode=ro`, foreign keys, row handling, and connection-local `query_only`.
+  Do not use `immutable=1` or writable fallback.
+- Separate writable initialization/migration from read-only compatibility validation.
+  Distinguish missing, invalid, older, newer, corrupt, and inaccessible databases.
+  Older databases require an intentional writable run or resume and are never migrated
+  by inspection.
+- Preserve typed reconstruction, released-brief hash verification, partial/RUNNING
+  inspection, bounded history ordering, WAL concurrency, writable run/resume behavior,
+  insert-only evidence, and same-run provenance guards.
+- Add no dependency, ORM, provider call, or spending. Do not start MVP-6.6.
+
 ## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
 
 - Set current provider-backed quotation minima to 50 words only when exact quoted

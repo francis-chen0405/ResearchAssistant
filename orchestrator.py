@@ -100,6 +100,7 @@ from providers.pricing import (
 from providers.scraper import RetryPolicy, ScraperProvider
 from providers.search import SearchProvider
 from store import (
+    DatabaseReader,
     ModelAttemptBudgetError,
     finish_model_route_attempt,
     init_db,
@@ -118,6 +119,7 @@ from store import (
     insert_statement_review,
     insert_synthesis,
     insert_validation,
+    open_read_only_store,
     read_analyst_decision,
     read_cancellation_request,
     read_candidate,
@@ -1522,31 +1524,46 @@ def inspect_provider_run(
 ) -> ProviderPipelineResult:
     """Reopen and inspect a partial or terminal provider-backed run."""
     path = str(Path(db_path).resolve())
-    init_db(path)
-    manifest = read_run(path, run_id)
-    checkpoints = tuple(read_orchestration_checkpoints(path, run_id))
-    attempts = tuple(read_model_route_attempts(path, run_id))
-    planner = _read_optional_planner(path, run_id)
+    with open_read_only_store(path) as store:
+        return _inspect_provider_run_connection(
+            store.connection,
+            path,
+            run_id,
+            failure_reason=failure_reason,
+        )
+
+
+def _inspect_provider_run_connection(
+    reader: DatabaseReader,
+    path: str,
+    run_id: UUID,
+    *,
+    failure_reason: str | None,
+) -> ProviderPipelineResult:
+    manifest = read_run(reader, run_id)
+    checkpoints = tuple(read_orchestration_checkpoints(reader, run_id))
+    attempts = tuple(read_model_route_attempts(reader, run_id))
+    planner = _read_optional_planner(reader, run_id)
     researchers = _read_optional_stage_result(
-        path,
+        reader,
         run_id,
         PHASE9_RESEARCHERS_ARTIFACT,
         ResearcherPairResult,
     )
     analysis = _read_optional_stage_result(
-        path,
+        reader,
         run_id,
         PHASE9_ANALYSIS_ARTIFACT,
         AnalysisStageResult,
     )
-    synthesis = _read_optional_synthesis(path, run_id)
-    validation = _read_optional_validation(path, run_id)
+    synthesis = _read_optional_synthesis(reader, run_id)
+    validation = _read_optional_validation(reader, run_id)
     status = _provider_status_from_manifest(manifest)
     resolved_failure = None
     if status is ProviderRunStatus.FAILED:
         resolved_failure = failure_reason or _latest_failure_reason(checkpoints)
     if status is ProviderRunStatus.CANCELLED and resolved_failure is None:
-        resolved_failure = _cancellation_reason(path, run_id)
+        resolved_failure = _cancellation_reason(reader, run_id)
     final_brief = None
     rendered_hash = None
     if (
@@ -1799,7 +1816,7 @@ def _persist_stage_result(
 
 
 def _read_optional_stage_result(
-    db_path: str,
+    db_path: DatabaseReader,
     run_id: UUID,
     artifact_key: str,
     model_type: type[_ModelT],
@@ -1816,21 +1833,21 @@ def _read_optional_stage_result(
     return model_type.model_validate_json(artifact.payload_json)
 
 
-def _read_optional_planner(db_path: str, run_id: UUID) -> PlannerOutput | None:
+def _read_optional_planner(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput | None:
     try:
         return read_planner_output(db_path, run_id)
     except KeyError:
         return None
 
 
-def _read_optional_synthesis(db_path: str, run_id: UUID) -> SynthesisOutput | None:
+def _read_optional_synthesis(db_path: DatabaseReader, run_id: UUID) -> SynthesisOutput | None:
     try:
         return read_synthesis(db_path, run_id)
     except KeyError:
         return None
 
 
-def _read_optional_validation(db_path: str, run_id: UUID) -> ValidationResult | None:
+def _read_optional_validation(db_path: DatabaseReader, run_id: UUID) -> ValidationResult | None:
     try:
         return read_validation(db_path, run_id)
     except KeyError:
@@ -1858,7 +1875,7 @@ def _latest_failure_reason(checkpoints: Sequence[OrchestrationCheckpoint]) -> st
     return max(failures, key=lambda item: item.updated_at).failure_reason
 
 
-def _cancellation_reason(db_path: str, run_id: UUID) -> str:
+def _cancellation_reason(db_path: DatabaseReader, run_id: UUID) -> str:
     try:
         return read_cancellation_request(db_path, run_id).reason
     except KeyError:

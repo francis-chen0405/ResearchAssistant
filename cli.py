@@ -29,7 +29,7 @@ from providers.config import (
     WigoloConfig,
 )
 from providers.mimo_factory import MimoProviderFactoryConfig
-from store import read_provider_run_contract
+from store import open_read_only_store, read_provider_run_contract
 
 
 class CLIExitCode(IntEnum):
@@ -301,7 +301,8 @@ def _inspect_run_command(db_path: Path, run_id: UUID) -> int:
     try:
         result = inspect_provider_run(db_path, run_id)
         try:
-            contract = read_provider_run_contract(str(db_path.resolve()), run_id)
+            with open_read_only_store(db_path) as store:
+                contract = read_provider_run_contract(store.connection, run_id)
         except KeyError:
             contract = None
     except Exception as exc:

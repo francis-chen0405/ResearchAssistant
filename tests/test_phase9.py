@@ -810,14 +810,28 @@ def test_database_reopening_preserves_partial_and_attempt_metadata(tmp_path: Pat
     )
 
 
-def test_inspection_rejects_claim_tampering_after_release(tmp_path: Path) -> None:
+def test_sqlite_rejects_claim_tampering_after_release(tmp_path: Path) -> None:
+    result = _run(tmp_path)
+    assert result.status is ProviderRunStatus.RELEASED
+
+    with sqlite3.connect(result.db_path) as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="runs.raw_claim is immutable"):
+            connection.execute(
+                "UPDATE runs SET raw_claim = ? WHERE run_id = ?",
+                ("A tampered claim.", str(result.run_id)),
+            )
+
+    assert inspect_provider_run(result.db_path, result.run_id) == result
+
+
+def test_inspection_rejects_released_brief_hash_corruption(tmp_path: Path) -> None:
     result = _run(tmp_path)
     assert result.status is ProviderRunStatus.RELEASED
 
     with sqlite3.connect(result.db_path) as connection:
         connection.execute(
-            "UPDATE runs SET raw_claim = ? WHERE run_id = ?",
-            ("A tampered claim.", str(result.run_id)),
+            "UPDATE validation_runs SET rendered_brief_hash = ? WHERE run_id = ?",
+            ("0" * 64, str(result.run_id)),
         )
 
     with pytest.raises(ValueError, match="persisted released brief"):

@@ -1,5 +1,58 @@
 # Handoff
 
+## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
+
+- MVP-6.5 is complete and verified; MVP-6.6 has not started. SQLite migration 5 is
+  `database-enforced immutable runs.raw_claim`. Migration 4 is accurately limited to
+  same-run provenance protection.
+- `store.py` installs `runs_raw_claim_immutable` atomically. It is a
+  `BEFORE UPDATE OF raw_claim ON runs` trigger with
+  `WHEN NEW.raw_claim IS NOT OLD.raw_claim`; every actual claim change aborts with
+  `runs.raw_claim is immutable`, regardless of status or direct-SQL caller. Identical
+  assignments remain valid. `update_run()` retains its earlier application guard.
+- `ReadOnlyStore` is the inspection/history boundary. It opens a safely encoded existing
+  path with URI `mode=ro`, foreign keys, `sqlite3.Row`, and connection-local
+  `query_only`; it deliberately does not use `immutable=1`. The compatibility check
+  validates integrity, migration rows 1-5, required objects, and exact trigger semantics.
+- Compatibility failures distinguish missing, invalid, older, newer, corrupt, and open/
+  permission cases. Inspection never creates or migrates. To migrate an older database,
+  intentionally start or resume a writable run; the normal `init_db()` path upgrades it.
+- `inspect_provider_run` reuses one read-only session for manifest, checkpoints, attempts,
+  artifacts, synthesis, validation, cancellation reason, and released-hash reconstruction.
+  CLI contract display, live history, and live contract display also use read-only
+  sessions. Missing history retains the empty tuple contract without creating a file.
+
+Files changed:
+
+- Store/runtime: `store.py`, `orchestrator.py`, `cli.py`, `frontend/live_service.py`.
+- Regression coverage: `tests/test_mvp6_5_read_only_inspection.py`, `tests/test_phase9.py`.
+- Phase records and operator documentation: `.agent/PLANS.md`, the canonical MVP-6.5
+  plan, `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `frontend/README.md`, `STATUS.md`, and `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused required selection: 206 passed, 1 expected opt-in skip.
+- Full suite: 543 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format, Python compilation, launcher syntax, `git diff --check`, direct
+  schema/trigger inspection, migration record review, and before/after database-hash
+  comparison passed.
+- No dependency, ORM, provider call, spending, committed fixture mutation, generated
+  database/cache/coverage artifact, or commit was added.
+
+Known limitation:
+
+- Public-target validation and transport DNS remain separate as documented in MVP-6.3;
+  MVP-6.5 does not change that acquisition limitation. Read-only inspection supports
+  active WAL writers but does not promise a multi-query snapshot across a writer's
+  separate commits beyond ordinary SQLite read-transaction semantics.
+
+Do not start:
+
+- Do not begin MVP-6.6 or the CLI-status, usage-accounting, provider-contract, or
+  type-hint batches without separate explicit direction.
+
 ## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
 
 - MVP-6.4 is complete and verified; MVP-6.5 has not started. Current provider-backed

@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import UTC, datetime
+from enum import StrEnum
+from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
 from models import (
@@ -39,6 +43,7 @@ from models import (
     SourceSnapshot,
     StatementDraft,
     StatementReviewResult,
+    StrictModel,
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
@@ -50,6 +55,87 @@ from models import (
 # Connection helpers
 # ---------------------------------------------------------------------------
 
+CURRENT_SCHEMA_VERSION = 5
+RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
+RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
+MIGRATION_DESCRIPTIONS = {
+    1: "phase-2 initial sqlite schema",
+    2: "phase-9 orchestration audit and checkpoint schema",
+    3: "mvp-3a provider fingerprints and budget reservations",
+    4: "same-run provenance protection triggers",
+    5: "database-enforced immutable runs.raw_claim",
+}
+_REQUIRED_TABLES = {
+    "schema_migrations",
+    "runs",
+    "planner_outputs",
+    "claim_definitions",
+    "ambiguities",
+    "search_queries",
+    "retrieval_attempts",
+    "snapshots",
+    "provisional_extractions",
+    "candidates",
+    "analyst_decisions",
+    "statement_drafts",
+    "statement_review_attempts",
+    "ledger_records",
+    "synthesis_attempts",
+    "synthesis_sections",
+    "synthesis_items",
+    "validation_runs",
+    "validation_errors",
+    "model_invocations",
+    "orchestration_checkpoints",
+    "orchestration_stage_artifacts",
+    "provider_run_contracts",
+    "model_route_attempts",
+    "run_cancellations",
+}
+_REQUIRED_TRIGGERS = {
+    "retrieval_attempt_same_run",
+    "snapshot_same_run",
+    "provisional_extraction_same_run",
+    "candidate_same_run",
+    "analyst_decision_same_run",
+    "statement_draft_same_run",
+    "statement_review_same_run",
+    "ledger_record_same_run",
+    "synthesis_item_same_run",
+    RAW_CLAIM_TRIGGER_NAME,
+}
+_REQUIRED_INDEXES = {
+    "provisional_extractions_run_snapshot_stance",
+    "model_route_attempts_run_operation",
+}
+
+
+class DatabaseCompatibilityIssue(StrEnum):
+    MISSING_FILE = "missing_file"
+    INVALID_SQLITE = "invalid_sqlite"
+    OLDER_SCHEMA = "older_schema"
+    NEWER_SCHEMA = "newer_schema"
+    CORRUPT_SCHEMA = "corrupt_schema"
+    OPEN_FAILED = "open_failed"
+
+
+class DatabaseCompatibilityResult(StrictModel):
+    compatible: bool
+    issue: DatabaseCompatibilityIssue | None = None
+    schema_version: int | None = None
+    message: str
+
+
+class DatabaseCompatibilityError(RuntimeError):
+    """An inspection database cannot be opened without modifying it."""
+
+    def __init__(self, result: DatabaseCompatibilityResult) -> None:
+        self.result = result
+        super().__init__(result.message)
+
+
+DatabaseReader = str | Path | sqlite3.Connection
+
 
 def _connect(db_path: str) -> sqlite3.Connection:
     """Open a connection with foreign keys enabled."""
@@ -57,6 +143,179 @@ def _connect(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@contextmanager
+def _read_connection(source: DatabaseReader) -> Iterator[sqlite3.Connection]:
+    if isinstance(source, sqlite3.Connection):
+        yield source
+        return
+    conn = _connect(str(source))
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def _compatibility_error(
+    issue: DatabaseCompatibilityIssue,
+    message: str,
+    *,
+    schema_version: int | None = None,
+) -> DatabaseCompatibilityError:
+    return DatabaseCompatibilityError(
+        DatabaseCompatibilityResult(
+            compatible=False,
+            issue=issue,
+            schema_version=schema_version,
+            message=message,
+        )
+    )
+
+
+def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilityResult:
+    try:
+        integrity_rows = conn.execute("PRAGMA quick_check").fetchall()
+        if [row[0] for row in integrity_rows] != ["ok"]:
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+                "database integrity check failed; inspection made no changes",
+            )
+        objects = {
+            (row["type"], row["name"]): row["sql"]
+            for row in conn.execute(
+                """SELECT type, name, sql FROM sqlite_master
+                   WHERE name NOT LIKE 'sqlite_%'"""
+            ).fetchall()
+        }
+    except DatabaseCompatibilityError:
+        raise
+    except sqlite3.DatabaseError as exc:
+        message = str(exc).lower()
+        issue = (
+            DatabaseCompatibilityIssue.INVALID_SQLITE
+            if "not a database" in message or "file is encrypted" in message
+            else DatabaseCompatibilityIssue.CORRUPT_SCHEMA
+        )
+        raise _compatibility_error(
+            issue,
+            "file is not a valid ResearchAssistant SQLite database; inspection made no changes",
+        ) from exc
+
+    if ("table", "schema_migrations") not in objects:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.OLDER_SCHEMA,
+            "database schema is older or uninitialized; a writable run or resume is required "
+            "to initialize or migrate it",
+            schema_version=0,
+        )
+    try:
+        rows = conn.execute(
+            "SELECT version, description FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            "schema migration records are unreadable; inspection made no changes",
+        ) from exc
+    versions = {int(row["version"]): row["description"] for row in rows}
+    latest = max(versions, default=0)
+    if latest > CURRENT_SCHEMA_VERSION:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.NEWER_SCHEMA,
+            f"database schema version {latest} is newer than supported version "
+            f"{CURRENT_SCHEMA_VERSION}; use compatible ResearchAssistant code",
+            schema_version=latest,
+        )
+    if latest < CURRENT_SCHEMA_VERSION:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.OLDER_SCHEMA,
+            f"database schema version {latest} requires migration to version "
+            f"{CURRENT_SCHEMA_VERSION}; a writable run or resume is required",
+            schema_version=latest,
+        )
+    if versions != MIGRATION_DESCRIPTIONS:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            "schema migration records are incomplete or inconsistent; inspection made no changes",
+            schema_version=latest,
+        )
+    tables = {name for object_type, name in objects if object_type == "table"}
+    triggers = {name for object_type, name in objects if object_type == "trigger"}
+    indexes = {name for object_type, name in objects if object_type == "index"}
+    missing = sorted(
+        (_REQUIRED_TABLES - tables)
+        | (_REQUIRED_TRIGGERS - triggers)
+        | (_REQUIRED_INDEXES - indexes)
+    )
+    trigger_sql = objects.get(("trigger", RAW_CLAIM_TRIGGER_NAME))
+    if missing or not _is_expected_raw_claim_trigger(trigger_sql):
+        detail = ", ".join(missing) if missing else RAW_CLAIM_TRIGGER_NAME
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            f"required schema object is missing or invalid ({detail}); inspection made no changes",
+            schema_version=latest,
+        )
+    return DatabaseCompatibilityResult(
+        compatible=True,
+        schema_version=latest,
+        message=f"ResearchAssistant schema version {latest} is compatible",
+    )
+
+
+class ReadOnlyStore:
+    """One cohesive read-only SQLite session for inspection and history."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        path = Path(db_path).expanduser().resolve()
+        self.path = path
+        self.connection: sqlite3.Connection
+        self.compatibility: DatabaseCompatibilityResult
+        try:
+            if not path.exists():
+                raise _compatibility_error(
+                    DatabaseCompatibilityIssue.MISSING_FILE,
+                    f"inspection database does not exist: {path}",
+                )
+            if not path.is_file():
+                raise _compatibility_error(
+                    DatabaseCompatibilityIssue.OPEN_FAILED,
+                    f"inspection database is not a regular file: {path}",
+                )
+            encoded_path = quote(path.as_posix(), safe="/")
+            self.connection = sqlite3.connect(f"file:{encoded_path}?mode=ro", uri=True)
+            self.connection.row_factory = sqlite3.Row
+            self.connection.execute("PRAGMA foreign_keys = ON")
+            self.connection.execute("PRAGMA query_only = ON")
+            self.compatibility = _validate_read_only_schema(self.connection)
+        except DatabaseCompatibilityError:
+            if hasattr(self, "connection"):
+                self.connection.close()
+            raise
+        except (OSError, sqlite3.Error) as exc:
+            if hasattr(self, "connection"):
+                self.connection.close()
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.OPEN_FAILED,
+                f"could not open inspection database read-only: {path}",
+            ) from exc
+
+    def __enter__(self) -> ReadOnlyStore:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self.connection.close()
+
+    def read_run(self, run_id: UUID) -> RunManifest:
+        return read_run(self.connection, run_id)
+
+
+def open_read_only_store(db_path: str | Path) -> ReadOnlyStore:
+    """Open an existing compatible database without creating or migrating it."""
+    return ReadOnlyStore(db_path)
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +348,7 @@ def init_db(db_path: str) -> None:
                 (version, description, applied_at)
                 VALUES (
                     4,
-                    'same-run provenance triggers and immutable raw claim',
+                    'same-run provenance protection triggers',
                     '2026-08-01T00:00:00+00:00'
                 );
 
@@ -530,9 +789,78 @@ def init_db(db_path: str) -> None:
             conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_tokens INTEGER")
         if "reserved_cost_usd" not in columns:
             conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd REAL")
+        conn.execute(
+            "UPDATE schema_migrations SET description = ? WHERE version = 4",
+            (MIGRATION_DESCRIPTIONS[4],),
+        )
         conn.commit()
+        _apply_raw_claim_immutability_migration(conn)
     finally:
         conn.close()
+
+
+def _raw_claim_trigger_sql() -> str:
+    return f"""CREATE TRIGGER {RAW_CLAIM_TRIGGER_NAME}
+        BEFORE UPDATE OF raw_claim ON runs
+        WHEN NEW.raw_claim IS NOT OLD.raw_claim
+        BEGIN
+            SELECT RAISE(ABORT, '{RAW_CLAIM_TRIGGER_ERROR}');
+        END"""
+
+
+def _is_expected_raw_claim_trigger(sql: str | None) -> bool:
+    if sql is None:
+        return False
+    normalized = " ".join(sql.lower().split())
+    return all(
+        fragment in normalized
+        for fragment in (
+            f"create trigger {RAW_CLAIM_TRIGGER_NAME}",
+            "before update of raw_claim on runs",
+            "when new.raw_claim is not old.raw_claim",
+            f"raise(abort, '{RAW_CLAIM_TRIGGER_ERROR}')",
+        )
+    )
+
+
+def _apply_raw_claim_immutability_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (CURRENT_SCHEMA_VERSION,),
+    ).fetchone()
+    trigger = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+        (RAW_CLAIM_TRIGGER_NAME,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 5 description is inconsistent")
+        if trigger is None or not _is_expected_raw_claim_trigger(trigger["sql"]):
+            raise sqlite3.DatabaseError("migration 5 trigger is missing or inconsistent")
+        return
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(_raw_claim_trigger_sql())
+        installed = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+            (RAW_CLAIM_TRIGGER_NAME,),
+        ).fetchone()
+        if installed is None or not _is_expected_raw_claim_trigger(installed["sql"]):
+            raise sqlite3.DatabaseError("migration 5 trigger installation verification failed")
+        conn.execute(
+            """INSERT INTO schema_migrations (version, description, applied_at)
+               VALUES (?, ?, ?)""",
+            (
+                CURRENT_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION],
+                "2026-08-09T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -587,30 +915,24 @@ def insert_run(db_path: str, manifest: RunManifest) -> None:
         conn.close()
 
 
-def read_run(db_path: str, run_id: UUID) -> RunManifest:
-    conn = _connect(db_path)
-    try:
+def read_run(db_path: DatabaseReader, run_id: UUID) -> RunManifest:
+    with _read_connection(db_path) as conn:
         row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (str(run_id),)).fetchone()
         if row is None:
             raise KeyError(f"run {run_id} not found")
         return _row_to_run(row)
-    finally:
-        conn.close()
 
 
-def list_runs(db_path: str, *, limit: int = 100) -> list[RunManifest]:
+def list_runs(db_path: DatabaseReader, *, limit: int = 100) -> list[RunManifest]:
     """Return the most recently updated runs for local inspection."""
     if limit < 1 or limit > 1000:
         raise ValueError("run history limit must be between 1 and 1000")
-    conn = _connect(db_path)
-    try:
+    with _read_connection(db_path) as conn:
         rows = conn.execute(
             "SELECT * FROM runs ORDER BY updated_at DESC, run_id ASC LIMIT ?",
             (limit,),
         ).fetchall()
         return [_row_to_run(row) for row in rows]
-    finally:
-        conn.close()
 
 
 def update_run(db_path: str, manifest: RunManifest) -> None:
@@ -732,9 +1054,8 @@ def insert_planner_output(db_path: str, planner: PlannerOutput) -> None:
         conn.close()
 
 
-def read_planner_output(db_path: str, run_id: UUID) -> PlannerOutput:
-    conn = _connect(db_path)
-    try:
+def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
+    with _read_connection(db_path) as conn:
         po_row = conn.execute(
             "SELECT * FROM planner_outputs WHERE run_id = ?", (str(run_id),)
         ).fetchone()
@@ -796,8 +1117,6 @@ def read_planner_output(db_path: str, run_id: UUID) -> PlannerOutput:
             planner_model_name=po_row["planner_model_name"],
             planned_at=_iso_to_dt(po_row["planned_at"]),
         )
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1400,9 +1719,8 @@ def insert_synthesis(db_path: str, synthesis: SynthesisOutput) -> None:
         conn.close()
 
 
-def read_synthesis(db_path: str, run_id: UUID) -> SynthesisOutput:
-    conn = _connect(db_path)
-    try:
+def read_synthesis(db_path: DatabaseReader, run_id: UUID) -> SynthesisOutput:
+    with _read_connection(db_path) as conn:
         sa_row = conn.execute(
             "SELECT * FROM synthesis_attempts WHERE run_id = ?", (str(run_id),)
         ).fetchone()
@@ -1446,8 +1764,6 @@ def read_synthesis(db_path: str, run_id: UUID) -> SynthesisOutput:
             created_at=_iso_to_dt(sa_row["created_at"]),
             sections=sections,
         )
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1485,9 +1801,8 @@ def insert_validation(db_path: str, result: ValidationResult) -> None:
         conn.close()
 
 
-def read_validation(db_path: str, run_id: UUID) -> ValidationResult:
-    conn = _connect(db_path)
-    try:
+def read_validation(db_path: DatabaseReader, run_id: UUID) -> ValidationResult:
+    with _read_connection(db_path) as conn:
         vr_row = conn.execute(
             "SELECT * FROM validation_runs WHERE run_id = ?", (str(run_id),)
         ).fetchone()
@@ -1511,8 +1826,6 @@ def read_validation(db_path: str, run_id: UUID) -> ValidationResult:
             validated_at=_iso_to_dt(vr_row["validated_at"]),
             rendered_brief_hash=vr_row["rendered_brief_hash"],
         )
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1622,9 +1935,8 @@ def insert_provider_run_contract(db_path: str, contract: ProviderRunContract) ->
         conn.close()
 
 
-def read_provider_run_contract(db_path: str, run_id: UUID) -> ProviderRunContract:
-    conn = _connect(db_path)
-    try:
+def read_provider_run_contract(db_path: DatabaseReader, run_id: UUID) -> ProviderRunContract:
+    with _read_connection(db_path) as conn:
         row = conn.execute(
             "SELECT * FROM provider_run_contracts WHERE run_id = ?",
             (str(run_id),),
@@ -1632,8 +1944,6 @@ def read_provider_run_contract(db_path: str, run_id: UUID) -> ProviderRunContrac
         if row is None:
             raise KeyError(f"provider run contract for {run_id} not found")
         return _row_to_provider_run_contract(row)
-    finally:
-        conn.close()
 
 
 def _row_to_provider_run_contract(row: sqlite3.Row) -> ProviderRunContract:
@@ -1706,11 +2016,10 @@ def read_orchestration_checkpoint(
 
 
 def read_orchestration_checkpoints(
-    db_path: str,
+    db_path: DatabaseReader,
     run_id: UUID,
 ) -> list[OrchestrationCheckpoint]:
-    conn = _connect(db_path)
-    try:
+    with _read_connection(db_path) as conn:
         rows = conn.execute(
             """SELECT * FROM orchestration_checkpoints
                WHERE run_id = ? ORDER BY updated_at, stage_key""",
@@ -1726,8 +2035,6 @@ def read_orchestration_checkpoints(
             )
             for row in rows
         ]
-    finally:
-        conn.close()
 
 
 def insert_stage_artifact(db_path: str, artifact: PersistedStageArtifact) -> None:
@@ -1766,12 +2073,11 @@ def insert_stage_artifact(db_path: str, artifact: PersistedStageArtifact) -> Non
 
 
 def read_stage_artifact(
-    db_path: str,
+    db_path: DatabaseReader,
     run_id: UUID,
     artifact_key: str,
 ) -> PersistedStageArtifact:
-    conn = _connect(db_path)
-    try:
+    with _read_connection(db_path) as conn:
         row = conn.execute(
             """SELECT * FROM orchestration_stage_artifacts
                WHERE run_id = ? AND artifact_key = ?""",
@@ -1780,8 +2086,6 @@ def read_stage_artifact(
         if row is None:
             raise KeyError(f"stage artifact {artifact_key} for run {run_id} not found")
         return _row_to_stage_artifact(row)
-    finally:
-        conn.close()
 
 
 def _row_to_stage_artifact(row: sqlite3.Row) -> PersistedStageArtifact:
@@ -1917,12 +2221,11 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
 
 
 def read_model_route_attempts(
-    db_path: str,
+    db_path: DatabaseReader,
     run_id: UUID,
     operation_id: UUID | None = None,
 ) -> list[ModelRouteAttempt]:
-    conn = _connect(db_path)
-    try:
+    with _read_connection(db_path) as conn:
         if operation_id is None:
             rows = conn.execute(
                 """SELECT * FROM model_route_attempts WHERE run_id = ?
@@ -1937,8 +2240,6 @@ def read_model_route_attempts(
                 (str(run_id), str(operation_id)),
             ).fetchall()
         return [_row_to_model_route_attempt(row) for row in rows]
-    finally:
-        conn.close()
 
 
 def _insert_model_route_attempt_row(
@@ -2042,9 +2343,8 @@ def insert_cancellation_request(
     return read_cancellation_request(db_path, request.run_id)
 
 
-def read_cancellation_request(db_path: str, run_id: UUID) -> RunCancellationRequest:
-    conn = _connect(db_path)
-    try:
+def read_cancellation_request(db_path: DatabaseReader, run_id: UUID) -> RunCancellationRequest:
+    with _read_connection(db_path) as conn:
         row = conn.execute(
             "SELECT * FROM run_cancellations WHERE run_id = ?",
             (str(run_id),),
@@ -2056,5 +2356,3 @@ def read_cancellation_request(db_path: str, run_id: UUID) -> RunCancellationRequ
             requested_at=_iso_to_dt(row["requested_at"]),
             reason=row["reason"],
         )
-    finally:
-        conn.close()

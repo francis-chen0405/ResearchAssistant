@@ -1,8 +1,8 @@
 # AI Assistant Instructions
 
 This repository has completed Phases 0-10, MVP-1 through MVP-6, MVP-6.1, MVP-6.2
-Batch A, MVP-6.3, and MVP-6.4 for the Debate Research Agent System. MVP-6.4 is the latest
-authorized phase. No phase after MVP-6.4 has started. Before editing any file, read `ARCHITECTURE.md`,
+Batch A, MVP-6.3, MVP-6.4, and MVP-6.5 for the Debate Research Agent System. MVP-6.5 is the latest
+completed authorized phase. MVP-6.6 has not started. Before editing any file, read `ARCHITECTURE.md`,
 `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`, `HANDOFF.md`, `.agent/PLANS.md`, and the
 relevant current phase plan completely.
 

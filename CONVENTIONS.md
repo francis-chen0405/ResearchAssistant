@@ -107,6 +107,10 @@ SDK or dependency.
   - Concurrent supporting/opposing researchers must not share SQLite connections, cursors, or transactions
   - Prefer coordinator-owned serialized writes after both sync researchers finish; if a worker must touch SQLite, it opens and closes its own connection
   - Persistence records that affect release must include run IDs, prompt/model versions when applicable, retrieval attempts, and timestamps
+  - `runs.raw_claim` is immutable after insertion at both the application and SQLite trigger boundaries
+  - Schema migration 4 contains same-run provenance triggers; migration 5 contains the raw-claim immutability trigger
+  - History and inspection open existing databases with the validated read-only store session and never call `init_db()` or migrate
+  - Operators migrate an older database only through an intentional writable run or resume operation
 
 ## 6. Environment Variables
 
@@ -140,14 +144,15 @@ the current top-three/PDF-unsupported/legacy-model test contracts with the appro
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
 MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3, and
-MVP-6.4 are complete. Current provider-backed candidates use the strict shared
+MVP-6.4 and MVP-6.5 are complete. Current provider-backed candidates use the strict shared
 50-statistical/75-non-statistical quote policy; statistical classification requires both
 a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
-explicit legacy 50/100 policy. MVP-6.4 does not authorize the remaining database,
-accounting, provider-contract, CLI-status, or type-hint work. The original
+explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
+read-only-inspection database batch; accounting, provider-contract, CLI-status, and
+type-hint work remain unstarted. The original
 Streamlit app remains fixture-only; the separate live app reuses the established
 persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
-after MVP-6.4 without separate explicit direction.
+after MVP-6.5 without separate explicit direction. MVP-6.6 has not started.
 
 ## 8. Done Criteria Per Phase
 

@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.4, the evidence-density threshold calibration phase.
+The repository is complete through MVP-6.5, immutable run authority and read-only inspection.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -17,7 +17,8 @@ live research and hardened integrity/web-interface boundaries; MVP-6.1 fixed the
 MVP-6.2 Batch A corrected current-stack records, MVP-6.3 validates every redirect
 destination before local acquisition and treats Firecrawl provenance URLs as untrusted,
 and MVP-6.4 applies a shared 50-statistical/75-non-statistical exact-quote policy to new
-provider-backed runs.
+provider-backed runs. MVP-6.5 enforces submitted claims as immutable in SQLite and makes
+live history and inspection read-only at the connection boundary.
 
 ## How the system works
 
@@ -258,6 +259,17 @@ python cli.py inspect-run PATH_TO_DATABASE RUN_UUID
 python cli.py cancel-run PATH_TO_DATABASE RUN_UUID --reason "requested by operator"
 ```
 
+`inspect-run` never creates or migrates a database. It opens the existing file read-only,
+checks its migration records and required schema objects, and reconstructs typed
+artifacts through that same session. Missing, invalid, corrupt, older, newer, or
+inaccessible databases fail clearly without modification. To migrate an older database
+intentionally, start or resume a run with write access using `run`; the normal writable
+initialization path applies migration 5 before provider work.
+
+Migration 5 installs `runs_raw_claim_immutable`. Direct SQL and application writes cannot
+change `runs.raw_claim` after insertion in any run status; identical-value assignment is
+allowed. Migration 4 remains the same-run provenance-protection migration.
+
 Cancellation is cooperative: a synchronous request already in flight may continue to its deadline,
 but its attempt is persisted and no new call starts after cancellation is observed. It does not
 promise immediate interruption.
@@ -300,7 +312,7 @@ python -m ruff format .
 Normal tests are deterministic and offline. Two opt-in tests are expected to skip: the Phase 8
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
-  current MVP-6.4 verification result is 517 passed and 2 expected skips; exact focused,
+The current MVP-6.5 verification result is recorded in `STATUS.md`; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -338,8 +350,9 @@ See `evaluations/README.md` for metric and exit-code details.
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work. MVP-6.2 Batch A
 completed its documentation/current-stack correction, MVP-6.3 completed public-acquisition
 redirect safety and Firecrawl provenance validation, and MVP-6.4 completed the 50/75 evidence-
-density calibration. The database, accounting, provider-contract, CLI-status, and type-hint
-batches were not implemented. No phase after MVP-6.4 has started.
+density calibration. MVP-6.5 completed database-enforced claim immutability and read-only
+history/inspection. Accounting, provider-contract, CLI-status, and type-hint batches remain
+unstarted. MVP-6.6 has not started.
 
 Known limitations are:
 
@@ -361,7 +374,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.4 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.5 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

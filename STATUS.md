@@ -1,5 +1,56 @@
 # Status
 
+## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
+
+Status: Complete and verified. MVP-6.2 Batch A, MVP-6.3, and MVP-6.4 were confirmed
+complete prerequisites. MVP-6.6 has not started.
+
+- Added atomic SQLite migration 5,
+  `database-enforced immutable runs.raw_claim`, and corrected migration 4 to
+  `same-run provenance protection triggers`. Trigger `runs_raw_claim_immutable` rejects
+  every actual `raw_claim` change for every status with the stable message
+  `runs.raw_claim is immutable`; identical-value assignments and other mutable run
+  updates remain valid. The application-level guard remains defense in depth.
+- Migration 5 creates and verifies the trigger before inserting its migration record in
+  one explicit transaction. Conflicting or failed installation leaves version 5
+  unrecorded. Reopen is idempotent, existing claim bytes are untouched, and the public
+  column shape is unchanged.
+- Added a strict typed compatibility result/error and cohesive `ReadOnlyStore`. It safely
+  encodes resolved paths, opens existing files with SQLite URI `mode=ro`, enables foreign
+  keys and row handling, sets connection-local `query_only`, and validates the integrity,
+  exact migrations, required tables, indexes, triggers, and migration-5 trigger contract.
+  It does not use `immutable=1` or writable fallback.
+- `inspect_provider_run`, CLI `inspect-run`, live history, live reopening, and their
+  transitive store reads no longer call `init_db()` or reopen writable connections.
+  Missing files, invalid SQLite, older schema, newer schema, corrupt schema, and
+  permission/open failures are distinguished without mutation. Missing web history
+  remains empty without file creation. Older databases require an intentional writable
+  run or resume to migrate.
+- Preserved typed reconstruction, partial/RUNNING and terminal inspection, bounded
+  deterministic history, WAL concurrency, writable initialization/resume, same-run
+  provenance, insert-only evidence, cancellation, and released-brief hash verification.
+  The old claim-tampering inspection test now expects prevention at SQLite; a separate
+  released-hash corruption test preserves reconstruction-integrity coverage.
+- Added no dependency, ORM, provider call, or provider spending. No commit was created.
+
+Verification:
+
+- Regression-first baseline: the new focused suite failed at collection on the absent
+  migration-5/read-only APIs before implementation.
+- Focused persistence/migration, Phase 9 orchestration/inspection, MVP-4 CLI/subprocess,
+  MVP-5 history/reopening, concurrency/cancellation, fixture reconstruction, provider
+  restart, and release-integrity selection: 206 passed, 1 expected opt-in skip.
+- Complete offline suite: 543 passed, 2 expected opt-in skips.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison
+  remained skipped.
+- Ruff lint passed; Ruff format check reported 59 files already formatted.
+- Python compilation, launcher `zsh -n`, and `git diff --check` passed.
+- Direct temporary-schema inspection confirmed migration rows 1-5 and exact trigger SQL.
+  Read-only inspection preserved the database SHA-256 byte-for-byte; focused tests also
+  preserved schema objects, migration rows, and file modification time.
+- Final dependency, provider-call, generated database/cache/coverage artifact, Git diff,
+  and worktree reviews found no unrelated change or provider execution.
+
 ## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
 
 Status: Complete and verified. MVP-6.2 Batch A and MVP-6.3 were confirmed complete

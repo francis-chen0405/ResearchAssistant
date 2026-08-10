@@ -17,6 +17,12 @@ Wigolo-local extraction failures. It can run or compatibly resume direct
 `mimo-v2.5-pro` research, inspect persisted history, show live progress, cooperatively
 cancel, and copy or download a released validated brief.
 
+History and reopening use the store's validated SQLite read-only session. They never
+initialize or migrate a database and never create a missing file. An older database is
+left untouched and produces a migration-required message; migrate it intentionally by
+starting or resuming a writable CLI or website run. Invalid, newer, corrupt, or
+inaccessible databases also fail safely without writable fallback.
+
 Before any local source request, ResearchAssistant validates the initial URL and every
 redirect target under its public HTTP(S) and resolver policy. Wigolo receives only the
 validated final preflight URL. Firecrawl-returned source and canonical URLs are untrusted
