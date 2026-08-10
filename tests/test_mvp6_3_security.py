@@ -12,8 +12,8 @@ from providers.acquisition import (
     AcquisitionFailureCode,
     WigoloAcquisitionAdapter,
 )
+from providers.clients import ProviderClients
 from providers.config import ExaConfig, FirecrawlConfig, MimoConfig, WigoloConfig
-from providers.factory import ProviderFactoryClients
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.mimo_factory import MimoProviderFactoryConfig, build_mimo_provider_bundle
 from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProviderError
@@ -467,7 +467,7 @@ def test_mvp6_3_acquisition_identity_is_incompatible_with_pre_phase_identity() -
     )
     bundle = build_mimo_provider_bundle(
         config,
-        clients=ProviderFactoryClients(host_resolver=_resolver_for()),
+        clients=ProviderClients(host_resolver=_resolver_for()),
     )
 
     assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"

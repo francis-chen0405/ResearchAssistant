@@ -184,13 +184,13 @@ RUN_LLM_INTEGRATION_TESTS=
 
 Export `RUN_LLM_INTEGRATION_TESTS=1` only when intentionally enabling the optional Phase 8 gate.
 That test currently verifies explicit opt-in; it does not call a live provider. The separate
-`scripts/mvp2b_live_smoke.py` path requires an enable flag, the exact execution-time approval
+`scripts/mimo_live_smoke.py` path requires an enable flag, the exact execution-time approval
 phrase, explicit one-call limits, token/cost caps, an absolute unused output path, and `--execute`.
 Credentials alone cannot enable it. Do not run it without explicit approval for that execution.
-Its legacy OpenRouter placeholder is `OPENROUTER_API_KEY=`. The enable flag is
+It uses the existing `MIMO_API_KEY`. The enable flag is
 `RESEARCH_ASSISTANT_LIVE_SMOKE=1`, and the exact approval gate is
-`RESEARCH_ASSISTANT_LIVE_APPROVED=I_APPROVE_ONE_MVP2B_LIVE_SMOKE`. The configured maximum must be
-one search, acquisition, and LLM call, at most 25,000 tokens, and at most $0.10; the script remains
+`RESEARCH_ASSISTANT_LIVE_APPROVED=I_APPROVE_ONE_MIMO_LIVE_SMOKE`. The configured maximum must be
+one search, acquisition, and LLM call, at most 25,000 tokens, and at most $0.05; the script remains
 offline unless every gate and `--execute` are supplied.
 
 ## Running the project

@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-6.9
+## Current Project State: MVP-7
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -45,7 +45,7 @@ surfaces for old persisted runs, not the current live-run operating stack.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-6-9-acquisition-configuration-integrity.md`
+- `.agent/plans/phase-mvp-7-direct-mimo-consolidation.md`
 
 ## MVP-2A: Architecture Gate
 

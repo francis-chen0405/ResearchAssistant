@@ -131,11 +131,9 @@ SDK or dependency.
   Never hardcode keys or paths.
   Required variables are documented with blank values in `.env.example` only.
 
-MVP-2A proposed `OPENROUTER_API_KEY` for its future primary stack. MVP-2B subsequently
-authorized it for the separately gated legacy boundary smoke, so `.env.example` retains
-one blank placeholder while the current live CLI uses direct MiMo. Never expose the key
-to Wigolo, logs, SQLite, checkpoints, or exported artifacts. Live MVP claims are
-public/non-sensitive only.
+MVP-2A and MVP-2B historically used OpenRouter. MVP-7 retires that executable boundary;
+the current environment contains only direct-MiMo credentials. Historical records retain
+their original provider history. Live MVP claims are public/non-sensitive only.
 
 The authorized current stack uses required `MIMO_API_KEY` and `EXA_API_KEY`, optional
 `FIRECRAWL_API_KEY`, their configurable HTTPS base URLs, `MIMO_MODEL`, and optional

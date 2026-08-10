@@ -94,7 +94,8 @@ managed Wigolo lifecycle, a live CLI, or MVP-3B completion.
 
 On 2026-07-29 the user explicitly replaced OpenRouter with Xiaomi's direct MiMo API as
 the sole MVP-3B LLM gateway. This amendment applies to MVP-3B and future live work; the
-MVP-2B/MVP-3A OpenRouter implementation and tests remain historical compatibility proof.
+MVP-2B/MVP-3A OpenRouter implementation and tests are retained only in dated project
+records; MVP-7 removes their executable code.
 
 - Every LLM role uses direct `mimo-v2.5-pro` at the configured Xiaomi HTTPS base URL.
 - No OpenRouter or MiniMax call is permitted in an MVP-3B run. Objective failures may

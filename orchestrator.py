@@ -96,7 +96,7 @@ from providers.llm import (
     load_prompt,
 )
 from providers.pricing import (
-    DEFAULT_PRICE_CAPS,
+    COMPATIBILITY_PRICE_CAPS,
     DIRECT_MIMO_PRICE_CAP,
     conservative_token_estimate,
 )
@@ -148,7 +148,7 @@ from store import (
 from utils import URL_NAMESPACE, compute_sha256
 
 if TYPE_CHECKING:
-    from providers.factory import ProviderFactoryClients, ProviderFactoryConfig
+    from providers.clients import ProviderClients
 
 DEFAULT_OUTPUT_DIR_NAME = ".phase6_output"
 FIXTURE_DB_NAME = "fixture_pipeline.sqlite3"
@@ -1124,7 +1124,7 @@ class ProviderOrchestrationConfig(StrictModel):
     budget: OrchestrationBudget = OrchestrationBudget()
     require_budget_reservations: bool = False
     reserved_output_tokens_per_call: int = Field(default=4096, ge=1, le=32768)
-    pricing_policy: Literal["openrouter", "direct_mimo"] = "openrouter"
+    pricing_policy: Literal["compatibility", "direct_mimo"] = "compatibility"
     pinned_model_snapshots: tuple[PinnedModelSnapshot, ...] = ()
 
     @model_validator(mode="after")
@@ -1485,54 +1485,12 @@ def run_provider_pipeline(
     return inspect_provider_run(path, resolved_run_id)
 
 
-def run_mvp3a_pipeline(
-    raw_claim: str,
-    *,
-    db_path: str | Path,
-    factory_config: ProviderFactoryConfig,
-    clients: ProviderFactoryClients | None = None,
-    run_id: UUID | None = None,
-    clock: Callable[[], datetime] | None = None,
-    stage_hook: _StageHook | None = None,
-) -> ProviderPipelineResult:
-    """Construct the approved adapters, fingerprint them, and run MVP-3A offline/live-neutral."""
-    from providers.factory import build_provider_bundle
-
-    now = clock or _phase9_utc_now
-    resolved_run_id = run_id or uuid4()
-    bundle = build_provider_bundle(factory_config, clients=clients)
-    settings = ProviderOrchestrationConfig(
-        acquisition_policy=bundle.config.acquisition,
-        budget=OrchestrationBudget(
-            max_model_calls=bundle.config.ceilings.max_llm_calls,
-            retrieval_attempts_per_side=(bundle.config.acquisition.maximum_attempts_per_stance),
-            max_total_tokens=bundle.config.ceilings.max_tokens,
-            max_total_cost_usd=bundle.config.ceilings.max_cost_usd,
-        ),
-        require_budget_reservations=True,
-        reserved_output_tokens_per_call=bundle.config.openrouter.max_output_tokens,
-    )
-    contract = bundle.contract(resolved_run_id, _aware_phase9_time(now(), "contract created_at"))
-    return run_provider_pipeline(
-        raw_claim,
-        db_path=db_path,
-        search_provider=bundle.search,
-        scraper_provider=bundle.acquisition,
-        llm_provider=bundle.llm,
-        run_id=resolved_run_id,
-        config=settings,
-        provider_contract=contract,
-        clock=now,
-        stage_hook=stage_hook,
-    )
-
-
 def run_mvp3b_pipeline(
     raw_claim: str,
     *,
     db_path: str | Path,
     factory_config: object,
-    clients: ProviderFactoryClients | None = None,
+    clients: ProviderClients | None = None,
     run_id: UUID | None = None,
     clock: Callable[[], datetime] | None = None,
     stage_hook: _StageHook | None = None,
@@ -3268,11 +3226,7 @@ def _conservative_reservation(
             )
         cap = DIRECT_MIMO_PRICE_CAP
     else:
-        model = {
-            ModelAlias.MIMO_V25_PRO: "xiaomi/mimo-v2.5-pro",
-            ModelAlias.MINIMAX_M3: "minimax/minimax-m3",
-        }.get(alias)
-        cap = DEFAULT_PRICE_CAPS.get(model) if model is not None else None
+        cap = COMPATIBILITY_PRICE_CAPS.get(alias.value)
     if cap is None:
         raise Phase9OrchestrationError(
             _agent_stage(request.stage),

@@ -26,9 +26,9 @@ from models import (
 )
 from provider_contract import canonical_provider_contract_payload, parse_provider_contract_payload
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
+from providers.clients import ProviderClients
 from providers.config import ExaConfig, FirecrawlConfig, MimoConfig, RunCeilings, WigoloConfig
 from providers.exa import ExaSearchAdapter
-from providers.factory import ProviderFactoryClients
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, load_prompt
 from providers.mimo import XiaomiMimoAdapter
@@ -130,12 +130,12 @@ class MimoProviderBundle(StrictModel):
 def build_mimo_provider_bundle(
     config: MimoProviderFactoryConfig,
     *,
-    clients: ProviderFactoryClients | None = None,
+    clients: ProviderClients | None = None,
     price_cap: ModelPriceCap = DIRECT_MIMO_PRICE_CAP,
 ) -> MimoProviderBundle:
     if not isinstance(config, MimoProviderFactoryConfig):
         raise TypeError("direct MiMo factory requires MimoProviderFactoryConfig")
-    injected = clients or ProviderFactoryClients()
+    injected = clients or ProviderClients()
     search = ExaSearchAdapter(
         config.exa,
         client=injected.search,

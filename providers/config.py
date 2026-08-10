@@ -137,38 +137,6 @@ class FirecrawlConfig(StrictModel):
         )
 
 
-class OpenRouterConfig(StrictModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    provider_name: str = "openrouter"
-    adapter_version: str = "mvp2b-openrouter-v1"
-    base_url: str = "https://openrouter.ai/api/v1"
-    api_key: SecretStr
-    primary_model: str = "xiaomi/mimo-v2.5-pro"
-    fallback_model: str = "minimax/minimax-m3"
-    max_output_tokens: int = Field(default=4096, ge=1, le=32768)
-    deadlines: DeadlineConfig = DeadlineConfig()
-
-    @field_validator("base_url")
-    @classmethod
-    def validate_https(cls, value: str) -> str:
-        parsed = urlsplit(value)
-        if parsed.scheme != "https" or not parsed.hostname:
-            raise ValueError("OpenRouter base URL must use HTTPS")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("OpenRouter base URL cannot contain credentials, query, or fragment")
-        return value.rstrip("/")
-
-    @classmethod
-    def from_environment(cls, environment: Mapping[str, str]) -> OpenRouterConfig:
-        value = environment.get("OPENROUTER_API_KEY", "").strip()
-        if not value:
-            raise ProviderConfigurationError(
-                "OPENROUTER_API_KEY is required in the process environment"
-            )
-        return cls(api_key=SecretStr(value))
-
-
 class MimoConfig(StrictModel):
     """Strict direct Xiaomi MiMo configuration for MVP-3B."""
 

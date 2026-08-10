@@ -28,10 +28,9 @@ from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
 from providers.config import (
     FirecrawlConfig,
     LiveSmokeConfig,
-    OpenRouterConfig,
+    MimoConfig,
     WigoloConfig,
 )
-from providers.factory import FINGERPRINT_VERSION
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.mimo_factory import MIMO_FINGERPRINT_VERSION
 from providers.scraper import ScrapeRequest
@@ -352,17 +351,17 @@ def _parse_environment_example(path: Path) -> dict[str, str]:
 
 def test_environment_example_constructs_supported_legacy_smoke_offline() -> None:
     environment = _parse_environment_example(Path(".env.example"))
-    assert environment["OPENROUTER_API_KEY"] == ""
+    assert environment["MIMO_API_KEY"] == ""
     environment |= {
-        "OPENROUTER_API_KEY": "offline-placeholder",
+        "MIMO_API_KEY": "offline-placeholder",
         "RESEARCH_ASSISTANT_LIVE_SMOKE": "1",
-        "RESEARCH_ASSISTANT_LIVE_APPROVED": "I_APPROVE_ONE_MVP2B_LIVE_SMOKE",
+        "RESEARCH_ASSISTANT_LIVE_APPROVED": "I_APPROVE_ONE_MIMO_LIVE_SMOKE",
     }
 
     smoke = LiveSmokeConfig(
         enabled=environment["RESEARCH_ASSISTANT_LIVE_SMOKE"] == "1",
         approved_now=(
-            environment["RESEARCH_ASSISTANT_LIVE_APPROVED"] == "I_APPROVE_ONE_MVP2B_LIVE_SMOKE"
+            environment["RESEARCH_ASSISTANT_LIVE_APPROVED"] == "I_APPROVE_ONE_MIMO_LIVE_SMOKE"
         ),
         max_search_calls=int(environment["RESEARCH_ASSISTANT_SMOKE_MAX_SEARCH_CALLS"]),
         max_acquisition_calls=int(environment["RESEARCH_ASSISTANT_SMOKE_MAX_ACQUISITION_CALLS"]),
@@ -373,14 +372,13 @@ def test_environment_example_constructs_supported_legacy_smoke_offline() -> None
     )
     smoke.require_enabled()
     assert smoke.max_tokens <= 25_000
-    assert OpenRouterConfig.from_environment(environment).api_key.get_secret_value() == (
+    assert MimoConfig.from_environment(environment).api_key.get_secret_value() == (
         "offline-placeholder"
     )
 
 
 def test_mvp6_9_acquisition_and_fingerprint_identities_change() -> None:
     assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
-    assert FINGERPRINT_VERSION == "mvp6.9-acquisition-configuration-integrity-v1"
     assert MIMO_FINGERPRINT_VERSION == "mvp6.9-acquisition-configuration-integrity-v1"
 
 

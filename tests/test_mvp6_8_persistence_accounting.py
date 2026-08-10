@@ -18,8 +18,8 @@ from models import (
 )
 from money import parse_canonical_usd
 from orchestrator import summarize_model_usage
-from providers.openrouter import _usage as parse_openrouter_usage
-from providers.pricing import DEFAULT_PRICE_CAPS
+from providers.mimo import _usage as parse_mimo_usage
+from providers.pricing import DIRECT_MIMO_PRICE_CAP
 from store import (
     CURRENT_SCHEMA_VERSION,
     ModelAttemptBudgetError,
@@ -399,16 +399,13 @@ def test_noncanonical_persisted_monetary_text_is_rejected(value: str) -> None:
         parse_canonical_usd(value)
 
 
-def test_provider_decimal_string_keeps_its_long_fraction() -> None:
-    exact = Decimal("0.00000000000000000012345678901234567890123456789")
-    usage, estimated = parse_openrouter_usage(
+def test_direct_mimo_usage_uses_the_pinned_exact_price_cap() -> None:
+    usage = parse_mimo_usage(
         {
             "prompt_tokens": 1,
             "completion_tokens": 1,
             "total_tokens": 2,
-            "cost": str(exact),
         },
-        DEFAULT_PRICE_CAPS["xiaomi/mimo-v2.5-pro"],
+        DIRECT_MIMO_PRICE_CAP,
     )
-    assert estimated is False
-    assert usage.cost_usd == exact
+    assert usage.cost_usd == Decimal("0.000001500")
