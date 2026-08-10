@@ -10,6 +10,7 @@ from models import StrictModel
 
 DIRECT_MIMO_PRICING_POLICY_VERSION = "xiaomi-mimo-price-cap-2026-08-10-v2"
 
+
 class ModelPriceCap(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

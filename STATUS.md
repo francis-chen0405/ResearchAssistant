@@ -1,5 +1,34 @@
 # Status
 
+## 2026-08-10 - MVP-7.1 MiMo Consolidation Completion
+
+Status: Complete and verified. MVP-7 direct-MiMo consolidation remains the preceding
+committed milestone; MVP-7.1 repaired its provider-neutral CLI regression fixture and
+completed its verification record.
+
+- Replaced the deleted MVP-3A fixture dependency in the MVP-4 subprocess driver with
+  the existing provider-neutral Phase 9 fake providers. The driver now persists a
+  canonical direct-MiMo-compatible run contract, applies the requested budget, retains
+  unique snapshot coverage, and blocks inside a real provider override for cross-process
+  cancellation timing.
+- The repaired subprocess coverage proves released, blocked, and failed terminal exits;
+  configuration/budget rejection; launch redaction; inspection; exact resume identity;
+  snapshot persistence; and cooperative cancellation without restoring an OpenRouter
+  adapter or configuration path.
+- MVP-7.1 adds no provider vendor, live call, spending, dependency, database migration,
+  or change to dated historical records.
+
+Verification:
+
+- Complete offline suite: 549 passed, 2 expected opt-in skips.
+- Ruff lint and format checks passed; `git diff --check` passed.
+- Offline evaluation passed; all deterministic cases passed with no live comparison.
+
+Next phase:
+
+- No phase after MVP-7.1 is authorized. A future unified run-economics phase should be
+  separately authorized before extending MiMo-only budget accounting to Exa and Firecrawl.
+
 ## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
 
 Status: Complete and verified. MVP-6.8 was confirmed complete before implementation.

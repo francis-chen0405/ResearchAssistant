@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-10 - MVP-7.1 MiMo Consolidation Completion
+
+- MVP-7.1 is complete and verified. It repairs the MVP-7 direct-MiMo consolidation
+  regression in `tests/mvp4_subprocess_driver.py` without reintroducing OpenRouter.
+- The subprocess driver uses the existing provider-neutral Phase 9 fakes and constructs
+  a canonical direct-MiMo-compatible run contract plus exact requested budget. Its
+  unique fixture source texts retain the eighteen-snapshot assertion; its cancellation
+  subclass waits only after the orchestrator persists a real running model attempt.
+- Active current code and guidance remain direct MiMo. Historical OpenRouter records
+  remain accurate and unchanged.
+
+Verification handoff:
+
+- Complete offline suite: 549 passed, 2 expected opt-in skips.
+- Ruff lint/format, `git diff --check`, and deterministic offline evaluation passed.
+- No dependency, live provider call, spending, database migration, generated tracked
+  artifact, commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin a phase after MVP-7.1 without separate explicit user direction.
+
 ## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
 
 - MVP-6.9 is complete and verified. Schema version 7 is current; no later phase has
