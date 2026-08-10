@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
@@ -78,6 +79,7 @@ from models import (
     ValidationResult,
     entailment_for_claim_fit,
 )
+from money import ExactUSD, add_usd
 from providers.llm import (
     DEFAULT_LLM_ROUTING,
     DIRECT_MIMO_ROUTING,
@@ -1102,7 +1104,7 @@ class OrchestrationBudget(StrictModel):
     max_model_calls: int = Field(default=256, ge=1)
     retrieval_attempts_per_side: int = Field(default=ATTEMPTS_PER_STANCE, ge=1)
     max_total_tokens: int | None = Field(default=None, ge=1)
-    max_total_cost_usd: float | None = Field(default=None, ge=0.0)
+    max_total_cost_usd: ExactUSD | None = None
 
 
 class PinnedModelSnapshot(StrictModel):
@@ -1219,11 +1221,11 @@ class AnalysisStageResult(StrictModel):
 def summarize_model_usage(attempts: Sequence[ModelRouteAttempt]) -> ModelUsageAccounting:
     """Aggregate exact usage separately from conservative unknown-usage exposure."""
     known_tokens = 0
-    known_cost = 0.0
+    known_cost = Decimal("0")
     missing_token_ids: list[UUID] = []
     missing_cost_ids: list[UUID] = []
     conservative_tokens = 0
-    conservative_cost = 0.0
+    conservative_cost = Decimal("0")
     token_exposure_provable = True
     cost_exposure_provable = True
     for attempt in attempts:
@@ -1243,10 +1245,10 @@ def summarize_model_usage(attempts: Sequence[ModelRouteAttempt]) -> ModelUsageAc
             if attempt.reserved_cost_usd is None:
                 cost_exposure_provable = False
             else:
-                conservative_cost += attempt.reserved_cost_usd
+                conservative_cost = add_usd(conservative_cost, attempt.reserved_cost_usd)
         else:
-            known_cost += usage_cost
-            conservative_cost += usage_cost
+            known_cost = add_usd(known_cost, usage_cost)
+            conservative_cost = add_usd(conservative_cost, usage_cost)
     token_complete = not missing_token_ids
     cost_complete = not missing_cost_ids
     return ModelUsageAccounting(
@@ -1285,7 +1287,7 @@ class ProviderPipelineResult(StrictModel):
     retrieval_attempts_used: int = Field(default=0, ge=0)
     model_calls_used: int = Field(default=0, ge=0)
     total_tokens: int | None = Field(default=0, ge=0)
-    total_cost_usd: float | None = Field(default=0.0, ge=0.0)
+    total_cost_usd: ExactUSD | None = Decimal("0")
 
     @model_validator(mode="after")
     def validate_terminal_shape(self) -> ProviderPipelineResult:
@@ -1505,7 +1507,7 @@ def run_mvp3a_pipeline(
             max_model_calls=bundle.config.ceilings.max_llm_calls,
             retrieval_attempts_per_side=(bundle.config.acquisition.maximum_attempts_per_stance),
             max_total_tokens=bundle.config.ceilings.max_tokens,
-            max_total_cost_usd=float(bundle.config.ceilings.max_cost_usd),
+            max_total_cost_usd=bundle.config.ceilings.max_cost_usd,
         ),
         require_budget_reservations=True,
         reserved_output_tokens_per_call=bundle.config.openrouter.max_output_tokens,
@@ -1553,7 +1555,7 @@ def run_mvp3b_pipeline(
             max_model_calls=bundle.config.ceilings.max_llm_calls,
             retrieval_attempts_per_side=bundle.config.acquisition.maximum_attempts_per_stance,
             max_total_tokens=bundle.config.ceilings.max_tokens,
-            max_total_cost_usd=float(bundle.config.ceilings.max_cost_usd),
+            max_total_cost_usd=bundle.config.ceilings.max_cost_usd,
         ),
         require_budget_reservations=True,
         reserved_output_tokens_per_call=bundle.config.mimo.max_completion_tokens,

@@ -47,6 +47,12 @@ def _migration_rows(path: Path) -> list[tuple[int, str]]:
         ).fetchall()
 
 
+def _remove_mvp68_schema_records(connection: sqlite3.Connection) -> None:
+    connection.execute("DELETE FROM schema_migrations WHERE version = 6")
+    for trigger_name in store_module.IMMUTABLE_ARTIFACT_TRIGGERS:
+        connection.execute(f'DROP TRIGGER IF EXISTS "{trigger_name}"')
+
+
 def _schema_objects(path: Path) -> list[tuple[str, str, str | None]]:
     with sqlite3.connect(path) as connection:
         return connection.execute(
@@ -116,6 +122,7 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
     insert_run(str(path), manifest)
     original = manifest.raw_claim.encode()
     with sqlite3.connect(path) as connection:
+        _remove_mvp68_schema_records(connection)
         connection.execute(f'DROP TRIGGER "{RAW_CLAIM_TRIGGER_NAME}"')
         connection.execute("DELETE FROM schema_migrations WHERE version = 5")
         connection.execute(
@@ -128,9 +135,10 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
 
     assert read_run(str(path), manifest.run_id).raw_claim.encode() == original
     rows = _migration_rows(path)
-    assert rows[-2:] == [
+    assert rows[-3:] == [
         (4, "same-run provenance protection triggers"),
         (5, "database-enforced immutable runs.raw_claim"),
+        (6, "immutable snapshots and Ledger with exact decimal model costs"),
     ]
 
 
@@ -151,6 +159,7 @@ def test_failed_trigger_installation_does_not_record_migration_five(tmp_path: Pa
     path = tmp_path / "failed-install.sqlite3"
     init_db(str(path))
     with sqlite3.connect(path) as connection:
+        _remove_mvp68_schema_records(connection)
         connection.execute(f'DROP TRIGGER "{RAW_CLAIM_TRIGGER_NAME}"')
         connection.execute("DELETE FROM schema_migrations WHERE version = 5")
         connection.execute(
@@ -265,6 +274,7 @@ def test_older_schema_requires_writable_run_or_resume_without_modification(tmp_p
     path = tmp_path / "older.sqlite3"
     init_db(str(path))
     with sqlite3.connect(path) as connection:
+        _remove_mvp68_schema_records(connection)
         connection.execute(f'DROP TRIGGER "{RAW_CLAIM_TRIGGER_NAME}"')
         connection.execute("DELETE FROM schema_migrations WHERE version = 5")
     before = path.read_bytes()
@@ -340,6 +350,7 @@ def test_cli_incompatible_inspection_fails_without_migrating(
     path = tmp_path / "cli-older.sqlite3"
     init_db(str(path))
     with sqlite3.connect(path) as connection:
+        _remove_mvp68_schema_records(connection)
         connection.execute(f'DROP TRIGGER "{RAW_CLAIM_TRIGGER_NAME}"')
         connection.execute("DELETE FROM schema_migrations WHERE version = 5")
     before = path.read_bytes()
@@ -356,6 +367,7 @@ def test_web_history_rejects_incompatible_database_without_migrating(tmp_path: P
     path = tmp_path / "web-older.sqlite3"
     init_db(str(path))
     with sqlite3.connect(path) as connection:
+        _remove_mvp68_schema_records(connection)
         connection.execute(f'DROP TRIGGER "{RAW_CLAIM_TRIGGER_NAME}"')
         connection.execute("DELETE FROM schema_migrations WHERE version = 5")
     before = path.read_bytes()

@@ -12,6 +12,7 @@ import sqlite3
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
 from urllib.parse import quote
@@ -50,20 +51,37 @@ from models import (
     ValidationError,
     ValidationResult,
 )
+from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 
 # ---------------------------------------------------------------------------
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
+RAW_CLAIM_SCHEMA_VERSION = 5
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
+IMMUTABLE_ARTIFACT_TRIGGERS = {
+    "snapshots_immutable_update": ("snapshots", "UPDATE", "snapshots rows are immutable"),
+    "snapshots_immutable_delete": ("snapshots", "DELETE", "snapshots rows are immutable"),
+    "ledger_records_immutable_update": (
+        "ledger_records",
+        "UPDATE",
+        "ledger_records rows are immutable",
+    ),
+    "ledger_records_immutable_delete": (
+        "ledger_records",
+        "DELETE",
+        "ledger_records rows are immutable",
+    ),
+}
 MIGRATION_DESCRIPTIONS = {
     1: "phase-2 initial sqlite schema",
     2: "phase-9 orchestration audit and checkpoint schema",
     3: "mvp-3a provider fingerprints and budget reservations",
     4: "same-run provenance protection triggers",
     5: "database-enforced immutable runs.raw_claim",
+    6: "immutable snapshots and Ledger with exact decimal model costs",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -103,6 +121,7 @@ _REQUIRED_TRIGGERS = {
     "ledger_record_same_run",
     "synthesis_item_same_run",
     RAW_CLAIM_TRIGGER_NAME,
+    *IMMUTABLE_ARTIFACT_TRIGGERS,
 }
 _REQUIRED_INDEXES = {
     "provisional_extractions_run_snapshot_stance",
@@ -249,8 +268,25 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
         | (_REQUIRED_INDEXES - indexes)
     )
     trigger_sql = objects.get(("trigger", RAW_CLAIM_TRIGGER_NAME))
-    if missing or not _is_expected_raw_claim_trigger(trigger_sql):
-        detail = ", ".join(missing) if missing else RAW_CLAIM_TRIGGER_NAME
+    invalid_immutable = [
+        name
+        for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items()
+        if not _is_expected_immutable_trigger(
+            objects.get(("trigger", name)), name, table, operation, error
+        )
+    ]
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+    missing_cost_columns = sorted({"reserved_cost_usd_exact", "cost_usd_exact"} - columns)
+    if (
+        missing
+        or not _is_expected_raw_claim_trigger(trigger_sql)
+        or invalid_immutable
+        or missing_cost_columns
+    ):
+        invalid = invalid_immutable + missing_cost_columns
+        detail = ", ".join(missing + invalid) if missing or invalid else RAW_CLAIM_TRIGGER_NAME
         raise _compatibility_error(
             DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
             f"required schema object is missing or invalid ({detail}); inspection made no changes",
@@ -795,6 +831,7 @@ def init_db(db_path: str) -> None:
         )
         conn.commit()
         _apply_raw_claim_immutability_migration(conn)
+        _apply_mvp68_integrity_migration(conn)
     finally:
         conn.close()
 
@@ -826,14 +863,14 @@ def _is_expected_raw_claim_trigger(sql: str | None) -> bool:
 def _apply_raw_claim_immutability_migration(conn: sqlite3.Connection) -> None:
     row = conn.execute(
         "SELECT description FROM schema_migrations WHERE version = ?",
-        (CURRENT_SCHEMA_VERSION,),
+        (RAW_CLAIM_SCHEMA_VERSION,),
     ).fetchone()
     trigger = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
         (RAW_CLAIM_TRIGGER_NAME,),
     ).fetchone()
     if row is not None:
-        if row["description"] != MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION]:
+        if row["description"] != MIGRATION_DESCRIPTIONS[RAW_CLAIM_SCHEMA_VERSION]:
             raise sqlite3.DatabaseError("migration 5 description is inconsistent")
         if trigger is None or not _is_expected_raw_claim_trigger(trigger["sql"]):
             raise sqlite3.DatabaseError("migration 5 trigger is missing or inconsistent")
@@ -852,9 +889,118 @@ def _apply_raw_claim_immutability_migration(conn: sqlite3.Connection) -> None:
             """INSERT INTO schema_migrations (version, description, applied_at)
                VALUES (?, ?, ?)""",
             (
+                RAW_CLAIM_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[RAW_CLAIM_SCHEMA_VERSION],
+                "2026-08-09T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _immutable_trigger_sql(
+    name: str,
+    table: str,
+    operation: str,
+    error: str,
+) -> str:
+    return f"""CREATE TRIGGER {name}
+        BEFORE {operation} ON {table}
+        BEGIN
+            SELECT RAISE(ABORT, '{error}');
+        END"""
+
+
+def _is_expected_immutable_trigger(
+    sql: str | None,
+    name: str,
+    table: str,
+    operation: str,
+    error: str,
+) -> bool:
+    if sql is None:
+        return False
+    normalized = " ".join(sql.lower().split())
+    return all(
+        fragment in normalized
+        for fragment in (
+            f"create trigger {name}",
+            f"before {operation.lower()} on {table}",
+            f"raise(abort, '{error}')",
+        )
+    )
+
+
+def _verify_mvp68_schema(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+    if not {"reserved_cost_usd_exact", "cost_usd_exact"} <= columns:
+        raise sqlite3.DatabaseError("migration 6 exact-cost columns are missing")
+    for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items():
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
+        ).fetchone()
+        if row is None or not _is_expected_immutable_trigger(
+            row["sql"], name, table, operation, error
+        ):
+            raise sqlite3.DatabaseError(f"migration 6 trigger {name} is missing or inconsistent")
+
+
+def _apply_mvp68_integrity_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (CURRENT_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 6 description is inconsistent")
+        _verify_mvp68_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {
+            item["name"]
+            for item in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+        }
+        if "reserved_cost_usd_exact" not in columns:
+            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd_exact TEXT")
+        if "cost_usd_exact" not in columns:
+            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN cost_usd_exact TEXT")
+        rows = conn.execute(
+            """SELECT attempt_id, reserved_cost_usd, cost_usd,
+                      reserved_cost_usd_exact, cost_usd_exact
+               FROM model_route_attempts"""
+        ).fetchall()
+        for existing in rows:
+            reserved_exact = existing["reserved_cost_usd_exact"]
+            cost_exact = existing["cost_usd_exact"]
+            if reserved_exact is not None:
+                parse_canonical_usd(reserved_exact)
+            elif existing["reserved_cost_usd"] is not None:
+                reserved_exact = canonical_usd(parse_exact_usd(existing["reserved_cost_usd"]))
+            if cost_exact is not None:
+                parse_canonical_usd(cost_exact)
+            elif existing["cost_usd"] is not None:
+                cost_exact = canonical_usd(parse_exact_usd(existing["cost_usd"]))
+            conn.execute(
+                """UPDATE model_route_attempts
+                   SET reserved_cost_usd_exact = ?, cost_usd_exact = ?
+                   WHERE attempt_id = ?""",
+                (reserved_exact, cost_exact, existing["attempt_id"]),
+            )
+        for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items():
+            conn.execute(_immutable_trigger_sql(name, table, operation, error))
+        _verify_mvp68_schema(conn)
+        conn.execute(
+            """INSERT INTO schema_migrations (version, description, applied_at)
+               VALUES (?, ?, ?)""",
+            (
                 CURRENT_SCHEMA_VERSION,
                 MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION],
-                "2026-08-09T00:00:00+00:00",
+                "2026-08-10T00:00:00+00:00",
             ),
         )
         conn.commit()
@@ -2104,10 +2250,13 @@ def reserve_model_route_attempt(
     *,
     max_model_calls: int,
     max_total_tokens: int | None = None,
-    max_total_cost_usd: float | None = None,
+    max_total_cost_usd: Decimal | None = None,
 ) -> ModelRouteAttempt:
     if attempt.status is not ModelAttemptStatus.RUNNING:
         raise ValueError("only running model attempts may be reserved")
+    exact_cost_ceiling = (
+        parse_exact_usd(max_total_cost_usd) if max_total_cost_usd is not None else None
+    )
     conn = _connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -2164,33 +2313,40 @@ def reserve_model_route_attempt(
                 raise ModelAttemptBudgetError(
                     f"model token budget {max_total_tokens} cannot reserve the next call"
                 )
-        if max_total_cost_usd is not None:
+        if exact_cost_ceiling is not None:
             reserved_cost = attempt.reserved_cost_usd
             if reserved_cost is None:
                 raise ModelAttemptBudgetError(
                     "cost budget requires a conservative reservation before every call"
                 )
             rows = conn.execute(
-                """SELECT attempt_id, cost_usd, reserved_cost_usd
+                """SELECT attempt_id, cost_usd, reserved_cost_usd,
+                          cost_usd_exact, reserved_cost_usd_exact
                    FROM model_route_attempts WHERE run_id = ?""",
                 (str(attempt.run_id),),
             ).fetchall()
-            used_cost = 0.0
+            used_cost = Decimal("0")
             for existing_attempt in rows:
-                exposure = (
-                    existing_attempt["cost_usd"]
-                    if existing_attempt["cost_usd"] is not None
-                    else existing_attempt["reserved_cost_usd"]
-                )
+                cost_text = existing_attempt["cost_usd_exact"]
+                reserved_text = existing_attempt["reserved_cost_usd_exact"]
+                exposure = None
+                if cost_text is not None:
+                    exposure = parse_canonical_usd(cost_text)
+                elif existing_attempt["cost_usd"] is not None:
+                    exposure = parse_exact_usd(existing_attempt["cost_usd"])
+                elif reserved_text is not None:
+                    exposure = parse_canonical_usd(reserved_text)
+                elif existing_attempt["reserved_cost_usd"] is not None:
+                    exposure = parse_exact_usd(existing_attempt["reserved_cost_usd"])
                 if exposure is None:
                     raise ModelAttemptBudgetError(
                         "model usage is incomplete and the remaining cost budget cannot be "
                         f"proven after attempt {existing_attempt['attempt_id']}"
                     )
-                used_cost += exposure
-            if used_cost + reserved_cost > max_total_cost_usd:
+                used_cost = add_usd(used_cost, exposure)
+            if add_usd(used_cost, reserved_cost) > exact_cost_ceiling:
                 raise ModelAttemptBudgetError(
-                    f"model cost budget {max_total_cost_usd} cannot reserve the next call"
+                    f"model cost budget {exact_cost_ceiling} cannot reserve the next call"
                 )
         _insert_model_route_attempt_row(conn, attempt)
         conn.commit()
@@ -2225,7 +2381,7 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
             """UPDATE model_route_attempts SET
                    status = ?, failure_code = ?, failure_reason = ?, ended_at = ?,
                    latency_ms = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?,
-                   cost_usd = ?, output_json = ?
+                   cost_usd = NULL, cost_usd_exact = ?, output_json = ?
                WHERE attempt_id = ?""",
             (
                 attempt.status.value,
@@ -2236,7 +2392,7 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
                 usage.input_tokens if usage else None,
                 usage.output_tokens if usage else None,
                 usage.total_tokens if usage else None,
-                usage.cost_usd if usage else None,
+                canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
                 attempt.output_json,
                 str(attempt.attempt_id),
             ),
@@ -2279,8 +2435,10 @@ def _insert_model_route_attempt_row(
             pinned_model_snapshot, route_index, attempt_number, input_artifact_ids,
             status, retry_reason, escalation_reason, failure_code, failure_reason,
             started_at, ended_at, latency_ms, reserved_tokens, reserved_cost_usd,
-            input_tokens, output_tokens, total_tokens, cost_usd, output_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            reserved_cost_usd_exact, input_tokens, output_tokens, total_tokens, cost_usd,
+            cost_usd_exact, output_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL,
+                   ?, ?, ?, ?, NULL, ?, ?)""",
         (
             str(attempt.attempt_id),
             str(attempt.run_id),
@@ -2301,11 +2459,13 @@ def _insert_model_route_attempt_row(
             _dt_to_iso(attempt.ended_at) if attempt.ended_at else None,
             attempt.latency_ms,
             attempt.reserved_tokens,
-            attempt.reserved_cost_usd,
+            canonical_usd(attempt.reserved_cost_usd)
+            if attempt.reserved_cost_usd is not None
+            else None,
             usage.input_tokens if usage else None,
             usage.output_tokens if usage else None,
             usage.total_tokens if usage else None,
-            usage.cost_usd if usage else None,
+            canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
             attempt.output_json,
         ),
     )
@@ -2316,6 +2476,7 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
         row["input_tokens"],
         row["output_tokens"],
         row["total_tokens"],
+        row["cost_usd_exact"],
         row["cost_usd"],
     )
     usage = None
@@ -2324,7 +2485,13 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
             input_tokens=row["input_tokens"],
             output_tokens=row["output_tokens"],
             total_tokens=row["total_tokens"],
-            cost_usd=row["cost_usd"],
+            cost_usd=(
+                parse_canonical_usd(row["cost_usd_exact"])
+                if row["cost_usd_exact"] is not None
+                else parse_exact_usd(row["cost_usd"])
+                if row["cost_usd"] is not None
+                else None
+            ),
         )
     return ModelRouteAttempt(
         run_id=UUID(row["run_id"]),
@@ -2346,7 +2513,13 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
         ended_at=_iso_to_dt(row["ended_at"]) if row["ended_at"] else None,
         latency_ms=row["latency_ms"],
         reserved_tokens=row["reserved_tokens"],
-        reserved_cost_usd=row["reserved_cost_usd"],
+        reserved_cost_usd=(
+            parse_canonical_usd(row["reserved_cost_usd_exact"])
+            if row["reserved_cost_usd_exact"] is not None
+            else parse_exact_usd(row["reserved_cost_usd"])
+            if row["reserved_cost_usd"] is not None
+            else None
+        ),
         usage=usage,
         output_json=row["output_json"],
     )

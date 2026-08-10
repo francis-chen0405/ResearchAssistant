@@ -6,6 +6,7 @@ import threading
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -909,7 +910,7 @@ def test_optional_token_and_cost_metadata_is_recorded(tmp_path: Path) -> None:
 
     assert result.status is ProviderRunStatus.RELEASED
     assert result.total_tokens == result.model_calls_used * 15
-    assert result.total_cost_usd == pytest.approx(result.model_calls_used * 0.002)
+    assert result.total_cost_usd == Decimal(result.model_calls_used) * Decimal("0.002")
     planner_attempt = next(item for item in result.model_attempts if item.stage == "planner")
     assert planner_attempt.pinned_model_snapshot == "mimo-pro-test-snapshot"
     assert planner_attempt.usage == usage
@@ -938,7 +939,8 @@ def test_usage_metadata_survives_deterministic_route_failure(tmp_path: Path) -> 
     assert all(item.failure_code == "exact_quote_failure" for item in failed_extractor_attempts)
     assert all(item.usage == usage for item in failed_extractor_attempts)
     assert result.total_tokens == result.model_calls_used * usage.total_tokens
-    assert result.total_cost_usd == pytest.approx(result.model_calls_used * usage.cost_usd)
+    assert usage.cost_usd is not None
+    assert result.total_cost_usd == Decimal(result.model_calls_used) * usage.cost_usd
 
 
 def test_every_tested_run_has_an_explicit_terminal_status(tmp_path: Path) -> None:

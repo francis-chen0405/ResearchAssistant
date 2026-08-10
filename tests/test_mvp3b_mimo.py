@@ -346,7 +346,7 @@ def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -
     assert metadata.cost_estimated is True
     assert metadata.usage.total_tokens == 15
     expected = DIRECT_MIMO_PRICE_CAP.upper_bound(10, 5)
-    assert metadata.usage.cost_usd == float(expected)
+    assert metadata.usage.cost_usd == expected
 
 
 @pytest.mark.parametrize(

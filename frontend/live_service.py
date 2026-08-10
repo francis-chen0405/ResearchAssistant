@@ -17,6 +17,7 @@ from pydantic import Field, field_validator
 from cli import CLIExitCode, repository_identity
 from frontend.security import redact_text
 from models import RunManifest, StrictModel
+from money import ExactUSD
 from orchestrator import (
     ClaimMismatchError,
     FingerprintMismatchError,
@@ -100,13 +101,13 @@ class LiveRunSnapshot(StrictModel):
     model_calls_used: int = Field(ge=0)
     retrieval_attempts_used: int = Field(ge=0)
     total_tokens: int | None = Field(default=0, ge=0)
-    total_cost_usd: float | None = Field(default=0.0, ge=0)
+    total_cost_usd: ExactUSD | None = Decimal("0")
     known_token_subtotal: int = Field(default=0, ge=0)
-    known_cost_subtotal_usd: float = Field(default=0.0, ge=0)
+    known_cost_subtotal_usd: ExactUSD = Decimal("0")
     token_usage_complete: bool = True
     cost_usage_complete: bool = True
     conservative_reserved_tokens: int | None = Field(default=0, ge=0)
-    conservative_reserved_cost_usd: float | None = Field(default=0.0, ge=0)
+    conservative_reserved_cost_usd: ExactUSD | None = Decimal("0")
     supporting: ResearchProgress
     opposing: ResearchProgress
     validation_errors: tuple[str, ...] = ()

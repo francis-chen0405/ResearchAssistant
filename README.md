@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.7, repository-wide type contract enforcement.
+The repository is complete through MVP-6.8, persistence and accounting integrity.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -23,7 +23,8 @@ its own exit code, distinguishes exact usage from incomplete known subtotals, en
 unknown usage conservatively, and validates frozen provider contracts end to end.
 MVP-6.7 enforces explicit return and named-parameter annotations on every repository-
 owned Python function except conventional `self`/`cls` receivers, across production and
-test code including nested functions.
+test code including nested functions. MVP-6.8 makes snapshot and Ledger rows immutable
+through SQLite triggers and uses exact `Decimal`/canonical-text USD accounting end to end.
 
 ## How the system works
 
@@ -273,11 +274,17 @@ checks its migration records and required schema objects, and reconstructs typed
 artifacts through that same session. Missing, invalid, corrupt, older, newer, or
 inaccessible databases fail clearly without modification. To migrate an older database
 intentionally, start or resume a run with write access using `run`; the normal writable
-initialization path applies migration 5 before provider work.
+initialization path applies migrations 5 and 6 before provider work.
 
 Migration 5 installs `runs_raw_claim_immutable`. Direct SQL and application writes cannot
 change `runs.raw_claim` after insertion in any run status; identical-value assignment is
 allowed. Migration 4 remains the same-run provenance-protection migration.
+
+Migration 6 installs unconditional update/delete rejection triggers for `snapshots` and
+`ledger_records`. It also adds canonical-text reservation and usage cost columns. New
+authoritative USD values are finite non-negative decimals and never use SQLite `REAL`;
+legacy `REAL` columns remain compatibility-only. Historical float rows migrate
+deterministically, but decimal digits already lost before persistence cannot be recovered.
 
 Cancellation is cooperative: a synchronous request already in flight may continue to its deadline,
 but its attempt is persisted and no new call starts after cancellation is observed. It does not
@@ -342,7 +349,7 @@ Normal tests are deterministic and offline. Two opt-in tests are expected to ski
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
 standard-library AST enforcement test is `tests/test_type_contracts.py`. The current
-MVP-6.7 verification result is recorded in `STATUS.md`; exact focused,
+MVP-6.8 verification result is recorded in `STATUS.md`; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -383,7 +390,8 @@ redirect safety and Firecrawl provenance validation, and MVP-6.4 completed the 5
 density calibration. MVP-6.5 completed database-enforced claim immutability and read-only
 history/inspection. MVP-6.6 completed CLI-status, usage-accounting/budget, and
 provider-contract integrity. MVP-6.7 completed repository-wide signature enforcement
-for production and test code, including nested functions. The contradiction-audit
+for production and test code, including nested functions. MVP-6.8 completed SQLite-
+enforced snapshot/Ledger immutability and exact monetary accounting. The contradiction-audit
 remediation sequence is complete. No later phase has started or been authorized.
 
 Known limitations are:
@@ -407,7 +415,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.7 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.8 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

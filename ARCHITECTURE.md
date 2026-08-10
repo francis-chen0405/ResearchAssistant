@@ -69,7 +69,9 @@ type-hint batches. MVP-6.5 adds database-enforced claim immutability and validat
 read-only history/inspection. MVP-6.6 adds distinct nonterminal exit semantics,
 complete/conservative model-usage accounting, and immutable self-consistent provider
 contracts. MVP-6.7 enforces complete Python function-signature annotations repository-
-wide. The contradiction-audit remediation sequence is complete; no later phase has
+wide. MVP-6.8 adds SQLite-enforced snapshot/Ledger immutability and canonical exact-
+decimal USD accounting through storage, aggregation, reservation, comparison, resume,
+and inspection. The contradiction-audit remediation sequence is complete; no later phase has
 started or been authorized.
 
 ## MVP-2A Live Provider Architecture Gate
@@ -238,6 +240,29 @@ all missing annotations with path, line, and discoverable qualified name, and tr
 unparseable owned file as a failure. MVP-6.7 changes annotations and enforcement only;
 runtime behavior, Pydantic schemas, persistence, provider behavior, evidence policy,
 budgets, exit codes, and acceptance criteria are unchanged.
+
+### MVP-6.8 Persistence and Accounting Integrity
+
+SQLite migration 6 installs unconditional `BEFORE UPDATE` and `BEFORE DELETE` triggers
+for `snapshots` and `ledger_records`. Every existing-row mutation aborts with a stable
+table-specific error; inserts, duplicate-key rejection, reconstruction, and read-only
+inspection retain their established behavior. Trigger creation, exact-cost migration,
+verification, and the migration record are atomic and idempotent. Other artifact tables
+are intentionally outside this immutability scope.
+
+Authoritative USD accounting uses finite non-negative `Decimal` values. Provider decimal
+strings, configured ceilings, per-call caps, reservations, completed usage, aggregates,
+resume reconstruction, comparisons, and operator summaries never pass through binary
+float. SQLite stores new authoritative reservation and usage costs as canonical non-
+exponent decimal text in `reserved_cost_usd_exact` and `cost_usd_exact`; the legacy
+`REAL` columns remain compatibility-only and are null for new writes.
+
+Migration converts historical `REAL` values through the shortest deterministic decimal
+text representation of the already-stored float. This preserves the value SQLite can
+recover but cannot restore source digits previously lost to IEEE-754, and no missing
+precision is invented. Exact-limit exposure remains allowed; any amount above the limit
+is rejected. The accounting policy and provider fingerprint identities are bumped to
+prevent incompatible same-run resumption.
 
 ### Approved Stack and Role Mapping
 

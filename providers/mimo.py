@@ -37,6 +37,7 @@ from models import (
     _expected_placement,
     _is_ledger_eligible,
 )
+from money import parse_exact_usd
 from providers.config import MimoConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
 from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap, conservative_token_estimate
@@ -174,7 +175,7 @@ class XiaomiMimoAdapter:
             headers={"api-key": config.api_key.get_secret_value()},
         )
         self._price_cap = price_cap
-        self._max_call_cost_usd = max_call_cost_usd
+        self._max_call_cost_usd = parse_exact_usd(max_call_cost_usd)
         self._max_call_tokens = max_call_tokens
         self._thread_state = local()
 
@@ -299,7 +300,7 @@ class XiaomiMimoAdapter:
                 "reported token usage exceeds the configured call ceiling",
                 retryable=False,
             )
-        if usage.cost_usd is None or Decimal(str(usage.cost_usd)) > self._max_call_cost_usd:
+        if usage.cost_usd is None or usage.cost_usd > self._max_call_cost_usd:
             raise MimoProviderError(
                 MimoFailureCode.BUDGET,
                 "estimated cost exceeds the configured call ceiling",
@@ -666,7 +667,7 @@ def _usage(raw: Any, cap: ModelPriceCap) -> ModelUsageMetadata:
         input_tokens=prompt,
         output_tokens=completion,
         total_tokens=total,
-        cost_usd=float(cap.upper_bound(prompt, completion)),
+        cost_usd=cap.upper_bound(prompt, completion),
     )
 
 

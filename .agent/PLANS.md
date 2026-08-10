@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-6.7
+## Current Project State: MVP-6.8
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -26,8 +26,10 @@ inspection use validated read-only SQLite sessions. MVP-6.6 assigns RUNNING exit
 conservative reservations for budget enforcement, and freezes/validates canonical
 provider-run contracts. MVP-6.7 enforces explicit return annotations and explicit named-
 parameter annotations on every repository-owned Python function except conventional
-`self`/`cls` receivers. The standard-library AST regression covers production and test
-code, including nested functions. The contradiction-audit remediation sequence is complete.
+`self`/`cls` receivers. MVP-6.8 installs SQLite migration 6 to reject updates/deletes of
+snapshots and Ledger records, and uses canonical decimal text plus strict `Decimal`
+accounting for authoritative USD values. The contradiction-audit remediation sequence
+and MVP-6.8 integrity work are complete.
 
 New live runs use Exa Search `auto` for metadata-only discovery, pinned loopback Wigolo
 `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback under the
@@ -40,7 +42,7 @@ surfaces for old persisted runs, not the current live-run operating stack.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-6-7-repository-wide-type-contract-enforcement.md`
+- `.agent/plans/phase-mvp-6-8-persistence-accounting-integrity.md`
 
 ## MVP-2A: Architecture Gate
 
@@ -84,7 +86,7 @@ open items are documented consistently. Existing offline verification remains gr
 
 ## MVP Sequence
 
-These canonical plans record the earlier completed MVP sequence. MVP-6.7 is the latest
+These canonical plans record the earlier completed MVP sequence. MVP-6.8 is the latest
 completed authorized phase; no later phase has started or been authorized.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
@@ -113,6 +115,8 @@ completed authorized phase; no later phase has started or been authorized.
     `.agent/plans/phase-mvp-6-6-runtime-status-budget-contract-integrity.md`
 13. MVP-6.7 Repository-Wide Type Contract Enforcement:
     `.agent/plans/phase-mvp-6-7-repository-wide-type-contract-enforcement.md`
+14. MVP-6.8 Persistence and Accounting Integrity:
+    `.agent/plans/phase-mvp-6-8-persistence-accounting-integrity.md`
 
 The canonical MVP-5 plan path is retained for history, but its earlier scheduled-live-
 validation placeholder was superseded by the user's 2026-08-01 explicit MVP-5 web-

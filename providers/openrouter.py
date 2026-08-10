@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from models import ModelUsageMetadata, StrictModel
+from money import parse_exact_usd
 from providers.config import OpenRouterConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
 from providers.pricing import DEFAULT_PRICE_CAPS, ModelPriceCap, conservative_token_estimate
@@ -89,7 +90,7 @@ class OpenRouterAdapter:
             headers={"Authorization": f"Bearer {config.api_key.get_secret_value()}"},
         )
         self._price_caps = price_caps or DEFAULT_PRICE_CAPS
-        self._max_call_cost_usd = max_call_cost_usd
+        self._max_call_cost_usd = parse_exact_usd(max_call_cost_usd)
         self._max_call_tokens = max_call_tokens
         self._thread_state = local()
 
@@ -200,7 +201,7 @@ class OpenRouterAdapter:
                 "reported token usage exceeds the configured call ceiling",
                 retryable=False,
             )
-        if usage.cost_usd is None or Decimal(str(usage.cost_usd)) > self._max_call_cost_usd:
+        if usage.cost_usd is None or usage.cost_usd > self._max_call_cost_usd:
             raise OpenRouterProviderError(
                 OpenRouterFailureCode.BUDGET,
                 "reported or capped cost exceeds the configured call ceiling",
@@ -364,7 +365,7 @@ def _usage(raw: Any, cap: ModelPriceCap) -> tuple[ModelUsageMetadata, bool]:
             input_tokens=prompt,
             output_tokens=completion,
             total_tokens=total,
-            cost_usd=float(cost_decimal),
+            cost_usd=cost_decimal,
         ),
         estimated,
     )

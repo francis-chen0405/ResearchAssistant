@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, SecretStr, field_validator
 
 from models import StrictModel
+from money import ExactUSD
 
 
 class ProviderConfigurationError(RuntimeError):
@@ -36,7 +37,7 @@ class DeadlineConfig(StrictModel):
 class RunCeilings(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    max_cost_usd: Decimal = Field(default=Decimal("1.00"), gt=0, le=Decimal("1.00"))
+    max_cost_usd: Annotated[ExactUSD, Field(gt=Decimal("0"), le=Decimal("1.00"))] = Decimal("1.00")
     max_tokens: int = Field(default=1_000_000, ge=1, le=1_000_000)
     max_llm_calls: int = Field(default=160, ge=1, le=160)
 
@@ -217,7 +218,7 @@ class LiveSmokeConfig(StrictModel):
     max_acquisition_calls: int = Field(ge=1, le=1)
     max_llm_calls: int = Field(ge=1, le=1)
     max_tokens: int = Field(ge=1, le=25_000)
-    max_cost_usd: Decimal = Field(gt=0, le=Decimal("0.10"))
+    max_cost_usd: Annotated[ExactUSD, Field(gt=Decimal("0"), le=Decimal("0.10"))]
     output_path: Path
 
     @field_validator("output_path")

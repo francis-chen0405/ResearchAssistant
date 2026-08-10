@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from money import ExactUSD
 from provider_contract import parse_provider_contract_payload, provider_contract_fingerprint
 
 Score = Annotated[int, Field(ge=1, le=5)]
@@ -686,15 +687,15 @@ class ModelUsageAccounting(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     exact_total_tokens: NonNegativeInt | None
-    exact_total_cost_usd: Annotated[float, Field(ge=0.0)] | None
+    exact_total_cost_usd: ExactUSD | None
     known_token_subtotal: NonNegativeInt
-    known_cost_subtotal_usd: Annotated[float, Field(ge=0.0)]
+    known_cost_subtotal_usd: ExactUSD
     token_complete: bool
     cost_complete: bool
     missing_token_attempt_ids: tuple[UUID, ...] = ()
     missing_cost_attempt_ids: tuple[UUID, ...] = ()
     conservative_reserved_tokens: NonNegativeInt | None
-    conservative_reserved_cost_usd: Annotated[float, Field(ge=0.0)] | None
+    conservative_reserved_cost_usd: ExactUSD | None
 
     @model_validator(mode="after")
     def validate_completeness(self) -> ModelUsageAccounting:
@@ -719,7 +720,7 @@ class ModelUsageMetadata(StrictModel):
     input_tokens: NonNegativeInt | None = None
     output_tokens: NonNegativeInt | None = None
     total_tokens: NonNegativeInt | None = None
-    cost_usd: Annotated[float, Field(ge=0.0)] | None = None
+    cost_usd: ExactUSD | None = None
 
     @model_validator(mode="after")
     def validate_token_total(self) -> ModelUsageMetadata:
@@ -753,7 +754,7 @@ class ModelRouteAttempt(StrictModel):
     ended_at: datetime | None = None
     latency_ms: Annotated[float, Field(ge=0.0)] | None = None
     reserved_tokens: NonNegativeInt | None = None
-    reserved_cost_usd: Annotated[float, Field(ge=0.0)] | None = None
+    reserved_cost_usd: ExactUSD | None = None
     usage: ModelUsageMetadata | None = None
     output_json: str | None = None
 

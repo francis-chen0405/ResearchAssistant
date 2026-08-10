@@ -1,5 +1,55 @@
 # Status
 
+## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
+
+Status: Complete and verified. MVP-6.7 was confirmed complete before implementation.
+MVP-6.9 and later phases were not started.
+
+- Added atomic, idempotent SQLite migration 6. Four unconditional `BEFORE UPDATE`/
+  `BEFORE DELETE` triggers reject direct mutation of existing `snapshots` and
+  `ledger_records` rows with stable table-specific errors. Normal inserts, duplicate
+  rejection, fixture execution, release reconstruction, and read-only inspection remain
+  valid. No unrelated artifact table became immutable.
+- Added strict exact USD handling in `money.py`. Configured ceilings, per-call caps,
+  provider-reported costs, reservations, completed usage, aggregates, resume-time
+  reconstruction, comparisons, provider results, inspection, and live summaries use
+  finite non-negative `Decimal` values. Addition uses an explicit sufficient-precision
+  local decimal context rather than the process default.
+- Added canonical non-exponent SQLite text columns `reserved_cost_usd_exact` and
+  `cost_usd_exact`. New writes use only those authoritative columns and leave legacy
+  `REAL` values null. Noncanonical, negative, negative-zero, and non-finite exact values
+  fail validation.
+- Version-5 migration converts historical `REAL` values through their recoverable
+  shortest float text. This is deterministic but cannot restore source decimal digits
+  already lost to binary floating point; the migration does not invent precision.
+- Bumped both provider fingerprints to
+  `mvp6.8-persistence-accounting-integrity-v1` and accounting policy identities to
+  `mvp6.8-exact-decimal-reserve-reconcile-v1`. Pre-MVP-6.8 runs require a new run ID for
+  execution under the changed monetary semantics.
+- Regression tests were added before fixes. The baseline produced 10 expected failures:
+  direct SQL mutation, missing migration objects, precision loss, above-ceiling escape,
+  exact-sum escape, and absent historical conversion. No dependency, provider call,
+  provider spending, commit, push, or pull request was added.
+
+Verification:
+
+- Focused migration, immutability, exact-accounting, fixture reconstruction, resume,
+  provider, CLI, and type-contract selection: 164 passed, 1 expected live-smoke skip.
+- Complete offline suite: 605 passed, 2 expected opt-in skips.
+- Repository-wide type-contract test: passed within both focused and full suites.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison
+  remained skipped.
+- Ruff lint passed; Ruff format check reported 64 files already formatted.
+- `git diff --check`, schema/trigger inspection, generated-tracked-artifact scan, and
+  final worktree/diff review passed. No generated database, cache, coverage file,
+  secret, or evaluation output is newly tracked.
+
+Historical limitation:
+
+- A pre-MVP-6.8 SQLite `REAL` contains only its already-rounded binary value. Migration
+  preserves a deterministic decimal representation of that value, not an unrecoverable
+  original provider string.
+
 ## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
 
 Status: Complete and verified. MVP-6.5 and MVP-6.6 were confirmed complete before

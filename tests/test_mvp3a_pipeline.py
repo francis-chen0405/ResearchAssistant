@@ -603,8 +603,8 @@ def test_provider_fingerprints_include_only_the_mvp6_4_live_evidence_policy() ->
     mimo_payload = json.loads(mimo_bundle.fingerprint_payload_json)
 
     assert EVIDENCE_POLICY_VERSION == "mvp6.4-evidence-density-50-75-v1"
-    assert FINGERPRINT_VERSION == "mvp6.4-evidence-density-fingerprint-v1"
-    assert MIMO_FINGERPRINT_VERSION == "mvp6.4-evidence-density-fingerprint-v1"
+    assert FINGERPRINT_VERSION == "mvp6.8-persistence-accounting-integrity-v1"
+    assert MIMO_FINGERPRINT_VERSION == "mvp6.8-persistence-accounting-integrity-v1"
     assert EVIDENCE_POLICY_VERSION in openrouter_payload["policy_identity"]
     assert EVIDENCE_POLICY_VERSION in mimo_payload["policy_identity"]
     assert "post-mvp5-bounded-inference-v2" not in openrouter_payload["policy_identity"]

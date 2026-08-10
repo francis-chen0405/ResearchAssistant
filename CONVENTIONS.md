@@ -117,6 +117,10 @@ SDK or dependency.
   - Operators migrate an older database only through an intentional writable run or resume operation
   - Provider-run contracts are frozen strict models; canonical payload bytes, duplicated identity fields, and fingerprint must agree on construction and read
   - Model-usage totals are exact only when complete; incomplete values retain labeled known subtotals and conservative reservation exposure
+  - SQLite migration 6 rejects every UPDATE and DELETE of existing `snapshots` and
+    `ledger_records` rows through unconditional table-specific triggers
+  - Authoritative USD values use finite non-negative `Decimal` end to end and canonical
+    non-exponent decimal text in SQLite; legacy REAL cost columns are compatibility-only
 
 ## 6. Environment Variables
 
@@ -150,17 +154,18 @@ the current top-three/PDF-unsupported/legacy-model test contracts with the appro
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
 MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3,
-MVP-6.4, MVP-6.5, MVP-6.6, and MVP-6.7 are complete. Current provider-backed candidates use the strict shared
+MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, and MVP-6.8 are complete. Current provider-backed candidates use the strict shared
 50-statistical/75-non-statistical quote policy; statistical classification requires both
 a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
 explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
 read-only-inspection database batch. MVP-6.6 completed CLI-status, model-usage
 accounting/budget, and provider-contract integrity. MVP-6.7 completed repository-wide
 function-signature annotation enforcement across production and test code, including
-nested functions. The contradiction-audit remediation sequence is complete. The original
+nested functions. MVP-6.8 completed SQLite snapshot/Ledger immutability and exact
+decimal monetary accounting. The contradiction-audit remediation sequence is complete. The original
 Streamlit app remains fixture-only; the separate live app reuses the established
 persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
-after MVP-6.7 without separate explicit direction. No later phase has started or been authorized.
+after MVP-6.8 without separate explicit direction. No later phase has started or been authorized.
 
 ## 8. Done Criteria Per Phase
 

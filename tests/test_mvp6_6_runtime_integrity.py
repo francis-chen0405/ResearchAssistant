@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
@@ -72,7 +73,7 @@ def _attempt(
     status: ModelAttemptStatus = ModelAttemptStatus.COMPLETED,
     usage: ModelUsageMetadata | None = None,
     reserved_tokens: int | None = 100,
-    reserved_cost_usd: float | None = 0.1,
+    reserved_cost_usd: Decimal | None = Decimal("0.1"),
     route_index: int = 0,
 ) -> ModelRouteAttempt:
     started = NOW + timedelta(seconds=index)
@@ -192,9 +193,9 @@ def test_complete_attempts_aggregate_exact_usage() -> None:
     )
     summary = summarize_model_usage(attempts)
     assert summary.exact_total_tokens == 23
-    assert summary.exact_total_cost_usd == pytest.approx(0.03)
+    assert summary.exact_total_cost_usd == Decimal("0.03")
     assert summary.known_token_subtotal == 23
-    assert summary.known_cost_subtotal_usd == pytest.approx(0.03)
+    assert summary.known_cost_subtotal_usd == Decimal("0.03")
     assert summary.token_complete and summary.cost_complete
 
 
@@ -230,14 +231,14 @@ def test_mixed_unknown_cost_is_not_presented_as_an_exact_total() -> None:
     unknown = _attempt(
         1,
         usage=ModelUsageMetadata(total_tokens=20, cost_usd=None),
-        reserved_cost_usd=0.2,
+        reserved_cost_usd=Decimal("0.2"),
     )
     summary = summarize_model_usage((known, unknown))
     assert summary.exact_total_cost_usd is None
-    assert summary.known_cost_subtotal_usd == pytest.approx(0.04)
+    assert summary.known_cost_subtotal_usd == Decimal("0.04")
     assert summary.cost_complete is False
     assert summary.missing_cost_attempt_ids == (unknown.attempt_id,)
-    assert summary.conservative_reserved_cost_usd == pytest.approx(0.24)
+    assert summary.conservative_reserved_cost_usd == Decimal("0.24")
 
 
 @pytest.mark.parametrize("status", [ModelAttemptStatus.FAILED, ModelAttemptStatus.RUNNING])
@@ -251,7 +252,7 @@ def test_failed_timed_out_and_running_attempts_are_not_assumed_free(
     assert summary.known_token_subtotal == 0
     assert summary.known_cost_subtotal_usd == 0
     assert summary.conservative_reserved_tokens == 100
-    assert summary.conservative_reserved_cost_usd == pytest.approx(0.1)
+    assert summary.conservative_reserved_cost_usd == Decimal("0.1")
 
 
 def test_pipeline_compatibility_totals_are_exact_only() -> None:

@@ -1,5 +1,24 @@
 # Decisions
 
+## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
+
+- Add SQLite migration 6 using the established explicit migration transaction. Install
+  unconditional update/delete rejection triggers only for `snapshots` and
+  `ledger_records`; do not broaden immutability to lifecycle-managed stage artifacts.
+- Store authoritative model reservation and usage costs as canonical decimal text in
+  new exact columns. Leave legacy `REAL` columns present for schema compatibility but
+  null on new writes and non-authoritative after migration.
+- Convert historical `REAL` values through their recoverable shortest float text. State
+  explicitly that original decimal precision already lost to IEEE-754 cannot be
+  recovered and must not be invented.
+- Use strict finite non-negative `Decimal` values for configured ceilings, provider
+  costs, reservations, aggregates, resume reconstruction, comparisons, and live/
+  inspection summaries. Exact ceilings are inclusive.
+- Bump accounting policy identity to `mvp6.8-exact-decimal-reserve-reconcile-v1` and
+  provider fingerprint identity to `mvp6.8-persistence-accounting-integrity-v1` so old
+  runs cannot resume under changed monetary semantics.
+- Add no dependency and make no live provider call. Do not begin MVP-6.9.
+
 ## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
 
 - Enforce the existing no-exceptions convention on every repository-owned Python `def`

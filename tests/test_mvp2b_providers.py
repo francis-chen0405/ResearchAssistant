@@ -546,7 +546,7 @@ def test_openrouter_valid_structured_output_records_model_usage_cost_and_request
     assert metadata.returned_model == "xiaomi/mimo-v2.5-pro"
     assert metadata.upstream_provider == "approved-upstream"
     assert metadata.usage.total_tokens == 30
-    assert metadata.usage.cost_usd == 0.001
+    assert metadata.usage.cost_usd == Decimal("0.001")
     assert metadata.cost_estimated is False
     assert requests[0]["provider"] == {"require_parameters": True, "data_collection": "deny"}
     assert requests[0]["response_format"]["json_schema"]["strict"] is True  # type: ignore[index]
@@ -612,7 +612,7 @@ def test_openrouter_estimates_cost_from_approved_cap_when_provider_cost_is_absen
     adapter.generate(_reviewer_request())
     metadata = adapter.last_call_metadata()
     assert metadata.cost_estimated is True
-    assert metadata.usage.cost_usd == pytest.approx(0.0003)
+    assert metadata.usage.cost_usd == Decimal("0.000300000")
 
 
 @pytest.mark.parametrize(

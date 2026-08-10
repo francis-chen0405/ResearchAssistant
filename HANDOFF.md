@@ -1,5 +1,53 @@
 # Handoff
 
+## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
+
+- MVP-6.8 is complete and verified. Schema version 6 is current; MVP-6.9 and later work
+  have not started.
+- `store.py` installs four unconditional immutable-artifact triggers for `snapshots` and
+  `ledger_records`. Migration 6 also adds exact reservation/usage cost text columns,
+  converts historical `REAL` values, verifies all objects, and inserts its record in one
+  transaction. Reopen verifies the contract. Read-only inspection requires version 6;
+  writable run/resume intentionally migrates older databases.
+- `money.py` is the shared exact USD boundary. `ExactUSD` provides strict Pydantic
+  parsing and canonical JSON serialization; storage text is canonical, non-exponent,
+  finite, and non-negative. `add_usd()` prevents the default Decimal context from
+  rounding long exact sums.
+- New route-attempt writes keep legacy `reserved_cost_usd`/`cost_usd` REAL columns null
+  and write `reserved_cost_usd_exact`/`cost_usd_exact`. Historical REAL digits already
+  lost cannot be recovered; migration preserves only the deterministically recoverable
+  value and never fabricates precision.
+- Provider/accounting compatibility identities are
+  `mvp6.8-persistence-accounting-integrity-v1` and
+  `mvp6.8-exact-decimal-reserve-reconcile-v1`. Use a new run ID rather than resuming a
+  pre-MVP-6.8 run under the new accounting policy.
+
+Files changed:
+
+- Persistence/accounting: `money.py`, `models.py`, `store.py`, `orchestrator.py`,
+  `providers/config.py`, `providers/pricing.py` consumers in the MiMo/OpenRouter
+  adapters, both provider factories, and `frontend/live_service.py`.
+- Regression coverage: `tests/test_mvp6_8_persistence_accounting.py` plus exact-type and
+  migration compatibility updates in the existing MVP-2B, MVP-3A, MVP-3B, MVP-6.5,
+  MVP-6.6, and Phase 9 suites.
+- Records: the canonical MVP-6.8 plan, `.agent/PLANS.md`, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused required selection: 164 passed, 1 expected live-smoke skip.
+- Full suite: 605 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format, repository-wide type contract, `git diff --check`, direct migration/
+  trigger checks, and tracked-artifact/worktree review passed.
+- No dependency, live provider call, spending, generated tracked artifact, secret,
+  commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin MVP-6.9 or any later phase without separate explicit direction.
+
 ## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
 
 - MVP-6.7 is complete and verified. It is the final planned contradiction-audit
