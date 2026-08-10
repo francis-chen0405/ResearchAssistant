@@ -292,6 +292,27 @@ class RetrievalRecord(StrictModel):
     _retrieved_at_is_aware = field_validator("retrieved_at")(_validate_aware_datetime)
 
 
+SupportedOriginMediaType = Literal["text/html", "text/plain", "application/pdf"]
+
+
+class MediaTypeProvenance(StrictModel):
+    """Keep verified origin evidence separate from provider-declared metadata."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    verified_media_type: SupportedOriginMediaType | None = None
+    verified_source_url: str | None = None
+    provider_declared_media_type: SupportedOriginMediaType | None = None
+
+    @model_validator(mode="after")
+    def validate_verified_pair(self) -> MediaTypeProvenance:
+        if (self.verified_media_type is None) != (self.verified_source_url is None):
+            raise ValueError("verified media type and source URL must be present together")
+        if self.verified_source_url is not None and not self.verified_source_url.strip():
+            raise ValueError("verified source URL cannot be blank")
+        return self
+
+
 class SourceSnapshot(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -299,11 +320,18 @@ class SourceSnapshot(StrictModel):
     retrieval_attempt_id: UUID
     snapshot_id: UUID
     source_url: NonEmptyStr
+    original_url: NonEmptyStr | None = None
+    canonical_url: NonEmptyStr | None = None
     retrieved_at: datetime
     normalized_text: NonEmptyStr
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     word_count: NonNegativeInt
     truncated: bool
+    normalization_version: NonEmptyStr | None = None
+    acquisition_version: NonEmptyStr | None = None
+    provider_name: NonEmptyStr | None = None
+    provider_version: NonEmptyStr | None = None
+    media_type_provenance: MediaTypeProvenance = MediaTypeProvenance()
     created_at: datetime
 
     _retrieved_at_is_aware = field_validator("retrieved_at")(_validate_aware_datetime)

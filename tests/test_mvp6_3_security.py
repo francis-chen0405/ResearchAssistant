@@ -470,10 +470,10 @@ def test_mvp6_3_acquisition_identity_is_incompatible_with_pre_phase_identity() -
         clients=ProviderFactoryClients(host_resolver=_resolver_for()),
     )
 
-    assert ACQUISITION_VERSION == "mvp6.3-public-acquisition-v2"
+    assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
     assert ACQUISITION_VERSION in bundle.fingerprint_payload_json
     old_payload = bundle.fingerprint_payload_json.replace(
         ACQUISITION_VERSION,
-        "mvp2b-acquisition-v1",
+        "mvp6.3-public-acquisition-v2",
     )
     assert sha256(old_payload.encode()).hexdigest() != bundle.fingerprint_sha256

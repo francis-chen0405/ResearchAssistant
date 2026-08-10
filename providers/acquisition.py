@@ -7,11 +7,12 @@ import ipaddress
 import re
 import socket
 from collections.abc import Callable, Sequence
-from typing import Any
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+from pydantic import ConfigDict, Field
 
+from models import MediaTypeProvenance, StrictModel, SupportedOriginMediaType
 from providers.config import WigoloConfig
 from providers.normalization import (
     NormalizationError,
@@ -24,9 +25,10 @@ from providers.scraper import (
     ScrapeResponse,
     ScraperProviderError,
     ScraperTimeoutError,
+    VerifiedAcquisitionPreflight,
 )
 
-ACQUISITION_VERSION = "mvp6.3-public-acquisition-v2"
+ACQUISITION_VERSION = "mvp6.9-acquisition-provenance-v3"
 HostResolver = Callable[[str], Sequence[str]]
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
@@ -56,6 +58,27 @@ class AcquisitionFailureCode:
     WIGOLO_TIMEOUT = "wigolo_timeout"
 
 
+class AcquisitionPreflight(StrictModel):
+    """Typed result of an independently validated source preflight."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    payload: bytes
+    media_type: SupportedOriginMediaType
+    charset: str | None = None
+    final_url: str = Field(min_length=1)
+    canonical_url: str | None = None
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    def verified_context(self, original_url: str) -> VerifiedAcquisitionPreflight:
+        return VerifiedAcquisitionPreflight(
+            original_url=original_url,
+            resolved_url=self.final_url,
+            canonical_url=self.canonical_url,
+            media_type=self.media_type,
+        )
+
+
 class WigoloAcquisitionAdapter:
     """Preflight source metadata, then use Wigolo only for supported HTML extraction."""
 
@@ -81,8 +104,9 @@ class WigoloAcquisitionAdapter:
 
     def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
         preflight = self._preflight(request)
-        media_type = preflight["media_type"]
-        payload = preflight["payload"]
+        media_type = preflight.media_type
+        payload = preflight.payload
+        verified_preflight = preflight.verified_context(request.url)
         rendered = False
         try:
             if media_type == "application/pdf":
@@ -92,9 +116,9 @@ class WigoloAcquisitionAdapter:
                     deadline_seconds=self._config.deadlines.pdf_fetch_seconds,
                 )
             elif media_type == "text/plain":
-                document = normalize_plain_text(payload, declared_charset=preflight["charset"])
+                document = normalize_plain_text(payload, declared_charset=preflight.charset)
             elif media_type == "text/html":
-                markdown, rendered = self._fetch_markdown(preflight["final_url"])
+                markdown, rendered = self._fetch_markdown(preflight.final_url)
                 document = normalize_markdown(markdown)
             else:
                 raise ScraperProviderError(
@@ -102,16 +126,29 @@ class WigoloAcquisitionAdapter:
                     "source content type is unsupported",
                     retryable=False,
                 )
+        except ScraperProviderError as exc:
+            error_type = (
+                ScraperTimeoutError
+                if isinstance(exc, ScraperTimeoutError)
+                else ScraperProviderError
+            )
+            raise error_type(
+                exc.code,
+                str(exc),
+                retryable=exc.retryable,
+                verified_preflight=verified_preflight,
+            ) from exc
         except NormalizationError as exc:
             raise ScraperProviderError(
                 AcquisitionFailureCode.UNSUPPORTED,
                 str(exc),
                 retryable=exc.retryable,
+                verified_preflight=verified_preflight,
             ) from exc
         return ScrapeResponse(
-            resolved_url=preflight["final_url"],
+            resolved_url=preflight.final_url,
             original_url=request.url,
-            canonical_url=preflight["canonical_url"],
+            canonical_url=preflight.canonical_url,
             content_type=media_type,
             text=document.text,
             snapshot_sha256=document.sha256,
@@ -122,9 +159,13 @@ class WigoloAcquisitionAdapter:
             provider_name=self._config.provider_name,
             provider_version=self._config.provider_version,
             rendered=rendered,
+            media_type_provenance=MediaTypeProvenance(
+                verified_media_type=media_type,
+                verified_source_url=preflight.final_url,
+            ),
         )
 
-    def _preflight(self, request: ScrapeRequest) -> dict[str, Any]:
+    def _preflight(self, request: ScrapeRequest) -> AcquisitionPreflight:
         try:
             current_url = request.url
             seen_urls: set[str] = set()
@@ -217,14 +258,14 @@ class WigoloAcquisitionAdapter:
                 "source preflight connection failed",
                 retryable=True,
             ) from exc
-        return {
-            "payload": payload,
-            "media_type": content_type,
-            "charset": charset,
-            "final_url": final_url,
-            "canonical_url": canonical,
-            "payload_sha256": hashlib.sha256(payload).hexdigest(),
-        }
+        return AcquisitionPreflight(
+            payload=payload,
+            media_type=content_type,
+            charset=charset,
+            final_url=final_url,
+            canonical_url=canonical,
+            payload_sha256=hashlib.sha256(payload).hexdigest(),
+        )
 
     def _fetch_markdown(self, url: str) -> tuple[str, bool]:
         first = self._wigolo_fetch(

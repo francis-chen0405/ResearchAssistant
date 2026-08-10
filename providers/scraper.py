@@ -5,9 +5,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
-from models import StrictModel
+from models import MediaTypeProvenance, StrictModel, SupportedOriginMediaType
 
 
 class ScraperProviderError(RuntimeError):
@@ -19,6 +19,7 @@ class ScraperProviderError(RuntimeError):
         message: str | None = None,
         *,
         retryable: bool = False,
+        verified_preflight: VerifiedAcquisitionPreflight | None = None,
     ) -> None:
         if message is None:
             message = code
@@ -26,6 +27,7 @@ class ScraperProviderError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+        self.verified_preflight = verified_preflight
 
 
 class ScraperTimeoutError(ScraperProviderError):
@@ -41,9 +43,21 @@ class ScrapeStatus(StrEnum):
     DUPLICATE_CONTENT = "duplicate_content"
 
 
+class VerifiedAcquisitionPreflight(StrictModel):
+    """Independently established public-source identity available to fallback."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    original_url: str = Field(min_length=1)
+    resolved_url: str = Field(min_length=1)
+    canonical_url: str | None = None
+    media_type: SupportedOriginMediaType
+
+
 class ScrapeRequest(StrictModel):
     url: str = Field(min_length=1)
     timeout_seconds: float = Field(gt=0)
+    verified_preflight: VerifiedAcquisitionPreflight | None = None
 
 
 class ScrapeResponse(StrictModel):
@@ -60,6 +74,18 @@ class ScrapeResponse(StrictModel):
     provider_name: str = "unknown"
     provider_version: str = "unknown"
     rendered: bool = False
+    media_type_provenance: MediaTypeProvenance = MediaTypeProvenance()
+
+    @model_validator(mode="after")
+    def validate_media_type_provenance(self) -> ScrapeResponse:
+        provenance = self.media_type_provenance
+        if (
+            provenance.verified_source_url == self.resolved_url
+            and provenance.verified_media_type is not None
+            and self.content_type != provenance.verified_media_type
+        ):
+            raise ValueError("applicable verified media type must remain authoritative")
+        return self
 
 
 class RetryPolicy(StrictModel):

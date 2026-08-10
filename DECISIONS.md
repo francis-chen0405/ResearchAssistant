@@ -1,5 +1,31 @@
 # Decisions
 
+## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
+
+- Treat only ResearchAssistant's bounded public-host preflight and PDF signature check as
+  independent origin-media verification. Firecrawl Markdown and
+  `metadata.contentType` are never verification.
+- Use a frozen strict `MediaTypeProvenance` with paired verified media type/verified URL
+  plus a separate optional sanitized provider declaration. Preserve conflicts rather than
+  allowing the provider declaration to override verified evidence; malformed,
+  unsupported, empty, and non-string declarations remain unknown.
+- Replace the primary preflight dictionary with a strict typed result and carry its
+  public final URL, canonical URL, and verified media type through approved fallback
+  failures. Firecrawl receives the verified final URL; verified media type is
+  authoritative only for that exact resolved URL.
+- Add SQLite migration 7 with nullable snapshot provenance columns. Do not update or
+  reinterpret historical immutable rows; reconstruct their absent provenance as
+  explicitly unknown.
+- Bump acquisition identity to `mvp6.9-acquisition-provenance-v3`, Firecrawl adapter
+  identity to `mvp6.9-firecrawl-media-provenance-v3`, and both provider fingerprint
+  versions to `mvp6.9-acquisition-configuration-integrity-v1`.
+- Keep the legacy MVP-2B boundary smoke supported. Add a blank `OPENROUTER_API_KEY`, use
+  the valid 25,000-token example, retain exact command/enable/approval/one-call/cost/
+  output gates, and prove configuration offline without provider calls.
+- Use the durable package description `Evidence-constrained Debate Research Agent System
+  with deterministic release validation.` and test that it remains phase-neutral.
+- Add no dependency and make no live provider call. Do not begin a phase after MVP-6.9.
+
 ## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
 
 - Add SQLite migration 6 using the established explicit migration transaction. Install

@@ -121,6 +121,8 @@ SDK or dependency.
     `ledger_records` rows through unconditional table-specific triggers
   - Authoritative USD values use finite non-negative `Decimal` end to end and canonical
     non-exponent decimal text in SQLite; legacy REAL cost columns are compatibility-only
+  - SQLite migration 7 adds nullable snapshot acquisition/media-provenance columns;
+    historical immutable rows reconstruct as explicitly unknown and are never rewritten
 
 ## 6. Environment Variables
 
@@ -129,10 +131,11 @@ SDK or dependency.
   Never hardcode keys or paths.
   Required variables are documented with blank values in `.env.example` only.
 
-MVP-2A proposes `OPENROUTER_API_KEY` as the only required vendor secret for the primary
-stack. Do not add it to `.env.example`, load it, or use it until MVP-2B is explicitly
-authorized. Never expose the key to Wigolo, logs, SQLite, checkpoints, or exported
-artifacts. Live MVP claims are public/non-sensitive only.
+MVP-2A proposed `OPENROUTER_API_KEY` for its future primary stack. MVP-2B subsequently
+authorized it for the separately gated legacy boundary smoke, so `.env.example` retains
+one blank placeholder while the current live CLI uses direct MiMo. Never expose the key
+to Wigolo, logs, SQLite, checkpoints, or exported artifacts. Live MVP claims are
+public/non-sensitive only.
 
 The authorized current stack uses required `MIMO_API_KEY` and `EXA_API_KEY`, optional
 `FIRECRAWL_API_KEY`, their configurable HTTPS base URLs, `MIMO_MODEL`, and optional
@@ -140,6 +143,11 @@ loopback `WIGOLO_BASE_URL`. Keys are read only from an explicitly supplied mappi
 remain blank in `.env.example`. Direct MiMo replaces OpenRouter for the live CLI; Exa is
 metadata-only discovery, Wigolo is primary acquisition, and Firecrawl is only the narrow
 optional acquisition fallback.
+
+The legacy MVP-2B boundary smoke remains disabled unless its exact command argument,
+enable flag, execution-time approval phrase, one-call caps, token/cost caps, and dedicated
+absolute output path all validate. Its example token ceiling must not exceed the
+`LiveSmokeConfig` maximum of 25,000.
 
 ## 7. Phase-Gated Development
 
@@ -154,7 +162,7 @@ the current top-three/PDF-unsupported/legacy-model test contracts with the appro
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
 MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3,
-MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, and MVP-6.8 are complete. Current provider-backed candidates use the strict shared
+MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, and MVP-6.9 are complete. Current provider-backed candidates use the strict shared
 50-statistical/75-non-statistical quote policy; statistical classification requires both
 a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
 explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
@@ -162,10 +170,12 @@ read-only-inspection database batch. MVP-6.6 completed CLI-status, model-usage
 accounting/budget, and provider-contract integrity. MVP-6.7 completed repository-wide
 function-signature annotation enforcement across production and test code, including
 nested functions. MVP-6.8 completed SQLite snapshot/Ledger immutability and exact
-decimal monetary accounting. The contradiction-audit remediation sequence is complete. The original
+decimal monetary accounting. MVP-6.9 completed truthful Firecrawl media-type provenance,
+snapshot provenance persistence, legacy smoke-example repair, and phase-neutral package
+metadata. The contradiction-audit remediation sequence is complete. The original
 Streamlit app remains fixture-only; the separate live app reuses the established
 persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
-after MVP-6.8 without separate explicit direction. No later phase has started or been authorized.
+after MVP-6.9 without separate explicit direction. No later phase has started or been authorized.
 
 ## 8. Done Criteria Per Phase
 

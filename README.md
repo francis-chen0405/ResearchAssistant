@@ -6,7 +6,7 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.8, persistence and accounting integrity.
+The repository is complete through MVP-6.9, acquisition and configuration integrity.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -25,6 +25,9 @@ MVP-6.7 enforces explicit return and named-parameter annotations on every reposi
 owned Python function except conventional `self`/`cls` receivers, across production and
 test code including nested functions. MVP-6.8 makes snapshot and Ledger rows immutable
 through SQLite triggers and uses exact `Decimal`/canonical-text USD accounting end to end.
+MVP-6.9 carries verified origin media type and final-URL context across scraper fallback,
+keeps provider-declared media type separate, persists that provenance in schema migration 7,
+and aligns fingerprints, offline configuration, and phase-neutral package metadata.
 
 ## How the system works
 
@@ -71,7 +74,9 @@ Primary source acquisition never auto-follows redirects. Each initial URL and ea
 302, 303, 307, or 308 target must independently pass the public HTTP(S), hostname,
 literal-address, and injected-DNS-answer policy before a local request is sent. Wigolo
 receives only the validated final URL. Firecrawl request, returned source, and recognized
-canonical URLs pass the same policy before becoming provenance.
+canonical URLs pass the same policy before becoming provenance. Origin media type is authoritative
+only when it was verified for the same final URL; Firecrawl metadata remains a separate
+provider-declared claim and cannot reclassify Markdown as HTML or PDF.
 
 Current provider-backed evidence requires at least 50 exact quoted words only when the
 quoted segments contain both a digit and a recognized statistical marker (`%`, `percent`,
@@ -182,6 +187,11 @@ That test currently verifies explicit opt-in; it does not call a live provider. 
 `scripts/mvp2b_live_smoke.py` path requires an enable flag, the exact execution-time approval
 phrase, explicit one-call limits, token/cost caps, an absolute unused output path, and `--execute`.
 Credentials alone cannot enable it. Do not run it without explicit approval for that execution.
+Its legacy OpenRouter placeholder is `OPENROUTER_API_KEY=`. The enable flag is
+`RESEARCH_ASSISTANT_LIVE_SMOKE=1`, and the exact approval gate is
+`RESEARCH_ASSISTANT_LIVE_APPROVED=I_APPROVE_ONE_MVP2B_LIVE_SMOKE`. The configured maximum must be
+one search, acquisition, and LLM call, at most 25,000 tokens, and at most $0.10; the script remains
+offline unless every gate and `--execute` are supplied.
 
 ## Running the project
 
@@ -274,7 +284,7 @@ checks its migration records and required schema objects, and reconstructs typed
 artifacts through that same session. Missing, invalid, corrupt, older, newer, or
 inaccessible databases fail clearly without modification. To migrate an older database
 intentionally, start or resume a run with write access using `run`; the normal writable
-initialization path applies migrations 5 and 6 before provider work.
+initialization path applies migrations 5, 6, and 7 before provider work.
 
 Migration 5 installs `runs_raw_claim_immutable`. Direct SQL and application writes cannot
 change `runs.raw_claim` after insertion in any run status; identical-value assignment is
@@ -285,6 +295,11 @@ Migration 6 installs unconditional update/delete rejection triggers for `snapsho
 authoritative USD values are finite non-negative decimals and never use SQLite `REAL`;
 legacy `REAL` columns remain compatibility-only. Historical float rows migrate
 deterministically, but decimal digits already lost before persistence cannot be recovered.
+
+Migration 7 adds nullable snapshot columns for original and canonical URLs, normalization and
+acquisition identities, provider identity, and canonical media-type provenance JSON. Historical
+rows remain unchanged and reconstruct with explicit unknown provenance; new rows preserve verified
+origin media type separately from provider-declared metadata.
 
 Cancellation is cooperative: a synchronous request already in flight may continue to its deadline,
 but its attempt is persisted and no new call starts after cancellation is observed. It does not
@@ -349,7 +364,7 @@ Normal tests are deterministic and offline. Two opt-in tests are expected to ski
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
 standard-library AST enforcement test is `tests/test_type_contracts.py`. The current
-MVP-6.8 verification result is recorded in `STATUS.md`; exact focused,
+MVP-6.9 verification result is recorded in `STATUS.md`; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -392,7 +407,9 @@ history/inspection. MVP-6.6 completed CLI-status, usage-accounting/budget, and
 provider-contract integrity. MVP-6.7 completed repository-wide signature enforcement
 for production and test code, including nested functions. MVP-6.8 completed SQLite-
 enforced snapshot/Ledger immutability and exact monetary accounting. The contradiction-audit
-remediation sequence is complete. No later phase has started or been authorized.
+remediation sequence is complete. MVP-6.9 completed verified acquisition/media-type provenance,
+schema migration 7, configuration reconciliation, and phase-neutral package metadata. No later
+phase has started or been authorized.
 
 Known limitations are:
 
@@ -415,7 +432,7 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.8 remain out of scope until explicitly approved.
+live validation and any phase after MVP-6.9 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

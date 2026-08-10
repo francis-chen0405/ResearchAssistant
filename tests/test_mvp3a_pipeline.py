@@ -603,8 +603,8 @@ def test_provider_fingerprints_include_only_the_mvp6_4_live_evidence_policy() ->
     mimo_payload = json.loads(mimo_bundle.fingerprint_payload_json)
 
     assert EVIDENCE_POLICY_VERSION == "mvp6.4-evidence-density-50-75-v1"
-    assert FINGERPRINT_VERSION == "mvp6.8-persistence-accounting-integrity-v1"
-    assert MIMO_FINGERPRINT_VERSION == "mvp6.8-persistence-accounting-integrity-v1"
+    assert FINGERPRINT_VERSION == "mvp6.9-acquisition-configuration-integrity-v1"
+    assert MIMO_FINGERPRINT_VERSION == "mvp6.9-acquisition-configuration-integrity-v1"
     assert EVIDENCE_POLICY_VERSION in openrouter_payload["policy_identity"]
     assert EVIDENCE_POLICY_VERSION in mimo_payload["policy_identity"]
     assert "post-mvp5-bounded-inference-v2" not in openrouter_payload["policy_identity"]
@@ -636,7 +636,7 @@ def test_mocked_full_approved_provider_pipeline_releases_and_persists_identity(
     assert all(outcome.provider_version == "0.2.1" for outcome in retrieved)
     assert all(outcome.normalization_version == "ra-normalization-v1" for outcome in retrieved)
     assert all(
-        outcome.acquisition_version == "mvp6.3-public-acquisition-v2" for outcome in retrieved
+        outcome.acquisition_version == "mvp6.9-acquisition-provenance-v3" for outcome in retrieved
     )
     assert all(
         json.loads(request.content)["max_results"] == 5
@@ -837,6 +837,27 @@ def test_75_75_policy_fingerprint_cannot_resume_as_mvp6_4(
     )
     with pytest.raises(ValueError, match="fingerprint"):
         _run(tmp_path, MockProviderHTTP())
+
+
+def test_pre_mvp6_9_acquisition_fingerprint_cannot_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "providers.factory.ACQUISITION_VERSION",
+        "mvp6.3-public-acquisition-v2",
+    )
+    first = _run(tmp_path, MockProviderHTTP())
+    assert first.status is ProviderRunStatus.RELEASED
+
+    monkeypatch.setattr(
+        "providers.factory.ACQUISITION_VERSION",
+        "mvp6.9-acquisition-provenance-v3",
+    )
+    resumed_provider = MockProviderHTTP()
+    with pytest.raises(ValueError, match="fingerprint"):
+        _run(tmp_path, resumed_provider)
+    assert resumed_provider.requests == []
 
 
 def test_cancellation_after_active_call_persists_attempt_and_starts_no_new_call(

@@ -71,7 +71,10 @@ complete/conservative model-usage accounting, and immutable self-consistent prov
 contracts. MVP-6.7 enforces complete Python function-signature annotations repository-
 wide. MVP-6.8 adds SQLite-enforced snapshot/Ledger immutability and canonical exact-
 decimal USD accounting through storage, aggregation, reservation, comparison, resume,
-and inspection. The contradiction-audit remediation sequence is complete; no later phase has
+and inspection. MVP-6.9 separates independently verified origin media type from
+provider-declared metadata, carries verified preflight evidence across Firecrawl fallback,
+repairs the legacy boundary-smoke example, and makes package wording phase-neutral. The
+contradiction-audit remediation sequence is complete; no later phase has
 started or been authorized.
 
 ## MVP-2A Live Provider Architecture Gate
@@ -264,6 +267,28 @@ precision is invented. Exact-limit exposure remains allowed; any amount above th
 is rejected. The accounting policy and provider fingerprint identities are bumped to
 prevent incompatible same-run resumption.
 
+### MVP-6.9 Acquisition and Configuration Integrity
+
+Origin media type is authoritative only when ResearchAssistant independently establishes
+it through the bounded public-host source preflight, including the narrow PDF-signature
+check. Firecrawl-returned Markdown is an acquisition representation, never proof of the
+origin type. A strict frozen media-type provenance artifact stores the verified type and
+the exact URL at which it was verified separately from an optional sanitized Firecrawl
+declaration. Empty, malformed, unsupported, or non-string declarations remain unknown.
+
+When primary preflight succeeds but Wigolo later fails with an approved fallback code, a
+strict verified-preflight artifact crosses the fallback boundary. Firecrawl receives the
+validated final URL. The verified media type remains authoritative only when the returned
+source URL is the same verified URL; otherwise the response remains Markdown with the
+earlier evidence explicitly tied to its different URL. Conflicting verified and provider-
+declared values are preserved separately and never resolved in the provider's favor.
+
+SQLite migration 7 adds nullable snapshot provenance columns without rewriting historical
+immutable snapshot rows. Historical rows reconstruct with explicitly unknown media-type
+provenance; new rows preserve URL, normalization, acquisition, provider, and media-type
+semantics. Acquisition, Firecrawl-adapter, and provider-fingerprint identities are bumped,
+so pre-MVP-6.9 runs cannot resume under the new semantics with the same run ID.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: Exa Search `auto` for metadata-only discovery, pinned
@@ -294,8 +319,9 @@ structural maximum. Supporting and opposing workers retain equal limits.
 Every candidate is fetched independently. Persist the original discovery URL and final
 redirected URL separately. A source-declared canonical URL is advisory metadata and may
 not replace either. Independently determine source media type from bounded HTTP metadata
-and, when ambiguous, a bounded signature check; Wigolo's extracted Markdown is not proof
-of the origin `Content-Type`.
+and, when ambiguous, a bounded signature check. Neither Wigolo nor Firecrawl Markdown is
+proof of the origin `Content-Type`, and Firecrawl `metadata.contentType` remains a separate
+provider declaration rather than verified evidence.
 
 Use a direct non-rendered fetch first. Only an explicit challenge or JavaScript-required
 outcome permits one final Chromium-rendered attempt. No authentication, clicks, typing,
@@ -340,9 +366,11 @@ rules. The snapshot SHA-256 and word count are computed from the exact stored te
 All quote offsets refer to that normalized stored text. The LLM proposes exact quote
 strings, and Python locates segments sequentially and accepts each only when
 `normalized_text[start_char:end_char] == exact_quote`. Persist the normalization version,
-source media type, acquisition version, original/final/canonical URLs, and optional
-provider-payload hash with the snapshot provenance. A refetch may create a new snapshot
-but can never replace an existing one.
+verified origin media type and its verified URL, separately sanitized provider-declared
+media type, acquisition version, original/final/canonical URLs, provider identity, and
+optional provider-payload hash with the snapshot provenance. Normalization metadata is
+not origin-media proof. A refetch may create a new snapshot but can never replace an
+existing one.
 
 ### Live Retry, Budget, Data, and Restart Rules
 

@@ -44,7 +44,7 @@ from providers.wigolo import WigoloSearchAdapter
 PROVIDER_FACTORY_VERSION = "mvp3a-provider-factory-v1"
 RETRY_POLICY_VERSION = "mvp3a-objective-retry-v1"
 BUDGET_POLICY_VERSION = "mvp6.8-exact-decimal-reserve-reconcile-v1"
-FINGERPRINT_VERSION = "mvp6.8-persistence-accounting-integrity-v1"
+FINGERPRINT_VERSION = "mvp6.9-acquisition-configuration-integrity-v1"
 
 
 class ApprovedRoleMapping(StrictModel):

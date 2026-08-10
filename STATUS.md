@@ -1,5 +1,58 @@
 # Status
 
+## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
+
+Status: Complete and verified. MVP-6.8 was confirmed complete before implementation.
+No phase after MVP-6.9 was started.
+
+- Added frozen strict `VerifiedAcquisitionPreflight` and `MediaTypeProvenance` artifacts.
+  ResearchAssistant's bounded source preflight is the only authority for verified origin
+  media type, and that evidence remains tied to its validated final URL. Approved primary
+  failures carry the typed preflight into Firecrawl fallback.
+- Firecrawl Markdown without applicable preflight evidence is represented as
+  `text/markdown`. Sanitized `metadata.contentType` values are retained only as separate
+  provider declarations; missing, blank, malformed, unsupported, and non-string values
+  remain unknown. Conflicts do not overwrite verified evidence.
+- Preserved the existing redirect, returned-source, canonical-URL, credential, public-host,
+  and SSRF checks. Firecrawl fallback now requests the already validated final URL, while
+  normalization identity remains distinct from origin media-type provenance.
+- Added atomic SQLite migration 7. New snapshots persist original/canonical URL context,
+  normalization/acquisition identity, provider identity, and canonical provenance JSON.
+  Existing rows are not rewritten and reconstruct with explicit unknown provenance.
+- Bumped acquisition identity to `mvp6.9-acquisition-provenance-v3`, Firecrawl adapter
+  identity to `mvp6.9-firecrawl-media-provenance-v3`, and both execution fingerprint
+  identities to `mvp6.9-acquisition-configuration-integrity-v1`. Pre-MVP-6.9 acquisition
+  fingerprints cannot resume under the changed semantics.
+- Repaired the supported legacy MVP-2B boundary smoke example with blank
+  `OPENROUTER_API_KEY=`, a valid 25,000-token ceiling, the actual gate names and approval
+  phrase, and existing one-call/cost/output constraints. Offline construction proves the
+  example is structurally valid; no execution gate or provider path was enabled.
+- Replaced phase-bound package wording with `Evidence-constrained Debate Research Agent
+  System with deterministic release validation.` and advanced only current-facing phase
+  summaries. Historical records remain intact.
+- Regression tests were added before implementation; the initial test module failed at
+  collection on the deliberately missing provenance model. No dependency, provider call,
+  integration-test opt-in, spending, commit, push, or pull request was added.
+
+Verification:
+
+- Focused Firecrawl/acquisition, URL-security, persistence/migration, fingerprint/resume,
+  environment-example, package-metadata, and type-contract selection: 122 passed.
+- Complete offline suite: 622 passed, 2 expected opt-in skips.
+- Repository-wide type-contract test: passed in both focused and full suites.
+- Offline evaluation: all 38 deterministic cases passed; no live provider comparison ran.
+- Ruff lint passed; Ruff format check reported 65 files already formatted.
+- `git diff --check`, final knowledge-graph refresh, secret/generated-artifact scan, and
+  final worktree/diff review passed. No database, cache, coverage artifact, secret, or
+  evaluation output is newly tracked.
+
+Remaining limitation:
+
+- Verified origin media type applies only to the exact final URL checked by preflight. If
+  Firecrawl returns a different validated public source URL, the Markdown remains usable
+  text but its origin media type is unknown; the earlier evidence remains recorded only
+  against the URL for which it was established.
+
 ## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
 
 Status: Complete and verified. MVP-6.7 was confirmed complete before implementation.

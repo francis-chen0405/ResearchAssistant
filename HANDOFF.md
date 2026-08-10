@@ -1,5 +1,58 @@
 # Handoff
 
+## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
+
+- MVP-6.9 is complete and verified. Schema version 7 is current; no later phase has
+  started or been authorized.
+- `MediaTypeProvenance` stores independently verified origin media type and its exact
+  validated URL separately from sanitized provider-declared metadata. Firecrawl Markdown
+  is `text/markdown` unless typed primary-preflight evidence applies to the same resolved
+  URL. Conflicts remain visible and never replace the verified value.
+- `VerifiedAcquisitionPreflight` crosses only approved primary-to-Firecrawl fallback
+  failures. Firecrawl uses the validated final URL and retains existing request, returned
+  source, canonical, credential, redirect, public-host, and SSRF boundaries.
+- Migration 7 adds nullable immutable-snapshot provenance columns without rewriting old
+  rows. Historical rows reconstruct with unknown provenance; new rows retain URL,
+  normalization/acquisition, provider, and media-type provenance context.
+- Compatibility identities are `mvp6.9-acquisition-provenance-v3`,
+  `mvp6.9-firecrawl-media-provenance-v3`, and
+  `mvp6.9-acquisition-configuration-integrity-v1` for both execution stacks. Use a new run
+  ID instead of resuming a pre-MVP-6.9 acquisition fingerprint.
+- The legacy MVP-2B boundary smoke remains supported but disabled. `.env.example` now has
+  a blank OpenRouter key, valid 25,000-token cap, one-call caps, $0.05 example cost cap,
+  absolute output path, and the actual enable/approval gates. `--execute` and all runtime
+  gates remain mandatory.
+- Package description is phase-neutral: `Evidence-constrained Debate Research Agent System
+  with deterministic release validation.`
+
+Files changed:
+
+- Provenance/acquisition: `models.py`, `providers/scraper.py`,
+  `providers/acquisition.py`, `providers/firecrawl.py`, `agents/researcher.py`, and
+  `agents/supportingresearcher.py`.
+- Persistence/compatibility/configuration: `store.py`, `providers/config.py`, both provider
+  factories, `.env.example`, and `pyproject.toml`.
+- Regression coverage: `tests/test_mvp6_9_acquisition_configuration.py` plus narrow
+  acquisition identity, resume, read-only migration, and schema-version updates in the
+  existing MVP-3A, MVP-6.3, MVP-6.5, and MVP-6.8 suites.
+- Records: the canonical MVP-6.9 plan, `.agent/PLANS.md`, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused required selection: 122 passed.
+- Full offline suite: 622 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; no live comparison ran.
+- Ruff lint/format, repository-wide type contract, `git diff --check`, knowledge-graph
+  refresh, and secret/generated-artifact/worktree review passed.
+- No dependency, live provider call, provider spending, integration opt-in, generated
+  tracked artifact, secret, commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin any phase after MVP-6.9 without separate explicit user direction.
+
 ## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
 
 - MVP-6.8 is complete and verified. Schema version 6 is current; MVP-6.9 and later work

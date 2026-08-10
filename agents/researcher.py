@@ -9,6 +9,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from models import (
     CandidateQuoteBlock,
+    MediaTypeProvenance,
     ProvisionalCandidate,
     SegmentOffset,
     SourceSnapshot,
@@ -112,9 +113,16 @@ def build_source_snapshot(
     retrieval_attempt_id: UUID,
     snapshot_id: UUID,
     source_url: str,
+    original_url: str | None = None,
+    canonical_url: str | None = None,
     retrieved_at: datetime,
     normalized_text: str,
     truncated: bool,
+    normalization_version: str | None = None,
+    acquisition_version: str | None = None,
+    provider_name: str | None = None,
+    provider_version: str | None = None,
+    media_type_provenance: MediaTypeProvenance | None = None,
     created_at: datetime,
 ) -> SourceSnapshot:
     snapshot = SourceSnapshot(
@@ -122,11 +130,18 @@ def build_source_snapshot(
         retrieval_attempt_id=retrieval_attempt_id,
         snapshot_id=snapshot_id,
         source_url=source_url,
+        original_url=original_url,
+        canonical_url=canonical_url,
         retrieved_at=retrieved_at,
         normalized_text=normalized_text,
         snapshot_sha256=compute_sha256(normalized_text),
         word_count=count_words(normalized_text),
         truncated=truncated,
+        normalization_version=normalization_version,
+        acquisition_version=acquisition_version,
+        provider_name=provider_name,
+        provider_version=provider_version,
+        media_type_provenance=media_type_provenance or MediaTypeProvenance(),
         created_at=created_at,
     )
     validate_snapshot_integrity(snapshot)

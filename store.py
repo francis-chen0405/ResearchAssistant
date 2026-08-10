@@ -26,6 +26,7 @@ from models import (
     CandidateQuoteBlock,
     ClaimDefinition,
     LedgerRecord,
+    MediaTypeProvenance,
     ModelAttemptStatus,
     ModelInvocationRecord,
     ModelRouteAttempt,
@@ -57,8 +58,9 @@ from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 RAW_CLAIM_SCHEMA_VERSION = 5
+MVP68_SCHEMA_VERSION = 6
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -82,6 +84,7 @@ MIGRATION_DESCRIPTIONS = {
     4: "same-run provenance protection triggers",
     5: "database-enforced immutable runs.raw_claim",
     6: "immutable snapshots and Ledger with exact decimal model costs",
+    7: "snapshot acquisition and media-type provenance",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -279,13 +282,29 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
         row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
     }
     missing_cost_columns = sorted({"reserved_cost_usd_exact", "cost_usd_exact"} - columns)
+    snapshot_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(snapshots)").fetchall()
+    }
+    missing_snapshot_provenance_columns = sorted(
+        {
+            "original_url",
+            "canonical_url",
+            "normalization_version",
+            "acquisition_version",
+            "provider_name",
+            "provider_version",
+            "media_type_provenance_json",
+        }
+        - snapshot_columns
+    )
     if (
         missing
         or not _is_expected_raw_claim_trigger(trigger_sql)
         or invalid_immutable
         or missing_cost_columns
+        or missing_snapshot_provenance_columns
     ):
-        invalid = invalid_immutable + missing_cost_columns
+        invalid = invalid_immutable + missing_cost_columns + missing_snapshot_provenance_columns
         detail = ", ".join(missing + invalid) if missing or invalid else RAW_CLAIM_TRIGGER_NAME
         raise _compatibility_error(
             DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
@@ -832,6 +851,7 @@ def init_db(db_path: str) -> None:
         conn.commit()
         _apply_raw_claim_immutability_migration(conn)
         _apply_mvp68_integrity_migration(conn)
+        _apply_mvp69_provenance_migration(conn)
     finally:
         conn.close()
 
@@ -952,10 +972,10 @@ def _verify_mvp68_schema(conn: sqlite3.Connection) -> None:
 def _apply_mvp68_integrity_migration(conn: sqlite3.Connection) -> None:
     row = conn.execute(
         "SELECT description FROM schema_migrations WHERE version = ?",
-        (CURRENT_SCHEMA_VERSION,),
+        (MVP68_SCHEMA_VERSION,),
     ).fetchone()
     if row is not None:
-        if row["description"] != MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION]:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP68_SCHEMA_VERSION]:
             raise sqlite3.DatabaseError("migration 6 description is inconsistent")
         _verify_mvp68_schema(conn)
         return
@@ -994,6 +1014,58 @@ def _apply_mvp68_integrity_migration(conn: sqlite3.Connection) -> None:
         for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items():
             conn.execute(_immutable_trigger_sql(name, table, operation, error))
         _verify_mvp68_schema(conn)
+        conn.execute(
+            """INSERT INTO schema_migrations (version, description, applied_at)
+               VALUES (?, ?, ?)""",
+            (
+                MVP68_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP68_SCHEMA_VERSION],
+                "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+_SNAPSHOT_PROVENANCE_COLUMNS = {
+    "original_url": "TEXT",
+    "canonical_url": "TEXT",
+    "normalization_version": "TEXT",
+    "acquisition_version": "TEXT",
+    "provider_name": "TEXT",
+    "provider_version": "TEXT",
+    "media_type_provenance_json": "TEXT",
+}
+
+
+def _verify_mvp69_schema(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(snapshots)").fetchall()}
+    missing = sorted(set(_SNAPSHOT_PROVENANCE_COLUMNS) - columns)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 7 snapshot provenance columns are missing: {', '.join(missing)}"
+        )
+
+
+def _apply_mvp69_provenance_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (CURRENT_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 7 description is inconsistent")
+        _verify_mvp69_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {item["name"] for item in conn.execute("PRAGMA table_info(snapshots)").fetchall()}
+        for name, declaration in _SNAPSHOT_PROVENANCE_COLUMNS.items():
+            if name not in columns:
+                conn.execute(f"ALTER TABLE snapshots ADD COLUMN {name} {declaration}")
+        _verify_mvp69_schema(conn)
         conn.execute(
             """INSERT INTO schema_migrations (version, description, applied_at)
                VALUES (?, ?, ?)""",
@@ -1332,8 +1404,10 @@ def insert_snapshot(db_path: str, snapshot: SourceSnapshot) -> None:
         conn.execute(
             """INSERT INTO snapshots
                (snapshot_id, run_id, retrieval_attempt_id, source_url, retrieved_at,
-                normalized_text, snapshot_sha256, word_count, truncated, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                normalized_text, snapshot_sha256, word_count, truncated, created_at,
+                original_url, canonical_url, normalization_version, acquisition_version,
+                provider_name, provider_version, media_type_provenance_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 str(snapshot.snapshot_id),
                 str(snapshot.run_id),
@@ -1345,6 +1419,17 @@ def insert_snapshot(db_path: str, snapshot: SourceSnapshot) -> None:
                 snapshot.word_count,
                 int(snapshot.truncated),
                 _dt_to_iso(snapshot.created_at),
+                snapshot.original_url,
+                snapshot.canonical_url,
+                snapshot.normalization_version,
+                snapshot.acquisition_version,
+                snapshot.provider_name,
+                snapshot.provider_version,
+                json.dumps(
+                    snapshot.media_type_provenance.model_dump(mode="json"),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
             ),
         )
         conn.commit()
@@ -1365,11 +1450,22 @@ def read_snapshot(db_path: str, snapshot_id: UUID) -> SourceSnapshot:
             retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
             snapshot_id=UUID(row["snapshot_id"]),
             source_url=row["source_url"],
+            original_url=row["original_url"],
+            canonical_url=row["canonical_url"],
             retrieved_at=_iso_to_dt(row["retrieved_at"]),
             normalized_text=row["normalized_text"],
             snapshot_sha256=row["snapshot_sha256"],
             word_count=row["word_count"],
             truncated=bool(row["truncated"]),
+            normalization_version=row["normalization_version"],
+            acquisition_version=row["acquisition_version"],
+            provider_name=row["provider_name"],
+            provider_version=row["provider_version"],
+            media_type_provenance=(
+                MediaTypeProvenance.model_validate_json(row["media_type_provenance_json"])
+                if row["media_type_provenance_json"] is not None
+                else MediaTypeProvenance()
+            ),
             created_at=_iso_to_dt(row["created_at"]),
         )
     finally:

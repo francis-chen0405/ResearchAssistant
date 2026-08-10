@@ -15,6 +15,7 @@ from pydantic import Field, model_validator
 from agents.researcher import build_source_snapshot, validate_snapshot_integrity
 from models import (
     ClaimDefinition,
+    MediaTypeProvenance,
     PlannerOutput,
     RetrievalRecord,
     RetrievalStatus,
@@ -153,6 +154,7 @@ class RetrievalOutcome(StrictModel):
     canonical_url: str | None = None
     normalization_version: str | None = None
     acquisition_version: str | None = None
+    media_type_provenance: MediaTypeProvenance = MediaTypeProvenance()
     snapshot_id: UUID | None = None
     attempts_made: int = Field(ge=0)
     failure_code: str | None = None
@@ -557,6 +559,7 @@ def _retrieve_result(
                 canonical_url=response.canonical_url,
                 normalization_version=response.normalization_version,
                 acquisition_version=response.acquisition_version,
+                media_type_provenance=response.media_type_provenance,
                 attempts_made=attempts_made,
                 failure_code="unsupported_content",
             ),
@@ -669,9 +672,16 @@ def _retrieve_result(
             retrieval_attempt_id=retrieval_attempt_id,
             snapshot_id=snapshot_id,
             source_url=response.resolved_url,
+            original_url=response.original_url or original_url,
+            canonical_url=response.canonical_url,
             retrieved_at=retrieved_at,
             normalized_text=normalized_text,
             truncated=truncated,
+            normalization_version=response.normalization_version,
+            acquisition_version=response.acquisition_version,
+            provider_name=response.provider_name,
+            provider_version=response.provider_version,
+            media_type_provenance=response.media_type_provenance,
             created_at=clock(),
         )
         deduplication.original_urls[original_url] = snapshot_id
@@ -698,6 +708,7 @@ def _retrieve_result(
                 canonical_url=response.canonical_url,
                 normalization_version=response.normalization_version,
                 acquisition_version=response.acquisition_version,
+                media_type_provenance=response.media_type_provenance,
                 snapshot_id=snapshot_id,
                 attempts_made=attempts_made,
             ),

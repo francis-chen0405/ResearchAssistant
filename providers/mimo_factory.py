@@ -42,7 +42,7 @@ from providers.pricing import (
 MIMO_FACTORY_VERSION = "mvp3b-direct-mimo-factory-v1"
 MIMO_RETRY_POLICY_VERSION = "mvp3b-direct-mimo-one-retry-v1"
 MIMO_BUDGET_POLICY_VERSION = "mvp6.8-exact-decimal-reserve-reconcile-v1"
-MIMO_FINGERPRINT_VERSION = "mvp6.8-persistence-accounting-integrity-v1"
+MIMO_FINGERPRINT_VERSION = "mvp6.9-acquisition-configuration-integrity-v1"
 
 
 class MimoProviderFactoryConfig(StrictModel):

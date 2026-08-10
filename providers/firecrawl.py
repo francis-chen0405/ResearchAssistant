@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from models import MediaTypeProvenance
 from providers.acquisition import (
     ACQUISITION_VERSION,
     AcquisitionFailureCode,
@@ -45,7 +46,12 @@ class FallbackAcquisitionAdapter:
         except ScraperProviderError as exc:
             if self._fallback is None or exc.code not in _FALLBACK_CODES:
                 raise
-            return self._fallback.scrape(request)
+            fallback_request = ScrapeRequest(
+                url=request.url,
+                timeout_seconds=request.timeout_seconds,
+                verified_preflight=exc.verified_preflight,
+            )
+            return self._fallback.scrape(fallback_request)
 
 
 class FirecrawlAcquisitionAdapter:
@@ -65,7 +71,9 @@ class FirecrawlAcquisitionAdapter:
         self._host_resolver = host_resolver or _resolve_host_addresses
 
     def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
-        _validate_public_url(request.url, resolver=self._host_resolver)
+        preflight = request.verified_preflight
+        target_url = preflight.resolved_url if preflight is not None else request.url
+        _validate_public_url(target_url, resolver=self._host_resolver)
         try:
             response = self._client.post(
                 "/v2/scrape",
@@ -73,7 +81,7 @@ class FirecrawlAcquisitionAdapter:
                     "Authorization": f"Bearer {self._config.api_key.get_secret_value()}",
                     "Content-Type": "application/json",
                 },
-                json={"url": request.url, "formats": ["markdown"], "onlyMainContent": True},
+                json={"url": target_url, "formats": ["markdown"], "onlyMainContent": True},
                 timeout=min(request.timeout_seconds, self._config.deadlines.browser_fetch_seconds),
             )
         except httpx.TimeoutException as exc:
@@ -124,15 +132,30 @@ class FirecrawlAcquisitionAdapter:
                 AcquisitionFailureCode.EXTRACTION, str(exc), retryable=exc.retryable
             ) from exc
         returned_source = _optional_url(metadata, "sourceURL")
-        resolved = returned_source or request.url
+        resolved = returned_source or target_url
         _validate_public_url(resolved, resolver=self._host_resolver)
-        canonical = _firecrawl_canonical_url(metadata)
-        if canonical is not None:
-            _validate_public_url(canonical, resolver=self._host_resolver)
-        content_type = (_text(metadata.get("contentType")) or "text/html").split(";", 1)[0]
+        provider_canonical = _firecrawl_canonical_url(metadata)
+        if provider_canonical is not None:
+            _validate_public_url(provider_canonical, resolver=self._host_resolver)
+        canonical = (
+            preflight.canonical_url
+            if preflight is not None and preflight.canonical_url is not None
+            else provider_canonical
+        )
+        provider_declared_media_type = _provider_declared_media_type(metadata.get("contentType"))
+        provenance = MediaTypeProvenance(
+            verified_media_type=preflight.media_type if preflight is not None else None,
+            verified_source_url=preflight.resolved_url if preflight is not None else None,
+            provider_declared_media_type=provider_declared_media_type,
+        )
+        content_type = (
+            preflight.media_type
+            if preflight is not None and preflight.resolved_url == resolved
+            else "text/markdown"
+        )
         return ScrapeResponse(
             resolved_url=resolved,
-            original_url=request.url,
+            original_url=preflight.original_url if preflight is not None else request.url,
             canonical_url=canonical,
             content_type=content_type,
             text=document.text,
@@ -144,11 +167,21 @@ class FirecrawlAcquisitionAdapter:
             provider_name=self._config.provider_name,
             provider_version=self._config.provider_version,
             rendered=False,
+            media_type_provenance=provenance,
         )
 
 
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _provider_declared_media_type(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    base_type = value.split(";", 1)[0].strip().lower()
+    if base_type not in {"text/html", "text/plain", "application/pdf"}:
+        return None
+    return base_type
 
 
 def _optional_url(metadata: dict[str, Any], key: str) -> str | None:
