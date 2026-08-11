@@ -23,7 +23,15 @@ from frontend.live_service import (
 )
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
-from models import RunManifest, RunStatus, Stage
+from models import (
+    PresentationTone,
+    ReportLength,
+    ResearchControls,
+    ResearchDepth,
+    RunManifest,
+    RunStatus,
+    Stage,
+)
 from orchestrator import ProviderPipelineResult, ProviderRunStatus
 from providers.search import SearchFailureCode, SearchProviderError
 from store import init_db, insert_run
@@ -136,6 +144,37 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
     assert "already has an active research run" in same_database_other_run.message
     assert snapshot.classification == "failed"
     assert calls == 1
+
+
+def test_live_controller_passes_requested_research_controls_to_runner(tmp_path: Path) -> None:
+    controls = ResearchControls(
+        depth=ResearchDepth.FOCUSED,
+        length=ReportLength.BRIEF,
+        tone=PresentationTone.NEUTRAL,
+    )
+    request = _request(tmp_path, run_id=uuid4()).model_copy(update={"research_controls": controls})
+    received_controls: ResearchControls | None = None
+
+    def runner(raw_claim: str, **kwargs: object) -> ProviderPipelineResult:
+        nonlocal received_controls
+        received_controls = kwargs["research_controls"]
+        assert isinstance(received_controls, ResearchControls)
+        return _terminal_result(str(kwargs["db_path"]), UUID(str(kwargs["run_id"])))
+
+    controller = LiveResearchController(
+        environment={"MIMO_API_KEY": SECRET, "EXA_API_KEY": "exa-test-secret"},
+        runner=runner,
+    )
+    start = controller.start(request)
+    snapshot = controller.snapshot(request.db_path, start.run_id)
+    deadline = monotonic() + 2
+    while snapshot.classification == "starting" and monotonic() < deadline:
+        sleep(0.01)
+        snapshot = controller.snapshot(request.db_path, start.run_id)
+
+    assert start.started is True
+    assert received_controls == controls
+    assert snapshot.classification == "failed"
 
 
 def test_worker_exception_is_redacted_from_ui_snapshot(tmp_path: Path) -> None:

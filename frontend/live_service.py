@@ -378,6 +378,7 @@ class LiveResearchController:
                 db_path=request.db_path,
                 factory_config=factory_config,
                 run_id=run_id,
+                research_controls=request.research_controls,
             )
             return self._snapshot_from_result(result)
         except ClaimMismatchError as exc:
