@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import ValidationError as PydanticValidationError
 
+from brief_export import BriefExportFormat, export_released_brief
 from orchestrator import (
     ClaimMismatchError,
     FingerprintMismatchError,
@@ -69,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         return _inspect_run_command(args.db_path, args.run_id)
     if args.command == "cancel-run":
         return _cancel_run_command(args.db_path, args.run_id, args.reason)
+    if args.command == "export-brief":
+        return _export_brief_command(args.db_path, args.run_id, args.output_path, args.format)
     parser.print_help()
     return CLIExitCode.INVALID_INPUT
 
@@ -112,6 +115,14 @@ def _build_parser() -> argparse.ArgumentParser:
     cancel_run.add_argument("db_path", type=Path)
     cancel_run.add_argument("run_id", type=UUID)
     cancel_run.add_argument("--reason", default="cancellation requested by user")
+    export_brief = subparsers.add_parser(
+        "export-brief",
+        help="Export a released brief locally as Markdown, PDF, or Word DOCX.",
+    )
+    export_brief.add_argument("db_path", type=Path)
+    export_brief.add_argument("run_id", type=UUID)
+    export_brief.add_argument("output_path", type=Path)
+    export_brief.add_argument("--format", type=BriefExportFormat, required=True)
     return parser
 
 
@@ -334,6 +345,13 @@ def _inspect_run_command(db_path: Path, run_id: UUID) -> int:
             f"- {checkpoint.stage_key}: {checkpoint.status.value}; "
             f"updated={checkpoint.updated_at.isoformat()}{suffix}"
         )
+    completed_checkpoints = sum(
+        checkpoint.status.value in {"completed", "blocked"} for checkpoint in result.checkpoints
+    )
+    print(
+        f"checkpoint progress: {completed_checkpoints}/5 complete; "
+        "completed checkpoints reuse on resume"
+    )
     print("retrieval attempts:")
     retrieval_outcomes = []
     if result.researcher_result is not None:
@@ -440,6 +458,24 @@ def _cancel_run_command(db_path: Path, run_id: UUID, reason: str) -> int:
     print(f"cancellation requested at: {request.requested_at.isoformat()}")
     print(f"reason: {request.reason}")
     print("The request will be observed cooperatively; an active call may run to its deadline.")
+    return CLIExitCode.RELEASED
+
+
+def _export_brief_command(
+    db_path: Path,
+    run_id: UUID,
+    output_path: Path,
+    export_format: BriefExportFormat,
+) -> int:
+    try:
+        exported = export_released_brief(db_path, str(run_id), output_path, export_format)
+    except Exception as exc:
+        print(f"brief export error: {exc}", file=sys.stderr)
+        return CLIExitCode.INVALID_INPUT
+    print(f"exported: {exported.output_path}")
+    print(f"run_id: {exported.metadata.run_id}")
+    print(f"rendered hash: {exported.metadata.rendered_brief_hash}")
+    print(f"generated at: {exported.metadata.generated_at.isoformat()}")
     return CLIExitCode.RELEASED
 
 

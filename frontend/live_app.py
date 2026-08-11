@@ -255,7 +255,11 @@ def _render_snapshot(
     status_col, stage_col, checkpoint_col, cost_col = st.columns(4)
     status_col.metric("Status", snapshot.classification)
     stage_col.metric("Stage", snapshot.stage)
-    checkpoint_col.metric("Checkpoint", snapshot.latest_checkpoint or "none")
+    checkpoint_col.metric(
+        "Checkpoint",
+        f"{snapshot.completed_checkpoints}/{snapshot.total_checkpoints} complete",
+        snapshot.latest_checkpoint or "none",
+    )
     cost_col.metric(
         "MiMo accounted cost",
         (

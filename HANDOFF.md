@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-10 - MVP-8 Briefs, Export & Performance
+
+- MVP-8 is complete and verified. `brief_export.py` exports only read-only reconstructed
+  RELEASED runs after rechecking valid final validation and the rendered hash.
+- `export-brief` writes local Markdown, PDF, or DOCX reports. Trace metadata includes the
+  run ID, rendered hash, exporter version, format, and aware generation time. Markdown is
+  deterministic for a fixed timestamp; no cloud/export account path exists.
+- Export preserves the complete released brief verbatim, including exact approved factual
+  statements, coverage warnings, and a human-review warning. Blocked, failed, cancelled,
+  and running runs fail closed.
+- CLI inspection and the local live UI show completed checkpoint progress. Exact
+  compatible failed-run resumes retain the existing typed valid-checkpoint reuse.
+
+Verification handoff:
+
+- Full offline suite: 557 passed, 2 expected opt-in skips.
+- Ruff lint/format, deterministic evaluation, and `git diff --check` passed.
+- No dependency, schema migration, live provider call, cloud sharing, external storage,
+  provider change, commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin a phase after MVP-8 without separate explicit user direction.
+
 ## 2026-08-10 - MVP-7.1 MiMo Consolidation Completion
 
 - MVP-7.1 is complete and verified. It repairs the MVP-7 direct-MiMo consolidation

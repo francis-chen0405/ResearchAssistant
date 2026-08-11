@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-7.1
+## Current Project State: MVP-8
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -43,9 +43,13 @@ and application-owned local service lifecycle remain in force. The original Stre
 frontend remains fixture-only. Native SearXNG paths remain historical compatibility
 surfaces for old persisted runs, not the current live-run operating stack.
 
+MVP-7.1 and MVP-8 are complete. MVP-8 delivered released-brief presentation, local
+deterministic export, and persisted progress/restart reuse without changing evidence or
+release policy. No later phase is authorized.
+
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-7-1-mimo-consolidation-completion.md`
+- `.agent/plans/phase-mvp-8-briefs-export-performance.md`
 
 ## MVP-2A: Architecture Gate
 

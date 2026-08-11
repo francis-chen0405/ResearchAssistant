@@ -96,6 +96,8 @@ class LiveRunSnapshot(StrictModel):
     exit_code: int | None = None
     stage: str = Field(min_length=1)
     latest_checkpoint: str | None = None
+    completed_checkpoints: int = Field(default=0, ge=0)
+    total_checkpoints: int = Field(default=5, ge=1)
     message: str = Field(min_length=1)
     diagnostic_component: str = Field(min_length=1)
     model_calls_used: int = Field(ge=0)
@@ -423,6 +425,11 @@ class LiveResearchController:
             exit_code=int(exit_code) if exit_code is not None else None,
             stage=result.current_stage.value,
             latest_checkpoint=checkpoint,
+            completed_checkpoints=sum(
+                checkpoint.status.value in {"completed", "blocked"}
+                for checkpoint in result.checkpoints
+            ),
+            total_checkpoints=5,
             message=_result_message(result),
             diagnostic_component=_diagnostic_component(result),
             model_calls_used=result.model_calls_used,

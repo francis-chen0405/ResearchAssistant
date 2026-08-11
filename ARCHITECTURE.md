@@ -290,6 +290,18 @@ provenance; new rows preserve URL, normalization, acquisition, provider, and med
 semantics. Acquisition, Firecrawl-adapter, and provider-fingerprint identities are bumped,
 so pre-MVP-6.9 runs cannot resume under the new semantics with the same run ID.
 
+### MVP-8 Brief Export and Progress Contract
+
+Only a read-only reconstructed RELEASED run may be exported. Export rechecks valid final
+validation and the SHA-256 of the reconstructed rendered brief against the persisted
+release hash; BLOCKED, FAILED, CANCELLED, and RUNNING runs never produce a report.
+Local Markdown, PDF, and DOCX exports preserve the released brief verbatim and add only
+application-owned trace metadata and the required human-review warning. Every export
+identifies the released run ID, rendered-brief hash, exporter version, format, and an
+aware generation timestamp. Export never mutates the run, Ledger, synthesis, validation,
+or release state. Progress surfaces report persisted completed checkpoints; compatible
+failed-run resumes reuse their typed, valid completed checkpoint artifacts.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: Exa Search `auto` for metadata-only discovery, pinned

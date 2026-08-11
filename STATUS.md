@@ -1,5 +1,31 @@
 # Status
 
+## 2026-08-10 - MVP-8 Briefs, Export & Performance
+
+Status: Complete and verified.
+
+- Added local Markdown, PDF, and DOCX export for revalidated released runs only. Each
+  report carries the released run ID, rendered-brief hash, exporter version, format, and
+  generation time; Markdown is deterministic for a fixed timestamp.
+- Export reconstructs through the established read-only inspection path and refuses
+  blocked, failed, cancelled, and running runs. It verifies final validation and the
+  rendered hash before writing a local file.
+- Presentation retains the exact released brief and approved factual statements, adds the
+  required human-review warning, and preserves visible coverage warnings.
+- Added persisted checkpoint completion to CLI inspection and the local live UI. Existing
+  compatible failed-run resume behavior continues to reuse typed valid checkpoints.
+- Added MVP-8 export regression coverage. No dependency, migration, live provider call,
+  external storage, account, or provider change was added.
+
+Verification:
+
+- Full offline suite: 557 passed, 2 expected opt-in skips.
+- Ruff lint and format checks, deterministic evaluation, and `git diff --check` passed.
+
+Next phase:
+
+- No phase after MVP-8 is authorized.
+
 ## 2026-08-10 - MVP-7.1 MiMo Consolidation Completion
 
 Status: Complete and verified. MVP-7 direct-MiMo consolidation remains the preceding

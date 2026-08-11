@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-08-10 - MVP-8 Briefs, Export & Performance
+
+- Export only a read-only reconstructed RELEASED run after rechecking valid final
+  validation and the persisted rendered-brief hash. Never export blocked, failed,
+  cancelled, or running output as a report.
+- Keep exports local and dependency-free: deterministic Markdown plus minimal standard-
+  library PDF and DOCX containers. Every export carries run ID, rendered-brief hash,
+  exporter version, format, and aware generation time.
+- Preserve every exact approved factual sentence and required warning. Presentation adds
+  only application-owned traceability and human-review framing.
+- Surface persisted checkpoint completion in CLI and local UI. Continue reusing typed,
+  valid completed checkpoint artifacts on exact compatible failed-run resume.
+- Do not add sharing, accounts, external storage, provider changes, live calls, schema
+  changes, or evidence/release-policy changes.
+
 ## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
 
 - Treat only ResearchAssistant's bounded public-host preflight and PDF signature check as

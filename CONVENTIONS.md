@@ -123,6 +123,8 @@ SDK or dependency.
     non-exponent decimal text in SQLite; legacy REAL cost columns are compatibility-only
   - SQLite migration 7 adds nullable snapshot acquisition/media-provenance columns;
     historical immutable rows reconstruct as explicitly unknown and are never rewritten
+  - Local brief export opens the database through the validated read-only inspection path;
+    it may export only a re-hashed released brief and never creates or mutates artifacts
 
 ## 6. Environment Variables
 
