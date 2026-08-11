@@ -1445,31 +1445,35 @@ def read_snapshot(db_path: str, snapshot_id: UUID) -> SourceSnapshot:
         ).fetchone()
         if row is None:
             raise KeyError(f"snapshot {snapshot_id} not found")
-        return SourceSnapshot(
-            run_id=UUID(row["run_id"]),
-            retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
-            snapshot_id=UUID(row["snapshot_id"]),
-            source_url=row["source_url"],
-            original_url=row["original_url"],
-            canonical_url=row["canonical_url"],
-            retrieved_at=_iso_to_dt(row["retrieved_at"]),
-            normalized_text=row["normalized_text"],
-            snapshot_sha256=row["snapshot_sha256"],
-            word_count=row["word_count"],
-            truncated=bool(row["truncated"]),
-            normalization_version=row["normalization_version"],
-            acquisition_version=row["acquisition_version"],
-            provider_name=row["provider_name"],
-            provider_version=row["provider_version"],
-            media_type_provenance=(
-                MediaTypeProvenance.model_validate_json(row["media_type_provenance_json"])
-                if row["media_type_provenance_json"] is not None
-                else MediaTypeProvenance()
-            ),
-            created_at=_iso_to_dt(row["created_at"]),
-        )
+        return _row_to_snapshot(row)
     finally:
         conn.close()
+
+
+def _row_to_snapshot(row: sqlite3.Row) -> SourceSnapshot:
+    return SourceSnapshot(
+        run_id=UUID(row["run_id"]),
+        retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
+        snapshot_id=UUID(row["snapshot_id"]),
+        source_url=row["source_url"],
+        original_url=row["original_url"],
+        canonical_url=row["canonical_url"],
+        retrieved_at=_iso_to_dt(row["retrieved_at"]),
+        normalized_text=row["normalized_text"],
+        snapshot_sha256=row["snapshot_sha256"],
+        word_count=row["word_count"],
+        truncated=bool(row["truncated"]),
+        normalization_version=row["normalization_version"],
+        acquisition_version=row["acquisition_version"],
+        provider_name=row["provider_name"],
+        provider_version=row["provider_version"],
+        media_type_provenance=(
+            MediaTypeProvenance.model_validate_json(row["media_type_provenance_json"])
+            if row["media_type_provenance_json"] is not None
+            else MediaTypeProvenance()
+        ),
+        created_at=_iso_to_dt(row["created_at"]),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1728,19 +1732,23 @@ def read_statement_draft(db_path: str, statement_draft_id: UUID) -> StatementDra
         ).fetchone()
         if row is None:
             raise KeyError(f"statement draft {statement_draft_id} not found")
-        return StatementDraft(
-            run_id=UUID(row["run_id"]),
-            statement_draft_id=UUID(row["statement_draft_id"]),
-            quote_block_id=UUID(row["quote_block_id"]),
-            stance=row["stance"],
-            draft_statement=row["draft_statement"],
-            claim_fit=row["claim_fit"],
-            analyst_prompt_version=row["analyst_prompt_version"],
-            analyst_model_name=row["analyst_model_name"],
-            drafted_at=_iso_to_dt(row["drafted_at"]),
-        )
+        return _row_to_statement_draft(row)
     finally:
         conn.close()
+
+
+def _row_to_statement_draft(row: sqlite3.Row) -> StatementDraft:
+    return StatementDraft(
+        run_id=UUID(row["run_id"]),
+        statement_draft_id=UUID(row["statement_draft_id"]),
+        quote_block_id=UUID(row["quote_block_id"]),
+        stance=row["stance"],
+        draft_statement=row["draft_statement"],
+        claim_fit=row["claim_fit"],
+        analyst_prompt_version=row["analyst_prompt_version"],
+        analyst_model_name=row["analyst_model_name"],
+        drafted_at=_iso_to_dt(row["drafted_at"]),
+    )
 
 
 def insert_statement_review(db_path: str, review: StatementReviewResult) -> None:

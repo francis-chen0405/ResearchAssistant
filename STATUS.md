@@ -1,5 +1,29 @@
 # Status
 
+## 2026-08-10 - MVP-8.2 Evidence Browser
+
+Status: Complete and verified.
+
+- Added a typed, local Evidence Browser that reconstructs candidates, trusted snapshots,
+  provenance, Analyst and Reviewer decisions, Ledger records, and final validation only
+  through the validated read-only SQLite inspection boundary.
+- Released statements trace directly to their Ledger record, approved review, exact
+  quotation, trusted snapshot, and source provenance. Filters cover stance, stage,
+  source URL, approval/rejection state, and release state.
+- The dedicated local Streamlit page is inspection-only and labels trusted snapshot text,
+  non-authoritative provider metadata, untrusted source text, and unreleased artifacts.
+  It exposes no provider request headers, credentials, or edit actions.
+- Added regression coverage for trail navigation, filters, unreleased labeling,
+  missing/corrupt databases, redaction, and byte-for-byte non-mutation.
+
+Verification:
+
+- Focused Evidence Browser suite: 6 passed.
+- Full offline suite passed with the existing 2 expected opt-in skips.
+- Ruff lint/format, deterministic Phase 10 evaluation, and `git diff --check` passed.
+- No dependency, migration, provider call, account, cloud storage, or evidence/release
+  policy change was added.
+
 ## 2026-08-10 - MVP-8.1 Research Controls
 
 - MVP-8.1 is complete and verified. Frozen strict `ResearchControls` carries bounded

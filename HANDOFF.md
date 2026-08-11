@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-10 - MVP-8.2 Evidence Browser
+
+- MVP-8.2 is complete. `evidence_browser.py` reconstructs a run's evidence trail with
+  strict frozen Pydantic view models over one validated `ReadOnlyStore` session. It never
+  initializes, migrates, or writes a database.
+- `frontend/evidence_browser_app.py` is a separate local read-only Streamlit page. It
+  filters by stance, stage, URL, approval, and release; it labels trusted snapshots,
+  non-authoritative provider metadata, untrusted source text, and unreleased artifacts.
+- Released-statement traces join exact Ledger records to the matching approved Reviewer
+  decision, quote candidate, trusted snapshot, provenance, and valid final validation.
+  There are no edit, approval, release, header, or credential surfaces.
+- `tests/test_mvp8_2_evidence_browser.py` covers navigation, filters, blocked labeling,
+  missing/corrupt read-only failures, redaction, and database-byte immutability.
+
+Verification handoff:
+
+- Focused Evidence Browser tests: 6 passed.
+- Full offline suite passed with the existing 2 expected opt-in skips.
+- Deterministic evaluation, Ruff lint/format, and `git diff --check` passed.
+- No dependency, schema migration, provider call, spending, account, cloud feature, or
+  evidence/release-policy change was added.
+
 ## 2026-08-10 - MVP-8.1 Research Controls
 
 - MVP-8.1 is complete. `ResearchControls` is frozen, strict, and defaults to standard

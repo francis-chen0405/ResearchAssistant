@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-8.1
+## Current Project State: MVP-8.2
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -43,16 +43,17 @@ and application-owned local service lifecycle remain in force. The original Stre
 frontend remains fixture-only. Native SearXNG paths remain historical compatibility
 surfaces for old persisted runs, not the current live-run operating stack.
 
-MVP-7.1 and MVP-8 are complete. MVP-8 delivered released-brief presentation, local
-deterministic export, and persisted progress/restart reuse without changing evidence or
-release policy. The user explicitly authorized MVP-8.1 Research Controls on 2026-08-10.
-It is limited to typed, fingerprinted operator controls for research depth, report
-length, presentation tone, and explicit focus. Evidence/release-policy invariants remain
-unchanged.
+MVP-7.1, MVP-8, and MVP-8.1 are complete. MVP-8 delivered released-brief presentation,
+local deterministic export, and persisted progress/restart reuse without changing
+evidence or release policy. MVP-8.1 delivered typed, fingerprinted operator controls for
+research depth, report length, presentation tone, and explicit focus. Evidence/release-
+policy invariants remain unchanged. The user explicitly authorized MVP-8.2 Evidence
+Browser on 2026-08-10. It is limited to local, typed, read-only evidence-trail
+inspection through the established SQLite inspection boundary.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-8-1-research-controls.md`
+- `.agent/plans/phase-mvp-8-2-evidence-browser.md`
 
 ## MVP-2A: Architecture Gate
 
