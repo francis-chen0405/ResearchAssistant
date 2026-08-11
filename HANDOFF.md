@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-10 - MVP-8.1 Research Controls
+
+- MVP-8.1 is complete. `ResearchControls` is frozen, strict, and defaults to standard
+  depth, report length, neutral tone, and no focus. Its optional typed focus fields are
+  explicitly supplied to `PlannerLLMInput`; application code never infers them.
+- Direct-MiMo factory configuration binds controls to equal-side bounded acquisition
+  policy and includes canonical controls JSON in the immutable provider policy identity.
+  Exact contract fingerprints reject changed controls on same-run resume. Existing
+  contracts without controls remain readable using safe defaults.
+- CLI, live start/status UI, and exported brief trace metadata show the controls. Tone
+  and length remain presentation-only controls and never alter factual Planner claims or
+  evidence/reviewer/Ledger artifacts.
+
+Verification handoff:
+
+- Focused regression selection: 90 passed, 2 expected skips.
+- Full suite: 565 passed, 2 expected skips.
+- Ruff lint/format, deterministic evaluation, and `git diff --check` passed.
+
 ## 2026-08-10 - MVP-8 Briefs, Export & Performance
 
 - MVP-8 is complete and verified. `brief_export.py` exports only read-only reconstructed

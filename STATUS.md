@@ -1,5 +1,26 @@
 # Status
 
+## 2026-08-10 - MVP-8.1 Research Controls
+
+- MVP-8.1 is complete and verified. Frozen strict `ResearchControls` carries bounded
+  depth, length, tone, and explicit optional focus constraints. Focus is passed to the
+  Planner input and is never inferred from the claim.
+- Controls are included in the canonical provider policy identity and fingerprint. A
+  changed control set therefore cannot resume an existing run under the same run ID.
+  Depth alone maps to equal supporting/opposing acquisition limits; budgets and every
+  evidence, quotation, Reviewer, Ledger, and final-validator rule remain unchanged.
+- CLI launch, live UI, live status, and local export trace metadata display selected
+  controls. Historical contracts without controls reconstruct with the safe defaults.
+- Added regression coverage for defaults, valid/invalid controls, Planner propagation,
+  immutability, and tone/focus isolation. No dependency, migration, provider, account,
+  cloud service, live call, or semantic-release rule was added.
+
+Verification:
+
+- Focused controls/provider/CLI/live/Planner tests: 90 passed, 2 expected skips.
+- Full offline suite: 565 passed, 2 expected skips.
+- Ruff lint/format, deterministic Phase 10 evaluation, and `git diff --check` passed.
+
 ## 2026-08-10 - MVP-8 Briefs, Export & Performance
 
 Status: Complete and verified.

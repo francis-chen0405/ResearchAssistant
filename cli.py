@@ -13,6 +13,7 @@ from uuid import UUID
 from pydantic import ValidationError as PydanticValidationError
 
 from brief_export import BriefExportFormat, export_released_brief
+from models import PresentationTone, ReportLength, ResearchControls, ResearchDepth, ResearchFocus
 from orchestrator import (
     ClaimMismatchError,
     FingerprintMismatchError,
@@ -102,6 +103,13 @@ def _build_parser() -> argparse.ArgumentParser:
     live_run.add_argument("--max-tokens", type=int, required=True)
     live_run.add_argument("--max-cost-usd", required=True)
     live_run.add_argument("--max-llm-calls", type=int, default=160)
+    live_run.add_argument("--depth", type=ResearchDepth, default=ResearchDepth.STANDARD)
+    live_run.add_argument("--length", type=ReportLength, default=ReportLength.REPORT)
+    live_run.add_argument("--tone", type=PresentationTone, default=PresentationTone.NEUTRAL)
+    live_run.add_argument("--focus-geographic-area", default=None)
+    live_run.add_argument("--focus-timeframe", default=None)
+    live_run.add_argument("--focus-population", default=None)
+    live_run.add_argument("--focus-analytical-lens", default=None)
     inspect_run = subparsers.add_parser(
         "inspect-run",
         help="Inspect a partial or terminal provider run.",
@@ -134,6 +142,20 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
             max_cost_usd=args.max_cost_usd,
             max_llm_calls=args.max_llm_calls,
         )
+        focus_values = {
+            "geographic_area": args.focus_geographic_area,
+            "timeframe": args.focus_timeframe,
+            "population": args.focus_population,
+            "analytical_lens": args.focus_analytical_lens,
+        }
+        focus = (
+            ResearchFocus(**focus_values)
+            if any(value is not None for value in focus_values.values())
+            else None
+        )
+        controls = ResearchControls(
+            depth=args.depth, length=args.length, tone=args.tone, focus=focus
+        )
     except (ValueError, PydanticValidationError) as exc:
         print(f"invalid input: {exc}", file=sys.stderr)
         return CLIExitCode.INVALID_INPUT
@@ -145,6 +167,7 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
             repository_revision=repository_identity(),
             wigolo=wigolo,
             ceilings=ceilings,
+            research_controls=controls,
         )
     except (ProviderConfigurationError, PydanticValidationError, ValueError) as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
@@ -159,6 +182,7 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
             db_path=db_path,
             factory_config=factory_config,
             run_id=run_id,
+            research_controls=controls,
         )
     except ClaimMismatchError as exc:
         print(f"invalid input: {exc}", file=sys.stderr)
@@ -261,6 +285,10 @@ def _print_launch_summary(
     print(f"token budget: {config.ceilings.max_tokens}")
     print(f"cost budget usd: {config.ceilings.max_cost_usd}")
     print(f"physical llm call budget: {config.ceilings.max_llm_calls}")
+    print(f"research depth: {config.research_controls.depth.value}")
+    print(f"report length: {config.research_controls.length.value}")
+    print(f"presentation tone: {config.research_controls.tone.value}")
+    print(f"research focus: {config.research_controls.focus or 'none'}")
 
 
 def _print_provider_result(result: ProviderPipelineResult) -> int:

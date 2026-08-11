@@ -49,6 +49,7 @@ from agents.supportingresearcher import (
 )
 from agents.synthesizer import SynthesizerLLMInput
 from models import (
+    DEFAULT_RESEARCH_CONTROLS,
     CandidateBatch,
     CandidateQuoteBlock,
     CheckpointStatus,
@@ -63,6 +64,7 @@ from models import (
     PlannerOutput,
     ProviderRunContract,
     ProvisionalCandidate,
+    ResearchControls,
     RetrievalRecord,
     RunCancellationRequest,
     RunManifest,
@@ -1339,6 +1341,7 @@ def run_provider_pipeline(
     run_id: UUID | None = None,
     config: ProviderOrchestrationConfig | None = None,
     provider_contract: ProviderRunContract | None = None,
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
     clock: Callable[[], datetime] | None = None,
     stage_hook: _StageHook | None = None,
 ) -> ProviderPipelineResult:
@@ -1386,6 +1389,7 @@ def run_provider_pipeline(
             llm_provider,
             settings,
             now,
+            research_controls,
         )
         _after_stage(path, resolved_run_id, PHASE9_PLANNER_CHECKPOINT, now, stage_hook)
 
@@ -1494,6 +1498,7 @@ def run_mvp3b_pipeline(
     run_id: UUID | None = None,
     clock: Callable[[], datetime] | None = None,
     stage_hook: _StageHook | None = None,
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
 ) -> ProviderPipelineResult:
     """Run the authorized Wigolo plus direct Xiaomi MiMo MVP-3B stack."""
     from providers.mimo_factory import (
@@ -1505,6 +1510,8 @@ def run_mvp3b_pipeline(
         raise TypeError("MVP-3B requires MimoProviderFactoryConfig")
     now = clock or _phase9_utc_now
     resolved_run_id = run_id or uuid4()
+    if factory_config.research_controls != research_controls:
+        raise ValueError("factory research controls must match requested controls")
     bundle = build_mimo_provider_bundle(factory_config, clients=clients)
     settings = ProviderOrchestrationConfig(
         routing=DIRECT_MIMO_ROUTING,
@@ -1534,6 +1541,7 @@ def run_mvp3b_pipeline(
         provider_contract=contract,
         clock=now,
         stage_hook=stage_hook,
+        research_controls=research_controls,
     )
 
 
@@ -1910,6 +1918,7 @@ def _run_planner_stage(
     llm_provider: LLMProvider,
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
+    research_controls: ResearchControls,
 ) -> PlannerOutput:
     if _checkpoint_is_completed(db_path, manifest.run_id, PHASE9_PLANNER_CHECKPOINT):
         return read_planner_output(db_path, manifest.run_id)
@@ -1920,7 +1929,11 @@ def _run_planner_stage(
         PHASE9_PLANNER_CHECKPOINT,
         clock,
     )
-    planner_input = PlannerLLMInput(run_id=manifest.run_id, raw_claim=manifest.raw_claim)
+    planner_input = PlannerLLMInput(
+        run_id=manifest.run_id,
+        raw_claim=manifest.raw_claim,
+        research_controls=research_controls,
+    )
     operation_id = _operation_id(manifest.run_id, "planner", manifest.run_id)
 
     def validate_planner(output: BaseModel, alias: ModelAlias) -> BaseModel:

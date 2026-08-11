@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import zipfile
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -12,8 +13,9 @@ from xml.sax.saxutils import escape
 
 from pydantic import ConfigDict, Field, field_validator
 
-from models import StrictModel
+from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, StrictModel
 from orchestrator import ProviderRunStatus, inspect_provider_run
+from store import open_read_only_store, read_provider_run_contract
 
 EXPORTER_VERSION = "mvp8-local-export-v1"
 
@@ -32,6 +34,7 @@ class BriefExportMetadata(StrictModel):
     format: BriefExportFormat
     generated_at: datetime
     exporter_version: str = Field(min_length=1)
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
 
     _generated_at_is_aware = field_validator("generated_at")(
         lambda value: _require_aware(value, "generated_at")
@@ -65,12 +68,14 @@ def export_released_brief(
         raise ValueError("released brief hash does not match reconstructed brief")
 
     timestamp = generated_at or datetime.now(UTC)
+    controls = _read_controls(db_path, result.run_id)
     metadata = BriefExportMetadata(
         run_id=str(result.run_id),
         rendered_brief_hash=result.rendered_brief_hash,
         format=export_format,
         generated_at=timestamp,
         exporter_version=EXPORTER_VERSION,
+        research_controls=controls,
     )
     destination = Path(output_path).resolve()
     if destination.suffix.lower() != _suffix_for(export_format):
@@ -89,6 +94,24 @@ def export_released_brief(
 
 def _parse_run_id(value: str) -> UUID:
     return UUID(value)
+
+
+def _read_controls(db_path: str | Path, run_id: UUID) -> ResearchControls:
+    if not Path(db_path).is_file():
+        return DEFAULT_RESEARCH_CONTROLS
+    with open_read_only_store(db_path) as store:
+        try:
+            contract = read_provider_run_contract(store.connection, run_id)
+        except KeyError:
+            return DEFAULT_RESEARCH_CONTROLS
+    marker = "|controls:"
+    if marker not in contract.policy_identity:
+        return DEFAULT_RESEARCH_CONTROLS
+    try:
+        encoded = contract.policy_identity.split(marker, 1)[1].rsplit("|", 1)[0]
+        return ResearchControls.model_validate(json.loads(encoded))
+    except (IndexError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("provider contract has no valid persisted research controls") from exc
 
 
 def _require_aware(value: datetime, label: str) -> datetime:
@@ -123,6 +146,7 @@ def _markdown(brief: str, metadata: BriefExportMetadata) -> str:
         f"rendered_brief_hash: {metadata.rendered_brief_hash}\n"
         f"generated_at: {timestamp}\n"
         f"exporter_version: {metadata.exporter_version}\n"
+        f"research_controls: {metadata.research_controls.canonical_json()}\n"
         "-->\n\n"
     )
     warning = (

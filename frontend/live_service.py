@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -16,7 +17,7 @@ from pydantic import Field, field_validator
 
 from cli import CLIExitCode, repository_identity
 from frontend.security import redact_text
-from models import RunManifest, StrictModel
+from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, RunManifest, StrictModel
 from money import ExactUSD
 from orchestrator import (
     ClaimMismatchError,
@@ -47,6 +48,18 @@ LiveClassification = Literal[
 ]
 
 
+def contract_controls(policy_identity: str) -> ResearchControls:
+    """Recover immutable controls persisted in the canonical provider contract."""
+    marker = "|controls:"
+    if marker not in policy_identity:
+        return DEFAULT_RESEARCH_CONTROLS
+    try:
+        encoded = policy_identity.split(marker, 1)[1].rsplit("|", 1)[0]
+        return ResearchControls.model_validate(json.loads(encoded))
+    except (IndexError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("provider contract has no valid persisted research controls") from exc
+
+
 class LiveRunRequest(StrictModel):
     raw_claim: str = Field(min_length=1)
     db_path: str = Field(min_length=1)
@@ -54,6 +67,7 @@ class LiveRunRequest(StrictModel):
     max_tokens: int = Field(ge=1, le=1_000_000)
     max_cost_usd: Decimal = Field(gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
 
     @field_validator("raw_claim")
     @classmethod
@@ -118,6 +132,7 @@ class LiveRunSnapshot(StrictModel):
     provider_identity: str | None = None
     model_identity: str | None = None
     fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
 
 
 class LiveHistoryItem(StrictModel):
@@ -238,6 +253,7 @@ class LiveResearchController:
                 repository_revision=repository_identity(),
                 wigolo=wigolo,
                 ceilings=ceilings,
+                research_controls=request.research_controls,
             )
         except Exception as exc:
             snapshot = self._early_snapshot(
@@ -450,6 +466,11 @@ class LiveResearchController:
             provider_identity=contract.provider_identity if contract is not None else None,
             model_identity=contract.model_identity if contract is not None else None,
             fingerprint=contract.fingerprint_sha256 if contract is not None else None,
+            research_controls=(
+                contract_controls(contract.policy_identity)
+                if contract is not None
+                else DEFAULT_RESEARCH_CONTROLS
+            ),
         )
 
     def _early_snapshot(

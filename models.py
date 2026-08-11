@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
@@ -36,6 +37,64 @@ def missing_required_query_exclusions(exclusion_parameters: str) -> tuple[str, .
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class ResearchDepth(StrEnum):
+    FOCUSED = "focused"
+    STANDARD = "standard"
+
+
+class ReportLength(StrEnum):
+    BRIEF = "brief"
+    REPORT = "report"
+
+
+class PresentationTone(StrEnum):
+    NEUTRAL = "neutral"
+    EXECUTIVE = "executive"
+    ACADEMIC = "academic"
+    PLAIN_LANGUAGE = "plain_language"
+
+
+class ResearchFocus(StrictModel):
+    """Explicit optional planner constraints; never inferred from the claim."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    geographic_area: NonEmptyStr | None = None
+    timeframe: NonEmptyStr | None = None
+    population: NonEmptyStr | None = None
+    analytical_lens: NonEmptyStr | None = None
+
+    @field_validator("geographic_area", "timeframe", "population", "analytical_lens")
+    @classmethod
+    def validate_trimmed(cls, value: str | None) -> str | None:
+        if value is not None and value != value.strip():
+            raise ValueError("focus values must not have leading or trailing whitespace")
+        return value
+
+    @model_validator(mode="after")
+    def validate_present(self) -> ResearchFocus:
+        if not any((self.geographic_area, self.timeframe, self.population, self.analytical_lens)):
+            raise ValueError("focus must include at least one explicit constraint")
+        return self
+
+
+class ResearchControls(StrictModel):
+    """Frozen operator choices whose canonical JSON is part of run compatibility."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    depth: ResearchDepth = ResearchDepth.STANDARD
+    length: ReportLength = ReportLength.REPORT
+    tone: PresentationTone = PresentationTone.NEUTRAL
+    focus: ResearchFocus | None = None
+
+    def canonical_json(self) -> str:
+        return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+
+
+DEFAULT_RESEARCH_CONTROLS = ResearchControls()
 
 
 class RunStatus(StrEnum):

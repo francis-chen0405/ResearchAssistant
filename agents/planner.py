@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from models import StrictModel
+from models import ResearchControls, StrictModel
 
 
 class PlannerLLMInput(StrictModel):
@@ -14,3 +14,4 @@ class PlannerLLMInput(StrictModel):
 
     run_id: UUID
     raw_claim: str = Field(min_length=1)
+    research_controls: ResearchControls = ResearchControls()

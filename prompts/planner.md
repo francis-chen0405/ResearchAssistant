@@ -23,6 +23,9 @@ whether the claim is true.
 - Use the architecture-defined strategies for each round.
 - Include `-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com` in every
   query's exclusion parameters.
+- Treat the typed `research_controls.focus` input as an explicit retrieval constraint when
+  present. Do not infer a focus that the operator did not provide. Depth is application
+  controlled and does not change the required query schema or evidence standards.
 
 # Safety
 

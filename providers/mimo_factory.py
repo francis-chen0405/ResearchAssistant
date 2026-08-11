@@ -16,9 +16,12 @@ from agents.reviewer import ReviewerDecision
 from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, AcquisitionPolicy
 from agents.synthesizer import SynthesizerLLMInput
 from models import (
+    DEFAULT_RESEARCH_CONTROLS,
     PlannerOutput,
     ProviderRunContract,
     ProvisionalCandidate,
+    ResearchControls,
+    ResearchDepth,
     ScoreDecision,
     StatementDraft,
     StrictModel,
@@ -56,6 +59,7 @@ class MimoProviderFactoryConfig(StrictModel):
     mimo: MimoConfig
     ceilings: RunCeilings = RunCeilings()
     acquisition: AcquisitionPolicy = MVP3A_ACQUISITION_POLICY
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
     repository_revision: str = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -66,8 +70,8 @@ class MimoProviderFactoryConfig(StrictModel):
             raise ValueError("new live runs require Exa auto discovery")
         if self.mimo.provider_name != "xiaomi-mimo" or self.mimo.model != "mimo-v2.5-pro":
             raise ValueError("MVP-3B requires direct Xiaomi mimo-v2.5-pro")
-        if self.acquisition != MVP3A_ACQUISITION_POLICY:
-            raise ValueError("MVP-3B requires rank-five/keep-three acquisition")
+        if self.acquisition != _acquisition_for_controls(self.research_controls):
+            raise ValueError("acquisition policy must exactly match research depth")
         for stage in LLMStage:
             route = DIRECT_MIMO_ROUTING.for_stage(stage)
             if route.primary is not ModelAlias.MIMO_V25_PRO or route.fallbacks:
@@ -82,6 +86,7 @@ class MimoProviderFactoryConfig(StrictModel):
         repository_revision: str,
         wigolo: WigoloConfig | None = None,
         ceilings: RunCeilings | None = None,
+        research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
     ) -> MimoProviderFactoryConfig:
         mimo = MimoConfig.from_environment(environment)
         exa = ExaConfig.from_environment(environment)
@@ -91,6 +96,8 @@ class MimoProviderFactoryConfig(StrictModel):
             firecrawl=FirecrawlConfig.from_environment(environment),
             mimo=mimo,
             ceilings=ceilings or RunCeilings(),
+            acquisition=_acquisition_for_controls(research_controls),
+            research_controls=research_controls,
             repository_revision=repository_revision,
         )
 
@@ -211,6 +218,7 @@ def _fingerprint_payload(
             },
             "ceilings": config.ceilings.model_dump(mode="json"),
             "acquisition": config.acquisition.model_dump(mode="json"),
+            "research_controls": config.research_controls.model_dump(mode="json"),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -237,8 +245,18 @@ def _fingerprint_payload(
             f"{MIMO_RETRY_POLICY_VERSION}|{MIMO_BUDGET_POLICY_VERSION}|"
             f"{DIRECT_MIMO_PRICING_POLICY_VERSION}|"
             f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|"
-            f"{sha256(operational_policy_json.encode('utf-8')).hexdigest()}|rank5-keep3"
+            f"{sha256(operational_policy_json.encode('utf-8')).hexdigest()}"
+            f"|controls:{config.research_controls.canonical_json()}"
             f"|{EVIDENCE_POLICY_VERSION}"
         ),
         "repository_revision": config.repository_revision,
     }
+
+
+def _acquisition_for_controls(controls: ResearchControls) -> AcquisitionPolicy:
+    """Map bounded depth choices to equal-side acquisition limits only."""
+    if controls.depth is ResearchDepth.FOCUSED:
+        return AcquisitionPolicy(discovery_results_per_query=3, usable_snapshots_per_query=2)
+    if controls.depth is ResearchDepth.STANDARD:
+        return MVP3A_ACQUISITION_POLICY
+    raise ValueError(f"unsupported research depth: {controls.depth!r}")

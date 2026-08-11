@@ -22,6 +22,13 @@ from frontend.live_service import (  # noqa: E402
     prepare_default_database,
 )
 from frontend.service_manager import WigoloServiceManager  # noqa: E402
+from models import (  # noqa: E402
+    PresentationTone,
+    ReportLength,
+    ResearchControls,
+    ResearchDepth,
+    ResearchFocus,
+)
 
 
 def main() -> None:
@@ -142,6 +149,14 @@ def _render_start_form(
         max_calls = calls_col.number_input(
             "Physical MiMo call ceiling", min_value=1, max_value=160, value=160, step=1
         )
+        control_col, tone_col, length_col = st.columns(3)
+        depth = control_col.selectbox("Research depth", options=list(ResearchDepth))
+        tone = tone_col.selectbox("Presentation tone", options=list(PresentationTone))
+        length = length_col.selectbox("Report length", options=list(ReportLength))
+        focus_area = st.text_input("Focus: geographic area (optional)")
+        focus_timeframe = st.text_input("Focus: timeframe (optional)")
+        focus_population = st.text_input("Focus: population (optional)")
+        focus_lens = st.text_input("Focus: analytical lens (optional)")
         database = st.text_input("SQLite database", value=str(default_db))
         run_id_text = st.text_input(
             "Run ID (optional)",
@@ -169,6 +184,13 @@ def _render_start_form(
     try:
         run_id = UUID(run_id_text) if run_id_text.strip() else None
         cost = Decimal(max_cost)
+        focus_values = {
+            "geographic_area": focus_area or None,
+            "timeframe": focus_timeframe or None,
+            "population": focus_population or None,
+            "analytical_lens": focus_lens or None,
+        }
+        focus = ResearchFocus(**focus_values) if any(focus_values.values()) else None
         request = LiveRunRequest(
             raw_claim=claim,
             db_path=str(Path(database).expanduser().resolve()),
@@ -176,6 +198,12 @@ def _render_start_form(
             max_tokens=int(max_tokens),
             max_cost_usd=cost,
             max_llm_calls=int(max_calls),
+            research_controls=ResearchControls(
+                depth=depth,
+                length=length,
+                tone=tone,
+                focus=focus,
+            ),
         )
     except (ValueError, InvalidOperation, ValidationError) as exc:
         st.error(f"Invalid input: {exc}")
@@ -288,6 +316,7 @@ def _render_snapshot(
     st.caption(f"Run ID: `{snapshot.run_id}` · Database: `{snapshot.db_path}`")
     st.caption(f"Diagnostic component: `{snapshot.diagnostic_component}`")
     st.write("**Exact claim:**", snapshot.raw_claim)
+    st.write("**Research controls:**", snapshot.research_controls.model_dump(mode="json"))
     if snapshot.fingerprint:
         with st.expander("Compatibility identity"):
             st.code(
