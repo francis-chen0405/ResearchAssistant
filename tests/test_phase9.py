@@ -627,24 +627,22 @@ def test_malformed_primary_output_retries_then_records_fallback(tmp_path: Path) 
     assert planner_attempts[2].escalation_reason is not None
 
 
-def test_extractor_exact_quote_failure_objectively_escalates_to_minimax(
+def test_extractor_exact_quote_failure_does_not_retry_or_switch_models(
     tmp_path: Path,
 ) -> None:
     llm = FakeLLMProvider(invalid_extractor_aliases={ModelAlias.MIMO_V25_PRO})
     result = _run(tmp_path, llm=llm)
     extractor_attempts = [item for item in result.model_attempts if item.stage == "extractor"]
 
-    assert result.status is ProviderRunStatus.RELEASED
-    assert any(
-        item.model_alias == ModelAlias.MINIMAX_M3.value
-        and item.escalation_reason is not None
-        and "exact_quote_failure" in item.escalation_reason
-        for item in extractor_attempts
-    )
+    assert result.status is ProviderRunStatus.FAILED
+    assert extractor_attempts
     assert all(
         attempts[0].model_alias == ModelAlias.MIMO_V25_PRO.value
         for attempts in _attempts_by_operation(extractor_attempts).values()
     )
+    assert {item.model_alias for item in extractor_attempts} == {ModelAlias.MIMO_V25_PRO.value}
+    assert all(item.attempt_number == 1 for item in extractor_attempts)
+    assert all(item.failure_code == "exact_quote_failure" for item in extractor_attempts)
 
 
 def test_semantic_reviewer_disagreement_does_not_switch_models(tmp_path: Path) -> None:
@@ -934,7 +932,7 @@ def test_usage_metadata_survives_deterministic_route_failure(tmp_path: Path) -> 
         if item.stage == "extractor" and item.status.value == "failed"
     ]
 
-    assert result.status is ProviderRunStatus.RELEASED
+    assert result.status is ProviderRunStatus.FAILED
     assert failed_extractor_attempts
     assert all(item.failure_code == "exact_quote_failure" for item in failed_extractor_attempts)
     assert all(item.usage == usage for item in failed_extractor_attempts)

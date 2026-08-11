@@ -1042,7 +1042,6 @@ _RETRYABLE_FAILURE_CODES = frozenset(
         "malformed_output",
         "schema_validation_failure",
         "deterministic_validation_failure",
-        "exact_quote_failure",
         "interrupted_attempt",
     }
 )
