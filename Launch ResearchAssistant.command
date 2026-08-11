@@ -4,6 +4,11 @@ set -eu
 SCRIPT_DIR="${0:A:h}"
 cd "$SCRIPT_DIR"
 
+if /usr/sbin/lsof -nP -iTCP:8501 -sTCP:LISTEN >/dev/null 2>&1; then
+  open "http://127.0.0.1:8501/"
+  exit 0
+fi
+
 if [[ ! -x ".venv/bin/streamlit" ]]; then
   osascript -e 'display alert "ResearchAssistant is not installed" message "Create .venv and install requirements.txt once, then double-click this launcher again." as critical'
   exit 1
@@ -35,7 +40,18 @@ if [[ -z "${FIRECRAWL_API_KEY:-}" ]]; then
 fi
 
 export PATH="$SCRIPT_DIR/.venv/bin:$PATH"
-exec "$SCRIPT_DIR/.venv/bin/streamlit" run "$SCRIPT_DIR/frontend/live_app.py" \
+"$SCRIPT_DIR/.venv/bin/streamlit" run "$SCRIPT_DIR/frontend/live_app.py" \
   --server.address 127.0.0.1 \
   --server.port 8501 \
-  --server.headless false
+  --server.headless true &
+STREAMLIT_PID=$!
+
+for _ in {1..30}; do
+  if /usr/sbin/lsof -nP -iTCP:8501 -sTCP:LISTEN >/dev/null 2>&1; then
+    open "http://127.0.0.1:8501/"
+    break
+  fi
+  sleep 1
+done
+
+wait "$STREAMLIT_PID"
