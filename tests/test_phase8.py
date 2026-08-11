@@ -21,11 +21,11 @@ from agents.supportingresearcher import (
 )
 from models import (
     PlannerOutput,
-    ProvisionalCandidate,
     ScoreDecision,
     SourceSnapshot,
     StrictModel,
     SynthesisOutput,
+    VerbatimQuoteSelection,
 )
 from providers.llm import (
     DEFAULT_LLM_ROUTING,
@@ -99,8 +99,8 @@ def _stage_outputs() -> list[tuple[LLMStage, type[BaseModel], BaseModel]]:
         (LLMStage.PLANNER, PlannerOutput, _planner_output()),
         (
             LLMStage.EXTRACTOR,
-            ProvisionalCandidate,
-            _load_model("provisional_candidates.json", ProvisionalCandidate, 0),
+            VerbatimQuoteSelection,
+            VerbatimQuoteSelection(selected_segments=("Exact fixture evidence.",)),
         ),
         (
             LLMStage.ANALYST,
@@ -260,22 +260,24 @@ def test_prompt_hash_is_stable_and_changes_when_file_changes(tmp_path: Path) -> 
     assert edited.sha256 != original.sha256
 
 
-def test_extractor_prompt_matches_mvp6_4_evidence_density_policy() -> None:
+def test_extractor_prompt_uses_mvp9_verbatim_selection_contract() -> None:
     prompt = load_prompt(LLMStage.EXTRACTOR)
 
-    assert prompt.version == "mvp6.4-extractor-50-75-v1"
+    assert prompt.version == "mvp9-verbatim-quote-selection-v1"
+    assert "selected_segments" in prompt.text
+    assert "Do not create brackets" in prompt.text
     assert "at least 50 exact quoted words" in prompt.text
     assert "at least one digit and at least one recognized statistical marker" in prompt.text
     assert "at least 75 exact quoted words" in prompt.text
     assert "Python validation is authoritative" in prompt.text
-    assert "paraphrase, heal, expand, or invent context" in prompt.text
+    assert "Never paraphrase, heal, expand, trim" in prompt.text
 
 
 def test_all_stage_prompts_are_versioned_and_hashed() -> None:
     prompts = [load_prompt(stage) for stage in LLMStage]
 
     assert len({prompt.version for prompt in prompts}) == len(LLMStage)
-    assert all(prompt.version.startswith(("phase8-", "mvp6.4-")) for prompt in prompts)
+    assert all(prompt.version.startswith(("phase8-", "mvp9-")) for prompt in prompts)
     assert all(len(prompt.sha256) == 64 for prompt in prompts)
 
 
@@ -365,7 +367,7 @@ def test_prompt_injection_is_carried_only_as_explicit_untrusted_source_text() ->
     request = build_stage_request(
         stage=LLMStage.EXTRACTOR,
         input_artifact=extraction_input,
-        requested_output_type=ProvisionalCandidate,
+        requested_output_type=VerbatimQuoteSelection,
         input_artifact_ids=(snapshot.snapshot_id,),
     )
 

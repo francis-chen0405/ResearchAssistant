@@ -12,17 +12,23 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import Field, model_validator
 
-from agents.researcher import build_source_snapshot, validate_snapshot_integrity
+from agents.researcher import (
+    assemble_quote_block_from_selected_segments,
+    build_source_snapshot,
+    validate_snapshot_integrity,
+)
 from models import (
     ClaimDefinition,
     MediaTypeProvenance,
     PlannerOutput,
+    ProvisionalCandidate,
     RetrievalRecord,
     RetrievalStatus,
     SearchQuery,
     SourceSnapshot,
     Stance,
     StrictModel,
+    VerbatimQuoteSelection,
     missing_required_query_exclusions,
 )
 from providers.scraper import (
@@ -66,6 +72,7 @@ class UntrustedSourceText(StrictModel):
     snapshot_id: UUID
     snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     text: str = Field(min_length=1)
+    truncated: bool = False
 
 
 class AcquisitionPolicy(StrictModel):
@@ -140,8 +147,42 @@ def build_extraction_llm_input(
             snapshot_id=snapshot.snapshot_id,
             snapshot_sha256=snapshot.snapshot_sha256,
             text=snapshot.normalized_text,
+            truncated=snapshot.truncated,
         ),
         retrieval=retrieval,
+    )
+
+
+def build_provisional_candidate_from_selection(
+    extraction_input: ExtractionLLMInput,
+    selection: VerbatimQuoteSelection,
+    *,
+    extraction_prompt_version: str,
+    extraction_model_name: str,
+    extracted_at: datetime,
+) -> ProvisionalCandidate:
+    """Assemble the persisted legacy-compatible candidate from a semantic selection."""
+    retrieval = extraction_input.retrieval
+    if retrieval is None:
+        raise ValueError("quote selection requires retrieval-backed extraction input")
+    return ProvisionalCandidate(
+        run_id=extraction_input.run_id,
+        stance=extraction_input.stance,
+        source_url=retrieval.resolved_url,
+        retrieval_attempt_id=retrieval.retrieval_attempt_id,
+        query_id=retrieval.query_id,
+        query_round=retrieval.query_round,
+        search_rank=retrieval.search_rank,
+        snapshot_id=extraction_input.source.snapshot_id,
+        snapshot_sha256=extraction_input.source.snapshot_sha256,
+        extracted_quote_block=assemble_quote_block_from_selected_segments(
+            extraction_input.source.text,
+            selection,
+            truncated=extraction_input.source.truncated,
+        ),
+        extraction_prompt_version=extraction_prompt_version,
+        extraction_model_name=extraction_model_name,
+        extracted_at=extracted_at,
     )
 
 

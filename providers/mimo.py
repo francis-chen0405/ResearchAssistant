@@ -16,14 +16,12 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agents.analyst import AnalystLLMInput, StatementDraftLLMInput
-from agents.supportingresearcher import ExtractionLLMInput
 from agents.synthesizer import SynthesizerLLMInput, _item_from_ledger
 from models import (
     AmbiguityRecord,
     ClaimDefinition,
     ModelUsageMetadata,
     PlannerOutput,
-    ProvisionalCandidate,
     Score,
     ScoreDecision,
     SearchQuery,
@@ -119,10 +117,6 @@ class MimoPlannerResponse(StrictModel):
     claim_definition: MimoClaimDefinitionResponse
     ambiguities: tuple[MimoAmbiguityResponse, ...]
     search_queries: tuple[MimoSearchQueryResponse, ...] = Field(min_length=6, max_length=6)
-
-
-class MimoExtractionResponse(StrictModel):
-    extracted_quote_block: str = Field(min_length=1)
 
 
 class MimoScoreResponse(StrictModel):
@@ -371,11 +365,10 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
     if request.stage is LLMStage.EXTRACTOR:
         stage_compatibility = (
             "\n<DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
-            "The extracted_quote_block string must be formatted exactly: "
-            '[preceding context] "exact quoted segment" [following context]\n'
-            "Use literal square brackets around both context portions and literal double "
-            "quotes around every exact source segment. Use only exact snapshot text or an "
-            "allowed boundary marker. Do not return an unquoted sentence or plain text.\n"
+            "Return selected_segments only: an ordered JSON array of one or more exact "
+            "verbatim passages copied from the trusted snapshot. Do not include brackets, "
+            "context sentences, quotation marks, ellipses, offsets, or paraphrases; the "
+            "application derives those deterministically from the snapshot.\n"
             "Use at least 50 exact quoted words only when the quotation contains at least "
             "one digit and at least one recognized statistical marker: %, percent, rate, "
             "ratio, average, median, index, p-value, million, billion, growth, or decline. "
@@ -429,11 +422,6 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
 def _semantic_response_type(request: LLMRequest) -> type[BaseModel]:
     if request.stage is LLMStage.PLANNER and request.requested_output_type is PlannerOutput:
         return MimoPlannerResponse
-    if (
-        request.stage is LLMStage.EXTRACTOR
-        and request.requested_output_type is ProvisionalCandidate
-    ):
-        return MimoExtractionResponse
     if request.stage is LLMStage.ANALYST and request.requested_output_type is ScoreDecision:
         return MimoScoreResponse
     if request.stage is LLMStage.ANALYST and request.requested_output_type is StatementDraft:
@@ -451,8 +439,6 @@ def _assemble_direct_mimo_output(
 ) -> BaseModel:
     if isinstance(response, MimoPlannerResponse):
         return _assemble_planner(request, response, created_at)
-    if isinstance(response, MimoExtractionResponse):
-        return _assemble_extraction(request, response, created_at)
     if isinstance(response, MimoScoreResponse):
         return _assemble_score(request, response, created_at)
     if isinstance(response, MimoStatementDraftResponse):
@@ -504,31 +490,6 @@ def _assemble_planner(
         planner_prompt_version=request.prompt.version,
         planner_model_name=request.model_alias.value,
         planned_at=created_at,
-    )
-
-
-def _assemble_extraction(
-    request: LLMRequest,
-    response: MimoExtractionResponse,
-    created_at: datetime,
-) -> ProvisionalCandidate:
-    artifact = request.input_artifact
-    if not isinstance(artifact, ExtractionLLMInput) or artifact.retrieval is None:
-        raise TypeError("direct MiMo extraction requires a retrieval-backed ExtractionLLMInput")
-    return ProvisionalCandidate(
-        run_id=request.run_id,
-        stance=artifact.stance,
-        source_url=artifact.retrieval.resolved_url,
-        retrieval_attempt_id=artifact.retrieval.retrieval_attempt_id,
-        query_id=artifact.retrieval.query_id,
-        query_round=artifact.retrieval.query_round,
-        search_rank=artifact.retrieval.search_rank,
-        snapshot_id=artifact.source.snapshot_id,
-        snapshot_sha256=artifact.source.snapshot_sha256,
-        extracted_quote_block=response.extracted_quote_block,
-        extraction_prompt_version=request.prompt.version,
-        extraction_model_name=request.model_alias.value,
-        extracted_at=created_at,
     )
 
 

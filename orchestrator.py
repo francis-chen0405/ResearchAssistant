@@ -43,8 +43,10 @@ from agents.supportingresearcher import (
     AcquisitionPolicy,
     CooperativeCancellation,
     DeduplicationState,
+    ExtractionLLMInput,
     ResearcherRetrievalBatch,
     build_extraction_llm_input,
+    build_provisional_candidate_from_selection,
     retrieve_supporting,
 )
 from agents.synthesizer import SynthesizerLLMInput
@@ -79,6 +81,7 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     ValidationResult,
+    VerbatimQuoteSelection,
     entailment_for_claim_fit,
 )
 from money import ExactUSD, add_usd
@@ -1025,7 +1028,7 @@ def _json_hash(payload: object) -> str:
 # Phase 9 provider-backed orchestration
 # ---------------------------------------------------------------------------
 
-PHASE9_POST_FILTER_VERSION = "mvp6.4-provider-post-filter-50-75-v1"
+PHASE9_POST_FILTER_VERSION = "mvp9-deterministic-quote-assembly-v1"
 PHASE9_LEDGER_ID_VERSION = "phase9-provider-ledger-id-v1"
 PHASE9_RESEARCHERS_ARTIFACT = "phase9-researchers"
 PHASE9_ANALYSIS_ARTIFACT = "phase9-analysis-ledger"
@@ -2162,14 +2165,29 @@ def _run_researcher_side(
             retrieval=retrieval,
         )
         operation_id = _operation_id(planner.run_id, "extractor", snapshot.snapshot_id)
+        extractor_prompt_version = load_prompt(LLMStage.EXTRACTOR).version
+        successful_alias: ModelAlias | None = None
 
         def validate_extraction(
             output: BaseModel,
             alias: ModelAlias,
             snapshot: SourceSnapshot = snapshot,
             batch: ResearcherRetrievalBatch = batch,
+            extraction_input: ExtractionLLMInput = extraction_input,
+            extractor_prompt_version: str = extractor_prompt_version,
         ) -> BaseModel:
-            provisional = _require_output(output, ProvisionalCandidate)
+            nonlocal successful_alias
+            selection = _require_output(output, VerbatimQuoteSelection)
+            try:
+                provisional = build_provisional_candidate_from_selection(
+                    extraction_input,
+                    selection,
+                    extraction_prompt_version=extractor_prompt_version,
+                    extraction_model_name=alias.value,
+                    extracted_at=_aware_phase9_time(clock(), "extracted_at"),
+                )
+            except ValueError as exc:
+                raise ObjectiveRoutingFailure("exact_quote_failure", str(exc)) from exc
             _validate_provisional_for_snapshot(provisional, snapshot, batch, alias)
             filtered = filter_provisional_candidate(
                 provisional,
@@ -2185,23 +2203,33 @@ def _run_researcher_side(
                     code,
                     message,
                 )
-            return provisional
+            successful_alias = alias
+            return selection
 
         try:
-            provisional = cast(
-                ProvisionalCandidate,
+            selection = cast(
+                VerbatimQuoteSelection,
                 _invoke_routed(
                     db_path=db_path,
                     provider=llm_provider,
                     stage=LLMStage.EXTRACTOR,
                     input_artifact=extraction_input,
-                    requested_output_type=ProvisionalCandidate,
+                    requested_output_type=VerbatimQuoteSelection,
                     input_artifact_ids=(snapshot.snapshot_id,),
                     operation_id=operation_id,
                     config=config,
                     clock=clock,
                     objective_validator=validate_extraction,
                 ),
+            )
+            if successful_alias is None:
+                raise RuntimeError("completed Extractor selection has no model identity")
+            provisional = build_provisional_candidate_from_selection(
+                extraction_input,
+                selection,
+                extraction_prompt_version=extractor_prompt_version,
+                extraction_model_name=successful_alias.value,
+                extracted_at=_aware_phase9_time(clock(), "extracted_at"),
             )
             filtered = filter_provisional_candidate(
                 provisional,

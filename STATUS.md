@@ -1,5 +1,47 @@
 # Status
 
+## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
+
+Status: Complete and verified.
+
+- Replaced the provider-facing Extractor `ProvisionalCandidate` output with strict
+  `VerbatimQuoteSelection`. MiMo now returns only ordered exact snapshot passages and
+  cannot supply brackets, context, offsets, provenance, IDs, timestamps, or a completed
+  candidate artifact.
+- Added deterministic application-owned quote assembly. ResearchAssistant locates the
+  passages sequentially in the immutable normalized snapshot, derives immediate context
+  and correct start/end/truncated markers, joins non-contiguous passages canonically,
+  constructs the legacy-compatible provisional artifact, and runs the unchanged exact
+  post-extraction filter before assigning a candidate ID.
+- Exact-selection mismatch now fails once without retry or route switching. Malformed
+  JSON/schema and approved availability failures retain bounded objective retries. No
+  fuzzy matching, healing, padding, source rewriting, threshold reduction, Reviewer
+  weakening, or release-gate weakening was added.
+- Bumped the Extractor prompt, direct-MiMo adapter/factory/retry, post-filter, schema,
+  and run-fingerprint identities. MVP-9 execution requires a new run ID; historical
+  terminal runs remain inspectable under their persisted contract.
+- Kept SQLite schema version 7. Semantic selections use the existing model-attempt JSON
+  audit field, while assembled quote blocks and exact offsets retain the existing
+  provisional/candidate columns. No migration or historical-row rewrite occurred.
+- Added adversarial MVP-9 coverage for strict schema shape, multi-segment assembly,
+  boundary markers, nonexistent/out-of-order passages, non-retryable mismatch, direct
+  MiMo semantic output, and schema-7 preservation.
+
+Verification:
+
+- Focused MVP-9/MiMo/prompt/orchestration/acquisition/database selection: 107 passed,
+  1 expected opt-in skip.
+- Complete offline suite: 579 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 deterministic cases passed; optional live comparison was
+  not enabled.
+- Ruff lint/format and `git diff --check` passed.
+- No dependency, migration, live Exa/Firecrawl/MiMo call, provider spending, generated
+  tracked artifact, commit, push, or pull request was added.
+
+Next phase:
+
+- No phase after MVP-9 is authorized.
+
 ## 2026-08-10 - MVP-8.2 Evidence Browser
 
 Status: Complete and verified.

@@ -14,6 +14,7 @@ from models import (
     SegmentOffset,
     SourceSnapshot,
     StrictModel,
+    VerbatimQuoteSelection,
 )
 from utils import compute_sha256, count_words, derive_quote_block_id
 
@@ -185,6 +186,28 @@ def find_segment_offsets(normalized_text: str, segments: list[str]) -> list[Segm
         offsets.append(SegmentOffset(start_char=start, end_char=end))
         search_start = end
     return offsets
+
+
+def assemble_quote_block_from_selected_segments(
+    normalized_text: str,
+    selection: VerbatimQuoteSelection,
+    *,
+    truncated: bool,
+) -> str:
+    """Build the canonical quote envelope from model-selected snapshot text."""
+    selected_segments = list(selection.selected_segments)
+    offsets = _find_offsets_with_valid_context_for_segments(normalized_text, selected_segments)
+    preceding = _previous_sentence(normalized_text, offsets[0].start_char)
+    following = _following_sentence(normalized_text, offsets[-1].end_char)
+    before = preceding.text if preceding is not None else START_MARKER
+    if following is not None:
+        after = following.text
+    elif truncated:
+        after = TRUNCATED_END_MARKER
+    else:
+        after = END_MARKER
+    quoted_segments = " ... ".join(selected_segments)
+    return f'[{before}] "{quoted_segments}" [{after}]'
 
 
 def validate_bracket_context(
@@ -425,6 +448,17 @@ def _find_offsets_with_valid_context(
     if saw_segment_match and context_error is not None:
         raise context_error
     raise ValueError("quoted segment does not appear in snapshot text")
+
+
+def _find_offsets_with_valid_context_for_segments(
+    normalized_text: str,
+    segments: list[str],
+) -> list[SegmentOffset]:
+    if not segments or any(not segment.strip() for segment in segments):
+        raise ValueError("selected quote segments must be non-empty")
+    for offsets in _candidate_offset_sequences(normalized_text, segments):
+        return offsets
+    raise ValueError("selected quote segment does not appear in snapshot text")
 
 
 def _candidate_offset_sequences(

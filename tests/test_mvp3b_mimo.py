@@ -13,16 +13,15 @@ from agents.supportingresearcher import ExtractionLLMInput, UntrustedSourceText
 from models import (
     ClaimDefinition,
     PlannerOutput,
-    ProvisionalCandidate,
     RetrievalRecord,
     RetrievalStatus,
     ScoreDecision,
     Stance,
+    VerbatimQuoteSelection,
 )
 from providers.config import MimoConfig, ProviderConfigurationError
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, build_stage_request
 from providers.mimo import (
-    MimoExtractionResponse,
     MimoFailureCode,
     MimoPlannerResponse,
     MimoProviderError,
@@ -70,6 +69,7 @@ def _extractor_request() -> object:
         snapshot_id=uuid4(),
         snapshot_sha256="a" * 64,
         text="Opening context. Exact public evidence sentence. Closing context.",
+        truncated=False,
     )
     return build_stage_request(
         stage=LLMStage.EXTRACTOR,
@@ -90,7 +90,7 @@ def _extractor_request() -> object:
             source=source,
             retrieval=retrieval,
         ),
-        requested_output_type=ProvisionalCandidate,
+        requested_output_type=VerbatimQuoteSelection,
         input_artifact_ids=(source.snapshot_id,),
         routing=DIRECT_MIMO_ROUTING,
         model_alias=ModelAlias.MIMO_V25_PRO,
@@ -160,13 +160,15 @@ def test_direct_mimo_route_has_no_cross_provider_fallback() -> None:
         assert route.fallbacks == ()
 
 
-def test_direct_mimo_extractor_prompt_requires_exact_quote_envelope() -> None:
+def test_direct_mimo_extractor_prompt_requires_selected_verbatim_segments() -> None:
     request = _request().model_copy(update={"stage": LLMStage.EXTRACTOR})
 
     prompt = _direct_mimo_prompt(request)
 
-    assert 'exactly: [preceding context] "exact quoted segment" [following context]' in prompt
-    assert "Do not return an unquoted sentence or plain text." in prompt
+    assert "Return selected_segments only" in prompt
+    assert (
+        "Do not include brackets, context sentences, quotation marks, ellipses, offsets" in prompt
+    )
     assert "at least 50 exact quoted words only when" in prompt
     assert "at least one digit and at least one recognized statistical marker" in prompt
     assert "Otherwise, use at least 75 exact quoted words" in prompt
@@ -214,34 +216,16 @@ def test_direct_mimo_semantic_score_schema_rejects_application_owned_fields() ->
         )
 
 
-def test_direct_mimo_assembles_extractor_identity_without_rewriting_quote() -> None:
+def test_direct_mimo_returns_only_the_typed_quote_selection() -> None:
     request = _extractor_request()
-    semantic = MimoExtractionResponse(
-        extracted_quote_block=(
-            '[Invented context.] "Exact public evidence sentence." [Also invented.]'
-        )
-    )
+    semantic = VerbatimQuoteSelection(selected_segments=("Exact public evidence sentence.",))
     output = _assemble_direct_mimo_output(
         request,
         semantic,
         created_at=datetime(2026, 7, 31, tzinfo=UTC),
     )
-    extractor_input = request.input_artifact
-
-    assert isinstance(output, ProvisionalCandidate)
-    assert isinstance(extractor_input, ExtractionLLMInput)
-    assert output.run_id == request.run_id
-    assert output.stance is Stance.OPPOSING
-    assert output.source_url == extractor_input.retrieval.resolved_url
-    assert output.retrieval_attempt_id == extractor_input.retrieval.retrieval_attempt_id
-    assert output.query_id == extractor_input.retrieval.query_id
-    assert output.query_round == extractor_input.retrieval.query_round
-    assert output.search_rank == extractor_input.retrieval.search_rank
-    assert output.snapshot_id == extractor_input.source.snapshot_id
-    assert output.snapshot_sha256 == extractor_input.source.snapshot_sha256
-    assert output.extraction_prompt_version == request.prompt.version
-    assert output.extraction_model_name == request.model_alias.value
-    assert output.extracted_quote_block == semantic.extracted_quote_block
+    assert output == semantic
+    assert isinstance(output, VerbatimQuoteSelection)
 
 
 def test_direct_mimo_stamps_deterministic_planner_identity() -> None:

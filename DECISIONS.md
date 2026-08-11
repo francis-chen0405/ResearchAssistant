@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
+
+- Replace the provider-facing Extractor `ProvisionalCandidate` schema with strict
+  `VerbatimQuoteSelection`, containing only ordered exact snapshot passages. The model
+  cannot author brackets, context, offsets, IDs, timestamps, provenance, or a completed
+  candidate.
+- Locate selected passages sequentially in the immutable normalized snapshot. Build the
+  canonical ellipsis, immediate brackets, boundary markers, and legacy-compatible
+  provisional artifact deterministically before the existing post-extraction filter.
+- Fail closed without fuzzy matching, quote healing, padding, or source rewriting.
+  Exact-selection mismatch is non-retryable; malformed/schema/availability failures
+  retain the approved bounded objective retry policy.
+- Keep SQLite schema version 7. Persist semantic selections through the existing generic
+  model-attempt JSON audit field and retain the existing provisional/candidate columns
+  for assembled quote blocks and exact offsets. Do not rewrite historical immutable rows.
+- Bump Extractor prompt, MiMo adapter/factory/retry, post-filter, schema, and run-
+  fingerprint identities. Historical terminal runs remain inspectable; MVP-9 execution
+  requires a new run ID rather than cross-contract resume.
+- Add no dependency and make no live provider call during implementation or verification.
+
 ## 2026-08-10 - MVP-8 Briefs, Export & Performance
 
 - Export only a read-only reconstructed RELEASED run after rechecking valid final

@@ -27,11 +27,11 @@ from pydantic import (
 from agents.reviewer import ReviewerDecision
 from models import (
     PlannerOutput,
-    ProvisionalCandidate,
     ScoreDecision,
     StatementDraft,
     StrictModel,
     SynthesisOutput,
+    VerbatimQuoteSelection,
 )
 
 PROMPT_DIRECTORY = Path(__file__).resolve().parents[1] / "prompts"
@@ -608,7 +608,7 @@ def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.PLANNER:
         return (PlannerOutput,)
     if stage is LLMStage.EXTRACTOR:
-        return (ProvisionalCandidate,)
+        return (VerbatimQuoteSelection,)
     if stage is LLMStage.ANALYST:
         return (ScoreDecision, StatementDraft)
     if stage is LLMStage.REVIEWER:

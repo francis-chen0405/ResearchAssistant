@@ -26,6 +26,7 @@ from models import (
     StatementDraft,
     StrictModel,
     SynthesisOutput,
+    VerbatimQuoteSelection,
 )
 from provider_contract import canonical_provider_contract_payload, parse_provider_contract_payload
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
@@ -42,10 +43,10 @@ from providers.pricing import (
     ModelPriceCap,
 )
 
-MIMO_FACTORY_VERSION = "mvp3b-direct-mimo-factory-v1"
-MIMO_RETRY_POLICY_VERSION = "mvp3b-direct-mimo-one-retry-v1"
+MIMO_FACTORY_VERSION = "mvp9-verified-quote-selection-factory-v1"
+MIMO_RETRY_POLICY_VERSION = "mvp9-nonretryable-exact-selection-v1"
 MIMO_BUDGET_POLICY_VERSION = "mvp6.8-exact-decimal-reserve-reconcile-v1"
-MIMO_FINGERPRINT_VERSION = "mvp6.9-acquisition-configuration-integrity-v1"
+MIMO_FINGERPRINT_VERSION = "mvp9-verified-quote-selection-v1"
 
 
 class MimoProviderFactoryConfig(StrictModel):
@@ -190,6 +191,7 @@ def _fingerprint_payload(
     schemas = (
         PlannerOutput,
         ProvisionalCandidate,
+        VerbatimQuoteSelection,
         ScoreDecision,
         StatementDraft,
         ReviewerDecision,

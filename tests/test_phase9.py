@@ -16,6 +16,7 @@ from pydantic import BaseModel
 import orchestrator as orchestrator_module
 from agents.analyst import AnalystLLMInput
 from agents.planner import PlannerLLMInput
+from agents.researcher import parse_extracted_quote_block
 from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, ExtractionLLMInput
 from agents.synthesizer import SynthesizerLLMInput, build_synthesis_output
@@ -27,7 +28,6 @@ from models import (
     ModelRouteAttempt,
     ModelUsageMetadata,
     PlannerOutput,
-    ProvisionalCandidate,
     ReviewerFailureCode,
     RunStatus,
     ScoreDecision,
@@ -35,6 +35,7 @@ from models import (
     Stage,
     Stance,
     StatementDraft,
+    VerbatimQuoteSelection,
 )
 from orchestrator import (
     OrchestrationBudget,
@@ -274,28 +275,15 @@ class FakeLLMProvider:
             planned_at=NOW,
         )
 
-    def _extractor(self, request: LLMRequest) -> ProvisionalCandidate:
+    def _extractor(self, request: LLMRequest) -> VerbatimQuoteSelection:
         extraction_input = request.input_artifact
         assert isinstance(extraction_input, ExtractionLLMInput)
         assert extraction_input.retrieval is not None
-        retrieval = extraction_input.retrieval
         quote = SUPPORT_QUOTE if extraction_input.stance is Stance.SUPPORTING else OPPOSE_QUOTE
         if request.model_alias in self.invalid_extractor_aliases:
-            quote = '[Start of Text] "This quote is not in the snapshot." [End of Text]'
-        return ProvisionalCandidate(
-            run_id=request.run_id,
-            stance=extraction_input.stance,
-            source_url=retrieval.resolved_url,
-            retrieval_attempt_id=retrieval.retrieval_attempt_id,
-            query_id=retrieval.query_id,
-            query_round=retrieval.query_round,
-            search_rank=retrieval.search_rank,
-            snapshot_id=extraction_input.source.snapshot_id,
-            snapshot_sha256=extraction_input.source.snapshot_sha256,
-            extracted_quote_block=quote,
-            extraction_prompt_version=request.prompt.version,
-            extraction_model_name=request.model_alias.value,
-            extracted_at=NOW,
+            return VerbatimQuoteSelection(selected_segments=("This quote is not in the snapshot.",))
+        return VerbatimQuoteSelection(
+            selected_segments=tuple(parse_extracted_quote_block(quote).segments)
         )
 
     def _analyst(self, request: LLMRequest) -> BaseModel:

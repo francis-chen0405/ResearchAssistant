@@ -6,7 +6,8 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-6.9, acquisition and configuration integrity.
+The repository is complete through MVP-9 Verified Quote Selection & Deterministic
+Assembly. No later phase is authorized.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -28,6 +29,11 @@ through SQLite triggers and uses exact `Decimal`/canonical-text USD accounting e
 MVP-6.9 carries verified origin media type and final-URL context across scraper fallback,
 keeps provider-declared media type separate, persists that provenance in schema migration 7,
 and aligns fingerprints, offline configuration, and phase-neutral package metadata.
+MVP-7.1 completed direct-MiMo consolidation, MVP-8 added safe local brief exports and
+persisted progress, MVP-8.1 added fingerprinted research controls, and MVP-8.2 added a
+read-only Evidence Browser. MVP-9 makes MiMo return only ordered exact snapshot passages;
+ResearchAssistant constructs quote context, brackets, offsets, and provenance
+deterministically while retaining SQLite schema version 7.
 
 ## How the system works
 
@@ -35,7 +41,8 @@ and aligns fingerprints, offline configuration, and phase-neutral package metada
 Raw claim
   -> Claim Planner (3 supporting queries + 3 opposing queries)
   -> Supporting and Opposing Researchers (run concurrently, equal limits)
-  -> trusted source snapshots and exact quotation filtering
+  -> trusted source snapshots and model-selected verbatim passages
+  -> deterministic quote assembly and exact quotation filtering
   -> Evidence Analyst (evidence quality, claim fit, placement, statement draft)
   -> Statement Reviewer (independent approval, at most one Analyst revision)
   -> Claim Ledger (approved factual statements and provenance only)
@@ -55,6 +62,9 @@ records are insert-only SQLite audit artifacts.
 - **Supporting and Opposing Researchers** use the same search depth and rules. Live and strict
   mocked runs rank five results and attempt them until three usable unique snapshots exist for each
   query, then apply the same deterministic quotation gates.
+- **Extractor models** return only ordered exact snapshot passages. Application code
+  derives brackets, immediate context, boundary markers, offsets, provenance, and the
+  persisted candidate; model-authored quote envelopes are rejected by schema.
 - **Evidence Analyst** rechecks snapshot and quotation integrity, scores evidence quality and claim
   fit separately, assigns placement, and drafts canonical factual statements.
 - **Statement Reviewer** sees only the quote, bracket context, draft, and claim-fit score. It audits
@@ -109,9 +119,11 @@ prompt versions and hashes, timing, failures, escalation reasons, and typed toke
 usage accounting. Exact totals exist only when every physical attempt reports that
 component; otherwise inspection shows an unknown exact total, a known subtotal, and
 conservative reserved exposure. Each model
-alias may be attempted twice by default. The live CLI retries direct `mimo-v2.5-pro` once only for
-approved objective failures and has no cross-provider fallback. Semantic disagreement never changes
-routes. Historical fallback aliases remain readable for persisted artifacts.
+alias may be attempted twice by default. The live CLI retries direct `mimo-v2.5-pro`
+once only for approved objective failures and has no cross-provider fallback. Exact
+quote-selection mismatch is non-retryable because immutable snapshot text cannot change;
+semantic disagreement also never changes routes. Historical fallback aliases remain
+readable for persisted artifacts.
 
 Completed-stage checkpoints and typed stage artifacts are persisted for restart-safe reuse.
 Cancellation is honored at stage boundaries. Model-call, per-side retrieval, and optional token or
@@ -430,9 +442,11 @@ Known limitations are:
   socket-pinned, so complete DNS-rebinding prevention is not claimed.
 - Final validation is deliberately syntactic and provenance-based. Semantic quality depends on the
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
+- MVP-9 removes model-authored quote formatting, but a selection still fails when the
+  source lacks enough exact, relevant evidence or when downstream review rejects it.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-6.9 remain out of scope until explicitly approved.
+live validation and any phase after MVP-9 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

@@ -397,6 +397,21 @@ class SourceSnapshot(StrictModel):
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
 
 
+class VerbatimQuoteSelection(StrictModel):
+    """Minimal model-owned Extractor result; application code owns quote assembly."""
+
+    selected_segments: Annotated[tuple[NonEmptyStr, ...], Field(min_length=1)]
+
+    @field_validator("selected_segments")
+    @classmethod
+    def validate_exact_segments(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(segment != segment.strip() for segment in value):
+            raise ValueError("selected quote segments cannot have surrounding whitespace")
+        if any(not segment.strip() for segment in value):
+            raise ValueError("selected quote segments must contain visible text")
+        return value
+
+
 class ProvisionalCandidate(StrictModel):
     run_id: UUID
     stance: Stance

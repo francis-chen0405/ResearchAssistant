@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-8.2
+## Current Project State: MVP-9
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -43,17 +43,20 @@ and application-owned local service lifecycle remain in force. The original Stre
 frontend remains fixture-only. Native SearXNG paths remain historical compatibility
 surfaces for old persisted runs, not the current live-run operating stack.
 
-MVP-7.1, MVP-8, and MVP-8.1 are complete. MVP-8 delivered released-brief presentation,
+MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 are complete. MVP-8 delivered released-brief presentation,
 local deterministic export, and persisted progress/restart reuse without changing
 evidence or release policy. MVP-8.1 delivered typed, fingerprinted operator controls for
 research depth, report length, presentation tone, and explicit focus. Evidence/release-
-policy invariants remain unchanged. The user explicitly authorized MVP-8.2 Evidence
-Browser on 2026-08-10. It is limited to local, typed, read-only evidence-trail
-inspection through the established SQLite inspection boundary.
+policy invariants remain unchanged. MVP-8.2 delivered local, typed, read-only
+evidence-trail inspection through the established SQLite inspection boundary. The user
+explicitly authorized MVP-9 Verified Quote Selection & Deterministic Assembly on
+2026-08-11; it is complete and verified. It replaces model-authored quote envelopes with
+exact segment selection and application-owned deterministic assembly while preserving
+schema version 7. No phase after MVP-9 is authorized.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-8-2-evidence-browser.md`
+- `.agent/plans/phase-mvp-9-verified-quote-selection-deterministic-assembly.md`
 
 ## MVP-2A: Architecture Gate
 
@@ -97,8 +100,8 @@ open items are documented consistently. Existing offline verification remains gr
 
 ## MVP Sequence
 
-These canonical plans record the earlier completed MVP sequence. MVP-6.9 is the latest
-completed authorized phase; no later phase has started or been authorized.
+These canonical plans record the earlier completed MVP-2B through MVP-6.9 sequence.
+Later completed plans are identified in the current-state section above.
 
 1. MVP-2B Production Provider Adapters and Boundary Proof:
    `.agent/plans/phase-mvp-2b-production-provider-boundaries.md`

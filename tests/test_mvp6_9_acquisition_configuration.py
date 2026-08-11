@@ -379,7 +379,7 @@ def test_environment_example_constructs_supported_legacy_smoke_offline() -> None
 
 def test_mvp6_9_acquisition_and_fingerprint_identities_change() -> None:
     assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
-    assert MIMO_FINGERPRINT_VERSION == "mvp6.9-acquisition-configuration-integrity-v1"
+    assert MIMO_FINGERPRINT_VERSION == "mvp9-verified-quote-selection-v1"
 
 
 def test_package_description_is_durable_and_phase_neutral() -> None:

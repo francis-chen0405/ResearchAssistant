@@ -123,6 +123,9 @@ SDK or dependency.
     non-exponent decimal text in SQLite; legacy REAL cost columns are compatibility-only
   - SQLite migration 7 adds nullable snapshot acquisition/media-provenance columns;
     historical immutable rows reconstruct as explicitly unknown and are never rewritten
+  - MVP-9 adds no migration: semantic quote selections use the existing generic model-
+    attempt JSON boundary, while assembled quote blocks and exact offsets retain the
+    schema-7 provisional/candidate columns
   - Local brief export opens the database through the validated read-only inspection path;
     it may export only a re-hashed released brief and never creates or mutates artifacts
 
@@ -162,7 +165,9 @@ the current top-three/PDF-unsupported/legacy-model test contracts with the appro
 rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime code.
 
 MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3,
-MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, and MVP-6.9 are complete. Current provider-backed candidates use the strict shared
+MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, MVP-6.9, MVP-7.1, MVP-8, MVP-8.1,
+MVP-8.2, and MVP-9 are complete. MVP-9 Verified Quote Selection & Deterministic Assembly
+is the latest completed authorized phase. Current provider-backed candidates use the strict shared
 50-statistical/75-non-statistical quote policy; statistical classification requires both
 a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
 explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
@@ -175,7 +180,7 @@ snapshot provenance persistence, legacy smoke-example repair, and phase-neutral 
 metadata. The contradiction-audit remediation sequence is complete. The original
 Streamlit app remains fixture-only; the separate live app reuses the established
 persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
-after MVP-6.9 without separate explicit direction. No later phase has started or been authorized.
+after MVP-9 without separate explicit direction. No later phase has started or been authorized.
 
 ## 8. Done Criteria Per Phase
 

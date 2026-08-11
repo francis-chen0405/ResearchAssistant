@@ -27,7 +27,8 @@ Claim Planner (6 queries: 3 Support, 3 Oppose)
 │           ↓                                  ↓               │
 │ Trusted Snapshot Creation          Trusted Snapshot Creation  │
 │           ↓                                  ↓               │
-│ LLM Extraction + Bracketing        LLM Extraction + Bracketing│
+│ LLM Verbatim Selection             LLM Verbatim Selection     │
+│ Application Quote Assembly         Application Quote Assembly │
 │           ↓                                  ↓               │
 │ Post-Extraction Filter             Post-Extraction Filter     │
 └───────────────┬──────────────────────────────┬───────────────┘
@@ -74,8 +75,9 @@ decimal USD accounting through storage, aggregation, reservation, comparison, re
 and inspection. MVP-6.9 separates independently verified origin media type from
 provider-declared metadata, carries verified preflight evidence across Firecrawl fallback,
 repairs the legacy boundary-smoke example, and makes package wording phase-neutral. The
-contradiction-audit remediation sequence is complete; no later phase has
-started or been authorized.
+contradiction-audit remediation sequence, MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 are
+complete. MVP-9 Verified Quote Selection & Deterministic Assembly is the latest
+completed user-authorized phase; no later phase has started.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -302,6 +304,28 @@ aware generation timestamp. Export never mutates the run, Ledger, synthesis, val
 or release state. Progress surfaces report persisted completed checkpoints; compatible
 failed-run resumes reuse their typed, valid completed checkpoint artifacts.
 
+### MVP-9 Verified Quote Selection and Deterministic Assembly
+
+The Extractor model returns only a strict `VerbatimQuoteSelection`: one ordered tuple of
+exact passages copied from the immutable normalized snapshot. It never authors brackets,
+context, offsets, IDs, timestamps, provenance, or a completed candidate. ResearchAssistant
+locates the passages sequentially, derives the immediate preceding and following sentences
+or the correct start/end/truncated marker, joins non-contiguous passages with the canonical
+ellipsis, and constructs the existing `ProvisionalCandidate` before the unchanged
+post-extraction filter runs.
+
+Exact selection mismatch is non-retryable because another model attempt cannot make
+altered or invented text appear in an immutable snapshot. Malformed JSON, schema failure,
+timeout, and other approved objective availability failures retain their bounded retry
+semantics. Application assembly never heals or fuzzy-matches text.
+
+SQLite remains at schema version 7. The semantic selection is stored at the existing
+generic model-attempt JSON audit boundary, while assembled quote blocks and validated
+offsets continue using the existing provisional/candidate columns. Historical rows are
+not rewritten and terminal runs remain inspectable. New execution uses bumped prompt,
+adapter, factory, retry, post-filter, schema, and fingerprint identities, so an older
+run contract requires a new run ID under MVP-9.
+
 ### Approved Stack and Role Mapping
 
 - Search and source acquisition: Exa Search `auto` for metadata-only discovery, pinned
@@ -376,9 +400,10 @@ whitespace; trim line edges; limit blank-line runs; retain visible link text but
 Markdown syntax or link destinations; and remove boilerplate only through deterministic
 rules. The snapshot SHA-256 and word count are computed from the exact stored text.
 
-All quote offsets refer to that normalized stored text. The LLM proposes exact quote
-strings, and Python locates segments sequentially and accepts each only when
-`normalized_text[start_char:end_char] == exact_quote`. Persist the normalization version,
+All quote offsets refer to that normalized stored text. The LLM selects ordered exact
+snapshot passages only. Python locates them sequentially, accepts each only when
+`normalized_text[start_char:end_char] == exact_quote`, and deterministically constructs
+the canonical bracketed quote envelope. Persist the normalization version,
 verified origin media type and its verified URL, separately sanitized provider-declared
 media type, acquisition version, original/final/canonical URLs, provider identity, and
 optional provider-payload hash with the snapshot provenance. Normalization metadata is
@@ -389,8 +414,9 @@ existing one.
 
 - A logical LLM operation may attempt primary, retry primary once, fallback, and retry
   fallback once. Only timeout, 408/429/retryable 5xx, malformed JSON, schema/Pydantic, or
-  deterministic validation failures qualify. Semantic disagreement and low scores do
-  not. Every physical attempt consumes the same run budget.
+  approved deterministic validation failures qualify. Exact-selection mismatch,
+  semantic disagreement, and low scores do not retry or switch models. Every physical
+  attempt consumes the same run budget.
 - Atomically reserve conservative tokens and capped price before each strict call;
   reconcile exact provider usage afterward. Retain usage from malformed, failed, and
   locally rejected responses. Missing final usage retains the full reservation; missing
@@ -453,20 +479,27 @@ Create an immutable source snapshot before LLM extraction.
 
 `{ run_id, retrieval_attempt_id, snapshot_id, source_url, retrieved_at, normalized_text, snapshot_sha256 (SHA-256 of normalized_text), word_count, truncated, created_at }`
 
-### C. LLM Extraction and Bracketing
+### C. LLM Verbatim Selection and Deterministic Assembly
 
-The LLM receives the trusted snapshot text and extracts all plausible evidence candidates. Its role is extraction only: it must not score source quality, evaluate logical soundness, assign entailment labels, create canonical claims, or perform any analytical judgment.
+The LLM receives the trusted snapshot text and selects exact plausible evidence passages.
+Its role is selection only: it must not score source quality, evaluate logical soundness,
+assign entailment labels, create canonical claims, author brackets/context/offsets, or
+perform any analytical judgment.
 
 **Target the Core Argument:** Extract exact sentences containing statistical data, analytical reasoning, causal mechanisms, or conclusions relevant to the claim.
-**Splicing for Substance:** Non-contiguous sentences may be joined only with `...`. Splicing must not invert, exaggerate, or obscure the author's meaning.
+**Splicing for Substance:** The model returns non-contiguous passages as separate ordered
+`selected_segments`. Application code alone joins them with `...`. Splicing must not
+invert, exaggerate, or obscure the author's meaning.
 **Avoid Fluff Padding:** Do not inflate quotation length. Maintain a fluff-to-core-argument ratio of 1:1 or less.
-**Strict Macro-Bracket Rule:** Capture the immediate preceding sentence of the first quoted segment and the immediate following sentence of the last quoted segment.
+**Strict Macro-Bracket Rule:** Application code captures the immediate preceding sentence
+of the first selected passage and the immediate following sentence of the last passage.
 
-Required format:
-```text
-[Preceding Sentence] "Segment 1... Segment 2" [Following Sentence]
-```
-Use `[Start of Text]` or `[End of Text]` where applicable only when the snapshot contains the true start or end of the source text. If `truncated: true` and the quote reaches the snapshot boundary or the following sentence is unavailable because of the scrape limit, use `[Truncated End of Snapshot]`; a truncated snapshot must never use `[End of Text]` as though the full source ended there.
+Required model-owned format is the strict `VerbatimQuoteSelection` Pydantic schema with
+only `selected_segments`. ResearchAssistant constructs
+`[Preceding Sentence] "Segment 1... Segment 2" [Following Sentence]`. It uses
+`[Start of Text]` or `[End of Text]` only at true boundaries. If `truncated: true` and
+the selection reaches the snapshot boundary, it uses `[Truncated End of Snapshot]`; a
+truncated snapshot never uses `[End of Text]` as though the full source ended there.
 
 ### D. Deterministic Post-Extraction Filter
 

@@ -1,5 +1,44 @@
 # Handoff
 
+## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
+
+- MVP-9 is complete. `VerbatimQuoteSelection` is the only provider-facing Extractor
+  result: an ordered tuple of exact snapshot passages with strict extra-field rejection.
+- `build_provisional_candidate_from_selection()` and the shared Researcher quote helper
+  own canonical ellipses, immediate context, start/end/truncated markers, provenance,
+  and construction of the existing `ProvisionalCandidate`.
+- Orchestration validates the assembled provisional through the unchanged exact
+  membership/order/context/density/relevance filter before a candidate ID exists.
+  Exact-selection mismatch records one `exact_quote_failure` and does not retry or
+  switch models. Other approved objective failures retain existing bounded behavior.
+- Prompt identity is `mvp9-verbatim-quote-selection-v1`; direct-MiMo adapter identity is
+  `mvp9-xiaomi-mimo-selection-v1`; factory/retry/fingerprint identities are the MVP-9
+  verified-selection values. Use a new run ID for the next execution.
+- SQLite remains schema 7. New selection output is audit JSON in `model_route_attempts`;
+  assembled provisional/candidate rows retain the established quote and offset columns.
+  Historical terminal databases remain readable and no immutable row is rewritten.
+
+Verification handoff:
+
+- Focused selection: 107 passed, 1 expected opt-in skip.
+- Full offline suite: 579 passed, 2 expected opt-in skips.
+- Deterministic evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format and `git diff --check` passed.
+- No dependency, schema migration, live provider call, spending, generated tracked
+  artifact, commit, push, or pull request was added.
+
+Operator handoff:
+
+- Restart/reload the local application and leave Run ID blank. A pre-MVP-9 run must not
+  resume under the new extraction contract.
+- A valid selection can still fail density, relevance, or downstream semantic review;
+  MVP-9 prevents model-authored formatting failures but does not fabricate evidence or
+  guarantee that every source contains a passing passage.
+
+Do not start:
+
+- Do not begin a phase after MVP-9 without separate explicit user direction.
+
 ## 2026-08-10 - MVP-8.2 Evidence Browser
 
 - MVP-8.2 is complete. `evidence_browser.py` reconstructs a run's evidence trail with
