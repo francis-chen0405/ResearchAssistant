@@ -53,11 +53,12 @@ explicitly authorized MVP-9 Verified Quote Selection & Deterministic Assembly on
 2026-08-11; it is complete and verified. It replaces model-authored quote envelopes with
 exact segment selection and application-owned deterministic assembly while preserving
 schema version 7. MVP-10 Evidence Portfolio & Trail is complete and verified. MVP-11
-Adaptive Research Expansion & Cost Control (Research Governor) is the authorized current
-phase. It adds deterministic, cumulative-budget-governed research rounds with an absolute
-maximum of three while preserving the MVP-9 and MVP-10 evidence safeguards.
+Adaptive Research Expansion & Cost Control (Research Governor) is complete and verified.
+It adds deterministic, cumulative-budget-governed research rounds with an absolute
+maximum of three while preserving the MVP-9 and MVP-10 evidence safeguards. Do not begin
+a later phase without explicit user authorization.
 
-Canonical current plan:
+Canonical completed plan:
 
 - `.agent/plans/phase-mvp-11-research-governor.md`
 

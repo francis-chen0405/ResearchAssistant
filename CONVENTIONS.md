@@ -171,8 +171,9 @@ rank-five/keep-three, narrow-PDF, MiMo-Pro/MiniMax route before changing runtime
 
 MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3,
 MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, MVP-6.9, MVP-7.1, MVP-8, MVP-8.1,
-MVP-8.2, and MVP-9 are complete. MVP-9 Verified Quote Selection & Deterministic Assembly
-is the latest completed authorized phase. Current provider-backed candidates use the strict shared
+MVP-8.2, MVP-9, MVP-10, and MVP-11 are complete. MVP-11 Adaptive Research Expansion &
+Cost Control (Research Governor) is the latest completed authorized phase. Current
+provider-backed candidates use the strict shared
 50-statistical/75-non-statistical quote policy; statistical classification requires both
 a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
 explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
@@ -182,10 +183,12 @@ function-signature annotation enforcement across production and test code, inclu
 nested functions. MVP-6.8 completed SQLite snapshot/Ledger immutability and exact
 decimal monetary accounting. MVP-6.9 completed truthful Firecrawl media-type provenance,
 snapshot provenance persistence, legacy smoke-example repair, and phase-neutral package
-metadata. The contradiction-audit remediation sequence is complete. The original
-Streamlit app remains fixture-only; the separate live app reuses the established
-persistence, fingerprint, cancellation, and terminal contracts. Do not begin a phase
-after MVP-9 without separate explicit direction. No later phase has started or been authorized.
+metadata. MVP-10 adds immutable source-family and portfolio-trail inspection; MVP-11
+adds cumulative-budget-governed Research Governor rounds with an absolute maximum of
+three. The contradiction-audit remediation sequence is complete. The original Streamlit
+app remains fixture-only; the separate live app reuses the established persistence,
+fingerprint, cancellation, and terminal contracts. Do not begin a phase after MVP-11
+without separate explicit direction. No later phase has started or been authorized.
 
 ## 8. Done Criteria Per Phase
 

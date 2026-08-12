@@ -1,5 +1,14 @@
 # Status
 
+## Current project state — 2026-08-11
+
+MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is complete and
+verified. MVP-10 Evidence Portfolio & Trail and MVP-9 Verified Quote Selection &
+Deterministic Assembly remain its immutable evidence safeguards. Migration 9 records
+append-only numeric research rounds constrained to 1–3, the deterministic post-Round-2
+Governor decision, and the terminal research result; historical MVP-9 and MVP-10 runs
+remain read-only inspectable. No phase after MVP-11 is authorized.
+
 ## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
 
 Status: Complete and verified.

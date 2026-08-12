@@ -83,8 +83,9 @@ and inspection. MVP-6.9 separates independently verified origin media type from
 provider-declared metadata, carries verified preflight evidence across Firecrawl fallback,
 repairs the legacy boundary-smoke example, and makes package wording phase-neutral. The
 contradiction-audit remediation sequence, MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 are
-complete. MVP-9 Verified Quote Selection & Deterministic Assembly is the latest
-completed user-authorized phase; no later phase has started.
+complete. MVP-9 Verified Quote Selection & Deterministic Assembly, MVP-10 Evidence
+Portfolio & Trail, and MVP-11 Adaptive Research Expansion & Cost Control are complete.
+MVP-11 is the latest completed user-authorized phase; no later phase has started.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -332,6 +333,30 @@ offsets continue using the existing provisional/candidate columns. Historical ro
 not rewritten and terminal runs remain inspectable. New execution uses bumped prompt,
 adapter, factory, retry, post-filter, schema, and fingerprint identities, so an older
 run contract requires a new run ID under MVP-9.
+
+### MVP-10 Evidence Portfolio and Trail
+
+MVP-10 adds an append-only source-family, source-outcome, approved-portfolio, and
+coverage trail in SQLite migration 8. Source-family identity prefers canonical source URL,
+then resolved source URL, then immutable snapshot hash. Duplicates remain visible trail
+records but do not receive model extraction or count as independent evidence. Coverage is
+strong at three or more independent families with opposing or limitation evidence,
+adequate at three or more otherwise, limited at one or two, and insufficient at zero.
+Historical MVP-9 databases remain read-only inspectable without migration.
+
+### MVP-11 Adaptive Research Expansion and Cost Control
+
+MVP-11 replaces MVP-10's single expansion limit with the deterministic Research Governor.
+An incomplete Round 1 completes Round 2; only application-owned policy after completed
+Round 2 may authorize Round 3. Research round records are constrained to numeric values
+1–3 in strict Pydantic artifacts and SQLite migration 9. A started Round 2 or Round 3
+finishes unless cancellation, a hard ceiling, or unavoidable terminal provider or
+infrastructure failure intervenes. The Governor records duplicate rate, recent
+productivity, remaining normalized search angles, and conservative cumulative-budget
+reservation before its one Round-3 decision. Governor decisions and terminal outcomes
+are append-only, terminal runs do not start another round, and new Governor contracts
+require a new Run ID. MVP-9 quotation, Reviewer/Ledger, and final-validator safeguards
+remain unchanged.
 
 ### Approved Stack and Role Mapping
 

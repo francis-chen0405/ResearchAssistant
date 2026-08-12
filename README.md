@@ -6,8 +6,8 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-9 Verified Quote Selection & Deterministic
-Assembly. No later phase is authorized.
+The repository is complete through MVP-11 Adaptive Research Expansion & Cost Control
+(Research Governor). No later phase is authorized.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -33,7 +33,12 @@ MVP-7.1 completed direct-MiMo consolidation, MVP-8 added safe local brief export
 persisted progress, MVP-8.1 added fingerprinted research controls, and MVP-8.2 added a
 read-only Evidence Browser. MVP-9 makes MiMo return only ordered exact snapshot passages;
 ResearchAssistant constructs quote context, brackets, offsets, and provenance
-deterministically while retaining SQLite schema version 7.
+deterministically. MVP-10 adds an append-only Evidence Portfolio and Evidence Trail with
+deterministic source-family coverage. MVP-11 replaces MVP-10's one targeted expansion
+with the deterministic Research Governor: an incomplete initial portfolio completes
+Round 2, and only application-owned post-Round-2 policy may authorize Round 3. Research
+rounds are absolutely limited to 1–3, all budgets remain cumulative, and SQLite schema
+version 9 retains historical MVP-9 and MVP-10 inspection compatibility.
 
 ## How the system works
 
@@ -46,6 +51,8 @@ Raw claim
   -> Evidence Analyst (evidence quality, claim fit, placement, statement draft)
   -> Statement Reviewer (independent approval, at most one Analyst revision)
   -> Claim Ledger (approved factual statements and provenance only)
+  -> Evidence Portfolio and Trail (independent source-family coverage)
+  -> Research Governor (complete Round 2; authorize Round 3 only when policy permits)
   -> Debate Synthesizer (typed structure and approved connective templates)
   -> deterministic Renderer and Validator
   -> released brief, or an explicit blocked/failed/cancelled result
@@ -296,7 +303,7 @@ checks its migration records and required schema objects, and reconstructs typed
 artifacts through that same session. Missing, invalid, corrupt, older, newer, or
 inaccessible databases fail clearly without modification. To migrate an older database
 intentionally, start or resume a run with write access using `run`; the normal writable
-initialization path applies migrations 5, 6, and 7 before provider work.
+initialization path applies migrations 5 through 9 before provider work.
 
 Migration 5 installs `runs_raw_claim_immutable`. Direct SQL and application writes cannot
 change `runs.raw_claim` after insertion in any run status; identical-value assignment is
@@ -312,6 +319,12 @@ Migration 7 adds nullable snapshot columns for original and canonical URLs, norm
 acquisition identities, provider identity, and canonical media-type provenance JSON. Historical
 rows remain unchanged and reconstruct with explicit unknown provenance; new rows preserve verified
 origin media type separately from provider-declared metadata.
+
+Migration 8 adds append-only source-family membership, Evidence Trail, approved portfolio, and
+coverage-assessment records. Migration 9 adds append-only research-round, Research Governor
+decision, and terminal-result records; SQLite rejects round values outside 1–3. Read-only
+inspection keeps historical MVP-9 and MVP-10 databases reconstructable without applying either
+migration.
 
 Cancellation is cooperative: a synchronous request already in flight may continue to its deadline,
 but its attempt is persisted and no new call starts after cancellation is observed. It does not
@@ -376,7 +389,7 @@ Normal tests are deterministic and offline. Two opt-in tests are expected to ski
 live-LLM gate unless `RUN_LLM_INTEGRATION_TESTS=1` is explicitly enabled, and the MVP-4 live CLI
 smoke test unless both of its explicit enable and execution-approval gates are supplied. The
 standard-library AST enforcement test is `tests/test_type_contracts.py`. The current
-MVP-6.9 verification result is recorded in `STATUS.md`; exact focused,
+MVP-11 verification result is recorded in `STATUS.md`; exact focused,
 evaluation, lint, format, compilation, launcher, and diff results are recorded in
 `STATUS.md` and `HANDOFF.md`.
 
@@ -420,8 +433,11 @@ provider-contract integrity. MVP-6.7 completed repository-wide signature enforce
 for production and test code, including nested functions. MVP-6.8 completed SQLite-
 enforced snapshot/Ledger immutability and exact monetary accounting. The contradiction-audit
 remediation sequence is complete. MVP-6.9 completed verified acquisition/media-type provenance,
-schema migration 7, configuration reconciliation, and phase-neutral package metadata. No later
-phase has started or been authorized.
+schema migration 7, configuration reconciliation, and phase-neutral package metadata. MVP-10
+completed the append-only Evidence Portfolio and Trail in migration 8. MVP-11 completed the
+deterministic, cumulative-budget Research Governor in migration 9: Round 2 completes when
+needed, Round 3 requires a typed post-Round-2 authorization, and a fourth round is impossible.
+No later phase has started or been authorized.
 
 Known limitations are:
 
@@ -444,9 +460,12 @@ Known limitations are:
   Analyst and Reviewer stages, and high-stakes outputs still require human review.
 - MVP-9 removes model-authored quote formatting, but a selection still fails when the
   source lacks enough exact, relevant evidence or when downstream review rejects it.
+- Research expansion is intentionally bounded: duplicate-heavy, unproductive, complete,
+  unreservable, cancelled, failed, and round-limit outcomes finalize rather than opening
+  another research round.
 
 Every released brief still requires human review before high-stakes or external use. Scheduled
-live validation and any phase after MVP-9 remain out of scope until explicitly approved.
+live validation and any phase after MVP-11 remain out of scope until explicitly approved.
 
 Read `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and the relevant
 canonical phase plan before making implementation changes.

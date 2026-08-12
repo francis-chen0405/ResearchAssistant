@@ -1,5 +1,15 @@
 # Handoff
 
+## Current project state — 2026-08-11
+
+MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is complete and
+verified. It preserves MVP-9 exact quote assembly and MVP-10 Evidence Portfolio/Trail
+safeguards while using strict typed, cumulative-budget research rounds. SQLite migration
+9 is append-only and constrains every persisted research round to 1–3. Round 3 can begin
+only after the typed deterministic post-Round-2 decision; terminal results cannot resume
+into another round. Historical MVP-9 and MVP-10 databases remain read-only inspectable.
+No later phase is authorized.
+
 ## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
 
 - MVP-9 is complete. `VerbatimQuoteSelection` is the only provider-facing Extractor
