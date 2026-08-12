@@ -2384,6 +2384,24 @@ Open issue:
 Next expected phase:
 
 - Phase 1 should start only after the user explicitly requests it. It should begin with schemas and artifact-store design as described in `ARCHITECTURE.md`, without weakening the Phase 0 constraints.
+# MVP-11 — Adaptive Research Expansion & Cost Control
+
+- MVP-11 is complete. The Research Governor uses strict typed artifacts and fixed policy
+  `mvp11-research-governor-v1`; research round records are numeric and constrained to
+  1–3 in both Pydantic and SQLite migration 9.
+- Round 2 is completed once started; Round 3 is authorized only after deterministic
+  post-Round-2 checks for incomplete coverage, duplicate rate, recent productivity,
+  new angles, full conservative workload reservation, cancellation, terminal provider
+  conditions, and the fixed cap. No live provider calls were made.
+- Governor decision/round/terminal records are append-only. Read-only inspection keeps
+  MVP-9 and MVP-10 databases readable. A terminal Governor result prevents a failed or
+  cancelled run from resuming into another research round.
+- The direct-MiMo factory and compatibility fingerprint now include the MVP-11 policy;
+  new live Governor runs require a new Run ID rather than reusing an older contract.
+- Verification: complete pytest passed with two expected opt-in skips; focused Governor
+  regressions passed; Ruff and diff checks passed. Do not start a later phase without
+  explicit authorization.
+
 # MVP-10 — Evidence Portfolio & Trail
 
 - MVP-10 is the active authorized phase. Migration 8 is additive and transactional; it stores source-family membership, trail entries, portfolio items, and final coverage.

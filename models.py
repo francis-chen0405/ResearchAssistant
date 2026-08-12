@@ -745,6 +745,198 @@ class PortfolioExpansionRequest(StrictModel):
     evidence_gaps: tuple[NonEmptyStr, ...]
 
 
+class ResearchRoundStatus(StrEnum):
+    """Persisted lifecycle state for one bounded MVP-11 research round."""
+
+    PLANNED = "planned"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CEILING_STOPPED = "ceiling_stopped"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class ResearchGovernorDecisionOutcome(StrEnum):
+    """The only deterministic outcomes of the post-Round-2 Governor."""
+
+    BEGIN_ROUND_THREE = "begin_round_three"
+    FINALIZE = "finalize"
+
+
+class ResearchGovernorReasonCode(StrEnum):
+    """Stable, application-owned explanation code for an authorization decision."""
+
+    ROUND_THREE_AUTHORIZED = "round_three_authorized"
+    PORTFOLIO_COMPLETE = "portfolio_complete"
+    DUPLICATE_HEAVY_ROUND_TWO = "duplicate_heavy_round_two"
+    CONSECUTIVE_UNPRODUCTIVE_SOURCES = "consecutive_unproductive_sources"
+    NO_MEANINGFUL_SEARCH_ANGLE = "no_meaningful_search_angle"
+    INSUFFICIENT_RESERVED_BUDGET = "insufficient_reserved_budget"
+    RUN_CANCELLED = "run_cancelled"
+    TERMINAL_PROVIDER_FAILURE = "terminal_provider_failure"
+    ROUND_LIMIT_REACHED = "round_limit_reached"
+
+
+class ResearchTerminalOutcome(StrEnum):
+    """The permitted terminal evidence outcomes after the final research round."""
+
+    COMPLETE = "complete"
+    LIMITED = "limited"
+    INSUFFICIENT = "insufficient"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class ResearchRoundRecord(StrictModel):
+    """Append-only plan and terminal state for exactly one permitted research round."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    research_round: Annotated[int, Field(ge=1, le=3)]
+    status: ResearchRoundStatus
+    planned_query_count: NonNegativeInt
+    planned_discovery_count: NonNegativeInt
+    completed_query_count: NonNegativeInt = 0
+    completed_discovery_count: NonNegativeInt = 0
+    started_at: datetime
+    completed_at: datetime | None = None
+    stopping_reason: NonEmptyStr
+
+    _started_at_is_aware = field_validator("started_at")(_validate_aware_datetime)
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_terminal_timestamp(self) -> ResearchRoundRecord:
+        terminal = {
+            ResearchRoundStatus.COMPLETED,
+            ResearchRoundStatus.CEILING_STOPPED,
+            ResearchRoundStatus.CANCELLED,
+            ResearchRoundStatus.FAILED,
+        }
+        if self.status in terminal and self.completed_at is None:
+            raise ValueError("terminal research rounds require completed_at")
+        if self.completed_at is not None and self.completed_at < self.started_at:
+            raise ValueError("research round completion cannot precede its start")
+        if self.completed_query_count > self.planned_query_count:
+            raise ValueError("completed queries cannot exceed the planned workload")
+        if self.completed_discovery_count > self.planned_discovery_count:
+            raise ValueError("completed discoveries cannot exceed the planned workload")
+        return self
+
+
+class ResearchGovernorBudgetState(StrictModel):
+    """Cumulative accounted usage and conservative Round-3 reservation evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_calls_used: NonNegativeInt
+    model_calls_remaining: NonNegativeInt
+    retrievals_used: NonNegativeInt
+    retrievals_remaining: NonNegativeInt
+    conservative_tokens_used: NonNegativeInt | None = None
+    tokens_remaining: NonNegativeInt | None = None
+    conservative_cost_used_usd: ExactUSD | None = None
+    cost_remaining_usd: ExactUSD | None = None
+    round_three_model_calls_required: NonNegativeInt
+    round_three_retrievals_required: NonNegativeInt
+    round_three_tokens_required: NonNegativeInt | None = None
+    round_three_cost_required_usd: ExactUSD | None = None
+    full_round_three_reserved: bool
+
+
+class ResearchGovernorPolicy(StrictModel):
+    """Versioned fixed application policy; callers cannot raise the three-round cap."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    policy_version: Literal["mvp11-research-governor-v1"] = "mvp11-research-governor-v1"
+    required_independent_families: Literal[3] = 3
+    duplicate_heavy_rate: Annotated[float, Field(ge=0, le=1)] = 0.70
+    consecutive_unproductive_source_limit: Literal[3] = 3
+    maximum_research_rounds: Literal[3] = 3
+
+
+class ResearchGovernorEvaluationInput(StrictModel):
+    """Typed facts used by deterministic application logic after completed Round 2."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    current_round: Literal[2] = 2
+    independent_approved_family_count: NonNegativeInt
+    round_two_duplicate_count: NonNegativeInt
+    round_two_result_count: NonNegativeInt
+    consecutive_unproductive_source_count: NonNegativeInt
+    remaining_search_angles: tuple[NonEmptyStr, ...]
+    cumulative_budget: ResearchGovernorBudgetState
+    cancelled: bool = False
+    terminal_provider_or_infrastructure_failure: bool = False
+    decided_at: datetime
+
+    _decided_at_is_aware = field_validator("decided_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_duplicate_count(self) -> ResearchGovernorEvaluationInput:
+        if self.round_two_duplicate_count > self.round_two_result_count:
+            raise ValueError("duplicate count cannot exceed completed Round-2 results")
+        return self
+
+
+class ResearchGovernorDecision(StrictModel):
+    """Strict deterministic post-Round-2 authorization artifact."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    current_round: Annotated[int, Field(ge=1, le=3)]
+    independent_approved_family_count: NonNegativeInt
+    portfolio_complete: bool
+    round_two_duplicate_count: NonNegativeInt
+    round_two_result_count: NonNegativeInt
+    round_two_duplicate_rate: Annotated[float, Field(ge=0, le=1)]
+    consecutive_unproductive_source_count: NonNegativeInt
+    remaining_search_angles: tuple[NonEmptyStr, ...]
+    cumulative_budget: ResearchGovernorBudgetState
+    decision: ResearchGovernorDecisionOutcome
+    reason_code: ResearchGovernorReasonCode
+    explanation: NonEmptyStr
+    policy_version: NonEmptyStr
+    decided_at: datetime
+
+    _decided_at_is_aware = field_validator("decided_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_decision_contract(self) -> ResearchGovernorDecision:
+        if self.current_round != 2:
+            raise ValueError("Research Governor authorization is evaluated only after Round 2")
+        if self.round_two_result_count == 0 and self.round_two_duplicate_rate != 0:
+            raise ValueError("an empty Round 2 must have a zero duplicate rate")
+        if self.decision is ResearchGovernorDecisionOutcome.BEGIN_ROUND_THREE:
+            if self.reason_code is not ResearchGovernorReasonCode.ROUND_THREE_AUTHORIZED:
+                raise ValueError("Round 3 authorization requires its stable reason code")
+            if not self.cumulative_budget.full_round_three_reserved:
+                raise ValueError("Round 3 authorization requires a full conservative reservation")
+        elif self.reason_code is ResearchGovernorReasonCode.ROUND_THREE_AUTHORIZED:
+            raise ValueError("finalization cannot use the authorization reason code")
+        return self
+
+
+class ResearchTerminalResult(StrictModel):
+    """Terminal Governor summary that explains the permitted stopping point."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    outcome: ResearchTerminalOutcome
+    completed_rounds: Annotated[int, Field(ge=1, le=3)]
+    independent_approved_family_count: NonNegativeInt
+    explanation: NonEmptyStr
+    finalized_at: datetime
+
+    _finalized_at_is_aware = field_validator("finalized_at")(_validate_aware_datetime)
+
+
 class SynthesisItem(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

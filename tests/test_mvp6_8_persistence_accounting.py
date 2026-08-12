@@ -136,8 +136,8 @@ def test_fresh_database_installs_mvp6_8_schema_and_repeated_init_is_idempotent(
             ).fetchall()
         }
         columns = {row[1] for row in connection.execute("PRAGMA table_info(model_route_attempts)")}
-    assert CURRENT_SCHEMA_VERSION == 8
-    assert versions == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,)]
+    assert CURRENT_SCHEMA_VERSION == 9
+    assert versions == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,)]
     assert {
         "snapshots_immutable_update",
         "snapshots_immutable_delete",
@@ -380,7 +380,13 @@ def test_mvp6_8_migration_failure_rolls_back_record_and_partial_triggers(
             row[0]
             for row in connection.execute(
                 """SELECT name FROM sqlite_master
-                   WHERE type = 'trigger' AND name LIKE '%_immutable_%'"""
+                       WHERE type = 'trigger'
+                         AND name IN (
+                            'snapshots_immutable_update',
+                            'snapshots_immutable_delete',
+                            'ledger_records_immutable_update',
+                            'ledger_records_immutable_delete'
+                         )"""
             )
         }
     assert 6 not in versions

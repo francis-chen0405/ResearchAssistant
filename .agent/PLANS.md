@@ -10,7 +10,7 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-10
+## Current Project State: MVP-11
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit
@@ -52,14 +52,14 @@ evidence-trail inspection through the established SQLite inspection boundary. Th
 explicitly authorized MVP-9 Verified Quote Selection & Deterministic Assembly on
 2026-08-11; it is complete and verified. It replaces model-authored quote envelopes with
 exact segment selection and application-owned deterministic assembly while preserving
-schema version 7. MVP-10 Evidence Portfolio & Trail is now the authorized current phase.
-It adds a bounded one-round evidence-portfolio expansion workflow, deterministic
-source-family accounting, and an auditable Evidence Trail without weakening MVP-9
-safeguards.
+schema version 7. MVP-10 Evidence Portfolio & Trail is complete and verified. MVP-11
+Adaptive Research Expansion & Cost Control (Research Governor) is the authorized current
+phase. It adds deterministic, cumulative-budget-governed research rounds with an absolute
+maximum of three while preserving the MVP-9 and MVP-10 evidence safeguards.
 
 Canonical current plan:
 
-- `.agent/plans/phase-mvp-10-evidence-portfolio-trail.md`
+- `.agent/plans/phase-mvp-11-research-governor.md`
 
 ## MVP-2A: Architecture Gate
 

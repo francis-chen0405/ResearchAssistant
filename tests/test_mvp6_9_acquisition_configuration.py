@@ -325,7 +325,7 @@ def test_snapshot_persistence_reconstructs_media_type_provenance(tmp_path: Path)
     assert historical.media_type_provenance == MediaTypeProvenance()
     assert historical.original_url is None
     assert historical.acquisition_version is None
-    assert CURRENT_SCHEMA_VERSION == 8
+    assert CURRENT_SCHEMA_VERSION == 9
     assert {
         "original_url",
         "canonical_url",
@@ -379,7 +379,7 @@ def test_environment_example_constructs_supported_legacy_smoke_offline() -> None
 
 def test_mvp6_9_acquisition_and_fingerprint_identities_change() -> None:
     assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
-    assert MIMO_FINGERPRINT_VERSION == "mvp9-verified-quote-selection-v1"
+    assert MIMO_FINGERPRINT_VERSION == "mvp11-research-governor-v1"
 
 
 def test_package_description_is_durable_and_phase_neutral() -> None:

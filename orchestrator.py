@@ -74,7 +74,13 @@ from models import (
     ProviderRunContract,
     ProvisionalCandidate,
     ResearchControls,
+    ResearchGovernorBudgetState,
+    ResearchGovernorDecision,
+    ResearchGovernorEvaluationInput,
     ResearchRound,
+    ResearchRoundRecord,
+    ResearchRoundStatus,
+    ResearchTerminalResult,
     RetrievalRecord,
     RunCancellationRequest,
     RunManifest,
@@ -115,6 +121,10 @@ from providers.pricing import (
 )
 from providers.scraper import RetryPolicy, ScraperProvider
 from providers.search import SearchProvider
+from research_governor import (
+    classify_terminal_outcome,
+    evaluate_round_three_authorization,
+)
 from store import (
     DatabaseReader,
     ModelAttemptBudgetError,
@@ -130,6 +140,9 @@ from store import (
     insert_portfolio_item,
     insert_provider_run_contract,
     insert_provisional_extraction,
+    insert_research_governor_decision,
+    insert_research_round_record,
+    insert_research_terminal_result,
     insert_retrieval_attempt,
     insert_run,
     insert_search_queries,
@@ -153,6 +166,9 @@ from store import (
     read_portfolio_coverage_assessment,
     read_provider_run_contract,
     read_provisional_extractions,
+    read_research_governor_decision,
+    read_research_round_records,
+    read_research_terminal_result,
     read_retrieval_attempt,
     read_run,
     read_snapshot,
@@ -1058,6 +1074,12 @@ MVP10_TARGETED_ANALYSIS_CHECKPOINT = "mvp10-targeted-analysis"
 MVP10_TARGETED_PLANNER_ARTIFACT = "mvp10-targeted-planner"
 MVP10_TARGETED_RESEARCHERS_ARTIFACT = "mvp10-targeted-researchers"
 MVP10_TARGETED_ANALYSIS_ARTIFACT = "mvp10-targeted-analysis"
+MVP11_ROUND_TWO_PLANNER_CHECKPOINT = "mvp11-round-two-planner"
+MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT = "mvp11-round-two-researchers"
+MVP11_ROUND_TWO_ANALYSIS_CHECKPOINT = "mvp11-round-two-analysis"
+MVP11_ROUND_THREE_PLANNER_CHECKPOINT = "mvp11-round-three-planner"
+MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT = "mvp11-round-three-researchers"
+MVP11_ROUND_THREE_ANALYSIS_CHECKPOINT = "mvp11-round-three-analysis"
 
 _RETRYABLE_FAILURE_CODES = frozenset(
     {
@@ -1152,6 +1174,7 @@ class ProviderOrchestrationConfig(StrictModel):
     pricing_policy: Literal["compatibility", "direct_mimo"] = "compatibility"
     pinned_model_snapshots: tuple[PinnedModelSnapshot, ...] = ()
     enable_portfolio_expansion: bool = False
+    enable_research_governor: bool = False
 
     @model_validator(mode="after")
     def validate_pinned_aliases(self) -> ProviderOrchestrationConfig:
@@ -1302,6 +1325,9 @@ class ProviderPipelineResult(StrictModel):
     researcher_result: ResearcherPairResult | None = None
     analysis_result: AnalysisStageResult | None = None
     portfolio_coverage: PortfolioCoverageAssessment | None = None
+    research_rounds: tuple[ResearchRoundRecord, ...] = ()
+    research_governor_decision: ResearchGovernorDecision | None = None
+    terminal_research_result: ResearchTerminalResult | None = None
     synthesis_output: SynthesisOutput | None = None
     validation_result: ValidationResult | None = None
     final_brief: str | None = None
@@ -1401,6 +1427,8 @@ def run_provider_pipeline(
     manifest = _create_or_resume_provider_run(path, resolved_run_id, claim, now)
     if provider_contract is not None and existing_contract is None:
         insert_provider_run_contract(path, provider_contract)
+    if settings.enable_research_governor and read_research_terminal_result(path, resolved_run_id):
+        return inspect_provider_run(path, resolved_run_id)
     if manifest.status in {RunStatus.COMPLETED, RunStatus.BLOCKED, RunStatus.CANCELLED}:
         return inspect_provider_run(path, resolved_run_id)
 
@@ -1436,7 +1464,7 @@ def run_provider_pipeline(
                 key=lambda item: str(item.quote_block_id),
             )
         )
-        if not all_candidates:
+        if not all_candidates and not settings.enable_research_governor:
             raise Phase9OrchestrationError(
                 Stage.OPPOSING_RESEARCHER,
                 "researchers produced no candidate that passed deterministic filtering",
@@ -1456,8 +1484,23 @@ def run_provider_pipeline(
         targeted_round_attempted = False
         targeted_researchers: ResearcherPairResult | None = None
         targeted_analysis: AnalysisStageResult | None = None
+        if settings.enable_research_governor:
+            analysis = _run_mvp11_research_governor(
+                path,
+                manifest,
+                planner,
+                researchers,
+                analysis,
+                search_provider,
+                scraper_provider,
+                llm_provider,
+                settings,
+                now,
+                research_controls,
+            )
         if (
-            settings.enable_portfolio_expansion
+            not settings.enable_research_governor
+            and settings.enable_portfolio_expansion
             and _approved_family_count(researchers, analysis) < 3
         ):
             targeted_round_attempted = True
@@ -1472,7 +1515,7 @@ def run_provider_pipeline(
                 now,
                 research_controls,
             )
-            if _targeted_queries_are_new(planner, targeted_planner):
+            if _targeted_queries_are_new((planner,), targeted_planner):
                 targeted_researchers = _run_researcher_stage(
                     path,
                     targeted_planner,
@@ -1495,7 +1538,7 @@ def run_provider_pipeline(
                     artifact_key=MVP10_TARGETED_ANALYSIS_ARTIFACT,
                 )
                 analysis = _combine_analysis_results(analysis, targeted_analysis)
-        if not analysis.ledger_records:
+        if not settings.enable_research_governor and not analysis.ledger_records:
             _persist_mvp10_portfolio(
                 path,
                 planner,
@@ -1528,35 +1571,36 @@ def run_provider_pipeline(
                 "insufficient evidence: no Reviewer-approved statement was eligible for the Ledger",
             )
 
-        _persist_mvp10_portfolio(
-            path,
-            planner,
-            researchers,
-            initial_analysis,
-            now,
-            stopping_reason="Round 1 completed.",
-        )
-        if targeted_researchers is not None and targeted_analysis is not None:
+        if not settings.enable_research_governor:
             _persist_mvp10_portfolio(
                 path,
                 planner,
-                targeted_researchers,
-                targeted_analysis,
+                researchers,
+                initial_analysis,
                 now,
-                stopping_reason="One targeted portfolio-expansion round completed.",
-                research_round=ResearchRound.TARGETED,
+                stopping_reason="Round 1 completed.",
             )
-        _finalize_mvp10_portfolio(
-            path,
-            resolved_run_id,
-            research_rounds=2 if targeted_round_attempted else 1,
-            stopping_reason=(
-                "Coverage target met in the initial round."
-                if not targeted_round_attempted
-                else "The one permitted targeted round completed; no further search is allowed."
-            ),
-            clock=now,
-        )
+            if targeted_researchers is not None and targeted_analysis is not None:
+                _persist_mvp10_portfolio(
+                    path,
+                    planner,
+                    targeted_researchers,
+                    targeted_analysis,
+                    now,
+                    stopping_reason="One targeted portfolio-expansion round completed.",
+                    research_round=ResearchRound.TARGETED,
+                )
+            _finalize_mvp10_portfolio(
+                path,
+                resolved_run_id,
+                research_rounds=2 if targeted_round_attempted else 1,
+                stopping_reason=(
+                    "Coverage target met in the initial round."
+                    if not targeted_round_attempted
+                    else "The one permitted targeted round completed; no further search is allowed."
+                ),
+                clock=now,
+            )
 
         active_stage = Stage.DEBATE_SYNTHESIZER
         synthesis = _run_synthesis_stage(
@@ -1588,6 +1632,16 @@ def run_provider_pipeline(
         )
     except Phase9Cancellation as exc:
         reason = str(exc)
+        if settings.enable_research_governor:
+            _finalize_mvp11_governor(
+                path,
+                resolved_run_id,
+                completed_rounds=max(len(read_research_round_records(path, resolved_run_id)), 1),
+                families=0,
+                explanation=reason,
+                clock=now,
+                cancelled=True,
+            )
         _finish_run(path, resolved_run_id, RunStatus.CANCELLED, active_stage, now)
         _checkpoint(
             path,
@@ -1600,6 +1654,16 @@ def run_provider_pipeline(
     except Exception as exc:
         failed_stage = exc.stage if isinstance(exc, Phase9OrchestrationError) else active_stage
         reason = str(exc) or type(exc).__name__
+        if settings.enable_research_governor:
+            _finalize_mvp11_governor(
+                path,
+                resolved_run_id,
+                completed_rounds=max(len(read_research_round_records(path, resolved_run_id)), 1),
+                families=0,
+                explanation=reason,
+                clock=now,
+                failed=True,
+            )
         _finish_run(path, resolved_run_id, RunStatus.FAILED, failed_stage, now)
         _checkpoint(
             path,
@@ -1650,7 +1714,7 @@ def run_mvp3b_pipeline(
         require_budget_reservations=True,
         reserved_output_tokens_per_call=bundle.config.mimo.max_completion_tokens,
         pricing_policy="direct_mimo",
-        enable_portfolio_expansion=True,
+        enable_research_governor=True,
     )
     contract = bundle.contract(
         resolved_run_id,
@@ -1714,6 +1778,9 @@ def _inspect_provider_run_connection(
     synthesis = _read_optional_synthesis(reader, run_id)
     validation = _read_optional_validation(reader, run_id)
     portfolio_coverage = read_portfolio_coverage_assessment(reader, run_id)
+    research_rounds = read_research_round_records(reader, run_id)
+    governor_decision = read_research_governor_decision(reader, run_id)
+    terminal_research_result = read_research_terminal_result(reader, run_id)
     status = _provider_status_from_manifest(manifest)
     resolved_failure = None
     if status is ProviderRunStatus.FAILED:
@@ -1755,6 +1822,9 @@ def _inspect_provider_run_connection(
         researcher_result=researchers,
         analysis_result=analysis,
         portfolio_coverage=portfolio_coverage,
+        research_rounds=research_rounds,
+        research_governor_decision=governor_decision,
+        terminal_research_result=terminal_research_result,
         synthesis_output=synthesis,
         validation_result=validation,
         final_brief=final_brief,
@@ -2120,32 +2190,63 @@ def _run_targeted_planner_stage(
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
     research_controls: ResearchControls,
+    *,
+    checkpoint_key: str = MVP10_TARGETED_PLANNER_CHECKPOINT,
+    artifact_key: str = MVP10_TARGETED_PLANNER_ARTIFACT,
+    operation_label: str = "mvp10-targeted-planner",
+    attempted_planners: tuple[PlannerOutput, ...] = (),
+    family_researchers: tuple[ResearcherPairResult, ...] = (),
+    require_new_queries: bool = True,
 ) -> PlannerOutput:
-    """Execute the one permitted typed replanning call without replacing round one."""
-    stored = _read_optional_stage_result(
-        db_path, manifest.run_id, MVP10_TARGETED_PLANNER_ARTIFACT, PlannerOutput
-    )
+    """Execute a typed bounded replanning call without replacing earlier rounds."""
+    stored = _read_optional_stage_result(db_path, manifest.run_id, artifact_key, PlannerOutput)
     if stored is not None:
         return stored
-    _begin_stage(
-        db_path, manifest.run_id, Stage.CLAIM_PLANNER, MVP10_TARGETED_PLANNER_CHECKPOINT, clock
-    )
-    snapshots = _snapshot_lookup(researchers)
+    _begin_stage(db_path, manifest.run_id, Stage.CLAIM_PLANNER, checkpoint_key, clock)
+    snapshots = {
+        snapshot.snapshot_id: snapshot
+        for researcher_pair in (researchers, *family_researchers)
+        for side in (researcher_pair.supporting, researcher_pair.opposing)
+        if side.retrieval_batch is not None
+        for snapshot in side.retrieval_batch.snapshots
+    }
+    prior_trail = read_evidence_trail_entries(db_path, manifest.run_id)
     approved_families = tuple(
         sorted(
             {
                 identify_source_family(snapshots[ledger.snapshot_id])
                 for ledger in analysis.ledger_records
+                if ledger.snapshot_id in snapshots
             },
             key=lambda item: str(item.source_family_id),
         )
     )
-    attempted_queries = tuple(query.query_text for query in initial_planner.search_queries)
+    attempted_queries = tuple(
+        query.query_text
+        for prior_planner in (initial_planner, *attempted_planners)
+        for query in prior_planner.search_queries
+    )
     rejected_sources = tuple(
-        candidate.source_url
-        for side in (researchers.supporting, researchers.opposing)
-        for candidate in side.candidates
-        if candidate.quote_block_id in analysis.rejected_quote_block_ids
+        sorted(
+            {
+                *(
+                    candidate.source_url
+                    for side in (researchers.supporting, researchers.opposing)
+                    for candidate in side.candidates
+                    if candidate.quote_block_id in analysis.rejected_quote_block_ids
+                ),
+                *(
+                    entry.resolved_url
+                    for entry in prior_trail
+                    if entry.outcome
+                    in {
+                        EvidenceTrailOutcome.ANALYST_REJECTED,
+                        EvidenceTrailOutcome.REVIEWER_REJECTED,
+                        EvidenceTrailOutcome.NOT_RELEVANT,
+                    }
+                ),
+            }
+        )
     )
     inaccessible_domains = tuple(
         sorted(
@@ -2156,6 +2257,15 @@ def _run_targeted_planner_stage(
                 for outcome in side.retrieval_batch.outcomes
                 if outcome.retrieval.status.value == "failed"
                 and _mvp10_source_domain(outcome.retrieval.resolved_url) != "unknown source"
+            }
+            | {
+                entry.source_domain
+                for entry in prior_trail
+                if entry.outcome
+                in {
+                    EvidenceTrailOutcome.INACCESSIBLE,
+                    EvidenceTrailOutcome.RETRIEVAL_FAILURE,
+                }
             }
         )
     )
@@ -2171,7 +2281,17 @@ def _run_targeted_planner_stage(
         ),
         rejected_sources=rejected_sources,
         inaccessible_domains=inaccessible_domains,
-        duplicate_source_families=(),
+        duplicate_source_families=tuple(
+            sorted(
+                {
+                    entry.source_family
+                    for entry in prior_trail
+                    if entry.outcome is EvidenceTrailOutcome.DUPLICATE
+                    and entry.source_family is not None
+                },
+                key=lambda item: str(item.source_family_id),
+            )
+        ),
         attempted_queries=attempted_queries,
         evidence_gaps=(
             "Find independent primary evidence not represented by approved source families.",
@@ -2185,7 +2305,7 @@ def _run_targeted_planner_stage(
         research_controls=research_controls,
         portfolio_expansion=expansion,
     )
-    operation_id = _operation_id(manifest.run_id, "mvp10-targeted-planner", manifest.run_id)
+    operation_id = _operation_id(manifest.run_id, operation_label, manifest.run_id)
 
     def validate_targeted_planner(output: BaseModel, alias: ModelAlias) -> BaseModel:
         planner = _require_output(output, PlannerOutput)
@@ -2216,15 +2336,20 @@ def _run_targeted_planner_stage(
             objective_validator=validate_targeted_planner,
         ),
     )
-    if _targeted_queries_are_new(initial_planner, targeted):
+    if not require_new_queries or _targeted_queries_are_new(
+        (initial_planner, *attempted_planners), targeted
+    ):
         insert_search_queries(db_path, tuple(targeted.search_queries))
-    _persist_stage_result(
-        db_path, manifest.run_id, MVP10_TARGETED_PLANNER_ARTIFACT, targeted, clock
-    )
+    elif require_new_queries:
+        raise Phase9OrchestrationError(
+            Stage.CLAIM_PLANNER,
+            "targeted Planner did not provide a materially new search strategy",
+        )
+    _persist_stage_result(db_path, manifest.run_id, artifact_key, targeted, clock)
     _checkpoint(
         db_path,
         manifest.run_id,
-        MVP10_TARGETED_PLANNER_CHECKPOINT,
+        checkpoint_key,
         CheckpointStatus.COMPLETED,
         clock,
     )
@@ -2241,9 +2366,427 @@ def _approved_family_count(researchers: ResearcherPairResult, analysis: Analysis
     )
 
 
-def _targeted_queries_are_new(initial: PlannerOutput, targeted: PlannerOutput) -> bool:
+def _run_mvp11_research_governor(
+    db_path: str,
+    manifest: RunManifest,
+    round_one_planner: PlannerOutput,
+    round_one_researchers: ResearcherPairResult,
+    round_one_analysis: AnalysisStageResult,
+    search_provider: SearchProvider,
+    scraper_provider: ScraperProvider,
+    llm_provider: LLMProvider,
+    config: ProviderOrchestrationConfig,
+    clock: Callable[[], datetime],
+    research_controls: ResearchControls,
+) -> AnalysisStageResult:
+    """Run the fixed MVP-11 two-round minimum and conditionally final third round."""
+    _record_mvp11_round(db_path, round_one_planner, round_one_researchers, 1, clock)
+    _persist_mvp10_portfolio(
+        db_path,
+        round_one_planner,
+        round_one_researchers,
+        round_one_analysis,
+        clock,
+        stopping_reason="Round 1 completed.",
+    )
+    combined = round_one_analysis
+    combined_researchers = (round_one_researchers,)
+    if _approved_family_count(round_one_researchers, round_one_analysis) >= 3:
+        _finalize_mvp11_governor(
+            db_path,
+            manifest.run_id,
+            completed_rounds=1,
+            families=_approved_family_count(round_one_researchers, round_one_analysis),
+            explanation="Round 1 met the independent approved source-family target.",
+            clock=clock,
+        )
+        _finalize_mvp10_portfolio(
+            db_path,
+            manifest.run_id,
+            research_rounds=1,
+            stopping_reason="Coverage target met in Round 1.",
+            clock=clock,
+        )
+        return combined
+
+    deduplication = _seed_mvp11_deduplication(round_one_researchers)
+    round_two_planner = _run_targeted_planner_stage(
+        db_path,
+        manifest,
+        round_one_planner,
+        round_one_researchers,
+        round_one_analysis,
+        llm_provider,
+        config,
+        clock,
+        research_controls,
+        checkpoint_key=MVP11_ROUND_TWO_PLANNER_CHECKPOINT,
+        artifact_key=MVP11_ROUND_TWO_PLANNER_CHECKPOINT,
+        operation_label="mvp11-round-two-planner",
+    )
+    round_two_researchers = _run_researcher_stage(
+        db_path,
+        round_two_planner,
+        search_provider,
+        scraper_provider,
+        llm_provider,
+        config,
+        clock,
+        checkpoint_key=MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
+        artifact_key=MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
+        deduplication=deduplication,
+    )
+    round_two_analysis = _run_analysis_stage(
+        db_path,
+        round_two_planner,
+        round_two_researchers,
+        llm_provider,
+        config,
+        clock,
+        checkpoint_key=MVP11_ROUND_TWO_ANALYSIS_CHECKPOINT,
+        artifact_key=MVP11_ROUND_TWO_ANALYSIS_CHECKPOINT,
+    )
+    _record_mvp11_round(db_path, round_two_planner, round_two_researchers, 2, clock)
+    _persist_mvp10_portfolio(
+        db_path,
+        round_two_planner,
+        round_two_researchers,
+        round_two_analysis,
+        clock,
+        stopping_reason="Round 2 completed its planned workload.",
+        research_round=ResearchRound.TARGETED,
+    )
+    combined = _combine_analysis_results(combined, round_two_analysis)
+    combined_researchers = (*combined_researchers, round_two_researchers)
+    decision = evaluate_round_three_authorization(
+        _mvp11_governor_input(
+            db_path,
+            manifest.run_id,
+            combined_researchers,
+            combined,
+            config,
+            clock,
+        )
+    )
+    _persist_mvp11_decision(db_path, decision)
+    if decision.decision.value != "begin_round_three":
+        _finalize_mvp11_governor(
+            db_path,
+            manifest.run_id,
+            completed_rounds=2,
+            families=decision.independent_approved_family_count,
+            explanation=decision.explanation,
+            clock=clock,
+        )
+        _finalize_mvp10_portfolio(
+            db_path,
+            manifest.run_id,
+            research_rounds=2,
+            stopping_reason=decision.explanation,
+            clock=clock,
+        )
+        return combined
+
+    round_three_planner = _run_targeted_planner_stage(
+        db_path,
+        manifest,
+        round_one_planner,
+        round_two_researchers,
+        combined,
+        llm_provider,
+        config,
+        clock,
+        research_controls,
+        checkpoint_key=MVP11_ROUND_THREE_PLANNER_CHECKPOINT,
+        artifact_key=MVP11_ROUND_THREE_PLANNER_CHECKPOINT,
+        operation_label="mvp11-round-three-planner",
+        attempted_planners=(round_two_planner,),
+        family_researchers=(round_one_researchers,),
+    )
+    round_three_researchers = _run_researcher_stage(
+        db_path,
+        round_three_planner,
+        search_provider,
+        scraper_provider,
+        llm_provider,
+        config,
+        clock,
+        checkpoint_key=MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
+        artifact_key=MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
+        deduplication=deduplication,
+    )
+    round_three_analysis = _run_analysis_stage(
+        db_path,
+        round_three_planner,
+        round_three_researchers,
+        llm_provider,
+        config,
+        clock,
+        checkpoint_key=MVP11_ROUND_THREE_ANALYSIS_CHECKPOINT,
+        artifact_key=MVP11_ROUND_THREE_ANALYSIS_CHECKPOINT,
+    )
+    _record_mvp11_round(db_path, round_three_planner, round_three_researchers, 3, clock)
+    _persist_mvp10_portfolio(
+        db_path,
+        round_three_planner,
+        round_three_researchers,
+        round_three_analysis,
+        clock,
+        stopping_reason="Round 3 completed its planned workload.",
+        research_round=ResearchRound.TARGETED,
+    )
+    combined = _combine_analysis_results(combined, round_three_analysis)
+    _finalize_mvp11_governor(
+        db_path,
+        manifest.run_id,
+        completed_rounds=3,
+        families=_mvp11_family_count((*combined_researchers, round_three_researchers), combined),
+        explanation="Round 3 completed; no further research round is permitted.",
+        clock=clock,
+    )
+    _finalize_mvp10_portfolio(
+        db_path,
+        manifest.run_id,
+        research_rounds=3,
+        stopping_reason="Round 3 completed; no further research round is permitted.",
+        clock=clock,
+    )
+    return combined
+
+
+def _seed_mvp11_deduplication(researchers: ResearcherPairResult) -> DeduplicationState:
+    """Seed a new round with every prior snapshot identity so it cannot re-acquire them."""
+    deduplication = DeduplicationState()
+    for side in (researchers.supporting, researchers.opposing):
+        if side.retrieval_batch is None:
+            continue
+        for snapshot in side.retrieval_batch.snapshots:
+            family = identify_source_family(snapshot)
+            deduplication.original_urls[snapshot.source_url] = snapshot.snapshot_id
+            deduplication.resolved_urls[snapshot.source_url] = snapshot.snapshot_id
+            deduplication.content_hashes[snapshot.snapshot_sha256] = snapshot.snapshot_id
+            deduplication.source_families[family.source_family_id] = snapshot.snapshot_id
+    return deduplication
+
+
+def _mvp11_family_count(
+    researcher_rounds: tuple[ResearcherPairResult, ...], analysis: AnalysisStageResult
+) -> int:
+    """Count approved families from all completed rounds without reinterpreting duplicates."""
+    snapshots = {
+        snapshot.snapshot_id: snapshot
+        for pair in researcher_rounds
+        for side in (pair.supporting, pair.opposing)
+        if side.retrieval_batch is not None
+        for snapshot in side.retrieval_batch.snapshots
+    }
+    return len(
+        {
+            identify_source_family(snapshots[ledger.snapshot_id]).source_family_id
+            for ledger in analysis.ledger_records
+            if ledger.snapshot_id in snapshots
+        }
+    )
+
+
+def _record_mvp11_round(
+    db_path: str,
+    planner: PlannerOutput,
+    researchers: ResearcherPairResult,
+    research_round: int,
+    clock: Callable[[], datetime],
+) -> None:
+    """Append one completed research-round record, refusing any impossible fourth round."""
+    if research_round not in {1, 2, 3}:
+        raise Phase9OrchestrationError(Stage.CLAIM_PLANNER, "MVP-11 forbids research Round 4")
+    if any(
+        item.research_round == research_round
+        for item in read_research_round_records(db_path, planner.run_id)
+    ):
+        return
+    outcomes = tuple(
+        outcome
+        for side in (researchers.supporting, researchers.opposing)
+        if side.retrieval_batch is not None
+        for outcome in side.retrieval_batch.outcomes
+    )
+    completed_at = _aware_phase9_time(clock(), "research round completed_at")
+    insert_research_round_record(
+        db_path,
+        ResearchRoundRecord(
+            run_id=planner.run_id,
+            research_round=research_round,
+            status=ResearchRoundStatus.COMPLETED,
+            planned_query_count=len(planner.search_queries),
+            planned_discovery_count=(
+                2 * researchers.supporting.retrieval_batch.intended_attempt_count
+                if researchers.supporting.retrieval_batch is not None
+                else 0
+            ),
+            completed_query_count=len(planner.search_queries),
+            completed_discovery_count=len(outcomes),
+            started_at=planner.planned_at,
+            completed_at=completed_at,
+            stopping_reason="Completed the planned research workload.",
+        ),
+    )
+
+
+def _mvp11_governor_input(
+    db_path: str,
+    run_id: UUID,
+    researcher_rounds: tuple[ResearcherPairResult, ...],
+    analysis: AnalysisStageResult,
+    config: ProviderOrchestrationConfig,
+    clock: Callable[[], datetime],
+) -> ResearchGovernorEvaluationInput:
+    """Derive post-Round-2 typed policy facts from persisted cumulative artifacts."""
+    round_two = researcher_rounds[-1]
+    outcomes = tuple(
+        item
+        for side in (round_two.supporting, round_two.opposing)
+        if side.retrieval_batch is not None
+        for item in side.retrieval_batch.outcomes
+    )
+    duplicate_count = sum(item.scrape_status.value == "duplicate_url" for item in outcomes)
+    attempts = tuple(read_model_route_attempts(db_path, run_id))
+    usage = summarize_model_usage(attempts)
+    model_remaining = max(config.budget.max_model_calls - len(attempts), 0)
+    retrieval_used = sum(
+        len(side.retrieval_batch.outcomes)
+        for pair in researcher_rounds
+        for side in (pair.supporting, pair.opposing)
+        if side.retrieval_batch is not None
+    )
+    retrieval_remaining = max(
+        (config.budget.retrieval_attempts_per_side * 2) - retrieval_used,
+        0,
+    )
+    planned_round_three_model_calls = _mvp11_round_three_model_call_reservation(config)
+    planned_round_three_retrievals = config.acquisition_policy.maximum_attempts_per_stance * 2
+    planned_round_three_tokens = (
+        planned_round_three_model_calls * config.reserved_output_tokens_per_call
+    )
+    price_cap = (
+        DIRECT_MIMO_PRICE_CAP
+        if config.pricing_policy == "direct_mimo"
+        else COMPATIBILITY_PRICE_CAPS["mimo-v2.5-pro"]
+    )
+    planned_round_three_cost = price_cap.upper_bound(
+        planned_round_three_tokens,
+        planned_round_three_tokens,
+    )
+    token_remaining = (
+        max(config.budget.max_total_tokens - (usage.conservative_reserved_tokens or 0), 0)
+        if config.budget.max_total_tokens is not None
+        else None
+    )
+    cost_remaining = (
+        config.budget.max_total_cost_usd - usage.conservative_reserved_cost_usd
+        if (
+            config.budget.max_total_cost_usd is not None
+            and usage.conservative_reserved_cost_usd is not None
+        )
+        else None
+    )
+    full_reserve = (
+        model_remaining >= planned_round_three_model_calls
+        and retrieval_remaining >= planned_round_three_retrievals
+        and (
+            config.budget.max_total_tokens is None
+            or token_remaining is not None
+            and token_remaining >= planned_round_three_tokens
+        )
+        and (
+            config.budget.max_total_cost_usd is None
+            or cost_remaining is not None
+            and cost_remaining >= planned_round_three_cost
+        )
+    )
+    return ResearchGovernorEvaluationInput(
+        run_id=run_id,
+        independent_approved_family_count=_mvp11_family_count(researcher_rounds, analysis),
+        round_two_duplicate_count=duplicate_count,
+        round_two_result_count=len(outcomes),
+        consecutive_unproductive_source_count=_mvp11_consecutive_unproductive(outcomes),
+        remaining_search_angles=("independent source types not used in the first two rounds",),
+        cumulative_budget=ResearchGovernorBudgetState(
+            model_calls_used=len(attempts),
+            model_calls_remaining=model_remaining,
+            retrievals_used=retrieval_used,
+            retrievals_remaining=retrieval_remaining,
+            conservative_tokens_used=usage.conservative_reserved_tokens,
+            tokens_remaining=token_remaining,
+            conservative_cost_used_usd=usage.conservative_reserved_cost_usd,
+            cost_remaining_usd=cost_remaining,
+            round_three_model_calls_required=planned_round_three_model_calls,
+            round_three_retrievals_required=planned_round_three_retrievals,
+            round_three_tokens_required=planned_round_three_tokens,
+            round_three_cost_required_usd=planned_round_three_cost,
+            full_round_three_reserved=full_reserve,
+        ),
+        decided_at=_aware_phase9_time(clock(), "governor decided_at"),
+    )
+
+
+def _mvp11_round_three_model_call_reservation(config: ProviderOrchestrationConfig) -> int:
+    """Reserve every bounded Round-3 operation and its allowed provider-level retries."""
+    maximum_sources = config.acquisition_policy.maximum_attempts_per_stance * 2
+    operations_per_source = 4  # Extractor, Analyst, statement draft, and Reviewer.
+    logical_operations = 1 + (maximum_sources * operations_per_source)
+    return logical_operations * config.retries.max_attempts_per_alias
+
+
+def _mvp11_consecutive_unproductive(outcomes: Sequence[object]) -> int:
+    """Count the trailing deterministic duplicate/unusable streak for Governor policy."""
+    count = 0
+    for outcome in reversed(outcomes):
+        if getattr(getattr(outcome, "scrape_status", None), "value", None) == "retrieved":
+            break
+        count += 1
+    return count
+
+
+def _persist_mvp11_decision(db_path: str, decision: ResearchGovernorDecision) -> None:
+    """Persist the one immutable Governor decision exactly once across safe resume."""
+    if read_research_governor_decision(db_path, decision.run_id) is None:
+        insert_research_governor_decision(db_path, decision)
+
+
+def _finalize_mvp11_governor(
+    db_path: str,
+    run_id: UUID,
+    *,
+    completed_rounds: int,
+    families: int,
+    explanation: str,
+    clock: Callable[[], datetime],
+    cancelled: bool = False,
+    failed: bool = False,
+) -> None:
+    """Persist a terminal classification that never allows a post-Round-3 resume loop."""
+    if read_research_terminal_result(db_path, run_id) is None:
+        insert_research_terminal_result(
+            db_path,
+            classify_terminal_outcome(
+                run_id=run_id,
+                completed_rounds=completed_rounds,
+                independent_approved_family_count=families,
+                cancelled=cancelled,
+                failed=failed,
+                explanation=explanation,
+                finalized_at=_aware_phase9_time(clock(), "research terminal finalized_at"),
+            ),
+        )
+
+
+def _targeted_queries_are_new(
+    attempted_planners: tuple[PlannerOutput, ...], targeted: PlannerOutput
+) -> bool:
     """Require the targeted round to offer a materially new query set before retrieval."""
-    attempted = {query.query_text for query in initial.search_queries}
+    attempted = {
+        query.query_text for planner in attempted_planners for query in planner.search_queries
+    }
     return not bool({query.query_text for query in targeted.search_queries} & attempted)
 
 
@@ -2279,6 +2822,7 @@ def _run_researcher_stage(
     *,
     checkpoint_key: str = PHASE9_RESEARCHERS_CHECKPOINT,
     artifact_key: str = PHASE9_RESEARCHERS_ARTIFACT,
+    deduplication: DeduplicationState | None = None,
 ) -> ResearcherPairResult:
     if _checkpoint_is_completed(db_path, planner.run_id, checkpoint_key):
         stored = _read_optional_stage_result(
@@ -2311,7 +2855,7 @@ def _run_researcher_stage(
         clock,
     )
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="phase9-researcher") as executor:
-        deduplication = DeduplicationState()
+        active_deduplication = deduplication or DeduplicationState()
         supporting_future = executor.submit(
             _run_researcher_side,
             db_path,
@@ -2322,7 +2866,7 @@ def _run_researcher_stage(
             llm_provider,
             config,
             clock,
-            deduplication,
+            active_deduplication,
         )
         opposing_future = executor.submit(
             _run_researcher_side,
@@ -2334,7 +2878,7 @@ def _run_researcher_stage(
             llm_provider,
             config,
             clock,
-            deduplication,
+            active_deduplication,
         )
         supporting = supporting_future.result()
         opposing = opposing_future.result()

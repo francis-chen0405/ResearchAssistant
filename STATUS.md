@@ -2043,6 +2043,38 @@ Verification:
 - `pytest`: 2 passed.
 - `ruff check .`: passed.
 - `ruff format --check .`: passed.
+# MVP-11 — Adaptive Research Expansion & Cost Control
+
+Status: Complete.
+
+Completed:
+
+- Verified MVP-10 at committed HEAD `0c20db6`, including its plan, documentation,
+  migration-8 implementation, focused tests, and clean starting worktree.
+- Added strict Research Governor policy, decision, budget, terminal, and numeric
+  research-round artifacts. The policy fixes the maximum at three rounds and records a
+  secret-free plain-language authorization/stopping explanation.
+- Added migration 9 for append-only research-round, Governor-decision, and terminal
+  records, with SQLite `CHECK` enforcement for round numbers 1–3 and immutable rows.
+- Bumped live provider factory/fingerprint policy identity to
+  `mvp11-research-governor-v1`; MVP-11 execution requires a new Run ID rather than
+  resuming an older contract under changed research-round semantics.
+- Updated provider orchestration to complete Round 2 when Round 1 is incomplete,
+  deduplicate across all permitted rounds, authorize Round 3 only through deterministic
+  application policy, and record terminal cancellation/failure without a Round 4 resume.
+- Extended the read-only Evidence Browser with compact Governor progress, budget,
+  duplicate-rate, productivity, authorization, and terminal-result information.
+
+Verification:
+
+- `pytest`: passed (2 expected opt-in skips).
+- Focused Governor/MVP-9/MVP-10/type-contract regression set: 71 passed.
+- `ruff check .`, `ruff format --check .`, and `git diff --check`: passed.
+
+Next phase:
+
+- Do not begin another phase without explicit user authorization.
+
 # MVP-10 — Evidence Portfolio & Trail
 
 - Added strict source-family, source-trail, portfolio, coverage, and targeted-planning models; migration 8 adds append-only tables without rewriting snapshots or Ledger rows.

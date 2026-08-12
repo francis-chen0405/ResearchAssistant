@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-08-11 - MVP-11 Adaptive Research Expansion & Cost Control
+
+- Fix the maximum research-round count at three in strict Pydantic artifacts, SQLite
+  constraints, orchestration, resume handling, and documentation. No caller, planner,
+  provider retry, or recovery path may authorize Round 4.
+- Complete a started Round 2 or Round 3 unless cancellation, hard ceilings, or an
+  unavoidable terminal provider/infrastructure failure intervenes. Reaching portfolio
+  completeness and duplicate saturation are audit facts, never early-stop conditions.
+- Use deterministic application logic—not MiMo—to decide Round 3 after Round 2. Policy
+  `mvp11-research-governor-v1` stops at 70% duplicates, three consecutive unproductive
+  sources, exhausted meaningful angles, unreservable complete workload, cancellation,
+  terminal failure, completeness, or the round limit.
+- Migration 9 is additive, transactional, idempotent, and append-only. It persists
+  bounded round records, the single Governor decision, and terminal research outcome;
+  historical databases retain read-only compatibility.
+
 ## 2026-08-11 - MVP-10 Evidence Portfolio & Trail
 
 - Count Reviewer-approved evidence by deterministic source family, not by quotation or domain. Canonical source URL is preferred, followed by resolved URL and snapshot hash.

@@ -39,6 +39,9 @@ from models import (
     PortfolioItem,
     ProviderRunContract,
     ProvisionalCandidate,
+    ResearchGovernorDecision,
+    ResearchRoundRecord,
+    ResearchTerminalResult,
     RetrievalRecord,
     RunCancellationRequest,
     RunManifest,
@@ -61,11 +64,12 @@ from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 RAW_CLAIM_SCHEMA_VERSION = 5
 MVP68_SCHEMA_VERSION = 6
 MVP69_SCHEMA_VERSION = 7
 MVP10_SCHEMA_VERSION = 8
+MVP11_SCHEMA_VERSION = 9
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -91,6 +95,7 @@ MIGRATION_DESCRIPTIONS = {
     6: "immutable snapshots and Ledger with exact decimal model costs",
     7: "snapshot acquisition and media-type provenance",
     8: "mvp-10 evidence portfolio and trail",
+    9: "mvp-11 bounded research governor records",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -122,6 +127,9 @@ _REQUIRED_TABLES = {
     "evidence_trail_entries",
     "portfolio_items",
     "portfolio_coverage_assessments",
+    "research_round_records",
+    "research_governor_decisions",
+    "research_terminal_results",
 }
 _REQUIRED_TRIGGERS = {
     "retrieval_attempt_same_run",
@@ -135,6 +143,14 @@ _REQUIRED_TRIGGERS = {
     "synthesis_item_same_run",
     RAW_CLAIM_TRIGGER_NAME,
     *IMMUTABLE_ARTIFACT_TRIGGERS,
+}
+_MVP11_TRIGGERS = {
+    "research_round_records_immutable_update",
+    "research_round_records_immutable_delete",
+    "research_governor_decisions_immutable_update",
+    "research_governor_decisions_immutable_delete",
+    "research_terminal_results_immutable_update",
+    "research_terminal_results_immutable_delete",
 }
 _REQUIRED_INDEXES = {
     "provisional_extractions_run_snapshot_stance",
@@ -280,17 +296,16 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
     tables = {name for object_type, name in objects if object_type == "table"}
     triggers = {name for object_type, name in objects if object_type == "trigger"}
     indexes = {name for object_type, name in objects if object_type == "index"}
+    required_tables = _REQUIRED_TABLES
+    required_triggers = _REQUIRED_TRIGGERS
+    if latest == MVP69_SCHEMA_VERSION:
+        required_tables = _REQUIRED_TABLES - _MVP10_TABLES - _MVP11_TABLES
+    elif latest == MVP10_SCHEMA_VERSION:
+        required_tables = _REQUIRED_TABLES - _MVP11_TABLES
+    else:
+        required_triggers = _REQUIRED_TRIGGERS | _MVP11_TRIGGERS
     missing = sorted(
-        (
-            (
-                _REQUIRED_TABLES - _MVP10_TABLES
-                if latest == MVP69_SCHEMA_VERSION
-                else _REQUIRED_TABLES
-            )
-            - tables
-        )
-        | (_REQUIRED_TRIGGERS - triggers)
-        | (_REQUIRED_INDEXES - indexes)
+        (required_tables - tables) | (required_triggers - triggers) | (_REQUIRED_INDEXES - indexes)
     )
     trigger_sql = objects.get(("trigger", RAW_CLAIM_TRIGGER_NAME))
     invalid_immutable = [
@@ -875,6 +890,7 @@ def init_db(db_path: str) -> None:
         _apply_mvp68_integrity_migration(conn)
         _apply_mvp69_provenance_migration(conn)
         _apply_mvp10_evidence_portfolio_migration(conn)
+        _apply_mvp11_research_governor_migration(conn)
     finally:
         conn.close()
 
@@ -1111,6 +1127,12 @@ _MVP10_TABLES = {
     "portfolio_coverage_assessments",
 }
 
+_MVP11_TABLES = {
+    "research_round_records",
+    "research_governor_decisions",
+    "research_terminal_results",
+}
+
 
 def _verify_mvp10_schema(conn: sqlite3.Connection) -> None:
     present = {
@@ -1176,6 +1198,91 @@ def _apply_mvp10_evidence_portfolio_migration(conn: sqlite3.Connection) -> None:
             (
                 MVP10_SCHEMA_VERSION,
                 MIGRATION_DESCRIPTIONS[MVP10_SCHEMA_VERSION],
+                "2026-08-11T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_mvp11_schema(conn: sqlite3.Connection) -> None:
+    """Verify the bounded append-only Research Governor tables and constraints."""
+    present = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_MVP11_TABLES - present)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 9 research governor tables are missing: {', '.join(missing)}"
+        )
+    sql_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'research_round_records'"
+    ).fetchone()
+    normalized = " ".join((sql_row["sql"] if sql_row is not None else "").lower().split())
+    if "check (research_round between 1 and 3)" not in normalized:
+        raise sqlite3.DatabaseError("migration 9 research round bound is missing or inconsistent")
+
+
+def _apply_mvp11_research_governor_migration(conn: sqlite3.Connection) -> None:
+    """Install idempotent append-only MVP-11 Governor persistence transactionally."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (MVP11_SCHEMA_VERSION,)
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP11_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 9 description is inconsistent")
+        _verify_mvp11_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS research_round_records (
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                research_round INTEGER NOT NULL CHECK (research_round BETWEEN 1 AND 3),
+                payload_json TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, research_round)
+            )""",
+            """CREATE TABLE IF NOT EXISTS research_governor_decisions (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                payload_json TEXT NOT NULL,
+                decided_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS research_terminal_results (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                payload_json TEXT NOT NULL,
+                finalized_at TEXT NOT NULL
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS research_round_records_immutable_update
+                BEFORE UPDATE ON research_round_records
+                BEGIN SELECT RAISE(ABORT, 'research round records are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_round_records_immutable_delete
+                BEFORE DELETE ON research_round_records
+                BEGIN SELECT RAISE(ABORT, 'research round records are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_governor_decisions_immutable_update
+                BEFORE UPDATE ON research_governor_decisions
+                BEGIN SELECT RAISE(ABORT, 'research governor decisions are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_governor_decisions_immutable_delete
+                BEFORE DELETE ON research_governor_decisions
+                BEGIN SELECT RAISE(ABORT, 'research governor decisions are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_terminal_results_immutable_update
+                BEFORE UPDATE ON research_terminal_results
+                BEGIN SELECT RAISE(ABORT, 'research terminal results are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_terminal_results_immutable_delete
+                BEFORE DELETE ON research_terminal_results
+                BEGIN SELECT RAISE(ABORT, 'research terminal results are append-only'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_mvp11_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                MVP11_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP11_SCHEMA_VERSION],
                 "2026-08-11T00:00:00+00:00",
             ),
         )
@@ -1349,6 +1456,120 @@ def read_portfolio_coverage_assessment(
                 return None
             raise
     return PortfolioCoverageAssessment.model_validate_json(row["payload_json"]) if row else None
+
+
+# ---------------------------------------------------------------------------
+# MVP-11 Research Governor (append-only)
+# ---------------------------------------------------------------------------
+
+
+def insert_research_round_record(db_path: str, record: ResearchRoundRecord) -> None:
+    """Append one completed or terminal research round; SQLite enforces its 1..3 bound."""
+    if record.completed_at is None:
+        raise ValueError("only completed or terminal research rounds may be persisted")
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO research_round_records
+               (run_id, research_round, payload_json, completed_at) VALUES (?, ?, ?, ?)""",
+            (
+                str(record.run_id),
+                record.research_round,
+                record.model_dump_json(),
+                _dt_to_iso(record.completed_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_research_round_records(
+    db_path: DatabaseReader, run_id: UUID
+) -> tuple[ResearchRoundRecord, ...]:
+    """Read persisted bounded rounds, returning no synthetic rows for historical runs."""
+    with _read_connection(db_path) as conn:
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM research_round_records WHERE run_id = ? "
+                "ORDER BY research_round",
+                (str(run_id),),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+    return tuple(ResearchRoundRecord.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_research_governor_decision(db_path: str, decision: ResearchGovernorDecision) -> None:
+    """Append the single deterministic post-Round-2 authorization decision for a run."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO research_governor_decisions (run_id, payload_json, decided_at)
+               VALUES (?, ?, ?)""",
+            (
+                str(decision.run_id),
+                decision.model_dump_json(),
+                _dt_to_iso(decision.decided_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_research_governor_decision(
+    db_path: DatabaseReader, run_id: UUID
+) -> ResearchGovernorDecision | None:
+    """Read the immutable Governor decision without creating one for a historical run."""
+    with _read_connection(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT payload_json FROM research_governor_decisions WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return None
+            raise
+    return ResearchGovernorDecision.model_validate_json(row["payload_json"]) if row else None
+
+
+def insert_research_terminal_result(db_path: str, result: ResearchTerminalResult) -> None:
+    """Append the terminal evidence classification after the final permitted round."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO research_terminal_results (run_id, payload_json, finalized_at)
+               VALUES (?, ?, ?)""",
+            (
+                str(result.run_id),
+                result.model_dump_json(),
+                _dt_to_iso(result.finalized_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_research_terminal_result(
+    db_path: DatabaseReader, run_id: UUID
+) -> ResearchTerminalResult | None:
+    """Read a persisted terminal classification without fabricating historical evidence."""
+    with _read_connection(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT payload_json FROM research_terminal_results WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return None
+            raise
+    return ResearchTerminalResult.model_validate_json(row["payload_json"]) if row else None
 
 
 # ---------------------------------------------------------------------------

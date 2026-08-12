@@ -90,6 +90,34 @@ def main() -> None:
         for missing in coverage.important_missing_evidence:
             if missing:
                 st.warning(missing)
+    if browser.governor_decision is not None or browser.research_rounds:
+        st.subheader("Research Governor")
+        completed = ", ".join(str(item.research_round) for item in browser.research_rounds)
+        st.write(f"Completed rounds: {completed or 'None'} · Maximum: 3 rounds")
+        if browser.governor_decision is not None:
+            decision = browser.governor_decision
+            st.write(
+                f"Portfolio: {decision.independent_approved_family_count}/3 independent "
+                "approved source families"
+            )
+            st.write(f"Round 2 duplicate rate: {decision.round_two_duplicate_rate:.0%}")
+            st.write(
+                f"Recent unproductive sources: {decision.consecutive_unproductive_source_count}"
+            )
+            st.write(f"Remaining search angles: {len(decision.remaining_search_angles)}")
+            budget = decision.cumulative_budget
+            st.write(
+                "Remaining accounted budget: "
+                f"{budget.model_calls_remaining} model calls and "
+                f"{budget.retrievals_remaining} retrievals"
+            )
+            st.write(
+                "Round 3 authorized: "
+                f"{'Yes' if decision.decision.value == 'begin_round_three' else 'No'}"
+            )
+            st.caption(decision.explanation)
+        if browser.terminal_research_result is not None:
+            st.caption(browser.terminal_research_result.explanation)
     if browser.evidence_trail:
         st.subheader("Evidence Trail")
         for entry in browser.evidence_trail:

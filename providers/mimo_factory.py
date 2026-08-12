@@ -43,10 +43,11 @@ from providers.pricing import (
     ModelPriceCap,
 )
 
-MIMO_FACTORY_VERSION = "mvp9-verified-quote-selection-factory-v1"
+MIMO_FACTORY_VERSION = "mvp11-research-governor-factory-v1"
 MIMO_RETRY_POLICY_VERSION = "mvp9-nonretryable-exact-selection-v1"
 MIMO_BUDGET_POLICY_VERSION = "mvp6.8-exact-decimal-reserve-reconcile-v1"
-MIMO_FINGERPRINT_VERSION = "mvp9-verified-quote-selection-v1"
+MIMO_FINGERPRINT_VERSION = "mvp11-research-governor-v1"
+RESEARCH_GOVERNOR_POLICY_VERSION = "mvp11-research-governor-v1"
 
 
 class MimoProviderFactoryConfig(StrictModel):
@@ -249,7 +250,7 @@ def _fingerprint_payload(
             f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|"
             f"{sha256(operational_policy_json.encode('utf-8')).hexdigest()}"
             f"|controls:{config.research_controls.canonical_json()}"
-            f"|{EVIDENCE_POLICY_VERSION}"
+            f"|{EVIDENCE_POLICY_VERSION}|{RESEARCH_GOVERNOR_POLICY_VERSION}"
         ),
         "repository_revision": config.repository_revision,
     }

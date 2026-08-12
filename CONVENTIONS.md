@@ -128,6 +128,9 @@ SDK or dependency.
     schema-7 provisional/candidate columns
   - MVP-10 migration 8 adds append-only Evidence Portfolio and Evidence Trail tables;
     historical MVP-9 runs remain readable with no required new artifacts
+  - MVP-11 migration 9 adds append-only research-round, Governor-decision, and terminal
+    research-result records; SQLite accepts only research rounds 1–3 and historical
+    MVP-9/MVP-10 runs remain readable without migration during inspection
   - Local brief export opens the database through the validated read-only inspection path;
     it may export only a re-hashed released brief and never creates or mutates artifacts
 

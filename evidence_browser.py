@@ -16,6 +16,9 @@ from models import (
     EvidenceTrailOutcome,
     LedgerRecord,
     PortfolioCoverageAssessment,
+    ResearchGovernorDecision,
+    ResearchRoundRecord,
+    ResearchTerminalResult,
     RunManifest,
     ScoreDecision,
     SourceSnapshot,
@@ -29,6 +32,9 @@ from store import (
     open_read_only_store,
     read_evidence_trail_entries,
     read_portfolio_coverage_assessment,
+    read_research_governor_decision,
+    read_research_round_records,
+    read_research_terminal_result,
     read_run,
 )
 
@@ -103,6 +109,9 @@ class EvidenceBrowserRun(StrictModel):
     released_statement_traces: tuple[ReleasedStatementTrace, ...]
     evidence_trail: tuple[EvidenceTrailEntry, ...] = ()
     portfolio_coverage: PortfolioCoverageAssessment | None = None
+    research_rounds: tuple[ResearchRoundRecord, ...] = ()
+    governor_decision: ResearchGovernorDecision | None = None
+    terminal_research_result: ResearchTerminalResult | None = None
     trusted_snapshot_text_label: str = "Trusted snapshot text (ResearchAssistant normalized)"
     provider_metadata_label: str = "Provider metadata (non-authoritative)"
     source_text_label: str = "Untrusted source text"
@@ -133,6 +142,9 @@ def browse_evidence_run(
                 released_statement_traces=traces,
                 evidence_trail=evidence_trail,
                 portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                research_rounds=read_research_round_records(reader.connection, run_id),
+                governor_decision=read_research_governor_decision(reader.connection, run_id),
+                terminal_research_result=read_research_terminal_result(reader.connection, run_id),
             )
     except DatabaseCompatibilityError as exc:
         raise EvidenceBrowserError(
