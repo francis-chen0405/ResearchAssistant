@@ -55,6 +55,11 @@ Claim Planner (6 queries: 3 Support, 3 Oppose)
 
 Retrieval, semantic approval, and deterministic release are strictly separated. Researchers identify candidates. The Analyst scores evidence on two independent dimensions and drafts exact canonical statements. A separate Statement Reviewer audits those statements before Ledger entry. The final stage permits only approved statements as factual content. The validator performs no semantic reasoning; all semantic judgment occurs in the Analyst and Reviewer stages.
 
+MVP-10 adds an auditable Evidence Portfolio before synthesis. It counts independent
+Reviewer-approved source families and permits one typed targeted research round only
+when fewer than three families pass. Duplicates remain immutable audit records, never
+independent portfolio evidence; all provider budgets remain cumulative.
+
 ## Phase Sequencing
 
 `ARCHITECTURE.md` defines system invariants, evidence rules, and release rules. Phase sequencing lives in `.agent/PLANS.md` and individual `.agent/plans/phase-XX-*.md` files. If a phase prompt conflicts with architecture, architecture wins unless the user explicitly approves an architecture change.

@@ -11,7 +11,11 @@ from pydantic import ConfigDict, Field
 import store as artifact_store
 from models import (
     CandidateQuoteBlock,
+    EvidenceRole,
+    EvidenceTrailEntry,
+    EvidenceTrailOutcome,
     LedgerRecord,
+    PortfolioCoverageAssessment,
     RunManifest,
     ScoreDecision,
     SourceSnapshot,
@@ -20,7 +24,13 @@ from models import (
     StrictModel,
     ValidationResult,
 )
-from store import DatabaseCompatibilityError, open_read_only_store, read_run
+from store import (
+    DatabaseCompatibilityError,
+    open_read_only_store,
+    read_evidence_trail_entries,
+    read_portfolio_coverage_assessment,
+    read_run,
+)
 
 
 class EvidenceBrowserError(ValueError):
@@ -45,6 +55,10 @@ class EvidenceBrowserFilter(StrictModel):
     source_url: str | None = Field(default=None, min_length=1)
     approved: bool | None = None
     released: bool | None = None
+    outcome: EvidenceTrailOutcome | None = None
+    role: EvidenceRole | None = None
+    research_round: str | None = None
+    cost_incurred: bool | None = None
 
 
 DEFAULT_EVIDENCE_BROWSER_FILTER = EvidenceBrowserFilter()
@@ -87,6 +101,8 @@ class EvidenceBrowserRun(StrictModel):
     final_validation: ValidationResult | None = None
     trails: tuple[EvidenceTrailItem, ...]
     released_statement_traces: tuple[ReleasedStatementTrace, ...]
+    evidence_trail: tuple[EvidenceTrailEntry, ...] = ()
+    portfolio_coverage: PortfolioCoverageAssessment | None = None
     trusted_snapshot_text_label: str = "Trusted snapshot text (ResearchAssistant normalized)"
     provider_metadata_label: str = "Provider metadata (non-authoritative)"
     source_text_label: str = "Untrusted source text"
@@ -105,11 +121,18 @@ def browse_evidence_run(
             trails = _trails(reader.connection, run_id, validation)
             filtered = tuple(trail for trail in trails if _matches(trail, filters))
             traces = _released_traces(filtered, validation)
+            evidence_trail = tuple(
+                entry
+                for entry in read_evidence_trail_entries(reader.connection, run_id)
+                if _matches_mvp10(entry, filters)
+            )
             return EvidenceBrowserRun(
                 manifest=manifest,
                 final_validation=validation,
                 trails=filtered,
                 released_statement_traces=traces,
+                evidence_trail=evidence_trail,
+                portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
             )
     except DatabaseCompatibilityError as exc:
         raise EvidenceBrowserError(
@@ -261,6 +284,18 @@ def _has_stage(trail: EvidenceTrailItem, stage: EvidenceStage) -> bool:
         EvidenceStage.LEDGER: bool(trail.ledger_records),
         EvidenceStage.VALIDATION: trail.final_validation_present,
     }[stage]
+
+
+def _matches_mvp10(entry: EvidenceTrailEntry, filters: EvidenceBrowserFilter) -> bool:
+    if filters.outcome is not None and entry.outcome is not filters.outcome:
+        return False
+    if filters.role is not None and entry.role is not filters.role:
+        return False
+    if filters.research_round is not None and entry.research_round.value != filters.research_round:
+        return False
+    if filters.cost_incurred is not None and entry.cost_incurred != filters.cost_incurred:
+        return False
+    return True
 
 
 def _released_traces(

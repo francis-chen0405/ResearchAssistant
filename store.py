@@ -25,6 +25,7 @@ from models import (
     AmbiguityRecord,
     CandidateQuoteBlock,
     ClaimDefinition,
+    EvidenceTrailEntry,
     LedgerRecord,
     MediaTypeProvenance,
     ModelAttemptStatus,
@@ -34,6 +35,8 @@ from models import (
     OrchestrationCheckpoint,
     PersistedStageArtifact,
     PlannerOutput,
+    PortfolioCoverageAssessment,
+    PortfolioItem,
     ProviderRunContract,
     ProvisionalCandidate,
     RetrievalRecord,
@@ -58,9 +61,11 @@ from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 RAW_CLAIM_SCHEMA_VERSION = 5
 MVP68_SCHEMA_VERSION = 6
+MVP69_SCHEMA_VERSION = 7
+MVP10_SCHEMA_VERSION = 8
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -85,6 +90,7 @@ MIGRATION_DESCRIPTIONS = {
     5: "database-enforced immutable runs.raw_claim",
     6: "immutable snapshots and Ledger with exact decimal model costs",
     7: "snapshot acquisition and media-type provenance",
+    8: "mvp-10 evidence portfolio and trail",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -112,6 +118,10 @@ _REQUIRED_TABLES = {
     "provider_run_contracts",
     "model_route_attempts",
     "run_cancellations",
+    "source_family_members",
+    "evidence_trail_entries",
+    "portfolio_items",
+    "portfolio_coverage_assessments",
 }
 _REQUIRED_TRIGGERS = {
     "retrieval_attempt_same_run",
@@ -249,14 +259,19 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
             f"{CURRENT_SCHEMA_VERSION}; use compatible ResearchAssistant code",
             schema_version=latest,
         )
-    if latest < CURRENT_SCHEMA_VERSION:
+    if latest < MVP69_SCHEMA_VERSION:
         raise _compatibility_error(
             DatabaseCompatibilityIssue.OLDER_SCHEMA,
             f"database schema version {latest} requires migration to version "
             f"{CURRENT_SCHEMA_VERSION}; a writable run or resume is required",
             schema_version=latest,
         )
-    if versions != MIGRATION_DESCRIPTIONS:
+    expected_migrations = {
+        version: description
+        for version, description in MIGRATION_DESCRIPTIONS.items()
+        if version <= latest
+    }
+    if versions != expected_migrations:
         raise _compatibility_error(
             DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
             "schema migration records are incomplete or inconsistent; inspection made no changes",
@@ -266,7 +281,14 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
     triggers = {name for object_type, name in objects if object_type == "trigger"}
     indexes = {name for object_type, name in objects if object_type == "index"}
     missing = sorted(
-        (_REQUIRED_TABLES - tables)
+        (
+            (
+                _REQUIRED_TABLES - _MVP10_TABLES
+                if latest == MVP69_SCHEMA_VERSION
+                else _REQUIRED_TABLES
+            )
+            - tables
+        )
         | (_REQUIRED_TRIGGERS - triggers)
         | (_REQUIRED_INDEXES - indexes)
     )
@@ -852,6 +874,7 @@ def init_db(db_path: str) -> None:
         _apply_raw_claim_immutability_migration(conn)
         _apply_mvp68_integrity_migration(conn)
         _apply_mvp69_provenance_migration(conn)
+        _apply_mvp10_evidence_portfolio_migration(conn)
     finally:
         conn.close()
 
@@ -1052,10 +1075,10 @@ def _verify_mvp69_schema(conn: sqlite3.Connection) -> None:
 def _apply_mvp69_provenance_migration(conn: sqlite3.Connection) -> None:
     row = conn.execute(
         "SELECT description FROM schema_migrations WHERE version = ?",
-        (CURRENT_SCHEMA_VERSION,),
+        (MVP69_SCHEMA_VERSION,),
     ).fetchone()
     if row is not None:
-        if row["description"] != MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION]:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP69_SCHEMA_VERSION]:
             raise sqlite3.DatabaseError("migration 7 description is inconsistent")
         _verify_mvp69_schema(conn)
         return
@@ -1070,9 +1093,90 @@ def _apply_mvp69_provenance_migration(conn: sqlite3.Connection) -> None:
             """INSERT INTO schema_migrations (version, description, applied_at)
                VALUES (?, ?, ?)""",
             (
-                CURRENT_SCHEMA_VERSION,
-                MIGRATION_DESCRIPTIONS[CURRENT_SCHEMA_VERSION],
+                MVP69_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP69_SCHEMA_VERSION],
                 "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+_MVP10_TABLES = {
+    "source_family_members",
+    "evidence_trail_entries",
+    "portfolio_items",
+    "portfolio_coverage_assessments",
+}
+
+
+def _verify_mvp10_schema(conn: sqlite3.Connection) -> None:
+    present = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_MVP10_TABLES - present)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 8 portfolio tables are missing: {', '.join(missing)}"
+        )
+
+
+def _apply_mvp10_evidence_portfolio_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (MVP10_SCHEMA_VERSION,)
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP10_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 8 description is inconsistent")
+        _verify_mvp10_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS source_family_members (
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                retrieval_attempt_id TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                source_family_id TEXT NOT NULL,
+                family_key TEXT NOT NULL,
+                identification_basis TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, retrieval_attempt_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS evidence_trail_entries (
+                trail_entry_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                retrieval_attempt_id TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (run_id, retrieval_attempt_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS portfolio_items (
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                ledger_claim_id TEXT NOT NULL REFERENCES ledger_records(ledger_claim_id),
+                source_family_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (run_id, ledger_claim_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS portfolio_coverage_assessments (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                payload_json TEXT NOT NULL,
+                assessed_at TEXT NOT NULL
+            )""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_mvp10_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                MVP10_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP10_SCHEMA_VERSION],
+                "2026-08-11T00:00:00+00:00",
             ),
         )
         conn.commit()
@@ -1104,6 +1208,147 @@ def _json_to_offsets(raw: str) -> list[SegmentOffset]:
     return [
         SegmentOffset(start_char=d["start_char"], end_char=d["end_char"]) for d in json.loads(raw)
     ]
+
+
+# ---------------------------------------------------------------------------
+# MVP-10 Evidence Portfolio and Trail (append-only)
+# ---------------------------------------------------------------------------
+
+
+def insert_source_family_member(db_path: str, entry: EvidenceTrailEntry) -> None:
+    """Persist one immutable family assignment when a source has an identified family."""
+    if entry.source_family is None:
+        return
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO source_family_members
+               (run_id, retrieval_attempt_id, source_family_id, family_key,
+                identification_basis, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                str(entry.run_id),
+                str(entry.retrieval_attempt_id),
+                str(entry.source_family.source_family_id),
+                entry.source_family.family_key,
+                entry.source_family.identification_basis,
+                _dt_to_iso(entry.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def insert_evidence_trail_entry(db_path: str, entry: EvidenceTrailEntry) -> None:
+    """Persist one complete source outcome without rewriting source history."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO evidence_trail_entries
+               (trail_entry_id, run_id, retrieval_attempt_id, payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                str(entry.trail_entry_id),
+                str(entry.run_id),
+                str(entry.retrieval_attempt_id),
+                entry.model_dump_json(),
+                _dt_to_iso(entry.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_evidence_trail_entries(
+    db_path: DatabaseReader, run_id: UUID
+) -> tuple[EvidenceTrailEntry, ...]:
+    """Read appended source outcomes; a pre-MVP-10 database has no such rows."""
+    with _read_connection(db_path) as conn:
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM evidence_trail_entries WHERE run_id = ? "
+                "ORDER BY created_at, trail_entry_id",
+                (str(run_id),),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+    return tuple(EvidenceTrailEntry.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_portfolio_item(db_path: str, item: PortfolioItem) -> None:
+    """Append one approved Ledger statement to the portfolio."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO portfolio_items (run_id, ledger_claim_id, source_family_id, payload_json)
+               VALUES (?, ?, ?, ?)""",
+            (
+                str(item.run_id),
+                str(item.ledger_claim_id),
+                str(item.source_family_id),
+                item.model_dump_json(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_portfolio_items(db_path: DatabaseReader, run_id: UUID) -> tuple[PortfolioItem, ...]:
+    """Read the immutable portfolio, or an empty portfolio for historical runs."""
+    with _read_connection(db_path) as conn:
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM portfolio_items WHERE run_id = ? "
+                "ORDER BY ledger_claim_id",
+                (str(run_id),),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+    return tuple(PortfolioItem.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_portfolio_coverage_assessment(
+    db_path: str, assessment: PortfolioCoverageAssessment
+) -> None:
+    """Persist the single terminal deterministic coverage assessment."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO portfolio_coverage_assessments (run_id, payload_json, assessed_at)
+               VALUES (?, ?, ?)""",
+            (
+                str(assessment.run_id),
+                assessment.model_dump_json(),
+                _dt_to_iso(assessment.assessed_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_portfolio_coverage_assessment(
+    db_path: DatabaseReader, run_id: UUID
+) -> PortfolioCoverageAssessment | None:
+    """Read terminal coverage when present, without fabricating it for history."""
+    with _read_connection(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT payload_json FROM portfolio_coverage_assessments WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return None
+            raise
+    return PortfolioCoverageAssessment.model_validate_json(row["payload_json"]) if row else None
 
 
 # ---------------------------------------------------------------------------
@@ -1262,6 +1507,35 @@ def insert_planner_output(db_path: str, planner: PlannerOutput) -> None:
                     q.query_text,
                     q.exclusion_parameters,
                     _dt_to_iso(q.created_at),
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def insert_search_queries(db_path: str, queries: tuple[SearchQuery, ...]) -> None:
+    """Append a distinct Planner round's queries without rewriting the initial plan."""
+    conn = _connect(db_path)
+    try:
+        for query in queries:
+            conn.execute(
+                """INSERT INTO search_queries
+                   (query_id, run_id, stance, query_round, strategy, query_text,
+                    exclusion_parameters, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(query.query_id),
+                    str(query.run_id),
+                    query.stance.value,
+                    query.query_round,
+                    query.strategy,
+                    query.query_text,
+                    query.exclusion_parameters,
+                    _dt_to_iso(query.created_at),
                 ),
             )
         conn.commit()

@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from evidence_browser import EvidenceBrowserFilter, EvidenceStage, browse_evidence_run
+from models import EvidenceRole, EvidenceTrailOutcome, ResearchRound
 
 
 def _load_streamlit() -> object:
@@ -32,6 +33,14 @@ def main() -> None:
     source_url = st.text_input("Exact source URL")
     approval = st.selectbox("Approval state", ["All", "Approved", "Rejected"])
     release = st.selectbox("Release status", ["All", "Released", "Not released"])
+    outcome = st.selectbox(
+        "Evidence Trail outcome", ["All", *[item.value for item in EvidenceTrailOutcome]]
+    )
+    role = st.selectbox("Evidence role", ["All", *[item.value for item in EvidenceRole]])
+    research_round = st.selectbox(
+        "Research round", ["All", *[item.value for item in ResearchRound]]
+    )
+    cost_incurred = st.selectbox("Cost incurred", ["All", "Yes", "No"])
     if not st.button("Open evidence trail", use_container_width=True):
         return
     try:
@@ -44,6 +53,10 @@ def main() -> None:
                 source_url=source_url or None,
                 approved={"Approved": True, "Rejected": False}.get(approval),
                 released={"Released": True, "Not released": False}.get(release),
+                outcome=None if outcome == "All" else EvidenceTrailOutcome(outcome),
+                role=None if role == "All" else EvidenceRole(role),
+                research_round=None if research_round == "All" else research_round,
+                cost_incurred={"Yes": True, "No": False}.get(cost_incurred),
             ),
         )
     except ValueError as exc:
@@ -65,6 +78,33 @@ def main() -> None:
                 st.write("Reviewer approved:", review.approved, "—", review.rationale)
             for ledger in trail.ledger_records:
                 st.success(f"Ledger statement: {ledger.approved_factual_statement}")
+    if browser.portfolio_coverage is not None:
+        coverage = browser.portfolio_coverage
+        st.subheader("Evidence Portfolio")
+        st.write(
+            f"{coverage.rating.value.title()} coverage · "
+            f"{coverage.independent_source_families} independent source families · "
+            f"{coverage.approved_evidence_items} approved evidence items"
+        )
+        st.caption(coverage.stopping_reason)
+        for missing in coverage.important_missing_evidence:
+            if missing:
+                st.warning(missing)
+    if browser.evidence_trail:
+        st.subheader("Evidence Trail")
+        for entry in browser.evidence_trail:
+            with st.expander(
+                f"{entry.outcome.value.replace('_', ' ').title()} · {entry.source_title}"
+            ):
+                st.write(entry.explanation)
+                st.caption(
+                    f"{entry.source_domain} · {entry.research_round.value} round · "
+                    f"{entry.retrieval_method}"
+                )
+                if entry.accepted_statement:
+                    st.success(entry.accepted_statement)
+                with st.expander("Technical details"):
+                    st.json(entry.model_dump(mode="json"))
     if browser.released_statement_traces:
         st.subheader("Released factual statements")
         for trace in browser.released_statement_traces:

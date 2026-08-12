@@ -2384,3 +2384,8 @@ Open issue:
 Next expected phase:
 
 - Phase 1 should start only after the user explicitly requests it. It should begin with schemas and artifact-store design as described in `ARCHITECTURE.md`, without weakening the Phase 0 constraints.
+# MVP-10 — Evidence Portfolio & Trail
+
+- MVP-10 is the active authorized phase. Migration 8 is additive and transactional; it stores source-family membership, trail entries, portfolio items, and final coverage.
+- The new `evidence_portfolio.py` owns deterministic family and coverage labels. The provider workflow retains MVP-9 quote assembly and adds a bounded targeted Planner call when fewer than three approved families are present.
+- Verification: 584 passed with 2 expected opt-in skips; Ruff lint and format passed. No live provider calls or dependency changes were made.

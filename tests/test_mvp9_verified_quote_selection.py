@@ -107,7 +107,9 @@ def test_nonexistent_or_out_of_order_selection_fails_closed() -> None:
         )
 
 
-def test_mvp9_preserves_schema_version_7_without_database_rewrite(tmp_path: Path) -> None:
+def test_mvp9_quote_storage_remains_compatible_with_mvp10_additive_migration(
+    tmp_path: Path,
+) -> None:
     db_path = tmp_path / "mvp9.sqlite3"
 
     init_db(str(db_path))
@@ -119,7 +121,7 @@ def test_mvp9_preserves_schema_version_7_without_database_rewrite(tmp_path: Path
         provisional_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(provisional_extractions)")
         }
-    assert CURRENT_SCHEMA_VERSION == 7
-    assert versions == [(1,), (2,), (3,), (4,), (5,), (6,), (7,)]
+    assert CURRENT_SCHEMA_VERSION == 8
+    assert versions == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,)]
     assert "extracted_quote_block" in provisional_columns
     assert "selected_segments" not in provisional_columns

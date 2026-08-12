@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-08-11 - MVP-10 Evidence Portfolio & Trail
+
+- Count Reviewer-approved evidence by deterministic source family, not by quotation or domain. Canonical source URL is preferred, followed by resolved URL and snapshot hash.
+- Permit one typed targeted-planning round only when initial coverage has fewer than three independent approved families; keep all budgets cumulative and preserve completed work.
+- Record append-only source outcomes and coverage in migration 8. Coverage is strong for three+ families including opposing/limitation evidence, adequate for three+, limited for one or two, and insufficient for zero.
+
 ## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
 
 - Replace the provider-facing Extractor `ProvisionalCandidate` schema with strict

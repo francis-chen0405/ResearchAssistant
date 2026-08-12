@@ -2043,3 +2043,8 @@ Verification:
 - `pytest`: 2 passed.
 - `ruff check .`: passed.
 - `ruff format --check .`: passed.
+# MVP-10 — Evidence Portfolio & Trail
+
+- Added strict source-family, source-trail, portfolio, coverage, and targeted-planning models; migration 8 adds append-only tables without rewriting snapshots or Ledger rows.
+- Provider orchestration now evaluates approved family coverage after round one and may issue one typed targeted Planner request before synthesis. The Evidence Browser exposes portfolio coverage and filtered trail outcomes.
+- Verification: 584 passed, 2 expected opt-in skips; `ruff check .` and `ruff format --check .` passed. No live provider calls were made.

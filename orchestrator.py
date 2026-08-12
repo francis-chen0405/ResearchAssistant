@@ -50,12 +50,16 @@ from agents.supportingresearcher import (
     retrieve_supporting,
 )
 from agents.synthesizer import SynthesizerLLMInput
+from evidence_portfolio import assess_portfolio, identify_source_family
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
     CandidateBatch,
     CandidateQuoteBlock,
     CheckpointStatus,
     Entailment,
+    EvidenceRole,
+    EvidenceTrailEntry,
+    EvidenceTrailOutcome,
     LedgerRecord,
     ModelAttemptStatus,
     ModelRouteAttempt,
@@ -64,9 +68,13 @@ from models import (
     OrchestrationCheckpoint,
     PersistedStageArtifact,
     PlannerOutput,
+    PortfolioCoverageAssessment,
+    PortfolioExpansionRequest,
+    PortfolioItem,
     ProviderRunContract,
     ProvisionalCandidate,
     ResearchControls,
+    ResearchRound,
     RetrievalRecord,
     RunCancellationRequest,
     RunManifest,
@@ -115,13 +123,18 @@ from store import (
     insert_analyst_decision,
     insert_cancellation_request,
     insert_candidate,
+    insert_evidence_trail_entry,
     insert_ledger_record,
     insert_planner_output,
+    insert_portfolio_coverage_assessment,
+    insert_portfolio_item,
     insert_provider_run_contract,
     insert_provisional_extraction,
     insert_retrieval_attempt,
     insert_run,
+    insert_search_queries,
     insert_snapshot,
+    insert_source_family_member,
     insert_stage_artifact,
     insert_statement_draft,
     insert_statement_review,
@@ -131,11 +144,13 @@ from store import (
     read_analyst_decision,
     read_cancellation_request,
     read_candidate,
+    read_evidence_trail_entries,
     read_ledger_record,
     read_model_route_attempts,
     read_orchestration_checkpoint,
     read_orchestration_checkpoints,
     read_planner_output,
+    read_portfolio_coverage_assessment,
     read_provider_run_contract,
     read_provisional_extractions,
     read_retrieval_attempt,
@@ -1037,6 +1052,12 @@ PHASE9_RESEARCHERS_CHECKPOINT = "researchers"
 PHASE9_ANALYSIS_CHECKPOINT = "analysis-ledger"
 PHASE9_SYNTHESIS_CHECKPOINT = "synthesis"
 PHASE9_VALIDATION_CHECKPOINT = "validation-release"
+MVP10_TARGETED_PLANNER_CHECKPOINT = "mvp10-targeted-planner"
+MVP10_TARGETED_RESEARCHERS_CHECKPOINT = "mvp10-targeted-researchers"
+MVP10_TARGETED_ANALYSIS_CHECKPOINT = "mvp10-targeted-analysis"
+MVP10_TARGETED_PLANNER_ARTIFACT = "mvp10-targeted-planner"
+MVP10_TARGETED_RESEARCHERS_ARTIFACT = "mvp10-targeted-researchers"
+MVP10_TARGETED_ANALYSIS_ARTIFACT = "mvp10-targeted-analysis"
 
 _RETRYABLE_FAILURE_CODES = frozenset(
     {
@@ -1130,6 +1151,7 @@ class ProviderOrchestrationConfig(StrictModel):
     reserved_output_tokens_per_call: int = Field(default=4096, ge=1, le=32768)
     pricing_policy: Literal["compatibility", "direct_mimo"] = "compatibility"
     pinned_model_snapshots: tuple[PinnedModelSnapshot, ...] = ()
+    enable_portfolio_expansion: bool = False
 
     @model_validator(mode="after")
     def validate_pinned_aliases(self) -> ProviderOrchestrationConfig:
@@ -1279,6 +1301,7 @@ class ProviderPipelineResult(StrictModel):
     planner_output: PlannerOutput | None = None
     researcher_result: ResearcherPairResult | None = None
     analysis_result: AnalysisStageResult | None = None
+    portfolio_coverage: PortfolioCoverageAssessment | None = None
     synthesis_output: SynthesisOutput | None = None
     validation_result: ValidationResult | None = None
     final_brief: str | None = None
@@ -1429,11 +1452,111 @@ def run_provider_pipeline(
             now,
         )
         _after_stage(path, resolved_run_id, PHASE9_ANALYSIS_CHECKPOINT, now, stage_hook)
+        initial_analysis = analysis
+        targeted_round_attempted = False
+        targeted_researchers: ResearcherPairResult | None = None
+        targeted_analysis: AnalysisStageResult | None = None
+        if (
+            settings.enable_portfolio_expansion
+            and _approved_family_count(researchers, analysis) < 3
+        ):
+            targeted_round_attempted = True
+            targeted_planner = _run_targeted_planner_stage(
+                path,
+                manifest,
+                planner,
+                researchers,
+                initial_analysis,
+                llm_provider,
+                settings,
+                now,
+                research_controls,
+            )
+            if _targeted_queries_are_new(planner, targeted_planner):
+                targeted_researchers = _run_researcher_stage(
+                    path,
+                    targeted_planner,
+                    search_provider,
+                    scraper_provider,
+                    llm_provider,
+                    settings,
+                    now,
+                    checkpoint_key=MVP10_TARGETED_RESEARCHERS_CHECKPOINT,
+                    artifact_key=MVP10_TARGETED_RESEARCHERS_ARTIFACT,
+                )
+                targeted_analysis = _run_analysis_stage(
+                    path,
+                    targeted_planner,
+                    targeted_researchers,
+                    llm_provider,
+                    settings,
+                    now,
+                    checkpoint_key=MVP10_TARGETED_ANALYSIS_CHECKPOINT,
+                    artifact_key=MVP10_TARGETED_ANALYSIS_ARTIFACT,
+                )
+                analysis = _combine_analysis_results(analysis, targeted_analysis)
         if not analysis.ledger_records:
+            _persist_mvp10_portfolio(
+                path,
+                planner,
+                researchers,
+                initial_analysis,
+                now,
+                stopping_reason="Research stopped because no Reviewer-approved evidence passed.",
+            )
+            if targeted_researchers is not None and targeted_analysis is not None:
+                _persist_mvp10_portfolio(
+                    path,
+                    planner,
+                    targeted_researchers,
+                    targeted_analysis,
+                    now,
+                    stopping_reason=(
+                        "Research stopped after one targeted round without approved evidence."
+                    ),
+                    research_round=ResearchRound.TARGETED,
+                )
+            _finalize_mvp10_portfolio(
+                path,
+                resolved_run_id,
+                research_rounds=2 if targeted_round_attempted else 1,
+                stopping_reason="Research stopped because no Reviewer-approved evidence passed.",
+                clock=now,
+            )
             raise Phase9OrchestrationError(
                 Stage.CLAIM_LEDGER,
-                "no Reviewer-approved statement was eligible for the Ledger",
+                "insufficient evidence: no Reviewer-approved statement was eligible for the Ledger",
             )
+
+        _persist_mvp10_portfolio(
+            path,
+            planner,
+            researchers,
+            initial_analysis,
+            now,
+            stopping_reason="Round 1 completed.",
+        )
+        if targeted_researchers is not None and targeted_analysis is not None:
+            _persist_mvp10_portfolio(
+                path,
+                planner,
+                targeted_researchers,
+                targeted_analysis,
+                now,
+                stopping_reason="One targeted portfolio-expansion round completed.",
+                research_round=ResearchRound.TARGETED,
+            )
+        _finalize_mvp10_portfolio(
+            path,
+            resolved_run_id,
+            research_rounds=2 if targeted_round_attempted else 1,
+            stopping_reason=(
+                "Coverage target met in the initial round."
+                if not targeted_round_attempted
+                else "The one permitted targeted round completed; no further search is allowed."
+            ),
+            clock=now,
+        )
 
         active_stage = Stage.DEBATE_SYNTHESIZER
         synthesis = _run_synthesis_stage(
@@ -1527,6 +1650,7 @@ def run_mvp3b_pipeline(
         require_budget_reservations=True,
         reserved_output_tokens_per_call=bundle.config.mimo.max_completion_tokens,
         pricing_policy="direct_mimo",
+        enable_portfolio_expansion=True,
     )
     contract = bundle.contract(
         resolved_run_id,
@@ -1589,6 +1713,7 @@ def _inspect_provider_run_connection(
     )
     synthesis = _read_optional_synthesis(reader, run_id)
     validation = _read_optional_validation(reader, run_id)
+    portfolio_coverage = read_portfolio_coverage_assessment(reader, run_id)
     status = _provider_status_from_manifest(manifest)
     resolved_failure = None
     if status is ProviderRunStatus.FAILED:
@@ -1629,6 +1754,7 @@ def _inspect_provider_run_connection(
         planner_output=planner,
         researcher_result=researchers,
         analysis_result=analysis,
+        portfolio_coverage=portfolio_coverage,
         synthesis_output=synthesis,
         validation_result=validation,
         final_brief=final_brief,
@@ -1984,6 +2110,164 @@ def _run_planner_stage(
     return planner
 
 
+def _run_targeted_planner_stage(
+    db_path: str,
+    manifest: RunManifest,
+    initial_planner: PlannerOutput,
+    researchers: ResearcherPairResult,
+    analysis: AnalysisStageResult,
+    llm_provider: LLMProvider,
+    config: ProviderOrchestrationConfig,
+    clock: Callable[[], datetime],
+    research_controls: ResearchControls,
+) -> PlannerOutput:
+    """Execute the one permitted typed replanning call without replacing round one."""
+    stored = _read_optional_stage_result(
+        db_path, manifest.run_id, MVP10_TARGETED_PLANNER_ARTIFACT, PlannerOutput
+    )
+    if stored is not None:
+        return stored
+    _begin_stage(
+        db_path, manifest.run_id, Stage.CLAIM_PLANNER, MVP10_TARGETED_PLANNER_CHECKPOINT, clock
+    )
+    snapshots = _snapshot_lookup(researchers)
+    approved_families = tuple(
+        sorted(
+            {
+                identify_source_family(snapshots[ledger.snapshot_id])
+                for ledger in analysis.ledger_records
+            },
+            key=lambda item: str(item.source_family_id),
+        )
+    )
+    attempted_queries = tuple(query.query_text for query in initial_planner.search_queries)
+    rejected_sources = tuple(
+        candidate.source_url
+        for side in (researchers.supporting, researchers.opposing)
+        for candidate in side.candidates
+        if candidate.quote_block_id in analysis.rejected_quote_block_ids
+    )
+    inaccessible_domains = tuple(
+        sorted(
+            {
+                _mvp10_source_domain(outcome.retrieval.resolved_url)
+                for side in (researchers.supporting, researchers.opposing)
+                if side.retrieval_batch is not None
+                for outcome in side.retrieval_batch.outcomes
+                if outcome.retrieval.status.value == "failed"
+                and _mvp10_source_domain(outcome.retrieval.resolved_url) != "unknown source"
+            }
+        )
+    )
+    expansion = PortfolioExpansionRequest(
+        run_id=manifest.run_id,
+        original_claim=manifest.raw_claim,
+        approved_source_families=approved_families,
+        supporting_coverage=sum(
+            ledger.stance.value == "supporting" for ledger in analysis.ledger_records
+        ),
+        opposing_or_limitation_coverage=sum(
+            ledger.stance.value == "opposing" for ledger in analysis.ledger_records
+        ),
+        rejected_sources=rejected_sources,
+        inaccessible_domains=inaccessible_domains,
+        duplicate_source_families=(),
+        attempted_queries=attempted_queries,
+        evidence_gaps=(
+            "Find independent primary evidence not represented by approved source families.",
+            "Seek credible contradiction, alternative estimate, or methodological "
+            "limitation when available.",
+        ),
+    )
+    planner_input = PlannerLLMInput(
+        run_id=manifest.run_id,
+        raw_claim=manifest.raw_claim,
+        research_controls=research_controls,
+        portfolio_expansion=expansion,
+    )
+    operation_id = _operation_id(manifest.run_id, "mvp10-targeted-planner", manifest.run_id)
+
+    def validate_targeted_planner(output: BaseModel, alias: ModelAlias) -> BaseModel:
+        planner = _require_output(output, PlannerOutput)
+        if (
+            planner.run_id != manifest.run_id
+            or planner.claim_definition.claim_text != manifest.raw_claim
+        ):
+            raise _validation_failure(
+                "targeted Planner output does not match the existing run claim"
+            )
+        _validate_llm_provenance(
+            planner.planner_prompt_version, planner.planner_model_name, LLMStage.PLANNER, alias
+        )
+        return planner
+
+    targeted = cast(
+        PlannerOutput,
+        _invoke_routed(
+            db_path=db_path,
+            provider=llm_provider,
+            stage=LLMStage.PLANNER,
+            input_artifact=planner_input,
+            requested_output_type=PlannerOutput,
+            input_artifact_ids=(manifest.run_id,),
+            operation_id=operation_id,
+            config=config,
+            clock=clock,
+            objective_validator=validate_targeted_planner,
+        ),
+    )
+    if _targeted_queries_are_new(initial_planner, targeted):
+        insert_search_queries(db_path, tuple(targeted.search_queries))
+    _persist_stage_result(
+        db_path, manifest.run_id, MVP10_TARGETED_PLANNER_ARTIFACT, targeted, clock
+    )
+    _checkpoint(
+        db_path,
+        manifest.run_id,
+        MVP10_TARGETED_PLANNER_CHECKPOINT,
+        CheckpointStatus.COMPLETED,
+        clock,
+    )
+    return targeted
+
+
+def _approved_family_count(researchers: ResearcherPairResult, analysis: AnalysisStageResult) -> int:
+    snapshots = _snapshot_lookup(researchers)
+    return len(
+        {
+            identify_source_family(snapshots[ledger.snapshot_id]).source_family_id
+            for ledger in analysis.ledger_records
+        }
+    )
+
+
+def _targeted_queries_are_new(initial: PlannerOutput, targeted: PlannerOutput) -> bool:
+    """Require the targeted round to offer a materially new query set before retrieval."""
+    attempted = {query.query_text for query in initial.search_queries}
+    return not bool({query.query_text for query in targeted.search_queries} & attempted)
+
+
+def _combine_analysis_results(
+    initial: AnalysisStageResult, targeted: AnalysisStageResult
+) -> AnalysisStageResult:
+    """Merge independently persisted round results without reprocessing known evidence."""
+    return AnalysisStageResult(
+        run_id=initial.run_id,
+        analyst_decisions=(*initial.analyst_decisions, *targeted.analyst_decisions),
+        statement_drafts=(*initial.statement_drafts, *targeted.statement_drafts),
+        reviewer_decisions=(*initial.reviewer_decisions, *targeted.reviewer_decisions),
+        ledger_records=tuple(
+            sorted(
+                (*initial.ledger_records, *targeted.ledger_records),
+                key=lambda item: str(item.ledger_claim_id),
+            )
+        ),
+        rejected_quote_block_ids=tuple(
+            sorted((*initial.rejected_quote_block_ids, *targeted.rejected_quote_block_ids), key=str)
+        ),
+    )
+
+
 def _run_researcher_stage(
     db_path: str,
     planner: PlannerOutput,
@@ -1992,12 +2276,15 @@ def _run_researcher_stage(
     llm_provider: LLMProvider,
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
+    *,
+    checkpoint_key: str = PHASE9_RESEARCHERS_CHECKPOINT,
+    artifact_key: str = PHASE9_RESEARCHERS_ARTIFACT,
 ) -> ResearcherPairResult:
-    if _checkpoint_is_completed(db_path, planner.run_id, PHASE9_RESEARCHERS_CHECKPOINT):
+    if _checkpoint_is_completed(db_path, planner.run_id, checkpoint_key):
         stored = _read_optional_stage_result(
             db_path,
             planner.run_id,
-            PHASE9_RESEARCHERS_ARTIFACT,
+            artifact_key,
             ResearcherPairResult,
         )
         if stored is None:
@@ -2020,7 +2307,7 @@ def _run_researcher_stage(
         db_path,
         planner.run_id,
         Stage.SUPPORTING_RESEARCHER,
-        PHASE9_RESEARCHERS_CHECKPOINT,
+        checkpoint_key,
         clock,
     )
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="phase9-researcher") as executor:
@@ -2061,7 +2348,7 @@ def _run_researcher_stage(
     _persist_stage_result(
         db_path,
         planner.run_id,
-        PHASE9_RESEARCHERS_ARTIFACT,
+        artifact_key,
         pair,
         clock,
     )
@@ -2080,7 +2367,7 @@ def _run_researcher_stage(
     _checkpoint(
         db_path,
         planner.run_id,
-        PHASE9_RESEARCHERS_CHECKPOINT,
+        checkpoint_key,
         CheckpointStatus.COMPLETED,
         clock,
     )
@@ -2422,12 +2709,15 @@ def _run_analysis_stage(
     llm_provider: LLMProvider,
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
+    *,
+    checkpoint_key: str = PHASE9_ANALYSIS_CHECKPOINT,
+    artifact_key: str = PHASE9_ANALYSIS_ARTIFACT,
 ) -> AnalysisStageResult:
-    if _checkpoint_is_completed(db_path, planner.run_id, PHASE9_ANALYSIS_CHECKPOINT):
+    if _checkpoint_is_completed(db_path, planner.run_id, checkpoint_key):
         stored = _read_optional_stage_result(
             db_path,
             planner.run_id,
-            PHASE9_ANALYSIS_ARTIFACT,
+            artifact_key,
             AnalysisStageResult,
         )
         if stored is None:
@@ -2440,7 +2730,7 @@ def _run_analysis_stage(
         db_path,
         planner.run_id,
         Stage.EVIDENCE_ANALYST,
-        PHASE9_ANALYSIS_CHECKPOINT,
+        checkpoint_key,
         clock,
     )
     snapshots = _snapshot_lookup(researchers)
@@ -2652,14 +2942,14 @@ def _run_analysis_stage(
     _persist_stage_result(
         db_path,
         planner.run_id,
-        PHASE9_ANALYSIS_ARTIFACT,
+        artifact_key,
         result,
         clock,
     )
     _checkpoint(
         db_path,
         planner.run_id,
-        PHASE9_ANALYSIS_CHECKPOINT,
+        checkpoint_key,
         CheckpointStatus.COMPLETED,
         clock,
     )
@@ -2827,6 +3117,249 @@ def _snapshot_lookup(researchers: ResearcherPairResult) -> dict[UUID, SourceSnap
                 )
             snapshots[snapshot.snapshot_id] = snapshot
     return snapshots
+
+
+def _persist_mvp10_portfolio(
+    db_path: str,
+    planner: PlannerOutput,
+    researchers: ResearcherPairResult,
+    analysis: AnalysisStageResult,
+    clock: Callable[[], datetime],
+    *,
+    stopping_reason: str,
+    research_round: ResearchRound = ResearchRound.INITIAL,
+    finalize: bool = False,
+) -> PortfolioCoverageAssessment | None:
+    """Append a transparent outcome for each discovered source and final portfolio state."""
+    existing = read_portfolio_coverage_assessment(db_path, planner.run_id)
+    if existing is not None:
+        return existing
+    snapshots = _snapshot_lookup(researchers)
+    candidates = {
+        candidate.retrieval_attempt_id: candidate
+        for side in (researchers.supporting, researchers.opposing)
+        for candidate in side.candidates
+    }
+    decisions = {item.quote_block_id: item for item in analysis.analyst_decisions}
+    reviews = {item.quote_block_id: item for item in analysis.reviewer_decisions}
+    ledgers = {item.quote_block_id: item for item in analysis.ledger_records}
+    attempts = tuple(read_model_route_attempts(db_path, planner.run_id))
+    entries: list[EvidenceTrailEntry] = []
+    for side in (researchers.supporting, researchers.opposing):
+        if side.retrieval_batch is None:
+            continue
+        for item in side.retrieval_batch.outcomes:
+            retrieval = item.retrieval
+            snapshot = snapshots.get(retrieval.retrieval_attempt_id)
+            candidate = candidates.get(retrieval.retrieval_attempt_id)
+            role = EvidenceRole.SUPPORTING if side.stance == "supporting" else EvidenceRole.OPPOSING
+            family = identify_source_family(snapshot) if snapshot is not None else None
+            outcome, explanation, failure_code = _mvp10_outcome_for_retrieval(
+                item, candidate, decisions, reviews, ledgers
+            )
+            if family is not None:
+                entry_stub = EvidenceTrailEntry(
+                    trail_entry_id=uuid5(
+                        URL_NAMESPACE,
+                        f"mvp10-trail::{planner.run_id}::{retrieval.retrieval_attempt_id}",
+                    ),
+                    run_id=planner.run_id,
+                    retrieval_attempt_id=retrieval.retrieval_attempt_id,
+                    research_round=research_round,
+                    role=role,
+                    source_title=_mvp10_source_title(retrieval.resolved_url),
+                    source_domain=_mvp10_source_domain(retrieval.resolved_url),
+                    original_url=retrieval.source_url,
+                    resolved_url=retrieval.resolved_url,
+                    source_family=family,
+                    retrieval_method="provider acquisition",
+                    snapshot_status="snapshotted",
+                    outcome=outcome,
+                    explanation=explanation,
+                    technical_failure_code=failure_code,
+                    model_attempt_ids=_mvp10_attempt_ids(attempts, snapshot, candidate),
+                    accepted_statement=(
+                        ledgers[candidate.quote_block_id].approved_factual_statement
+                        if candidate is not None and candidate.quote_block_id in ledgers
+                        else None
+                    ),
+                    accepted_quote=(
+                        candidate.extracted_quote_block if candidate is not None else None
+                    ),
+                    snapshot_sha256=snapshot.snapshot_sha256,
+                    cost_incurred=bool(_mvp10_attempt_ids(attempts, snapshot, candidate)),
+                    created_at=_aware_phase9_time(clock(), "trail created_at"),
+                )
+                insert_source_family_member(db_path, entry_stub)
+            else:
+                entry_stub = EvidenceTrailEntry(
+                    trail_entry_id=uuid5(
+                        URL_NAMESPACE,
+                        f"mvp10-trail::{planner.run_id}::{retrieval.retrieval_attempt_id}",
+                    ),
+                    run_id=planner.run_id,
+                    retrieval_attempt_id=retrieval.retrieval_attempt_id,
+                    research_round=research_round,
+                    role=role,
+                    source_title=_mvp10_source_title(retrieval.resolved_url),
+                    source_domain=_mvp10_source_domain(retrieval.resolved_url),
+                    original_url=retrieval.source_url,
+                    resolved_url=retrieval.resolved_url,
+                    retrieval_method="provider acquisition",
+                    snapshot_status="not snapshotted",
+                    outcome=outcome,
+                    explanation=explanation,
+                    technical_failure_code=failure_code,
+                    created_at=_aware_phase9_time(clock(), "trail created_at"),
+                )
+            entries.append(entry_stub)
+            insert_evidence_trail_entry(db_path, entry_stub)
+    for ledger in analysis.ledger_records:
+        candidate = next(
+            item for item in candidates.values() if item.quote_block_id == ledger.quote_block_id
+        )
+        family = identify_source_family(snapshots[candidate.snapshot_id])
+        insert_portfolio_item(
+            db_path,
+            PortfolioItem(
+                run_id=planner.run_id,
+                ledger_claim_id=ledger.ledger_claim_id,
+                source_family_id=family.source_family_id,
+                role=(
+                    EvidenceRole.SUPPORTING
+                    if ledger.stance.value == "supporting"
+                    else EvidenceRole.OPPOSING
+                ),
+                research_round=research_round,
+                added_at=_aware_phase9_time(clock(), "portfolio added_at"),
+            ),
+        )
+    if not finalize:
+        return None
+    return _finalize_mvp10_portfolio(
+        db_path,
+        planner.run_id,
+        research_rounds=1 if research_round is ResearchRound.INITIAL else 2,
+        stopping_reason=stopping_reason,
+        clock=clock,
+    )
+
+
+def _finalize_mvp10_portfolio(
+    db_path: str,
+    run_id: UUID,
+    *,
+    research_rounds: int,
+    stopping_reason: str,
+    clock: Callable[[], datetime],
+) -> PortfolioCoverageAssessment:
+    """Freeze the final coverage after every available source outcome is appended."""
+    existing = read_portfolio_coverage_assessment(db_path, run_id)
+    if existing is not None:
+        return existing
+    entries = read_evidence_trail_entries(db_path, run_id)
+    assessment = assess_portfolio(
+        run_id,
+        entries,
+        research_rounds=research_rounds,
+        stopping_reason=stopping_reason,
+        important_missing_evidence=(
+            "No independent opposing or limitation source family was approved."
+            if not any(
+                item.role is EvidenceRole.OPPOSING
+                for item in entries
+                if item.outcome is EvidenceTrailOutcome.ACCEPTED
+            )
+            else "",
+        ),
+        assessed_at=_aware_phase9_time(clock(), "portfolio assessed_at"),
+    )
+    insert_portfolio_coverage_assessment(db_path, assessment)
+    return assessment
+
+
+def _mvp10_outcome_for_retrieval(
+    outcome: object,
+    candidate: CandidateQuoteBlock | None,
+    decisions: dict[UUID, ScoreDecision],
+    reviews: dict[UUID, StatementReviewResult],
+    ledgers: dict[UUID, LedgerRecord],
+) -> tuple[EvidenceTrailOutcome, str, str | None]:
+    """Map typed retrieval and review artifacts to one plain-language source outcome."""
+    scrape_status = outcome.scrape_status
+    failure_code = outcome.failure_code
+    if getattr(scrape_status, "value", scrape_status) in {"duplicate_url", "duplicate_content"}:
+        return (
+            EvidenceTrailOutcome.DUPLICATE,
+            "This source belongs to an existing source family.",
+            failure_code,
+        )
+    if getattr(scrape_status, "value", scrape_status) == "unsupported":
+        return (
+            EvidenceTrailOutcome.UNSUPPORTED_CONTENT,
+            "The source content type is unsupported.",
+            failure_code,
+        )
+    if candidate is None:
+        if failure_code == "timeout":
+            return (
+                EvidenceTrailOutcome.INACCESSIBLE,
+                "The source could not be accessed in time.",
+                failure_code,
+            )
+        return (
+            EvidenceTrailOutcome.RETRIEVAL_FAILURE,
+            "The source could not be processed into usable evidence.",
+            failure_code,
+        )
+    decision = decisions.get(candidate.quote_block_id)
+    if decision is not None and not decision.approved:
+        return (
+            EvidenceTrailOutcome.ANALYST_REJECTED,
+            "The evidence did not meet Analyst requirements.",
+            None,
+        )
+    review = reviews.get(candidate.quote_block_id)
+    if review is not None and not review.approved:
+        return (
+            EvidenceTrailOutcome.REVIEWER_REJECTED,
+            "The factual statement did not pass independent review.",
+            review.failure_code.value if review.failure_code else None,
+        )
+    if candidate.quote_block_id in ledgers:
+        return (
+            EvidenceTrailOutcome.ACCEPTED,
+            "Accepted into the Reviewer-approved evidence portfolio.",
+            None,
+        )
+    return (
+        EvidenceTrailOutcome.NOT_RELEVANT,
+        "The source was valid but did not add sufficiently relevant approved evidence.",
+        None,
+    )
+
+
+def _mvp10_attempt_ids(
+    attempts: Sequence[ModelRouteAttempt],
+    snapshot: SourceSnapshot,
+    candidate: CandidateQuoteBlock | None,
+) -> tuple[UUID, ...]:
+    artifact_ids = {snapshot.snapshot_id}
+    if candidate is not None:
+        artifact_ids.add(candidate.quote_block_id)
+    return tuple(
+        item.attempt_id for item in attempts if artifact_ids.intersection(item.input_artifact_ids)
+    )
+
+
+def _mvp10_source_domain(url: str) -> str:
+    without_scheme = url.partition("://")[2]
+    domain = without_scheme.partition("/")[0]
+    return domain or "unknown source"
+
+
+def _mvp10_source_title(url: str) -> str:
+    return _mvp10_source_domain(url)
 
 
 def _run_synthesis_stage(

@@ -17,6 +17,7 @@ from agents.researcher import (
     build_source_snapshot,
     validate_snapshot_integrity,
 )
+from evidence_portfolio import identify_source_family
 from models import (
     ClaimDefinition,
     MediaTypeProvenance,
@@ -321,6 +322,7 @@ class DeduplicationState:
     original_urls: dict[str, UUID] = field(default_factory=dict)
     resolved_urls: dict[str, UUID] = field(default_factory=dict)
     content_hashes: dict[str, UUID] = field(default_factory=dict)
+    source_families: dict[UUID, UUID] = field(default_factory=dict)
     resolved_by_original: dict[str, str] = field(default_factory=dict)
     lock: Lock = field(default_factory=Lock, repr=False)
 
@@ -725,9 +727,37 @@ def _retrieve_result(
             media_type_provenance=response.media_type_provenance,
             created_at=clock(),
         )
+        family = identify_source_family(snapshot)
+        family_snapshot_id = deduplication.source_families.get(family.source_family_id)
+        if family_snapshot_id is not None:
+            deduplication.original_urls[original_url] = family_snapshot_id
+            deduplication.resolved_urls[response.resolved_url] = family_snapshot_id
+            deduplication.resolved_by_original[original_url] = response.resolved_url
+            record = _retrieval_record(
+                run_id,
+                retrieval_attempt_id,
+                query,
+                rank,
+                original_url,
+                response.resolved_url,
+                RetrievalStatus.SKIPPED,
+                retrieved_at,
+            )
+            return (
+                RetrievalOutcome(
+                    retrieval=record,
+                    scrape_status=ScrapeStatus.DUPLICATE_CONTENT,
+                    content_type=content_type,
+                    attempts_made=attempts_made,
+                    duplicate_of_snapshot_id=family_snapshot_id,
+                    failure_code="duplicate_source_family",
+                ),
+                None,
+            )
         deduplication.original_urls[original_url] = snapshot_id
         deduplication.resolved_urls[response.resolved_url] = snapshot_id
         deduplication.content_hashes[content_hash] = snapshot_id
+        deduplication.source_families[family.source_family_id] = snapshot_id
         deduplication.resolved_by_original[original_url] = response.resolved_url
         record = _retrieval_record(
             run_id,

@@ -136,6 +136,39 @@ class Stance(StrEnum):
     OPPOSING = "opposing"
 
 
+class ResearchRound(StrEnum):
+    INITIAL = "initial"
+    TARGETED = "targeted"
+
+
+class EvidenceRole(StrEnum):
+    SUPPORTING = "supporting"
+    OPPOSING = "opposing"
+    LIMITATION = "limitation"
+
+
+class EvidenceTrailOutcome(StrEnum):
+    ACCEPTED = "accepted"
+    DUPLICATE = "duplicate"
+    INACCESSIBLE = "inaccessible"
+    UNSUPPORTED_CONTENT = "unsupported_content"
+    RETRIEVAL_FAILURE = "retrieval_failure"
+    PASSAGE_SELECTION_FAILED = "passage_selection_failed"
+    QUOTE_VALIDATION_FAILED = "quote_validation_failed"
+    EVIDENCE_DENSITY_FAILURE = "evidence_density_failure"
+    ANALYST_REJECTED = "analyst_rejected"
+    REVIEWER_REJECTED = "reviewer_rejected"
+    NOT_RELEVANT = "not_relevant"
+    BUDGET_PREVENTED = "budget_prevented"
+
+
+class CoverageRating(StrEnum):
+    STRONG = "strong"
+    ADEQUATE = "adequate"
+    LIMITED = "limited"
+    INSUFFICIENT = "insufficient"
+
+
 class Placement(StrEnum):
     PRIMARY = "primary"
     SECONDARY = "secondary"
@@ -616,6 +649,100 @@ class LedgerRecord(StrictModel):
         if self.entailment is not entailment_for_claim_fit(self.claim_fit):
             raise ValueError("Ledger entailment must be derived from Claim Fit")
         return self
+
+
+class SourceFamilyIdentity(StrictModel):
+    """Deterministic audit identity for one underlying source family."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_family_id: UUID
+    family_key: NonEmptyStr
+    identification_basis: NonEmptyStr
+
+
+class EvidenceTrailEntry(StrictModel):
+    """Append-only, plain-language outcome for one discovered source."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    trail_entry_id: UUID
+    run_id: UUID
+    retrieval_attempt_id: UUID
+    research_round: ResearchRound
+    role: EvidenceRole
+    source_title: NonEmptyStr
+    source_domain: NonEmptyStr
+    original_url: NonEmptyStr
+    resolved_url: NonEmptyStr
+    source_family: SourceFamilyIdentity | None = None
+    retrieval_method: NonEmptyStr
+    snapshot_status: NonEmptyStr
+    outcome: EvidenceTrailOutcome
+    explanation: NonEmptyStr
+    technical_failure_code: str | None = None
+    model_attempt_ids: tuple[UUID, ...] = ()
+    accepted_statement: str | None = None
+    accepted_quote: str | None = None
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+    cost_incurred: bool = False
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class PortfolioItem(StrictModel):
+    """One approved Ledger statement included in an evidence portfolio."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    ledger_claim_id: UUID
+    source_family_id: UUID
+    role: EvidenceRole
+    research_round: ResearchRound
+    added_at: datetime
+
+    _added_at_is_aware = field_validator("added_at")(_validate_aware_datetime)
+
+
+class PortfolioCoverageAssessment(StrictModel):
+    """Deterministic source-family coverage, never a claim of factual certainty."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    approved_evidence_items: NonNegativeInt
+    independent_source_families: NonNegativeInt
+    supporting_families: NonNegativeInt
+    opposing_or_limitation_families: NonNegativeInt
+    duplicate_count: NonNegativeInt
+    rejected_count: NonNegativeInt
+    inaccessible_count: NonNegativeInt
+    research_rounds: NonNegativeInt
+    rating: CoverageRating
+    stopping_reason: NonEmptyStr
+    important_missing_evidence: tuple[str, ...] = ()
+    assessed_at: datetime
+
+    _assessed_at_is_aware = field_validator("assessed_at")(_validate_aware_datetime)
+
+
+class PortfolioExpansionRequest(StrictModel):
+    """Typed context that directs the one permitted targeted Planner round."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    original_claim: NonEmptyStr
+    approved_source_families: tuple[SourceFamilyIdentity, ...]
+    supporting_coverage: NonNegativeInt
+    opposing_or_limitation_coverage: NonNegativeInt
+    rejected_sources: tuple[NonEmptyStr, ...]
+    inaccessible_domains: tuple[NonEmptyStr, ...]
+    duplicate_source_families: tuple[SourceFamilyIdentity, ...]
+    attempted_queries: tuple[NonEmptyStr, ...]
+    evidence_gaps: tuple[NonEmptyStr, ...]
 
 
 class SynthesisItem(StrictModel):

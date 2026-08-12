@@ -126,6 +126,8 @@ SDK or dependency.
   - MVP-9 adds no migration: semantic quote selections use the existing generic model-
     attempt JSON boundary, while assembled quote blocks and exact offsets retain the
     schema-7 provisional/candidate columns
+  - MVP-10 migration 8 adds append-only Evidence Portfolio and Evidence Trail tables;
+    historical MVP-9 runs remain readable with no required new artifacts
   - Local brief export opens the database through the validated read-only inspection path;
     it may export only a re-hashed released brief and never creates or mutates artifacts
 
