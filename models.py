@@ -93,6 +93,22 @@ class ResearchControls(StrictModel):
     def canonical_json(self) -> str:
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
+    @classmethod
+    def from_policy_identity(cls, policy_identity: str) -> ResearchControls:
+        """Recover controls from an immutable policy identity with later policy segments."""
+        marker = "|controls:"
+        if marker not in policy_identity:
+            return DEFAULT_RESEARCH_CONTROLS
+        try:
+            encoded = policy_identity.split(marker, 1)[1]
+            payload, end = json.JSONDecoder().raw_decode(encoded)
+            suffix = encoded[end:]
+            if suffix and not suffix.startswith("|"):
+                raise ValueError("controls JSON must end before a policy segment boundary")
+            return cls.model_validate(payload)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError("provider contract has no valid persisted research controls") from exc
+
 
 DEFAULT_RESEARCH_CONTROLS = ResearchControls()
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import zipfile
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -104,14 +103,7 @@ def _read_controls(db_path: str | Path, run_id: UUID) -> ResearchControls:
             contract = read_provider_run_contract(store.connection, run_id)
         except KeyError:
             return DEFAULT_RESEARCH_CONTROLS
-    marker = "|controls:"
-    if marker not in contract.policy_identity:
-        return DEFAULT_RESEARCH_CONTROLS
-    try:
-        encoded = contract.policy_identity.split(marker, 1)[1].rsplit("|", 1)[0]
-        return ResearchControls.model_validate(json.loads(encoded))
-    except (IndexError, json.JSONDecodeError, ValueError) as exc:
-        raise ValueError("provider contract has no valid persisted research controls") from exc
+    return ResearchControls.from_policy_identity(contract.policy_identity)
 
 
 def _require_aware(value: datetime, label: str) -> datetime:

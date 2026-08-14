@@ -2319,6 +2319,11 @@ def _run_targeted_planner_stage(
         _validate_llm_provenance(
             planner.planner_prompt_version, planner.planner_model_name, LLMStage.PLANNER, alias
         )
+        if require_new_queries:
+            _require_materially_new_targeted_queries(
+                (initial_planner, *attempted_planners),
+                planner,
+            )
         return planner
 
     targeted = cast(
@@ -2336,15 +2341,7 @@ def _run_targeted_planner_stage(
             objective_validator=validate_targeted_planner,
         ),
     )
-    if not require_new_queries or _targeted_queries_are_new(
-        (initial_planner, *attempted_planners), targeted
-    ):
-        insert_search_queries(db_path, tuple(targeted.search_queries))
-    elif require_new_queries:
-        raise Phase9OrchestrationError(
-            Stage.CLAIM_PLANNER,
-            "targeted Planner did not provide a materially new search strategy",
-        )
+    insert_search_queries(db_path, tuple(targeted.search_queries))
     _persist_stage_result(db_path, manifest.run_id, artifact_key, targeted, clock)
     _checkpoint(
         db_path,
@@ -2618,10 +2615,10 @@ def _record_mvp11_round(
             research_round=research_round,
             status=ResearchRoundStatus.COMPLETED,
             planned_query_count=len(planner.search_queries),
-            planned_discovery_count=(
-                2 * researchers.supporting.retrieval_batch.intended_attempt_count
-                if researchers.supporting.retrieval_batch is not None
-                else 0
+            planned_discovery_count=sum(
+                side.retrieval_batch.intended_attempt_count
+                for side in (researchers.supporting, researchers.opposing)
+                if side.retrieval_batch is not None
             ),
             completed_query_count=len(planner.search_queries),
             completed_discovery_count=len(outcomes),
@@ -2788,6 +2785,16 @@ def _targeted_queries_are_new(
         query.query_text for planner in attempted_planners for query in planner.search_queries
     }
     return not bool({query.query_text for query in targeted.search_queries} & attempted)
+
+
+def _require_materially_new_targeted_queries(
+    attempted_planners: tuple[PlannerOutput, ...], targeted: PlannerOutput
+) -> None:
+    """Reject a repeated targeted strategy inside the retryable Planner boundary."""
+    if not _targeted_queries_are_new(attempted_planners, targeted):
+        raise _validation_failure(
+            "targeted Planner did not provide a materially new search strategy"
+        )
 
 
 def _combine_analysis_results(

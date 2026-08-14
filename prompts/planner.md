@@ -1,4 +1,4 @@
-Prompt-Version: phase8-planner-v1
+Prompt-Version: mvp11-governor-planning-v1
 Stage: planner
 
 # Role
@@ -26,6 +26,12 @@ whether the claim is true.
 - Treat the typed `research_controls.focus` input as an explicit retrieval constraint when
   present. Do not infer a focus that the operator did not provide. Depth is application
   controlled and does not change the required query schema or evidence standards.
+- When `portfolio_expansion` is present, it describes a later bounded research round.
+  Treat every exact string in `portfolio_expansion.attempted_queries` as disallowed: all
+  six new `query_text` values must be materially new and must not repeat an attempted
+  query. Use the stated evidence gaps, rejected sources, inaccessible domains, and
+  approved source families to choose a different strategy. The application validates
+  this before retrieval.
 
 # Safety
 

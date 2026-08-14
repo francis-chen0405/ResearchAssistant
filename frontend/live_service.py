@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fcntl
-import json
 import os
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -50,14 +49,7 @@ LiveClassification = Literal[
 
 def contract_controls(policy_identity: str) -> ResearchControls:
     """Recover immutable controls persisted in the canonical provider contract."""
-    marker = "|controls:"
-    if marker not in policy_identity:
-        return DEFAULT_RESEARCH_CONTROLS
-    try:
-        encoded = policy_identity.split(marker, 1)[1].rsplit("|", 1)[0]
-        return ResearchControls.model_validate(json.loads(encoded))
-    except (IndexError, json.JSONDecodeError, ValueError) as exc:
-        raise ValueError("provider contract has no valid persisted research controls") from exc
+    return ResearchControls.from_policy_identity(policy_identity)
 
 
 class LiveRunRequest(StrictModel):

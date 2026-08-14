@@ -1805,7 +1805,18 @@ def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
         ]
 
         q_rows = conn.execute(
-            "SELECT * FROM search_queries WHERE run_id = ? ORDER BY created_at", (str(run_id),)
+            """SELECT * FROM (
+                   SELECT *,
+                          ROW_NUMBER() OVER (
+                              PARTITION BY stance, query_round
+                              ORDER BY rowid
+                          ) AS planner_position
+                   FROM search_queries
+                   WHERE run_id = ?
+               )
+               WHERE planner_position = 1
+               ORDER BY CASE stance WHEN 'supporting' THEN 0 ELSE 1 END, query_round""",
+            (str(run_id),),
         ).fetchall()
         queries = [
             SearchQuery(

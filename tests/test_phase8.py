@@ -277,8 +277,16 @@ def test_all_stage_prompts_are_versioned_and_hashed() -> None:
     prompts = [load_prompt(stage) for stage in LLMStage]
 
     assert len({prompt.version for prompt in prompts}) == len(LLMStage)
-    assert all(prompt.version.startswith(("phase8-", "mvp9-")) for prompt in prompts)
+    assert all(prompt.version.startswith(("phase8-", "mvp9-", "mvp11-")) for prompt in prompts)
     assert all(len(prompt.sha256) == 64 for prompt in prompts)
+
+
+def test_planner_prompt_requires_new_queries_for_a_portfolio_expansion() -> None:
+    prompt = load_prompt(LLMStage.PLANNER)
+
+    assert prompt.version == "mvp11-governor-planning-v1"
+    assert "portfolio_expansion.attempted_queries" in prompt.text
+    assert "six new `query_text` values must be materially new" in prompt.text
 
 
 def test_success_invocation_records_complete_provenance() -> None:

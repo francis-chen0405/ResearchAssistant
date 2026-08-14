@@ -24,6 +24,20 @@ def test_research_controls_have_safe_defaults() -> None:
     assert DEFAULT_RESEARCH_CONTROLS.focus is None
 
 
+def test_persisted_controls_allow_later_policy_identity_segments() -> None:
+    controls = ResearchControls(
+        depth=ResearchDepth.FOCUSED,
+        length=ReportLength.BRIEF,
+        tone=PresentationTone.EXECUTIVE,
+    )
+
+    restored = ResearchControls.from_policy_identity(
+        f"mvp9-policy|controls:{controls.canonical_json()}|mvp11-research-governor-v1"
+    )
+
+    assert restored == controls
+
+
 def test_valid_controls_are_frozen_and_reach_planner_input() -> None:
     controls = ResearchControls(
         depth=ResearchDepth.FOCUSED,

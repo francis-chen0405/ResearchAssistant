@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+from hashlib import sha256
 from threading import local
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -16,6 +17,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agents.analyst import AnalystLLMInput, StatementDraftLLMInput
+from agents.planner import PlannerLLMInput
 from agents.synthesizer import SynthesizerLLMInput, _item_from_ledger
 from models import (
     AmbiguityRecord,
@@ -453,6 +455,10 @@ def _assemble_planner(
     response: MimoPlannerResponse,
     created_at: datetime,
 ) -> PlannerOutput:
+    planner_input = request.input_artifact
+    if not isinstance(planner_input, PlannerLLMInput):
+        raise TypeError("direct MiMo Planner assembly requires PlannerLLMInput")
+    query_namespace = _planner_query_namespace(planner_input)
     claim = ClaimDefinition(
         run_id=request.run_id,
         created_at=created_at,
@@ -475,7 +481,7 @@ def _assemble_planner(
             run_id=request.run_id,
             query_id=uuid5(
                 NAMESPACE_URL,
-                f"direct-mimo-planner::{request.run_id}::query::{index}",
+                f"direct-mimo-planner::{request.run_id}::{query_namespace}::query::{index}",
             ),
             created_at=created_at,
             **item.model_dump(),
@@ -491,6 +497,15 @@ def _assemble_planner(
         planner_model_name=request.model_alias.value,
         planned_at=created_at,
     )
+
+
+def _planner_query_namespace(planner_input: PlannerLLMInput) -> str:
+    """Derive stable, distinct IDs for the initial and each targeted query set."""
+    expansion = planner_input.portfolio_expansion
+    if expansion is None:
+        return "initial"
+    attempted = "\x1f".join(expansion.attempted_queries)
+    return f"targeted-{sha256(attempted.encode('utf-8')).hexdigest()}"
 
 
 def _assemble_score(

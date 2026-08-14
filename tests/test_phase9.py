@@ -60,7 +60,7 @@ from providers.scraper import (
     ScraperProviderError,
 )
 from providers.search import SearchRequest, SearchResponse, SearchResult
-from store import read_run
+from store import read_research_round_records, read_run
 
 NOW = datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
 RUN_ID = UUID("90000000-0000-0000-0000-000000000001")
@@ -370,6 +370,41 @@ class FakeLLMProvider:
         return type(synthesis).model_validate(payload)
 
 
+class TargetedPlannerRetryFakeLLMProvider(FakeLLMProvider):
+    """Repeat a targeted plan once, then return a valid new strategy on retry."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.targeted_planner_calls = 0
+
+    def _planner(self, request: LLMRequest) -> PlannerOutput:
+        planner = super()._planner(request)
+        planner_input = request.input_artifact
+        assert isinstance(planner_input, PlannerLLMInput)
+        if planner_input.portfolio_expansion is None:
+            return planner
+        self.targeted_planner_calls += 1
+        if self.targeted_planner_calls == 1:
+            return planner
+        return planner.model_copy(
+            update={
+                "search_queries": [
+                    query.model_copy(
+                        update={
+                            "query_id": uuid5(
+                                NAMESPACE_URL,
+                                f"phase9-targeted-query::{query.query_id}",
+                            ),
+                            "query_text": f"{query.query_text} targeted",
+                            "strategy": f"Targeted {query.strategy}",
+                        }
+                    )
+                    for query in planner.search_queries
+                ]
+            }
+        )
+
+
 def _run(
     tmp_path: Path,
     *,
@@ -477,6 +512,68 @@ def test_one_researcher_failure_does_not_invent_a_legacy_retrieval_limit(
     assert result.researcher_result.supporting.retrieval_batch.intended_attempt_count == 15
     assert result.researcher_result.opposing.status is ResearcherSideStatus.FAILED
     assert result.researcher_result.opposing.retrieval_batch is None
+
+
+def test_mvp11_round_record_keeps_the_available_side_planned_workload(
+    tmp_path: Path,
+) -> None:
+    result = _run(tmp_path, search=FakeSearchProvider(fail_side="supporting"))
+
+    assert result.status is ProviderRunStatus.RELEASED
+    assert result.planner_output is not None
+    assert result.researcher_result is not None
+    assert result.researcher_result.supporting.retrieval_batch is None
+    assert result.researcher_result.opposing.retrieval_batch is not None
+
+    orchestrator_module._record_mvp11_round(
+        result.db_path,
+        result.planner_output,
+        result.researcher_result,
+        1,
+        lambda: NOW,
+    )
+
+    (round_record,) = read_research_round_records(result.db_path, result.run_id)
+    assert round_record.planned_discovery_count == 9
+    assert round_record.completed_discovery_count == 9
+
+
+def test_mvp11_targeted_planner_retries_a_repeated_query_strategy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llm = TargetedPlannerRetryFakeLLMProvider()
+    original = orchestrator_module._run_researcher_stage
+
+    def cancel_after_targeted_plan(
+        db_path: str,
+        planner: PlannerOutput,
+        *args: object,
+        **kwargs: object,
+    ) -> object:
+        if any(query.query_text.endswith(" targeted") for query in planner.search_queries):
+            raise orchestrator_module.Phase9Cancellation("test stop after targeted planning")
+        return original(db_path, planner, *args, **kwargs)
+
+    monkeypatch.setattr(orchestrator_module, "_run_researcher_stage", cancel_after_targeted_plan)
+    result = _run(
+        tmp_path,
+        llm=llm,
+        config=ProviderOrchestrationConfig(enable_research_governor=True),
+    )
+
+    assert result.status is ProviderRunStatus.CANCELLED
+    assert llm.targeted_planner_calls == 2
+    planner_attempts = [attempt for attempt in result.model_attempts if attempt.stage == "planner"]
+    assert len(planner_attempts) == 3
+    assert sum(attempt.status.value == "completed" for attempt in planner_attempts) == 2
+    failed_attempt = next(
+        attempt for attempt in planner_attempts if attempt.status.value == "failed"
+    )
+    assert failed_attempt.failure_code == "deterministic_validation_failure"
+    assert "materially new search strategy" in (failed_attempt.failure_reason or "")
+    assert result.planner_output is not None
+    assert len(result.planner_output.search_queries) == 6
 
 
 def test_concurrent_researchers_share_cross_stance_url_deduplication(

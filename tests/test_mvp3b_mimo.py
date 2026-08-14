@@ -8,11 +8,13 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+from agents.planner import PlannerLLMInput
 from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import ExtractionLLMInput, UntrustedSourceText
 from models import (
     ClaimDefinition,
     PlannerOutput,
+    PortfolioExpansionRequest,
     RetrievalRecord,
     RetrievalStatus,
     ScoreDecision,
@@ -229,10 +231,15 @@ def test_direct_mimo_returns_only_the_typed_quote_selection() -> None:
 
 
 def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
-    request = _request().model_copy(
+    request = _request()
+    request = request.model_copy(
         update={
             "stage": LLMStage.PLANNER,
             "requested_output_type": PlannerOutput,
+            "input_artifact": PlannerLLMInput(
+                run_id=request.run_id,
+                raw_claim="Public claim.",
+            ),
         }
     )
     created_at = datetime(2026, 7, 31, tzinfo=UTC)
@@ -290,6 +297,34 @@ def test_direct_mimo_stamps_deterministic_planner_identity() -> None:
     assert len({item.query_id for item in output.search_queries}) == 6
     assert output.planner_prompt_version == request.prompt.version
     assert output.planner_model_name == request.model_alias.value
+
+    targeted_request = request.model_copy(
+        update={
+            "input_artifact": PlannerLLMInput(
+                run_id=request.run_id,
+                raw_claim="Public claim.",
+                portfolio_expansion=PortfolioExpansionRequest(
+                    run_id=request.run_id,
+                    original_claim="Public claim.",
+                    approved_source_families=(),
+                    supporting_coverage=0,
+                    opposing_or_limitation_coverage=0,
+                    rejected_sources=(),
+                    inaccessible_domains=(),
+                    duplicate_source_families=(),
+                    attempted_queries=tuple(query.query_text for query in output.search_queries),
+                    evidence_gaps=("Find independent evidence.",),
+                ),
+            )
+        }
+    )
+    targeted = PlannerOutput.model_validate(
+        _assemble_direct_mimo_output(targeted_request, semantic, created_at=created_at)
+    )
+
+    assert not {query.query_id for query in output.search_queries} & {
+        query.query_id for query in targeted.search_queries
+    }
 
     with pytest.raises(ValueError):
         MimoPlannerResponse.model_validate({**raw, "run_id": str(uuid4())})
