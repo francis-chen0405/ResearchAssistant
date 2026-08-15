@@ -2,30 +2,34 @@
 
 ## Current project state — 2026-08-15
 
-MLP-3 Next.js Product Rebuild is complete. The live product is now the clean-slate
-**Quiet Momentum** Next.js application in `web/`, backed by the strict loopback-only
-FastAPI adapter in `frontend/api.py`. It includes new research, animated persisted
-progress, terminal reports, released-brief download and hash display, SQLite history,
-transient Keychain provider setup, and an Advanced drawer for budgets, run/database
-identity, and the owned Wigolo service. The retired live Streamlit page is gone;
-Streamlit remains only for fixture replay and the read-only Evidence Browser.
+MLP-4 Research Quality & OpenAlex Integration is complete. New live runs use separate
+Planner lanes for three Exa web queries and one OpenAlex academic query per active stance.
+Focused research is the default and performs no opposing provider or model work;
+counterevidence enables the equal opposing lane without changing any configured call,
+token, USD, deadline, or provider ceiling. Advanced chooses the top 5, 7, or 10 sources,
+with 7 as the default and no wildcard or diversity slot.
 
-The one-click launcher now starts the local API and production Next.js server, opens
-`127.0.0.1:3000`, and stops only processes it owns. The browser never accesses SQLite or
-providers directly, and provider secrets remain excluded from API responses, URLs,
-browser persistence, logs, SQLite, repository files, downloads, and child-process
-arguments/environments. Website runs still use frozen `DEFAULT_RESEARCH_CONTROLS` and
-the completed MVP-11 pipeline remains unchanged.
+The deterministic first ranking merges Exa/OpenAlex discovery metadata, collapses exact
+canonical URLs, applies the documented 100-point score, and retains below-20 decisions in
+the trail while excluding them from acquisition. After acquisition, actual normalized
+page text is scored only to set extraction order; that second stage does not delete a
+usable source. The existing exact quotation filter, Reviewer, Ledger, immutable evidence,
+Research Governor, and final validator are unchanged. Focused briefs explicitly disclose
+that counterevidence was not requested.
 
-Approved dependencies resolved to FastAPI 0.141.1, Uvicorn 0.51.0, Next.js 16.3.1,
-React/React DOM 19.2.8, Motion 12.43.0, TypeScript 5.9.3, and ESLint 9.39.5. Verification:
-MLP-3/live focused tests passed (29); the complete offline suite passed (612 with 2
-expected opt-in skips); repository-wide Ruff lint/format, frontend lint and optimized
-production build, launcher syntax, `git diff --check`, and real-browser desktop/390px
-inspection passed. The browser pass covered setup, Advanced, history, released reports,
-download/hash controls, and horizontal-overflow safety. No database migration, provider
-call or spending, research/release-policy change, account system, cloud storage, hosting,
-telemetry, or historical rewrite was added. No later phase is authorized.
+OpenAlex configuration is required for new live runs, stored through the existing macOS
+Keychain boundary, and enforced at no more than ten searches or nominal USD 0.01 per run.
+Migration 10 adds provider and intent to persisted queries while preserving historical
+read-only inspection. Terminal Next.js results expose the persisted two-stage ranking
+only through a hidden post-run Research Trail drawer. MiMo estimates use reported cached
+input detail when present and conservatively treat input as uncached otherwise.
+
+Verification passed: 638 tests with 2 expected opt-in skips, repository-wide Ruff lint
+and format, frontend ESLint, optimized Next.js production build, and `git diff --check`.
+No live Exa, OpenAlex, Wigolo, Firecrawl, or MiMo call was made, so this implementation
+spent no provider credit. No dependency, hosting, account, telemetry, visual-redesign,
+or historical immutable-row rewrite was added. MLP-5 remains unstarted and requires
+separate user authorization.
 
 On 2026-08-15, the Keychain boundary was repaired after real launcher use exposed that
 the command-line `security` tool cannot receive a background web request's password

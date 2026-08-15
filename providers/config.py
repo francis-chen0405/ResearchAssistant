@@ -102,6 +102,50 @@ class ExaConfig(StrictModel):
         )
 
 
+class OpenAlexConfig(StrictModel):
+    """Required OpenAlex scholarly-discovery configuration for MLP-4 runs."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["openalex"] = "openalex"
+    provider_version: Literal["works-api"] = "works-api"
+    adapter_version: Literal["mlp4-openalex-works-v1"] = "mlp4-openalex-works-v1"
+    base_url: str = "https://api.openalex.org"
+    api_key: SecretStr
+    max_search_calls_per_run: Literal[10] = 10
+    max_search_cost_usd_per_run: Annotated[
+        ExactUSD,
+        Field(gt=Decimal("0"), le=Decimal("0.01")),
+    ] = Decimal("0.01")
+    nominal_search_cost_usd: Annotated[
+        ExactUSD,
+        Field(gt=Decimal("0"), le=Decimal("0.001")),
+    ] = Decimal("0.001")
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("OpenAlex base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("OpenAlex base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> OpenAlexConfig:
+        api_key = environment.get("OPENALEX_API_KEY", "").strip()
+        if not api_key:
+            raise ProviderConfigurationError(
+                "OPENALEX_API_KEY is required in the explicitly supplied environment"
+            )
+        return cls(
+            api_key=SecretStr(api_key),
+            base_url=environment.get("OPENALEX_BASE_URL", "https://api.openalex.org").strip(),
+        )
+
+
 class FirecrawlConfig(StrictModel):
     """Optional Firecrawl acquisition-fallback configuration."""
 

@@ -135,13 +135,14 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
 
     assert read_run(str(path), manifest.run_id).raw_claim.encode() == original
     rows = _migration_rows(path)
-    assert rows[-6:] == [
+    assert rows[-7:] == [
         (4, "same-run provenance protection triggers"),
         (5, "database-enforced immutable runs.raw_claim"),
         (6, "immutable snapshots and Ledger with exact decimal model costs"),
         (7, "snapshot acquisition and media-type provenance"),
         (8, "mvp-10 evidence portfolio and trail"),
         (9, "mvp-11 bounded research governor records"),
+        (10, "mlp-4 provider-specific discovery query provenance"),
     ]
 
 

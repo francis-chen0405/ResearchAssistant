@@ -6,7 +6,7 @@ import json
 import re
 import time
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_UP, Decimal
 from enum import StrEnum
 from hashlib import sha256
 from threading import local
@@ -22,10 +22,12 @@ from agents.synthesizer import SynthesizerLLMInput, _item_from_ledger
 from models import (
     AmbiguityRecord,
     ClaimDefinition,
+    DiscoveryProvider,
     ModelUsageMetadata,
     PlannerOutput,
     Score,
     ScoreDecision,
+    SearchIntent,
     SearchQuery,
     SectionType,
     Stance,
@@ -41,6 +43,10 @@ from money import parse_exact_usd
 from providers.config import MimoConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
 from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap, conservative_token_estimate
+
+MIMO_PRO_CACHE_HIT_USD_PER_TOKEN = Decimal("0.0000000036")
+MIMO_PRO_CACHE_MISS_USD_PER_TOKEN = Decimal("0.000000435")
+MIMO_PRO_OUTPUT_USD_PER_TOKEN = Decimal("0.00000087")
 
 
 class MimoFailureCode(StrEnum):
@@ -109,16 +115,18 @@ class MimoAmbiguityResponse(StrictModel):
 
 class MimoSearchQueryResponse(StrictModel):
     stance: Stance
+    provider: DiscoveryProvider = DiscoveryProvider.EXA
+    intent: SearchIntent = SearchIntent.BROAD_WEB
     query_round: int = Field(ge=1, le=3)
     strategy: str = Field(min_length=1)
     query_text: str = Field(min_length=1)
-    exclusion_parameters: str = Field(min_length=1)
+    exclusion_parameters: str
 
 
 class MimoPlannerResponse(StrictModel):
     claim_definition: MimoClaimDefinitionResponse
     ambiguities: tuple[MimoAmbiguityResponse, ...]
-    search_queries: tuple[MimoSearchQueryResponse, ...] = Field(min_length=6, max_length=6)
+    search_queries: tuple[MimoSearchQueryResponse, ...] = Field(min_length=4, max_length=8)
 
 
 class MimoScoreResponse(StrictModel):
@@ -488,6 +496,13 @@ def _assemble_planner(
         )
         for index, item in enumerate(response.search_queries, start=1)
     ]
+    provider_specific = any(query.provider is DiscoveryProvider.OPENALEX for query in queries)
+    if request.prompt.version.startswith("mlp4-") and not provider_specific:
+        raise ValueError("MLP-4 Planner output requires a separate OpenAlex query lane")
+    if provider_specific and planner_input.research_controls.research_mode.value != (
+        "balanced" if any(query.stance is Stance.OPPOSING for query in queries) else "focused"
+    ):
+        raise ValueError("Planner query stances must match the requested research mode")
     return PlannerOutput(
         run_id=request.run_id,
         claim_definition=claim,
@@ -639,12 +654,40 @@ def _usage(raw: Any, cap: ModelPriceCap) -> ModelUsageMetadata:
             "Xiaomi MiMo total token usage was inconsistent",
             retryable=False,
         )
+    cached = _cached_prompt_tokens(raw, prompt)
+    uncached = prompt - cached if cached is not None else None
+    cost = (
+        _cache_aware_cost(cached=cached, uncached=uncached, output=completion)
+        if cached is not None and uncached is not None
+        else cap.upper_bound(prompt, completion)
+    )
     return ModelUsageMetadata(
         input_tokens=prompt,
+        cached_input_tokens=cached,
+        uncached_input_tokens=uncached,
         output_tokens=completion,
         total_tokens=total,
-        cost_usd=cap.upper_bound(prompt, completion),
+        cost_usd=cost,
     )
+
+
+def _cached_prompt_tokens(raw: dict[str, Any], prompt_tokens: int) -> int | None:
+    details = raw.get("prompt_tokens_details")
+    if not isinstance(details, dict):
+        return None
+    cached = details.get("cached_tokens")
+    if isinstance(cached, bool) or not isinstance(cached, int) or not 0 <= cached <= prompt_tokens:
+        return None
+    return cached
+
+
+def _cache_aware_cost(*, cached: int, uncached: int, output: int) -> Decimal:
+    value = (
+        Decimal(cached) * MIMO_PRO_CACHE_HIT_USD_PER_TOKEN
+        + Decimal(uncached) * MIMO_PRO_CACHE_MISS_USD_PER_TOKEN
+        + Decimal(output) * MIMO_PRO_OUTPUT_USD_PER_TOKEN
+    )
+    return value.quantize(Decimal("0.000000001"), rounding=ROUND_UP)
 
 
 def _http_error(response: httpx.Response) -> MimoProviderError:

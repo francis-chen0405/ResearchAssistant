@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Callable, MutableMapping
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 import uvicorn
@@ -33,11 +33,12 @@ from frontend.live_service import (
     LiveRunRequest,
     LiveRunSnapshot,
     LiveStartResult,
+    ResearchTrail,
     prepare_default_database,
 )
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
-from models import DEFAULT_RESEARCH_CONTROLS, StrictModel
+from models import ResearchControls, ResearchMode, StrictModel
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -55,6 +56,8 @@ class ControllerBoundary(Protocol):
     def cancel(self, db_path: str | Path, run_id: UUID) -> str: ...
 
     def history(self, db_path: str | Path, *, limit: int = 100) -> tuple[LiveHistoryItem, ...]: ...
+
+    def research_trail(self, db_path: str | Path, run_id: UUID) -> ResearchTrail: ...
 
     def has_active_runs(self) -> bool: ...
 
@@ -124,7 +127,7 @@ class LoopbackGuardMiddleware(BaseHTTPMiddleware):
 class ApiHealth(StrictModel):
     status: str = "ok"
     product: str = "ResearchAssistant"
-    api_version: str = "mlp-3"
+    api_version: str = "mlp-4"
 
 
 class ConfigurationResponse(StrictModel):
@@ -138,6 +141,7 @@ class ConfigurationResponse(StrictModel):
 class CredentialSetupRequest(StrictModel):
     mimo_api_key: SecretStr
     exa_api_key: SecretStr
+    openalex_api_key: SecretStr
     firecrawl_api_key: SecretStr | None = None
 
 
@@ -155,6 +159,8 @@ class ResearchStartInput(StrictModel):
     max_tokens: int = Field(default=200_000, ge=1, le=1_000_000)
     max_cost_usd: Decimal = Field(default=Decimal("0.15"), gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
+    include_counterevidence: bool = False
+    sources_per_stance_per_round: Literal[5, 7, 10] = 7
 
 
 class RunLocator(StrictModel):
@@ -195,7 +201,7 @@ def create_app(
 
     app = FastAPI(
         title="ResearchAssistant local API",
-        version="mlp-3",
+        version="mlp-4",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -223,7 +229,7 @@ def create_app(
         config_message = runtime.controller.configuration_message()
         return ConfigurationResponse(
             configured=config_message is None,
-            message=config_message or "MiMo and Exa are connected.",
+            message=config_message or "MiMo, Exa, and OpenAlex are connected.",
             default_db_path=str(prepare_default_database()),
             firecrawl_enabled=bool(runtime.environment.get("FIRECRAWL_API_KEY", "").strip()),
             service=runtime.services.probe(),
@@ -234,6 +240,7 @@ def create_app(
         credentials = ProviderCredentials(
             mimo_api_key=payload.mimo_api_key.get_secret_value(),
             exa_api_key=payload.exa_api_key.get_secret_value(),
+            openalex_api_key=payload.openalex_api_key.get_secret_value(),
             firecrawl_api_key=(
                 payload.firecrawl_api_key.get_secret_value()
                 if payload.firecrawl_api_key is not None
@@ -274,7 +281,14 @@ def create_app(
             max_tokens=payload.max_tokens,
             max_cost_usd=payload.max_cost_usd,
             max_llm_calls=payload.max_llm_calls,
-            research_controls=DEFAULT_RESEARCH_CONTROLS,
+            research_controls=ResearchControls(
+                research_mode=(
+                    ResearchMode.BALANCED
+                    if payload.include_counterevidence
+                    else ResearchMode.FOCUSED
+                ),
+                sources_per_stance_per_round=payload.sources_per_stance_per_round,
+            ),
         )
         return runtime.controller.start(request)
 
@@ -295,6 +309,18 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=redact_text(exc)) from exc
         return CancelResponse(message=message)
+
+    @app.get("/api/research/{run_id}/trail", response_model=ResearchTrail)
+    def research_trail(
+        run_id: UUID,
+        db_path: str = Query(min_length=1),
+    ) -> ResearchTrail:
+        try:
+            return runtime.controller.research_trail(db_path, run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Research run not found.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
 
     @app.get("/api/history", response_model=HistoryResponse)
     def history(

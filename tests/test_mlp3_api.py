@@ -163,6 +163,7 @@ def test_credentials_are_saved_and_never_returned() -> None:
     payload = {
         "mimo_api_key": "mimo-super-secret",
         "exa_api_key": "exa-super-secret",
+        "openalex_api_key": "openalex-super-secret",
         "firecrawl_api_key": "firecrawl-super-secret",
     }
 
@@ -174,6 +175,7 @@ def test_credentials_are_saved_and_never_returned() -> None:
     assert saved[0].environment_items() == (
         ("MIMO_API_KEY", "mimo-super-secret"),
         ("EXA_API_KEY", "exa-super-secret"),
+        ("OPENALEX_API_KEY", "openalex-super-secret"),
         ("FIRECRAWL_API_KEY", "firecrawl-super-secret"),
     )
 

@@ -29,6 +29,7 @@ def _environment(
         **os.environ,
         "MIMO_API_KEY": SECRET,
         "EXA_API_KEY": "exa-test-secret",
+        "OPENALEX_API_KEY": "openalex-test-secret",
         "MIMO_BASE_URL": "https://api.xiaomimimo.com/v1",
         "MIMO_MODEL": "mimo-v2.5-pro",
         "MVP4_DB_PATH": str(db_path),
@@ -290,7 +291,7 @@ def test_restart_reuses_terminal_release_and_rejects_changed_claim_and_identity(
     assert changed_identity.returncode == CLIExitCode.CONFIGURATION_ERROR
     assert "incompatible fingerprint" in changed_identity.stderr
     with sqlite3.connect(tmp_path / "mvp4.sqlite3") as connection:
-        assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 18
+        assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 14
         assert connection.execute("SELECT COUNT(*) FROM validation_runs").fetchone()[0] == 1
 
 

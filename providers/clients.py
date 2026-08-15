@@ -16,6 +16,7 @@ class ProviderClients(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     search: httpx.Client | None = None
+    openalex_search: httpx.Client | None = None
     source: httpx.Client | None = None
     acquisition: httpx.Client | None = None
     fallback_acquisition: httpx.Client | None = None

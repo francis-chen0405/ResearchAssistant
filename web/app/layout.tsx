@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ResearchAssistant — Evidence, in context",
   description:
-    "Research a public claim from both sides and release a source-grounded brief.",
+    "Research a public claim and release a source-grounded brief you can inspect.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -2,13 +2,19 @@
 
 ## Current project state — 2026-08-15
 
-MLP-3 Next.js Product Rebuild is complete. `web/` is the sole live product surface and
-uses the independent warm editorial **Quiet Momentum** design. New research, meaningful
-progress motion, terminal/released reports, persisted history, provider setup, brief
-download/hash controls, and Advanced run/service settings all call the typed local API in
-`frontend/api.py`; SQLite and `LiveResearchController` remain authoritative. The live
-Streamlit page was retired. `frontend/streamlit_app.py` remains fixture-only and
-`frontend/evidence_browser_app.py` remains a separate read-only inspection tool.
+MLP-4 Research Quality & OpenAlex Integration is complete. `web/` remains the sole live
+product surface; the full visual redesign is deferred to MLP-5. The current page now has
+default-off counterevidence, an Advanced 5/7/10 source target (default 7), required
+OpenAlex setup, mode-aware progress/results, honest estimated-cost wording, and a hidden
+terminal Research Trail drawer.
+
+New provider-specific Planner output contains three Exa queries and one OpenAlex query
+per active stance. Focused runs start only supporting research; balanced runs preserve
+equal sides. Discovery is merged and deterministically ranked, scores below 20 are not
+acquired, and the top N uses no wildcard or diversity reservation. Acquired page text is
+ranked a second time only to order extraction. Existing exact quotation and final-release
+gates remain unchanged. Mode changes reduce actual work only and never rewrite configured
+usage ceilings.
 
 `Launch ResearchAssistant.command` starts the loopback API on 8765 and the built Next.js
 site on 3000, loads saved Keychain credentials inside Python, and cleans up only owned
@@ -17,13 +23,12 @@ processes. Install the approved Python dependencies, then run `pnpm install` and
 0.141.1, Uvicorn 0.51.0, Next.js 16.3.1, React/React DOM 19.2.8, Motion 12.43.0,
 TypeScript 5.9.3, and ESLint 9.39.5.
 
-Regression proof is in `tests/test_mlp3_api.py`, the migrated live-product coverage in
-`tests/test_mvp5_live_web.py`, and `tests/test_mlp2_credentials.py`. Focused tests passed
-(29); the full offline suite passed (612 with 2 expected opt-in skips); Ruff lint/format,
-frontend lint and production build, launcher syntax, `git diff --check`, and real-browser
-desktop/390px inspection passed. Existing released history opened unchanged. No database
-migration, live provider call, spending, hosted service, or research/release-policy
-change occurred. No phase after MLP-3 is authorized.
+Regression proof is concentrated in `tests/test_mlp4_research_quality.py` and the migrated
+provider, persistence, API, live-controller, and pipeline suites. Full verification is
+638 passed, 2 expected skips, plus Ruff lint/format, frontend lint, production build, and
+`git diff --check`. No live provider call or spending occurred. Migration 10 is additive;
+old terminal runs remain readable and old writable databases migrate intentionally on
+run/resume. MLP-5 is not authorized.
 
 Keychain maintenance on 2026-08-15 replaced the background-incompatible command-line
 password prompt with direct in-process calls to Apple's Security framework. The new path

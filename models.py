@@ -44,6 +44,24 @@ class ResearchDepth(StrEnum):
     STANDARD = "standard"
 
 
+class ResearchMode(StrEnum):
+    FOCUSED = "focused"
+    BALANCED = "balanced"
+
+
+class DiscoveryProvider(StrEnum):
+    EXA = "exa"
+    OPENALEX = "openalex"
+
+
+class SearchIntent(StrEnum):
+    BROAD_WEB = "broad_web"
+    ACADEMIC_STUDY = "academic_study"
+    GOVERNMENT_INSTITUTIONAL = "government_institutional"
+    NEWS_CURRENT = "news_current"
+    LIMITATIONS_COUNTEREVIDENCE = "limitations_counterevidence"
+
+
 class ReportLength(StrEnum):
     BRIEF = "brief"
     REPORT = "report"
@@ -89,6 +107,8 @@ class ResearchControls(StrictModel):
     length: ReportLength = ReportLength.REPORT
     tone: PresentationTone = PresentationTone.NEUTRAL
     focus: ResearchFocus | None = None
+    research_mode: ResearchMode = ResearchMode.FOCUSED
+    sources_per_stance_per_round: Literal[5, 7, 10] = 7
 
     def canonical_json(self) -> str:
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
@@ -335,13 +355,28 @@ class SearchQuery(StrictModel):
     run_id: UUID
     query_id: UUID
     stance: Stance
+    provider: DiscoveryProvider = DiscoveryProvider.EXA
+    intent: SearchIntent = SearchIntent.BROAD_WEB
     query_round: Annotated[int, Field(ge=1, le=3)]
     strategy: NonEmptyStr
     query_text: NonEmptyStr
-    exclusion_parameters: NonEmptyStr
+    exclusion_parameters: str
     created_at: datetime
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_provider_query(self) -> SearchQuery:
+        if self.provider is DiscoveryProvider.EXA:
+            missing = missing_required_query_exclusions(self.exclusion_parameters)
+            if missing:
+                raise ValueError("Exa query is missing required exclusion parameters")
+        else:
+            if self.intent is not SearchIntent.ACADEMIC_STUDY:
+                raise ValueError("OpenAlex queries must use academic-study intent")
+            if self.exclusion_parameters:
+                raise ValueError("OpenAlex queries cannot contain web exclusion syntax")
+        return self
 
 
 class PlannerOutput(StrictModel):
@@ -363,6 +398,21 @@ class PlannerOutput(StrictModel):
             if ambiguity.run_id != self.run_id:
                 raise ValueError("ambiguity run_id must match planner run_id")
 
+        if len({query.query_id for query in self.search_queries}) != len(self.search_queries):
+            raise ValueError("planner search query IDs must be unique")
+        openalex_queries = [
+            query for query in self.search_queries if query.provider is DiscoveryProvider.OPENALEX
+        ]
+        if not openalex_queries:
+            self._validate_legacy_queries()
+        else:
+            self._validate_provider_specific_queries()
+        for query in self.search_queries:
+            if query.run_id != self.run_id:
+                raise ValueError("search query run_id must match planner run_id")
+        return self
+
+    def _validate_legacy_queries(self) -> None:
         expected_rounds = {
             (Stance.SUPPORTING, 1),
             (Stance.SUPPORTING, 2),
@@ -374,15 +424,41 @@ class PlannerOutput(StrictModel):
         actual_rounds = {(query.stance, query.query_round) for query in self.search_queries}
         if len(self.search_queries) != 6 or actual_rounds != expected_rounds:
             raise ValueError(
-                "planner output must include exactly three supporting and three opposing queries"
+                "new Planner output requires a separate OpenAlex lane; legacy output must "
+                "contain exactly three supporting and three opposing Exa queries"
             )
-        for query in self.search_queries:
-            if query.run_id != self.run_id:
-                raise ValueError("search query run_id must match planner run_id")
-            missing = missing_required_query_exclusions(query.exclusion_parameters)
-            if missing:
-                raise ValueError("search query is missing required exclusion parameters")
-        return self
+
+    def _validate_provider_specific_queries(self) -> None:
+        stances = {query.stance for query in self.search_queries}
+        if Stance.SUPPORTING not in stances:
+            raise ValueError("provider-specific Planner output requires supporting queries")
+        for stance in stances:
+            exa_rounds = {
+                query.query_round
+                for query in self.search_queries
+                if query.stance is stance and query.provider is DiscoveryProvider.EXA
+            }
+            openalex = [
+                query
+                for query in self.search_queries
+                if query.stance is stance and query.provider is DiscoveryProvider.OPENALEX
+            ]
+            if exa_rounds != {1, 2, 3} or len(openalex) != 1:
+                raise ValueError(
+                    "each active stance requires three Exa queries and one OpenAlex query"
+                )
+        expected_count = 8 if Stance.OPPOSING in stances else 4
+        if len(self.search_queries) != expected_count:
+            raise ValueError("provider-specific Planner output contains an unexpected query")
+
+    @property
+    def research_mode(self) -> ResearchMode:
+        if any(query.stance is Stance.OPPOSING for query in self.search_queries):
+            return ResearchMode.BALANCED
+        return ResearchMode.FOCUSED
+
+    def queries_for_provider(self, provider: DiscoveryProvider) -> tuple[SearchQuery, ...]:
+        return tuple(query for query in self.search_queries if query.provider is provider)
 
 
 class RetrievalRecord(StrictModel):
@@ -391,7 +467,7 @@ class RetrievalRecord(StrictModel):
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
     query_text: NonEmptyStr
-    search_rank: Annotated[int, Field(ge=1, le=5)]
+    search_rank: Annotated[int, Field(ge=1, le=10)]
     source_url: NonEmptyStr
     resolved_url: NonEmptyStr
     status: RetrievalStatus
@@ -1155,6 +1231,8 @@ class ModelUsageAccounting(StrictModel):
 
 class ModelUsageMetadata(StrictModel):
     input_tokens: NonNegativeInt | None = None
+    cached_input_tokens: NonNegativeInt | None = None
+    uncached_input_tokens: NonNegativeInt | None = None
     output_tokens: NonNegativeInt | None = None
     total_tokens: NonNegativeInt | None = None
     cost_usd: ExactUSD | None = None
@@ -1168,6 +1246,16 @@ class ModelUsageMetadata(StrictModel):
             and self.total_tokens != self.input_tokens + self.output_tokens
         ):
             raise ValueError("total_tokens must equal input_tokens plus output_tokens")
+        if self.cached_input_tokens is not None or self.uncached_input_tokens is not None:
+            if (
+                self.input_tokens is None
+                or self.cached_input_tokens is None
+                or self.uncached_input_tokens is None
+                or self.cached_input_tokens + self.uncached_input_tokens != self.input_tokens
+            ):
+                raise ValueError(
+                    "cached and uncached input tokens must exactly partition input_tokens"
+                )
         return self
 
 

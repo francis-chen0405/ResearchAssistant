@@ -9,14 +9,17 @@ On macOS, double-click `Launch ResearchAssistant.command` in the repository root
 launcher starts the loopback-only typed Python API and the production Next.js website,
 then opens `http://127.0.0.1:3000/`. Its Terminal window and local processes must remain
 running while the website is open. Use the page's Provider
-setup action once to save required MiMo and Exa keys, plus optional Firecrawl, in the
+setup action once to save required MiMo, Exa, and OpenAlex keys, plus optional Firecrawl, in the
 user's macOS login Keychain.
 
-The page uses Exa Search `auto` for discovery, can start and health-check pinned Wigolo
+The page uses separate Exa web and OpenAlex academic discovery lanes, then ranks their
+merged results before acquisition. It can start and health-check pinned Wigolo
 `0.2.1` for primary acquisition, and optionally falls back to Firecrawl for approved
 Wigolo-local extraction failures. It can run or compatibly resume direct
 `mimo-v2.5-pro` research, inspect persisted history, show live progress, cooperatively
-cancel, and copy or download a released validated brief.
+cancel, and copy or download a released validated brief. Advanced controls optional
+counterevidence and a top 5/7/10 source target; terminal runs expose the persisted
+two-stage ranking trail only on request.
 
 The live form intentionally omits research depth, presentation tone, report length, and
 focus fields. Website runs use the frozen safe defaults (`standard` depth, `report`
@@ -48,8 +51,10 @@ SQLite, downloads, or passes them in command arguments. It does not load `.env` 
 profiles. Claims must be public and non-sensitive. Every released brief requires human
 review.
 
-The displayed USD ceiling and estimated cost cover MiMo model calls. Exa search charges
-and optional Firecrawl credits remain visible in their respective provider dashboards.
+The displayed USD ceiling and estimated cost cover MiMo model calls. Cached input uses
+the provider-reported cache partition when present and a conservative uncached estimate
+otherwise. Exa, OpenAlex, and optional Firecrawl usage remains separate; OpenAlex is
+additionally capped at ten searches and nominal USD 0.01 per run.
 If any physical MiMo attempt lacks token or cost usage, the page labels that exact total
 incomplete and shows only the known subtotal; it never displays missing usage as zero.
 The persisted reservation remains conservative budget exposure. A running research

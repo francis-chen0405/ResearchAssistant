@@ -64,12 +64,13 @@ from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 9
+CURRENT_SCHEMA_VERSION = 10
 RAW_CLAIM_SCHEMA_VERSION = 5
 MVP68_SCHEMA_VERSION = 6
 MVP69_SCHEMA_VERSION = 7
 MVP10_SCHEMA_VERSION = 8
 MVP11_SCHEMA_VERSION = 9
+MLP4_SCHEMA_VERSION = 10
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -96,6 +97,7 @@ MIGRATION_DESCRIPTIONS = {
     7: "snapshot acquisition and media-type provenance",
     8: "mvp-10 evidence portfolio and trail",
     9: "mvp-11 bounded research governor records",
+    10: "mlp-4 provider-specific discovery query provenance",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -334,14 +336,28 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
         }
         - snapshot_columns
     )
+    search_query_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+    }
+    missing_mlp4_query_columns = (
+        sorted({"provider", "intent"} - search_query_columns)
+        if latest >= MLP4_SCHEMA_VERSION
+        else []
+    )
     if (
         missing
         or not _is_expected_raw_claim_trigger(trigger_sql)
         or invalid_immutable
         or missing_cost_columns
         or missing_snapshot_provenance_columns
+        or missing_mlp4_query_columns
     ):
-        invalid = invalid_immutable + missing_cost_columns + missing_snapshot_provenance_columns
+        invalid = (
+            invalid_immutable
+            + missing_cost_columns
+            + missing_snapshot_provenance_columns
+            + missing_mlp4_query_columns
+        )
         detail = ", ".join(missing + invalid) if missing or invalid else RAW_CLAIM_TRIGGER_NAME
         raise _compatibility_error(
             DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
@@ -503,6 +519,8 @@ def init_db(db_path: str) -> None:
                 query_id            TEXT PRIMARY KEY,
                 run_id              TEXT NOT NULL REFERENCES planner_outputs(run_id),
                 stance              TEXT NOT NULL,
+                provider            TEXT NOT NULL DEFAULT 'exa',
+                intent              TEXT NOT NULL DEFAULT 'broad_web',
                 query_round         INTEGER NOT NULL,
                 strategy            TEXT NOT NULL,
                 query_text          TEXT NOT NULL,
@@ -891,6 +909,7 @@ def init_db(db_path: str) -> None:
         _apply_mvp69_provenance_migration(conn)
         _apply_mvp10_evidence_portfolio_migration(conn)
         _apply_mvp11_research_governor_migration(conn)
+        _apply_mlp4_discovery_query_migration(conn)
     finally:
         conn.close()
 
@@ -1284,6 +1303,54 @@ def _apply_mvp11_research_governor_migration(conn: sqlite3.Connection) -> None:
                 MVP11_SCHEMA_VERSION,
                 MIGRATION_DESCRIPTIONS[MVP11_SCHEMA_VERSION],
                 "2026-08-11T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_mlp4_discovery_query_schema(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()}
+    missing = sorted({"provider", "intent"} - columns)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 10 search query columns are missing: {', '.join(missing)}"
+        )
+
+
+def _apply_mlp4_discovery_query_migration(conn: sqlite3.Connection) -> None:
+    """Persist provider and intent without rewriting legacy Planner artifacts."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (MLP4_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MLP4_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 10 description is inconsistent")
+        _verify_mlp4_discovery_query_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {
+            item["name"] for item in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+        }
+        if "provider" not in columns:
+            conn.execute(
+                "ALTER TABLE search_queries ADD COLUMN provider TEXT NOT NULL DEFAULT 'exa'"
+            )
+        if "intent" not in columns:
+            conn.execute(
+                "ALTER TABLE search_queries ADD COLUMN intent TEXT NOT NULL DEFAULT 'broad_web'"
+            )
+        _verify_mlp4_discovery_query_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                MLP4_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MLP4_SCHEMA_VERSION],
+                "2026-08-15T00:00:00+00:00",
             ),
         )
         conn.commit()
@@ -1716,13 +1783,15 @@ def insert_planner_output(db_path: str, planner: PlannerOutput) -> None:
         for q in planner.search_queries:
             conn.execute(
                 """INSERT INTO search_queries
-                   (query_id, run_id, stance, query_round, strategy,
+                   (query_id, run_id, stance, provider, intent, query_round, strategy,
                     query_text, exclusion_parameters, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     str(q.query_id),
                     str(q.run_id),
                     q.stance.value,
+                    q.provider.value,
+                    q.intent.value,
                     q.query_round,
                     q.strategy,
                     q.query_text,
@@ -1745,13 +1814,15 @@ def insert_search_queries(db_path: str, queries: tuple[SearchQuery, ...]) -> Non
         for query in queries:
             conn.execute(
                 """INSERT INTO search_queries
-                   (query_id, run_id, stance, query_round, strategy, query_text,
-                    exclusion_parameters, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (query_id, run_id, stance, provider, intent, query_round, strategy,
+                    query_text, exclusion_parameters, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     str(query.query_id),
                     str(query.run_id),
                     query.stance.value,
+                    query.provider.value,
+                    query.intent.value,
                     query.query_round,
                     query.strategy,
                     query.query_text,
@@ -1804,18 +1875,25 @@ def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
             for r in amb_rows
         ]
 
+        query_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+        }
+        provider_specific = {"provider", "intent"} <= query_columns
+        partition = "stance, provider, query_round" if provider_specific else "stance, query_round"
+        provider_order = ", provider" if provider_specific else ""
         q_rows = conn.execute(
-            """SELECT * FROM (
-                   SELECT *,
-                          ROW_NUMBER() OVER (
-                              PARTITION BY stance, query_round
-                              ORDER BY rowid
-                          ) AS planner_position
-                   FROM search_queries
-                   WHERE run_id = ?
-               )
-               WHERE planner_position = 1
-               ORDER BY CASE stance WHEN 'supporting' THEN 0 ELSE 1 END, query_round""",
+            f"""SELECT * FROM (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY {partition}
+                               ORDER BY rowid
+                           ) AS planner_position
+                    FROM search_queries
+                    WHERE run_id = ?
+                )
+                WHERE planner_position = 1
+                ORDER BY CASE stance WHEN 'supporting' THEN 0 ELSE 1 END
+                         {provider_order}, query_round""",
             (str(run_id),),
         ).fetchall()
         queries = [
@@ -1823,6 +1901,8 @@ def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
                 run_id=UUID(r["run_id"]),
                 query_id=UUID(r["query_id"]),
                 stance=r["stance"],
+                provider=r["provider"] if provider_specific else "exa",
+                intent=r["intent"] if provider_specific else "broad_web",
                 query_round=r["query_round"],
                 strategy=r["strategy"],
                 query_text=r["query_text"],

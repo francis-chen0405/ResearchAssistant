@@ -13,7 +13,7 @@ from pydantic import ConfigDict, Field, model_validator
 from agents.analyst import AnalystLLMInput
 from agents.researcher import EVIDENCE_POLICY_VERSION
 from agents.reviewer import ReviewerDecision
-from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, AcquisitionPolicy
+from agents.supportingresearcher import AcquisitionPolicy
 from agents.synthesizer import SynthesizerLLMInput
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
@@ -31,12 +31,21 @@ from models import (
 from provider_contract import canonical_provider_contract_payload, parse_provider_contract_payload
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
 from providers.clients import ProviderClients
-from providers.config import ExaConfig, FirecrawlConfig, MimoConfig, RunCeilings, WigoloConfig
+from providers.composite_search import CompositeSearchProvider
+from providers.config import (
+    ExaConfig,
+    FirecrawlConfig,
+    MimoConfig,
+    OpenAlexConfig,
+    RunCeilings,
+    WigoloConfig,
+)
 from providers.exa import ExaSearchAdapter
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, load_prompt
 from providers.mimo import XiaomiMimoAdapter
 from providers.normalization import NORMALIZATION_VERSION, PDF_POLICY_VERSION
+from providers.openalex import OpenAlexSearchAdapter
 from providers.pricing import (
     DIRECT_MIMO_PRICE_CAP,
     DIRECT_MIMO_PRICING_POLICY_VERSION,
@@ -48,6 +57,11 @@ MIMO_RETRY_POLICY_VERSION = "mvp9-nonretryable-exact-selection-v1"
 MIMO_BUDGET_POLICY_VERSION = "mvp6.8-exact-decimal-reserve-reconcile-v1"
 MIMO_FINGERPRINT_VERSION = "mvp11-research-governor-v1"
 RESEARCH_GOVERNOR_POLICY_VERSION = "mvp11-research-governor-v1"
+MLP4_DEFAULT_ACQUISITION = AcquisitionPolicy(
+    discovery_results_per_query=10,
+    usable_snapshots_per_query=10,
+    source_target_per_stance=7,
+)
 
 
 class MimoProviderFactoryConfig(StrictModel):
@@ -57,10 +71,11 @@ class MimoProviderFactoryConfig(StrictModel):
 
     wigolo: WigoloConfig = WigoloConfig()
     exa: ExaConfig
+    openalex: OpenAlexConfig | None = None
     firecrawl: FirecrawlConfig | None = None
     mimo: MimoConfig
     ceilings: RunCeilings = RunCeilings()
-    acquisition: AcquisitionPolicy = MVP3A_ACQUISITION_POLICY
+    acquisition: AcquisitionPolicy = MLP4_DEFAULT_ACQUISITION
     research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
     repository_revision: str = Field(min_length=1)
 
@@ -70,6 +85,8 @@ class MimoProviderFactoryConfig(StrictModel):
             raise ValueError("MVP-3B requires Wigolo 0.2.1")
         if self.exa.provider_name != "exa" or self.exa.search_type != "auto":
             raise ValueError("new live runs require Exa auto discovery")
+        if self.openalex is not None and self.openalex.provider_name != "openalex":
+            raise ValueError("MLP-4 requires the OpenAlex Works API")
         if self.mimo.provider_name != "xiaomi-mimo" or self.mimo.model != "mimo-v2.5-pro":
             raise ValueError("MVP-3B requires direct Xiaomi mimo-v2.5-pro")
         if self.acquisition != _acquisition_for_controls(self.research_controls):
@@ -92,9 +109,11 @@ class MimoProviderFactoryConfig(StrictModel):
     ) -> MimoProviderFactoryConfig:
         mimo = MimoConfig.from_environment(environment)
         exa = ExaConfig.from_environment(environment)
+        openalex = OpenAlexConfig.from_environment(environment)
         return cls(
             wigolo=wigolo or WigoloConfig(),
             exa=exa,
+            openalex=openalex,
             firecrawl=FirecrawlConfig.from_environment(environment),
             mimo=mimo,
             ceilings=ceilings or RunCeilings(),
@@ -112,7 +131,7 @@ class MimoProviderBundle(StrictModel):
     )
 
     config: MimoProviderFactoryConfig
-    search: ExaSearchAdapter
+    search: ExaSearchAdapter | CompositeSearchProvider
     acquisition: FallbackAcquisitionAdapter
     llm: XiaomiMimoAdapter
     fingerprint_payload_json: str
@@ -145,10 +164,19 @@ def build_mimo_provider_bundle(
     if not isinstance(config, MimoProviderFactoryConfig):
         raise TypeError("direct MiMo factory requires MimoProviderFactoryConfig")
     injected = clients or ProviderClients()
-    search = ExaSearchAdapter(
+    exa_search = ExaSearchAdapter(
         config.exa,
         client=injected.search,
     )
+    search: ExaSearchAdapter | CompositeSearchProvider = exa_search
+    if config.openalex is not None:
+        search = CompositeSearchProvider(
+            exa=exa_search,
+            openalex=OpenAlexSearchAdapter(
+                config.openalex,
+                client=injected.openalex_search,
+            ),
+        )
     primary_acquisition = WigoloAcquisitionAdapter(
         config.wigolo,
         source_client=injected.source,
@@ -210,6 +238,11 @@ def _fingerprint_payload(
         {
             "wigolo": config.wigolo.model_dump(mode="json"),
             "exa": config.exa.model_dump(mode="json", exclude={"api_key"}),
+            "openalex": (
+                config.openalex.model_dump(mode="json", exclude={"api_key"})
+                if config.openalex is not None
+                else {"enabled": False}
+            ),
             "firecrawl": (
                 config.firecrawl.model_dump(mode="json", exclude={"api_key"})
                 if config.firecrawl is not None
@@ -230,11 +263,13 @@ def _fingerprint_payload(
         "fingerprint_version": MIMO_FINGERPRINT_VERSION,
         "provider_identity": (
             f"exa:{config.exa.base_url}|wigolo:{config.wigolo.provider_version}|"
+            f"openalex:{config.openalex.base_url if config.openalex else 'disabled'}|"
             f"firecrawl:{config.firecrawl.base_url if config.firecrawl else 'disabled'}|"
             f"xiaomi-mimo:{config.mimo.base_url}"
         ),
         "adapter_identity": (
             f"{config.exa.adapter_version}|{config.wigolo.adapter_version}|"
+            f"{config.openalex.adapter_version if config.openalex else 'openalex-disabled'}|"
             f"{config.firecrawl.adapter_version if config.firecrawl else 'firecrawl-disabled'}|"
             f"{config.mimo.adapter_version}|{MIMO_FACTORY_VERSION}"
         ),
@@ -257,9 +292,11 @@ def _fingerprint_payload(
 
 
 def _acquisition_for_controls(controls: ResearchControls) -> AcquisitionPolicy:
-    """Map bounded depth choices to equal-side acquisition limits only."""
-    if controls.depth is ResearchDepth.FOCUSED:
-        return AcquisitionPolicy(discovery_results_per_query=3, usable_snapshots_per_query=2)
-    if controls.depth is ResearchDepth.STANDARD:
-        return MVP3A_ACQUISITION_POLICY
-    raise ValueError(f"unsupported research depth: {controls.depth!r}")
+    """Use one ranked provider pool and the operator's bounded top-N target."""
+    if controls.depth not in {ResearchDepth.FOCUSED, ResearchDepth.STANDARD}:
+        raise ValueError(f"unsupported research depth: {controls.depth!r}")
+    return AcquisitionPolicy(
+        discovery_results_per_query=10,
+        usable_snapshots_per_query=10,
+        source_target_per_stance=controls.sources_per_stance_per_round,
+    )

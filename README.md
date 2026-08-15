@@ -1,14 +1,14 @@
 # ResearchAssistant
 
-ResearchAssistant is a phase-gated debate research system that investigates a claim from
-supporting and opposing perspectives and produces an evidence-constrained brief. It separates
+ResearchAssistant is a phase-gated research system that investigates a claim with an optional
+counterevidence lane and produces an evidence-constrained brief. It separates
 retrieval, semantic review, Ledger admission, synthesis, and deterministic release validation so
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
 The research pipeline is complete through MVP-11 Adaptive Research Expansion & Cost
-Control (Research Governor). MLP-1 through MLP-3 are complete; MLP-3 Next.js Product
-Rebuild is the latest product-experience phase.
+Control (Research Governor). MLP-1 through MLP-4 are complete; MLP-4 Research Quality &
+OpenAlex Integration is the latest product-experience phase.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -45,9 +45,9 @@ MLP-1 removes depth, tone, length, and focus choices from the live website. Webs
 runs use the existing safe defaults internally, while historical runs and CLI contracts
 retain their typed control metadata for compatibility.
 
-MLP-2 gives that simplified flow a clean local-product layout. Provider setup saves
-MiMo, Exa, and optional Firecrawl keys to macOS Keychain; Advanced mode contains the
-technical run and local-service settings.
+MLP-2 gave that simplified flow a clean local-product layout. The current provider setup
+saves MiMo, Exa, OpenAlex, and optional Firecrawl keys to macOS Keychain; Advanced mode
+contains research controls plus the technical run and local-service settings.
 
 MLP-3 replaces the live Streamlit product with the clean-slate **Quiet Momentum**
 Next.js experience. A strict loopback-only FastAPI adapter delegates to the existing
@@ -55,12 +55,21 @@ Python controller, so SQLite remains authoritative and the completed evidence, b
 cancellation, fingerprint, and deterministic-release contracts are unchanged. Streamlit
 remains only for the separate fixture replay and evidence-inspection utilities.
 
+MLP-4 makes focused research the default, adds optional counterevidence, and gives the
+Claim Planner separate Exa web queries and OpenAlex academic queries. Discovery metadata
+is ranked before acquisition; scores below 20 are retained in the audit trail but are not
+fetched. The top 5, 7, or 10 sources are acquired, then deterministically reordered from
+their actual text before extraction without deleting a source at this second stage. The
+post-extraction quotation, Reviewer, Ledger, and final-release gates are unchanged.
+
 ## How the system works
 
 ```text
 Raw claim
-  -> Claim Planner (3 supporting queries + 3 opposing queries)
-  -> Supporting and Opposing Researchers (run concurrently, equal limits)
+  -> Claim Planner (3 Exa queries + 1 OpenAlex query per active stance)
+  -> focused Supporting Researcher, or equal Supporting and Opposing Researchers
+  -> merged provider discovery ranking (discard below 20; select top 5/7/10)
+  -> acquired-text ranking for extraction order (no second-stage deletion)
   -> trusted source snapshots and model-selected verbatim passages
   -> deterministic quote assembly and exact quotation filtering
   -> Evidence Analyst (evidence quality, claim fit, placement, statement draft)
@@ -79,11 +88,13 @@ records are insert-only SQLite audit artifacts.
 
 ### Main roles and provider boundaries
 
-- **Claim Planner** defines the claim scope, ambiguity log, and exactly six searches without
-  judging whether the claim is true.
-- **Supporting and Opposing Researchers** use the same search depth and rules. Live and strict
-  mocked runs rank five results and attempt them until three usable unique snapshots exist for each
-  query, then apply the same deterministic quotation gates.
+- **Claim Planner** defines the claim scope and ambiguity log without judging whether the
+  claim is true. For each active stance it creates three typed Exa web queries and one
+  OpenAlex academic query.
+- **Researchers** merge Exa and OpenAlex discovery metadata, collapse exact canonical URL
+  duplicates, discard scores below 20, and acquire only the configured top 5, 7, or 10.
+  Acquired text is scored again only to set extraction order; this second stage does not
+  remove sources. Counterevidence is off by default and enables the equal opposing lane.
 - **Extractor models** return only ordered exact snapshot passages. Application code
   derives brackets, immediate context, boundary markers, offsets, provenance, and the
   persisted candidate; model-authored quote envelopes are rejected by schema.
@@ -98,7 +109,7 @@ records are insert-only SQLite audit artifacts.
 - **Renderer and Validator** check exact statement text, Ledger and Reviewer IDs, stance,
   placement, entailment, section and template compatibility, and claim reuse before rendering.
 - **Search, Scraper, and LLM providers** are synchronous vendor-neutral Protocols. Normal tests use
-  injected offline transports. New live runs use Exa Search `auto` for metadata-only discovery,
+  injected offline transports. New live runs use Exa and OpenAlex Works for metadata-only discovery,
   loopback Wigolo `0.2.1` for primary acquisition, optional Firecrawl acquisition fallback, and
   direct Xiaomi `mimo-v2.5-pro` for every LLM role. Historical adapters remain covered.
 
@@ -184,7 +195,7 @@ STATUS.md / HANDOFF.md   Chronological implementation and verification records
 
 Python 3.11 and 3.12 are supported. The live product requires Node.js 20.9+ and pnpm; live
 Wigolo acquisition additionally requires Node.js 20+ and
-pinned `wigolo@0.2.1` on loopback. Exa search requires an API key; Firecrawl fallback is optional.
+pinned `wigolo@0.2.1` on loopback. Exa and OpenAlex search require API keys; Firecrawl fallback is optional.
 MVP-5 can manage the local Wigolo service from the website. From the repository root, create a
 virtual environment and install the declared runtime and development dependencies:
 
@@ -212,10 +223,12 @@ No environment variable or API key is required for the fixture pipeline, fixture
 utilities, offline tests, or normal Phase 10 evaluation. The live CLI reads configuration only from the
 explicit process environment; it never loads `.env` automatically.
 
-The live CLI requires `MIMO_API_KEY` and `EXA_API_KEY`. `FIRECRAWL_API_KEY` is optional; when it is
+The live CLI requires `MIMO_API_KEY`, `EXA_API_KEY`, and `OPENALEX_API_KEY`.
+`FIRECRAWL_API_KEY` is optional; when it is
 absent, the narrow acquisition fallback is disabled and Wigolo remains the primary acquisition
 path. `MIMO_BASE_URL`, `EXA_BASE_URL`, `FIRECRAWL_BASE_URL`, and `WIGOLO_BASE_URL` have approved
-defaults, and `MIMO_MODEL` defaults to `mimo-v2.5-pro`. Claims must be public and non-sensitive.
+defaults, and `MIMO_MODEL` defaults to `mimo-v2.5-pro`. OpenAlex Works search is limited to
+ten calls and nominal USD 0.01 per run. Claims must be public and non-sensitive.
 Secrets are never printed, persisted, fingerprinted, or exported.
 
 ```dotenv
@@ -277,16 +290,18 @@ After first-time installation and the one-time website build above, double-click
 `Launch ResearchAssistant.command`. The launcher starts the loopback-only Python API and
 production Next.js server, then opens `127.0.0.1:3000`. Its Terminal window and local
 processes must remain running while the page is open.
-Use **Provider setup** in the page to enter MiMo, Exa, and optional Firecrawl keys once;
+Use **Provider setup** in the page to enter MiMo, Exa, OpenAlex, and optional Firecrawl keys once;
 the app saves them in the user's macOS login Keychain and reloads them on later launches.
 
 Advanced mode checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
 It never treats a listener or child PID as proof of health and stops only its own process group.
 The Next.js page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path.
-Depth, tone, report-length, and focus settings are intentionally not shown; website runs use the
-existing safe internal defaults. It
+Advanced includes counterevidence (off by default) and a 5/7/10 source target (default 7).
+Changing research mode does not rewrite any configured usage ceiling. Depth, tone, and
+report-length settings remain intentionally hidden. It
 shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,
-run history, cooperative cancellation, and released brief/hash copy/download controls.
+run history, cooperative cancellation, released brief/hash copy/download controls, and a
+hidden post-run research trail with both ranking stages.
 
 Provider keys enter only transient password widgets on the loopback page, then move to
 macOS Keychain and the local server process. They are never placed in URLs, SQLite,
@@ -294,9 +309,10 @@ logs, downloads, command arguments, or repository files. The app does not load `
 or shell profiles. Errors and bounded child output are redacted. Claims must be public
 and non-sensitive, and every released brief requires human review.
 
-The website's USD ceiling and estimated-cost card apply to MiMo model calls. Exa search charges
-and any Firecrawl credits are reported by their provider dashboards and are not silently counted
-as MiMo spend.
+The website's USD ceiling and estimated-cost card apply to MiMo model calls. When MiMo
+returns cached-token detail, the estimate uses the published cache-hit/cache-miss split;
+otherwise it conservatively treats input as uncached. Exa, OpenAlex, and Firecrawl usage
+remains separate from MiMo spend. OpenAlex additionally enforces its one-cent per-run cap.
 
 Run or resume the approved live stack with an exact claim, explicit SQLite path, and explicit token
 and cost ceilings:
@@ -304,6 +320,7 @@ and cost ceilings:
 ```bash
 export MIMO_API_KEY="..."
 export EXA_API_KEY="..."
+export OPENALEX_API_KEY="..."
 # Optional: export FIRECRAWL_API_KEY="..."
 python cli.py run \
   "For adults with hypertension, regular aerobic exercise lowers resting systolic blood pressure." \
@@ -329,7 +346,7 @@ checks its migration records and required schema objects, and reconstructs typed
 artifacts through that same session. Missing, invalid, corrupt, older, newer, or
 inaccessible databases fail clearly without modification. To migrate an older database
 intentionally, start or resume a run with write access using `run`; the normal writable
-initialization path applies migrations 5 through 9 before provider work.
+initialization path applies migrations 5 through 10 before provider work.
 
 Migration 5 installs `runs_raw_claim_immutable`. Direct SQL and application writes cannot
 change `runs.raw_claim` after insertion in any run status; identical-value assignment is
@@ -350,7 +367,8 @@ Migration 8 adds append-only source-family membership, Evidence Trail, approved 
 coverage-assessment records. Migration 9 adds append-only research-round, Research Governor
 decision, and terminal-result records; SQLite rejects round values outside 1–3. Read-only
 inspection keeps historical MVP-9 and MVP-10 databases reconstructable without applying either
-migration.
+migration. Migration 10 adds typed provider and intent columns to persisted search queries;
+historical rows reconstruct as the legacy Exa broad-web lane.
 
 Cancellation is cooperative: a synchronous request already in flight may continue to its deadline,
 but its attempt is persisted and no new call starts after cancellation is observed. It does not
@@ -467,12 +485,13 @@ No later phase has started or been authorized.
 
 Known limitations are:
 
-- Pinned Wigolo startup can require a first-use Node package download. New live runs use Exa for
-  discovery, Wigolo for primary acquisition, and optional Firecrawl fallback. Native SearXNG is
+- Pinned Wigolo startup can require a first-use Node package download. New live runs use Exa plus
+  OpenAlex for discovery, Wigolo for primary acquisition, and optional Firecrawl fallback. Native SearXNG is
   retained only for historical adapters and old persisted-run compatibility.
 - The website is local-only. It has no authentication, accounts, uploads, hosting, cloud service,
   or arbitrary cross-version crash recovery.
-- Direct-MiMo cost is a conservative frozen-policy estimate, not provider-confirmed billing.
+- Direct-MiMo cost is a pricing-policy estimate, not provider-confirmed billing. It accounts
+  for cached input when the response reports that partition and remains conservative otherwise.
 - Offline model-quality labels and prices are frozen evaluation data, not live benchmarks.
 - Missing token or cost usage is never presented as zero or as an exact total. Known
   subtotals remain visible, and configured reservations provide conservative budget

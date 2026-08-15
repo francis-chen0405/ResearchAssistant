@@ -6,10 +6,11 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
+from uuid import UUID
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from models import StrictModel
+from models import DiscoveryProvider, SearchIntent, StrictModel
 
 
 class SearchFailureCode(StrEnum):
@@ -23,6 +24,7 @@ class SearchFailureCode(StrEnum):
     MALFORMED_RESPONSE = "malformed_success_response"
     EMPTY_RESULTS = "empty_results"
     INVALID_URL = "invalid_url"
+    BUDGET_EXHAUSTED = "budget_exhausted"
 
 
 class SearchProviderError(RuntimeError):
@@ -48,8 +50,23 @@ class SearchTimeoutError(SearchProviderError):
 
 
 class SearchRequest(StrictModel):
+    run_id: UUID | None = None
+    provider: DiscoveryProvider = DiscoveryProvider.EXA
+    intent: SearchIntent = SearchIntent.BROAD_WEB
+    semantic: bool = False
     query_text: str = Field(min_length=1)
-    limit: int = Field(ge=1)
+    limit: int = Field(ge=1, le=100)
+
+    @model_validator(mode="after")
+    def validate_provider_controls(self) -> SearchRequest:
+        if self.semantic and self.provider is not DiscoveryProvider.OPENALEX:
+            raise ValueError("semantic search is available only for OpenAlex")
+        if self.provider is DiscoveryProvider.OPENALEX:
+            if self.run_id is None:
+                raise ValueError("OpenAlex searches require a run_id for budget accounting")
+            if self.intent is not SearchIntent.ACADEMIC_STUDY:
+                raise ValueError("OpenAlex searches require academic-study intent")
+        return self
 
 
 class SearchDiscoveryMetadata(StrictModel):
@@ -60,6 +77,13 @@ class SearchDiscoveryMetadata(StrictModel):
     display_url: str | None = None
     category: str | None = None
     author: str | None = None
+    external_id: str | None = None
+    doi: str | None = None
+    cited_by_count: int | None = Field(default=None, ge=0)
+    is_open_access: bool | None = None
+    work_type: str | None = None
+    is_retracted: bool | None = None
+    pdf_url: str | None = None
 
 
 class SearchEngineTelemetry(StrictModel):
@@ -76,7 +100,7 @@ class SearchResult(StrictModel):
 
     original_url: str = Field(min_length=1)
     title: str = ""
-    rank: int = Field(default=1, ge=1, le=5)
+    rank: int = Field(default=1, ge=1, le=100)
     relevance_score: float | None = None
     snippet: str | None = None
     metadata: SearchDiscoveryMetadata = SearchDiscoveryMetadata()

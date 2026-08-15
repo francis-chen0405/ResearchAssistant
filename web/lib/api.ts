@@ -37,6 +37,8 @@ export type RunSnapshot = {
   latest_checkpoint: string | null;
   completed_checkpoints: number;
   total_checkpoints: number;
+  current_research_round: number;
+  progress_percent: number;
   message: string;
   diagnostic_component: string;
   model_calls_used: number;
@@ -57,6 +59,10 @@ export type RunSnapshot = {
   provider_identity: string | null;
   model_identity: string | null;
   fingerprint: string | null;
+  research_controls: {
+    research_mode: "focused" | "balanced";
+    sources_per_stance_per_round: 5 | 7 | 10;
+  };
 };
 
 export type HistoryItem = {
@@ -68,6 +74,37 @@ export type HistoryItem = {
   completed_at: string | null;
 };
 
+export type ResearchTrailItem = {
+  research_round: number;
+  stance: "supporting" | "opposing";
+  provider: "exa" | "openalex";
+  intent: string;
+  query_text: string;
+  title: string;
+  url: string;
+  score: number;
+  decision: "selected" | "deferred" | "discarded";
+  selection_rank: number | null;
+  breakdown: {
+    relevance: number;
+    intent_match: number;
+    directness: number;
+    metadata_completeness: number;
+    likely_accessibility: number;
+    source_novelty: number;
+    penalties: number;
+  };
+  acquired_score: number | null;
+  extraction_rank: number | null;
+  acquired_breakdown: {
+    readability: number;
+    claim_term_coverage: number;
+    document_specificity: number;
+    evidence_language: number;
+    penalties: number;
+  } | null;
+};
+
 type StartInput = {
   raw_claim: string;
   acknowledged_public: boolean;
@@ -76,6 +113,8 @@ type StartInput = {
   max_tokens: number;
   max_cost_usd: string;
   max_llm_calls: number;
+  include_counterevidence: boolean;
+  sources_per_stance_per_round: 5 | 7 | 10;
 };
 
 type StartResult = {
@@ -88,6 +127,7 @@ type StartResult = {
 type CredentialInput = {
   mimo_api_key: string;
   exa_api_key: string;
+  openalex_api_key: string;
   firecrawl_api_key?: string;
 };
 
@@ -126,6 +166,8 @@ export const researchApi = {
     }),
   history: (database: string) =>
     request<{ items: HistoryItem[] }>(`/api/history?db_path=${encodeURIComponent(database)}`),
+  trail: (runId: string, database: string) =>
+    request<{ run_id: string; items: ResearchTrailItem[] }>(`/api/research/${runId}/trail?db_path=${encodeURIComponent(database)}`),
   service: () => request<ServiceDiagnostic>("/api/service"),
   startService: () => request<ServiceDiagnostic>("/api/service/start", { method: "POST" }),
   stopService: () => request<ServiceDiagnostic>("/api/service/stop", { method: "POST" }),

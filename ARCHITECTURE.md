@@ -11,14 +11,21 @@
 **Debate Synthesizer** — Builds a typed structured brief from approved Ledger records and fixed non-factual connective templates.
 **Deterministic Final Renderer & Validator** — Renders the final brief; blocks release unless every factual sentence exactly matches an approved Ledger statement.
 
-Supporting and Opposing Researchers may run in parallel; all other stages run sequentially. Parallel execution means the coordinator may start two synchronous researcher workers and join them before the Analyst runs. Do not introduce async for the MVP, and never share a SQLite connection, cursor, transaction, or in-memory mutable handoff between the two workers. Each worker returns typed Pydantic output to the coordinator; any persistence is performed after both workers finish or through worker-local short-lived SQLite connections.
+In balanced mode, Supporting and Opposing Researchers may run in parallel; focused mode
+runs only the Supporting Researcher. All other stages run sequentially. Parallel
+execution means the coordinator may start two synchronous researcher workers and join
+them before the Analyst runs. Do not introduce async, and never share a SQLite
+connection, cursor, transaction, or in-memory mutable handoff between workers. Each
+worker returns typed Pydantic output to the coordinator; any persistence is performed
+after workers finish or through worker-local short-lived SQLite connections.
 
 ## Required Workflow
 
 ```text
 Raw Claim
   ↓
-Claim Planner (6 queries: 3 Support, 3 Oppose)
+Claim Planner
+(per active stance: 3 Exa web queries + 1 OpenAlex academic query)
   ↓
 ┌──────────────────────────────────────────────────────────────┐
 │ Supporting Researcher              Opposing Researcher        │
@@ -86,9 +93,9 @@ contradiction-audit remediation sequence, MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 a
 complete. MVP-9 Verified Quote Selection & Deterministic Assembly, MVP-10 Evidence
 Portfolio & Trail, and MVP-11 Adaptive Research Expansion & Cost Control are complete.
 MVP-11 is the latest completed research-pipeline phase. MLP-1 Simplified Live Experience,
-MLP-2 Local Product Experience, and MLP-3 Next.js Product Rebuild are complete. MLP-3 is
-the latest product-experience phase and preserves every completed research and release
-invariant. No later phase is authorized.
+MLP-2 Local Product Experience, MLP-3 Next.js Product Rebuild, and MLP-4 Research Quality
+& OpenAlex Integration are complete. MLP-4 is the latest completed product-experience
+phase and preserves every completed release invariant. MLP-5 is not authorized.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -195,6 +202,36 @@ environment and returns status without returning a secret. Keys
 remain forbidden in URLs, browser persistence, logs, SQLite, downloads, repository files,
 and child-process arguments. The Streamlit dependency remains solely for the fixture
 replay and read-only evidence utilities; it is not part of the live-product path.
+
+### MLP-4 Research Quality and OpenAlex Boundary
+
+MLP-4 makes focused research the default and balanced counterevidence an explicit
+option. Focused mode runs only supporting-side work; balanced mode retains equal
+supporting/opposing standards. Changing mode never changes configured run-level call,
+token, USD, deadline, or provider ceilings. The selected mode and source target are
+frozen controls and exact fingerprint inputs.
+
+The Claim Planner produces separate provider-appropriate plans for every active stance:
+three Exa web queries and one OpenAlex academic query per research round. Exa and
+OpenAlex metadata are discovery-only. Every source is still independently acquired and
+normalized before it can become evidence. OpenAlex is limited to ten search calls and
+nominal USD 0.01 per run; its paid content endpoint is not used. Retracted works are
+rejected, while open access, citation count, age, and PDF availability are not global
+eligibility requirements.
+
+OpenAlex officially requires its API key as an `api_key` parameter on the upstream HTTPS
+request. This is the only MLP-4 exception to the general no-secret-in-URL transport
+rule. The key remains forbidden in browser/application URLs, logs, errors, SQLite,
+history, exports, fingerprints, and any persisted or displayed request metadata.
+
+Discovery results are merged, exact canonical duplicates are collapsed, and
+deterministic Stage-A ranking selects the highest-scored sources. Scores below 20/100
+leave the acquisition pool but remain append-only trail records. The target is five,
+seven, or ten usable snapshots per active stance per round, default seven. There are no
+diversity or wildcard overrides. Stage-B ranking orders independently acquired,
+normalized snapshots for extraction. Neither ranking stage replaces or weakens exact
+snapshot/quotation checks, the post-extraction filter, Reviewer approval, Ledger
+admission, or deterministic final validation.
 
 ### MVP-6.4 Evidence Density Policy
 
@@ -387,7 +424,8 @@ remain unchanged.
 
 ### Approved Stack and Role Mapping
 
-- Search and source acquisition: Exa Search `auto` for metadata-only discovery, pinned
+- Search and source acquisition: Exa Search `auto` plus OpenAlex Works search for
+  provider-specific metadata-only discovery, pinned
   local Wigolo `0.2.1` over loopback for primary acquisition, and optional Firecrawl for
   the narrowly approved fallback failures. Search is discovery only; provider snippets,
   evidence fields, relevance scores, and summaries can never become trusted content.
@@ -515,9 +553,15 @@ Defines the research boundary and search strategy. Evaluates the logical structu
 
 ### Search Strategies
 
-**Supporting (3 queries):** (1) Direct Affirmation — core terms asserting the claim is true. (2) Underlying Mechanism — target the proposed causal link. (3) Deep-Dive Analysis or Opinion — journalism, expert analysis, strong argumentative pieces.
+**Supporting Exa (3 queries):** (1) Direct Affirmation — core terms asserting the claim is true. (2) Underlying Mechanism — target the proposed causal link. (3) Deep-Dive Analysis or Opinion — journalism, expert analysis, strong argumentative pieces.
 
-**Opposing (3 queries):** (1) Direct Refutation — direct negation terms only. (2) Limiting Conditions — boundary conditions, adverse effects, or sub-populations. (3) Confounding Factors — rival causes or omitted variables.
+**Supporting OpenAlex (1 query):** Academic terminology targeting empirical studies,
+reviews, datasets, or scholarly analysis relevant to the supporting research angle.
+
+**Opposing Exa (3 queries, balanced mode only):** (1) Direct Refutation — direct negation terms only. (2) Limiting Conditions — boundary conditions, adverse effects, or sub-populations. (3) Confounding Factors — rival causes or omitted variables.
+
+**Opposing OpenAlex (1 query, balanced mode only):** Academic terminology targeting
+null results, limitations, confounding, boundary conditions, or contradictory evidence.
 
 ## 2. Supporting Evidence Researcher
 
@@ -770,11 +814,13 @@ submit free-form prose or structural framing directly.
 
 ## Stopping Criteria
 
-Research stops after three rounds per side: all six queries are executed and each query
-has either produced three usable unique snapshots or exhausted its five ranked
-candidates. At most eighteen snapshots proceed to extraction and at most thirty ranked
-source acquisitions are attempted. Snapshots are filtered and passing candidates are
-submitted to the Analyst. No iterative feedback loop is included in the MVP.
+The Research Governor still permits no more than three research rounds. In each round,
+every active stance executes its provider-specific plan and attempts eligible results in
+descending deterministic score order until the configured target of five, seven, or ten
+usable unique snapshots exists or the eligible pool is exhausted. Focused mode has one
+active stance; balanced mode has two with equal targets. Results scoring below 20 are
+not acquired. Snapshots are Stage-B ordered, then the unchanged extraction and
+post-extraction gates determine which candidates reach the Analyst.
 
 ## MVP Evaluation Metrics
 

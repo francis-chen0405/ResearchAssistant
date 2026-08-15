@@ -77,6 +77,7 @@ from models import (
     ResearchGovernorBudgetState,
     ResearchGovernorDecision,
     ResearchGovernorEvaluationInput,
+    ResearchMode,
     ResearchRound,
     ResearchRoundRecord,
     ResearchRoundStatus,
@@ -1113,6 +1114,7 @@ class ResearcherSideStatus(StrEnum):
     COMPLETED = "completed"
     PARTIAL = "partial"
     FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class Phase9OrchestrationError(RuntimeError):
@@ -1221,6 +1223,13 @@ class ResearcherStageResult(StrictModel):
             raise ValueError("failed researcher results require an explicit failure")
         if self.status is ResearcherSideStatus.COMPLETED and self.failures:
             raise ValueError("completed researcher results cannot include failures")
+        if self.status is ResearcherSideStatus.SKIPPED and (
+            self.retrieval_batch is not None
+            or self.provisional_candidates
+            or self.candidates
+            or self.failures
+        ):
+            raise ValueError("skipped researcher results cannot contain research artifacts")
         return self
 
 
@@ -1455,6 +1464,7 @@ def run_provider_pipeline(
             llm_provider,
             settings,
             now,
+            research_controls=research_controls,
         )
         active_stage = Stage.OPPOSING_RESEARCHER
         _after_stage(path, resolved_run_id, PHASE9_RESEARCHERS_CHECKPOINT, now, stage_hook)
@@ -1524,6 +1534,7 @@ def run_provider_pipeline(
                     llm_provider,
                     settings,
                     now,
+                    research_controls=research_controls,
                     checkpoint_key=MVP10_TARGETED_RESEARCHERS_CHECKPOINT,
                     artifact_key=MVP10_TARGETED_RESEARCHERS_ARTIFACT,
                 )
@@ -1614,12 +1625,18 @@ def run_provider_pipeline(
         _after_stage(path, resolved_run_id, PHASE9_SYNTHESIS_CHECKPOINT, now, stage_hook)
 
         active_stage = Stage.FINAL_RENDERER_VALIDATOR
+        validation_controls = research_controls
+        if not any(query.provider.value == "openalex" for query in planner.search_queries):
+            validation_controls = research_controls.model_copy(
+                update={"research_mode": ResearchMode.BALANCED}
+            )
         validation = _run_validation_stage(
             path,
             synthesis,
             analysis,
             manifest.raw_claim,
             now,
+            research_controls=validation_controls,
         )
         terminal_status = RunStatus.COMPLETED if validation.valid else RunStatus.BLOCKED
         _finish_run(path, resolved_run_id, terminal_status, active_stage, now)
@@ -1796,14 +1813,31 @@ def _inspect_provider_run_connection(
         and validation is not None
         and validation.valid
     ):
+        try:
+            contract = read_provider_run_contract(reader, run_id)
+        except KeyError:
+            contract = None
+        research_mode = (
+            ResearchControls.from_policy_identity(contract.policy_identity).research_mode
+            if contract is not None
+            else DEFAULT_RESEARCH_CONTROLS.research_mode
+        )
         final_brief = render_brief(
             synthesis,
             analysis.ledger_records,
             authoritative_claim=manifest.raw_claim,
+            research_mode=research_mode,
         )
         rendered_hash = validation.rendered_brief_hash
         if rendered_hash != sha256(final_brief.encode("utf-8")).hexdigest():
-            raise ValueError("persisted released brief does not match its validation hash")
+            legacy_brief = render_brief(
+                synthesis,
+                analysis.ledger_records,
+                authoritative_claim=manifest.raw_claim,
+            )
+            if rendered_hash != sha256(legacy_brief.encode("utf-8")).hexdigest():
+                raise ValueError("persisted released brief does not match its validation hash")
+            final_brief = legacy_brief
 
     usage_accounting = summarize_model_usage(attempts)
     retrieval_count = 0
@@ -2429,6 +2463,7 @@ def _run_mvp11_research_governor(
         llm_provider,
         config,
         clock,
+        research_controls=research_controls,
         checkpoint_key=MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
         artifact_key=MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
         deduplication=deduplication,
@@ -2508,6 +2543,7 @@ def _run_mvp11_research_governor(
         llm_provider,
         config,
         clock,
+        research_controls=research_controls,
         checkpoint_key=MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
         artifact_key=MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
         deduplication=deduplication,
@@ -2827,6 +2863,7 @@ def _run_researcher_stage(
     config: ProviderOrchestrationConfig,
     clock: Callable[[], datetime],
     *,
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
     checkpoint_key: str = PHASE9_RESEARCHERS_CHECKPOINT,
     artifact_key: str = PHASE9_RESEARCHERS_ARTIFACT,
     deduplication: DeduplicationState | None = None,
@@ -2861,10 +2898,12 @@ def _run_researcher_stage(
         checkpoint_key,
         clock,
     )
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="phase9-researcher") as executor:
-        active_deduplication = deduplication or DeduplicationState()
-        supporting_future = executor.submit(
-            _run_researcher_side,
+    active_deduplication = deduplication or DeduplicationState()
+    provider_specific_plan = any(
+        query.provider.value == "openalex" for query in planner.search_queries
+    )
+    if research_controls.research_mode.value == "focused" and provider_specific_plan:
+        supporting = _run_researcher_side(
             db_path,
             planner,
             "supporting",
@@ -2875,20 +2914,39 @@ def _run_researcher_stage(
             clock,
             active_deduplication,
         )
-        opposing_future = executor.submit(
-            _run_researcher_side,
-            db_path,
-            planner,
-            "opposing",
-            search_provider,
-            scraper_provider,
-            llm_provider,
-            config,
-            clock,
-            active_deduplication,
+        opposing = ResearcherStageResult(
+            run_id=planner.run_id,
+            stance="opposing",
+            status=ResearcherSideStatus.SKIPPED,
         )
-        supporting = supporting_future.result()
-        opposing = opposing_future.result()
+    else:
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="phase9-researcher") as executor:
+            supporting_future = executor.submit(
+                _run_researcher_side,
+                db_path,
+                planner,
+                "supporting",
+                search_provider,
+                scraper_provider,
+                llm_provider,
+                config,
+                clock,
+                active_deduplication,
+            )
+            opposing_future = executor.submit(
+                _run_researcher_side,
+                db_path,
+                planner,
+                "opposing",
+                search_provider,
+                scraper_provider,
+                llm_provider,
+                config,
+                clock,
+                active_deduplication,
+            )
+            supporting = supporting_future.result()
+            opposing = opposing_future.result()
 
     pair = ResearcherPairResult(
         run_id=planner.run_id,
@@ -3987,6 +4045,8 @@ def _run_validation_stage(
     analysis: AnalysisStageResult,
     authoritative_claim: str,
     clock: Callable[[], datetime],
+    *,
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
 ) -> ValidationResult:
     existing = _read_optional_validation(db_path, synthesis.run_id)
     if existing is not None:
@@ -4003,6 +4063,7 @@ def _run_validation_stage(
         analysis.ledger_records,
         authoritative_claim=authoritative_claim,
         validated_at=_aware_phase9_time(clock(), "validated_at"),
+        research_mode=research_controls.research_mode,
     )
     _persist_model(
         db_path,

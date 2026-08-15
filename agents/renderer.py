@@ -19,6 +19,7 @@ from models import (
     Entailment,
     LedgerRecord,
     Placement,
+    ResearchMode,
     SectionType,
     Stance,
     StrictModel,
@@ -141,6 +142,7 @@ def validate_final_release(
     authoritative_claim: str,
     validated_at: datetime,
     validator_config_version: str = VALIDATOR_CONFIG_VERSION,
+    research_mode: ResearchMode | None = None,
 ) -> ValidationResult:
     framing_errors = _authoritative_claim_errors(authoritative_claim)
     ledger_lookup, ledger_errors = _ledger_lookup(synthesis, ledger_records)
@@ -163,7 +165,12 @@ def validate_final_release(
             rendered_brief_hash=None,
         )
 
-    rendered = _render_validated_brief(synthesis, ledger_lookup, authoritative_claim)
+    rendered = _render_validated_brief(
+        synthesis,
+        ledger_lookup,
+        authoritative_claim,
+        research_mode=research_mode,
+    )
     return ValidationResult(
         run_id=synthesis.run_id,
         valid=True,
@@ -179,6 +186,7 @@ def render_brief(
     ledger_records: Sequence[LedgerRecord],
     *,
     authoritative_claim: str,
+    research_mode: ResearchMode | None = None,
 ) -> str:
     framing_errors = _authoritative_claim_errors(authoritative_claim)
     ledger_lookup, ledger_errors = _ledger_lookup(synthesis, ledger_records)
@@ -192,7 +200,12 @@ def render_brief(
     ]
     if errors:
         raise ValueError("invalid SynthesisOutput cannot be rendered")
-    return _render_validated_brief(synthesis, ledger_lookup, authoritative_claim)
+    return _render_validated_brief(
+        synthesis,
+        ledger_lookup,
+        authoritative_claim,
+        research_mode=research_mode,
+    )
 
 
 def _authoritative_claim_errors(authoritative_claim: str) -> list[ValidationError]:
@@ -590,6 +603,8 @@ def _render_validated_brief(
     synthesis: SynthesisOutput,
     ledger_lookup: Mapping[object, LedgerRecord],
     authoritative_claim: str,
+    *,
+    research_mode: ResearchMode | None,
 ) -> str:
     lines = [
         f"# {BRIEF_TITLE}",
@@ -600,7 +615,18 @@ def _render_validated_brief(
     missing_stances = [
         stance for stance in (Stance.SUPPORTING, Stance.OPPOSING) if stance not in present_stances
     ]
-    if missing_stances:
+    if (
+        missing_stances
+        and research_mode is ResearchMode.FOCUSED
+        and missing_stances == [Stance.OPPOSING]
+    ):
+        lines.extend(
+            (
+                "",
+                "Evidence coverage: Counterevidence was not requested for this focused run.",
+            )
+        )
+    elif missing_stances:
         missing = " and ".join(stance.value for stance in missing_stances)
         lines.extend(
             (

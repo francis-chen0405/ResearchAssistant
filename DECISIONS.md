@@ -1,5 +1,29 @@
 # Decisions
 
+## 2026-08-15 - MLP-4 Research Quality & OpenAlex Integration
+
+- Use Exa and OpenAlex together by default, with separate provider-appropriate Claim
+  Planner queries: three Exa web queries and one OpenAlex academic query per active
+  stance per research round.
+- Make counterevidence optional and disabled by default. Focused mode starts no opposing
+  work; balanced mode retains equal side standards. Mode never changes configured
+  run-level call, token, USD, deadline, or provider ceilings.
+- Replace pre-acquisition heuristics with deterministic two-stage source ranking while
+  preserving the existing post-extraction quotation filter unchanged.
+- Select only the highest-ranked eligible sources. Use a default target of seven usable
+  sources per active stance per round, with five/seven/ten in Advanced. Add no diversity
+  or wildcard slot.
+- Remove scores below 20/100 from the active acquisition pool while retaining an
+  append-only audit record of the decision.
+- Limit OpenAlex to ten search calls and nominal USD 0.01 per run. Do not use its paid
+  content endpoint; reject retracted works without globally requiring open access,
+  citations, recency, or a PDF.
+- OpenAlex officially requires its key in the upstream HTTPS query. Permit that narrow
+  provider-transport exception while keeping the key out of browser/application URLs,
+  logs, errors, SQLite, history, exports, fingerprints, and displayed request metadata.
+- Preserve the current Next.js visual language during MLP-4. The broader visual redesign
+  is deferred to separately authorized MLP-5.
+
 ## 2026-08-15 - MLP-3 Keychain Save Repair
 
 - Replace the command-line `security` password prompt with direct in-process calls to

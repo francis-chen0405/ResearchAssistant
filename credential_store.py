@@ -32,9 +32,16 @@ class ProviderCredentials(StrictModel):
 
     mimo_api_key: SecretStr
     exa_api_key: SecretStr
+    openalex_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
-    @field_validator("mimo_api_key", "exa_api_key", "firecrawl_api_key", mode="before")
+    @field_validator(
+        "mimo_api_key",
+        "exa_api_key",
+        "openalex_api_key",
+        "firecrawl_api_key",
+        mode="before",
+    )
     @classmethod
     def validate_api_key(cls, value: object) -> object:
         if value is None:
@@ -51,6 +58,8 @@ class ProviderCredentials(StrictModel):
             ("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),
             ("EXA_API_KEY", self.exa_api_key.get_secret_value()),
         )
+        if self.openalex_api_key is not None:
+            items += (("OPENALEX_API_KEY", self.openalex_api_key.get_secret_value()),)
         if self.firecrawl_api_key is None:
             return items
         return items + (("FIRECRAWL_API_KEY", self.firecrawl_api_key.get_secret_value()),)
@@ -77,6 +86,7 @@ def load_saved_credentials() -> ProviderCredentials | None:
     return ProviderCredentials(
         mimo_api_key=mimo,
         exa_api_key=exa,
+        openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
         firecrawl_api_key=_read_optional_secret(),
     )
 
@@ -143,10 +153,10 @@ def _read_secret(environment_name: str) -> str | None:
         _release_item(keychain_ref)
 
 
-def _read_optional_secret() -> str | None:
+def _read_optional_secret(environment_name: str = "FIRECRAWL_API_KEY") -> str | None:
     try:
-        return _read_secret("FIRECRAWL_API_KEY")
-    except KeychainUnavailableError:
+        return _read_secret(environment_name)
+    except (KeychainUnavailableError, KeyError):
         return None
 
 

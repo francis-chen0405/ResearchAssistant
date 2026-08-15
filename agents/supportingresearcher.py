@@ -32,6 +32,13 @@ from models import (
     VerbatimQuoteSelection,
     missing_required_query_exclusions,
 )
+from providers.ranking import (
+    DiscoveryDecision,
+    RankedAcquiredSource,
+    RankedDiscoveryResult,
+    rank_acquired_sources,
+    rank_discovery_pool,
+)
 from providers.scraper import (
     RetryPolicy,
     ScrapeRequest,
@@ -47,6 +54,7 @@ from providers.search import (
     SearchProviderError,
     SearchRequest,
     SearchResponse,
+    SearchResult,
 )
 from utils import compute_sha256
 
@@ -79,8 +87,9 @@ class UntrustedSourceText(StrictModel):
 class AcquisitionPolicy(StrictModel):
     """Bounded rank/keep policy for one Researcher query."""
 
-    discovery_results_per_query: int = Field(default=3, ge=3, le=5)
-    usable_snapshots_per_query: int = Field(default=3, ge=1, le=3)
+    discovery_results_per_query: int = Field(default=3, ge=3, le=100)
+    usable_snapshots_per_query: int = Field(default=3, ge=1, le=10)
+    source_target_per_stance: Literal[5, 7, 10] | None = None
 
     @model_validator(mode="after")
     def validate_keep_limit(self) -> AcquisitionPolicy:
@@ -90,6 +99,8 @@ class AcquisitionPolicy(StrictModel):
 
     @property
     def maximum_attempts_per_stance(self) -> int:
+        if self.source_target_per_stance is not None:
+            return self.source_target_per_stance
         return self.discovery_results_per_query * QUERIES_PER_STANCE
 
 
@@ -247,14 +258,19 @@ class RetrievalOutcome(StrictModel):
 class ResearcherRetrievalBatch(StrictModel):
     run_id: UUID
     stance: Stance
-    intended_attempt_count: int = Field(default=ATTEMPTS_PER_STANCE, ge=3, le=15)
-    discovery_results_per_query: int = Field(default=RESULTS_PER_QUERY, ge=3, le=5)
-    usable_snapshots_per_query: int = Field(default=RESULTS_PER_QUERY, ge=1, le=3)
+    intended_attempt_count: int = Field(default=ATTEMPTS_PER_STANCE, ge=3, le=30)
+    discovery_results_per_query: int = Field(default=RESULTS_PER_QUERY, ge=3, le=100)
+    usable_snapshots_per_query: int = Field(default=RESULTS_PER_QUERY, ge=1, le=10)
+    source_target_per_stance: Literal[5, 7, 10] | None = None
+    discovery_ranking: tuple[RankedDiscoveryResult, ...] = ()
+    acquired_source_ranking: tuple[RankedAcquiredSource, ...] = ()
     outcomes: list[RetrievalOutcome]
     snapshots: list[SourceSnapshot]
 
     @model_validator(mode="after")
     def validate_batch(self) -> ResearcherRetrievalBatch:
+        if self.source_target_per_stance is not None:
+            return self._validate_ranked_batch()
         if self.intended_attempt_count != (self.discovery_results_per_query * QUERIES_PER_STANCE):
             raise ValueError("intended attempt count must match configured discovery depth")
         pairs_by_round: dict[int, list[int]] = {}
@@ -280,6 +296,50 @@ class ResearcherRetrievalBatch(StrictModel):
                 )
         if any(count > self.usable_snapshots_per_query for count in snapshots_by_round.values()):
             raise ValueError("researcher snapshots exceed the per-query keep target")
+        snapshot_ids = {snapshot.snapshot_id for snapshot in self.snapshots}
+        outcome_snapshot_ids = {
+            outcome.snapshot_id for outcome in self.outcomes if outcome.snapshot_id is not None
+        }
+        if len(snapshot_ids) != len(self.snapshots) or snapshot_ids != outcome_snapshot_ids:
+            raise ValueError("batch snapshots must exactly match newly retrieved outcomes")
+        attempts_by_id = {
+            outcome.retrieval.retrieval_attempt_id: outcome for outcome in self.outcomes
+        }
+        for snapshot in self.snapshots:
+            outcome = attempts_by_id.get(snapshot.retrieval_attempt_id)
+            if outcome is None or snapshot.run_id != self.run_id:
+                raise ValueError("snapshot provenance must match a batch retrieval")
+            if snapshot.source_url != outcome.retrieval.resolved_url:
+                raise ValueError("snapshot source URL must match the resolved retrieval URL")
+        return self
+
+    def _validate_ranked_batch(self) -> ResearcherRetrievalBatch:
+        if self.intended_attempt_count != self.source_target_per_stance:
+            raise ValueError("ranked batch attempt ceiling must equal its source target")
+        selected = [
+            item for item in self.discovery_ranking if item.decision is DiscoveryDecision.SELECTED
+        ]
+        if len(selected) > self.source_target_per_stance:
+            raise ValueError("ranked batch exceeds its source target")
+        expected_ranks = list(range(1, len(selected) + 1))
+        if [item.selection_rank for item in selected] != expected_ranks:
+            raise ValueError("ranked selections must be contiguous from rank one")
+        outcome_ranks = sorted(outcome.retrieval.search_rank for outcome in self.outcomes)
+        if outcome_ranks != expected_ranks:
+            raise ValueError("ranked outcomes must exactly match selected discovery results")
+        if len(self.snapshots) > self.source_target_per_stance:
+            raise ValueError("ranked snapshots exceed the source target")
+        ranked_snapshot_ids = [item.snapshot_id for item in self.acquired_source_ranking]
+        if len(ranked_snapshot_ids) != len(set(ranked_snapshot_ids)):
+            raise ValueError("acquired-source rankings require unique snapshots")
+        if set(ranked_snapshot_ids) != {snapshot.snapshot_id for snapshot in self.snapshots}:
+            raise ValueError("acquired-source rankings must exactly cover batch snapshots")
+        if [item.extraction_rank for item in self.acquired_source_ranking] != list(
+            range(1, len(self.acquired_source_ranking) + 1)
+        ):
+            raise ValueError("acquired-source extraction ranks must be contiguous")
+        if any(outcome.retrieval.run_id != self.run_id for outcome in self.outcomes):
+            raise ValueError("retrieval run IDs must match the batch")
         snapshot_ids = {snapshot.snapshot_id for snapshot in self.snapshots}
         outcome_snapshot_ids = {
             outcome.snapshot_id for outcome in self.outcomes if outcome.snapshot_id is not None
@@ -419,6 +479,20 @@ def _retrieve_stance(
     boundary_check: Callable[[], None] | None,
 ) -> ResearcherRetrievalBatch:
     queries = _queries_for_stance(planner, stance)
+    if acquisition_policy.source_target_per_stance is not None:
+        return _retrieve_ranked_stance(
+            planner,
+            stance,
+            queries,
+            search_provider,
+            scraper_provider,
+            retry_policy=retry_policy,
+            acquisition_policy=acquisition_policy,
+            clock=clock,
+            deduplication=deduplication,
+            snapshot_consumer=snapshot_consumer,
+            boundary_check=boundary_check,
+        )
     outcomes: list[RetrievalOutcome] = []
     snapshots: list[SourceSnapshot] = []
 
@@ -481,6 +555,102 @@ def _retrieve_stance(
         intended_attempt_count=acquisition_policy.maximum_attempts_per_stance,
         discovery_results_per_query=acquisition_policy.discovery_results_per_query,
         usable_snapshots_per_query=acquisition_policy.usable_snapshots_per_query,
+        outcomes=outcomes,
+        snapshots=snapshots,
+    )
+
+
+def _retrieve_ranked_stance(
+    planner: PlannerOutput,
+    stance: Stance,
+    queries: list[SearchQuery],
+    search_provider: SearchProvider,
+    scraper_provider: ScraperProvider,
+    *,
+    retry_policy: RetryPolicy,
+    acquisition_policy: AcquisitionPolicy,
+    clock: Clock,
+    deduplication: DeduplicationState,
+    snapshot_consumer: SnapshotConsumer | None,
+    boundary_check: Callable[[], None] | None,
+) -> ResearcherRetrievalBatch:
+    source_target = acquisition_policy.source_target_per_stance
+    if source_target is None:
+        raise ValueError("ranked retrieval requires a source target")
+    query_results: list[tuple[SearchQuery, SearchResult]] = []
+    for query in queries:
+        request = SearchRequest(
+            run_id=planner.run_id,
+            provider=query.provider,
+            intent=query.intent,
+            query_text=_query_with_exclusions(query),
+            limit=acquisition_policy.discovery_results_per_query,
+        )
+        if boundary_check is not None:
+            boundary_check()
+        response = search_provider.search(request)
+        if boundary_check is not None:
+            boundary_check()
+        if not isinstance(response, SearchResponse):
+            raise SearchProviderError("search provider returned a non-SearchResponse value")
+        if not response.results:
+            if response.degraded_pool:
+                continue
+            raise SearchProviderError(
+                SearchFailureCode.EMPTY_RESULTS,
+                f"{query.provider.value} returned no discovery results",
+                retryable=False,
+            )
+        query_results.extend((query, result) for result in response.results)
+    if not query_results:
+        raise SearchProviderError(
+            SearchFailureCode.EMPTY_RESULTS,
+            f"no discovery results remained for the {stance.value} pool",
+            retryable=False,
+        )
+    ranking = rank_discovery_pool(
+        claim_text=planner.claim_definition.claim_text,
+        query_results=tuple(query_results),
+        source_target=source_target,
+    )
+    selected = [item for item in ranking if item.decision is DiscoveryDecision.SELECTED]
+    outcomes: list[RetrievalOutcome] = []
+    snapshots: list[SourceSnapshot] = []
+    for item in selected:
+        if item.selection_rank is None:
+            raise ValueError("selected discovery result has no selection rank")
+        outcome, snapshot = _retrieve_result(
+            planner.run_id,
+            item.query,
+            item.selection_rank,
+            item.result.original_url,
+            scraper_provider,
+            retry_policy,
+            clock,
+            deduplication,
+            boundary_check,
+        )
+        outcomes.append(outcome)
+        if snapshot is not None:
+            snapshots.append(snapshot)
+            if snapshot_consumer is not None:
+                snapshot_consumer(snapshot)
+    acquired_ranking = rank_acquired_sources(
+        claim_text=planner.claim_definition.claim_text,
+        snapshots=tuple(snapshots),
+        retrievals=tuple(outcome.retrieval for outcome in outcomes),
+    )
+    snapshot_by_id = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
+    snapshots = [snapshot_by_id[item.snapshot_id] for item in acquired_ranking]
+    return ResearcherRetrievalBatch(
+        run_id=planner.run_id,
+        stance=stance,
+        intended_attempt_count=source_target,
+        discovery_results_per_query=acquisition_policy.discovery_results_per_query,
+        usable_snapshots_per_query=acquisition_policy.usable_snapshots_per_query,
+        source_target_per_stance=source_target,
+        discovery_ranking=ranking,
+        acquired_source_ranking=acquired_ranking,
         outcomes=outcomes,
         snapshots=snapshots,
     )
@@ -834,14 +1004,17 @@ def _scrape_with_retry(
 def _queries_for_stance(planner: PlannerOutput, stance: Stance) -> list[SearchQuery]:
     queries = sorted(
         (query for query in planner.search_queries if query.stance is stance),
-        key=lambda query: query.query_round,
+        key=lambda query: (query.provider.value, query.query_round),
     )
-    if len(queries) != QUERIES_PER_STANCE:
-        raise ValueError(f"planner must provide exactly three {stance.value} queries")
+    expected = 4 if any(query.provider.value == "openalex" for query in queries) else 3
+    if len(queries) != expected:
+        raise ValueError(f"planner must provide exactly {expected} {stance.value} provider queries")
     return queries
 
 
 def _query_with_exclusions(query: SearchQuery) -> str:
+    if query.provider.value == "openalex":
+        return query.query_text
     missing = missing_required_query_exclusions(query.exclusion_parameters)
     if missing:
         raise ValueError(f"query is missing required exclusions: {', '.join(missing)}")

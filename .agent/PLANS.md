@@ -10,7 +10,24 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Latest Completed Product Phase: MLP-3
+## Latest Completed Product Phase: MLP-4
+
+The user explicitly authorized MLP-4 Research Quality & OpenAlex Integration on
+2026-08-15, and it is complete. It adds provider-specific Exa/OpenAlex planning, secure
+OpenAlex discovery,
+deterministic two-stage source ranking, a default-off counterevidence mode, cumulative
+progress, and a hidden research trail. The default is seven top-ranked sources per
+active stance per research round, with five/seven/ten available in Advanced; scores
+below 20 leave the acquisition pool, and no diversity or wildcard slot is used.
+
+MLP-4 preserves the current Next.js visual language except for minimal functional
+controls. MLP-5 is the separately deferred visual redesign and is not authorized.
+
+Canonical completed plan:
+
+- `.agent/plans/phase-mlp-4-research-quality-openalex.md`
+
+## Previous Completed Product Phase: MLP-3
 
 The user explicitly authorized a clean-slate Next.js product rebuild on 2026-08-14.
 MLP-3 is complete. The user approved its Python and JavaScript dependency set and requested
@@ -21,7 +38,7 @@ canonical plan is `.agent/plans/phase-mlp-3-nextjs-product-rebuild.md`.
 
 MLP-1 and MLP-2 remain complete. MVP-11 remains the latest completed research-pipeline
 phase. MLP-3 did not change that pipeline, its evidence rules, budgets, persistence, or
-release gate. No later phase is authorized.
+release gate. MLP-4 is complete; MLP-5 is not authorized.
 
 ## Completed Research Pipeline: MVP-11
 

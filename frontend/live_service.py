@@ -19,17 +19,27 @@ from frontend.security import redact_text
 from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, RunManifest, StrictModel
 from money import ExactUSD
 from orchestrator import (
+    MVP10_TARGETED_RESEARCHERS_ARTIFACT,
+    MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
+    MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
+    PHASE9_RESEARCHERS_ARTIFACT,
     ClaimMismatchError,
     FingerprintMismatchError,
     ProviderPipelineResult,
     ProviderRunStatus,
+    ResearcherPairResult,
     inspect_provider_run,
     request_run_cancellation,
     run_mvp3b_pipeline,
 )
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
-from store import list_runs, open_read_only_store, read_provider_run_contract
+from store import (
+    list_runs,
+    open_read_only_store,
+    read_provider_run_contract,
+    read_stage_artifact,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIVE_DB = PROJECT_ROOT / ".researchassistant" / "live-runs.sqlite3"
@@ -104,6 +114,8 @@ class LiveRunSnapshot(StrictModel):
     latest_checkpoint: str | None = None
     completed_checkpoints: int = Field(default=0, ge=0)
     total_checkpoints: int = Field(default=5, ge=1)
+    current_research_round: int = Field(default=1, ge=1, le=3)
+    progress_percent: int = Field(default=0, ge=0, le=100)
     message: str = Field(min_length=1)
     diagnostic_component: str = Field(min_length=1)
     model_calls_used: int = Field(ge=0)
@@ -134,6 +146,46 @@ class LiveHistoryItem(StrictModel):
     stage: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
     completed_at: str | None = None
+
+
+class DiscoveryScoreBreakdown(StrictModel):
+    relevance: int = Field(ge=0, le=35)
+    intent_match: int = Field(ge=0, le=20)
+    directness: int = Field(ge=0, le=15)
+    metadata_completeness: int = Field(ge=0, le=10)
+    likely_accessibility: int = Field(ge=0, le=10)
+    source_novelty: int = Field(ge=0, le=10)
+    penalties: int = Field(ge=-45, le=0)
+
+
+class AcquiredSourceScoreBreakdown(StrictModel):
+    readability: int = Field(ge=0, le=25)
+    claim_term_coverage: int = Field(ge=0, le=35)
+    document_specificity: int = Field(ge=0, le=25)
+    evidence_language: int = Field(ge=0, le=15)
+    penalties: int = Field(ge=-20, le=0)
+
+
+class ResearchTrailItem(StrictModel):
+    research_round: int = Field(ge=1, le=3)
+    stance: Literal["supporting", "opposing"]
+    provider: Literal["exa", "openalex"]
+    intent: str = Field(min_length=1)
+    query_text: str = Field(min_length=1)
+    title: str
+    url: str = Field(min_length=1)
+    score: int = Field(ge=0, le=100)
+    decision: Literal["selected", "deferred", "discarded"]
+    selection_rank: int | None = Field(default=None, ge=1, le=10)
+    breakdown: DiscoveryScoreBreakdown
+    acquired_score: int | None = Field(default=None, ge=0, le=100)
+    extraction_rank: int | None = Field(default=None, ge=1, le=10)
+    acquired_breakdown: AcquiredSourceScoreBreakdown | None = None
+
+
+class ResearchTrail(StrictModel):
+    run_id: UUID
+    items: tuple[ResearchTrailItem, ...]
 
 
 class LiveStartResult(StrictModel):
@@ -353,6 +405,112 @@ class LiveResearchController:
                 for manifest in list_runs(store.connection, limit=limit)
             )
 
+    def research_trail(self, db_path: str | Path, run_id: UUID) -> ResearchTrail:
+        path = Path(db_path).resolve()
+        if not path.is_file():
+            raise KeyError(f"run {run_id} not found")
+        stage_keys = (
+            (1, PHASE9_RESEARCHERS_ARTIFACT),
+            (2, MVP10_TARGETED_RESEARCHERS_ARTIFACT),
+            (2, MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT),
+            (3, MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT),
+        )
+        items: list[ResearchTrailItem] = []
+        with open_read_only_store(path) as store:
+            for research_round, artifact_key in stage_keys:
+                try:
+                    artifact = read_stage_artifact(store.connection, run_id, artifact_key)
+                except KeyError:
+                    continue
+                if artifact.artifact_type != ResearcherPairResult.__name__:
+                    continue
+                pair = ResearcherPairResult.model_validate_json(artifact.payload_json)
+                for side in (pair.supporting, pair.opposing):
+                    if side.retrieval_batch is None:
+                        continue
+                    outcomes_by_rank = {
+                        outcome.retrieval.search_rank: outcome
+                        for outcome in side.retrieval_batch.outcomes
+                    }
+                    acquired_by_retrieval = {
+                        item.retrieval_attempt_id: item
+                        for item in side.retrieval_batch.acquired_source_ranking
+                    }
+                    for ranked in side.retrieval_batch.discovery_ranking:
+                        components = ranked.components
+                        outcome = (
+                            outcomes_by_rank.get(ranked.selection_rank)
+                            if ranked.selection_rank is not None
+                            else None
+                        )
+                        acquired = (
+                            acquired_by_retrieval.get(outcome.retrieval.retrieval_attempt_id)
+                            if outcome is not None
+                            else None
+                        )
+                        items.append(
+                            ResearchTrailItem(
+                                research_round=research_round,
+                                stance=side.stance,
+                                provider=ranked.query.provider.value,
+                                intent=ranked.query.intent.value,
+                                query_text=ranked.query.query_text,
+                                title=ranked.result.title,
+                                url=ranked.canonical_url,
+                                score=ranked.score,
+                                decision=ranked.decision.value,
+                                selection_rank=ranked.selection_rank,
+                                breakdown=DiscoveryScoreBreakdown(
+                                    relevance=components.relevance,
+                                    intent_match=components.intent_match,
+                                    directness=components.directness,
+                                    metadata_completeness=components.metadata_completeness,
+                                    likely_accessibility=components.likely_accessibility,
+                                    source_novelty=components.source_novelty,
+                                    penalties=(
+                                        components.generic_homepage_penalty
+                                        + components.marketing_or_community_penalty
+                                        + components.unrelated_title_penalty
+                                    ),
+                                ),
+                                acquired_score=acquired.score if acquired is not None else None,
+                                extraction_rank=(
+                                    acquired.extraction_rank if acquired is not None else None
+                                ),
+                                acquired_breakdown=(
+                                    AcquiredSourceScoreBreakdown(
+                                        readability=acquired.components.readability,
+                                        claim_term_coverage=(
+                                            acquired.components.claim_term_coverage
+                                        ),
+                                        document_specificity=(
+                                            acquired.components.document_specificity
+                                        ),
+                                        evidence_language=acquired.components.evidence_language,
+                                        penalties=(
+                                            acquired.components.generic_or_promotional_penalty
+                                        ),
+                                    )
+                                    if acquired is not None
+                                    else None
+                                ),
+                            )
+                        )
+        return ResearchTrail(
+            run_id=run_id,
+            items=tuple(
+                sorted(
+                    items,
+                    key=lambda item: (
+                        item.research_round,
+                        item.stance,
+                        -item.score,
+                        item.url,
+                    ),
+                )
+            ),
+        )
+
     def has_active_runs(self) -> bool:
         with self._lock:
             return any(not active.future.done() for active in self._active.values())
@@ -426,6 +584,7 @@ class LiveResearchController:
         classification = result.status.value
         checkpoint = result.checkpoints[-1].stage_key if result.checkpoints else None
         exit_code = exit_code_for_status(result.status)
+        current_round, progress_percent = _research_round_and_progress(result)
         return LiveRunSnapshot(
             run_id=result.run_id,
             db_path=result.db_path,
@@ -439,6 +598,8 @@ class LiveResearchController:
                 for checkpoint in result.checkpoints
             ),
             total_checkpoints=5,
+            current_research_round=current_round,
+            progress_percent=progress_percent,
             message=_result_message(result),
             diagnostic_component=_diagnostic_component(result),
             model_calls_used=result.model_calls_used,
@@ -525,7 +686,12 @@ class LiveResearchController:
             value,
             secrets=tuple(
                 self._environment.get(name, "")
-                for name in ("MIMO_API_KEY", "EXA_API_KEY", "FIRECRAWL_API_KEY")
+                for name in (
+                    "MIMO_API_KEY",
+                    "EXA_API_KEY",
+                    "OPENALEX_API_KEY",
+                    "FIRECRAWL_API_KEY",
+                )
             ),
         )
 
@@ -594,6 +760,33 @@ def _empty_progress(stance: Literal["supporting", "opposing"]) -> ResearchProgre
         retrieval_attempts=0,
         usable_snapshots=0,
         candidates=0,
+    )
+
+
+def _research_round_and_progress(result: ProviderPipelineResult) -> tuple[int, int]:
+    checkpoint_keys = {checkpoint.stage_key for checkpoint in result.checkpoints}
+    if any(key.startswith("mvp11-round-three") for key in checkpoint_keys):
+        current_round = 3
+    elif any(key.startswith("mvp11-round-two") for key in checkpoint_keys):
+        current_round = 2
+    else:
+        current_round = 1
+    if result.status is not ProviderRunStatus.RUNNING:
+        return current_round, 100
+    if result.current_stage.value in {"debate_synthesizer", "final_renderer_validator"}:
+        return current_round, 88 if result.current_stage.value == "debate_synthesizer" else 96
+    stage_progress = {
+        "claim_planner": 10,
+        "supporting_researcher": 28,
+        "opposing_researcher": 34,
+        "evidence_analyst": 52,
+        "statement_reviewer": 58,
+        "claim_ledger": 62,
+    }.get(result.current_stage.value, 5)
+    round_floor = {1: 0, 2: 62, 3: 76}[current_round]
+    round_span = {1: 1.0, 2: 0.18, 3: 0.12}[current_round]
+    return current_round, min(
+        87, max(round_floor, round_floor + round(stage_progress * round_span))
     )
 
 

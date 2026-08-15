@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Configuration,
   HistoryItem,
+  ResearchTrailItem,
   RunSnapshot,
   ServiceDiagnostic,
   researchApi,
@@ -17,12 +18,14 @@ type Settings = {
   maxTokens: number;
   maxCost: string;
   maxCalls: number;
+  includeCounterevidence: boolean;
+  sourceTarget: 5 | 7 | 10;
 };
 
 const terminalStates = new Set(["released", "blocked", "failed", "cancelled", "configuration_error", "invalid_input"]);
 const stageOrder = [
   { key: "claim_planner", label: "Frame the claim" },
-  { key: "researchers", label: "Follow both sides" },
+  { key: "researchers", label: "Follow the sources" },
   { key: "evidence_analyst", label: "Test the evidence" },
   { key: "statement_reviewer", label: "Review each statement" },
   { key: "final_renderer_validator", label: "Assemble & validate" },
@@ -54,7 +57,7 @@ export default function Home() {
   const [claim, setClaim] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [configuration, setConfiguration] = useState<Configuration | null>(null);
-  const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160 });
+  const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160, includeCounterevidence: false, sourceTarget: 7 });
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [activeRun, setActiveRun] = useState<{ id: string; database: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -133,6 +136,8 @@ export default function Home() {
         max_tokens: settings.maxTokens,
         max_cost_usd: settings.maxCost,
         max_llm_calls: settings.maxCalls,
+        include_counterevidence: settings.includeCounterevidence,
+        sources_per_stance_per_round: settings.sourceTarget,
       });
       setActiveRun({ id: result.run_id, database: settings.dbPath });
       setSnapshot(null);
@@ -180,7 +185,7 @@ export default function Home() {
           ) : activeRun ? (
             <StartingView key="starting" claim={claim} reduceMotion={Boolean(reduceMotion)} />
           ) : (
-            <ResearchView key="new" claim={claim} acknowledged={acknowledged} busy={busy} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
+            <ResearchView key="new" claim={claim} acknowledged={acknowledged} busy={busy} counterevidence={settings.includeCounterevidence} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
           )}
         </AnimatePresence>
         <AnimatePresence>
@@ -207,17 +212,17 @@ function Header({ view, providerState, onView, onSetup, onAdvanced }: { view: Ma
   </header>;
 }
 
-function ResearchView({ claim, acknowledged, busy, reduceMotion, onClaim, onAcknowledged, onSubmit }: { claim: string; acknowledged: boolean; busy: boolean; reduceMotion: boolean; onClaim: (claim: string) => void; onAcknowledged: (acknowledged: boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; }) {
+function ResearchView({ claim, acknowledged, busy, counterevidence, reduceMotion, onClaim, onAcknowledged, onSubmit }: { claim: string; acknowledged: boolean; busy: boolean; counterevidence: boolean; reduceMotion: boolean; onClaim: (claim: string) => void; onAcknowledged: (acknowledged: boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; }) {
   const reveal = (delay: number) => reduceMotion ? {} : { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] as const } };
   return <motion.section className="hero" initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }}>
     <motion.p className="eyebrow" {...reveal(0.02)}>Evidence, in context</motion.p>
     <h1><motion.span {...reveal(0.08)}>Research a claim.</motion.span><motion.span {...reveal(0.14)}>See the evidence.</motion.span></h1>
-    <motion.p className="intro" {...reveal(0.2)}>See what supports it, what challenges it, and which sources the research used.</motion.p>
+    <motion.p className="intro" {...reveal(0.2)}>See which sources hold up, what they show, and how they were chosen.</motion.p>
     <motion.form className="claim-composer" onSubmit={onSubmit} layout {...reveal(0.27)}>
       <motion.i className="composer-signal" aria-hidden="true" initial={reduceMotion ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 0.9, delay: 0.48, ease: [0.22, 1, 0.36, 1] }} />
       <label htmlFor="claim">What would you like to examine?</label><textarea id="claim" value={claim} onChange={(event) => onClaim(event.target.value)} placeholder="e.g. Remote work makes software teams less productive." rows={3} />
       <label className="acknowledgement"><input type="checkbox" checked={acknowledged} onChange={(event) => onAcknowledged(event.target.checked)} /><span>This is public and non-sensitive, and I’ll review what comes back.</span></label>
-      <div className="composer-footer"><span>Both sides · preserved sources · deterministic release</span><motion.button type="submit" className="primary-action" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} disabled={!claim.trim() || !acknowledged || busy}>{busy ? "Starting…" : "Begin research"} <span aria-hidden="true">↗</span></motion.button></div>
+      <div className="composer-footer"><span>{counterevidence ? "Supporting + counterevidence" : "Focused research"} · preserved sources</span><motion.button type="submit" className="primary-action" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} disabled={!claim.trim() || !acknowledged || busy}>{busy ? "Starting…" : "Begin research"} <span aria-hidden="true">↗</span></motion.button></div>
     </motion.form>
   </motion.section>;
 }
@@ -227,13 +232,13 @@ function StartingView({ claim, reduceMotion }: { claim: string; reduceMotion: bo
 }
 
 function ProgressView({ snapshot, onCancel }: { snapshot: RunSnapshot; onCancel: () => void }) {
-  const activeStage = stageIndex(snapshot.stage);
-  const overall = Math.max(5, Math.round(((activeStage + 0.45) / stageOrder.length) * 100));
+  const activeStage = snapshot.current_research_round > 1 && ["claim_planner", "supporting_researcher", "opposing_researcher"].includes(snapshot.stage) ? 1 : stageIndex(snapshot.stage);
+  const overall = Math.max(5, snapshot.progress_percent);
   return <motion.section className="progress-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-    <div className="progress-heading"><div><p className="eyebrow">Research in motion</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2><p>{snapshot.message}</p></div><div className="progress-dial" style={{ "--progress": `${overall * 3.6}deg` } as React.CSSProperties}><div><motion.strong key={overall} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>{overall}%</motion.strong><span>complete</span></div></div></div>
+    <div className="progress-heading"><div><p className="eyebrow">Research in motion · round {snapshot.current_research_round}</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2><p>{snapshot.message}</p></div><div className="progress-dial" style={{ "--progress": `${overall * 3.6}deg` } as React.CSSProperties}><div><motion.strong key={overall} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>{overall}%</motion.strong><span>complete</span></div></div></div>
     <ol className="stage-list">{stageOrder.map((stage, index) => <li className={index < activeStage ? "done" : index === activeStage ? "current" : ""} key={stage.key}><span className="stage-number">0{index + 1}</span><span className="stage-label">{stage.label}</span>{index === activeStage && <motion.i layoutId="active-stage" />}</li>)}</ol>
-    <div className="stance-grid"><StanceCard title="Evidence that supports" progress={snapshot.supporting} accent="warm" /><StanceCard title="Evidence that challenges" progress={snapshot.opposing} accent="cool" /></div>
-    <div className="run-footnote"><div><span>Current stage</span><strong>{readableStage(snapshot.stage)}</strong></div><div><span>Model calls</span><strong>{snapshot.model_calls_used}</strong></div><div><span>Retrievals</span><strong>{snapshot.retrieval_attempts_used}</strong></div><div><span>Known model cost</span><strong>{formatCost(snapshot.known_cost_subtotal_usd)}</strong></div><button type="button" onClick={onCancel}>Cancel run</button></div>
+    <div className={`stance-grid ${snapshot.research_controls.research_mode === "focused" ? "single" : ""}`}><StanceCard title="Evidence that supports" progress={snapshot.supporting} accent="warm" />{snapshot.research_controls.research_mode === "balanced" && <StanceCard title="Evidence that challenges" progress={snapshot.opposing} accent="cool" />}</div>
+    <div className="run-footnote"><div><span>Current stage</span><strong>{readableStage(snapshot.stage)}</strong></div><div><span>Model calls</span><strong>{snapshot.model_calls_used}</strong></div><div><span>Retrievals</span><strong>{snapshot.retrieval_attempts_used}</strong></div><div><span>Estimated model cost</span><strong>{formatCost(snapshot.known_cost_subtotal_usd)}</strong></div><button type="button" onClick={onCancel}>Cancel run</button></div>
   </motion.section>;
 }
 
@@ -244,10 +249,28 @@ function StanceCard({ title, progress, accent }: { title: string; progress: RunS
 
 function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => void }) {
   const released = snapshot.classification === "released";
+  const [trailOpen, setTrailOpen] = useState(false);
+  const [trail, setTrail] = useState<ResearchTrailItem[] | null>(null);
+  const [trailError, setTrailError] = useState<string | null>(null);
+  const openTrail = async () => {
+    setTrailOpen(true);
+    if (trail !== null) return;
+    try {
+      const result = await researchApi.trail(snapshot.run_id, snapshot.db_path);
+      setTrail(result.items);
+    } catch (error) {
+      setTrailError(error instanceof Error ? error.message : "The research trail could not be opened.");
+    }
+  };
   return <motion.section className={`result-view ${released ? "released" : "unreleased"}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <div className="result-masthead"><div><p className="eyebrow">{released ? "Validated release" : readableStage(snapshot.classification)}</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2></div><div className="release-stamp"><span>{released ? "Released" : "Not released"}</span><small>{snapshot.exit_code === null ? "—" : `Exit ${snapshot.exit_code}`}</small></div></div>
-    <div className="report-layout"><article className="brief-paper">{snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{snapshot.message}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{snapshot.message}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Known model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
+    <div className="report-layout"><article className="brief-paper">{snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{snapshot.message}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{snapshot.message}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
+    <AnimatePresence>{trailOpen && <ResearchTrailDrawer items={trail} error={trailError} onClose={() => setTrailOpen(false)} />}</AnimatePresence>
   </motion.section>;
+}
+
+function ResearchTrailDrawer({ items, error, onClose }: { items: ResearchTrailItem[] | null; error: string | null; onClose: () => void }) {
+  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel trail-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced · post-run</p><h2>Research trail</h2><p className="panel-intro">How results were ranked from provider metadata, then reordered after the page was acquired.</p>{error ? <p className="form-error">{error}</p> : items === null ? <p className="trail-empty">Opening the persisted trail…</p> : items.length === 0 ? <p className="trail-empty">This run predates discovery ranking, so it has no ranking trail.</p> : <div className="trail-list">{items.map((item, index) => <details className={`trail-item ${item.decision}`} key={`${item.research_round}-${item.stance}-${item.url}-${index}`}><summary><span className="trail-score">{item.score}</span><span><small>Round {item.research_round} · {item.provider} · {item.decision}</small><strong>{item.title || item.url}</strong></span></summary><p>{item.query_text}</p>{item.acquired_score !== null && <p><b>After acquisition:</b> {item.acquired_score}/100 · extraction order {item.extraction_rank}</p>}<a href={item.url} target="_blank" rel="noreferrer">Open source ↗</a><dl><div><dt>Relevance</dt><dd>{item.breakdown.relevance}</dd></div><div><dt>Intent</dt><dd>{item.breakdown.intent_match}</dd></div><div><dt>Directness</dt><dd>{item.breakdown.directness}</dd></div><div><dt>Metadata</dt><dd>{item.breakdown.metadata_completeness}</dd></div><div><dt>Access</dt><dd>{item.breakdown.likely_accessibility}</dd></div><div><dt>Novelty</dt><dd>{item.breakdown.source_novelty}</dd></div><div><dt>Penalties</dt><dd>{item.breakdown.penalties}</dd></div></dl>{item.acquired_breakdown && <dl className="acquired-breakdown"><div><dt>Readability</dt><dd>{item.acquired_breakdown.readability}</dd></div><div><dt>Claim terms</dt><dd>{item.acquired_breakdown.claim_term_coverage}</dd></div><div><dt>Specificity</dt><dd>{item.acquired_breakdown.document_specificity}</dd></div><div><dt>Evidence terms</dt><dd>{item.acquired_breakdown.evidence_language}</dd></div><div><dt>Page penalties</dt><dd>{item.acquired_breakdown.penalties}</dd></div></dl>}</details>)}</div>}</motion.aside></motion.div>;
 }
 
 function Brief({ text }: { text: string }) {
@@ -278,9 +301,9 @@ function HistoryView({ items, loading, onOpen }: { items: HistoryItem[]; loading
 }
 
 function ProviderSetup({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
-  const [mimo, setMimo] = useState(""); const [exa, setExa] = useState(""); const [firecrawl, setFirecrawl] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setSaving(true); setError(null); try { const result = await researchApi.saveCredentials({ mimo_api_key: mimo, exa_api_key: exa, ...(firecrawl ? { firecrawl_api_key: firecrawl } : {}) }); setMimo(""); setExa(""); setFirecrawl(""); onSaved(result.message); } catch (caught) { setError(caught instanceof Error ? caught.message : "The keys could not be saved."); } finally { setSaving(false); } };
-  return <Modal title="Connect the research providers" onClose={onClose}><p className="modal-intro">Keys go directly to your macOS Keychain through the local API. They are never returned to this page.</p><form className="setup-form" onSubmit={submit}><label>MiMo API key <input type="password" value={mimo} onChange={(event) => setMimo(event.target.value)} autoComplete="off" required /></label><label>Exa API key <input type="password" value={exa} onChange={(event) => setExa(event.target.value)} autoComplete="off" required /></label><label>Firecrawl API key <span>optional fallback</span><input type="password" value={firecrawl} onChange={(event) => setFirecrawl(event.target.value)} autoComplete="off" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action wide" type="submit" disabled={!mimo || !exa || saving}>{saving ? "Saving securely…" : "Save to Keychain"}<span>↗</span></button></form></Modal>;
+  const [mimo, setMimo] = useState(""); const [exa, setExa] = useState(""); const [openalex, setOpenalex] = useState(""); const [firecrawl, setFirecrawl] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setSaving(true); setError(null); try { const result = await researchApi.saveCredentials({ mimo_api_key: mimo, exa_api_key: exa, openalex_api_key: openalex, ...(firecrawl ? { firecrawl_api_key: firecrawl } : {}) }); setMimo(""); setExa(""); setOpenalex(""); setFirecrawl(""); onSaved(result.message); } catch (caught) { setError(caught instanceof Error ? caught.message : "The keys could not be saved."); } finally { setSaving(false); } };
+  return <Modal title="Connect the research providers" onClose={onClose}><p className="modal-intro">Keys go directly to your macOS Keychain through the local API. They are never returned to this page.</p><form className="setup-form" onSubmit={submit}><label>MiMo API key <input type="password" value={mimo} onChange={(event) => setMimo(event.target.value)} autoComplete="off" required /></label><label>Exa API key <input type="password" value={exa} onChange={(event) => setExa(event.target.value)} autoComplete="off" required /></label><label>OpenAlex API key <input type="password" value={openalex} onChange={(event) => setOpenalex(event.target.value)} autoComplete="off" required /></label><label>Firecrawl API key <span>optional fallback</span><input type="password" value={firecrawl} onChange={(event) => setFirecrawl(event.target.value)} autoComplete="off" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action wide" type="submit" disabled={!mimo || !exa || !openalex || saving}>{saving ? "Saving securely…" : "Save to Keychain"}<span>↗</span></button></form></Modal>;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -289,7 +312,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function AdvancedPanel({ settings, configuration, active, onSettings, onClose, onService }: { settings: Settings; configuration: Configuration | null; active: boolean; onSettings: (settings: Settings) => void; onClose: () => void; onService: (action: "start" | "stop") => void; }) {
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => onSettings({ ...settings, [key]: value });
-  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced</p><h2>Run settings</h2><p className="panel-intro">Technical limits and local runtime details. The safe defaults are usually enough.</p><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="1000000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>MiMo cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">The API and acquisition service bind only to this computer. Cancellation is cooperative; an active request may finish before the worker stops.</p></motion.aside></motion.div>;
+  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced</p><h2>Run settings</h2><p className="panel-intro">Research choices and local limits. The defaults are a focused seven-source run.</p><section className="research-options"><div className="option-copy"><strong>Counterevidence</strong><span>Add a separate challenging-evidence search. Off by default.</span></div><button type="button" role="switch" aria-checked={settings.includeCounterevidence} className={`switch ${settings.includeCounterevidence ? "on" : ""}`} disabled={active} onClick={() => update("includeCounterevidence", !settings.includeCounterevidence)}><i /></button><div className="option-copy"><strong>Sources to examine</strong><span>Take only the highest-ranked sources from each active side.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 7, 10] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="1000000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>MiMo cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Turning counterevidence off reduces actual use; it does not raise or lower any usage ceiling.</p></motion.aside></motion.div>;
 }
 
 function ServiceCard({ service, active, onService }: { service: ServiceDiagnostic | null; active: boolean; onService: (action: "start" | "stop") => void }) {

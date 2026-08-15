@@ -145,8 +145,9 @@ MVP-2A and MVP-2B historically used OpenRouter. MVP-7 retires that executable bo
 the current environment contains only direct-MiMo credentials. Historical records retain
 their original provider history. Live MVP claims are public/non-sensitive only.
 
-The authorized current stack uses required `MIMO_API_KEY` and `EXA_API_KEY`, optional
-`FIRECRAWL_API_KEY`, their configurable HTTPS base URLs, `MIMO_MODEL`, and optional
+The authorized current stack uses required `MIMO_API_KEY`, `EXA_API_KEY`, and
+`OPENALEX_API_KEY`, optional `FIRECRAWL_API_KEY`, their configurable HTTPS base URLs,
+`MIMO_MODEL`, and optional
 loopback `WIGOLO_BASE_URL`. Keys are read only from an explicitly supplied mapping and
 remain blank in `.env.example`. Direct MiMo replaces OpenRouter for the live CLI; Exa is
 metadata-only discovery, Wigolo is primary acquisition, and Firecrawl is only the narrow
@@ -190,11 +191,11 @@ app remains fixture-only; the Next.js live product reuses the established persis
 fingerprint, cancellation, and terminal contracts. Do not begin a phase after MVP-11
 without separate explicit direction. MLP-1 Simplified Live Experience and MLP-2 Local
 Product Experience are complete. MLP-3 Next.js Product Rebuild and its dependency set
-were explicitly authorized on 2026-08-14 and are complete. MLP-3 is the latest product-
-experience phase and preserves the completed MVP-11 research pipeline and release
-contracts. Its local
+were explicitly authorized on 2026-08-14 and are complete. MLP-4 is the latest completed
+product-experience phase and preserves the completed MVP-11 release contracts. Its local
 credential source remains macOS Keychain; `.env` and shell-profile loading remain
-forbidden.
+forbidden. MLP-4 Research Quality & OpenAlex Integration is complete; MLP-5 is not
+authorized.
 
 ## 8. Done Criteria Per Phase
 

@@ -368,6 +368,36 @@ def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -
     assert metadata.usage.cost_usd == expected
 
 
+def test_direct_mimo_uses_cache_aware_cost_when_provider_reports_cached_tokens() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _response(
+            request,
+            usage={
+                "prompt_tokens": 1_000,
+                "prompt_tokens_details": {"cached_tokens": 800},
+                "completion_tokens": 100,
+                "total_tokens": 1_100,
+            },
+        )
+
+    adapter = XiaomiMimoAdapter(
+        MimoConfig(api_key=SecretStr("mimo-secret-value")),
+        client=httpx.Client(
+            base_url="https://api.xiaomimimo.com/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+        max_call_cost_usd=Decimal("0.10"),
+        max_call_tokens=25_000,
+    )
+
+    adapter.generate(_request())
+    usage = adapter.last_call_metadata().usage
+
+    assert usage.cached_input_tokens == 800
+    assert usage.uncached_input_tokens == 200
+    assert usage.cost_usd == Decimal("0.000176880")
+
+
 @pytest.mark.parametrize(
     ("response_builder", "code"),
     [

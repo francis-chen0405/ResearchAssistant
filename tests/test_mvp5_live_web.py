@@ -124,7 +124,11 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
         return _terminal_result(str(kwargs["db_path"]), UUID(str(kwargs["run_id"])))
 
     controller = LiveResearchController(
-        environment={"MIMO_API_KEY": SECRET, "EXA_API_KEY": "exa-test-secret"},
+        environment={
+            "MIMO_API_KEY": SECRET,
+            "EXA_API_KEY": "exa-test-secret",
+            "OPENALEX_API_KEY": "openalex-test-secret",
+        },
         runner=runner,
     )
     first = controller.start(request)
@@ -164,7 +168,11 @@ def test_live_controller_passes_requested_research_controls_to_runner(tmp_path: 
         return _terminal_result(str(kwargs["db_path"]), UUID(str(kwargs["run_id"])))
 
     controller = LiveResearchController(
-        environment={"MIMO_API_KEY": SECRET, "EXA_API_KEY": "exa-test-secret"},
+        environment={
+            "MIMO_API_KEY": SECRET,
+            "EXA_API_KEY": "exa-test-secret",
+            "OPENALEX_API_KEY": "openalex-test-secret",
+        },
         runner=runner,
     )
     start = controller.start(request)
@@ -186,7 +194,11 @@ def test_worker_exception_is_redacted_from_ui_snapshot(tmp_path: Path) -> None:
         raise RuntimeError(f"Authorization: Bearer {SECRET}")
 
     controller = LiveResearchController(
-        environment={"MIMO_API_KEY": SECRET, "EXA_API_KEY": "exa-test-secret"},
+        environment={
+            "MIMO_API_KEY": SECRET,
+            "EXA_API_KEY": "exa-test-secret",
+            "OPENALEX_API_KEY": "openalex-test-secret",
+        },
         runner=runner,
     )
     result = controller.start(request)
@@ -402,8 +414,11 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
 def test_live_next_provider_setup_uses_password_fields() -> None:
     source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
 
-    assert all(label in source for label in ("MiMo API key", "Exa API key", "Firecrawl API key"))
-    assert source.count('type="password"') == 3
+    assert all(
+        label in source
+        for label in ("MiMo API key", "Exa API key", "OpenAlex API key", "Firecrawl API key")
+    )
+    assert source.count('type="password"') == 4
     assert "Keys go directly to your macOS Keychain" in source
     assert "They are never returned to this page" in source
 
@@ -416,6 +431,7 @@ def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> Non
         **os.environ,
         "MIMO_API_KEY": SECRET,
         "EXA_API_KEY": "exa-test-secret",
+        "OPENALEX_API_KEY": "openalex-test-secret",
         "MIMO_BASE_URL": "https://api.xiaomimimo.com/v1",
         "MIMO_MODEL": "mimo-v2.5-pro",
         "MVP4_DB_PATH": str(db_path),
