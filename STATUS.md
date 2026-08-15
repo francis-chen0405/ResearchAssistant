@@ -31,9 +31,10 @@ On 2026-08-15, the Keychain boundary was repaired after real launcher use expose
 the command-line `security` tool cannot receive a background web request's password
 prompt. Credential reads and writes now use Apple's Security framework in-process via
 the Python standard library. A disposable real-login-Keychain round trip passed and was
-removed; the complete offline suite still passes with 612 tests and 2 expected skips.
+removed; the complete offline suite now passes with 613 tests and 2 expected skips.
 Secrets remain absent from command arguments, logs, responses, browser storage, and
-repository files.
+repository files. The macOS framework availability gate recognizes its system symlink,
+whose binary may live only in Apple's shared dynamic-linker cache.
 
 ## Completed research-pipeline state — 2026-08-11
 

@@ -8,6 +8,9 @@
 - Keep secrets out of command arguments, URLs, API responses, browser persistence, logs,
   SQLite, repository files, and child-process environments. Use only Python's standard
   library; add no dependency.
+- Accept the macOS Security framework's system symlink as the availability signal; on
+  current macOS the loadable binary may exist only in Apple's shared dynamic-linker cache
+  and therefore does not pass a regular-file check.
 - Verify the native boundary with a disposable login-Keychain save/read round trip and
   remove the diagnostic entry immediately afterward.
 

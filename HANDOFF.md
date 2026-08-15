@@ -30,7 +30,9 @@ password prompt with direct in-process calls to Apple's Security framework. The 
 successfully completed and cleaned up a disposable real-login-Keychain save/read round
 trip. Restart the launcher after pulling this state so the Python API loads the repaired
 credential module; previously failed saves must be entered again because they were never
-persisted. Full regression remains 612 passed with 2 expected skips.
+persisted. The availability check uses the framework symlink rather than requiring its
+shared-cache binary to appear as a regular file. Full regression is 613 passed with
+2 expected skips.
 
 ## Completed research-pipeline state — 2026-08-11
 
