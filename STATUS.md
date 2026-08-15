@@ -1,26 +1,39 @@
 # Status
 
-## Current project state — 2026-08-14
+## Current project state — 2026-08-15
 
-MLP-2 Local Product Experience is complete. MLP-1 remains the completed simplified-form
-baseline: depth, tone, length, and focus inputs stay absent and website runs continue to
-use frozen `DEFAULT_RESEARCH_CONTROLS`. MLP-2 adds a sparse graphite/blue local-product
-layout, top-level Research, History, Provider setup, and Advanced actions, and moves only
-operational budgets, database/run identity, service controls, and diagnostics into the
-Advanced panel.
+MLP-3 Next.js Product Rebuild is complete. The live product is now the clean-slate
+**Quiet Momentum** Next.js application in `web/`, backed by the strict loopback-only
+FastAPI adapter in `frontend/api.py`. It includes new research, animated persisted
+progress, terminal reports, released-brief download and hash display, SQLite history,
+transient Keychain provider setup, and an Advanced drawer for budgets, run/database
+identity, and the owned Wigolo service. The retired live Streamlit page is gone;
+Streamlit remains only for fixture replay and the read-only Evidence Browser.
 
-The launcher now starts the website without per-launch native key prompts. Provider
-setup accepts transient password inputs on loopback, stores MiMo, Exa, and optional
-Firecrawl values in the user's macOS login Keychain, and loads them into the local server
-process on later launches. Keychain writes pass secrets through standard input, never
-arguments; secrets remain excluded from URLs, SQLite, logs, downloads, child processes,
-and repository files. Explicit environment configuration remains supported.
+The one-click launcher now starts the local API and production Next.js server, opens
+`127.0.0.1:3000`, and stops only processes it owns. The browser never accesses SQLite or
+providers directly, and provider secrets remain excluded from API responses, URLs,
+browser persistence, logs, SQLite, repository files, downloads, and child-process
+arguments/environments. Website runs still use frozen `DEFAULT_RESEARCH_CONTROLS` and
+the completed MVP-11 pipeline remains unchanged.
 
-Verification: MLP-2/live focused tests passed (26); the complete offline suite passed
-(611 with 2 expected opt-in skips); repository-wide Ruff lint and format checks,
-launcher syntax, `git diff --check`, and rendered desktop/390px browser inspection
-passed. No dependency, migration, provider call, budget/release-policy change, account/
-email system, cloud storage, or historical rewrite was added.
+Approved dependencies resolved to FastAPI 0.141.1, Uvicorn 0.51.0, Next.js 16.3.1,
+React/React DOM 19.2.8, Motion 12.43.0, TypeScript 5.9.3, and ESLint 9.39.5. Verification:
+MLP-3/live focused tests passed (29); the complete offline suite passed (612 with 2
+expected opt-in skips); repository-wide Ruff lint/format, frontend lint and optimized
+production build, launcher syntax, `git diff --check`, and real-browser desktop/390px
+inspection passed. The browser pass covered setup, Advanced, history, released reports,
+download/hash controls, and horizontal-overflow safety. No database migration, provider
+call or spending, research/release-policy change, account system, cloud storage, hosting,
+telemetry, or historical rewrite was added. No later phase is authorized.
+
+On 2026-08-15, the Keychain boundary was repaired after real launcher use exposed that
+the command-line `security` tool cannot receive a background web request's password
+prompt. Credential reads and writes now use Apple's Security framework in-process via
+the Python standard library. A disposable real-login-Keychain round trip passed and was
+removed; the complete offline suite still passes with 612 tests and 2 expected skips.
+Secrets remain absent from command arguments, logs, responses, browser storage, and
+repository files.
 
 ## Completed research-pipeline state — 2026-08-11
 

@@ -1,26 +1,36 @@
 # Handoff
 
-## Current project state — 2026-08-14
+## Current project state — 2026-08-15
 
-MLP-2 Local Product Experience is complete. The live site now uses a clean graphite,
-white, electric-blue, and violet layout with compact navigation, an animated research-
-signal stage, and a centered claim-first research surface,
-a separate History view, a loopback Provider setup dialog, and an Advanced panel for
-budgets, database/run identity, service lifecycle, provider status, and diagnostics. The
-MLP-1 removal of depth/tone/length/focus inputs remains intact; website runs still pass
-frozen `DEFAULT_RESEARCH_CONTROLS` and preserve all historical fingerprints.
+MLP-3 Next.js Product Rebuild is complete. `web/` is the sole live product surface and
+uses the independent warm editorial **Quiet Momentum** design. New research, meaningful
+progress motion, terminal/released reports, persisted history, provider setup, brief
+download/hash controls, and Advanced run/service settings all call the typed local API in
+`frontend/api.py`; SQLite and `LiveResearchController` remain authoritative. The live
+Streamlit page was retired. `frontend/streamlit_app.py` remains fixture-only and
+`frontend/evidence_browser_app.py` remains a separate read-only inspection tool.
 
-`credential_store.py` defines strict secret-safe provider credentials and macOS login-
-Keychain persistence. `/usr/bin/security` receives saved values through standard input,
-not argv. `Launch ResearchAssistant.command` no longer asks for keys; the server loads
-saved credentials or directs the user to Provider setup. Explicit environment keys
-remain compatible. There is no email/account flow, `.env` loading, cloud storage,
-dependency, database migration, provider, or research/release-policy change.
+`Launch ResearchAssistant.command` starts the loopback API on 8765 and the built Next.js
+site on 3000, loads saved Keychain credentials inside Python, and cleans up only owned
+processes. Install the approved Python dependencies, then run `pnpm install` and
+`pnpm run build` in `web/` before using the launcher. Resolved versions are FastAPI
+0.141.1, Uvicorn 0.51.0, Next.js 16.3.1, React/React DOM 19.2.8, Motion 12.43.0,
+TypeScript 5.9.3, and ESLint 9.39.5.
 
-Regression proof is in `tests/test_mlp2_credentials.py` and the MLP-2 Streamlit tests in
-`tests/test_mvp5_live_web.py`. Focused tests passed (26), the full offline suite passed
-(611 with 2 expected opt-in skips), Ruff lint and format, launcher syntax,
-`git diff --check`, and rendered desktop/390px browser inspection passed.
+Regression proof is in `tests/test_mlp3_api.py`, the migrated live-product coverage in
+`tests/test_mvp5_live_web.py`, and `tests/test_mlp2_credentials.py`. Focused tests passed
+(29); the full offline suite passed (612 with 2 expected opt-in skips); Ruff lint/format,
+frontend lint and production build, launcher syntax, `git diff --check`, and real-browser
+desktop/390px inspection passed. Existing released history opened unchanged. No database
+migration, live provider call, spending, hosted service, or research/release-policy
+change occurred. No phase after MLP-3 is authorized.
+
+Keychain maintenance on 2026-08-15 replaced the background-incompatible command-line
+password prompt with direct in-process calls to Apple's Security framework. The new path
+successfully completed and cleaned up a disposable real-login-Keychain save/read round
+trip. Restart the launcher after pulling this state so the Python API loads the repaired
+credential module; previously failed saves must be entered again because they were never
+persisted. Full regression remains 612 passed with 2 expected skips.
 
 ## Completed research-pipeline state — 2026-08-11
 

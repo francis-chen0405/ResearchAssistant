@@ -85,11 +85,10 @@ repairs the legacy boundary-smoke example, and makes package wording phase-neutr
 contradiction-audit remediation sequence, MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 are
 complete. MVP-9 Verified Quote Selection & Deterministic Assembly, MVP-10 Evidence
 Portfolio & Trail, and MVP-11 Adaptive Research Expansion & Cost Control are complete.
-MVP-11 is the latest completed research-pipeline phase. MLP-1 Simplified Live Experience
-is complete. MLP-2 Local Product Experience is the active user-authorized product-
-experience phase: it retains the simplified form, adds a restrained local-product
-layout, stores provider credentials in macOS Keychain, and moves operational settings
-behind Advanced mode while preserving every research/release invariant.
+MVP-11 is the latest completed research-pipeline phase. MLP-1 Simplified Live Experience,
+MLP-2 Local Product Experience, and MLP-3 Next.js Product Rebuild are complete. MLP-3 is
+the latest product-experience phase and preserves every completed research and release
+invariant. No later phase is authorized.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -168,12 +167,34 @@ policy failures.
 
 MLP-2 permits provider keys to enter the loopback-only page through transient password
 widgets. They are immediately stored in the user's macOS login Keychain and applied only
-to the local Streamlit server process; they never enter URLs, SQLite, logs, downloads,
+to the local server process; they never enter URLs, SQLite, logs, downloads,
 provider child-process arguments, or repository files. The launcher does not request or
 transport keys. Explicit process-environment configuration remains supported, and the
 application does not load `.env` files or shell profiles.
 Cooperative cancellation, fingerprints, budgets, restart compatibility, terminal
 semantics, and human review remain exactly as released in MVP-4.
+
+### MLP-3 Next.js Product Boundary
+
+MLP-3 makes the Next.js App Router application in `web/` the live product. Its browser
+code owns presentation, interaction, local polling, responsive layout, and meaningful
+motion only. It has no direct provider, process, filesystem, Keychain, or SQLite access.
+
+The strict FastAPI adapter in `frontend/api.py` binds to `127.0.0.1:8765`, rejects
+non-loopback hosts and nonlocal browser origins, disables public API documentation, and
+serializes strict Pydantic models only at the HTTP boundary. It delegates all run,
+history, cancellation, service, and credential behavior to the existing typed Python
+services. SQLite remains the authoritative run state, and the browser never invents
+provider progress before persistence exposes it.
+
+Credentials enter transient password fields and cross only the loopback API boundary.
+The adapter passes them to the macOS Keychain boundary, which calls Apple's Security
+framework in-process so a background request never needs a terminal password prompt and
+no secret enters process arguments. It then applies them to its own explicit process
+environment and returns status without returning a secret. Keys
+remain forbidden in URLs, browser persistence, logs, SQLite, downloads, repository files,
+and child-process arguments. The Streamlit dependency remains solely for the fixture
+replay and read-only evidence utilities; it is not part of the live-product path.
 
 ### MVP-6.4 Evidence Density Policy
 

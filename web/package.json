@@ -1,0 +1,26 @@
+{
+  "name": "researchassistant-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "motion": ">=12 <13",
+    "next": ">=16 <17",
+    "react": ">=19.2 <20",
+    "react-dom": ">=19.2 <20"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": ">=9 <10",
+    "eslint-config-next": ">=16 <17",
+    "typescript": ">=5.9 <6"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

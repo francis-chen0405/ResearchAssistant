@@ -1,5 +1,41 @@
 # Decisions
 
+## 2026-08-15 - MLP-3 Keychain Save Repair
+
+- Replace the command-line `security` password prompt with direct in-process calls to
+  Apple's Security framework. A background API request has no interactive terminal from
+  which the command-line tool can safely collect its prompted password.
+- Keep secrets out of command arguments, URLs, API responses, browser persistence, logs,
+  SQLite, repository files, and child-process environments. Use only Python's standard
+  library; add no dependency.
+- Verify the native boundary with a disposable login-Keychain save/read round trip and
+  remove the diagnostic entry immediately afterward.
+
+## 2026-08-14 - MLP-3 Next.js Product Rebuild
+
+- Replace the live Streamlit product experience with a clean-slate Next.js App Router
+  application while preserving the established Python research controller and SQLite
+  authority.
+- Treat MLP-2 as behavior reference material only. Do not copy its visual system,
+  layout, components, CSS, or page composition into MLP-3.
+- Use the Quiet Momentum direction: editorial restraint, warm neutrals, one signal
+  accent, and purposeful state-driven motion without WebGL, custom cursors, decorative
+  floating cards, scroll choreography, sound, particles, or a launch sequence.
+- Put a strict loopback-only Python HTTP adapter between the browser and the existing
+  controller, service manager, and Keychain boundaries. Never expose provider secrets.
+- Keep the old live Streamlit page during parity verification. The user's later explicit
+  direction to update everything that relied on Streamlit authorizes retiring it after
+  the Next.js product passes acceptance.
+- Hold implementation at the dependency boundary until the exact Python and JavaScript
+  dependency proposal in the canonical MLP-3 plan receives explicit user approval.
+- The user approved that dependency set on 2026-08-14 and expanded MLP-3 to make Next.js
+  the documented and launched live product everywhere. Streamlit remains only for the
+  fixture replay tool, read-only Evidence Browser, and accurate migration history.
+- MLP-3 completed with the approved dependencies, strict typed loopback adapter, one-click
+  launcher, migrated live-product tests, and clean-slate Quiet Momentum UI. No pipeline,
+  schema, provider, budget, release-policy, cloud, account, telemetry, or hosting change
+  was made.
+
 ## 2026-08-14 - MLP-2 Local Product Experience
 
 - Use the supplied Quin screenshot only as a visual reference for sparse spacing,

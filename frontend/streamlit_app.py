@@ -191,7 +191,8 @@ def main() -> None:
     st.title("Fixture-Only Pipeline")
     st.warning(
         "Offline fixtures only. This page does not use Xiaomi MiMo, Wigolo, live web search, "
-        "or provider credentials. Use `frontend/live_app.py` for live research."
+        "or provider credentials. Use the Next.js product at `http://127.0.0.1:3000` "
+        "for live research."
     )
 
     fixture_options = discover_fixture_runs()

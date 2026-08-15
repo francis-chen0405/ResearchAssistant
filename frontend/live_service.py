@@ -173,7 +173,7 @@ class _ActiveRun:
 
 
 class LiveResearchController:
-    """Keep Streamlit reruns responsive while SQLite remains authoritative."""
+    """Keep local website requests responsive while SQLite remains authoritative."""
 
     def __init__(
         self,

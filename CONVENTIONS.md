@@ -186,13 +186,15 @@ snapshot provenance persistence, legacy smoke-example repair, and phase-neutral 
 metadata. MVP-10 adds immutable source-family and portfolio-trail inspection; MVP-11
 adds cumulative-budget-governed Research Governor rounds with an absolute maximum of
 three. The contradiction-audit remediation sequence is complete. The original Streamlit
-app remains fixture-only; the separate live app reuses the established persistence,
+app remains fixture-only; the Next.js live product reuses the established persistence,
 fingerprint, cancellation, and terminal contracts. Do not begin a phase after MVP-11
-without separate explicit direction. MLP-1 Simplified Live Experience is complete.
-MLP-2 Local Product Experience was explicitly authorized on 2026-08-14 and is the active
-product-experience phase; it must preserve the completed MVP-11 research pipeline and
-release contracts. Its local credential source is macOS Keychain, loaded into the
-Streamlit server-process environment; `.env` and shell-profile loading remain forbidden.
+without separate explicit direction. MLP-1 Simplified Live Experience and MLP-2 Local
+Product Experience are complete. MLP-3 Next.js Product Rebuild and its dependency set
+were explicitly authorized on 2026-08-14 and are complete. MLP-3 is the latest product-
+experience phase and preserves the completed MVP-11 research pipeline and release
+contracts. Its local
+credential source remains macOS Keychain; `.env` and shell-profile loading remain
+forbidden.
 
 ## 8. Done Criteria Per Phase
 

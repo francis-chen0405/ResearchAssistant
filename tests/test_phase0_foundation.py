@@ -32,11 +32,13 @@ def test_pyproject_declares_phase_dependencies() -> None:
 
     assert pyproject["project"]["requires-python"] == ">=3.11,<3.13"
     assert pyproject["project"]["dependencies"] == [
+        "fastapi>=0.115,<1.0",
         "httpx>=0.27,<1.0",
         "markdown-it-py>=3.0,<4.0",
         "pydantic>=2.0,<3.0",
         "pypdf>=5.0,<6.0",
         "streamlit>=1.37,<2.0",
+        "uvicorn>=0.30,<1.0",
     ]
     assert pyproject["project"]["optional-dependencies"]["dev"] == [
         "pytest>=8.0,<9.0",

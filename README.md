@@ -7,8 +7,8 @@ that a released factual sentence must exactly match a separately reviewed statem
 Ledger.
 
 The research pipeline is complete through MVP-11 Adaptive Research Expansion & Cost
-Control (Research Governor). MLP-1 Simplified Live Experience is complete, and MLP-2
-Local Product Experience is the active product-experience phase.
+Control (Research Governor). MLP-1 through MLP-3 are complete; MLP-3 Next.js Product
+Rebuild is the latest product-experience phase.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -48,6 +48,12 @@ retain their typed control metadata for compatibility.
 MLP-2 gives that simplified flow a clean local-product layout. Provider setup saves
 MiMo, Exa, and optional Firecrawl keys to macOS Keychain; Advanced mode contains the
 technical run and local-service settings.
+
+MLP-3 replaces the live Streamlit product with the clean-slate **Quiet Momentum**
+Next.js experience. A strict loopback-only FastAPI adapter delegates to the existing
+Python controller, so SQLite remains authoritative and the completed evidence, budget,
+cancellation, fingerprint, and deterministic-release contracts are unchanged. Streamlit
+remains only for the separate fixture replay and evidence-inspection utilities.
 
 ## How the system works
 
@@ -161,7 +167,8 @@ agents/                 Planner, Researchers, Analyst, Reviewer, Synthesizer, Re
 providers/              Search, scraper, and LLM Protocols and routing contracts
 prompts/                Versioned structured prompts for all LLM stages
 evaluations/            Phase 10 corpus, evaluator, CLI runner, and generated output location
-frontend/               Separate fixture-only and live Streamlit applications
+frontend/               Typed live API/controller plus fixture and evidence utilities
+web/                    Next.js live product and Motion interaction system
 tests/                  Phase 0-10 tests, frontend tests, fixtures, and adversarial cases
 models.py               Strict Pydantic handoff and persistence models
 store.py                SQLite schema, migrations, and typed persistence operations
@@ -175,7 +182,8 @@ STATUS.md / HANDOFF.md   Chronological implementation and verification records
 
 ## Installation
 
-Python 3.11 and 3.12 are supported. Live Wigolo acquisition additionally requires Node.js 20+ and
+Python 3.11 and 3.12 are supported. The live product requires Node.js 20.9+ and pnpm; live
+Wigolo acquisition additionally requires Node.js 20+ and
 pinned `wigolo@0.2.1` on loopback. Exa search requires an API key; Firecrawl fallback is optional.
 MVP-5 can manage the local Wigolo service from the website. From the repository root, create a
 virtual environment and install the declared runtime and development dependencies:
@@ -185,6 +193,10 @@ python3.11 -m venv .venv
 PATH="$PWD/.venv/bin:$PATH"
 python -m pip install -r requirements.txt
 python -m pip install "pytest>=8.0,<9.0" "ruff>=0.8,<1.0"
+cd web
+pnpm install
+pnpm run build
+cd ..
 ```
 
 If your compatible executable has another name, such as `python3.12`, use it in the first command.
@@ -196,8 +208,8 @@ on `PATH`, so the commands below include that step.
 
 ### Environment variables
 
-No environment variable or API key is required for the fixture pipeline, Streamlit frontend,
-offline tests, or normal Phase 10 evaluation. The live CLI reads configuration only from the
+No environment variable or API key is required for the fixture pipeline, fixture-only Streamlit
+utilities, offline tests, or normal Phase 10 evaluation. The live CLI reads configuration only from the
 explicit process environment; it never loads `.env` automatically.
 
 The live CLI requires `MIMO_API_KEY` and `EXA_API_KEY`. `FIRECRAWL_API_KEY` is optional; when it is
@@ -261,15 +273,16 @@ the final brief when available, validation errors, hashes, artifact counts, and 
 
 ### Launch the live website on macOS
 
-After first-time installation, double-click `Launch ResearchAssistant.command`. The
-launcher opens the live page at
-`127.0.0.1:8501`; its Terminal window/local server must remain running while the page is open.
+After first-time installation and the one-time website build above, double-click
+`Launch ResearchAssistant.command`. The launcher starts the loopback-only Python API and
+production Next.js server, then opens `127.0.0.1:3000`. Its Terminal window and local
+processes must remain running while the page is open.
 Use **Provider setup** in the page to enter MiMo, Exa, and optional Firecrawl keys once;
 the app saves them in the user's macOS login Keychain and reloads them on later launches.
 
 Advanced mode checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
 It never treats a listener or child PID as proof of health and stops only its own process group.
-The page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path.
+The Next.js page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path.
 Depth, tone, report-length, and focus settings are intentionally not shown; website runs use the
 existing safe internal defaults. It
 shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,

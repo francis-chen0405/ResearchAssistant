@@ -12,17 +12,19 @@ from time import monotonic, sleep
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 import frontend.service_manager as service_manager_module
 from cli import CLIExitCode
+from frontend.api import ApiRuntime, create_app
 from frontend.live_service import (
     LiveResearchController,
     LiveRunRequest,
     exit_code_for_status,
 )
 from frontend.security import redact_text
-from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
+from frontend.service_manager import WigoloServiceManager
 from models import (
     PresentationTone,
     ReportLength,
@@ -356,151 +358,57 @@ def test_stop_never_kills_unowned_listener(monkeypatch: pytest.MonkeyPatch) -> N
     assert killed == []
 
 
-def test_live_streamlit_renders_friendly_missing_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from streamlit.testing.v1 import AppTest
+def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
+    source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
 
-    monkeypatch.delenv("MIMO_API_KEY", raising=False)
-    monkeypatch.delenv("EXA_API_KEY", raising=False)
-    monkeypatch.setenv("RESEARCHASSISTANT_DISABLE_KEYCHAIN", "1")
-    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-
-    assert not app.exception
-    assert any("not configured" in error.value for error in app.error)
-    assert any("Human review is required" in caption.value for caption in app.caption)
-    assert all(SECRET not in element.value for element in (*app.error, *app.caption))
-
-
-def test_live_streamlit_acknowledgement_does_not_deadlock_submit_button(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    monkeypatch.setenv("MIMO_API_KEY", SECRET)
-    monkeypatch.setenv("EXA_API_KEY", "exa-test-secret")
-    monkeypatch.setattr(
-        WigoloServiceManager,
-        "probe",
-        lambda self: ServiceDiagnostic(
-            state="healthy",
-            wigolo_ready=True,
-            searxng_readiness="configured",
-            message="Pinned Wigolo 0.2.1 is healthy.",
-        ),
+    assert all(
+        expected in source
+        for expected in (
+            "Research a claim.",
+            "See the evidence.",
+            "History",
+            "Provider setup",
+            "Advanced",
+            "Begin research",
+            "Run settings",
+            "Token ceiling",
+            "MiMo cost ceiling",
+            "Call ceiling",
+            "Run ID",
+            "SQLite database",
+        )
     )
-    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-    start = next(item for item in app.button if item.label == "Begin research")
-
-    assert not start.disabled
-    start.click().run()
-    assert any("confirm" in error.value.lower() for error in app.error)
-
-
-def test_live_streamlit_omits_research_controls(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    monkeypatch.setenv("MIMO_API_KEY", SECRET)
-    monkeypatch.setenv("EXA_API_KEY", "exa-test-secret")
-    monkeypatch.setattr(
-        WigoloServiceManager,
-        "probe",
-        lambda self: ServiceDiagnostic(
-            state="healthy",
-            wigolo_ready=True,
-            searxng_readiness="configured",
-            message="Pinned Wigolo 0.2.1 is healthy.",
-        ),
-    )
-
-    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-    labels = {
-        "Research depth",
-        "Presentation tone",
-        "Report length",
-        "Focus: geographic area (optional)",
-        "Focus: timeframe (optional)",
-        "Focus: population (optional)",
-        "Focus: analytical lens (optional)",
-    }
-    rendered_labels = {item.label for item in (*app.selectbox, *app.text_input)}
-
-    assert not app.exception
-    assert labels.isdisjoint(rendered_labels)
-    assert "Research controls" not in (ROOT / "frontend" / "live_app.py").read_text(
-        encoding="utf-8"
-    )
-
-
-def test_live_streamlit_uses_clean_primary_layout_and_reveals_advanced_mode(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    monkeypatch.setenv("MIMO_API_KEY", SECRET)
-    monkeypatch.setenv("EXA_API_KEY", "exa-test-secret")
-    monkeypatch.setattr(
-        WigoloServiceManager,
-        "probe",
-        lambda self: ServiceDiagnostic(
-            state="healthy",
-            wigolo_ready=True,
-            searxng_readiness="configured",
-            message="Pinned Wigolo 0.2.1 is healthy.",
-        ),
-    )
-
-    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-    button_labels = {item.label for item in app.button}
-    markdown = "\n".join(item.value for item in app.markdown)
-
-    assert not app.exception
-    assert {"History", "Provider setup", "Advanced", "Begin research"} <= button_labels
-    assert "Research the claim" in markdown
-    source = (ROOT / "frontend" / "live_app.py").read_text(encoding="utf-8")
+    assert "disabled={!claim.trim() || !acknowledged || busy}" in source
     assert all(
         removed not in source
-        for removed in ("nature-window", "nature-sun", "nature-hill", "nature-path")
+        for removed in (
+            "Research depth",
+            "Presentation tone",
+            "Report length",
+            "Focus: geographic area",
+            "Focus: timeframe",
+            "Focus: population",
+            "Focus: analytical lens",
+            "nature-window",
+            "nature-sun",
+            "nature-hill",
+            "nature-path",
+            "Research principles",
+            "Human review still matters",
+        )
     )
-    assert all(item.value != "Local services" for item in app.subheader)
-
-    next(item for item in app.button if item.label == "Advanced").click().run()
-
-    assert not app.exception
-    assert any(item.value == "Run settings" for item in app.subheader)
-    assert any(item.value == "Local services" for item in app.subheader)
-    assert {"MiMo cost ceiling (USD)", "SQLite database", "Run ID (optional)"} <= {
-        item.label for item in app.text_input
-    }
-    assert {"Token ceiling", "Physical MiMo call ceiling"} <= {
-        item.label for item in app.number_input
-    }
 
 
-def test_live_streamlit_provider_setup_uses_password_fields(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from streamlit.testing.v1 import AppTest
+def test_live_next_provider_setup_uses_password_fields() -> None:
+    source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
 
-    monkeypatch.delenv("MIMO_API_KEY", raising=False)
-    monkeypatch.delenv("EXA_API_KEY", raising=False)
-    monkeypatch.setenv("RESEARCHASSISTANT_DISABLE_KEYCHAIN", "1")
-    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-
-    next(item for item in app.button if item.label == "Provider setup").click().run()
-
-    assert not app.exception
-    fields = {item.label: item for item in app.text_input}
-    assert {"MiMo API key", "Exa API key", "Firecrawl API key (optional)"} <= fields.keys()
-    assert all(field.proto.type == field.proto.PASSWORD for field in fields.values())
+    assert all(label in source for label in ("MiMo API key", "Exa API key", "Firecrawl API key"))
+    assert source.count('type="password"') == 3
+    assert "Keys go directly to your macOS Keychain" in source
+    assert "They are never returned to this page" in source
 
 
-def test_mocked_released_run_reconnects_in_live_streamlit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from streamlit.testing.v1 import AppTest
+def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> None:
 
     db_path = tmp_path / "mocked-live-web.sqlite3"
     run_id = uuid4()
@@ -542,22 +450,27 @@ def test_mocked_released_run_reconnects_in_live_streamlit(
         "utf-8", errors="ignore"
     )
 
-    snapshot = LiveResearchController(environment={}).snapshot(db_path, run_id)
+    controller = LiveResearchController(environment={})
+    snapshot = controller.snapshot(db_path, run_id)
     assert snapshot.supporting.model_attempts > 0
     assert snapshot.opposing.model_attempts > 0
+    runtime = ApiRuntime(
+        controller=controller,
+        services=WigoloServiceManager(base_environment={}),
+        environment={},
+    )
+    app = create_app(
+        runtime,
+        load_keychain_on_start=False,
+        allowed_hosts=("testserver",),
+        allowed_origins=("http://127.0.0.1:3000",),
+    )
+    response = TestClient(app).get(f"/api/research/{run_id}", params={"db_path": str(db_path)})
 
-    monkeypatch.delenv("MIMO_API_KEY", raising=False)
-    monkeypatch.setenv("RESEARCHASSISTANT_DISABLE_KEYCHAIN", "1")
-    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-    next(item for item in app.button if item.label == "History").click().run()
-    history_input = next(item for item in app.text_input if item.label == "History database")
-    history_input.input(str(db_path)).run()
-    open_button = next(item for item in app.button if item.label == "Open run")
-    open_button.click().run()
-
-    assert not app.exception
-    assert any("Released after deterministic validation" in item.value for item in app.success)
-    assert any(item.value == "Validated final brief" for item in app.subheader)
-    assert any(item.label == "Download brief" for item in app.get("download_button"))
-    rendered = "\n".join(item.value for item in (*app.error, *app.warning, *app.success))
-    assert SECRET not in rendered
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["classification"] == "released"
+    assert "Released after deterministic validation" in payload["message"]
+    assert payload["final_brief"]
+    assert payload["rendered_brief_hash"]
+    assert SECRET not in response.text

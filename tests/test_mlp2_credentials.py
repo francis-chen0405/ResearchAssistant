@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import subprocess
-from collections.abc import Sequence
-
 import pytest
 from pydantic import ValidationError
 
@@ -32,58 +29,54 @@ def test_provider_credentials_are_strict_and_secret_safe() -> None:
         )
 
 
-def test_keychain_save_never_places_secrets_in_command_arguments(
+def test_keychain_availability_accepts_the_macos_shared_cache_framework_link(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[tuple[str, ...], str | None]] = []
-
-    def fake_run(
-        command: Sequence[str],
-        *,
-        input: str | None,
-        text: bool,
-        capture_output: bool,
-        timeout: int,
-        check: bool,
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append((tuple(command), input))
-        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
-
     monkeypatch.setattr(credential_store.sys, "platform", "darwin")
-    monkeypatch.setattr(credential_store.subprocess, "run", fake_run)
+    monkeypatch.setattr(credential_store.os.path, "lexists", lambda path: True)
+
+    assert credential_store._keychain_available() is True
+
+
+def test_keychain_save_uses_the_in_process_native_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def fake_write(environment_name: str, secret: str) -> None:
+        calls.append((environment_name, secret))
+
+    monkeypatch.setattr(credential_store, "_keychain_available", lambda: True)
+    monkeypatch.setattr(credential_store, "_write_keychain_secret", fake_write)
     credentials = ProviderCredentials(mimo_api_key="mimo-secret", exa_api_key="exa-secret")
 
     save_credentials(credentials)
 
-    assert len(calls) == 2
-    assert all(command[-1] == "-w" for command, _ in calls)
-    assert all("secret" not in " ".join(command) for command, _ in calls)
-    assert {password for _, password in calls} == {"mimo-secret\n", "exa-secret\n"}
+    assert calls == [
+        ("MIMO_API_KEY", "mimo-secret"),
+        ("EXA_API_KEY", "exa-secret"),
+    ]
+    source = credential_store.PROJECT_ROOT.joinpath("credential_store.py").read_text(
+        encoding="utf-8"
+    )
+    assert "subprocess.run" not in source
 
 
 def test_keychain_load_returns_typed_credentials_without_logging_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     values = {
-        "ResearchAssistant.MIMO_API_KEY": "mimo-secret\n",
-        "ResearchAssistant.EXA_API_KEY": "exa-secret\n",
-        "ResearchAssistant.FIRECRAWL_API_KEY": "firecrawl-secret\n",
+        "MIMO_API_KEY": "mimo-secret",
+        "EXA_API_KEY": "exa-secret",
+        "FIRECRAWL_API_KEY": "firecrawl-secret",
     }
 
-    def fake_run(
-        command: Sequence[str],
-        *,
-        input: str | None,
-        text: bool,
-        capture_output: bool,
-        timeout: int,
-        check: bool,
-    ) -> subprocess.CompletedProcess[str]:
-        service = command[command.index("-s") + 1]
-        return subprocess.CompletedProcess(command, 0, stdout=values[service], stderr="")
-
-    monkeypatch.setattr(credential_store.sys, "platform", "darwin")
-    monkeypatch.setattr(credential_store.subprocess, "run", fake_run)
+    monkeypatch.setattr(credential_store, "_keychain_available", lambda: True)
+    monkeypatch.setattr(
+        credential_store,
+        "_read_secret",
+        lambda environment_name: values[environment_name],
+    )
 
     credentials = load_saved_credentials()
 
@@ -99,3 +92,7 @@ def test_launcher_defers_missing_credentials_to_local_provider_setup() -> None:
 
     assert "display dialog" not in launcher
     assert "Enter MIMO_API_KEY" not in launcher
+    assert "frontend.api" in launcher
+    assert 'next" start' in launcher
+    assert "127.0.0.1:3000" in launcher
+    assert "streamlit" not in launcher.lower()

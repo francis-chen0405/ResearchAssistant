@@ -5,3 +5,7 @@ live-smoke-output/
 .researchassistant/
 .DS_Store
 .coverage
+.pnpm-store/
+web/.next/
+web/node_modules/
+web/next-env.d.ts
