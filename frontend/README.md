@@ -5,11 +5,11 @@ website.
 
 ## Live research website
 
-On macOS, double-click `Launch ResearchAssistant.command` in the repository root. Native
-hidden-input dialogs request required `MIMO_API_KEY` and `EXA_API_KEY` values when absent,
-plus an optional `FIRECRAWL_API_KEY`. Values last only for that launch. The launcher
-starts the local Streamlit server and opens the browser; its Terminal window/server
-process must remain running while the website is open.
+On macOS, double-click `Launch ResearchAssistant.command` in the repository root. The
+launcher starts the local Streamlit server and opens the browser; its Terminal window/
+server process must remain running while the website is open. Use the page's Provider
+setup action once to save required MiMo and Exa keys, plus optional Firecrawl, in the
+user's macOS login Keychain.
 
 The page uses Exa Search `auto` for discovery, can start and health-check pinned Wigolo
 `0.2.1` for primary acquisition, and optionally falls back to Firecrawl for approved
@@ -40,10 +40,12 @@ First-time setup still requires Python 3.11 or 3.12, the declared requirements, 
 Only application-owned children can be stopped from the page. An unrelated listener on
 port 8000 is never killed.
 
-The website reads provider keys only from its explicitly supplied process environment.
-It never renders, logs, persists, downloads, or passes them in command arguments. It
-does not load `.env` or shell profiles. Claims must be public and non-sensitive. Every
-released brief requires human review.
+Provider keys are accepted only through transient password widgets on the loopback page
+or an explicitly supplied process environment. Saved values live in macOS Keychain and
+are loaded into the local Streamlit process. The website never renders, logs, stores in
+SQLite, downloads, or passes them in command arguments. It does not load `.env` or shell
+profiles. Claims must be public and non-sensitive. Every released brief requires human
+review.
 
 The displayed USD ceiling and estimated cost cover MiMo model calls. Exa search charges
 and optional Firecrawl credits remain visible in their respective provider dashboards.

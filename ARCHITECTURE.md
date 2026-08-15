@@ -86,9 +86,10 @@ contradiction-audit remediation sequence, MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 a
 complete. MVP-9 Verified Quote Selection & Deterministic Assembly, MVP-10 Evidence
 Portfolio & Trail, and MVP-11 Adaptive Research Expansion & Cost Control are complete.
 MVP-11 is the latest completed research-pipeline phase. MLP-1 Simplified Live Experience
-is the active user-authorized product-experience phase; its first slice removes optional
-research controls from the live website while preserving the existing typed defaults,
-fingerprint compatibility, and every research/release invariant.
+is complete. MLP-2 Local Product Experience is the active user-authorized product-
+experience phase: it retains the simplified form, adds a restrained local-product
+layout, stores provider credentials in macOS Keychain, and moves operational settings
+behind Advanced mode while preserving every research/release invariant.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -165,10 +166,12 @@ gated behind Wigolo-local timeout/connection/malformed/extraction/challenge fail
 never bypasses authentication, paywalls, access denial, unsupported content, or source
 policy failures.
 
-The browser never receives MiMo, Exa, or Firecrawl keys. Configuration comes only from
-the explicitly supplied server-process environment. The macOS launcher may request keys
-through native hidden-input dialogs and exports them only to the local Streamlit server
-process; it does not persist them or place them in URLs or command arguments.
+MLP-2 permits provider keys to enter the loopback-only page through transient password
+widgets. They are immediately stored in the user's macOS login Keychain and applied only
+to the local Streamlit server process; they never enter URLs, SQLite, logs, downloads,
+provider child-process arguments, or repository files. The launcher does not request or
+transport keys. Explicit process-environment configuration remains supported, and the
+application does not load `.env` files or shell profiles.
 Cooperative cancellation, fingerprints, budgets, restart compatibility, terminal
 semantics, and human review remain exactly as released in MVP-4.
 

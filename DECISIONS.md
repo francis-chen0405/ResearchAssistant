@@ -1,5 +1,22 @@
 # Decisions
 
+## 2026-08-14 - MLP-2 Local Product Experience
+
+- Use the supplied Quin screenshot only as a visual reference for sparse spacing,
+  restrained typography, and soft borders; retain original ResearchAssistant content
+  and behavior. The finished palette uses graphite, white, electric blue, and violet.
+  Its animated hero visual represents research signals, evidence cards, source checks,
+  and scanning—not landscape, nature, or lifestyle imagery.
+- Make Research, History, Provider setup, and Advanced the top-level local navigation.
+  Keep the primary claim flow minimal and place budgets, database/run identity, local
+  service controls, and diagnostics in Advanced mode.
+- Replace per-launch native credential prompts with transient loopback password fields
+  backed by macOS Keychain. Pass secrets to `/usr/bin/security` through standard input,
+  never command arguments; never place keys in URLs, SQLite, logs, downloads, provider
+  child processes, or repository files.
+- Add no email identity, accounts, cloud persistence, dependency, database migration,
+  provider, or research/release-policy change.
+
 ## 2026-08-14 - MLP-1 Simplified Live Research Form
 
 - Remove research depth, presentation tone, report length, and all focus inputs from

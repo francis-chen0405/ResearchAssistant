@@ -2,19 +2,25 @@
 
 ## Current project state — 2026-08-14
 
-MLP-1 Simplified Live Experience is active. Its first completed slice removes research
-depth, presentation tone, report length, and all focus inputs from the local live
-website, and removes the controls metadata dump from live status. Website-created runs
-now explicitly use the existing frozen `DEFAULT_RESEARCH_CONTROLS`: standard depth,
-report length, neutral tone, and no focus. Typed controls remain in internal, CLI,
-fingerprint, persistence, export, and historical reconstruction contracts.
+MLP-2 Local Product Experience is complete. MLP-1 remains the completed simplified-form
+baseline: depth, tone, length, and focus inputs stay absent and website runs continue to
+use frozen `DEFAULT_RESEARCH_CONTROLS`. MLP-2 adds a sparse graphite/blue local-product
+layout, top-level Research, History, Provider setup, and Advanced actions, and moves only
+operational budgets, database/run identity, service controls, and diagnostics into the
+Advanced panel.
 
-Verification for this slice: focused live-web/control tests passed (29); the complete
-offline suite passed (605 with 2 expected opt-in skips); Ruff lint and format checks,
-`git diff --check`, and rendered-browser inspection passed. No dependency, migration,
-provider call, budget/release-policy change, or historical rewrite occurred.
+The launcher now starts the website without per-launch native key prompts. Provider
+setup accepts transient password inputs on loopback, stores MiMo, Exa, and optional
+Firecrawl values in the user's macOS login Keychain, and loads them into the local server
+process on later launches. Keychain writes pass secrets through standard input, never
+arguments; secrets remain excluded from URLs, SQLite, logs, downloads, child processes,
+and repository files. Explicit environment configuration remains supported.
 
-The broader MLP-1 credential/startup and visual-redesign slices remain open.
+Verification: MLP-2/live focused tests passed (26); the complete offline suite passed
+(611 with 2 expected opt-in skips); repository-wide Ruff lint and format checks,
+launcher syntax, `git diff --check`, and rendered desktop/390px browser inspection
+passed. No dependency, migration, provider call, budget/release-policy change, account/
+email system, cloud storage, or historical rewrite was added.
 
 ## Completed research-pipeline state — 2026-08-11
 
@@ -23,7 +29,7 @@ verified. MVP-10 Evidence Portfolio & Trail and MVP-9 Verified Quote Selection &
 Deterministic Assembly remain its immutable evidence safeguards. Migration 9 records
 append-only numeric research rounds constrained to 1–3, the deterministic post-Round-2
 Governor decision, and the terminal research result; historical MVP-9 and MVP-10 runs
-remain read-only inspectable. MLP-1 does not alter these contracts.
+remain read-only inspectable. MLP-1 and MLP-2 do not alter these contracts.
 
 ## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
 

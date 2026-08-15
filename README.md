@@ -7,8 +7,8 @@ that a released factual sentence must exactly match a separately reviewed statem
 Ledger.
 
 The research pipeline is complete through MVP-11 Adaptive Research Expansion & Cost
-Control (Research Governor). MLP-1 Simplified Live Experience is the active
-product-experience phase.
+Control (Research Governor). MLP-1 Simplified Live Experience is complete, and MLP-2
+Local Product Experience is the active product-experience phase.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -44,6 +44,10 @@ version 9 retains historical MVP-9 and MVP-10 inspection compatibility.
 MLP-1 removes depth, tone, length, and focus choices from the live website. Website
 runs use the existing safe defaults internally, while historical runs and CLI contracts
 retain their typed control metadata for compatibility.
+
+MLP-2 gives that simplified flow a clean local-product layout. Provider setup saves
+MiMo, Exa, and optional Firecrawl keys to macOS Keychain; Advanced mode contains the
+technical run and local-service settings.
 
 ## How the system works
 
@@ -257,13 +261,13 @@ the final brief when available, validation errors, hashes, artifact counts, and 
 
 ### Launch the live website on macOS
 
-After first-time installation, double-click `Launch ResearchAssistant.command`. When absent from
-the launcher environment, macOS requests required `MIMO_API_KEY` and `EXA_API_KEY` values in native
-hidden-input dialogs for that launch only, then offers an optional `FIRECRAWL_API_KEY` field. No
-terminal commands are required during normal use. The launcher opens the live page at
+After first-time installation, double-click `Launch ResearchAssistant.command`. The
+launcher opens the live page at
 `127.0.0.1:8501`; its Terminal window/local server must remain running while the page is open.
+Use **Provider setup** in the page to enter MiMo, Exa, and optional Firecrawl keys once;
+the app saves them in the user's macOS login Keychain and reloads them on later launches.
 
-The sidebar checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
+Advanced mode checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
 It never treats a listener or child PID as proof of health and stops only its own process group.
 The page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path.
 Depth, tone, report-length, and focus settings are intentionally not shown; website runs use the
@@ -271,9 +275,11 @@ existing safe internal defaults. It
 shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,
 run history, cooperative cancellation, and released brief/hash copy/download controls.
 
-The browser never receives provider API keys; they stay in the local server process. The app does
-not load `.env` or shell profiles. Errors and bounded child output are redacted. Claims must be
-public and non-sensitive, and every released brief requires human review.
+Provider keys enter only transient password widgets on the loopback page, then move to
+macOS Keychain and the local server process. They are never placed in URLs, SQLite,
+logs, downloads, command arguments, or repository files. The app does not load `.env`
+or shell profiles. Errors and bounded child output are redacted. Claims must be public
+and non-sensitive, and every released brief requires human review.
 
 The website's USD ceiling and estimated-cost card apply to MiMo model calls. Exa search charges
 and any Firecrawl credits are reported by their provider dashboards and are not silently counted

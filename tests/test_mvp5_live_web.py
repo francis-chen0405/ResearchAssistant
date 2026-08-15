@@ -362,12 +362,14 @@ def test_live_streamlit_renders_friendly_missing_configuration(
     from streamlit.testing.v1 import AppTest
 
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    monkeypatch.setenv("RESEARCHASSISTANT_DISABLE_KEYCHAIN", "1")
     app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
 
     assert not app.exception
     assert any("not configured" in error.value for error in app.error)
-    assert any("Human review is required" in warning.value for warning in app.warning)
-    assert all(SECRET not in element.value for element in (*app.error, *app.warning))
+    assert any("Human review is required" in caption.value for caption in app.caption)
+    assert all(SECRET not in element.value for element in (*app.error, *app.caption))
 
 
 def test_live_streamlit_acknowledgement_does_not_deadlock_submit_button(
@@ -388,7 +390,7 @@ def test_live_streamlit_acknowledgement_does_not_deadlock_submit_button(
         ),
     )
     app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
-    start = next(item for item in app.button if item.label == "Start Research")
+    start = next(item for item in app.button if item.label == "Begin research")
 
     assert not start.disabled
     start.click().run()
@@ -430,6 +432,69 @@ def test_live_streamlit_omits_research_controls(
     assert "Research controls" not in (ROOT / "frontend" / "live_app.py").read_text(
         encoding="utf-8"
     )
+
+
+def test_live_streamlit_uses_clean_primary_layout_and_reveals_advanced_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("MIMO_API_KEY", SECRET)
+    monkeypatch.setenv("EXA_API_KEY", "exa-test-secret")
+    monkeypatch.setattr(
+        WigoloServiceManager,
+        "probe",
+        lambda self: ServiceDiagnostic(
+            state="healthy",
+            wigolo_ready=True,
+            searxng_readiness="configured",
+            message="Pinned Wigolo 0.2.1 is healthy.",
+        ),
+    )
+
+    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
+    button_labels = {item.label for item in app.button}
+    markdown = "\n".join(item.value for item in app.markdown)
+
+    assert not app.exception
+    assert {"History", "Provider setup", "Advanced", "Begin research"} <= button_labels
+    assert "Research the claim" in markdown
+    source = (ROOT / "frontend" / "live_app.py").read_text(encoding="utf-8")
+    assert all(
+        removed not in source
+        for removed in ("nature-window", "nature-sun", "nature-hill", "nature-path")
+    )
+    assert all(item.value != "Local services" for item in app.subheader)
+
+    next(item for item in app.button if item.label == "Advanced").click().run()
+
+    assert not app.exception
+    assert any(item.value == "Run settings" for item in app.subheader)
+    assert any(item.value == "Local services" for item in app.subheader)
+    assert {"MiMo cost ceiling (USD)", "SQLite database", "Run ID (optional)"} <= {
+        item.label for item in app.text_input
+    }
+    assert {"Token ceiling", "Physical MiMo call ceiling"} <= {
+        item.label for item in app.number_input
+    }
+
+
+def test_live_streamlit_provider_setup_uses_password_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    monkeypatch.setenv("RESEARCHASSISTANT_DISABLE_KEYCHAIN", "1")
+    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
+
+    next(item for item in app.button if item.label == "Provider setup").click().run()
+
+    assert not app.exception
+    fields = {item.label: item for item in app.text_input}
+    assert {"MiMo API key", "Exa API key", "Firecrawl API key (optional)"} <= fields.keys()
+    assert all(field.proto.type == field.proto.PASSWORD for field in fields.values())
 
 
 def test_mocked_released_run_reconnects_in_live_streamlit(
@@ -482,7 +547,9 @@ def test_mocked_released_run_reconnects_in_live_streamlit(
     assert snapshot.opposing.model_attempts > 0
 
     monkeypatch.delenv("MIMO_API_KEY", raising=False)
+    monkeypatch.setenv("RESEARCHASSISTANT_DISABLE_KEYCHAIN", "1")
     app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
+    next(item for item in app.button if item.label == "History").click().run()
     history_input = next(item for item in app.text_input if item.label == "History database")
     history_input.input(str(db_path)).run()
     open_button = next(item for item in app.button if item.label == "Open run")

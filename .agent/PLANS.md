@@ -10,15 +10,15 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MLP-1
+## Current Project State: MLP-2
 
-The user explicitly authorized MLP-1 on 2026-08-14. Its first slice simplifies the
-local live website by removing depth, tone, length, and focus controls while keeping the
-existing frozen safe defaults and historical fingerprint compatibility. The canonical
-plan is `.agent/plans/phase-mlp-1-simplified-live-experience.md`.
+The user explicitly identified the committed simplified live experience as completed
+MLP-1 and authorized MLP-2 on 2026-08-14. MLP-2 creates the clean local-product layout,
+Keychain-backed provider setup, and secondary Advanced run-settings panel. The canonical
+plan is `.agent/plans/phase-mlp-2-local-product-experience.md`.
 
-MVP-11 remains the latest completed research-pipeline phase. MLP-1 does not change that
-pipeline, its evidence rules, budgets, persistence, or release gate.
+MVP-11 remains the latest completed research-pipeline phase. MLP-1 and MLP-2 do not
+change that pipeline, its evidence rules, budgets, persistence, or release gate.
 
 ## Completed Research Pipeline: MVP-11
 
