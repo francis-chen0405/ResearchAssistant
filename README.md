@@ -6,8 +6,9 @@ retrieval, semantic review, Ledger admission, synthesis, and deterministic relea
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The repository is complete through MVP-11 Adaptive Research Expansion & Cost Control
-(Research Governor). No later phase is authorized.
+The research pipeline is complete through MVP-11 Adaptive Research Expansion & Cost
+Control (Research Governor). MLP-1 Simplified Live Experience is the active
+product-experience phase.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -30,7 +31,7 @@ MVP-6.9 carries verified origin media type and final-URL context across scraper 
 keeps provider-declared media type separate, persists that provenance in schema migration 7,
 and aligns fingerprints, offline configuration, and phase-neutral package metadata.
 MVP-7.1 completed direct-MiMo consolidation, MVP-8 added safe local brief exports and
-persisted progress, MVP-8.1 added fingerprinted research controls, and MVP-8.2 added a
+persisted progress, MVP-8.1 added fingerprinted internal research controls, and MVP-8.2 added a
 read-only Evidence Browser. MVP-9 makes MiMo return only ordered exact snapshot passages;
 ResearchAssistant constructs quote context, brackets, offsets, and provenance
 deterministically. MVP-10 adds an append-only Evidence Portfolio and Evidence Trail with
@@ -39,6 +40,10 @@ with the deterministic Research Governor: an incomplete initial portfolio comple
 Round 2, and only application-owned post-Round-2 policy may authorize Round 3. Research
 rounds are absolutely limited to 1–3, all budgets remain cumulative, and SQLite schema
 version 9 retains historical MVP-9 and MVP-10 inspection compatibility.
+
+MLP-1 removes depth, tone, length, and focus choices from the live website. Website
+runs use the existing safe defaults internally, while historical runs and CLI contracts
+retain their typed control metadata for compatibility.
 
 ## How the system works
 
@@ -260,7 +265,9 @@ terminal commands are required during normal use. The launcher opens the live pa
 
 The sidebar checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
 It never treats a listener or child PID as proof of health and stops only its own process group.
-The page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path. It
+The page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path.
+Depth, tone, report-length, and focus settings are intentionally not shown; website runs use the
+existing safe internal defaults. It
 shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,
 run history, cooperative cancellation, and released brief/hash copy/download controls.
 

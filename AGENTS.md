@@ -4,7 +4,8 @@ This repository has completed Phases 0-10, MVP-1 through MVP-6, MVP-6.1, MVP-6.2
 Batch A, MVP-6.3, MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, MVP-6.9, MVP-7.1,
 MVP-8, MVP-8.1, MVP-8.2, MVP-9, MVP-10, and MVP-11 for the Debate Research Agent
 System. MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is the
-latest completed authorized phase. No later phase has started or been authorized. Before
+latest completed research-pipeline phase. MLP-1 Simplified Live Experience was
+authorized on 2026-08-14 and is the active product-experience phase. Before
 editing any file, read `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`,
 `HANDOFF.md`, `.agent/PLANS.md`, and the relevant current phase plan completely.
 

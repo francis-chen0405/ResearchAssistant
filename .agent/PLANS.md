@@ -10,7 +10,17 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Current Project State: MVP-11
+## Current Project State: MLP-1
+
+The user explicitly authorized MLP-1 on 2026-08-14. Its first slice simplifies the
+local live website by removing depth, tone, length, and focus controls while keeping the
+existing frozen safe defaults and historical fingerprint compatibility. The canonical
+plan is `.agent/plans/phase-mlp-1-simplified-live-experience.md`.
+
+MVP-11 remains the latest completed research-pipeline phase. MLP-1 does not change that
+pipeline, its evidence rules, budgets, persistence, or release gate.
+
+## Completed Research Pipeline: MVP-11
 
 Phases 0 through 10, MVP-1 through MVP-6, and MVP-6.1 are complete committed work.
 MVP-6 comprises the live research stabilization in `37c52a7` and the post-audit

@@ -85,7 +85,10 @@ repairs the legacy boundary-smoke example, and makes package wording phase-neutr
 contradiction-audit remediation sequence, MVP-7.1, MVP-8, MVP-8.1, and MVP-8.2 are
 complete. MVP-9 Verified Quote Selection & Deterministic Assembly, MVP-10 Evidence
 Portfolio & Trail, and MVP-11 Adaptive Research Expansion & Cost Control are complete.
-MVP-11 is the latest completed user-authorized phase; no later phase has started.
+MVP-11 is the latest completed research-pipeline phase. MLP-1 Simplified Live Experience
+is the active user-authorized product-experience phase; its first slice removes optional
+research controls from the live website while preserving the existing typed defaults,
+fingerprint compatibility, and every research/release invariant.
 
 ## MVP-2A Live Provider Architecture Gate
 

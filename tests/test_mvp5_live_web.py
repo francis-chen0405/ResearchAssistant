@@ -395,6 +395,43 @@ def test_live_streamlit_acknowledgement_does_not_deadlock_submit_button(
     assert any("confirm" in error.value.lower() for error in app.error)
 
 
+def test_live_streamlit_omits_research_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("MIMO_API_KEY", SECRET)
+    monkeypatch.setenv("EXA_API_KEY", "exa-test-secret")
+    monkeypatch.setattr(
+        WigoloServiceManager,
+        "probe",
+        lambda self: ServiceDiagnostic(
+            state="healthy",
+            wigolo_ready=True,
+            searxng_readiness="configured",
+            message="Pinned Wigolo 0.2.1 is healthy.",
+        ),
+    )
+
+    app = AppTest.from_file(str(ROOT / "frontend" / "live_app.py"), default_timeout=10).run()
+    labels = {
+        "Research depth",
+        "Presentation tone",
+        "Report length",
+        "Focus: geographic area (optional)",
+        "Focus: timeframe (optional)",
+        "Focus: population (optional)",
+        "Focus: analytical lens (optional)",
+    }
+    rendered_labels = {item.label for item in (*app.selectbox, *app.text_input)}
+
+    assert not app.exception
+    assert labels.isdisjoint(rendered_labels)
+    assert "Research controls" not in (ROOT / "frontend" / "live_app.py").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_mocked_released_run_reconnects_in_live_streamlit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,6 +1,22 @@
 # Handoff
 
-## Current project state — 2026-08-11
+## Current project state — 2026-08-14
+
+MLP-1 Simplified Live Experience is active. The first slice is complete: the live
+Streamlit form no longer exposes research depth, presentation tone, report length, or
+geographic/timeframe/population/analytical focus fields, and live status no longer dumps
+control metadata. `frontend/live_app.py` passes `DEFAULT_RESEARCH_CONTROLS` explicitly,
+preserving standard/report/neutral/no-focus behavior and all historical fingerprints.
+
+Regression proof is in `test_live_streamlit_omits_research_controls`. Focused tests
+passed (29), the full offline suite passed (605 with 2 expected opt-in skips), Ruff lint
+and format, `git diff --check`, and rendered-browser inspection passed. No migration,
+dependency, provider call, secret-handling change, or evidence/release change occurred.
+
+Next MLP-1 work may address Keychain-backed startup and the broader visual redesign;
+neither is implemented by this slice.
+
+## Completed research-pipeline state — 2026-08-11
 
 MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is complete and
 verified. It preserves MVP-9 exact quote assembly and MVP-10 Evidence Portfolio/Trail
@@ -8,7 +24,7 @@ safeguards while using strict typed, cumulative-budget research rounds. SQLite m
 9 is append-only and constrains every persisted research round to 1–3. Round 3 can begin
 only after the typed deterministic post-Round-2 decision; terminal results cannot resume
 into another round. Historical MVP-9 and MVP-10 databases remain read-only inspectable.
-No later phase is authorized.
+MLP-1 does not alter the completed research-pipeline contracts.
 
 ## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
 

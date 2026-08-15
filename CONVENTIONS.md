@@ -188,7 +188,9 @@ adds cumulative-budget-governed Research Governor rounds with an absolute maximu
 three. The contradiction-audit remediation sequence is complete. The original Streamlit
 app remains fixture-only; the separate live app reuses the established persistence,
 fingerprint, cancellation, and terminal contracts. Do not begin a phase after MVP-11
-without separate explicit direction. No later phase has started or been authorized.
+without separate explicit direction. MLP-1 Simplified Live Experience was explicitly
+authorized on 2026-08-14 and is the active product-experience phase; it must preserve
+the completed MVP-11 research pipeline and release contracts.
 
 ## 8. Done Criteria Per Phase
 

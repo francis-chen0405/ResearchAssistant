@@ -1,5 +1,15 @@
 # Decisions
 
+## 2026-08-14 - MLP-1 Simplified Live Research Form
+
+- Remove research depth, presentation tone, report length, and all focus inputs from
+  the local live website.
+- Use the existing frozen `DEFAULT_RESEARCH_CONTROLS` for every website-created run.
+  Keep the typed controls, canonical fingerprint representation, CLI behavior, and
+  historical reconstruction intact for compatibility.
+- Remove the research-controls metadata dump from the live run display. Add no database
+  migration, dependency, provider change, or evidence/release-policy change.
+
 ## 2026-08-11 - MVP-11 Adaptive Research Expansion & Cost Control
 
 - Fix the maximum research-round count at three in strict Pydantic artifacts, SQLite

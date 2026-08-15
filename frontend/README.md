@@ -17,6 +17,10 @@ Wigolo-local extraction failures. It can run or compatibly resume direct
 `mimo-v2.5-pro` research, inspect persisted history, show live progress, cooperatively
 cancel, and copy or download a released validated brief.
 
+The live form intentionally omits research depth, presentation tone, report length, and
+focus fields. Website runs use the frozen safe defaults (`standard` depth, `report`
+length, `neutral` tone, and no focus); persisted historical controls remain readable.
+
 History and reopening use the store's validated SQLite read-only session. They never
 initialize or migrate a database and never create a missing file. An older database is
 left untouched and produces a migration-required message; migrate it intentionally by

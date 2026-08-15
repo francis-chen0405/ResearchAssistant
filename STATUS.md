@@ -1,13 +1,29 @@
 # Status
 
-## Current project state — 2026-08-11
+## Current project state — 2026-08-14
+
+MLP-1 Simplified Live Experience is active. Its first completed slice removes research
+depth, presentation tone, report length, and all focus inputs from the local live
+website, and removes the controls metadata dump from live status. Website-created runs
+now explicitly use the existing frozen `DEFAULT_RESEARCH_CONTROLS`: standard depth,
+report length, neutral tone, and no focus. Typed controls remain in internal, CLI,
+fingerprint, persistence, export, and historical reconstruction contracts.
+
+Verification for this slice: focused live-web/control tests passed (29); the complete
+offline suite passed (605 with 2 expected opt-in skips); Ruff lint and format checks,
+`git diff --check`, and rendered-browser inspection passed. No dependency, migration,
+provider call, budget/release-policy change, or historical rewrite occurred.
+
+The broader MLP-1 credential/startup and visual-redesign slices remain open.
+
+## Completed research-pipeline state — 2026-08-11
 
 MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is complete and
 verified. MVP-10 Evidence Portfolio & Trail and MVP-9 Verified Quote Selection &
 Deterministic Assembly remain its immutable evidence safeguards. Migration 9 records
 append-only numeric research rounds constrained to 1–3, the deterministic post-Round-2
 Governor decision, and the terminal research result; historical MVP-9 and MVP-10 runs
-remain read-only inspectable. No phase after MVP-11 is authorized.
+remain read-only inspectable. MLP-1 does not alter these contracts.
 
 ## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
 
