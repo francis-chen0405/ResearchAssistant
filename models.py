@@ -522,10 +522,24 @@ class SourceSnapshot(StrictModel):
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
 
 
+class SelectedSentenceRange(StrictModel):
+    """One inclusive, source-owned sentence range selected by the Extractor."""
+
+    start_sentence: Annotated[int, Field(ge=1)]
+    end_sentence: Annotated[int, Field(ge=1)]
+
+    @model_validator(mode="after")
+    def validate_order(self) -> SelectedSentenceRange:
+        if self.end_sentence < self.start_sentence:
+            raise ValueError("sentence range end must not precede its start")
+        return self
+
+
 class VerbatimQuoteSelection(StrictModel):
     """Minimal model-owned Extractor result; application code owns quote assembly."""
 
-    selected_segments: Annotated[tuple[NonEmptyStr, ...], Field(min_length=1)]
+    selected_segments: tuple[NonEmptyStr, ...] = ()
+    selected_sentence_ranges: tuple[SelectedSentenceRange, ...] = ()
 
     @field_validator("selected_segments")
     @classmethod
@@ -536,6 +550,17 @@ class VerbatimQuoteSelection(StrictModel):
             raise ValueError("selected quote segments must contain visible text")
         return value
 
+    @model_validator(mode="after")
+    def validate_selection_shape(self) -> VerbatimQuoteSelection:
+        if bool(self.selected_segments) == bool(self.selected_sentence_ranges):
+            raise ValueError("select either exact segments or source sentence ranges")
+        previous_end = 0
+        for selection_range in self.selected_sentence_ranges:
+            if selection_range.start_sentence <= previous_end:
+                raise ValueError("sentence ranges must be ordered and non-overlapping")
+            previous_end = selection_range.end_sentence
+        return self
+
 
 class ProvisionalCandidate(StrictModel):
     run_id: UUID
@@ -544,7 +569,7 @@ class ProvisionalCandidate(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
-    search_rank: Annotated[int, Field(ge=1, le=5)]
+    search_rank: Annotated[int, Field(ge=1, le=10)]
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     extracted_quote_block: NonEmptyStr

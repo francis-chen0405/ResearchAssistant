@@ -1581,6 +1581,12 @@ def run_provider_pipeline(
                 Stage.CLAIM_LEDGER,
                 "insufficient evidence: no Reviewer-approved statement was eligible for the Ledger",
             )
+        if settings.enable_research_governor and not analysis.ledger_records:
+            raise Phase9OrchestrationError(
+                Stage.CLAIM_LEDGER,
+                "insufficient evidence after the permitted research rounds: no "
+                "Reviewer-approved statement was eligible for the Ledger",
+            )
 
         if not settings.enable_research_governor:
             _persist_mvp10_portfolio(
@@ -3053,6 +3059,11 @@ def _run_researcher_side(
         if outcome.failure_code is not None
     )
     for snapshot in batch.snapshots:
+        if (
+            batch.source_target_per_stance is not None
+            and len(candidates) >= batch.source_target_per_stance
+        ):
+            break
         retrieval = retrievals_by_id[snapshot.retrieval_attempt_id]
         extraction_input = build_extraction_llm_input(
             planner=planner,

@@ -162,15 +162,14 @@ def test_direct_mimo_route_has_no_cross_provider_fallback() -> None:
         assert route.fallbacks == ()
 
 
-def test_direct_mimo_extractor_prompt_requires_selected_verbatim_segments() -> None:
+def test_direct_mimo_extractor_prompt_requires_source_sentence_ranges() -> None:
     request = _request().model_copy(update={"stage": LLMStage.EXTRACTOR})
 
     prompt = _direct_mimo_prompt(request)
 
-    assert "Return selected_segments only" in prompt
-    assert (
-        "Do not include brackets, context sentences, quotation marks, ellipses, offsets" in prompt
-    )
+    assert "Return selected_sentence_ranges only" in prompt
+    assert "selectable_source_text" in prompt
+    assert "Do not return selected_segments, text, brackets, context sentences" in prompt
     assert "at least 50 exact quoted words only when" in prompt
     assert "at least one digit and at least one recognized statistical marker" in prompt
     assert "Otherwise, use at least 75 exact quoted words" in prompt

@@ -15,6 +15,7 @@ from pydantic import Field, model_validator
 from agents.researcher import (
     assemble_quote_block_from_selected_segments,
     build_source_snapshot,
+    numbered_source_text,
     validate_snapshot_integrity,
 )
 from evidence_portfolio import identify_source_family
@@ -100,7 +101,9 @@ class AcquisitionPolicy(StrictModel):
     @property
     def maximum_attempts_per_stance(self) -> int:
         if self.source_target_per_stance is not None:
-            return self.source_target_per_stance
+            # Keep three ranked fallbacks available for acquisition or exact-quote
+            # failure without allowing the per-stance work to grow without bound.
+            return min(10, self.source_target_per_stance + 3)
         return self.discovery_results_per_query * QUERIES_PER_STANCE
 
 
@@ -121,6 +124,7 @@ class ExtractionLLMInput(StrictModel):
     stance: Stance
     claim_definition: ClaimDefinition
     source: UntrustedSourceText
+    selectable_source_text: str = ""
     retrieval: RetrievalRecord | None = None
 
     @model_validator(mode="after")
@@ -130,6 +134,8 @@ class ExtractionLLMInput(StrictModel):
         if self.retrieval is not None:
             if self.retrieval.run_id != self.run_id:
                 raise ValueError("retrieval run_id must match extraction run_id")
+        if not self.selectable_source_text:
+            self.selectable_source_text = numbered_source_text(self.source.text)
         return self
 
 
@@ -161,6 +167,7 @@ def build_extraction_llm_input(
             text=snapshot.normalized_text,
             truncated=snapshot.truncated,
         ),
+        selectable_source_text=numbered_source_text(snapshot.normalized_text),
         retrieval=retrieval,
     )
 
@@ -314,8 +321,15 @@ class ResearcherRetrievalBatch(StrictModel):
         return self
 
     def _validate_ranked_batch(self) -> ResearcherRetrievalBatch:
-        if self.intended_attempt_count != self.source_target_per_stance:
-            raise ValueError("ranked batch attempt ceiling must equal its source target")
+        maximum_backfill_attempts = min(10, self.source_target_per_stance + 3)
+        if not (
+            self.source_target_per_stance
+            <= self.intended_attempt_count
+            <= maximum_backfill_attempts
+        ):
+            raise ValueError(
+                "ranked batch attempt ceiling must stay within its bounded backfill pool"
+            )
         selected = [
             item for item in self.discovery_ranking if item.decision is DiscoveryDecision.SELECTED
         ]
@@ -325,10 +339,12 @@ class ResearcherRetrievalBatch(StrictModel):
         if [item.selection_rank for item in selected] != expected_ranks:
             raise ValueError("ranked selections must be contiguous from rank one")
         outcome_ranks = sorted(outcome.retrieval.search_rank for outcome in self.outcomes)
-        if outcome_ranks != expected_ranks:
-            raise ValueError("ranked outcomes must exactly match selected discovery results")
-        if len(self.snapshots) > self.source_target_per_stance:
-            raise ValueError("ranked snapshots exceed the source target")
+        if outcome_ranks != list(range(1, len(self.outcomes) + 1)):
+            raise ValueError("ranked outcomes must have contiguous acquisition ranks")
+        if len(self.outcomes) > self.intended_attempt_count:
+            raise ValueError("ranked outcomes exceed the bounded backfill pool")
+        if len(self.snapshots) > self.intended_attempt_count:
+            raise ValueError("ranked snapshots exceed the bounded backfill pool")
         ranked_snapshot_ids = [item.snapshot_id for item in self.acquired_source_ranking]
         if len(ranked_snapshot_ids) != len(set(ranked_snapshot_ids)):
             raise ValueError("acquired-source rankings require unique snapshots")
@@ -610,19 +626,21 @@ def _retrieve_ranked_stance(
         )
     ranking = rank_discovery_pool(
         claim_text=planner.claim_definition.claim_text,
+        claim_facets=_ranking_facets(planner.claim_definition),
         query_results=tuple(query_results),
         source_target=source_target,
     )
-    selected = [item for item in ranking if item.decision is DiscoveryDecision.SELECTED]
+    eligible = [item for item in ranking if item.decision is not DiscoveryDecision.DISCARDED]
     outcomes: list[RetrievalOutcome] = []
     snapshots: list[SourceSnapshot] = []
-    for item in selected:
-        if item.selection_rank is None:
-            raise ValueError("selected discovery result has no selection rank")
+    for acquisition_rank, item in enumerate(
+        eligible[: acquisition_policy.maximum_attempts_per_stance],
+        start=1,
+    ):
         outcome, snapshot = _retrieve_result(
             planner.run_id,
             item.query,
-            item.selection_rank,
+            acquisition_rank,
             item.result.original_url,
             scraper_provider,
             retry_policy,
@@ -637,6 +655,7 @@ def _retrieve_ranked_stance(
                 snapshot_consumer(snapshot)
     acquired_ranking = rank_acquired_sources(
         claim_text=planner.claim_definition.claim_text,
+        claim_facets=_ranking_facets(planner.claim_definition),
         snapshots=tuple(snapshots),
         retrievals=tuple(outcome.retrieval for outcome in outcomes),
     )
@@ -645,7 +664,7 @@ def _retrieve_ranked_stance(
     return ResearcherRetrievalBatch(
         run_id=planner.run_id,
         stance=stance,
-        intended_attempt_count=source_target,
+        intended_attempt_count=acquisition_policy.maximum_attempts_per_stance,
         discovery_results_per_query=acquisition_policy.discovery_results_per_query,
         usable_snapshots_per_query=acquisition_policy.usable_snapshots_per_query,
         source_target_per_stance=source_target,
@@ -653,6 +672,15 @@ def _retrieve_ranked_stance(
         acquired_source_ranking=acquired_ranking,
         outcomes=outcomes,
         snapshots=snapshots,
+    )
+
+
+def _ranking_facets(claim_definition: ClaimDefinition) -> tuple[str, ...]:
+    """Pass only optional Planner scope facets to the soft deterministic ranker."""
+    return (
+        claim_definition.population,
+        claim_definition.intervention_or_exposure,
+        claim_definition.causal_or_comparative_meaning,
     )
 
 

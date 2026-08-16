@@ -195,7 +195,7 @@ def assemble_quote_block_from_selected_segments(
     truncated: bool,
 ) -> str:
     """Build the canonical quote envelope from model-selected snapshot text."""
-    selected_segments = list(selection.selected_segments)
+    selected_segments = selected_segments_from_selection(normalized_text, selection)
     offsets = _find_offsets_with_valid_context_for_segments(normalized_text, selected_segments)
     preceding = _previous_sentence(normalized_text, offsets[0].start_char)
     following = _following_sentence(normalized_text, offsets[-1].end_char)
@@ -208,6 +208,37 @@ def assemble_quote_block_from_selected_segments(
         after = END_MARKER
     quoted_segments = " ... ".join(selected_segments)
     return f'[{before}] "{quoted_segments}" [{after}]'
+
+
+def numbered_source_text(normalized_text: str) -> str:
+    """Expose immutable snapshot sentences with stable one-based selection identifiers."""
+    spans = _sentence_spans(normalized_text)
+    if not spans:
+        raise ValueError("snapshot has no selectable sentences")
+    return "\n".join(f"[{index}] {span.text}" for index, span in enumerate(spans, start=1))
+
+
+def selected_segments_from_selection(
+    normalized_text: str,
+    selection: VerbatimQuoteSelection,
+) -> list[str]:
+    """Turn a model's source sentence references into exact immutable snapshot text."""
+    if selection.selected_segments:
+        return list(selection.selected_segments)
+    spans = _sentence_spans(normalized_text)
+    selected_segments: list[str] = []
+    for selection_range in selection.selected_sentence_ranges:
+        if selection_range.end_sentence > len(spans):
+            raise ValueError("selected sentence range exceeds the snapshot")
+        selected_segments.append(
+            " ".join(
+                span.text
+                for span in spans[selection_range.start_sentence - 1 : selection_range.end_sentence]
+            )
+        )
+    if not selected_segments:
+        raise ValueError("quote selection has no source-backed segments")
+    return selected_segments
 
 
 def validate_bracket_context(

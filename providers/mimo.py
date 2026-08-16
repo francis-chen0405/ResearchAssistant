@@ -375,10 +375,11 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
     if request.stage is LLMStage.EXTRACTOR:
         stage_compatibility = (
             "\n<DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
-            "Return selected_segments only: an ordered JSON array of one or more exact "
-            "verbatim passages copied from the trusted snapshot. Do not include brackets, "
-            "context sentences, quotation marks, ellipses, offsets, or paraphrases; the "
-            "application derives those deterministically from the snapshot.\n"
+            "Return selected_sentence_ranges only: an ordered JSON array of inclusive "
+            "{start_sentence, end_sentence} objects that refer to the numbered source "
+            "sentences in selectable_source_text. Do not return selected_segments, text, "
+            "brackets, context sentences, quotation marks, ellipses, offsets, or paraphrases; "
+            "the application assembles the exact source text deterministically.\n"
             "Use at least 50 exact quoted words only when the quotation contains at least "
             "one digit and at least one recognized statistical marker: %, percent, rate, "
             "ratio, average, median, index, p-value, million, billion, growth, or decline. "

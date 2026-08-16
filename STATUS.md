@@ -2,7 +2,9 @@
 
 ## Current project state — 2026-08-15
 
-MLP-4 Research Quality & OpenAlex Integration is complete. New live runs use separate
+MLP-4 Research Quality & OpenAlex Integration is complete. A corrective quality pass
+adds bounded rank-ordered backfill, claim-aware soft ranking, source-anchored exact
+quote selection, and a clean zero-Ledger stop. New live runs use separate
 Planner lanes for three Exa web queries and one OpenAlex academic query per active stance.
 Focused research is the default and performs no opposing provider or model work;
 counterevidence enables the equal opposing lane without changing any configured call,

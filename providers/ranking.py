@@ -195,6 +195,7 @@ class RankedAcquiredSource(StrictModel):
 def rank_discovery_pool(
     *,
     claim_text: str,
+    claim_facets: tuple[str, ...] = (),
     query_results: tuple[tuple[SearchQuery, SearchResult], ...],
     source_target: int,
 ) -> tuple[RankedDiscoveryResult, ...]:
@@ -207,6 +208,7 @@ def rank_discovery_pool(
     scored = [
         _score_result(
             claim_text=claim_text,
+            claim_facets=claim_facets,
             query=query,
             result=result,
             repeated_host=host_counts[(urlsplit(result.original_url).hostname or "").lower()] > 1,
@@ -259,12 +261,14 @@ def canonical_discovery_url(url: str) -> str:
 def rank_acquired_sources(
     *,
     claim_text: str,
+    claim_facets: tuple[str, ...] = (),
     snapshots: tuple[SourceSnapshot, ...],
     retrievals: tuple[RetrievalRecord, ...],
 ) -> tuple[RankedAcquiredSource, ...]:
     """Order acquired text for extraction without discarding an otherwise usable source."""
     retrieval_by_id = {item.retrieval_attempt_id: item for item in retrievals}
     claim_tokens = _tokens(claim_text)
+    facet_tokens = _facet_tokens(claim_facets, claim_tokens)
     scored: list[tuple[SourceSnapshot, AcquiredSourceScoreComponents]] = []
     for snapshot in snapshots:
         retrieval = retrieval_by_id.get(snapshot.retrieval_attempt_id)
@@ -274,10 +278,11 @@ def rank_acquired_sources(
         text_tokens = _tokens(text)
         word_count = len(_TOKEN_RE.findall(text))
         readability = 25 if word_count >= 150 else 18 if word_count >= 75 else 8
-        claim_term_coverage = min(
-            35,
-            round(35 * len(claim_tokens & text_tokens) / max(len(claim_tokens), 1)),
+        base_coverage = round(20 * len(claim_tokens & text_tokens) / max(len(claim_tokens), 1))
+        facet_coverage = (
+            round(15 * len(facet_tokens & text_tokens) / len(facet_tokens)) if facet_tokens else 0
         )
+        claim_term_coverage = min(35, base_coverage + facet_coverage)
         path = urlsplit(retrieval.resolved_url).path
         document_specificity = (15 if path not in {"", "/"} else 3) + (
             10 if word_count >= 250 else 5
@@ -313,14 +318,20 @@ def rank_acquired_sources(
 def _score_result(
     *,
     claim_text: str,
+    claim_facets: tuple[str, ...],
     query: SearchQuery,
     result: SearchResult,
     repeated_host: bool,
 ) -> RankedDiscoveryResult:
     claim_tokens = _tokens(f"{claim_text} {query.query_text}")
-    title_tokens = _tokens(result.title)
-    overlap = len(claim_tokens & title_tokens)
-    relevance = min(35, round(35 * overlap / max(len(claim_tokens), 1)))
+    facet_tokens = _facet_tokens(claim_facets, claim_tokens)
+    result_tokens = _tokens(f"{result.title} {result.snippet or ''}")
+    overlap = len(claim_tokens & result_tokens)
+    base_relevance = round(20 * overlap / max(len(claim_tokens), 1))
+    facet_relevance = (
+        round(15 * len(facet_tokens & result_tokens) / len(facet_tokens)) if facet_tokens else 0
+    )
+    relevance = min(35, base_relevance + facet_relevance)
     if result.relevance_score is not None:
         relevance = min(35, relevance + min(round(max(result.relevance_score, 0) / 20), 5))
     intent_match = _intent_score(query, result)
@@ -385,6 +396,14 @@ def _tokens(value: str) -> frozenset[str]:
     return frozenset(
         token for token in _TOKEN_RE.findall(value.lower()) if token not in _STOP_WORDS
     )
+
+
+def _facet_tokens(claim_facets: tuple[str, ...], claim_tokens: frozenset[str]) -> frozenset[str]:
+    """Return optional, claim-specific terms without imposing a gate on broad claims."""
+    tokens = frozenset().union(*(_tokens(facet) for facet in claim_facets if facet.strip()))
+    # A Planner can use broad boilerplate such as "all people"; only terms already
+    # present in the claim are safe as ranking bonuses.
+    return tokens & claim_tokens
 
 
 def _sort_key(item: RankedDiscoveryResult) -> tuple[int, str, int, str]:

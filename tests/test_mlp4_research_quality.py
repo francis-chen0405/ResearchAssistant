@@ -11,7 +11,7 @@ import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from agents.supportingresearcher import ResearcherRetrievalBatch
+from agents.supportingresearcher import AcquisitionPolicy, ResearcherRetrievalBatch
 from frontend.live_service import LiveResearchController
 from models import (
     AmbiguityRecord,
@@ -220,6 +220,20 @@ def _openalex_adapter(handler: httpx.MockTransport) -> OpenAlexSearchAdapter:
     )
 
 
+@pytest.mark.parametrize(("target", "expected_attempts"), ((5, 8), (7, 10), (10, 10)))
+def test_ranked_acquisition_reserves_a_small_bounded_backfill_pool(
+    target: int,
+    expected_attempts: int,
+) -> None:
+    policy = AcquisitionPolicy(
+        discovery_results_per_query=10,
+        usable_snapshots_per_query=10,
+        source_target_per_stance=target,
+    )
+
+    assert policy.maximum_attempts_per_stance == expected_attempts
+
+
 def test_openalex_normal_search_is_metadata_only_and_typed() -> None:
     seen: list[httpx.Request] = []
 
@@ -364,6 +378,62 @@ def test_discovery_ranking_prefers_direct_research_over_marketing() -> None:
     assert ranked[0].result.original_url.startswith("https://autonomy.work/")
     marketing = next(item for item in ranked if "monday.com" in item.result.original_url)
     assert marketing.components.marketing_or_community_penalty == -20
+
+
+def test_claim_facet_bonus_demotes_generic_academic_matches_without_excluding_them() -> None:
+    run_id = uuid4()
+    query = _query(run_id, Stance.SUPPORTING, DiscoveryProvider.OPENALEX, 1)
+    ranked = rank_discovery_pool(
+        claim_text="Remote work makes software teams less productive.",
+        claim_facets=("software teams", "remote work", "less productive"),
+        query_results=(
+            (
+                query,
+                _result(
+                    "https://example.edu/remote-sensing",
+                    "Remote systems for aerial data collection",
+                    provider=DiscoveryProvider.OPENALEX,
+                    rank=1,
+                ),
+            ),
+            (
+                query,
+                _result(
+                    "https://example.edu/developer-productivity",
+                    "How working from home affects software developer productivity",
+                    provider=DiscoveryProvider.OPENALEX,
+                    rank=2,
+                ),
+            ),
+        ),
+        source_target=5,
+    )
+
+    assert "developer-productivity" in ranked[0].result.original_url
+    assert ranked[1].decision is not DiscoveryDecision.DISCARDED
+
+
+def test_broad_claim_has_no_required_missing_facet_gate() -> None:
+    run_id = uuid4()
+    query = _query(run_id, Stance.SUPPORTING, DiscoveryProvider.EXA, 1)
+    ranked = rank_discovery_pool(
+        claim_text="Remote work affects productivity.",
+        claim_facets=(),
+        query_results=(
+            (
+                query,
+                _result(
+                    "https://example.edu/productivity",
+                    "Remote work and employee productivity",
+                    provider=DiscoveryProvider.EXA,
+                    rank=1,
+                ),
+            ),
+        ),
+        source_target=5,
+    )
+
+    assert ranked[0].score >= 20
 
 
 def test_discovery_ranking_discards_scores_below_twenty() -> None:

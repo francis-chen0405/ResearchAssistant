@@ -1,6 +1,6 @@
 # MLP-4 — Research Quality & OpenAlex Integration
 
-Status: Complete and verified on 2026-08-15.
+Status: Complete and verified on 2026-08-15; corrective quality pass verified on 2026-08-15.
 
 ## Authority and intent
 
@@ -102,9 +102,11 @@ There is no near-duplicate penalty. Exact canonical duplicates are collapsed rat
 than scored twice. Results below 20 are recorded as discarded and never fetched.
 
 The remaining results are ordered by score with stable provider/rank/URL tie-breakers.
-The worker attempts them from highest to lowest until the configured target of five,
-seven, or ten usable unique snapshots exists for that stance/round or the eligible pool
-is exhausted. No diversity or wildcard reservation overrides rank.
+The worker keeps a bounded ranked fallback pool: targets of five, seven, and ten may
+attempt at most eight, ten, and ten sources respectively. Extraction proceeds in ranked
+order and stops once the configured target passes deterministic quote validation, so a
+retrieval or exact-selection failure can backfill from the next source without unbounded
+retry work. No diversity or wildcard reservation overrides rank.
 
 Stage B runs after ResearchAssistant has independently acquired and normalized a page.
 It deterministically evaluates readability, actual claim-term coverage, document
@@ -184,7 +186,8 @@ exact MLP-4 contract. Historical terminal runs remain readable.
 - Retracted works are rejected; non-OA, low-citation, older, and non-PDF works are not
   globally rejected.
 - Scores are deterministic; results below 20 cannot be acquired; top-N order is stable;
-  no diversity or wildcard override exists.
+  claim facets are optional soft bonuses rather than hard keyword gates, and no diversity
+  or wildcard override exists.
 - The unchanged post-extraction quote filter, Reviewer, Ledger, and final validator
   retain all existing adversarial acceptance tests.
 - Focused reports explicitly disclose that counterevidence was not requested.

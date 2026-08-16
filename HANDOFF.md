@@ -2,7 +2,9 @@
 
 ## Current project state — 2026-08-15
 
-MLP-4 Research Quality & OpenAlex Integration is complete. `web/` remains the sole live
+MLP-4 Research Quality & OpenAlex Integration is complete. Its corrective quality pass
+uses bounded source backfill, optional claim-facet ranking bonuses, source sentence-range
+selection, and a clean insufficient-evidence terminal path. `web/` remains the sole live
 product surface; the full visual redesign is deferred to MLP-5. The current page now has
 default-off counterevidence, an Advanced 5/7/10 source target (default 7), required
 OpenAlex setup, mode-aware progress/results, honest estimated-cost wording, and a hidden

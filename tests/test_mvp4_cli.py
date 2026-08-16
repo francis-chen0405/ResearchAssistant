@@ -291,7 +291,7 @@ def test_restart_reuses_terminal_release_and_rejects_changed_claim_and_identity(
     assert changed_identity.returncode == CLIExitCode.CONFIGURATION_ERROR
     assert "incompatible fingerprint" in changed_identity.stderr
     with sqlite3.connect(tmp_path / "mvp4.sqlite3") as connection:
-        assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 14
+        assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 18
         assert connection.execute("SELECT COUNT(*) FROM validation_runs").fetchone()[0] == 1
 
 

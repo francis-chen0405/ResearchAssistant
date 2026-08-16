@@ -51,6 +51,48 @@ def test_application_assembles_context_and_multiple_segments_deterministically()
     )
 
 
+def test_application_assembles_exact_text_from_source_sentence_ranges() -> None:
+    text = (
+        "Opening context. First exact evidence sentence. Intervening source sentence. "
+        "Second exact evidence sentence. Closing context."
+    )
+    selection = VerbatimQuoteSelection.model_validate(
+        {
+            "selected_sentence_ranges": (
+                {"start_sentence": 2, "end_sentence": 2},
+                {"start_sentence": 4, "end_sentence": 4},
+            )
+        }
+    )
+
+    quote = assemble_quote_block_from_selected_segments(text, selection, truncated=False)
+
+    assert quote == (
+        '[Opening context.] "First exact evidence sentence. ... '
+        'Second exact evidence sentence." [Closing context.]'
+    )
+
+
+def test_source_sentence_ranges_reject_overlap_and_out_of_bounds() -> None:
+    with pytest.raises(ValidationError, match="ordered and non-overlapping"):
+        VerbatimQuoteSelection.model_validate(
+            {
+                "selected_sentence_ranges": (
+                    {"start_sentence": 2, "end_sentence": 3},
+                    {"start_sentence": 3, "end_sentence": 4},
+                )
+            }
+        )
+    with pytest.raises(ValueError, match="exceeds the snapshot"):
+        assemble_quote_block_from_selected_segments(
+            "One. Two.",
+            VerbatimQuoteSelection.model_validate(
+                {"selected_sentence_ranges": ({"start_sentence": 3, "end_sentence": 3},)}
+            ),
+            truncated=False,
+        )
+
+
 @pytest.mark.parametrize(
     ("text", "selection", "truncated", "expected"),
     (
