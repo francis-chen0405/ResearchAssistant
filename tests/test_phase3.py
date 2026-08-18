@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from agents.researcher import (
     CURRENT_QUOTE_LENGTH_POLICY,
@@ -17,7 +18,7 @@ from agents.researcher import (
     filter_provisional_candidate,
     verify_candidate_against_snapshot,
 )
-from models import ProvisionalCandidate, SegmentOffset, SourceSnapshot, Stance
+from models import CandidateQuoteBlock, ProvisionalCandidate, SegmentOffset, SourceSnapshot, Stance
 from utils import compute_sha256, count_words
 
 _NOW = datetime(2026, 6, 27, 12, 0, tzinfo=UTC)
@@ -123,16 +124,16 @@ def test_valid_statistical_quote_gets_deterministic_candidate_id() -> None:
 
 
 def test_current_and_legacy_quote_policies_are_explicitly_separate() -> None:
-    assert EVIDENCE_POLICY_VERSION == "mvp6.4-evidence-density-50-75-v1"
-    assert STATISTICAL_MIN_WORDS == 50
-    assert NON_STATISTICAL_MIN_WORDS == 75
-    assert CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words == 50
-    assert CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words == 75
+    assert EVIDENCE_POLICY_VERSION == "mlp4-relaxed-evidence-yield-20-30-v1"
+    assert STATISTICAL_MIN_WORDS == 20
+    assert NON_STATISTICAL_MIN_WORDS == 30
+    assert CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words == 20
+    assert CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words == 30
     assert LEGACY_FIXTURE_QUOTE_LENGTH_POLICY.statistical_min_words == 50
     assert LEGACY_FIXTURE_QUOTE_LENGTH_POLICY.non_statistical_min_words == 100
 
 
-@pytest.mark.parametrize(("word_count", "accepted"), [(49, False), (50, True), (51, True)])
+@pytest.mark.parametrize(("word_count", "accepted"), [(19, False), (20, True), (21, True)])
 def test_statistical_quote_boundary(word_count: int, accepted: bool) -> None:
     segment = _statistical_sentence(word_count)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
@@ -142,7 +143,7 @@ def test_statistical_quote_boundary(word_count: int, accepted: bool) -> None:
     assert (result.candidate is not None) is accepted
 
 
-@pytest.mark.parametrize(("word_count", "accepted"), [(74, False), (75, True), (76, True)])
+@pytest.mark.parametrize(("word_count", "accepted"), [(29, False), (30, True), (31, True)])
 def test_non_statistical_quote_boundary(word_count: int, accepted: bool) -> None:
     segment = _non_statistical_sentence(word_count)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
@@ -152,14 +153,14 @@ def test_non_statistical_quote_boundary(word_count: int, accepted: bool) -> None
     assert (result.candidate is not None) is accepted
 
 
-def test_non_statistical_quote_requires_at_least_seventy_five_words() -> None:
-    accepted_segment = _non_statistical_sentence(75)
+def test_non_statistical_quote_requires_at_least_thirty_words() -> None:
+    accepted_segment = _non_statistical_sentence(30)
     accepted_snapshot = _snapshot(f"{_BEFORE} {accepted_segment} {_AFTER}")
     accepted = _filter(
         accepted_snapshot,
         f'[{_BEFORE}] "{accepted_segment}" [{_AFTER}]',
     )
-    rejected_segment = _non_statistical_sentence(74)
+    rejected_segment = _non_statistical_sentence(29)
     rejected_snapshot = _snapshot(f"{_BEFORE} {rejected_segment} {_AFTER}")
     rejected = _filter(
         rejected_snapshot,
@@ -168,9 +169,33 @@ def test_non_statistical_quote_requires_at_least_seventy_five_words() -> None:
 
     assert accepted.valid is True
     assert accepted.candidate is not None
-    assert accepted.candidate.raw_segment_word_count == 75
+    assert accepted.candidate.raw_segment_word_count == 30
     assert rejected.valid is False
-    assert rejected.rejection_message == "quoted segments contain 74 words; need 75"
+    assert rejected.rejection_message == "quoted segments contain 29 words; need 30"
+
+
+def test_claim_keyword_matches_are_audit_metadata_not_an_acceptance_gate() -> None:
+    segment = _non_statistical_sentence(30)
+    snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
+    quote_block = f'[{_BEFORE}] "{segment}" [{_AFTER}]'
+
+    result = _filter(snapshot, quote_block, keywords=["unmatched"])
+
+    assert result.valid is True
+    assert result.candidate is not None
+    assert result.candidate.claim_keyword_match_count == 0
+
+
+def test_candidate_search_rank_allows_the_expanded_bounded_backfill_pool() -> None:
+    segment = _non_statistical_sentence(30)
+    snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
+    result = _filter(snapshot, f'[{_BEFORE}] "{segment}" [{_AFTER}]')
+
+    assert result.candidate is not None
+    payload = result.candidate.model_dump()
+    assert CandidateQuoteBlock.model_validate({**payload, "search_rank": 25}).search_rank == 25
+    with pytest.raises(ValidationError):
+        CandidateQuoteBlock.model_validate({**payload, "search_rank": 26})
 
 
 def test_legacy_fixture_policy_does_not_leak_into_current_default_filtering() -> None:
@@ -233,7 +258,6 @@ def test_valid_repeated_segment_uses_occurrence_with_matching_brackets() -> None
         (f'[{_BEFORE}] "missing segment text" [{_AFTER}]', ["policy"]),
         (f'[Wrong preceding sentence.] "{_statistical_sentence()}" [{_AFTER}]', ["policy"]),
         (f'[{_BEFORE}] "{_statistical_sentence()}" [Wrong following sentence.]', ["policy"]),
-        (f'[{_BEFORE}] "{_statistical_sentence()}" [{_AFTER}]', ["unmatched"]),
     ],
 )
 def test_invalid_quote_blocks_are_rejected_without_candidate_id(
@@ -360,7 +384,7 @@ def test_non_statistical_quote_below_75_words_rejected_without_id() -> None:
     _assert_rejected(result)
 
 
-def test_statistical_quote_below_50_words_rejected_without_id() -> None:
+def test_statistical_quote_below_current_minimum_rejected_without_id() -> None:
     segment = _statistical_sentence(STATISTICAL_MIN_WORDS - 1)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
     quote_block = f'[{_BEFORE}] "{segment}" [{_AFTER}]'
@@ -373,8 +397,8 @@ def test_statistical_quote_below_50_words_rejected_without_id() -> None:
 @pytest.mark.parametrize(
     "segment",
     [
-        f"{_words(['policy', 'evidence', 'shows', '2026'], 74)}.",
-        f"{_words(['policy', 'evidence', 'shows', 'growth'], 74)}.",
+        f"{_words(['policy', 'evidence', 'shows', '2026'], 29)}.",
+        f"{_words(['policy', 'evidence', 'shows', 'growth'], 29)}.",
     ],
 )
 def test_digit_or_marker_alone_does_not_unlock_statistical_threshold(segment: str) -> None:
@@ -387,7 +411,7 @@ def test_digit_or_marker_alone_does_not_unlock_statistical_threshold(segment: st
 
 
 def test_marker_substrings_do_not_unlock_statistical_threshold() -> None:
-    segment = f"{_words(['policy', 'corporate', 'reporting', '2026'], 74)}."
+    segment = f"{_words(['policy', 'corporate', 'reporting', '2026'], 29)}."
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
     quote_block = f'[{_BEFORE}] "{segment}" [{_AFTER}]'
 
@@ -452,12 +476,12 @@ def test_verify_rejects_tampered_candidate_offsets_even_when_hash_matches() -> N
 
 
 def test_verify_rejects_underlength_candidate_without_keyword_recheck() -> None:
-    segment = _non_statistical_sentence(74)
+    segment = _non_statistical_sentence(29)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
     rejected = _filter(snapshot, f'[{_BEFORE}] "{segment}" [{_AFTER}]')
     assert rejected.valid is False
 
-    accepted_segment = _non_statistical_sentence(75)
+    accepted_segment = _non_statistical_sentence(30)
     accepted_snapshot = _snapshot(f"{_BEFORE} {accepted_segment} {_AFTER}")
     accepted = _filter(
         accepted_snapshot,
@@ -471,7 +495,7 @@ def test_verify_rejects_underlength_candidate_without_keyword_recheck() -> None:
         update={
             "extracted_quote_block": f'[{_BEFORE}] "{segment}" [{_AFTER}]',
             "segment_offsets": offsets,
-            "raw_segment_word_count": 74,
+            "raw_segment_word_count": 29,
         }
     )
     underlength = underlength.model_copy(
@@ -485,12 +509,12 @@ def test_verify_rejects_underlength_candidate_without_keyword_recheck() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="need 75"):
+    with pytest.raises(ValueError, match="need 30"):
         verify_candidate_against_snapshot(short_snapshot, underlength)
 
 
 def test_downstream_recheck_rejects_tampered_statistical_candidate() -> None:
-    accepted_segment = _statistical_sentence(50)
+    accepted_segment = _statistical_sentence(20)
     accepted_snapshot = _snapshot(f"{_BEFORE} {accepted_segment} {_AFTER}")
     accepted = _filter(
         accepted_snapshot,
@@ -498,7 +522,7 @@ def test_downstream_recheck_rejects_tampered_statistical_candidate() -> None:
     )
     assert accepted.candidate is not None
 
-    short_segment = _statistical_sentence(49)
+    short_segment = _statistical_sentence(19)
     short_snapshot = _snapshot(f"{_BEFORE} {short_segment} {_AFTER}")
     start_char = short_snapshot.normalized_text.index(short_segment)
     offsets = [SegmentOffset(start_char=start_char, end_char=start_char + len(short_segment))]
@@ -507,7 +531,7 @@ def test_downstream_recheck_rejects_tampered_statistical_candidate() -> None:
             "snapshot_sha256": short_snapshot.snapshot_sha256,
             "extracted_quote_block": f'[{_BEFORE}] "{short_segment}" [{_AFTER}]',
             "segment_offsets": offsets,
-            "raw_segment_word_count": 49,
+            "raw_segment_word_count": 19,
             "quote_block_id": derive_quote_block_id(
                 accepted.candidate.source_url,
                 short_snapshot.snapshot_sha256,
@@ -516,5 +540,5 @@ def test_downstream_recheck_rejects_tampered_statistical_candidate() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="need 50"):
+    with pytest.raises(ValueError, match="need 20"):
         verify_candidate_against_snapshot(short_snapshot, tampered)

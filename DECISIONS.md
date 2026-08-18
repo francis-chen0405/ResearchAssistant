@@ -1,5 +1,35 @@
 # Decisions
 
+## 2026-08-17 - MLP-4 Expanded Retrieval Yield
+
+- Replace the live Advanced source-target choices with 5, 10, 15, and 20, with 10 as
+  the default. Continue accepting the former 7-source value only to inspect historical
+  immutable runs.
+- Give each new target five bounded ranked fallbacks, resulting in at most 10, 15, 20,
+  or 25 acquisition attempts per active stance per research round.
+- Correct the stale pre-Analyst `CandidateQuoteBlock.search_rank <= 5` schema limit.
+  Candidate, provisional, and retrieval rank provenance now permits the bounded pool
+  through rank 25.
+- Preserve discovery-floor, exact snapshot membership, offsets, context, boundary,
+  truncation, quotation-density, Analyst, Reviewer, Ledger, and final-validation rules.
+- Bump the ranking/factory/fingerprint/post-filter policy identities. Add no dependency,
+  migration, provider, or live provider spend.
+
+## 2026-08-17 - MLP-4 Evidence-Yield Relaxation
+
+- Lower the deterministic discovery discard floor from 20/100 to 5/100 so marginally
+  ranked results can enter the bounded acquisition pool.
+- Lower current provider-backed exact-quotation minimums from 50 statistical / 75
+  non-statistical words to 20 / 30 words.
+- Retain `claim_keyword_match_count` as non-negative audit metadata, including zero,
+  rather than rejecting exact passages before semantic Analyst review.
+- Preserve exact snapshot membership, ordered offsets, immediate context, boundary and
+  truncation rules, immutable evidence, Analyst scoring, Reviewer approval, Ledger
+  admission, and final validation. Do not add fuzzy quote repair.
+- Bump the discovery, extraction, MiMo adapter/factory/fingerprint, and orchestration
+  policy identities so the relaxed contract cannot silently resume an older run.
+- Add no dependency, migration, provider, live spend, interface redesign, or MLP-5 work.
+
 ## 2026-08-15 - MLP-4 Research Quality & OpenAlex Integration
 
 - Use Exa and OpenAlex together by default, with separate provider-appropriate Claim

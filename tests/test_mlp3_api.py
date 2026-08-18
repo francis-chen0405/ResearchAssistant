@@ -194,6 +194,7 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
             "raw_claim": "A public claim",
             "acknowledged_public": True,
             "db_path": str(database),
+            "sources_per_stance_per_round": 20,
         },
     )
 
@@ -205,6 +206,7 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
     assert request.max_cost_usd == Decimal("0.15")
     assert request.max_llm_calls == 160
     assert request.research_controls.depth.value == "standard"
+    assert request.research_controls.sources_per_stance_per_round == 20
 
 
 def test_snapshot_history_cancellation_and_service_controls(tmp_path: Path) -> None:

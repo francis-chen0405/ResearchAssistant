@@ -20,7 +20,8 @@ from models import (
 )
 from providers.search import SearchResult
 
-DISCARD_SCORE_FLOOR = 20
+DISCOVERY_POLICY_VERSION = "mlp4-expanded-retrieval-yield-v1"
+DISCARD_SCORE_FLOOR = 5
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOP_WORDS = frozenset(
     {
@@ -200,8 +201,8 @@ def rank_discovery_pool(
     source_target: int,
 ) -> tuple[RankedDiscoveryResult, ...]:
     """Collapse exact canonical URLs, score the pool, and select only the top N."""
-    if source_target not in {5, 7, 10}:
-        raise ValueError("source target must be one of 5, 7, or 10")
+    if source_target not in {5, 7, 10, 15, 20}:
+        raise ValueError("source target must be one of 5, 10, 15, or 20")
     host_counts = Counter(
         (urlsplit(result.original_url).hostname or "").lower() for _, result in query_results
     )

@@ -16,9 +16,13 @@ The user explicitly authorized MLP-4 Research Quality & OpenAlex Integration on
 2026-08-15, and it is complete. It adds provider-specific Exa/OpenAlex planning, secure
 OpenAlex discovery,
 deterministic two-stage source ranking, a default-off counterevidence mode, cumulative
-progress, and a hidden research trail. The default is seven top-ranked sources per
-active stance per research round, with five/seven/ten available in Advanced; scores
-below 20 leave the acquisition pool, and no diversity or wildcard slot is used.
+progress, and a hidden research trail. The default is ten top-ranked sources per active
+stance per research round, with five/ten/fifteen/twenty available in Advanced and five
+bounded fallbacks for each target; scores below 5 leave the acquisition pool, and no
+diversity or wildcard slot is used. The 2026-08-17 corrective evidence-yield policy uses
+20 statistical / 30 non-statistical quoted words, treats a zero claim-keyword count as
+audit metadata before semantic Analyst review, and permits candidate provenance through
+the bounded rank-25 pool, while preserving exact snapshot and downstream release gates.
 
 MLP-4 preserves the current Next.js visual language except for minimal functional
 controls. MLP-5 is the separately deferred visual redesign and is not authorized.

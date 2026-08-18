@@ -18,8 +18,11 @@ same validated direct-MiMo pipeline through a responsive persisted web surface. 
 live research and hardened integrity/web-interface boundaries; MVP-6.1 fixed the live-worker test.
 MVP-6.2 Batch A corrected current-stack records, MVP-6.3 validates every redirect
 destination before local acquisition and treats Firecrawl provenance URLs as untrusted,
-and MVP-6.4 applies a shared 50-statistical/75-non-statistical exact-quote policy to new
-provider-backed runs. MVP-6.5 enforces submitted claims as immutable in SQLite and makes
+and MVP-6.4 introduced a shared 50-statistical/75-non-statistical exact-quote policy.
+The user-authorized 2026-08-17 MLP-4 correction supersedes that current-run policy with
+20/30-word thresholds, a 5/100 discovery floor, and keyword matching as audit metadata;
+frozen historical fixtures retain their labeled policy. MVP-6.5 enforces submitted
+claims as immutable in SQLite and makes
 live history and inspection read-only at the connection boundary. MVP-6.6 gives RUNNING
 its own exit code, distinguishes exact usage from incomplete known subtotals, enforces
 unknown usage conservatively, and validates frozen provider contracts end to end.
@@ -57,10 +60,13 @@ remains only for the separate fixture replay and evidence-inspection utilities.
 
 MLP-4 makes focused research the default, adds optional counterevidence, and gives the
 Claim Planner separate Exa web queries and OpenAlex academic queries. Discovery metadata
-is ranked before acquisition; scores below 20 are retained in the audit trail but are not
-fetched. The top 5, 7, or 10 sources are acquired, then deterministically reordered from
+is ranked before acquisition; scores below 5 are retained in the audit trail but are not
+fetched. The top 5, 10, 15, or 20 sources are acquired, with five bounded fallbacks,
+then deterministically reordered from
 their actual text before extraction without deleting a source at this second stage. The
-post-extraction quotation, Reviewer, Ledger, and final-release gates are unchanged.
+current quote floor is 20 statistical / 30 non-statistical exact words, and a zero
+claim-keyword match remains audit metadata for semantic Analyst review. Exact snapshot,
+Reviewer, Ledger, and final-release gates remain strict.
 
 ## How the system works
 
@@ -68,7 +74,7 @@ post-extraction quotation, Reviewer, Ledger, and final-release gates are unchang
 Raw claim
   -> Claim Planner (3 Exa queries + 1 OpenAlex query per active stance)
   -> focused Supporting Researcher, or equal Supporting and Opposing Researchers
-  -> merged provider discovery ranking (discard below 20; select top 5/7/10)
+  -> merged provider discovery ranking (discard below 5; select top 5/10/15/20)
   -> acquired-text ranking for extraction order (no second-stage deletion)
   -> trusted source snapshots and model-selected verbatim passages
   -> deterministic quote assembly and exact quotation filtering
@@ -92,7 +98,7 @@ records are insert-only SQLite audit artifacts.
   claim is true. For each active stance it creates three typed Exa web queries and one
   OpenAlex academic query.
 - **Researchers** merge Exa and OpenAlex discovery metadata, collapse exact canonical URL
-  duplicates, discard scores below 20, and acquire only the configured top 5, 7, or 10.
+  duplicates, discard scores below 5, and acquire only the configured top 5, 10, 15, or 20.
   Acquired text is scored again only to set extraction order; this second stage does not
   remove sources. Counterevidence is off by default and enables the equal opposing lane.
 - **Extractor models** return only ordered exact snapshot passages. Application code
@@ -121,13 +127,15 @@ canonical URLs pass the same policy before becoming provenance. Origin media typ
 only when it was verified for the same final URL; Firecrawl metadata remains a separate
 provider-declared claim and cannot reclassify Markdown as HTML or PDF.
 
-Current provider-backed evidence requires at least 50 exact quoted words only when the
+Current provider-backed evidence requires at least 20 exact quoted words only when the
 quoted segments contain both a digit and a recognized statistical marker (`%`, `percent`,
 `rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`,
-or `decline`). Otherwise it requires at least 75 words. Marker matching is
+or `decline`). Otherwise it requires at least 30 words. Marker matching is
 case-insensitive and respects word/token boundaries, so a digit alone, marker alone, or
 incidental substring does not qualify. Frozen fixture replay alone retains its explicitly
-labeled historical 50/100 policy. Exact membership, offsets, context, provenance,
+labeled historical 50/100 policy. A zero claim-keyword match count is permitted as audit
+metadata so synonyms and domain-specific phrasing reach semantic review. Exact
+membership, offsets, context, provenance,
 entailment, qualification, Reviewer approval, Ledger admission, and final validation are
 unchanged.
 
@@ -296,7 +304,8 @@ the app saves them in the user's macOS login Keychain and reloads them on later 
 Advanced mode checks exact Wigolo `0.2.1` identity and can start its pinned acquisition service.
 It never treats a listener or child PID as proof of health and stops only its own process group.
 The Next.js page accepts an exact claim, explicit token/USD budgets, optional run ID, and SQLite path.
-Advanced includes counterevidence (off by default) and a 5/7/10 source target (default 7).
+Advanced includes counterevidence (off by default) and a 5/10/15/20 source target
+(default 10), with five bounded fallbacks per target.
 Changing research mode does not rewrite any configured usage ceiling. Depth, tone, and
 report-length settings remain intentionally hidden. It
 shows persisted stage/checkpoint/usage/cost and stance progress, deterministic terminal states,

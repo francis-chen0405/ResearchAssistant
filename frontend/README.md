@@ -18,7 +18,7 @@ merged results before acquisition. It can start and health-check pinned Wigolo
 Wigolo-local extraction failures. It can run or compatibly resume direct
 `mimo-v2.5-pro` research, inspect persisted history, show live progress, cooperatively
 cancel, and copy or download a released validated brief. Advanced controls optional
-counterevidence and a top 5/7/10 source target; terminal runs expose the persisted
+counterevidence and a top 5/10/15/20 source target; terminal runs expose the persisted
 two-stage ranking trail only on request.
 
 The live form intentionally omits research depth, presentation tone, report length, and

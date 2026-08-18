@@ -37,9 +37,9 @@ STATISTICAL_MARKERS = (
     "decline",
 )
 
-EVIDENCE_POLICY_VERSION = "mvp6.4-evidence-density-50-75-v1"
-STATISTICAL_MIN_WORDS = 50
-NON_STATISTICAL_MIN_WORDS = 75
+EVIDENCE_POLICY_VERSION = "mlp4-relaxed-evidence-yield-20-30-v1"
+STATISTICAL_MIN_WORDS = 20
+NON_STATISTICAL_MIN_WORDS = 30
 
 
 class QuoteLengthPolicy(StrictModel):
@@ -298,9 +298,6 @@ def validate_quote_substance(
         f"{parsed_quote.preceding_context} {quoted_text} {parsed_quote.following_context}",
         claim_keywords,
     )
-
-    if keyword_matches < 1:
-        raise ValueError("quote block does not contain a configured claim keyword")
 
     minimum_words = (
         quote_length_policy.statistical_min_words

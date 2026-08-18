@@ -1060,7 +1060,7 @@ def _json_hash(payload: object) -> str:
 # Phase 9 provider-backed orchestration
 # ---------------------------------------------------------------------------
 
-PHASE9_POST_FILTER_VERSION = "mvp9-deterministic-quote-assembly-v1"
+PHASE9_POST_FILTER_VERSION = "mlp4-expanded-retrieval-yield-v1"
 PHASE9_LEDGER_ID_VERSION = "phase9-provider-ledger-id-v1"
 PHASE9_RESEARCHERS_ARTIFACT = "phase9-researchers"
 PHASE9_ANALYSIS_ARTIFACT = "phase9-analysis-ledger"

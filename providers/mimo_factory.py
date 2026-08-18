@@ -51,16 +51,17 @@ from providers.pricing import (
     DIRECT_MIMO_PRICING_POLICY_VERSION,
     ModelPriceCap,
 )
+from providers.ranking import DISCOVERY_POLICY_VERSION
 
-MIMO_FACTORY_VERSION = "mvp11-research-governor-factory-v1"
+MIMO_FACTORY_VERSION = "mlp4-expanded-retrieval-yield-factory-v1"
 MIMO_RETRY_POLICY_VERSION = "mvp9-nonretryable-exact-selection-v1"
 MIMO_BUDGET_POLICY_VERSION = "mvp6.8-exact-decimal-reserve-reconcile-v1"
-MIMO_FINGERPRINT_VERSION = "mvp11-research-governor-v1"
+MIMO_FINGERPRINT_VERSION = "mlp4-expanded-retrieval-yield-v1"
 RESEARCH_GOVERNOR_POLICY_VERSION = "mvp11-research-governor-v1"
 MLP4_DEFAULT_ACQUISITION = AcquisitionPolicy(
     discovery_results_per_query=10,
     usable_snapshots_per_query=10,
-    source_target_per_stance=7,
+    source_target_per_stance=10,
 )
 
 
@@ -285,7 +286,8 @@ def _fingerprint_payload(
             f"{sha256(pricing_json.encode('utf-8')).hexdigest()}|"
             f"{sha256(operational_policy_json.encode('utf-8')).hexdigest()}"
             f"|controls:{config.research_controls.canonical_json()}"
-            f"|{EVIDENCE_POLICY_VERSION}|{RESEARCH_GOVERNOR_POLICY_VERSION}"
+            f"|{EVIDENCE_POLICY_VERSION}|{DISCOVERY_POLICY_VERSION}"
+            f"|{RESEARCH_GOVERNOR_POLICY_VERSION}"
         ),
         "repository_revision": config.repository_revision,
     }

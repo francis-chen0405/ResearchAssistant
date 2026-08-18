@@ -1,4 +1,4 @@
-Prompt-Version: mvp9-verbatim-quote-selection-v1
+Prompt-Version: mlp4-relaxed-evidence-yield-v1
 Stage: extractor
 
 # Role
@@ -33,15 +33,17 @@ always control.
 - Do not include immediate preceding/following context unless it is itself part of the
   evidence passage being selected.
 - Preserve material qualifications and avoid fluff padding.
-- Use at least 50 exact quoted words only when the quotation contains at least one digit and at least one recognized statistical marker:
+- Use at least 20 exact quoted words only when the quotation contains at least one digit and at least one recognized statistical marker:
   `%`, `percent`, `rate`, `ratio`,
   `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, or `decline`.
   Marker matching uses whole word/token boundaries; incidental substrings do not count.
-- Otherwise, use at least 75 exact quoted words. A digit without a recognized marker and
-  a marker without a digit both require 75 words.
+- Otherwise, use at least 30 exact quoted words. A digit without a recognized marker and
+  a marker without a digit both require 30 words.
 - Never repair or pad a short selection. Invalid selections are rejected rather than
   rewritten or retried as though formatting could change source truth.
+- Claim-keyword matches are audit metadata rather than a hard acceptance gate; select
+  semantically relevant passages even when the source uses synonyms or narrower terms.
 - Python validation is authoritative for classification, exact membership, ordering,
-  context, length, relevance, provenance, deterministic brackets, offsets, and IDs.
-- Leave all deterministic membership, offset, length, relevance, marker, and ID checks
-  to the application validator.
+  context, length, provenance, deterministic brackets, offsets, and IDs.
+- Leave all deterministic membership, offset, length, marker, keyword-audit, and ID
+  checks to the application validator.

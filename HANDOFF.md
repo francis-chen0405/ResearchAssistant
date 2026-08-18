@@ -1,22 +1,34 @@
 # Handoff
 
-## Current project state — 2026-08-15
+## Current project state — 2026-08-17
 
 MLP-4 Research Quality & OpenAlex Integration is complete. Its corrective quality pass
 uses bounded source backfill, optional claim-facet ranking bonuses, source sentence-range
 selection, and a clean insufficient-evidence terminal path. `web/` remains the sole live
 product surface; the full visual redesign is deferred to MLP-5. The current page now has
-default-off counterevidence, an Advanced 5/7/10 source target (default 7), required
+default-off counterevidence, an Advanced 5/10/15/20 source target (default 10), required
 OpenAlex setup, mode-aware progress/results, honest estimated-cost wording, and a hidden
 terminal Research Trail drawer.
 
 New provider-specific Planner output contains three Exa queries and one OpenAlex query
 per active stance. Focused runs start only supporting research; balanced runs preserve
-equal sides. Discovery is merged and deterministically ranked, scores below 20 are not
+equal sides. Discovery is merged and deterministically ranked, scores below 5 are not
 acquired, and the top N uses no wildcard or diversity reservation. Acquired page text is
-ranked a second time only to order extraction. Existing exact quotation and final-release
-gates remain unchanged. Mode changes reduce actual work only and never rewrite configured
-usage ceilings.
+ranked a second time only to order extraction. Mode changes reduce actual work only and
+never rewrite configured usage ceilings.
+
+The 2026-08-17 user-authorized evidence-yield correction lowers the discovery floor from
+20 to 5, lowers current exact quote minimums from 50/75 to 20 statistical / 30
+non-statistical words, and permits zero claim-keyword matches as visible audit metadata
+before semantic Analyst review. Exact snapshot membership, ordering, offsets, immediate
+context, boundary/truncation rules, immutable evidence, Analyst scoring, Reviewer
+approval, Ledger admission, and final validation remain strict; fuzzy repair remains
+forbidden.
+
+The 2026-08-17 expanded-retrieval correction adds five bounded fallbacks per target
+(up to 25 acquisition ranks) and removes the stale pre-Analyst candidate `search_rank <=
+5` restriction. Historical seven-source runs remain readable; seven is not offered as a
+new live control.
 
 `Launch ResearchAssistant.command` starts the loopback API on 8765 and the built Next.js
 site on 3000, loads saved Keychain credentials inside Python, and cleans up only owned
@@ -25,12 +37,16 @@ processes. Install the approved Python dependencies, then run `pnpm install` and
 0.141.1, Uvicorn 0.51.0, Next.js 16.3.1, React/React DOM 19.2.8, Motion 12.43.0,
 TypeScript 5.9.3, and ESLint 9.39.5.
 
-Regression proof is concentrated in `tests/test_mlp4_research_quality.py` and the migrated
-provider, persistence, API, live-controller, and pipeline suites. Full verification is
-638 passed, 2 expected skips, plus Ruff lint/format, frontend lint, production build, and
-`git diff --check`. No live provider call or spending occurred. Migration 10 is additive;
-old terminal runs remain readable and old writable databases migrate intentionally on
-run/resume. MLP-5 is not authorized.
+Regression proof is concentrated in `tests/test_mlp4_research_quality.py`,
+`tests/test_phase3.py`, and the provider/pipeline suites. The correction changes no
+dependency or migration and made no live provider call. Its policy/fingerprint identity
+bumps require a fresh run: restart the launcher and leave Run ID blank rather than
+resuming a run created under the previous thresholds. Old terminal runs remain readable.
+MLP-5 is not authorized.
+
+Correction verification passed: 651 tests with 2 expected opt-in skips, Ruff lint and
+format, frontend ESLint and optimized production build using installed dependencies,
+launcher syntax, and `git diff --check`.
 
 Keychain maintenance on 2026-08-15 replaced the background-incompatible command-line
 password prompt with direct in-process calls to Apple's Security framework. The new path

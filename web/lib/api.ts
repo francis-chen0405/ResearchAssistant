@@ -61,7 +61,7 @@ export type RunSnapshot = {
   fingerprint: string | null;
   research_controls: {
     research_mode: "focused" | "balanced";
-    sources_per_stance_per_round: 5 | 7 | 10;
+    sources_per_stance_per_round: 5 | 10 | 15 | 20;
   };
 };
 
@@ -114,7 +114,7 @@ type StartInput = {
   max_cost_usd: string;
   max_llm_calls: number;
   include_counterevidence: boolean;
-  sources_per_stance_per_round: 5 | 7 | 10;
+  sources_per_stance_per_round: 5 | 10 | 15 | 20;
 };
 
 type StartResult = {

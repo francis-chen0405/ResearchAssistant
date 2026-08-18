@@ -495,7 +495,7 @@ def test_snapshot_hash_mismatch_blocks_ledger_admission() -> None:
 
 def test_underlength_tampered_statistical_candidate_is_blocked_before_ledger() -> None:
     _, accepted_candidate = _snapshot_and_candidate()
-    short_segment = f"{_words(['policy', 'evidence', 'shows', '50%', 'growth'], 49)}."
+    short_segment = f"{_words(['policy', 'evidence', 'shows', '50%', 'growth'], 19)}."
     short_snapshot = build_source_snapshot(
         run_id=_RUN_ID,
         retrieval_attempt_id=_RETRIEVAL_ID,
@@ -513,7 +513,7 @@ def test_underlength_tampered_statistical_candidate_is_blocked_before_ledger() -
             "snapshot_sha256": short_snapshot.snapshot_sha256,
             "extracted_quote_block": f'[{_BEFORE}] "{short_segment}" [{_AFTER}]',
             "segment_offsets": offsets,
-            "raw_segment_word_count": 49,
+            "raw_segment_word_count": 19,
             "quote_block_id": derive_quote_block_id(
                 accepted_candidate.source_url,
                 short_snapshot.snapshot_sha256,
@@ -526,7 +526,7 @@ def test_underlength_tampered_statistical_candidate_is_blocked_before_ledger() -
     draft = _draft(candidate, decision, statement)
     review = _approved_review(candidate, draft)
 
-    with pytest.raises(ValueError, match="need 50"):
+    with pytest.raises(ValueError, match="need 20"):
         _admit(
             _admission_request(
                 short_snapshot,

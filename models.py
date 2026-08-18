@@ -108,7 +108,7 @@ class ResearchControls(StrictModel):
     tone: PresentationTone = PresentationTone.NEUTRAL
     focus: ResearchFocus | None = None
     research_mode: ResearchMode = ResearchMode.FOCUSED
-    sources_per_stance_per_round: Literal[5, 7, 10] = 7
+    sources_per_stance_per_round: Literal[5, 7, 10, 15, 20] = 10
 
     def canonical_json(self) -> str:
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
@@ -467,7 +467,7 @@ class RetrievalRecord(StrictModel):
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
     query_text: NonEmptyStr
-    search_rank: Annotated[int, Field(ge=1, le=10)]
+    search_rank: Annotated[int, Field(ge=1, le=25)]
     source_url: NonEmptyStr
     resolved_url: NonEmptyStr
     status: RetrievalStatus
@@ -569,7 +569,7 @@ class ProvisionalCandidate(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
-    search_rank: Annotated[int, Field(ge=1, le=10)]
+    search_rank: Annotated[int, Field(ge=1, le=25)]
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     extracted_quote_block: NonEmptyStr
@@ -588,7 +588,7 @@ class CandidateQuoteBlock(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=3)]
-    search_rank: Annotated[int, Field(ge=1, le=5)]
+    search_rank: Annotated[int, Field(ge=1, le=25)]
     retrieved_at: datetime
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -597,7 +597,7 @@ class CandidateQuoteBlock(StrictModel):
     segment_offsets: Annotated[list[SegmentOffset], Field(min_length=1)]
     raw_segment_word_count: PositiveInt
     has_statistical_markers: bool
-    claim_keyword_match_count: PositiveInt
+    claim_keyword_match_count: NonNegativeInt
     truncated: bool
     extraction_prompt_version: NonEmptyStr
     extraction_model_name: NonEmptyStr

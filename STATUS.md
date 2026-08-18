@@ -1,6 +1,6 @@
 # Status
 
-## Current project state — 2026-08-15
+## Current project state — 2026-08-17
 
 MLP-4 Research Quality & OpenAlex Integration is complete. A corrective quality pass
 adds bounded rank-ordered backfill, claim-aware soft ranking, source-anchored exact
@@ -8,16 +8,24 @@ quote selection, and a clean zero-Ledger stop. New live runs use separate
 Planner lanes for three Exa web queries and one OpenAlex academic query per active stance.
 Focused research is the default and performs no opposing provider or model work;
 counterevidence enables the equal opposing lane without changing any configured call,
-token, USD, deadline, or provider ceiling. Advanced chooses the top 5, 7, or 10 sources,
-with 7 as the default and no wildcard or diversity slot.
+token, USD, deadline, or provider ceiling. Advanced chooses 5, 10, 15, or 20 sources,
+with 10 as the default, five bounded fallbacks per target, and no wildcard or diversity
+slot.
+
+On 2026-08-17, the user explicitly authorized a substantial evidence-yield relaxation.
+The discovery floor is now 5/100 instead of 20/100, current provider-backed exact quote
+minimums are 20 statistical / 30 non-statistical words instead of 50/75, and a zero
+claim-keyword count is retained as audit metadata for semantic Analyst review rather
+than causing pre-Analyst rejection. Exact snapshot membership, sequential offsets,
+immediate context, boundary and truncation rules, immutable evidence, Analyst scoring,
+Reviewer approval, Ledger admission, and final validation remain strict. No fuzzy quote
+repair was added.
 
 The deterministic first ranking merges Exa/OpenAlex discovery metadata, collapses exact
-canonical URLs, applies the documented 100-point score, and retains below-20 decisions in
+canonical URLs, applies the documented 100-point score, and retains below-5 decisions in
 the trail while excluding them from acquisition. After acquisition, actual normalized
 page text is scored only to set extraction order; that second stage does not delete a
-usable source. The existing exact quotation filter, Reviewer, Ledger, immutable evidence,
-Research Governor, and final validator are unchanged. Focused briefs explicitly disclose
-that counterevidence was not requested.
+usable source. Focused briefs explicitly disclose that counterevidence was not requested.
 
 OpenAlex configuration is required for new live runs, stored through the existing macOS
 Keychain boundary, and enforced at no more than ten searches or nominal USD 0.01 per run.
@@ -26,12 +34,21 @@ read-only inspection. Terminal Next.js results expose the persisted two-stage ra
 only through a hidden post-run Research Trail drawer. MiMo estimates use reported cached
 input detail when present and conservatively treat input as uncached otherwise.
 
-Verification passed: 638 tests with 2 expected opt-in skips, repository-wide Ruff lint
-and format, frontend ESLint, optimized Next.js production build, and `git diff --check`.
-No live Exa, OpenAlex, Wigolo, Firecrawl, or MiMo call was made, so this implementation
-spent no provider credit. No dependency, hosting, account, telemetry, visual-redesign,
-or historical immutable-row rewrite was added. MLP-5 remains unstarted and requires
-separate user authorization.
+The evidence-yield correction bumps its discovery, extraction, MiMo adapter/factory/
+fingerprint, and orchestration policy identities, so it applies to fresh runs and cannot
+silently resume an older contract. No live Exa, OpenAlex, Wigolo, Firecrawl, or MiMo call
+was made, so this implementation spent no provider credit. No dependency, migration,
+hosting, account, telemetry, visual redesign, or historical immutable-row rewrite was
+added. MLP-5 remains unstarted and requires separate user authorization.
+
+The 2026-08-17 expanded-retrieval correction removes a stale `search_rank <= 5`
+pre-Analyst candidate constraint that rejected otherwise valid exact quotes from later
+bounded acquisition ranks. Candidate, provisional, and retrieval provenance now permits
+ranks through 25; exact source and downstream quality/release checks are unchanged.
+
+Verification for the 2026-08-17 corrections passed: 651 tests with 2 expected opt-in
+skips, repository-wide Ruff lint and format, frontend ESLint and optimized production
+build using the installed dependencies, launcher syntax, and `git diff --check`.
 
 On 2026-08-15, the Keychain boundary was repaired after real launcher use exposed that
 the command-line `security` tool cannot receive a background web request's password

@@ -160,7 +160,7 @@ class ResearchStartInput(StrictModel):
     max_cost_usd: Decimal = Field(default=Decimal("0.15"), gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     include_counterevidence: bool = False
-    sources_per_stance_per_round: Literal[5, 7, 10] = 7
+    sources_per_stance_per_round: Literal[5, 10, 15, 20] = 10
 
 
 class RunLocator(StrictModel):

@@ -41,6 +41,7 @@ from providers.composite_search import CompositeSearchProvider
 from providers.config import OpenAlexConfig
 from providers.openalex import OpenAlexSearchAdapter
 from providers.ranking import (
+    DISCARD_SCORE_FLOOR,
     DiscoveryDecision,
     rank_acquired_sources,
     rank_discovery_pool,
@@ -131,14 +132,14 @@ def _planner(*, balanced: bool) -> PlannerOutput:
     )
 
 
-def test_mlp4_controls_default_to_focused_with_seven_sources() -> None:
+def test_mlp4_controls_default_to_focused_with_ten_sources() -> None:
     controls = ResearchControls()
 
     assert controls.research_mode is ResearchMode.FOCUSED
-    assert controls.sources_per_stance_per_round == 7
+    assert controls.sources_per_stance_per_round == 10
 
 
-@pytest.mark.parametrize("target", [5, 7, 10])
+@pytest.mark.parametrize("target", [5, 10, 15, 20])
 def test_mlp4_controls_accept_only_advanced_source_targets(target: int) -> None:
     controls = ResearchControls(sources_per_stance_per_round=target)
 
@@ -146,8 +147,13 @@ def test_mlp4_controls_accept_only_advanced_source_targets(target: int) -> None:
 
 
 def test_mlp4_controls_reject_unapproved_source_target() -> None:
-    with pytest.raises(ValidationError):
-        ResearchControls(sources_per_stance_per_round=6)
+    for target in (6, 12):
+        with pytest.raises(ValidationError):
+            ResearchControls(sources_per_stance_per_round=target)
+
+
+def test_mlp4_controls_keep_the_legacy_seven_source_value_readable() -> None:
+    assert ResearchControls(sources_per_stance_per_round=7).sources_per_stance_per_round == 7
 
 
 def test_focused_planner_requires_separate_exa_and_openalex_queries() -> None:
@@ -220,7 +226,7 @@ def _openalex_adapter(handler: httpx.MockTransport) -> OpenAlexSearchAdapter:
     )
 
 
-@pytest.mark.parametrize(("target", "expected_attempts"), ((5, 8), (7, 10), (10, 10)))
+@pytest.mark.parametrize(("target", "expected_attempts"), ((5, 10), (10, 15), (15, 20), (20, 25)))
 def test_ranked_acquisition_reserves_a_small_bounded_backfill_pool(
     target: int,
     expected_attempts: int,
@@ -436,7 +442,7 @@ def test_broad_claim_has_no_required_missing_facet_gate() -> None:
     assert ranked[0].score >= 20
 
 
-def test_discovery_ranking_discards_scores_below_twenty() -> None:
+def test_discovery_ranking_keeps_marginal_sources_above_relaxed_floor() -> None:
     run_id = uuid4()
     query = _query(run_id, Stance.SUPPORTING, DiscoveryProvider.EXA, 1)
     ranked = rank_discovery_pool(
@@ -455,11 +461,35 @@ def test_discovery_ranking_discards_scores_below_twenty() -> None:
         source_target=5,
     )
 
-    assert ranked[0].score < 20
+    assert DISCARD_SCORE_FLOOR == 5
+    assert 5 <= ranked[0].score < 20
+    assert ranked[0].decision is DiscoveryDecision.SELECTED
+
+
+def test_discovery_ranking_still_discards_near_zero_sources() -> None:
+    run_id = uuid4()
+    query = _query(run_id, Stance.SUPPORTING, DiscoveryProvider.EXA, 1)
+    ranked = rank_discovery_pool(
+        claim_text="Four-day workweek productivity",
+        query_results=(
+            (
+                query,
+                _result(
+                    "https://monday.com/",
+                    "Welcome",
+                    provider=DiscoveryProvider.EXA,
+                    rank=1,
+                ),
+            ),
+        ),
+        source_target=5,
+    )
+
+    assert ranked[0].score < DISCARD_SCORE_FLOOR
     assert ranked[0].decision is DiscoveryDecision.DISCARDED
 
 
-@pytest.mark.parametrize("source_target", [5, 7, 10])
+@pytest.mark.parametrize("source_target", [5, 10, 15, 20])
 def test_discovery_ranking_selects_only_top_n_without_reserved_slots(
     source_target: int,
 ) -> None:
@@ -475,7 +505,7 @@ def test_discovery_ranking_selects_only_top_n_without_reserved_slots(
                 rank=index,
             ),
         )
-        for index in range(1, 13)
+        for index in range(1, 31)
     )
 
     ranked = rank_discovery_pool(
@@ -759,5 +789,5 @@ def test_post_run_research_trail_reads_persisted_discovery_scores(tmp_path: Path
 
     assert len(trail.items) == 1
     assert trail.items[0].provider == "exa"
-    assert trail.items[0].decision == "discarded"
+    assert trail.items[0].decision == "selected"
     assert trail.items[0].breakdown.penalties == -25

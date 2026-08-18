@@ -225,12 +225,14 @@ rule. The key remains forbidden in browser/application URLs, logs, errors, SQLit
 history, exports, fingerprints, and any persisted or displayed request metadata.
 
 Discovery results are merged, exact canonical duplicates are collapsed, and
-deterministic Stage-A ranking selects the highest-scored sources. Scores below 20/100
-leave the acquisition pool but remain append-only trail records. The target is five,
-seven, or ten usable snapshots per active stance per round, default seven. There are no
-diversity or wildcard overrides. Stage-B ranking orders independently acquired,
+deterministic Stage-A ranking selects the highest-scored sources. Scores below 5/100
+leave the acquisition pool but remain append-only trail records. New live runs target
+five, ten, fifteen, or twenty usable snapshots per active stance per round, default ten,
+and retain five bounded fallbacks per target. The historical seven-source control is
+read-only compatibility only. There are no diversity or wildcard overrides. Stage-B
+ranking orders independently acquired,
 normalized snapshots for extraction. Neither ranking stage replaces or weakens exact
-snapshot/quotation checks, the post-extraction filter, Reviewer approval, Ledger
+snapshot/quotation checks, Reviewer approval, Ledger
 admission, or deterministic final validation.
 
 ### MVP-6.4 Evidence Density Policy
@@ -250,6 +252,21 @@ application-owned indirect connective; Claim Fit 3, qualified-only, and Weak sta
 also require explicit statement scope qualification. A one-sided Ledger produces a
 deterministic not-balanced coverage warning; zero approved Ledger statements still fail
 closed.
+
+### MLP-4 Evidence-Yield Relaxation
+
+On 2026-08-17 the user explicitly authorized a substantially more permissive evidence
+funnel. New provider-backed runs use a 5/100 discovery floor, require 20 exact quoted
+words for digit-plus-statistical-marker evidence and 30 otherwise, and retain
+`claim_keyword_match_count` as non-negative audit metadata rather than a pre-Analyst
+acceptance gate. This supersedes the current-run 20-point and 50/75 thresholds above;
+frozen fixture replay retains its labeled historical 50/100 policy.
+
+The relaxation does not permit fuzzy quotation matching, invented or healed source
+text, incorrect offsets, altered context, mutable snapshots, unreviewed Ledger entry,
+or validator bypass. Lower-quality and synonym-based candidates may reach the Analyst,
+which still applies separate Evidence Quality and Claim Fit scoring before the
+independent Reviewer and deterministic release gate.
 
 ### MVP-6.5 Immutable Run Authority and Read-Only Inspection
 
@@ -606,10 +623,10 @@ truncated snapshot never uses `[End of Text]` as though the full source ended th
 
 ### D. Deterministic Post-Extraction Filter
 
-For each candidate, Python must: parse the bracketed structure; remove ellipsis tokens for word count; confirm every segment appears exactly in the snapshot in sequential order; record character offsets; confirm bracket sentences are the immediate surrounding snapshot sentences; reject `[End of Text]` when `truncated: true`; apply relevance, length, and marker rules; reject failures before assigning an ID.
+For each candidate, Python must: parse the bracketed structure; remove ellipsis tokens for word count; confirm every segment appears exactly in the snapshot in sequential order; record character offsets; confirm bracket sentences are the immediate surrounding snapshot sentences; reject `[End of Text]` when `truncated: true`; apply length and marker rules; reject failures before assigning an ID.
 
-**Relevance:** The quote block must contain at least one configured core claim keyword or approved morphological variant.
-**Substance and Data Density:** For current provider-backed runs, if the quoted segments contain at least one digit and one recognized statistical marker, the minimum length is 50 words. Otherwise, the minimum length is 75 words. Statistical markers are `%`, `percent`, `rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, and `decline`; matching is case-insensitive and respects word/token boundaries. A digit alone, a marker alone, or an incidental substring uses 75. Frozen historical fixture replay explicitly retains the legacy 50/100 policy and may not supply it to a new provider-backed run.
+**Relevance:** Configured claim-keyword matches are counted and persisted as audit metadata. Zero matches do not reject a source before semantic Analyst review because a source may use synonyms, narrower terminology, or domain-specific language.
+**Substance and Data Density:** For current provider-backed runs, if the quoted segments contain at least one digit and one recognized statistical marker, the minimum length is 20 words. Otherwise, the minimum length is 30 words. Statistical markers are `%`, `percent`, `rate`, `ratio`, `average`, `median`, `index`, `p-value`, `million`, `billion`, `growth`, and `decline`; matching is case-insensitive and respects word/token boundaries. A digit alone, a marker alone, or an incidental substring uses 30. Frozen historical fixture replay explicitly retains the legacy 50/100 policy and may not supply it to a new provider-backed run.
 
 ### E. ID Assignment
 
@@ -816,10 +833,10 @@ submit free-form prose or structural framing directly.
 
 The Research Governor still permits no more than three research rounds. In each round,
 every active stance executes its provider-specific plan and attempts eligible results in
-descending deterministic score order until the configured target of five, seven, or ten
-usable unique snapshots exists or the eligible pool is exhausted. Focused mode has one
-active stance; balanced mode has two with equal targets. Results scoring below 20 are
-not acquired. Snapshots are Stage-B ordered, then the unchanged extraction and
+descending deterministic score order until the configured target of five, ten, fifteen,
+or twenty usable unique snapshots exists or the eligible pool is exhausted. Focused mode has one
+active stance; balanced mode has two with equal targets. Results scoring below 5 are
+not acquired. Snapshots are Stage-B ordered, then the extraction and
 post-extraction gates determine which candidates reach the Analyst.
 
 ## MVP Evaluation Metrics

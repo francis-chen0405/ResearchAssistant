@@ -260,15 +260,15 @@ def test_prompt_hash_is_stable_and_changes_when_file_changes(tmp_path: Path) -> 
     assert edited.sha256 != original.sha256
 
 
-def test_extractor_prompt_uses_mvp9_verbatim_selection_contract() -> None:
+def test_extractor_prompt_uses_current_verbatim_selection_contract() -> None:
     prompt = load_prompt(LLMStage.EXTRACTOR)
 
-    assert prompt.version == "mvp9-verbatim-quote-selection-v1"
+    assert prompt.version == "mlp4-relaxed-evidence-yield-v1"
     assert "selected_segments" in prompt.text
     assert "Do not create brackets" in prompt.text
-    assert "at least 50 exact quoted words" in prompt.text
+    assert "at least 20 exact quoted words" in prompt.text
     assert "at least one digit and at least one recognized statistical marker" in prompt.text
-    assert "at least 75 exact quoted words" in prompt.text
+    assert "at least 30 exact quoted words" in prompt.text
     assert "Python validation is authoritative" in prompt.text
     assert "Never paraphrase, heal, expand, trim" in prompt.text
 

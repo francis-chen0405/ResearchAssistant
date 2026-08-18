@@ -1,6 +1,7 @@
 # MLP-4 — Research Quality & OpenAlex Integration
 
-Status: Complete and verified on 2026-08-15; corrective quality pass verified on 2026-08-15.
+Status: Complete and verified on 2026-08-15; corrective quality passes verified on
+2026-08-15 and 2026-08-17, including expanded retrieval yield.
 
 ## Authority and intent
 
@@ -20,13 +21,16 @@ The user explicitly authorized these product decisions:
   work, so actual usage may be lower.
 - Deterministic source selection uses the highest-ranked sources only. There is no
   diversity slot and no wildcard slot.
-- The default source target is seven per active stance per research round. Advanced
-  mode may select five, seven, or ten.
-- Discovery results scoring below 20/100 leave the active acquisition pool. Their
+- The default source target is ten per active stance per research round. Advanced mode
+  may select five, ten, fifteen, or twenty. The historical seven-source control remains
+  readable but is not offered for new live runs.
+- Discovery results scoring below 5/100 leave the active acquisition pool. Their
   discard decision remains append-only audit history rather than being erased.
-- The existing deterministic post-extraction quotation filter remains unchanged. The
-  new two-stage ranking operates before model extraction and does not replace exact
-  quotation, snapshot, Reviewer, Ledger, or final-release validation.
+- Current provider-backed quotes require 20 exact words when statistically classified
+  and 30 otherwise. A zero claim-keyword match count is retained as audit metadata and
+  proceeds to semantic Analyst review.
+- Deterministic exact quotation, snapshot, offset, context, boundary, Reviewer, Ledger,
+  and final-release validation remain in force.
 
 ## Architecture changes
 
@@ -99,11 +103,12 @@ Deterministic penalties:
 - clearly unrelated title: minus 10
 
 There is no near-duplicate penalty. Exact canonical duplicates are collapsed rather
-than scored twice. Results below 20 are recorded as discarded and never fetched.
+than scored twice. Results below 5 are recorded as discarded and never fetched.
 
 The remaining results are ordered by score with stable provider/rank/URL tie-breakers.
-The worker keeps a bounded ranked fallback pool: targets of five, seven, and ten may
-attempt at most eight, ten, and ten sources respectively. Extraction proceeds in ranked
+The worker keeps a bounded ranked fallback pool: targets of five, ten, fifteen, and
+twenty may attempt at most ten, fifteen, twenty, and twenty-five sources respectively.
+Extraction proceeds in ranked
 order and stops once the configured target passes deterministic quote validation, so a
 retrieval or exact-selection failure can backfill from the next source without unbounded
 retry work. No diversity or wildcard reservation overrides rank.
@@ -137,7 +142,7 @@ reviews, portfolio records, Governor decisions, and usage records.
 The existing website gains only minimal functional controls:
 
 - `Include counterevidence`, off by default
-- Advanced `Sources per side per round`: 5, 7, or 10; default 7
+- Advanced `Sources per side per round`: 5, 10, 15, or 20; default 10
 - required OpenAlex Keychain field and provider readiness
 - hidden `View research trail` disclosure
 - honest provider, cumulative-progress, and conservative-cost labels
@@ -166,7 +171,7 @@ exact MLP-4 contract. Historical terminal runs remain readable.
 3. Implement the provider-specific Planner contract and prompt, then the composite
    Exa/OpenAlex discovery coordinator.
 4. Add append-only ranking artifacts/persistence and deterministic Stage A/Stage B
-   ranking with the 20-point discard floor and top-N acquisition.
+   ranking with the 5-point discard floor and top-N acquisition.
 5. Make Researchers, orchestration, Governor, synthesis/release framing, history, and
    resume behavior mode-aware without weakening post-extraction or release gates.
 6. Fix cumulative monotonic progress and expose the typed hidden research trail.
@@ -185,11 +190,13 @@ exact MLP-4 contract. Historical terminal runs remain readable.
 - OpenAlex never exceeds ten searches or nominal USD 0.01 per run.
 - Retracted works are rejected; non-OA, low-citation, older, and non-PDF works are not
   globally rejected.
-- Scores are deterministic; results below 20 cannot be acquired; top-N order is stable;
+- Scores are deterministic; results below 5 cannot be acquired; top-N order is stable;
   claim facets are optional soft bonuses rather than hard keyword gates, and no diversity
   or wildcard override exists.
-- The unchanged post-extraction quote filter, Reviewer, Ledger, and final validator
-  retain all existing adversarial acceptance tests.
+- Current provider-backed quotes use 20 statistical / 30 non-statistical exact words;
+  zero keyword matches remain visible audit metadata for semantic Analyst review.
+- Exact snapshot membership, offsets, context, boundary rules, Reviewer, Ledger, and
+  final validation retain their adversarial acceptance tests.
 - Focused reports explicitly disclose that counterevidence was not requested.
 - Progress is cumulative and monotonic across research rounds.
 - Old terminal runs remain readable and old writable databases migrate only through an
@@ -212,6 +219,7 @@ yield, source-family coverage, MiMo usage, provider failures, runtime, and cost.
 - OpenAlex paid content/PDF retrieval
 - WebGL, custom cursor, sound, particles, elaborate scroll choreography, or hosting
 - Accounts, public network binding, cloud persistence, telemetry, or analytics
-- Weakening quotation density, snapshot integrity, Reviewer approval, Ledger admission,
-  deterministic final validation, human review, or public/non-sensitive restrictions
+- Further weakening snapshot integrity, exact quotation assembly, Reviewer approval,
+  Ledger admission, deterministic final validation, human review, or public/non-sensitive
+  restrictions
 - Live provider calls during normal offline implementation and verification

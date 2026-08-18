@@ -174,10 +174,13 @@ MVP-2B, MVP-3A, MVP-3B, MVP-4, MVP-5, MVP-6, MVP-6.1, MVP-6.2 Batch A, MVP-6.3,
 MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, MVP-6.9, MVP-7.1, MVP-8, MVP-8.1,
 MVP-8.2, MVP-9, MVP-10, and MVP-11 are complete. MVP-11 Adaptive Research Expansion &
 Cost Control (Research Governor) is the latest completed authorized phase. Current
-provider-backed candidates use the strict shared
-50-statistical/75-non-statistical quote policy; statistical classification requires both
-a digit and a whole-token recognized marker. Frozen fixture replay alone injects the
-explicit legacy 50/100 policy. MVP-6.5 completed the immutable-run-authority and
+provider-backed candidates use the shared 20-statistical/30-non-statistical quote
+policy; statistical classification requires both a digit and a whole-token recognized
+marker. Discovery scores below 5 leave the bounded acquisition pool, while a zero
+claim-keyword count remains audit metadata for semantic Analyst review rather than a
+hard pre-Analyst rejection. Exact snapshot and downstream approval gates remain strict.
+Frozen fixture replay alone injects the explicit legacy 50/100 policy. MVP-6.5 completed
+the immutable-run-authority and
 read-only-inspection database batch. MVP-6.6 completed CLI-status, model-usage
 accounting/budget, and provider-contract integrity. MVP-6.7 completed repository-wide
 function-signature annotation enforcement across production and test code, including

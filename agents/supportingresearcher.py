@@ -90,7 +90,7 @@ class AcquisitionPolicy(StrictModel):
 
     discovery_results_per_query: int = Field(default=3, ge=3, le=100)
     usable_snapshots_per_query: int = Field(default=3, ge=1, le=10)
-    source_target_per_stance: Literal[5, 7, 10] | None = None
+    source_target_per_stance: Literal[5, 7, 10, 15, 20] | None = None
 
     @model_validator(mode="after")
     def validate_keep_limit(self) -> AcquisitionPolicy:
@@ -101,9 +101,9 @@ class AcquisitionPolicy(StrictModel):
     @property
     def maximum_attempts_per_stance(self) -> int:
         if self.source_target_per_stance is not None:
-            # Keep three ranked fallbacks available for acquisition or exact-quote
-            # failure without allowing the per-stance work to grow without bound.
-            return min(10, self.source_target_per_stance + 3)
+            # Keep five ranked fallbacks available for acquisition or exact-quote
+            # failure while retaining a hard per-stance work bound.
+            return min(25, self.source_target_per_stance + 5)
         return self.discovery_results_per_query * QUERIES_PER_STANCE
 
 
@@ -268,7 +268,7 @@ class ResearcherRetrievalBatch(StrictModel):
     intended_attempt_count: int = Field(default=ATTEMPTS_PER_STANCE, ge=3, le=30)
     discovery_results_per_query: int = Field(default=RESULTS_PER_QUERY, ge=3, le=100)
     usable_snapshots_per_query: int = Field(default=RESULTS_PER_QUERY, ge=1, le=10)
-    source_target_per_stance: Literal[5, 7, 10] | None = None
+    source_target_per_stance: Literal[5, 7, 10, 15, 20] | None = None
     discovery_ranking: tuple[RankedDiscoveryResult, ...] = ()
     acquired_source_ranking: tuple[RankedAcquiredSource, ...] = ()
     outcomes: list[RetrievalOutcome]
@@ -321,7 +321,7 @@ class ResearcherRetrievalBatch(StrictModel):
         return self
 
     def _validate_ranked_batch(self) -> ResearcherRetrievalBatch:
-        maximum_backfill_attempts = min(10, self.source_target_per_stance + 3)
+        maximum_backfill_attempts = min(25, self.source_target_per_stance + 5)
         if not (
             self.source_target_per_stance
             <= self.intended_attempt_count

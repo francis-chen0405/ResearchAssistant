@@ -170,9 +170,9 @@ def test_direct_mimo_extractor_prompt_requires_source_sentence_ranges() -> None:
     assert "Return selected_sentence_ranges only" in prompt
     assert "selectable_source_text" in prompt
     assert "Do not return selected_segments, text, brackets, context sentences" in prompt
-    assert "at least 50 exact quoted words only when" in prompt
+    assert "at least 20 exact quoted words only when" in prompt
     assert "at least one digit and at least one recognized statistical marker" in prompt
-    assert "Otherwise, use at least 75 exact quoted words" in prompt
+    assert "Otherwise, use at least 30 exact quoted words" in prompt
     assert "Python validation is authoritative" in prompt
     assert "paraphrase, heal, expand, or invent context" in prompt
 

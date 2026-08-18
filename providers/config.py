@@ -187,7 +187,7 @@ class MimoConfig(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     provider_name: Literal["xiaomi-mimo"] = "xiaomi-mimo"
-    adapter_version: Literal["mvp9-xiaomi-mimo-selection-v1"] = "mvp9-xiaomi-mimo-selection-v1"
+    adapter_version: Literal["mlp4-relaxed-evidence-yield-v1"] = "mlp4-relaxed-evidence-yield-v1"
     base_url: str = "https://api.xiaomimimo.com/v1"
     api_key: SecretStr
     model: Literal["mimo-v2.5-pro"] = "mimo-v2.5-pro"
