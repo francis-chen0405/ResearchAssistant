@@ -2,6 +2,11 @@
 
 ## Current project state — 2026-08-17
 
+On 2026-08-18, the user explicitly authorized Firecrawl fallback for Wigolo authentication
+and paywall responses plus one direct Firecrawl re-acquisition after a MiMo exact-quote
+failure. The second MiMo extraction uses a new operation identity and only runs when the
+Firecrawl snapshot is non-empty and materially different. The retry remains bounded.
+
 MLP-5 Provider Selection & SERP Search is complete. The Next.js Advanced panel defaults
 SERP Search, Exa, and OpenAlex on, permits each to be disabled but never all at once, and
 contains the approved plain-language provider descriptions. New runs require keys only for

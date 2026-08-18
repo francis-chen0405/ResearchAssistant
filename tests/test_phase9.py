@@ -169,6 +169,34 @@ class FakeScraperProvider:
         )
 
 
+class FirecrawlQuoteFallbackScraper(FakeScraperProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fallback_requests: list[ScrapeRequest] = []
+
+    def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+        with self._lock:
+            self.requests.append(request)
+        return ScrapeResponse(
+            resolved_url=request.url.replace("research.test", "resolved.test"),
+            content_type="text/html; charset=utf-8",
+            text=f"Primary acquisition contained unusable text for {request.url}.",
+            provider_name="wigolo",
+        )
+
+    def scrape_fallback(self, request: ScrapeRequest) -> ScrapeResponse:
+        with self._lock:
+            self.fallback_requests.append(request)
+        side = "supporting" if "/supporting/" in request.url else "opposing"
+        return ScrapeResponse(
+            resolved_url=request.url,
+            content_type="text/markdown",
+            text=SUPPORT_TEXT if side == "supporting" else OPPOSE_TEXT,
+            provider_name="firecrawl",
+            provider_version="v2",
+        )
+
+
 class FakeLLMProvider:
     capabilities = LLMProviderCapabilities(
         supports_temperature=True,
@@ -605,6 +633,23 @@ def test_partial_retrieval_success_is_preserved(tmp_path: Path) -> None:
     assert result.status is ProviderRunStatus.RELEASED
     assert result.researcher_result.supporting.status is ResearcherSideStatus.PARTIAL
     assert result.retrieval_attempts_used == 18
+
+
+def test_exact_quote_failure_reacquires_once_through_firecrawl(tmp_path: Path) -> None:
+    scraper = FirecrawlQuoteFallbackScraper()
+
+    result = _run(tmp_path, scraper=scraper)
+
+    assert result.status is ProviderRunStatus.RELEASED
+    assert len(scraper.fallback_requests) == 18
+    assert result.analysis_result is not None
+    assert len(result.analysis_result.ledger_records) == 18
+    assert result.researcher_result is not None
+    for side in (result.researcher_result.supporting, result.researcher_result.opposing):
+        assert side.retrieval_batch is not None
+        assert all(
+            snapshot.provider_name == "firecrawl" for snapshot in side.retrieval_batch.snapshots
+        )
 
 
 def test_validator_rejection_blocks_release_without_hash(tmp_path: Path) -> None:

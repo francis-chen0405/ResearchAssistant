@@ -19,6 +19,9 @@ Status: Complete and verified on 2026-08-17.
 - Advanced contains the three required source switches and concise provider guidance.
 - Source switches persist automatically in browser local storage, so closing Advanced or
   refreshing the page keeps the user's last selection.
+- Firecrawl remains a bounded fallback: it now receives authentication/paywall acquisition
+  failures, and an exact-quote extraction failure may trigger one direct Firecrawl
+  re-acquisition followed by one fresh MiMo extraction route on the changed snapshot.
 
 ## Safeguards retained
 

@@ -111,3 +111,11 @@ class ScraperProvider(Protocol):
 
     def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
         """Retrieve one URL without interpreting its content."""
+
+
+@runtime_checkable
+class FallbackScraperProvider(ScraperProvider, Protocol):
+    """Scraper route that exposes one explicit fallback-only acquisition."""
+
+    def scrape_fallback(self, request: ScrapeRequest) -> ScrapeResponse:
+        """Retrieve one URL directly through the configured fallback."""

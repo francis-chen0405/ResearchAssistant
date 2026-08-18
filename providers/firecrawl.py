@@ -31,6 +31,8 @@ _FALLBACK_CODES = frozenset(
         AcquisitionFailureCode.MALFORMED,
         AcquisitionFailureCode.EXTRACTION,
         AcquisitionFailureCode.CHALLENGE,
+        AcquisitionFailureCode.AUTHENTICATION,
+        AcquisitionFailureCode.PAYWALL,
     }
 )
 
@@ -52,6 +54,15 @@ class FallbackAcquisitionAdapter:
                 verified_preflight=exc.verified_preflight,
             )
             return self._fallback.scrape(fallback_request)
+
+    def scrape_fallback(self, request: ScrapeRequest) -> ScrapeResponse:
+        """Use the configured fallback directly for one bounded re-acquisition."""
+        if self._fallback is None:
+            raise ScraperProviderError(
+                AcquisitionFailureCode.EXTRACTION,
+                "Firecrawl fallback is not configured",
+            )
+        return self._fallback.scrape(request)
 
 
 class FirecrawlAcquisitionAdapter:

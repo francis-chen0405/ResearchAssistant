@@ -29,6 +29,7 @@ from agents.planner import PlannerLLMInput
 from agents.renderer import render_brief, validate_final_release
 from agents.researcher import (
     LEGACY_FIXTURE_QUOTE_LENGTH_POLICY,
+    build_source_snapshot,
     filter_provisional_candidate,
     validate_snapshot_integrity,
 )
@@ -43,7 +44,6 @@ from agents.supportingresearcher import (
     AcquisitionPolicy,
     CooperativeCancellation,
     DeduplicationState,
-    ExtractionLLMInput,
     ResearcherRetrievalBatch,
     build_extraction_llm_input,
     build_provisional_candidate_from_selection,
@@ -90,6 +90,7 @@ from models import (
     SearchQuery,
     SourceSnapshot,
     Stage,
+    Stance,
     StatementDraft,
     StatementReviewResult,
     StrictModel,
@@ -120,7 +121,12 @@ from providers.pricing import (
     DIRECT_MIMO_PRICE_CAP,
     conservative_token_estimate,
 )
-from providers.scraper import RetryPolicy, ScraperProvider
+from providers.scraper import (
+    FallbackScraperProvider,
+    RetryPolicy,
+    ScrapeRequest,
+    ScraperProvider,
+)
 from providers.search import SearchProvider
 from research_governor import (
     classify_terminal_outcome,
@@ -1792,12 +1798,43 @@ def _inspect_provider_run_connection(
         PHASE9_RESEARCHERS_ARTIFACT,
         ResearcherPairResult,
     )
+    researcher_rounds = tuple(item for item in (researchers,) if item is not None)
+    for artifact_key in (
+        MVP10_TARGETED_RESEARCHERS_ARTIFACT,
+        MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
+        MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
+    ):
+        expanded_researchers = _read_optional_stage_result(
+            reader,
+            run_id,
+            artifact_key,
+            ResearcherPairResult,
+        )
+        if expanded_researchers is not None:
+            researcher_rounds = (*researcher_rounds, expanded_researchers)
     analysis = _read_optional_stage_result(
         reader,
         run_id,
         PHASE9_ANALYSIS_ARTIFACT,
         AnalysisStageResult,
     )
+    for artifact_key in (
+        MVP10_TARGETED_ANALYSIS_ARTIFACT,
+        MVP11_ROUND_TWO_ANALYSIS_CHECKPOINT,
+        MVP11_ROUND_THREE_ANALYSIS_CHECKPOINT,
+    ):
+        expanded_analysis = _read_optional_stage_result(
+            reader,
+            run_id,
+            artifact_key,
+            AnalysisStageResult,
+        )
+        if expanded_analysis is not None:
+            analysis = (
+                expanded_analysis
+                if analysis is None
+                else _combine_analysis_results(analysis, expanded_analysis)
+            )
     synthesis = _read_optional_synthesis(reader, run_id)
     validation = _read_optional_validation(reader, run_id)
     portfolio_coverage = read_portfolio_coverage_assessment(reader, run_id)
@@ -1847,8 +1884,8 @@ def _inspect_provider_run_connection(
 
     usage_accounting = summarize_model_usage(attempts)
     retrieval_count = 0
-    if researchers is not None:
-        for side in (researchers.supporting, researchers.opposing):
+    for researcher_round in researcher_rounds:
+        for side in (researcher_round.supporting, researcher_round.opposing):
             if side.retrieval_batch is not None:
                 retrieval_count += len(side.retrieval_batch.outcomes)
     return ProviderPipelineResult(
@@ -3065,91 +3102,54 @@ def _run_researcher_side(
         ):
             break
         retrieval = retrievals_by_id[snapshot.retrieval_attempt_id]
-        extraction_input = build_extraction_llm_input(
-            planner=planner,
-            snapshot=snapshot,
-            stance=stance_value,
-            retrieval=retrieval,
-        )
-        operation_id = _operation_id(planner.run_id, "extractor", snapshot.snapshot_id)
-        extractor_prompt_version = load_prompt(LLMStage.EXTRACTOR).version
-        successful_alias: ModelAlias | None = None
-
-        def validate_extraction(
-            output: BaseModel,
-            alias: ModelAlias,
-            snapshot: SourceSnapshot = snapshot,
-            batch: ResearcherRetrievalBatch = batch,
-            extraction_input: ExtractionLLMInput = extraction_input,
-            extractor_prompt_version: str = extractor_prompt_version,
-        ) -> BaseModel:
-            nonlocal successful_alias
-            selection = _require_output(output, VerbatimQuoteSelection)
-            try:
-                provisional = build_provisional_candidate_from_selection(
-                    extraction_input,
-                    selection,
-                    extraction_prompt_version=extractor_prompt_version,
-                    extraction_model_name=alias.value,
-                    extracted_at=_aware_phase9_time(clock(), "extracted_at"),
-                )
-            except ValueError as exc:
-                raise ObjectiveRoutingFailure("exact_quote_failure", str(exc)) from exc
-            _validate_provisional_for_snapshot(provisional, snapshot, batch, alias)
-            filtered = filter_provisional_candidate(
-                provisional,
-                snapshot,
-                claim_keywords=claim_keywords,
-                post_filter_version=PHASE9_POST_FILTER_VERSION,
-                validation_clock=clock,
-            )
-            if not filtered.valid or filtered.candidate is None:
-                message = filtered.rejection_message or "deterministic extraction filter failed"
-                code = _post_filter_failure_code(message)
-                raise ObjectiveRoutingFailure(
-                    code,
-                    message,
-                )
-            successful_alias = alias
-            return selection
-
         try:
-            selection = cast(
-                VerbatimQuoteSelection,
-                _invoke_routed(
-                    db_path=db_path,
-                    provider=llm_provider,
-                    stage=LLMStage.EXTRACTOR,
-                    input_artifact=extraction_input,
-                    requested_output_type=VerbatimQuoteSelection,
-                    input_artifact_ids=(snapshot.snapshot_id,),
-                    operation_id=operation_id,
-                    config=config,
-                    clock=clock,
-                    objective_validator=validate_extraction,
-                ),
-            )
-            if successful_alias is None:
-                raise RuntimeError("completed Extractor selection has no model identity")
-            provisional = build_provisional_candidate_from_selection(
-                extraction_input,
-                selection,
-                extraction_prompt_version=extractor_prompt_version,
-                extraction_model_name=successful_alias.value,
-                extracted_at=_aware_phase9_time(clock(), "extracted_at"),
-            )
-            filtered = filter_provisional_candidate(
-                provisional,
+            provisional, candidate = _extract_candidate_from_snapshot(
+                db_path,
+                planner,
+                batch,
                 snapshot,
-                claim_keywords=claim_keywords,
-                post_filter_version=PHASE9_POST_FILTER_VERSION,
-                validation_clock=clock,
+                retrieval,
+                stance_value,
+                llm_provider,
+                config,
+                clock,
+                claim_keywords,
             )
-            if not filtered.valid or filtered.candidate is None:
-                raise RuntimeError("completed Extractor output failed deterministic revalidation")
             provisionals.append(provisional)
-            candidates.append(_scope_live_candidate_identity(filtered.candidate))
+            candidates.append(candidate)
         except Exception as exc:
+            fallback_snapshot = (
+                _firecrawl_reacquire_snapshot(
+                    scraper_provider,
+                    planner,
+                    retrieval,
+                    snapshot,
+                    config,
+                    clock,
+                )
+                if "exact_quote_failure" in str(exc)
+                else None
+            )
+            if fallback_snapshot is not None:
+                try:
+                    batch = _replace_batch_snapshot(batch, snapshot, fallback_snapshot)
+                    provisional, candidate = _extract_candidate_from_snapshot(
+                        db_path,
+                        planner,
+                        batch,
+                        fallback_snapshot,
+                        retrieval,
+                        stance_value,
+                        llm_provider,
+                        config,
+                        clock,
+                        claim_keywords,
+                    )
+                    provisionals.append(provisional)
+                    candidates.append(candidate)
+                    continue
+                except Exception as fallback_exc:
+                    exc = fallback_exc
             failures.append(
                 ResearcherFailure(
                     stage=f"{stance}_extraction",
@@ -3192,6 +3192,178 @@ def _scope_live_candidate_identity(candidate: CandidateQuoteBlock) -> CandidateQ
                 NAMESPACE_URL,
                 f"live-candidate::{candidate.run_id}::{candidate.quote_block_id}",
             )
+        }
+    )
+
+
+def _extract_candidate_from_snapshot(
+    db_path: str,
+    planner: PlannerOutput,
+    batch: ResearcherRetrievalBatch,
+    snapshot: SourceSnapshot,
+    retrieval: RetrievalRecord,
+    stance: Stance,
+    llm_provider: LLMProvider,
+    config: ProviderOrchestrationConfig,
+    clock: Callable[[], datetime],
+    claim_keywords: Sequence[str],
+) -> tuple[ProvisionalCandidate, CandidateQuoteBlock]:
+    extraction_input = build_extraction_llm_input(
+        planner=planner,
+        snapshot=snapshot,
+        stance=stance,
+        retrieval=retrieval,
+    )
+    extractor_prompt_version = load_prompt(LLMStage.EXTRACTOR).version
+    successful_alias: ModelAlias | None = None
+
+    def validate_extraction(output: BaseModel, alias: ModelAlias) -> BaseModel:
+        nonlocal successful_alias
+        selection = _require_output(output, VerbatimQuoteSelection)
+        try:
+            provisional = build_provisional_candidate_from_selection(
+                extraction_input,
+                selection,
+                extraction_prompt_version=extractor_prompt_version,
+                extraction_model_name=alias.value,
+                extracted_at=_aware_phase9_time(clock(), "extracted_at"),
+            )
+        except ValueError as exc:
+            raise ObjectiveRoutingFailure("exact_quote_failure", str(exc)) from exc
+        _validate_provisional_for_snapshot(provisional, snapshot, batch, alias)
+        filtered = filter_provisional_candidate(
+            provisional,
+            snapshot,
+            claim_keywords=claim_keywords,
+            post_filter_version=PHASE9_POST_FILTER_VERSION,
+            validation_clock=clock,
+        )
+        if not filtered.valid or filtered.candidate is None:
+            message = filtered.rejection_message or "deterministic extraction filter failed"
+            raise ObjectiveRoutingFailure(_post_filter_failure_code(message), message)
+        successful_alias = alias
+        return selection
+
+    selection = cast(
+        VerbatimQuoteSelection,
+        _invoke_routed(
+            db_path=db_path,
+            provider=llm_provider,
+            stage=LLMStage.EXTRACTOR,
+            input_artifact=extraction_input,
+            requested_output_type=VerbatimQuoteSelection,
+            input_artifact_ids=(snapshot.snapshot_id,),
+            operation_id=_operation_id(planner.run_id, "extractor", snapshot.snapshot_id),
+            config=config,
+            clock=clock,
+            objective_validator=validate_extraction,
+        ),
+    )
+    if successful_alias is None:
+        raise RuntimeError("completed Extractor selection has no model identity")
+    provisional = build_provisional_candidate_from_selection(
+        extraction_input,
+        selection,
+        extraction_prompt_version=extractor_prompt_version,
+        extraction_model_name=successful_alias.value,
+        extracted_at=_aware_phase9_time(clock(), "extracted_at"),
+    )
+    filtered = filter_provisional_candidate(
+        provisional,
+        snapshot,
+        claim_keywords=claim_keywords,
+        post_filter_version=PHASE9_POST_FILTER_VERSION,
+        validation_clock=clock,
+    )
+    if not filtered.valid or filtered.candidate is None:
+        raise RuntimeError("completed Extractor output failed deterministic revalidation")
+    return provisional, _scope_live_candidate_identity(filtered.candidate)
+
+
+def _firecrawl_reacquire_snapshot(
+    scraper_provider: ScraperProvider,
+    planner: PlannerOutput,
+    retrieval: RetrievalRecord,
+    snapshot: SourceSnapshot,
+    config: ProviderOrchestrationConfig,
+    clock: Callable[[], datetime],
+) -> SourceSnapshot | None:
+    if not isinstance(scraper_provider, FallbackScraperProvider):
+        return None
+    try:
+        response = scraper_provider.scrape_fallback(
+            ScrapeRequest(
+                url=retrieval.resolved_url,
+                timeout_seconds=config.retrieval_retry.timeout_seconds,
+            )
+        )
+    except Exception:
+        return None
+    if (
+        response.resolved_url != retrieval.resolved_url
+        or not response.text.strip()
+        or response.snapshot_sha256 == snapshot.snapshot_sha256
+    ):
+        return None
+    content_hash = sha256(response.text.encode("utf-8")).hexdigest()
+    return build_source_snapshot(
+        run_id=planner.run_id,
+        retrieval_attempt_id=retrieval.retrieval_attempt_id,
+        snapshot_id=uuid5(
+            NAMESPACE_URL,
+            f"firecrawl-extraction-fallback::{planner.run_id}::{retrieval.retrieval_attempt_id}::{content_hash}",
+        ),
+        source_url=retrieval.resolved_url,
+        original_url=response.original_url or retrieval.source_url,
+        canonical_url=response.canonical_url,
+        retrieved_at=_aware_phase9_time(clock(), "fallback retrieved_at"),
+        normalized_text=response.text,
+        truncated=response.truncated,
+        normalization_version=response.normalization_version,
+        acquisition_version=response.acquisition_version,
+        provider_name=response.provider_name,
+        provider_version=response.provider_version,
+        media_type_provenance=response.media_type_provenance,
+        created_at=_aware_phase9_time(clock(), "fallback snapshot created_at"),
+    )
+
+
+def _replace_batch_snapshot(
+    batch: ResearcherRetrievalBatch,
+    original: SourceSnapshot,
+    replacement: SourceSnapshot,
+) -> ResearcherRetrievalBatch:
+    outcomes = [
+        outcome.model_copy(
+            update={
+                "snapshot_id": replacement.snapshot_id,
+                "provider_name": replacement.provider_name,
+                "provider_version": replacement.provider_version,
+                "canonical_url": replacement.canonical_url,
+                "normalization_version": replacement.normalization_version,
+                "acquisition_version": replacement.acquisition_version,
+                "media_type_provenance": replacement.media_type_provenance,
+            }
+        )
+        if outcome.snapshot_id == original.snapshot_id
+        else outcome
+        for outcome in batch.outcomes
+    ]
+    snapshots = [
+        replacement if item.snapshot_id == original.snapshot_id else item
+        for item in batch.snapshots
+    ]
+    acquired_ranking = tuple(
+        item.model_copy(update={"snapshot_id": replacement.snapshot_id})
+        if item.snapshot_id == original.snapshot_id
+        else item
+        for item in batch.acquired_source_ranking
+    )
+    return batch.model_copy(
+        update={
+            "outcomes": outcomes,
+            "snapshots": snapshots,
+            "acquired_source_ranking": acquired_ranking,
         }
     )
 

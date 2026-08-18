@@ -24,7 +24,11 @@ from models import (
     Stage,
     Stance,
 )
-from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
+from providers.acquisition import (
+    ACQUISITION_VERSION,
+    AcquisitionFailureCode,
+    WigoloAcquisitionAdapter,
+)
 from providers.config import (
     FirecrawlConfig,
     LiveSmokeConfig,
@@ -33,7 +37,7 @@ from providers.config import (
 )
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.mimo_factory import MIMO_FINGERPRINT_VERSION
-from providers.scraper import ScrapeRequest
+from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProviderError
 from store import (
     CURRENT_SCHEMA_VERSION,
     init_db,
@@ -151,6 +155,39 @@ def test_verified_primary_preflight_type_survives_firecrawl_fallback_conflict() 
         verified_source_url=ARTICLE_URL,
         provider_declared_media_type="application/pdf",
     )
+
+
+@pytest.mark.parametrize(
+    "failure_code",
+    (AcquisitionFailureCode.AUTHENTICATION, AcquisitionFailureCode.PAYWALL),
+)
+def test_firecrawl_fallback_handles_authentication_and_paywall_failures(
+    failure_code: str,
+) -> None:
+    fallback_requests: list[ScrapeRequest] = []
+
+    class FailingPrimary:
+        def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+            del request
+            raise ScraperProviderError(failure_code, "primary access failed")
+
+    class SuccessfulFallback:
+        def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+            fallback_requests.append(request)
+            return ScrapeResponse(
+                resolved_url=request.url,
+                content_type="text/markdown",
+                text="Recovered public source text.",
+                provider_name="firecrawl",
+            )
+
+    result = FallbackAcquisitionAdapter(
+        primary=FailingPrimary(),
+        fallback=SuccessfulFallback(),
+    ).scrape(ScrapeRequest(url=ARTICLE_URL, timeout_seconds=10))
+
+    assert result.provider_name == "firecrawl"
+    assert [request.url for request in fallback_requests] == [ARTICLE_URL]
 
 
 def test_verified_preflight_follows_redirect_boundary_into_fallback() -> None:

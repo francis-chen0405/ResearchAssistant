@@ -113,15 +113,13 @@ def test_firecrawl_is_used_only_for_approved_wigolo_failures(code: str) -> None:
 @pytest.mark.parametrize(
     "code",
     [
-        AcquisitionFailureCode.AUTHENTICATION,
-        AcquisitionFailureCode.PAYWALL,
         AcquisitionFailureCode.INACCESSIBLE,
         AcquisitionFailureCode.TOO_LARGE,
         AcquisitionFailureCode.REDIRECT,
         AcquisitionFailureCode.CONTENT_TYPE,
     ],
 )
-def test_firecrawl_never_bypasses_source_access_or_policy_failures(code: str) -> None:
+def test_firecrawl_never_bypasses_permanent_source_policy_failures(code: str) -> None:
     fallback = _Fallback()
     adapter = FallbackAcquisitionAdapter(
         primary=_Primary(ScraperProviderError(code, "source refused")),

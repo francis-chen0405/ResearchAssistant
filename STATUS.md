@@ -2,6 +2,12 @@
 
 ## Current project state — 2026-08-17
 
+On 2026-08-18, the user explicitly expanded the configured Firecrawl fallback. Wigolo
+authentication and paywall responses now receive one Firecrawl attempt. A MiMo exact-quote
+failure may also trigger one direct Firecrawl re-acquisition; MiMo retries only when the
+fallback returns a different non-empty snapshot. Permanent source-policy failures and
+non-exact-quote model/schema failures retain their existing behavior.
+
 MLP-5 Provider Selection & SERP Search is complete. New website runs default to all three
 typed discovery sources—SERP Search, Exa, and OpenAlex—and may switch each source on or
 off in Advanced, while requiring at least one. The frozen source set is part of planner
