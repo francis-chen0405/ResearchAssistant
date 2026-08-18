@@ -614,6 +614,53 @@ def test_acquired_source_ranking_moves_weak_text_to_bottom_without_deleting_it()
     assert len(ranked) == 2
 
 
+def test_acquired_source_ranking_accepts_the_full_bounded_backfill_pool() -> None:
+    run_id = uuid4()
+    query = _query(run_id, Stance.SUPPORTING, DiscoveryProvider.EXA, 1)
+    retrievals = tuple(
+        RetrievalRecord(
+            run_id=run_id,
+            retrieval_attempt_id=uuid4(),
+            query_id=query.query_id,
+            query_round=1,
+            query_text=query.query_text,
+            search_rank=index,
+            source_url=f"https://example.com/study-{index}",
+            resolved_url=f"https://example.com/study-{index}",
+            status=RetrievalStatus.RETRIEVED,
+            retrieved_at=NOW,
+        )
+        for index in range(1, 26)
+    )
+    snapshots = tuple(
+        SourceSnapshot(
+            run_id=run_id,
+            snapshot_id=uuid4(),
+            retrieval_attempt_id=retrieval.retrieval_attempt_id,
+            source_url=retrieval.resolved_url,
+            original_url=retrieval.source_url,
+            retrieved_at=NOW,
+            normalized_text=(
+                "A four-day workweek productivity study measured employee output. " * 30
+            ),
+            snapshot_sha256=sha256(str(index).encode()).hexdigest(),
+            word_count=240,
+            truncated=False,
+            created_at=NOW,
+        )
+        for index, retrieval in enumerate(retrievals, start=1)
+    )
+
+    ranked = rank_acquired_sources(
+        claim_text="A four-day workweek improves productivity.",
+        snapshots=snapshots,
+        retrievals=retrievals,
+    )
+
+    assert len(ranked) == 25
+    assert [item.extraction_rank for item in ranked] == list(range(1, 26))
+
+
 class _SearchLane:
     def __init__(self, responses: list[SearchResponse | SearchProviderError]) -> None:
         self.responses = responses

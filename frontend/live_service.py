@@ -185,10 +185,10 @@ class ResearchTrailItem(StrictModel):
     url: str = Field(min_length=1)
     score: int = Field(ge=0, le=100)
     decision: Literal["selected", "deferred", "discarded"]
-    selection_rank: int | None = Field(default=None, ge=1, le=10)
+    selection_rank: int | None = Field(default=None, ge=1, le=20)
     breakdown: DiscoveryScoreBreakdown
     acquired_score: int | None = Field(default=None, ge=0, le=100)
-    extraction_rank: int | None = Field(default=None, ge=1, le=10)
+    extraction_rank: int | None = Field(default=None, ge=1, le=25)
     acquired_breakdown: AcquiredSourceScoreBreakdown | None = None
 
 

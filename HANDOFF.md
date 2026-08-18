@@ -2,6 +2,15 @@
 
 ## Current project state — 2026-08-17
 
+A 2026-08-18 live-run correction aligns typed ranking fields with the already-authorized
+bounded workload: discovery selection ranks accept 1–20 and acquired extraction ranks
+accept 1–25. The previous stale 10-rank cap could invalidate a whole retrieval batch after
+successful provider discovery and acquisition, then surface as a misleading later Planner
+failure. No provider policy, evidence threshold, dependency, migration, or immutable
+historical row changed. Regression coverage now ranks the full 25-item backfill pool;
+661 tests pass with 2 expected skips, and Ruff plus diff checks pass. Frontend lint/build
+remain blocked by pnpm's unavailable registry install attempt.
+
 On 2026-08-18, the user explicitly authorized Firecrawl fallback for Wigolo authentication
 and paywall responses plus one direct Firecrawl re-acquisition after a MiMo exact-quote
 failure. The second MiMo extraction uses a new operation identity and only runs when the

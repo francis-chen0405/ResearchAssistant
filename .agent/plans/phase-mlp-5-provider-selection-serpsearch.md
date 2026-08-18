@@ -22,6 +22,10 @@ Status: Complete and verified on 2026-08-17.
 - Firecrawl remains a bounded fallback: it now receives authentication/paywall acquisition
   failures, and an exact-quote extraction failure may trigger one direct Firecrawl
   re-acquisition followed by one fresh MiMo extraction route on the changed snapshot.
+- A live-run correction aligns discovery selection ranks with the existing 20-source
+  maximum and acquired extraction ranks with the existing 25-attempt bounded backfill
+  maximum. This prevents valid multi-provider batches with more than ten acquired pages
+  from failing typed validation before extraction.
 
 ## Safeguards retained
 
@@ -32,7 +36,7 @@ new provider selection or adapter identity requires a new run.
 
 ## Verification
 
-- Full offline suite: 655 passed, 2 expected opt-in skips.
+- Full offline suite: 661 passed, 2 expected opt-in skips.
 - Ruff lint and formatting checks passed; `git diff --check` passed.
 - Frontend lint/build could not run in this workspace because the package manager attempted
   an unavailable registry install despite an existing incomplete `web/node_modules` tree.

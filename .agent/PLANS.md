@@ -15,7 +15,10 @@ tooling only; it does not start another product phase or alter runtime behavior.
 The user explicitly authorized and completed MLP-5 Provider Selection & SERP Search on
 2026-08-17. It adds typed per-run SERP Search, Exa, and OpenAlex selection, defaulting to
 all three, plus optional Keychain credentials and a twelve-call SERP Search ceiling. It
-does not begin the separately deferred visual redesign.
+does not begin the separately deferred visual redesign. A 2026-08-18 live-run correction
+aligns ranking model limits with the existing 20-source selection and 25-attempt bounded
+backfill policies so multi-provider batches cannot fail merely because a valid extraction
+rank exceeds ten.
 
 Canonical completed plan:
 

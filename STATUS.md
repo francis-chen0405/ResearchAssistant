@@ -2,6 +2,15 @@
 
 ## Current project state — 2026-08-17
 
+On 2026-08-18, a live multi-provider run exposed stale ranking field limits: the
+documented 20-source selection and 25-attempt backfill policies could produce selection
+ranks above 10 or extraction ranks above 10, causing the entire Researcher batch to fail
+validation. The typed ranking and read-only research-trail limits now match the existing
+policy ceilings (20 selected, 25 acquired). Regression coverage exercises the complete
+25-source acquired pool. Full Python verification passes with 661 tests and 2 expected
+opt-in skips; Ruff lint/format and diff validation pass. Frontend lint/build remain blocked
+by pnpm attempting an unavailable registry install from the local dependency state.
+
 On 2026-08-18, the user explicitly expanded the configured Firecrawl fallback. Wigolo
 authentication and paywall responses now receive one Firecrawl attempt. A MiMo exact-quote
 failure may also trigger one direct Firecrawl re-acquisition; MiMo retries only when the

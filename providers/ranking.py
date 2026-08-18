@@ -143,7 +143,7 @@ class RankedDiscoveryResult(StrictModel):
     components: DiscoveryScoreComponents
     score: int = Field(ge=0, le=100)
     decision: DiscoveryDecision
-    selection_rank: int | None = Field(default=None, ge=1, le=10)
+    selection_rank: int | None = Field(default=None, ge=1, le=20)
 
     @model_validator(mode="after")
     def validate_score_and_selection(self) -> RankedDiscoveryResult:
@@ -184,7 +184,7 @@ class RankedAcquiredSource(StrictModel):
     retrieval_attempt_id: UUID
     components: AcquiredSourceScoreComponents
     score: int = Field(ge=0, le=100)
-    extraction_rank: int = Field(ge=1, le=10)
+    extraction_rank: int = Field(ge=1, le=25)
 
     @model_validator(mode="after")
     def validate_score(self) -> RankedAcquiredSource:
