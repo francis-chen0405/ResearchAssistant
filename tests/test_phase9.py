@@ -818,6 +818,16 @@ def test_duplicate_retry_and_terminal_rerun_create_no_duplicate_artifacts(
         )
 
 
+def test_distinct_runs_can_reuse_the_same_quote_without_candidate_collision(tmp_path: Path) -> None:
+    first = _run(tmp_path, run_id=uuid5(NAMESPACE_URL, "candidate-reuse-first"))
+    second = _run(tmp_path, run_id=uuid5(NAMESPACE_URL, "candidate-reuse-second"))
+
+    assert first.status is ProviderRunStatus.RELEASED
+    assert second.status is ProviderRunStatus.RELEASED
+    with sqlite3.connect(second.db_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM candidates").fetchone()[0] == 4
+
+
 def test_restart_after_researchers_does_not_duplicate_snapshots(tmp_path: Path) -> None:
     def fail_after_researchers(run_id: UUID, stage_key: str) -> None:
         del run_id

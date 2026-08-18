@@ -3148,7 +3148,7 @@ def _run_researcher_side(
             if not filtered.valid or filtered.candidate is None:
                 raise RuntimeError("completed Extractor output failed deterministic revalidation")
             provisionals.append(provisional)
-            candidates.append(filtered.candidate)
+            candidates.append(_scope_live_candidate_identity(filtered.candidate))
         except Exception as exc:
             failures.append(
                 ResearcherFailure(
@@ -3181,6 +3181,18 @@ def _run_researcher_side(
         provisional_candidates=tuple(provisionals),
         candidates=tuple(candidates),
         failures=tuple(failures),
+    )
+
+
+def _scope_live_candidate_identity(candidate: CandidateQuoteBlock) -> CandidateQuoteBlock:
+    """Keep deterministic quote identity idempotent within a run, not across runs."""
+    return candidate.model_copy(
+        update={
+            "quote_block_id": uuid5(
+                NAMESPACE_URL,
+                f"live-candidate::{candidate.run_id}::{candidate.quote_block_id}",
+            )
+        }
     )
 
 

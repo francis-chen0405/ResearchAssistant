@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from datetime import datetime
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -423,7 +423,11 @@ def verify_candidate_against_snapshot(
         candidate.snapshot_sha256,
         candidate.segment_offsets,
     )
-    if candidate.quote_block_id != expected_id:
+    scoped_id = uuid5(
+        NAMESPACE_URL,
+        f"live-candidate::{candidate.run_id}::{expected_id}",
+    )
+    if candidate.quote_block_id not in {expected_id, scoped_id}:
         raise ValueError("candidate quote_block_id is not the deterministic ID")
     return True
 
