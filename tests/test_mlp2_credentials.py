@@ -62,6 +62,22 @@ def test_keychain_save_uses_the_in_process_native_boundary(
     assert "subprocess.run" not in source
 
 
+def test_keychain_save_can_add_one_provider_key_without_replacing_saved_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def fake_write(environment_name: str, secret: str) -> None:
+        calls.append((environment_name, secret))
+
+    monkeypatch.setattr(credential_store, "_keychain_available", lambda: True)
+    monkeypatch.setattr(credential_store, "_write_keychain_secret", fake_write)
+
+    save_credentials(ProviderCredentials(serpsearch_api_key="serpsearch-secret"))
+
+    assert calls == [("SERPSEARCH_API_KEY", "serpsearch-secret")]
+
+
 def test_keychain_load_returns_typed_credentials_without_logging_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

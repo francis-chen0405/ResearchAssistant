@@ -180,6 +180,20 @@ def test_credentials_are_saved_and_never_returned() -> None:
     )
 
 
+def test_credentials_can_save_one_new_provider_key_without_resending_existing_keys() -> None:
+    client, _, saved = _client()
+
+    response = client.post("/api/credentials", json={"serpsearch_api_key": "serpsearch-secret"})
+
+    assert response.status_code == 200
+    assert "secret" not in response.text
+    assert saved[0].environment_items() == (("SERPSEARCH_API_KEY", "serpsearch-secret"),)
+
+    empty = client.post("/api/credentials", json={})
+    assert empty.status_code == 422
+    assert empty.json()["detail"] == "Enter at least one API key to save."
+
+
 def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -> None:
     client, controller, _ = _client()
     database = tmp_path / "live.sqlite3"

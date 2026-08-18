@@ -139,7 +139,7 @@ class ConfigurationResponse(StrictModel):
 
 
 class CredentialSetupRequest(StrictModel):
-    mimo_api_key: SecretStr
+    mimo_api_key: SecretStr | None = None
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
@@ -241,8 +241,22 @@ def create_app(
 
     @app.post("/api/credentials", response_model=CredentialSetupResponse)
     def store_credentials(payload: CredentialSetupRequest) -> CredentialSetupResponse:
+        if not any(
+            (
+                payload.mimo_api_key,
+                payload.serpsearch_api_key,
+                payload.exa_api_key,
+                payload.openalex_api_key,
+                payload.firecrawl_api_key,
+            )
+        ):
+            raise HTTPException(status_code=422, detail="Enter at least one API key to save.")
         credentials = ProviderCredentials(
-            mimo_api_key=payload.mimo_api_key.get_secret_value(),
+            mimo_api_key=(
+                payload.mimo_api_key.get_secret_value()
+                if payload.mimo_api_key is not None
+                else None
+            ),
             exa_api_key=(
                 payload.exa_api_key.get_secret_value() if payload.exa_api_key is not None else None
             ),

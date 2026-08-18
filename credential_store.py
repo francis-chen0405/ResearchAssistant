@@ -30,7 +30,7 @@ class ProviderCredentials(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    mimo_api_key: SecretStr
+    mimo_api_key: SecretStr | None = None
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
@@ -56,7 +56,9 @@ class ProviderCredentials(StrictModel):
 
     def environment_items(self) -> tuple[tuple[str, str], ...]:
         """Return explicit process-environment boundary values."""
-        items = (("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),)
+        items: tuple[tuple[str, str], ...] = ()
+        if self.mimo_api_key is not None:
+            items += (("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),)
         if self.exa_api_key is not None:
             items += (("EXA_API_KEY", self.exa_api_key.get_secret_value()),)
         if self.openalex_api_key is not None:

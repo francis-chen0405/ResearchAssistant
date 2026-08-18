@@ -128,7 +128,7 @@ type StartResult = {
 };
 
 type CredentialInput = {
-  mimo_api_key: string;
+  mimo_api_key?: string;
   exa_api_key?: string;
   openalex_api_key?: string;
   serpsearch_api_key?: string;

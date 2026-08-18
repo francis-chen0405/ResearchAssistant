@@ -383,6 +383,7 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
             "See the evidence.",
             "History",
             "Provider setup",
+            "leave blank to keep the saved key",
             "Advanced",
             "Begin research",
             "Run settings",
