@@ -415,6 +415,14 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
     )
 
 
+def test_provider_setup_modal_keeps_its_save_action_reachable_on_short_screens() -> None:
+    stylesheet = (ROOT / "web" / "app" / "globals.css").read_text(encoding="utf-8")
+
+    assert ".modal {" in stylesheet
+    assert "max-height: calc(100dvh - 40px)" in stylesheet
+    assert "overflow-y: auto" in stylesheet
+
+
 def test_live_next_provider_setup_uses_password_fields() -> None:
     source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
 

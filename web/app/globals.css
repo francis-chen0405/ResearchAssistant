@@ -133,8 +133,8 @@ dd { margin: 0; font-family: Georgia, serif; font-size: 23px; }
 .history-status { width: fit-content; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; }
 .history-status.released, .history-status.completed { color: #3c7355; border-color: rgba(60, 115, 85, 0.35); }
 .history-empty { padding: 50px 0; color: var(--muted); }
-.overlay { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(23, 25, 22, 0.34); backdrop-filter: blur(8px); }
-.modal { position: relative; width: min(550px, 100%); padding: 36px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 20px; background: var(--paper); box-shadow: var(--shadow); }
+.overlay { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; overflow-y: auto; overscroll-behavior: contain; padding: 20px; background: rgba(23, 25, 22, 0.34); backdrop-filter: blur(8px); }
+.modal { position: relative; width: min(550px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; padding: 36px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 20px; background: var(--paper); box-shadow: var(--shadow); }
 .modal h2, .advanced-panel h2 { max-width: 430px; margin: 0 0 15px; font-family: Georgia, serif; font-size: clamp(34px, 5vw, 48px); font-weight: 400; line-height: 1.05; letter-spacing: -0.035em; }
 .modal-intro, .panel-intro { color: var(--muted); font-size: 13px; line-height: 1.55; }
 .close-button { position: absolute; top: 22px; right: 24px; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: transparent; cursor: pointer; font-size: 24px; font-weight: 300; line-height: 1; }
