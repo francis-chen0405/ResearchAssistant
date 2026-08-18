@@ -25,6 +25,8 @@ type Settings = {
   useOpenAlex: boolean;
 };
 
+const PROVIDER_PREFERENCES_KEY = "researchassistant.provider-preferences.v1";
+
 const terminalStates = new Set(["released", "blocked", "failed", "cancelled", "configuration_error", "invalid_input"]);
 const stageOrder = [
   { key: "claim_planner", label: "Frame the claim" },
@@ -61,6 +63,7 @@ export default function Home() {
   const [acknowledged, setAcknowledged] = useState(false);
   const [configuration, setConfiguration] = useState<Configuration | null>(null);
   const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160, includeCounterevidence: false, sourceTarget: 10, useSerpSearch: true, useExa: true, useOpenAlex: true });
+  const [providerPreferencesLoaded, setProviderPreferencesLoaded] = useState(false);
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [activeRun, setActiveRun] = useState<{ id: string; database: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -69,6 +72,48 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = window.localStorage.getItem(PROVIDER_PREFERENCES_KEY);
+        if (saved && !disposed) {
+          const parsed = JSON.parse(saved) as Partial<Pick<Settings, "useSerpSearch" | "useExa" | "useOpenAlex">>;
+          setSettings((current) => ({
+            ...current,
+            ...(typeof parsed.useSerpSearch === "boolean" ? { useSerpSearch: parsed.useSerpSearch } : {}),
+            ...(typeof parsed.useExa === "boolean" ? { useExa: parsed.useExa } : {}),
+            ...(typeof parsed.useOpenAlex === "boolean" ? { useOpenAlex: parsed.useOpenAlex } : {}),
+          }));
+        }
+      } catch {
+        // Keep the safe all-provider defaults when local preference storage is unavailable.
+      } finally {
+        if (!disposed) setProviderPreferencesLoaded(true);
+      }
+    }, 0);
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!providerPreferencesLoaded) return;
+    try {
+      window.localStorage.setItem(
+        PROVIDER_PREFERENCES_KEY,
+        JSON.stringify({
+          useSerpSearch: settings.useSerpSearch,
+          useExa: settings.useExa,
+          useOpenAlex: settings.useOpenAlex,
+        }),
+      );
+    } catch {
+      // Preferences remain available for this page session if storage is unavailable.
+    }
+  }, [providerPreferencesLoaded, settings.useSerpSearch, settings.useExa, settings.useOpenAlex]);
 
   const refreshConfiguration = useCallback(async () => {
     try {

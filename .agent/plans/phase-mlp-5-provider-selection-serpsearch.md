@@ -17,6 +17,8 @@ Status: Complete and verified on 2026-08-17.
   sources require no key and create no query, call, or trail failure. Existing CLI and
   programmatic legacy defaults retain the former Exa/OpenAlex selection for compatibility.
 - Advanced contains the three required source switches and concise provider guidance.
+- Source switches persist automatically in browser local storage, so closing Advanced or
+  refreshing the page keeps the user's last selection.
 
 ## Safeguards retained
 
