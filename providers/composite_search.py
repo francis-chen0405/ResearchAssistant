@@ -13,6 +13,7 @@ from providers.search import (
     SearchRequest,
     SearchResponse,
 )
+from providers.serpsearch import SerpSearchAdapter
 
 _DEGRADABLE_OPENALEX_FAILURES = frozenset(
     {
@@ -31,15 +32,31 @@ class CompositeSearchProvider:
     def __init__(
         self,
         *,
-        exa: ExaSearchAdapter,
-        openalex: OpenAlexSearchAdapter,
+        exa: ExaSearchAdapter | None = None,
+        openalex: OpenAlexSearchAdapter | None = None,
+        serpsearch: SerpSearchAdapter | None = None,
     ) -> None:
         self._exa = exa
         self._openalex = openalex
+        self._serpsearch = serpsearch
 
     def search(self, request: SearchRequest) -> SearchResponse:
         if request.provider is DiscoveryProvider.EXA:
+            if self._exa is None:
+                raise SearchProviderError(
+                    SearchFailureCode.MISSING_CONFIGURATION, "Exa is disabled"
+                )
             return self._exa.search(request)
+        if request.provider is DiscoveryProvider.SERPSEARCH:
+            if self._serpsearch is None:
+                raise SearchProviderError(
+                    SearchFailureCode.MISSING_CONFIGURATION, "SERP Search is disabled"
+                )
+            return self._serpsearch.search(request)
+        if self._openalex is None:
+            raise SearchProviderError(
+                SearchFailureCode.MISSING_CONFIGURATION, "OpenAlex is disabled"
+            )
         try:
             normal = self._openalex.search(request)
         except SearchProviderError as normal_error:

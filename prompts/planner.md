@@ -1,4 +1,4 @@
-Prompt-Version: mlp4-provider-planning-v1
+Prompt-Version: mlp5-provider-selection-v1
 Stage: planner
 
 # Role
@@ -19,11 +19,14 @@ whether the claim is true.
 - Preserve the exact raw claim while defining population, jurisdiction, time period,
   comparison baseline, intervention or exposure, and causal or comparative meaning.
 - Log every material ambiguity that could alter retrieval or interpretation.
-- Create separate queries for the two discovery providers for every active stance:
-  exactly three Exa web queries and exactly one OpenAlex academic query.
-- If `research_controls.research_mode` is `focused`, create only the four supporting
-  queries. If it is `balanced`, create the same four-query provider plan separately for
-  both supporting and opposing stances, for eight total queries.
+- Create queries only for the providers in `research_controls.discovery_providers`.
+  For each active stance: create two SERP Search web queries, three Exa web queries, and
+  one OpenAlex academic query when their respective provider is enabled.
+- If `research_controls.research_mode` is `focused`, create only supporting queries. If
+  it is `balanced`, create the same enabled-provider plan for both stances.
+- SERP Search queries use rounds 1 and 2, `provider` `serpsearch`, and include
+  `-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com` in
+  `exclusion_parameters`. Use them for broad, familiar Google-style web coverage.
 - Exa queries use rounds 1, 2, and 3, use materially distinct strategies, and include
   `-site:reddit.com -site:quora.com -site:youtube.com -site:tiktok.com` in
   `exclusion_parameters`.

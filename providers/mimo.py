@@ -38,6 +38,7 @@ from models import (
     _derive_ledger_score,
     _expected_placement,
     _is_ledger_eligible,
+    validate_planner_provider_selection,
 )
 from money import parse_exact_usd
 from providers.config import MimoConfig
@@ -126,7 +127,7 @@ class MimoSearchQueryResponse(StrictModel):
 class MimoPlannerResponse(StrictModel):
     claim_definition: MimoClaimDefinitionResponse
     ambiguities: tuple[MimoAmbiguityResponse, ...]
-    search_queries: tuple[MimoSearchQueryResponse, ...] = Field(min_length=4, max_length=8)
+    search_queries: tuple[MimoSearchQueryResponse, ...] = Field(min_length=1, max_length=12)
 
 
 class MimoScoreResponse(StrictModel):
@@ -498,14 +499,7 @@ def _assemble_planner(
         )
         for index, item in enumerate(response.search_queries, start=1)
     ]
-    provider_specific = any(query.provider is DiscoveryProvider.OPENALEX for query in queries)
-    if request.prompt.version.startswith("mlp4-") and not provider_specific:
-        raise ValueError("MLP-4 Planner output requires a separate OpenAlex query lane")
-    if provider_specific and planner_input.research_controls.research_mode.value != (
-        "balanced" if any(query.stance is Stance.OPPOSING for query in queries) else "focused"
-    ):
-        raise ValueError("Planner query stances must match the requested research mode")
-    return PlannerOutput(
+    output = PlannerOutput(
         run_id=request.run_id,
         claim_definition=claim,
         ambiguities=ambiguities,
@@ -514,6 +508,13 @@ def _assemble_planner(
         planner_model_name=request.model_alias.value,
         planned_at=created_at,
     )
+    if request.prompt.version.startswith("mlp5-"):
+        validate_planner_provider_selection(output, planner_input.research_controls)
+        if planner_input.research_controls.research_mode.value != (
+            "balanced" if any(query.stance is Stance.OPPOSING for query in queries) else "focused"
+        ):
+            raise ValueError("Planner query stances must match the requested research mode")
+    return output
 
 
 def _planner_query_namespace(planner_input: PlannerLLMInput) -> str:

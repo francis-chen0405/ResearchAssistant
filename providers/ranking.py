@@ -381,6 +381,8 @@ def _intent_score(query: SearchQuery, result: SearchResult) -> int:
     engine = (result.metadata.engine or "").lower()
     if query.provider is DiscoveryProvider.OPENALEX:
         return 20 if engine == "openalex" and query.intent is SearchIntent.ACADEMIC_STUDY else 5
+    if query.provider is DiscoveryProvider.SERPSEARCH:
+        return 20 if engine == "serpsearch" else 5
     if engine == "exa":
         return 20
     return 10

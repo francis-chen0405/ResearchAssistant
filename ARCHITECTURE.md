@@ -95,7 +95,8 @@ Portfolio & Trail, and MVP-11 Adaptive Research Expansion & Cost Control are com
 MVP-11 is the latest completed research-pipeline phase. MLP-1 Simplified Live Experience,
 MLP-2 Local Product Experience, MLP-3 Next.js Product Rebuild, and MLP-4 Research Quality
 & OpenAlex Integration are complete. MLP-4 is the latest completed product-experience
-phase and preserves every completed release invariant. MLP-5 is not authorized.
+phase and preserves every completed release invariant. MLP-5 Provider Selection & SERP
+Search is complete and preserves every completed release invariant.
 
 ## MVP-2A Live Provider Architecture Gate
 
@@ -234,6 +235,18 @@ ranking orders independently acquired,
 normalized snapshots for extraction. Neither ranking stage replaces or weakens exact
 snapshot/quotation checks, Reviewer approval, Ledger
 admission, or deterministic final validation.
+
+### MLP-5 Provider Selection and SERP Search Boundary
+
+New website runs freeze an ordered nonempty selection of SERP Search, Exa, and OpenAlex
+in `ResearchControls` and the exact provider fingerprint. All three default on; disabled
+sources create no plan, call, or configuration requirement. The Planner creates two
+SERP Search, three Exa, and one OpenAlex query for each selected provider per active
+stance. SERP Search uses bearer authentication, retains only normalized organic HTTP(S)
+results, and is limited to twelve attempted calls per run. Its subscription cost is not
+invented as a per-call USD value. All provider results remain discovery-only and merge
+through the existing ranking, acquisition, snapshot, quotation, review, Ledger, and
+release gates unchanged.
 
 ### MVP-6.4 Evidence Density Policy
 

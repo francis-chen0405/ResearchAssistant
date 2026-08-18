@@ -128,6 +128,7 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
             "MIMO_API_KEY": SECRET,
             "EXA_API_KEY": "exa-test-secret",
             "OPENALEX_API_KEY": "openalex-test-secret",
+            "SERPSEARCH_API_KEY": "serpsearch-test-secret",
         },
         runner=runner,
     )
@@ -172,6 +173,7 @@ def test_live_controller_passes_requested_research_controls_to_runner(tmp_path: 
             "MIMO_API_KEY": SECRET,
             "EXA_API_KEY": "exa-test-secret",
             "OPENALEX_API_KEY": "openalex-test-secret",
+            "SERPSEARCH_API_KEY": "serpsearch-test-secret",
         },
         runner=runner,
     )
@@ -198,6 +200,7 @@ def test_worker_exception_is_redacted_from_ui_snapshot(tmp_path: Path) -> None:
             "MIMO_API_KEY": SECRET,
             "EXA_API_KEY": "exa-test-secret",
             "OPENALEX_API_KEY": "openalex-test-secret",
+            "SERPSEARCH_API_KEY": "serpsearch-test-secret",
         },
         runner=runner,
     )
@@ -416,9 +419,15 @@ def test_live_next_provider_setup_uses_password_fields() -> None:
 
     assert all(
         label in source
-        for label in ("MiMo API key", "Exa API key", "OpenAlex API key", "Firecrawl API key")
+        for label in (
+            "MiMo API key",
+            "SERP Search API key",
+            "Exa API key",
+            "OpenAlex API key",
+            "Firecrawl API key",
+        )
     )
-    assert source.count('type="password"') == 4
+    assert source.count('type="password"') == 5
     assert "Keys go directly to your macOS Keychain" in source
     assert "They are never returned to this page" in source
 
@@ -432,6 +441,7 @@ def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> Non
         "MIMO_API_KEY": SECRET,
         "EXA_API_KEY": "exa-test-secret",
         "OPENALEX_API_KEY": "openalex-test-secret",
+        "SERPSEARCH_API_KEY": "serpsearch-test-secret",
         "MIMO_BASE_URL": "https://api.xiaomimimo.com/v1",
         "MIMO_MODEL": "mimo-v2.5-pro",
         "MVP4_DB_PATH": str(db_path),

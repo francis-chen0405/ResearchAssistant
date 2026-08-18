@@ -16,7 +16,13 @@ from pydantic import Field, field_validator
 
 from cli import CLIExitCode, repository_identity
 from frontend.security import redact_text
-from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, RunManifest, StrictModel
+from models import (
+    DEFAULT_RESEARCH_CONTROLS,
+    DiscoveryProvider,
+    ResearchControls,
+    RunManifest,
+    StrictModel,
+)
 from money import ExactUSD
 from orchestrator import (
     MVP10_TARGETED_RESEARCHERS_ARTIFACT,
@@ -43,6 +49,9 @@ from store import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIVE_DB = PROJECT_ROOT / ".researchassistant" / "live-runs.sqlite3"
+LEGACY_LIVE_RESEARCH_CONTROLS = ResearchControls(
+    discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)
+)
 
 LiveClassification = Literal[
     "starting",
@@ -69,7 +78,7 @@ class LiveRunRequest(StrictModel):
     max_tokens: int = Field(ge=1, le=1_000_000)
     max_cost_usd: Decimal = Field(gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
-    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
+    research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS
 
     @field_validator("raw_claim")
     @classmethod
@@ -690,6 +699,7 @@ class LiveResearchController:
                     "MIMO_API_KEY",
                     "EXA_API_KEY",
                     "OPENALEX_API_KEY",
+                    "SERPSEARCH_API_KEY",
                     "FIRECRAWL_API_KEY",
                 )
             ),

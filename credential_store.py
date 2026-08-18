@@ -31,14 +31,16 @@ class ProviderCredentials(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     mimo_api_key: SecretStr
-    exa_api_key: SecretStr
+    exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
+    serpsearch_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
     @field_validator(
         "mimo_api_key",
         "exa_api_key",
         "openalex_api_key",
+        "serpsearch_api_key",
         "firecrawl_api_key",
         mode="before",
     )
@@ -54,12 +56,13 @@ class ProviderCredentials(StrictModel):
 
     def environment_items(self) -> tuple[tuple[str, str], ...]:
         """Return explicit process-environment boundary values."""
-        items = (
-            ("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),
-            ("EXA_API_KEY", self.exa_api_key.get_secret_value()),
-        )
+        items = (("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),)
+        if self.exa_api_key is not None:
+            items += (("EXA_API_KEY", self.exa_api_key.get_secret_value()),)
         if self.openalex_api_key is not None:
             items += (("OPENALEX_API_KEY", self.openalex_api_key.get_secret_value()),)
+        if self.serpsearch_api_key is not None:
+            items += (("SERPSEARCH_API_KEY", self.serpsearch_api_key.get_secret_value()),)
         if self.firecrawl_api_key is None:
             return items
         return items + (("FIRECRAWL_API_KEY", self.firecrawl_api_key.get_secret_value()),)
@@ -73,20 +76,20 @@ def save_credentials(credentials: ProviderCredentials) -> None:
 
 
 def load_saved_credentials() -> ProviderCredentials | None:
-    """Read required saved credentials and the optional fallback credential."""
+    """Read the required model key and any saved discovery-provider keys."""
     if not _keychain_available():
         return None
     try:
         mimo = _read_secret("MIMO_API_KEY")
-        exa = _read_secret("EXA_API_KEY")
     except KeychainUnavailableError:
         return None
-    if not mimo or not exa:
+    if not mimo:
         return None
     return ProviderCredentials(
         mimo_api_key=mimo,
-        exa_api_key=exa,
+        exa_api_key=_read_optional_secret("EXA_API_KEY"),
         openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
+        serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),
         firecrawl_api_key=_read_optional_secret(),
     )
 

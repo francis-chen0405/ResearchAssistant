@@ -10,7 +10,18 @@ The user-authorized CI maintenance plan is
 `.agent/plans/ci-daily-expanded-checks.md`. It changes automation and development
 tooling only; it does not start another product phase or alter runtime behavior.
 
-## Latest Completed Product Phase: MLP-4
+## Latest Completed Product Phase: MLP-5 Provider Selection & SERP Search
+
+The user explicitly authorized and completed MLP-5 Provider Selection & SERP Search on
+2026-08-17. It adds typed per-run SERP Search, Exa, and OpenAlex selection, defaulting to
+all three, plus optional Keychain credentials and a twelve-call SERP Search ceiling. It
+does not begin the separately deferred visual redesign.
+
+Canonical completed plan:
+
+- `.agent/plans/phase-mlp-5-provider-selection-serpsearch.md`
+
+## Previous Completed Product Phase: MLP-4
 
 The user explicitly authorized MLP-4 Research Quality & OpenAlex Integration on
 2026-08-15, and it is complete. It adds provider-specific Exa/OpenAlex planning, secure

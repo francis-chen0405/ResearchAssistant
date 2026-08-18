@@ -77,7 +77,7 @@ export type HistoryItem = {
 export type ResearchTrailItem = {
   research_round: number;
   stance: "supporting" | "opposing";
-  provider: "exa" | "openalex";
+  provider: "serpsearch" | "exa" | "openalex";
   intent: string;
   query_text: string;
   title: string;
@@ -115,6 +115,9 @@ type StartInput = {
   max_llm_calls: number;
   include_counterevidence: boolean;
   sources_per_stance_per_round: 5 | 10 | 15 | 20;
+  use_serpsearch: boolean;
+  use_exa: boolean;
+  use_openalex: boolean;
 };
 
 type StartResult = {
@@ -126,8 +129,9 @@ type StartResult = {
 
 type CredentialInput = {
   mimo_api_key: string;
-  exa_api_key: string;
-  openalex_api_key: string;
+  exa_api_key?: string;
+  openalex_api_key?: string;
+  serpsearch_api_key?: string;
   firecrawl_api_key?: string;
 };
 

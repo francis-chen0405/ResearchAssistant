@@ -30,6 +30,7 @@ from models import (
     SourceSnapshot,
     Stage,
     Stance,
+    validate_planner_provider_selection,
 )
 from orchestrator import (
     PHASE9_RESEARCHERS_ARTIFACT,
@@ -171,7 +172,7 @@ def test_balanced_planner_requires_provider_plan_for_both_stances() -> None:
     assert len(planner.search_queries) == 8
 
 
-def test_new_planner_rejects_missing_openalex_lane() -> None:
+def test_planner_requires_the_frozen_selected_provider_set() -> None:
     planner = _planner(balanced=False)
     payload = planner.model_dump()
     payload["search_queries"] = [
@@ -180,8 +181,9 @@ def test_new_planner_rejects_missing_openalex_lane() -> None:
         if query.provider is DiscoveryProvider.EXA
     ]
 
-    with pytest.raises(ValidationError, match="OpenAlex"):
-        PlannerOutput.model_validate(payload)
+    exa_only = PlannerOutput.model_validate(payload)
+    with pytest.raises(ValueError, match="selected discovery providers"):
+        validate_planner_provider_selection(exa_only, ResearchControls())
 
 
 def test_openalex_query_forbids_web_exclusion_syntax() -> None:

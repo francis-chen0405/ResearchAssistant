@@ -379,7 +379,7 @@ def test_environment_example_constructs_supported_legacy_smoke_offline() -> None
 
 def test_current_acquisition_and_fingerprint_identities_are_explicit() -> None:
     assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
-    assert MIMO_FINGERPRINT_VERSION == "mlp4-expanded-retrieval-yield-v1"
+    assert MIMO_FINGERPRINT_VERSION == "mlp5-provider-selection-v1"
 
 
 def test_package_description_is_durable_and_phase_neutral() -> None:

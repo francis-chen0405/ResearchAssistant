@@ -50,6 +50,7 @@ class ResearchMode(StrEnum):
 
 
 class DiscoveryProvider(StrEnum):
+    SERPSEARCH = "serpsearch"
     EXA = "exa"
     OPENALEX = "openalex"
 
@@ -109,6 +110,25 @@ class ResearchControls(StrictModel):
     focus: ResearchFocus | None = None
     research_mode: ResearchMode = ResearchMode.FOCUSED
     sources_per_stance_per_round: Literal[5, 7, 10, 15, 20] = 10
+    discovery_providers: tuple[DiscoveryProvider, ...] = (
+        DiscoveryProvider.SERPSEARCH,
+        DiscoveryProvider.EXA,
+        DiscoveryProvider.OPENALEX,
+    )
+
+    @field_validator("discovery_providers")
+    @classmethod
+    def validate_discovery_providers(
+        cls, value: tuple[DiscoveryProvider, ...]
+    ) -> tuple[DiscoveryProvider, ...]:
+        if not value:
+            raise ValueError("at least one discovery provider must be enabled")
+        if len(set(value)) != len(value):
+            raise ValueError("discovery providers must not contain duplicates")
+        canonical = tuple(provider for provider in DiscoveryProvider if provider in value)
+        if value != canonical:
+            raise ValueError("discovery providers must use canonical provider order")
+        return value
 
     def canonical_json(self) -> str:
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
@@ -367,10 +387,14 @@ class SearchQuery(StrictModel):
 
     @model_validator(mode="after")
     def validate_provider_query(self) -> SearchQuery:
-        if self.provider is DiscoveryProvider.EXA:
+        if self.provider in {DiscoveryProvider.EXA, DiscoveryProvider.SERPSEARCH}:
             missing = missing_required_query_exclusions(self.exclusion_parameters)
             if missing:
-                raise ValueError("Exa query is missing required exclusion parameters")
+                raise ValueError(
+                    f"{self.provider.value} query is missing required exclusion parameters"
+                )
+            if self.intent is SearchIntent.ACADEMIC_STUDY:
+                raise ValueError("web queries cannot use academic-study intent")
         else:
             if self.intent is not SearchIntent.ACADEMIC_STUDY:
                 raise ValueError("OpenAlex queries must use academic-study intent")
@@ -400,56 +424,40 @@ class PlannerOutput(StrictModel):
 
         if len({query.query_id for query in self.search_queries}) != len(self.search_queries):
             raise ValueError("planner search query IDs must be unique")
-        openalex_queries = [
-            query for query in self.search_queries if query.provider is DiscoveryProvider.OPENALEX
-        ]
-        if not openalex_queries:
-            self._validate_legacy_queries()
-        else:
-            self._validate_provider_specific_queries()
+        self._validate_provider_specific_queries()
         for query in self.search_queries:
             if query.run_id != self.run_id:
                 raise ValueError("search query run_id must match planner run_id")
         return self
-
-    def _validate_legacy_queries(self) -> None:
-        expected_rounds = {
-            (Stance.SUPPORTING, 1),
-            (Stance.SUPPORTING, 2),
-            (Stance.SUPPORTING, 3),
-            (Stance.OPPOSING, 1),
-            (Stance.OPPOSING, 2),
-            (Stance.OPPOSING, 3),
-        }
-        actual_rounds = {(query.stance, query.query_round) for query in self.search_queries}
-        if len(self.search_queries) != 6 or actual_rounds != expected_rounds:
-            raise ValueError(
-                "new Planner output requires a separate OpenAlex lane; legacy output must "
-                "contain exactly three supporting and three opposing Exa queries"
-            )
 
     def _validate_provider_specific_queries(self) -> None:
         stances = {query.stance for query in self.search_queries}
         if Stance.SUPPORTING not in stances:
             raise ValueError("provider-specific Planner output requires supporting queries")
         for stance in stances:
-            exa_rounds = {
-                query.query_round
-                for query in self.search_queries
-                if query.stance is stance and query.provider is DiscoveryProvider.EXA
-            }
-            openalex = [
-                query
-                for query in self.search_queries
-                if query.stance is stance and query.provider is DiscoveryProvider.OPENALEX
-            ]
-            if exa_rounds != {1, 2, 3} or len(openalex) != 1:
-                raise ValueError(
-                    "each active stance requires three Exa queries and one OpenAlex query"
+            for provider, expected_rounds in (
+                (DiscoveryProvider.SERPSEARCH, {1, 2}),
+                (DiscoveryProvider.EXA, {1, 2, 3}),
+                (DiscoveryProvider.OPENALEX, {1}),
+            ):
+                rounds = {
+                    query.query_round
+                    for query in self.search_queries
+                    if query.stance is stance and query.provider is provider
+                }
+                count = sum(
+                    query.stance is stance and query.provider is provider
+                    for query in self.search_queries
                 )
-        expected_count = 8 if Stance.OPPOSING in stances else 4
-        if len(self.search_queries) != expected_count:
-            raise ValueError("provider-specific Planner output contains an unexpected query")
+                if rounds and (rounds != expected_rounds or count != len(expected_rounds)):
+                    raise ValueError("provider query rounds do not match its discovery contract")
+        supporting_providers = {
+            query.provider for query in self.search_queries if query.stance is Stance.SUPPORTING
+        }
+        for stance in stances:
+            providers = {query.provider for query in self.search_queries if query.stance is stance}
+            if providers != supporting_providers:
+                raise ValueError("each active stance must use the same discovery providers")
 
     @property
     def research_mode(self) -> ResearchMode:
@@ -459,6 +467,29 @@ class PlannerOutput(StrictModel):
 
     def queries_for_provider(self, provider: DiscoveryProvider) -> tuple[SearchQuery, ...]:
         return tuple(query for query in self.search_queries if query.provider is provider)
+
+
+def validate_planner_provider_selection(planner: PlannerOutput, controls: ResearchControls) -> None:
+    """Require a new plan to exactly match the frozen source selection."""
+    actual = {query.provider for query in planner.search_queries}
+    expected = set(controls.discovery_providers)
+    if actual != expected:
+        raise ValueError("Planner providers must exactly match the selected discovery providers")
+    expected_counts = {
+        DiscoveryProvider.SERPSEARCH: 2,
+        DiscoveryProvider.EXA: 3,
+        DiscoveryProvider.OPENALEX: 1,
+    }
+    for stance in {query.stance for query in planner.search_queries}:
+        for provider in controls.discovery_providers:
+            count = sum(
+                query.stance is stance and query.provider is provider
+                for query in planner.search_queries
+            )
+            if count != expected_counts[provider]:
+                raise ValueError(
+                    "Planner query counts do not match the selected discovery providers"
+                )
 
 
 class RetrievalRecord(StrictModel):

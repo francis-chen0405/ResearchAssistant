@@ -7,6 +7,7 @@ from hashlib import sha256
 import httpx
 import pytest
 
+from models import DiscoveryProvider, ResearchControls
 from providers.acquisition import (
     ACQUISITION_VERSION,
     AcquisitionFailureCode,
@@ -463,6 +464,7 @@ def test_mvp6_3_acquisition_identity_is_incompatible_with_pre_phase_identity() -
     config = MimoProviderFactoryConfig(
         exa=ExaConfig(api_key="exa-test-secret"),
         mimo=MimoConfig(api_key="mimo-test-secret"),
+        research_controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,)),
         repository_revision="test-revision",
     )
     bundle = build_mimo_provider_bundle(

@@ -146,6 +146,42 @@ class OpenAlexConfig(StrictModel):
         )
 
 
+class SerpSearchConfig(StrictModel):
+    """Strict Google-style SERP Search discovery configuration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["serpsearch"] = "serpsearch"
+    provider_version: Literal["google-search-api-v1"] = "google-search-api-v1"
+    adapter_version: Literal["mlp5-serpsearch-v1"] = "mlp5-serpsearch-v1"
+    base_url: str = "https://api.serpsearch.com"
+    api_key: SecretStr
+    max_search_calls_per_run: Literal[12] = 12
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("SERP Search base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("SERP Search base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> SerpSearchConfig:
+        api_key = environment.get("SERPSEARCH_API_KEY", "").strip()
+        if not api_key:
+            raise ProviderConfigurationError(
+                "SERPSEARCH_API_KEY is required when SERP Search is enabled"
+            )
+        return cls(
+            api_key=SecretStr(api_key),
+            base_url=environment.get("SERPSEARCH_BASE_URL", "https://api.serpsearch.com").strip(),
+        )
+
+
 class FirecrawlConfig(StrictModel):
     """Optional Firecrawl acquisition-fallback configuration."""
 

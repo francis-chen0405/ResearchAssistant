@@ -20,6 +20,9 @@ type Settings = {
   maxCalls: number;
   includeCounterevidence: boolean;
   sourceTarget: 5 | 10 | 15 | 20;
+  useSerpSearch: boolean;
+  useExa: boolean;
+  useOpenAlex: boolean;
 };
 
 const terminalStates = new Set(["released", "blocked", "failed", "cancelled", "configuration_error", "invalid_input"]);
@@ -57,7 +60,7 @@ export default function Home() {
   const [claim, setClaim] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [configuration, setConfiguration] = useState<Configuration | null>(null);
-  const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160, includeCounterevidence: false, sourceTarget: 10 });
+  const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160, includeCounterevidence: false, sourceTarget: 10, useSerpSearch: true, useExa: true, useOpenAlex: true });
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [activeRun, setActiveRun] = useState<{ id: string; database: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -120,7 +123,7 @@ export default function Home() {
   const beginResearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!claim.trim() || !acknowledged) return;
-    if (!configuration?.configured) { setSetupOpen(true); return; }
+    if (!configuration) { setNotice("The local API is not ready yet."); return; }
     if (!configuration.service.wigolo_ready) {
       setNotice("Start the local research service in Advanced before beginning.");
       setAdvancedOpen(true);
@@ -138,10 +141,17 @@ export default function Home() {
         max_llm_calls: settings.maxCalls,
         include_counterevidence: settings.includeCounterevidence,
         sources_per_stance_per_round: settings.sourceTarget,
+        use_serpsearch: settings.useSerpSearch,
+        use_exa: settings.useExa,
+        use_openalex: settings.useOpenAlex,
       });
-      setActiveRun({ id: result.run_id, database: settings.dbPath });
-      setSnapshot(null);
       setNotice(result.message);
+      if (result.started) {
+        setActiveRun({ id: result.run_id, database: settings.dbPath });
+        setSnapshot(null);
+      } else if (result.classification === "configuration_error") {
+        setSetupOpen(true);
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Research could not start.");
     } finally { setBusy(false); }
@@ -301,9 +311,9 @@ function HistoryView({ items, loading, onOpen }: { items: HistoryItem[]; loading
 }
 
 function ProviderSetup({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
-  const [mimo, setMimo] = useState(""); const [exa, setExa] = useState(""); const [openalex, setOpenalex] = useState(""); const [firecrawl, setFirecrawl] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
-  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setSaving(true); setError(null); try { const result = await researchApi.saveCredentials({ mimo_api_key: mimo, exa_api_key: exa, openalex_api_key: openalex, ...(firecrawl ? { firecrawl_api_key: firecrawl } : {}) }); setMimo(""); setExa(""); setOpenalex(""); setFirecrawl(""); onSaved(result.message); } catch (caught) { setError(caught instanceof Error ? caught.message : "The keys could not be saved."); } finally { setSaving(false); } };
-  return <Modal title="Connect the research providers" onClose={onClose}><p className="modal-intro">Keys go directly to your macOS Keychain through the local API. They are never returned to this page.</p><form className="setup-form" onSubmit={submit}><label>MiMo API key <input type="password" value={mimo} onChange={(event) => setMimo(event.target.value)} autoComplete="off" required /></label><label>Exa API key <input type="password" value={exa} onChange={(event) => setExa(event.target.value)} autoComplete="off" required /></label><label>OpenAlex API key <input type="password" value={openalex} onChange={(event) => setOpenalex(event.target.value)} autoComplete="off" required /></label><label>Firecrawl API key <span>optional fallback</span><input type="password" value={firecrawl} onChange={(event) => setFirecrawl(event.target.value)} autoComplete="off" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action wide" type="submit" disabled={!mimo || !exa || !openalex || saving}>{saving ? "Saving securely…" : "Save to Keychain"}<span>↗</span></button></form></Modal>;
+  const [mimo, setMimo] = useState(""); const [serpsearch, setSerpsearch] = useState(""); const [exa, setExa] = useState(""); const [openalex, setOpenalex] = useState(""); const [firecrawl, setFirecrawl] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null);
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setSaving(true); setError(null); try { const result = await researchApi.saveCredentials({ mimo_api_key: mimo, ...(serpsearch ? { serpsearch_api_key: serpsearch } : {}), ...(exa ? { exa_api_key: exa } : {}), ...(openalex ? { openalex_api_key: openalex } : {}), ...(firecrawl ? { firecrawl_api_key: firecrawl } : {}) }); setMimo(""); setSerpsearch(""); setExa(""); setOpenalex(""); setFirecrawl(""); onSaved(result.message); } catch (caught) { setError(caught instanceof Error ? caught.message : "The keys could not be saved."); } finally { setSaving(false); } };
+  return <Modal title="Connect the research providers" onClose={onClose}><p className="modal-intro">Keys go directly to your macOS Keychain through the local API. They are never returned to this page.</p><form className="setup-form" onSubmit={submit}><label>MiMo API key <input type="password" value={mimo} onChange={(event) => setMimo(event.target.value)} autoComplete="off" required /></label><label>SERP Search API key <span>optional until selected</span><input type="password" value={serpsearch} onChange={(event) => setSerpsearch(event.target.value)} autoComplete="off" /></label><label>Exa API key <span>optional until selected</span><input type="password" value={exa} onChange={(event) => setExa(event.target.value)} autoComplete="off" /></label><label>OpenAlex API key <span>optional until selected</span><input type="password" value={openalex} onChange={(event) => setOpenalex(event.target.value)} autoComplete="off" /></label><label>Firecrawl API key <span>optional fallback</span><input type="password" value={firecrawl} onChange={(event) => setFirecrawl(event.target.value)} autoComplete="off" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action wide" type="submit" disabled={!mimo || saving}>{saving ? "Saving securely…" : "Save to Keychain"}<span>↗</span></button></form></Modal>;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -312,7 +322,13 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function AdvancedPanel({ settings, configuration, active, onSettings, onClose, onService }: { settings: Settings; configuration: Configuration | null; active: boolean; onSettings: (settings: Settings) => void; onClose: () => void; onService: (action: "start" | "stop") => void; }) {
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => onSettings({ ...settings, [key]: value });
-  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced</p><h2>Run settings</h2><p className="panel-intro">Research choices and local limits. The default is a focused ten-source run.</p><section className="research-options"><div className="option-copy"><strong>Counterevidence</strong><span>Add a separate challenging-evidence search. Off by default.</span></div><button type="button" role="switch" aria-checked={settings.includeCounterevidence} className={`switch ${settings.includeCounterevidence ? "on" : ""}`} disabled={active} onClick={() => update("includeCounterevidence", !settings.includeCounterevidence)}><i /></button><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each active side, with five bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="1000000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>MiMo cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Turning counterevidence off reduces actual use; it does not raise or lower any usage ceiling.</p></motion.aside></motion.div>;
+  const sources = [
+    ["useSerpSearch", "SERP Search", "Best for familiar Google results across the wider web, including current pages and everyday sources."],
+    ["useExa", "Exa", "Best for finding relevant pages by meaning, not just exact keywords."],
+    ["useOpenAlex", "OpenAlex", "Best for academic studies, papers, and other scholarly research."],
+  ] as const;
+  const selectedCount = sources.filter(([key]) => settings[key]).length;
+  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced</p><h2>Run settings</h2><p className="panel-intro">Research choices and local limits. The default is a focused ten-source run.</p><section className="research-options">{sources.map(([key, label, copy]) => <><div className="option-copy" key={`${key}-copy`}><strong>{label}</strong><span>{copy}</span></div><button key={key} type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></>)}<div className="option-copy"><strong>Counterevidence</strong><span>Add a separate challenging-evidence search. Off by default.</span></div><button type="button" role="switch" aria-checked={settings.includeCounterevidence} className={`switch ${settings.includeCounterevidence ? "on" : ""}`} disabled={active} onClick={() => update("includeCounterevidence", !settings.includeCounterevidence)}><i /></button><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each active side, with five bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="1000000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>MiMo cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Turning counterevidence off reduces actual use; it does not raise or lower any usage ceiling.</p></motion.aside></motion.div>;
 }
 
 function ServiceCard({ service, active, onService }: { service: ServiceDiagnostic | null; active: boolean; onService: (action: "start" | "stop") => void }) {

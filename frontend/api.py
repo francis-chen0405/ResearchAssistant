@@ -38,7 +38,7 @@ from frontend.live_service import (
 )
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
-from models import ResearchControls, ResearchMode, StrictModel
+from models import DiscoveryProvider, ResearchControls, ResearchMode, StrictModel
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -140,8 +140,9 @@ class ConfigurationResponse(StrictModel):
 
 class CredentialSetupRequest(StrictModel):
     mimo_api_key: SecretStr
-    exa_api_key: SecretStr
-    openalex_api_key: SecretStr
+    exa_api_key: SecretStr | None = None
+    openalex_api_key: SecretStr | None = None
+    serpsearch_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
 
@@ -161,6 +162,9 @@ class ResearchStartInput(StrictModel):
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     include_counterevidence: bool = False
     sources_per_stance_per_round: Literal[5, 10, 15, 20] = 10
+    use_serpsearch: bool = True
+    use_exa: bool = True
+    use_openalex: bool = True
 
 
 class RunLocator(StrictModel):
@@ -229,7 +233,7 @@ def create_app(
         config_message = runtime.controller.configuration_message()
         return ConfigurationResponse(
             configured=config_message is None,
-            message=config_message or "MiMo, Exa, and OpenAlex are connected.",
+            message=config_message or "MiMo and your selected research sources are connected.",
             default_db_path=str(prepare_default_database()),
             firecrawl_enabled=bool(runtime.environment.get("FIRECRAWL_API_KEY", "").strip()),
             service=runtime.services.probe(),
@@ -239,8 +243,19 @@ def create_app(
     def store_credentials(payload: CredentialSetupRequest) -> CredentialSetupResponse:
         credentials = ProviderCredentials(
             mimo_api_key=payload.mimo_api_key.get_secret_value(),
-            exa_api_key=payload.exa_api_key.get_secret_value(),
-            openalex_api_key=payload.openalex_api_key.get_secret_value(),
+            exa_api_key=(
+                payload.exa_api_key.get_secret_value() if payload.exa_api_key is not None else None
+            ),
+            openalex_api_key=(
+                payload.openalex_api_key.get_secret_value()
+                if payload.openalex_api_key is not None
+                else None
+            ),
+            serpsearch_api_key=(
+                payload.serpsearch_api_key.get_secret_value()
+                if payload.serpsearch_api_key is not None
+                else None
+            ),
             firecrawl_api_key=(
                 payload.firecrawl_api_key.get_secret_value()
                 if payload.firecrawl_api_key is not None
@@ -273,6 +288,8 @@ def create_app(
                     "review the result."
                 ),
             )
+        if not (payload.use_serpsearch or payload.use_exa or payload.use_openalex):
+            raise HTTPException(status_code=422, detail="Select at least one research source.")
         database = payload.db_path or str(prepare_default_database())
         request = LiveRunRequest(
             raw_claim=payload.raw_claim,
@@ -288,6 +305,15 @@ def create_app(
                     else ResearchMode.FOCUSED
                 ),
                 sources_per_stance_per_round=payload.sources_per_stance_per_round,
+                discovery_providers=tuple(
+                    provider
+                    for provider, enabled in (
+                        (DiscoveryProvider.SERPSEARCH, payload.use_serpsearch),
+                        (DiscoveryProvider.EXA, payload.use_exa),
+                        (DiscoveryProvider.OPENALEX, payload.use_openalex),
+                    )
+                    if enabled
+                ),
             ),
         )
         return runtime.controller.start(request)

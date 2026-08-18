@@ -231,8 +231,10 @@ No environment variable or API key is required for the fixture pipeline, fixture
 utilities, offline tests, or normal Phase 10 evaluation. The live CLI reads configuration only from the
 explicit process environment; it never loads `.env` automatically.
 
-The live CLI requires `MIMO_API_KEY`, `EXA_API_KEY`, and `OPENALEX_API_KEY`.
-`FIRECRAWL_API_KEY` is optional; when it is
+The legacy live CLI requires `MIMO_API_KEY`, `EXA_API_KEY`, and `OPENALEX_API_KEY`.
+The website defaults to SERP Search, Exa, and OpenAlex enabled; it requires
+`SERPSEARCH_API_KEY` only while SERP Search is selected and allows any source to be
+disabled. `FIRECRAWL_API_KEY` is optional; when it is
 absent, the narrow acquisition fallback is disabled and Wigolo remains the primary acquisition
 path. `MIMO_BASE_URL`, `EXA_BASE_URL`, `FIRECRAWL_BASE_URL`, and `WIGOLO_BASE_URL` have approved
 defaults, and `MIMO_MODEL` defaults to `mimo-v2.5-pro`. OpenAlex Works search is limited to

@@ -13,7 +13,14 @@ from uuid import UUID
 from pydantic import ValidationError as PydanticValidationError
 
 from brief_export import BriefExportFormat, export_released_brief
-from models import PresentationTone, ReportLength, ResearchControls, ResearchDepth, ResearchFocus
+from models import (
+    DiscoveryProvider,
+    PresentationTone,
+    ReportLength,
+    ResearchControls,
+    ResearchDepth,
+    ResearchFocus,
+)
 from orchestrator import (
     ClaimMismatchError,
     FingerprintMismatchError,
@@ -154,7 +161,11 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
             else None
         )
         controls = ResearchControls(
-            depth=args.depth, length=args.length, tone=args.tone, focus=focus
+            depth=args.depth,
+            length=args.length,
+            tone=args.tone,
+            focus=focus,
+            discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX),
         )
     except (ValueError, PydanticValidationError) as exc:
         print(f"invalid input: {exc}", file=sys.stderr)

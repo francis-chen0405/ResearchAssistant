@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-08-17 - MLP-5 Provider Selection & SERP Search
+
+- Add SERP Search as a bearer-authenticated Google-style discovery provider using only
+  normalized organic HTTP(S) results. Provider snippets are discovery metadata, never evidence.
+- Default new website runs to SERP Search, Exa, and OpenAlex enabled, while allowing any
+  nonempty subset. Freeze the selected ordered provider tuple in `ResearchControls` and
+  exact run compatibility identity.
+- Plan two SERP Search, three Exa, and one OpenAlex query per active stance for each
+  enabled provider. Enforce at most twelve attempted SERP Search calls per run and do not
+  manufacture a subscription-provider per-call USD amount.
+- Make discovery credentials optional in Keychain; block only when an enabled source has
+  no saved key. Preserve Exa/OpenAlex defaults for legacy CLI/programmatic compatibility.
+- Add no dependency, migration, live provider call, or visual redesign. Preserve all
+  discovery ranking, acquisition, immutable snapshot, exact quotation, review, Ledger, and
+  final-release safeguards.
+
 ## 2026-08-17 - MLP-4 Expanded Retrieval Yield
 
 - Replace the live Advanced source-target choices with 5, 10, 15, and 20, with 10 as

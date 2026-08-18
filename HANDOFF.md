@@ -2,6 +2,19 @@
 
 ## Current project state — 2026-08-17
 
+MLP-5 Provider Selection & SERP Search is complete. The Next.js Advanced panel defaults
+SERP Search, Exa, and OpenAlex on, permits each to be disabled but never all at once, and
+contains the approved plain-language provider descriptions. New runs require keys only for
+their enabled sources. `ResearchControls.discovery_providers` is frozen into canonical run
+controls; the MiMo planner must return exactly two SERP Search, three Exa, and one OpenAlex
+query for every enabled provider per active stance. SERP Search uses only organic results,
+enforces twelve attempted calls per run, and keeps provider output as discovery metadata.
+The old CLI/programmatic default remains Exa/OpenAlex for compatibility; the web API passes
+the new default selection explicitly. Full offline suite passed: 655 passed, 2 expected
+opt-in skips. Ruff and `git diff --check` passed. Frontend lint/build was blocked because
+pnpm attempted a registry install and the registry was unavailable; restore `web/`
+dependencies before rerunning it.
+
 MLP-4 Research Quality & OpenAlex Integration is complete. Its corrective quality pass
 uses bounded source backfill, optional claim-facet ranking bonuses, source sentence-range
 selection, and a clean insufficient-evidence terminal path. `web/` remains the sole live

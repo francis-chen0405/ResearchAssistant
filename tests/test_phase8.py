@@ -278,7 +278,8 @@ def test_all_stage_prompts_are_versioned_and_hashed() -> None:
 
     assert len({prompt.version for prompt in prompts}) == len(LLMStage)
     assert all(
-        prompt.version.startswith(("phase8-", "mvp9-", "mvp11-", "mlp4-")) for prompt in prompts
+        prompt.version.startswith(("phase8-", "mvp9-", "mvp11-", "mlp4-", "mlp5-"))
+        for prompt in prompts
     )
     assert all(len(prompt.sha256) == 64 for prompt in prompts)
 
@@ -286,10 +287,11 @@ def test_all_stage_prompts_are_versioned_and_hashed() -> None:
 def test_planner_prompt_requires_new_queries_for_a_portfolio_expansion() -> None:
     prompt = load_prompt(LLMStage.PLANNER)
 
-    assert prompt.version == "mlp4-provider-planning-v1"
+    assert prompt.version == "mlp5-provider-selection-v1"
     assert "portfolio_expansion.attempted_queries" in prompt.text
     assert "new `query_text` values must be materially new" in prompt.text
-    assert "exactly three Exa web queries and exactly one OpenAlex academic query" in prompt.text
+    assert "two SERP Search web queries, three Exa web queries" in prompt.text
+    assert "one OpenAlex academic query" in prompt.text
 
 
 def test_success_invocation_records_complete_provenance() -> None:

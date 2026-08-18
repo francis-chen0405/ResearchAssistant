@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 _AUTHORIZATION_PATTERN = re.compile(r"(?i)(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,;]+")
 _KEY_ASSIGNMENT_PATTERN = re.compile(
-    r"(?i)((?:(?:MIMO|EXA|FIRECRAWL)_API_KEY|api[_-]?key|token|secret)\s*[:=]\s*)"
+    r"(?i)((?:(?:MIMO|EXA|OPENALEX|SERPSEARCH|FIRECRAWL)_API_KEY|api[_-]?key|token|secret)\s*[:=]\s*)"
     r"[^\s,;]+"
 )
 _BEARER_PATTERN = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")

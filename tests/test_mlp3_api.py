@@ -209,6 +209,39 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
     assert request.research_controls.sources_per_stance_per_round == 20
 
 
+def test_start_freezes_selected_discovery_sources_and_rejects_an_empty_set(tmp_path: Path) -> None:
+    client, controller, _ = _client()
+    database = tmp_path / "live.sqlite3"
+
+    accepted = client.post(
+        "/api/research/start",
+        json={
+            "raw_claim": "A public claim",
+            "acknowledged_public": True,
+            "db_path": str(database),
+            "use_serpsearch": True,
+            "use_exa": False,
+            "use_openalex": False,
+        },
+    )
+    rejected = client.post(
+        "/api/research/start",
+        json={
+            "raw_claim": "A public claim",
+            "acknowledged_public": True,
+            "db_path": str(database),
+            "use_serpsearch": False,
+            "use_exa": False,
+            "use_openalex": False,
+        },
+    )
+
+    assert accepted.status_code == 200
+    assert controller.started[0].research_controls.discovery_providers == ("serpsearch",)
+    assert rejected.status_code == 422
+    assert "at least one" in rejected.json()["detail"]
+
+
 def test_snapshot_history_cancellation_and_service_controls(tmp_path: Path) -> None:
     client, controller, _ = _client()
     database = str(tmp_path / "live.sqlite3")

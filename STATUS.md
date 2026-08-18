@@ -2,6 +2,18 @@
 
 ## Current project state — 2026-08-17
 
+MLP-5 Provider Selection & SERP Search is complete. New website runs default to all three
+typed discovery sources—SERP Search, Exa, and OpenAlex—and may switch each source on or
+off in Advanced, while requiring at least one. The frozen source set is part of planner
+validation and the exact provider fingerprint. SERP Search runs two Google-style organic
+queries per active stance per round and permits at most twelve attempted calls per run;
+its subscription cost is never invented as a per-call USD value. Disabled sources need no
+key and produce no work; enabled sources without a saved Keychain key fail closed before
+the run begins. All source metadata remains discovery-only and follows the existing ranking
+and evidence controls. Full offline verification: 655 passed, 2 expected opt-in skips;
+Ruff and diff checks passed. Frontend lint/build remains unverified because pnpm attempted
+an unavailable registry install from the incomplete local dependency tree.
+
 MLP-4 Research Quality & OpenAlex Integration is complete. A corrective quality pass
 adds bounded rank-ordered backfill, claim-aware soft ranking, source-anchored exact
 quote selection, and a clean zero-Ledger stop. New live runs use separate
