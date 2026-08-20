@@ -4,6 +4,16 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
+## ResearchAssistant v2 — Phase 2: Multi-Model Routing
+
+The user explicitly authorized v2 Phase 2 on 2026-08-20. It adds only logical model
+routing/configuration, price-cap preflight, and contract fingerprint identity; it does
+not start v2 research behavior or alter historical direct-MiMo runs.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-02-multi-model-routing.md`
+
 ## CI Maintenance After MVP-1
 
 The user-authorized CI maintenance plan is

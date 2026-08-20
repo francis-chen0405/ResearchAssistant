@@ -878,3 +878,16 @@ from historical focused/balanced controls, which remain readable without rewriti
 persisted records. A v2 run identity fixes `researchassistant-v2` with the Phase-1
 policy identity before append-only v2 artifacts can be recorded. This phase adds no
 new research control flow, provider behavior, or UI behavior.
+
+## ResearchAssistant v2 Phase 2 Multi-Model Routing
+
+V2 model selection is expressed through logical aliases and a frozen stage-routing
+table, never scattered provider model strings. Fresh v2 routing preflight resolves every
+enabled logical route to a secret-free physical provider/model identity and an exact,
+positive price cap before provider work can begin. MiMo normal and MiMo Pro are separate
+Xiaomi-compatible routes with returned-model validation. Luna High is configuration-only
+until a later authorized phase supplies a verified transport; its endpoint, credential,
+physical model identifier, and pricing are explicit deployment configuration. Routing,
+physical provider/model identity, prompt and schema versions, pricing, and relevant
+non-secret provider settings are all provider-contract fingerprint inputs. Historical
+direct-MiMo contracts and persisted stage aliases remain readable.

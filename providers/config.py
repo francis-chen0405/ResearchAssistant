@@ -28,6 +28,10 @@ class DeadlineConfig(StrictModel):
     pdf_fetch_seconds: float = Field(default=30.0, gt=0, le=30.0)
     browser_fetch_seconds: float = Field(default=25.0, gt=0, le=25.0)
     planner_seconds: float = Field(default=90.0, gt=0, le=90.0)
+    scout_seconds: float = Field(default=90.0, gt=0, le=180.0)
+    gap_analysis_seconds: float = Field(default=120.0, gt=0, le=180.0)
+    search_agent_seconds: float = Field(default=90.0, gt=0, le=180.0)
+    source_selection_seconds: float = Field(default=90.0, gt=0, le=180.0)
     extractor_seconds: float = Field(default=180.0, gt=0, le=180.0)
     analyst_seconds: float = Field(default=120.0, gt=0, le=120.0)
     reviewer_seconds: float = Field(default=90.0, gt=0, le=90.0)
@@ -256,6 +260,99 @@ class MimoConfig(StrictModel):
             api_key=SecretStr(api_key),
             base_url=base_url,
             model=model,
+        )
+
+
+class MimoRouteConfig(StrictModel):
+    """One explicitly selected Xiaomi-compatible MiMo physical route for v2."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["xiaomi-mimo"] = "xiaomi-mimo"
+    adapter_version: Literal["v2-mimo-routing-v1"] = "v2-mimo-routing-v1"
+    base_url: str = "https://api.xiaomimimo.com/v1"
+    api_key: SecretStr
+    model: str = Field(min_length=1)
+    max_completion_tokens: int = Field(default=4096, ge=1, le=32768)
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("Xiaomi MiMo base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Xiaomi MiMo base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(
+        cls,
+        environment: Mapping[str, str],
+        *,
+        model_environment_name: str,
+        default_model: str | None,
+    ) -> MimoRouteConfig:
+        api_key = environment.get("MIMO_API_KEY", "").strip()
+        if not api_key:
+            raise ProviderConfigurationError(
+                "MIMO_API_KEY is required in the explicitly supplied environment"
+            )
+        model = environment.get(model_environment_name, default_model or "").strip()
+        if not model:
+            raise ProviderConfigurationError(
+                f"{model_environment_name} is required for the selected MiMo v2 route"
+            )
+        return cls(
+            api_key=SecretStr(api_key),
+            base_url=environment.get("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1").strip(),
+            model=model,
+        )
+
+
+class LunaConfig(StrictModel):
+    """Configuration-only boundary for the v2 Luna route.
+
+    The physical provider model is deliberately supplied at deployment time.  Phase 2
+    establishes no Luna transport or live invocation behavior.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["luna"] = "luna"
+    adapter_version: Literal["v2-luna-configuration-v1"] = "v2-luna-configuration-v1"
+    base_url: str
+    api_key: SecretStr
+    model: str = Field(min_length=1)
+    max_completion_tokens: int = Field(default=4096, ge=1, le=32768)
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("Luna base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Luna base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> LunaConfig:
+        missing = tuple(
+            name
+            for name in ("LUNA_API_KEY", "LUNA_BASE_URL", "LUNA_MODEL")
+            if not environment.get(name, "").strip()
+        )
+        if missing:
+            raise ProviderConfigurationError(
+                f"{', '.join(missing)} are required for the selected Luna v2 route"
+            )
+        return cls(
+            api_key=SecretStr(environment["LUNA_API_KEY"].strip()),
+            base_url=environment["LUNA_BASE_URL"].strip(),
+            model=environment["LUNA_MODEL"].strip(),
         )
 
 

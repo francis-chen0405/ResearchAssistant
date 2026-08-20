@@ -26,11 +26,16 @@ from pydantic import (
 
 from agents.reviewer import ReviewerDecision
 from models import (
+    GapAnalysisResult,
     PlannerOutput,
     ScoreDecision,
+    ScoutBatch,
+    SourceRecommendationResult,
     StatementDraft,
     StrictModel,
     SynthesisOutput,
+    V2InitialResearchPlan,
+    V2SearchRoundPlan,
     VerbatimQuoteSelection,
 )
 
@@ -39,6 +44,10 @@ PROMPT_DIRECTORY = Path(__file__).resolve().parents[1] / "prompts"
 
 class LLMStage(StrEnum):
     PLANNER = "planner"
+    SCOUT = "scout"
+    GAP_ANALYSIS = "gap_analysis"
+    SEARCH_AGENT = "search_agent"
+    SOURCE_SELECTION = "source_selection"
     EXTRACTOR = "extractor"
     ANALYST = "analyst"
     REVIEWER = "reviewer"
@@ -47,6 +56,7 @@ class LLMStage(StrEnum):
 
 class ModelAlias(StrEnum):
     MIMO_V25_PRO = "mimo-v2.5-pro"
+    GPT_5_6_LUNA_HIGH = "gpt-5.6-luna-high"
     MINIMAX_M3 = "minimax-m3"
     # Legacy aliases remain readable for existing persisted Phase 8/9 artifacts.
     MIMO_V25 = "mimo-v2.5"
@@ -86,6 +96,22 @@ class LLMRoutingConfig(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     planner: StageRoute
+    scout: StageRoute = StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.2),
+    )
+    gap_analysis: StageRoute = StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.1),
+    )
+    search_agent: StageRoute = StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.2),
+    )
+    source_selection: StageRoute = StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.0),
+    )
     extractor: StageRoute
     analyst: StageRoute
     reviewer: StageRoute
@@ -134,6 +160,46 @@ DIRECT_MIMO_ROUTING = LLMRoutingConfig(
     ),
     analyst=StageRoute(
         primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.1),
+    ),
+    reviewer=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.0),
+    ),
+    synthesizer=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.15),
+    ),
+)
+
+
+V2_LLM_ROUTING = LLMRoutingConfig(
+    planner=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.2),
+    ),
+    scout=StageRoute(
+        primary=ModelAlias.MIMO_V25,
+        generation=GenerationSettings(temperature=0.2),
+    ),
+    gap_analysis=StageRoute(
+        primary=ModelAlias.GPT_5_6_LUNA_HIGH,
+        generation=GenerationSettings(temperature=0.1),
+    ),
+    search_agent=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.2),
+    ),
+    source_selection=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.0),
+    ),
+    extractor=StageRoute(
+        primary=ModelAlias.MIMO_V25_PRO,
+        generation=GenerationSettings(temperature=0.0),
+    ),
+    analyst=StageRoute(
+        primary=ModelAlias.GPT_5_6_LUNA_HIGH,
         generation=GenerationSettings(temperature=0.1),
     ),
     reviewer=StageRoute(
@@ -606,7 +672,15 @@ def invoke_llm(
 
 def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.PLANNER:
-        return (PlannerOutput,)
+        return (PlannerOutput, V2InitialResearchPlan)
+    if stage is LLMStage.SCOUT:
+        return (ScoutBatch,)
+    if stage is LLMStage.GAP_ANALYSIS:
+        return (GapAnalysisResult,)
+    if stage is LLMStage.SEARCH_AGENT:
+        return (V2SearchRoundPlan,)
+    if stage is LLMStage.SOURCE_SELECTION:
+        return (SourceRecommendationResult,)
     if stage is LLMStage.EXTRACTOR:
         return (VerbatimQuoteSelection,)
     if stage is LLMStage.ANALYST:

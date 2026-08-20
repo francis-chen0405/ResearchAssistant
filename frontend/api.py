@@ -140,6 +140,7 @@ class ConfigurationResponse(StrictModel):
 
 class CredentialSetupRequest(StrictModel):
     mimo_api_key: SecretStr | None = None
+    luna_api_key: SecretStr | None = None
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
@@ -244,6 +245,7 @@ def create_app(
         if not any(
             (
                 payload.mimo_api_key,
+                payload.luna_api_key,
                 payload.serpsearch_api_key,
                 payload.exa_api_key,
                 payload.openalex_api_key,
@@ -255,6 +257,11 @@ def create_app(
             mimo_api_key=(
                 payload.mimo_api_key.get_secret_value()
                 if payload.mimo_api_key is not None
+                else None
+            ),
+            luna_api_key=(
+                payload.luna_api_key.get_secret_value()
+                if payload.luna_api_key is not None
                 else None
             ),
             exa_api_key=(

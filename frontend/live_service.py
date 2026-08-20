@@ -697,6 +697,7 @@ class LiveResearchController:
                 self._environment.get(name, "")
                 for name in (
                     "MIMO_API_KEY",
+                    "LUNA_API_KEY",
                     "EXA_API_KEY",
                     "OPENALEX_API_KEY",
                     "SERPSEARCH_API_KEY",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from decimal import ROUND_UP, Decimal
 
 from pydantic import ConfigDict, Field
@@ -48,6 +49,33 @@ DIRECT_MIMO_PRICE_CAP = ModelPriceCap(
     input_usd_per_token=Decimal("0.0000005"),
     output_usd_per_token=Decimal("0.000001"),
 )
+
+
+def price_cap_from_environment(
+    environment: Mapping[str, str],
+    *,
+    model: str,
+    environment_prefix: str,
+) -> ModelPriceCap:
+    """Load explicit v2 pricing; unknown routes never receive a zero-cost fallback."""
+    input_name = f"{environment_prefix}_INPUT_USD_PER_TOKEN"
+    output_name = f"{environment_prefix}_OUTPUT_USD_PER_TOKEN"
+    input_value = environment.get(input_name, "").strip()
+    output_value = environment.get(output_name, "").strip()
+    if not input_value or not output_value:
+        raise ValueError(
+            f"{input_name} and {output_name} are required for deterministic route pricing"
+        )
+    try:
+        return ModelPriceCap(
+            model=model,
+            input_usd_per_token=Decimal(input_value),
+            output_usd_per_token=Decimal(output_value),
+        )
+    except Exception as exc:
+        raise ValueError(
+            f"{environment_prefix} route pricing must be positive decimal USD-per-token values"
+        ) from exc
 
 
 def conservative_token_estimate(text: str) -> int:

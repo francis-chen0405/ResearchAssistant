@@ -31,6 +31,7 @@ class ProviderCredentials(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     mimo_api_key: SecretStr | None = None
+    luna_api_key: SecretStr | None = None
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
@@ -38,6 +39,7 @@ class ProviderCredentials(StrictModel):
 
     @field_validator(
         "mimo_api_key",
+        "luna_api_key",
         "exa_api_key",
         "openalex_api_key",
         "serpsearch_api_key",
@@ -59,6 +61,8 @@ class ProviderCredentials(StrictModel):
         items: tuple[tuple[str, str], ...] = ()
         if self.mimo_api_key is not None:
             items += (("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),)
+        if self.luna_api_key is not None:
+            items += (("LUNA_API_KEY", self.luna_api_key.get_secret_value()),)
         if self.exa_api_key is not None:
             items += (("EXA_API_KEY", self.exa_api_key.get_secret_value()),)
         if self.openalex_api_key is not None:
@@ -89,6 +93,7 @@ def load_saved_credentials() -> ProviderCredentials | None:
         return None
     return ProviderCredentials(
         mimo_api_key=mimo,
+        luna_api_key=_read_optional_secret("LUNA_API_KEY"),
         exa_api_key=_read_optional_secret("EXA_API_KEY"),
         openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
         serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),

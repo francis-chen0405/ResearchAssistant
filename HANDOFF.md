@@ -2512,3 +2512,22 @@ Next expected phase:
   provider contract.
 - Future v2 phases may build behavior on these typed artifacts only after explicit
   authorization; this phase intentionally changed no production research flow or UI.
+
+# ResearchAssistant v2 — Phase 2: Multi-Model Routing
+
+- V2 logical routing is now frozen: Planner, Search Agent, Source Selection, Extractor,
+  Reviewer, and Synthesizer use MiMo Pro; Scout uses MiMo normal; Gap Analysis and
+  Evidence Analyst use GPT-5.6 Luna High. This is configuration/identity only: no v2
+  Scout, Gap, Search Agent, source-selection, or Analyst execution was introduced.
+- `V2RoutingConfig.from_environment()` is the fresh-run preflight boundary. It requires
+  `MIMO_API_KEY`, explicit normal-MiMo pricing, and deployment-owned Luna endpoint,
+  API key, physical model, and pricing. Pro retains its frozen price cap only for the
+  known Pro physical model; any replacement requires explicit pricing.
+- Xiaomi routing supports independently bound MiMo normal and Pro physical models and
+  rejects a returned model mismatch. Luna has no transport adapter yet by design.
+- V2 provider contracts include logical routing, physical provider/model identity, exact
+  price caps, provider configuration excluding secrets, current prompt hashes/versions,
+  schema version, and policy version. Historical direct-MiMo contracts remain unchanged
+  and readable.
+- Verification: complete suite 682 passed, 2 expected skips; Ruff lint/format and
+  `git diff --check` passed. No live provider calls were made.

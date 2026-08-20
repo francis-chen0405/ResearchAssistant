@@ -41,7 +41,7 @@ from models import (
     validate_planner_provider_selection,
 )
 from money import parse_exact_usd
-from providers.config import MimoConfig
+from providers.config import MimoConfig, MimoRouteConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
 from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap, conservative_token_estimate
 
@@ -159,12 +159,13 @@ class XiaomiMimoAdapter:
 
     def __init__(
         self,
-        config: MimoConfig,
+        config: MimoConfig | MimoRouteConfig,
         *,
         client: httpx.Client | None = None,
         price_cap: ModelPriceCap = DIRECT_MIMO_PRICE_CAP,
         max_call_cost_usd: Decimal = Decimal("1.00"),
         max_call_tokens: int = 1_000_000,
+        expected_model_alias: ModelAlias = ModelAlias.MIMO_V25_PRO,
     ) -> None:
         if price_cap.model != config.model:
             raise MimoProviderError(
@@ -182,14 +183,15 @@ class XiaomiMimoAdapter:
         self._price_cap = price_cap
         self._max_call_cost_usd = parse_exact_usd(max_call_cost_usd)
         self._max_call_tokens = max_call_tokens
+        self._expected_model_alias = expected_model_alias
         self._thread_state = local()
 
     def generate(self, request: LLMRequest) -> BaseModel:
         self._thread_state.last_failure_usage = None
-        if request.model_alias is not ModelAlias.MIMO_V25_PRO:
+        if request.model_alias is not self._expected_model_alias:
             raise MimoProviderError(
                 MimoFailureCode.CAPABILITY,
-                "direct Xiaomi MiMo supports only the approved MiMo Pro alias",
+                "direct Xiaomi MiMo request does not match its configured logical route",
                 retryable=False,
             )
         input_estimate = conservative_token_estimate(_direct_mimo_prompt(request))
@@ -611,7 +613,7 @@ def _assemble_synthesis(
     )
 
 
-def _deadline_for(stage: LLMStage, config: MimoConfig) -> float:
+def _deadline_for(stage: LLMStage, config: MimoConfig | MimoRouteConfig) -> float:
     return getattr(config.deadlines, f"{stage.value}_seconds")
 
 

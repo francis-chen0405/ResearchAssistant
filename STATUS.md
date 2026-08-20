@@ -2188,3 +2188,18 @@ Status: Complete and verified.
   work remains deferred.
 - Verification: 673 passed, 2 skipped, 1 existing dependency warning; Ruff, formatting,
   and `git diff --check` passed. No live provider calls were made.
+
+# ResearchAssistant v2 — Phase 2: Multi-Model Routing
+
+Status: Complete and verified.
+
+- Added logical stages for Scout, Gap Analysis, Search Agent, and Source Selection;
+  routed the v2 target table through explicit MiMo normal, MiMo Pro, and Luna High
+  aliases without changing the historical direct-MiMo pipeline.
+- Added secret-safe v2 route preflight and provider-contract fingerprinting. Every v2
+  route now resolves to a physical provider/model and a positive deterministic price
+  cap before provider work; missing Luna endpoint/model/credential/pricing fails closed.
+- Reused the Xiaomi adapter for separately bound normal/Pro aliases and retained exact
+  returned-model validation. Luna is configuration-only pending later transport approval.
+- Verification: complete suite 682 passed, 2 expected skips; Ruff lint/format and
+  `git diff --check` passed. No live provider calls were made.

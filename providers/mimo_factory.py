@@ -66,6 +66,13 @@ MLP4_DEFAULT_ACQUISITION = AcquisitionPolicy(
     usable_snapshots_per_query=10,
     source_target_per_stance=10,
 )
+HISTORICAL_PROVIDER_LLM_STAGES = (
+    LLMStage.PLANNER,
+    LLMStage.EXTRACTOR,
+    LLMStage.ANALYST,
+    LLMStage.REVIEWER,
+    LLMStage.SYNTHESIZER,
+)
 
 
 class MimoProviderFactoryConfig(StrictModel):
@@ -109,7 +116,7 @@ class MimoProviderFactoryConfig(StrictModel):
             raise ValueError("MVP-3B requires direct Xiaomi mimo-v2.5-pro")
         if self.acquisition != _acquisition_for_controls(self.research_controls):
             raise ValueError("acquisition policy must exactly match research depth")
-        for stage in LLMStage:
+        for stage in HISTORICAL_PROVIDER_LLM_STAGES:
             route = DIRECT_MIMO_ROUTING.for_stage(stage)
             if route.primary is not ModelAlias.MIMO_V25_PRO or route.fallbacks:
                 raise ValueError(f"{stage.value} must use only direct MiMo Pro")
@@ -245,7 +252,7 @@ def _fingerprint_payload(
     config: MimoProviderFactoryConfig,
     price_cap: ModelPriceCap,
 ) -> dict[str, str]:
-    prompts = {stage.value: load_prompt(stage).sha256 for stage in LLMStage}
+    prompts = {stage.value: load_prompt(stage).sha256 for stage in HISTORICAL_PROVIDER_LLM_STAGES}
     schemas = (
         PlannerOutput,
         ProvisionalCandidate,

@@ -724,3 +724,17 @@
   run with a pre-v2 policy cannot be relabeled or resumed as v2.
 - Defer all new v2 research execution, providers, analysis, recommendations, and UI
   work to later authorized phases.
+
+## 2026-08-20 - ResearchAssistant v2 Phase 2
+
+- Define the v2 routing target with logical aliases: MiMo normal, MiMo Pro, and GPT-5.6
+  Luna High. Preserve historical aliases and direct-MiMo contracts as compatibility
+  readers.
+- Use separate Xiaomi-compatible route configurations for MiMo normal and Pro; retain
+  strict returned physical-model validation for each adapter invocation.
+- Do not invent a Luna physical API model ID or transport. Require its endpoint, secret,
+  physical model, and positive per-token prices from the explicit environment boundary.
+- Fail v2 preflight when any enabled route lacks an exact deterministic price cap. Freeze
+  routing, route/provider identity, prompt/schema versions, pricing, and secret-free
+  provider configuration in the provider-run contract fingerprint.
+- Do not wire the new roles into research execution in this phase.
