@@ -908,3 +908,24 @@ directions and providers, invalid lanes, duplicate IDs, and normalized duplicate
 text within a provider/direction/round lane fail before persistence. No objective,
 importance score, targeted replan, Round 2, or Round 3 query is created in this phase.
 Historical planner outputs and pre-v2 pipelines remain readable.
+
+## ResearchAssistant v2 Phase 4 Discovery, Identity, Clustering, and Scout
+
+Fresh-v2 Round-1 discovery supports OpenAlex, arXiv, PubMed, Exa, and Serper. Every result
+is normalized into a typed metadata-only artifact carrying original provider/query metadata,
+direction, round, provider rank, source identity fields, and an immutable provenance chain.
+Snippets, abstracts, provider metadata, and optional Crossref bibliographic enrichment are
+discovery metadata only and cannot be cited as evidence or used for Claim Ledger admission.
+
+Before Scout, canonical URLs remove tracking parameters and conservative same-source
+clustering may use exact canonical URL, DOI, strong normalized-title equality, or exact
+author/year/title identity. Clusters retain preferred and alternate URLs, provider/query
+references, and all metadata provenance; topical similarity never creates a cluster.
+
+Scout uses the existing v2 MiMo-v2.5 normal route and receives batches of at most 30
+metadata-only candidates. It returns exactly one application-owned stable-ID decision per
+item: `retrieve`, `maybe`, or `skip`. Unknown, duplicate, missing, malformed, or wrong-run
+responses are rejected. Scout is recall-biased, cannot assess evidence quality or Ledger
+eligibility, cannot generate factual claims, and cannot promote disabled directions. One
+bounded retry is allowed; a repeated failure is persisted as audit data and falls back to
+deterministic ranking with all affected candidates retained as `maybe`.

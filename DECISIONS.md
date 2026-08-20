@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-08-20 - ResearchAssistant v2 Phase 4 Discovery, Normalization, Clustering, and Scout
+
+- Support OpenAlex, arXiv, PubMed, Exa, and Serper as fresh-v2 discovery sources while
+  retaining historical provider behavior and controls unchanged.
+- Preserve discovery provider/query/direction/round/rank identity, raw metadata provenance,
+  snippets/abstracts, and alternate URLs in strict typed artifacts. Discovery is not evidence.
+- Use optional non-fatal Crossref DOI enrichment only for identity normalization.
+- Cluster only conservatively established same-source records; never cluster shared topics.
+- Route metadata-only Scout batches of at most 30 candidates through MiMo-v2.5. Require exact
+  stable-ID mappings, use retrieve/maybe/skip recall bias, and retry once before deterministic
+  all-maybe fallback with append-only audit failure preservation.
+- Reuse immutable generic v2 artifact persistence for restart; add no live verification,
+  retrieval, evidence analysis, UI work, or dependencies.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 3 Initial Planner and Broad Round 1
 
 - Use MiMo-v2.5-Pro for the fresh-v2 Initial Planner and generate only broad Round-1

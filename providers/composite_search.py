@@ -9,6 +9,7 @@ from providers.exa import ExaSearchAdapter
 from providers.openalex import OpenAlexSearchAdapter
 from providers.search import (
     SearchFailureCode,
+    SearchProvider,
     SearchProviderError,
     SearchRequest,
     SearchResponse,
@@ -35,10 +36,16 @@ class CompositeSearchProvider:
         exa: ExaSearchAdapter | None = None,
         openalex: OpenAlexSearchAdapter | None = None,
         serpsearch: SerpSearchAdapter | None = None,
+        arxiv: SearchProvider | None = None,
+        pubmed: SearchProvider | None = None,
+        serper: SearchProvider | None = None,
     ) -> None:
         self._exa = exa
         self._openalex = openalex
         self._serpsearch = serpsearch
+        self._arxiv = arxiv
+        self._pubmed = pubmed
+        self._serper = serper
 
     def search(self, request: SearchRequest) -> SearchResponse:
         if request.provider is DiscoveryProvider.EXA:
@@ -53,6 +60,12 @@ class CompositeSearchProvider:
                     SearchFailureCode.MISSING_CONFIGURATION, "SERP Search is disabled"
                 )
             return self._serpsearch.search(request)
+        if request.provider is DiscoveryProvider.ARXIV:
+            return self._require_optional_provider(self._arxiv, "arXiv").search(request)
+        if request.provider is DiscoveryProvider.PUBMED:
+            return self._require_optional_provider(self._pubmed, "PubMed").search(request)
+        if request.provider is DiscoveryProvider.SERPER:
+            return self._require_optional_provider(self._serper, "Serper").search(request)
         if self._openalex is None:
             raise SearchProviderError(
                 SearchFailureCode.MISSING_CONFIGURATION, "OpenAlex is disabled"
@@ -95,6 +108,15 @@ class CompositeSearchProvider:
                     )
                 }
             )
+
+    @staticmethod
+    def _require_optional_provider(provider: SearchProvider | None, name: str) -> SearchProvider:
+        if provider is None:
+            raise SearchProviderError(
+                SearchFailureCode.MISSING_CONFIGURATION,
+                f"{name} is disabled",
+            )
+        return provider
 
 
 def _weak_openalex_response(request: SearchRequest, response: SearchResponse) -> bool:

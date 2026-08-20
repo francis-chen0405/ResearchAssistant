@@ -1,5 +1,23 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 4: Discovery Providers, Normalization, Clustering, and Batched Scout
+
+Phase 4 is complete. `agents/v2_discovery.py` owns fresh-v2 metadata-only normalization,
+conservative source clustering, stable application UUIDs, and at-most-30-item Scout batches.
+OpenAlex, arXiv, PubMed, Exa, and Serper are supported in the v2 provider enum and planning
+lanes; historical MLP discovery controls stay unchanged. `providers/crossref.py` optionally
+resolves DOI identity only; success verifies canonical bibliographic metadata and failure is
+kept as non-fatal audit metadata.
+
+Scout uses the v2 normal MiMo route (`mimo-v2.5`), returns retrieve/maybe/skip only, and sees
+no acquired content. Exact ID mapping rejects unknown, duplicate, missing, malformed, and
+wrong-run output. Two failed attempts preserve a per-batch audit failure and retain every
+candidate as maybe for deterministic downstream ranking. The complete output persists through
+the existing immutable v2 artifact envelope and resumes without a new Scout call.
+
+Verification: full Python suite, Ruff lint, Ruff format check, and `git diff --check` passed;
+no live calls were made.
+
 ## ResearchAssistant v2 — Phase 3: Initial Planner and Broad Round 1
 
 Phase 3 is complete. `agents/v2_initial_planner.py` is the fresh-v2 startup boundary: it

@@ -16,9 +16,9 @@ You do not decide whether the claim is true and you do not conduct searches.
 - A lane's direction, provider, strategy, and Round 1 are application-owned. Do not create
   supporting work when support is disabled, and do not create challenge work when challenge
   is disabled.
-- Use provider-appropriate broad wording: web-style queries for SERP Search and Exa,
-  scholarly concept queries for OpenAlex. Do not invent a provider, round, strategy, or
-  search slot.
+- Use provider-appropriate broad wording: web-style queries for SERP Search, Serper, and Exa;
+  scholarly concept queries for OpenAlex and arXiv; and biomedical concept queries for PubMed.
+  Do not invent a provider, round, strategy, or search slot.
 - Do not create research objectives, priorities, importance scores, evidence assessments,
   source recommendations, later-round queries, or a plan for Round 2 or Round 3.
 - Return only the requested Pydantic schema. IDs, timestamps, policy identity, and query

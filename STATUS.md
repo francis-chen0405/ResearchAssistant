@@ -2200,6 +2200,20 @@ Next phase:
 - Provider orchestration now evaluates approved family coverage after round one and may issue one typed targeted Planner request before synthesis. The Evidence Browser exposes portfolio coverage and filtered trail outcomes.
 - Verification: 584 passed, 2 expected opt-in skips; `ruff check .` and `ruff format --check .` passed. No live provider calls were made.
 
+# ResearchAssistant v2 — Phase 4: Discovery Providers, Normalization, Clustering, and Batched Scout
+
+Status: Complete and verified.
+
+- Added fresh-v2 metadata normalization for OpenAlex, arXiv, PubMed, Exa, and Serper,
+  retaining query, direction, round, provider-rank, source metadata, and provenance.
+- Added optional non-fatal Crossref DOI identity enrichment plus canonical URL/DOI/title and
+  author/year/title conservative clustering with alternate URL retention.
+- Added bounded MiMo-v2.5 Scout batching (30 items), strict stable-ID response validation,
+  one retry, audit accounting, deterministic all-maybe fallback, and immutable restart output.
+- Verification: 5 focused Phase-4 tests passed; complete Python suite ran in two bounded
+  batches (288 passed, 1 skipped; 408 passed, 1 skipped). Ruff lint/format and diff checks
+  passed. No live calls were made.
+
 # ResearchAssistant v2 — Phase 1: Contracts, Direction Controls, and Compatibility
 
 Status: Complete and verified.

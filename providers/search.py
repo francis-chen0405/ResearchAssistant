@@ -77,6 +77,7 @@ class SearchDiscoveryMetadata(StrictModel):
     display_url: str | None = None
     category: str | None = None
     author: str | None = None
+    abstract: str | None = None
     external_id: str | None = None
     doi: str | None = None
     cited_by_count: int | None = Field(default=None, ge=0)

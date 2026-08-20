@@ -26,6 +26,18 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-03-initial-planner-round-one.md`
 
+## ResearchAssistant v2 — Phase 4: Discovery Providers, Normalization, Clustering, and Batched Scout
+
+The user explicitly authorized and completed v2 Phase 4 on 2026-08-20. It normalizes
+OpenAlex, arXiv, PubMed, Exa, and Serper discovery metadata, optionally enriches source
+identity through non-evidentiary Crossref metadata, conservatively clusters same-source
+candidates, and runs MiMo-v2.5 Scout in bounded metadata-only batches. Scout failures
+remain auditable and fall back to deterministic ranking; discovery never becomes evidence.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-04-discovery-providers-normalization-clustering-scout.md`
+
 ## CI Maintenance After MVP-1
 
 The user-authorized CI maintenance plan is

@@ -38,6 +38,7 @@ OPENALEX_SELECT = ",".join(
         "open_access",
         "primary_location",
         "best_oa_location",
+        "abstract_inverted_index",
     )
 )
 
@@ -159,6 +160,7 @@ def _parse_results(items: list[object], limit: int) -> list[SearchResult]:
                     cited_by_count=_nonnegative_int(item.get("cited_by_count")),
                     is_open_access=_open_access(item.get("open_access")),
                     work_type=_string(item.get("type")),
+                    abstract=_abstract(item.get("abstract_inverted_index")),
                     is_retracted=False,
                     pdf_url=_location_url(item.get("primary_location"), "pdf_url")
                     or _location_url(item.get("best_oa_location"), "pdf_url"),
@@ -222,6 +224,22 @@ def _open_access(value: object) -> bool | None:
     if not isinstance(value, dict) or not isinstance(value.get("is_oa"), bool):
         return None
     return value["is_oa"]
+
+
+def _abstract(value: object) -> str | None:
+    """Reconstruct optional OpenAlex abstract metadata without treating it as evidence."""
+    if not isinstance(value, dict):
+        return None
+    terms: list[tuple[int, str]] = []
+    for token, positions in value.items():
+        if not isinstance(token, str) or not isinstance(positions, list):
+            continue
+        for position in positions:
+            if isinstance(position, int) and position >= 0:
+                terms.append((position, token))
+    if not terms or len({position for position, _ in terms}) != len(terms):
+        return None
+    return " ".join(token for _, token in sorted(terms))
 
 
 def _response_cost(body: dict[str, Any]) -> Decimal:
