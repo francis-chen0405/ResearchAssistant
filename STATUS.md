@@ -2200,6 +2200,23 @@ Next phase:
 - Provider orchestration now evaluates approved family coverage after round one and may issue one typed targeted Planner request before synthesis. The Evidence Browser exposes portfolio coverage and filtered trail outcomes.
 - Verification: 584 passed, 2 expected opt-in skips; `ruff check .` and `ruff format --check .` passed. No live provider calls were made.
 
+# ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
+
+Status: Complete and verified.
+
+- Added bounded v2 routing from Scout decisions through existing Wigolo acquisition and the
+  optional verified-preflight Firecrawl fallback. Preferred URLs run before retained
+  alternates; successful equivalent clusters are not reacquired.
+- Added append-only immutable Phase-5 output retaining provider-attempt audit records,
+  strict hash-verified `SourceSnapshot` artifacts, deterministic exact-offset Probe results,
+  and all usable surviving sources.
+- Probe has no LLM call and never creates Claim Fit, Evidence Quality, factual claims, or
+  Claim Ledger entries. Opening, conclusion, numeric, and citation signals provide
+  low-overlap fallback. Failed Probe records preserve snapshots but produce no survivor.
+- Verification: complete offline suite passed in two bounded batches (403 passed, 1 skipped;
+  297 passed, 1 skipped), for 700 passed and 2 expected skips. `ruff check .`,
+  `ruff format --check .`, and `git diff --check` passed. No live calls were made.
+
 # ResearchAssistant v2 — Phase 4: Discovery Providers, Normalization, Clustering, and Batched Scout
 
 Status: Complete and verified.

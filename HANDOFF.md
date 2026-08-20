@@ -1,5 +1,26 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
+
+Phase 5 is complete. `agents/v2_acquisition.py` consumes immutable Phase-4 clusters in
+Scout retrieve → deterministic rank → Scout maybe order. It keeps Scout skip out of normal
+acquisition, attempts each preferred URL before bounded alternates, and stops after a
+successful equivalent source. The existing Wigolo adapter remains primary; Firecrawl is
+optional and only receives an approved verified preflight from a qualifying primary failure.
+
+Every success becomes a strict `SourceSnapshot` with source identity, provider provenance,
+normalization/hash validation, and an append-only v2 artifact audit chain. Probe is fully
+deterministic and no-LLM. It emits 2–5 exact source windows when available, preserves
+snapshot IDs/hashes and offsets, and uses opening/conclusion/numeric/citation fallback
+signals. Probe contains no claim or quality scoring and cannot enter the Ledger. A failed
+Probe preserves the snapshot and audit record but creates no survivor, so later Gap Analysis
+cannot consume unsafe/invented content.
+
+Verification: focused Phase-4/Phase-5 tests passed; the complete offline suite passed in two
+bounded batches (403 passed, 1 skipped; 297 passed, 1 skipped), for 700 passed and 2 expected
+skips. Ruff lint, format check, and `git diff --check` passed. No live call or dependency
+change was made.
+
 ## ResearchAssistant v2 — Phase 4: Discovery Providers, Normalization, Clustering, and Batched Scout
 
 Phase 4 is complete. `agents/v2_discovery.py` owns fresh-v2 metadata-only normalization,

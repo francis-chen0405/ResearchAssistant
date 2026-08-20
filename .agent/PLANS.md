@@ -38,6 +38,18 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-04-discovery-providers-normalization-clustering-scout.md`
 
+## ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
+
+The user explicitly authorized and completed v2 Phase 5 on 2026-08-20. It reuses the
+existing safe Wigolo/optional-Firecrawl acquisition boundary, preserves hash-verified
+immutable snapshots in append-only v2 artifacts, and adds a deterministic no-LLM Probe
+plus survivor pool. Probe is prioritization only and cannot enter Gap Analysis or the
+Claim Ledger as factual evidence.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-05-acquisition-snapshots-probe-survivors.md`
+
 ## CI Maintenance After MVP-1
 
 The user-authorized CI maintenance plan is

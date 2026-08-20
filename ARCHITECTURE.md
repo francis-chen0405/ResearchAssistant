@@ -929,3 +929,23 @@ responses are rejected. Scout is recall-biased, cannot assess evidence quality o
 eligibility, cannot generate factual claims, and cannot promote disabled directions. One
 bounded retry is allowed; a repeated failure is persisted as audit data and falls back to
 deterministic ranking with all affected candidates retained as `maybe`.
+
+## ResearchAssistant v2 Phase 5 Acquisition, Snapshot, Probe, and Survivor Boundary
+
+Fresh-v2 acquisition consumes only conservative Phase-4 source clusters. It orders Scout
+`retrieve` records ahead of deterministic discovery rank and Scout `maybe` records, and
+does not normally acquire Scout `skip` records. A cluster attempts its preferred URL before
+bounded retained alternates. One successful equivalent source prevents repeat acquisition.
+
+Wigolo remains the primary acquisition boundary. Firecrawl is optional and may run only as
+the existing approved fallback after a qualifying Wigolo failure that carries independently
+validated preflight provenance. Phase 5 neither bypasses URL/redirect validation nor weakens
+media-type provenance, PDF restrictions, normalization, or snapshot hashing.
+
+Each success is a strict immutable `SourceSnapshot` stored inside the append-only v2 artifact
+with source-cluster identity and provider audit chain. Probe deterministically ranks exact
+sentence windows from that stored text without an LLM call. It retains snapshot ID/hash and
+character offsets, uses opening/conclusion/evidence-density/citation fallback windows, and
+does not assess Claim Fit, Evidence Quality, factual truth, or Ledger eligibility. Only a
+successful snapshot with one or more Probe windows enters the survivor pool. Probe failure
+preserves its snapshot and audit record but yields no Gap-Analysis input.

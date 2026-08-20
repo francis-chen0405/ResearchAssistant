@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-08-20 - ResearchAssistant v2 Phase 5 Acquisition, Snapshots, Probe, and Survivors
+
+- Reuse safe Wigolo acquisition as the primary v2 route; Firecrawl remains optional and is
+  invoked only under the existing verified-preflight fallback policy.
+- Order source clusters by Scout retrieve, deterministic discovery rank, then Scout maybe;
+  do not normally acquire Scout skip sources. Try the preferred URL before bounded retained
+  alternates and stop acquiring a source cluster after one success.
+- Preserve every successful normalized response as a strict, hash-verified immutable
+  `SourceSnapshot` within the append-only v2 Phase-5 artifact, retaining provider attempts
+  and source-cluster identity.
+- Probe stored snapshot text deterministically with exact offsets and snapshot hashes. It is
+  no-LLM prioritization only and cannot score, claim, recommend, or enter the Claim Ledger.
+- Retain all successful usable sources as survivors. A Probe failure remains an audit record,
+  preserves the snapshot, invents no passages, and excludes the source from later analysis.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 4 Discovery, Normalization, Clustering, and Scout
 
 - Support OpenAlex, arXiv, PubMed, Exa, and Serper as fresh-v2 discovery sources while
