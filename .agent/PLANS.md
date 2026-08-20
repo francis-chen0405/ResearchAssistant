@@ -50,6 +50,17 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-05-acquisition-snapshots-probe-survivors.md`
 
+## ResearchAssistant v2 — Phase 6: Luna Gap Analysis
+
+The user explicitly authorized and completed v2 Phase 6 on 2026-08-20. After Round-1
+survivors exist, it passes only bounded Phase-5 Probe context and metadata to GPT-5.6 Luna
+High for typed research-strategy gap analysis. It can recommend stopping after Round 1 and
+persists a degraded stop if its bounded retry fails. It does not execute Round 2.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-06-luna-gap-analysis.md`
+
 ## CI Maintenance After MVP-1
 
 The user-authorized CI maintenance plan is

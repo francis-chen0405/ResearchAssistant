@@ -2200,6 +2200,27 @@ Next phase:
 - Provider orchestration now evaluates approved family coverage after round one and may issue one typed targeted Planner request before synthesis. The Evidence Browser exposes portfolio coverage and filtered trail outcomes.
 - Verification: 584 passed, 2 expected opt-in skips; `ruff check .` and `ruff format --check .` passed. No live provider calls were made.
 
+# ResearchAssistant v2 — Phase 6: Luna Gap Analysis
+
+Status: Complete and verified.
+
+- Added strict bounded Phase-6 Gap Analysis schemas and a Phase-5-to-Phase-6 input projection.
+  It passes only source metadata and up to forty 1,200-character Probe excerpts, never full
+  documents, Ledger artifacts, or model-authored factual claims.
+- Added GPT-5.6 Luna High execution with one normal retry, per-attempt conservative reservation
+  records, completed/stop results, and degraded persisted stop state when analysis cannot
+  complete. Restart reuses either state without a further call.
+- Gap results require specific enabled-direction missing-evidence gaps and typed gap-linked
+  search directions; each direction has at most three gaps. Stop results contain no gaps.
+- Round 2 execution was not added. No live calls or dependency changes were made.
+
+Verification:
+
+- Full offline suite passed in two bounded batches: 299 passed, 1 skipped (one existing
+  FastAPI/httpx deprecation warning) and 407 passed, 1 skipped; 706 passed and 2 expected
+  skips total.
+- `ruff check .`, `ruff format --check .`, and `git diff --check` passed.
+
 # ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
 
 Status: Complete and verified.

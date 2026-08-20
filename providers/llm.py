@@ -34,6 +34,7 @@ from models import (
     StatementDraft,
     StrictModel,
     SynthesisOutput,
+    V2GapAnalysisModelOutput,
     V2InitialPlannerModelOutput,
     V2InitialResearchPlan,
     V2SearchRoundPlan,
@@ -677,7 +678,7 @@ def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.SCOUT:
         return (ScoutBatch,)
     if stage is LLMStage.GAP_ANALYSIS:
-        return (GapAnalysisResult,)
+        return (GapAnalysisResult, V2GapAnalysisModelOutput)
     if stage is LLMStage.SEARCH_AGENT:
         return (V2SearchRoundPlan,)
     if stage is LLMStage.SOURCE_SELECTION:

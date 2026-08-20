@@ -173,6 +173,7 @@ V2_POLICY_IDENTITY = "researchassistant-v2-phase-1"
 V2_INITIAL_PLANNER_POLICY_IDENTITY = "researchassistant-v2-phase-3-initial-planner-v1"
 V2_DISCOVERY_POLICY_IDENTITY = "researchassistant-v2-phase-4-discovery-scout-v1"
 V2_ACQUISITION_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v1"
+V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
 
 
 class ResearchDirection(StrEnum):
@@ -901,6 +902,282 @@ class V2AcquisitionProbeOutput(StrictModel):
                 {passage.passage_id for passage in probe.passages}
             ):
                 raise ValueError("survivors may reference only their own Probe passages")
+        return self
+
+
+class V2GapBudgetState(StrictModel):
+    """The bounded, remaining budget view supplied to Gap Analysis."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_calls_remaining: NonNegativeInt
+    tokens_remaining: NonNegativeInt | None = None
+    cost_remaining_usd: ExactUSD | None = None
+
+
+class V2GapAttemptedQuery(StrictModel):
+    """One already-executed Round-1 query, never a proposal for a later round."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    query_id: UUID
+    direction: ResearchDirection
+    provider: DiscoveryProvider
+    strategy: NonEmptyStr
+    query_text: NonEmptyStr
+
+
+class V2GapSurvivingSourceMetadata(StrictModel):
+    """Compact source identity available to research strategy, without source documents."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_cluster_id: UUID
+    direction: ResearchDirection
+    snapshot_id: UUID
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    source_url: NonEmptyStr
+    title: NonEmptyStr | None = None
+    source_family_id: NonEmptyStr
+
+
+class V2GapProbePassage(StrictModel):
+    """A bounded Probe excerpt for strategy only, never a quotation or Ledger input."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    passage_id: NonEmptyStr
+    source_cluster_id: UUID
+    direction: ResearchDirection
+    text: NonEmptyStr = Field(max_length=1200)
+    truncated_for_gap_analysis: bool = False
+
+
+class V2GapSourceFamily(StrictModel):
+    """Conservative cluster-family information used to avoid duplicate research."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    family_id: NonEmptyStr
+    direction: ResearchDirection
+    source_cluster_ids: tuple[UUID, ...] = Field(min_length=1, max_length=25)
+    discovery_providers: tuple[DiscoveryProvider, ...] = Field(min_length=1, max_length=6)
+
+
+class V2GapDuplicatePattern(StrictModel):
+    """Observed duplicate-family pattern, not a conclusion about source quality."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_cluster_id: UUID
+    direction: ResearchDirection
+    duplicate_discovery_count: PositiveInt
+    pattern: NonEmptyStr
+
+
+class V2GapAcquisitionFailure(StrictModel):
+    """A compact failed-acquisition audit record for research strategy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_cluster_id: UUID
+    direction: ResearchDirection
+    provider: V2AcquisitionProvider
+    failure_code: NonEmptyStr
+
+
+class V2GapSearchDirection(StrictModel):
+    """A specific, typed possible later-search direction tied to one material gap."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    gap_id: NonEmptyStr
+    direction: ResearchDirection
+    missing_evidence: NonEmptyStr
+    search_focus: NonEmptyStr
+
+
+class V2MaterialGap(StrictModel):
+    """One specific missing-evidence condition, in an enabled research direction."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    gap_id: NonEmptyStr
+    direction: ResearchDirection
+    missing_evidence: NonEmptyStr
+    rationale: NonEmptyStr
+
+
+class V2GapAnalysisInput(StrictModel):
+    """Strict, bounded Round-1 strategy input; acquired documents are intentionally absent."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    directions: ResearchDirections
+    completed_round: Literal[1] = 1
+    attempted_queries: tuple[V2GapAttemptedQuery, ...] = Field(max_length=24)
+    surviving_sources: tuple[V2GapSurvivingSourceMetadata, ...] = Field(max_length=25)
+    probe_passages: tuple[V2GapProbePassage, ...] = Field(max_length=40)
+    source_families: tuple[V2GapSourceFamily, ...] = Field(max_length=25)
+    discovered_terms: tuple[NonEmptyStr, ...] = Field(max_length=40)
+    duplicate_patterns: tuple[V2GapDuplicatePattern, ...] = Field(max_length=25)
+    acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=50)
+    previous_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
+    remaining_budget: V2GapBudgetState
+    policy_identity: Literal["researchassistant-v2-phase-6-gap-analysis-v1"] = (
+        V2_GAP_ANALYSIS_POLICY_IDENTITY
+    )
+
+    @model_validator(mode="after")
+    def validate_strategy_scope(self) -> V2GapAnalysisInput:
+        for item in (
+            *self.attempted_queries,
+            *self.surviving_sources,
+            *self.probe_passages,
+            *self.source_families,
+            *self.duplicate_patterns,
+            *self.acquisition_failures,
+            *self.previous_gaps,
+        ):
+            self.directions.require_permitted(item.direction)
+        source_ids = {source.source_cluster_id for source in self.surviving_sources}
+        if any(passage.source_cluster_id not in source_ids for passage in self.probe_passages):
+            raise ValueError("Gap Analysis passages must belong to surviving sources")
+        return self
+
+
+class V2GapAnalysisModelOutput(StrictModel):
+    """Narrow Luna response before application-owned run identity is attached."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    coverage_summary: NonEmptyStr = Field(max_length=2000)
+    material_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
+    continue_research: bool
+    stop_reason: NonEmptyStr | None = Field(default=None, max_length=1000)
+    new_search_directions: tuple[V2GapSearchDirection, ...] = Field(max_length=6)
+    discovered_terms: tuple[NonEmptyStr, ...] = Field(max_length=20)
+
+    @model_validator(mode="after")
+    def validate_strategy_decision(self) -> V2GapAnalysisModelOutput:
+        gap_ids = tuple(gap.gap_id for gap in self.material_gaps)
+        if len(gap_ids) != len(set(gap_ids)):
+            raise ValueError("Gap Analysis gap IDs must be unique")
+        if any(gap_ids.count(item.gap_id) > 3 for item in self.material_gaps):
+            raise ValueError("Gap Analysis has too many gaps with one ID")
+        if self.continue_research:
+            if (
+                not self.material_gaps
+                or not self.new_search_directions
+                or self.stop_reason is not None
+            ):
+                raise ValueError(
+                    "continuing research requires gaps and search directions without a stop reason"
+                )
+        elif self.material_gaps or self.new_search_directions or self.stop_reason is None:
+            raise ValueError("stopping research requires a stop reason and no invented gaps")
+        if any(item.gap_id not in gap_ids for item in self.new_search_directions):
+            raise ValueError("new search directions must reference a material gap")
+        return self
+
+
+class V2GapAnalysisResult(V2GapAnalysisModelOutput):
+    """Validated Gap Analysis decision bound to exactly one completed Round 1."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    analyzed_at: datetime
+
+    _analyzed_at_is_aware = field_validator("analyzed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_gap_directions(self) -> V2GapAnalysisResult:
+        for gap in self.material_gaps:
+            self.directions.require_permitted(gap.direction)
+        for search in self.new_search_directions:
+            self.directions.require_permitted(search.direction)
+            matching_gap = next(gap for gap in self.material_gaps if gap.gap_id == search.gap_id)
+            if matching_gap.direction is not search.direction:
+                raise ValueError("new search direction must match its gap direction")
+        per_direction = {direction: 0 for direction in self.directions.enabled_directions}
+        for gap in self.material_gaps:
+            per_direction[gap.direction] += 1
+        if any(count > 3 for count in per_direction.values()):
+            raise ValueError("Gap Analysis permits at most three gaps per enabled direction")
+        return self
+
+
+class V2GapAnalysisState(StrEnum):
+    COMPLETED = "completed"
+    DEGRADED = "degraded"
+
+
+class V2GapReservation(StrictModel):
+    """Secret-free conservative reservation recorded for a Luna strategy attempt."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    input_tokens: PositiveInt
+    output_tokens: PositiveInt
+    reserved_tokens: PositiveInt
+    reserved_cost_usd: ExactUSD
+
+    @model_validator(mode="after")
+    def validate_total(self) -> V2GapReservation:
+        if self.reserved_tokens != self.input_tokens + self.output_tokens:
+            raise ValueError("Gap Analysis reserved tokens must equal input plus output tokens")
+        return self
+
+
+class V2GapAnalysisAttempt(StrictModel):
+    """One bounded Luna attempt, including its conservative reservation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    attempt_number: PositiveInt
+    reservation: V2GapReservation
+    succeeded: bool
+    failure: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> V2GapAnalysisAttempt:
+        if self.succeeded == (self.failure is not None):
+            raise ValueError("Gap Analysis attempt success and failure must agree")
+        return self
+
+
+class V2GapAnalysisOutput(StrictModel):
+    """Persisted Phase-6 state. Degraded output always stops adaptive continuation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    input: V2GapAnalysisInput
+    state: V2GapAnalysisState
+    result: V2GapAnalysisResult | None = None
+    attempts: tuple[V2GapAnalysisAttempt, ...] = Field(max_length=2)
+    stop_adaptive_continuation: bool
+    completed_at: datetime
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_output(self) -> V2GapAnalysisOutput:
+        if self.input.run_id != self.run_id:
+            raise ValueError("Gap Analysis input run_id must match output")
+        if self.state is V2GapAnalysisState.COMPLETED:
+            if self.result is None or self.stop_adaptive_continuation != (
+                not self.result.continue_research
+            ):
+                raise ValueError("completed Gap Analysis state must agree with its decision")
+        elif self.result is not None or not self.stop_adaptive_continuation:
+            raise ValueError(
+                "degraded Gap Analysis must not invent a result and must stop continuation"
+            )
         return self
 
 

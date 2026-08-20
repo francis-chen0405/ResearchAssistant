@@ -1,5 +1,26 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 6: Luna Gap Analysis
+
+Phase 6 is complete. `agents/v2_gap_analysis.py` consumes the immutable Phase-3/4/5 typed
+outputs only after Round-1 survivors exist. Its input carries the exact claim, enabled
+directions, completed Round 1, attempted queries, survivor metadata, at most 40 compact Probe
+excerpts of at most 1,200 characters each, conservative family/duplicate patterns, discovered
+terms, acquisition failures, previous gaps, and remaining budget state. It never sends full
+source documents, creates Ledger evidence, or makes factual claims.
+
+`V2GapAnalysisResult` contains a coverage summary, priority-ordered material gaps, an explicit
+continue/stop decision, a stop reason, specific typed gap-linked search directions, and
+discovered terms. Every gap/search direction must be in an enabled direction, and each enabled
+direction has a hard maximum of three gaps. A stop result must have no invented gaps or search
+directions.
+
+Gap Analysis uses the configured GPT-5.6 Luna High route and records the conservative input,
+output, token, and cost reservation for every attempt. It retries once at most. Two failures
+(or insufficient remaining budget) persist a `DEGRADED` output with no result and
+`stop_adaptive_continuation=True`; restart returns the exact persisted state without a new call.
+Round 2 and all later execution remain unimplemented and unauthorized.
+
 ## ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
 
 Phase 5 is complete. `agents/v2_acquisition.py` consumes immutable Phase-4 clusters in
