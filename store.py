@@ -57,6 +57,7 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2InitialPlannerOutput,
     V2PersistedArtifact,
     V2PipelineIdentity,
     ValidationError,
@@ -65,12 +66,13 @@ from models import (
     v2_artifact_fingerprint,
 )
 from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
+from provider_contract import parse_provider_contract_payload
 
 # ---------------------------------------------------------------------------
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 RAW_CLAIM_SCHEMA_VERSION = 5
 MVP68_SCHEMA_VERSION = 6
 MVP69_SCHEMA_VERSION = 7
@@ -78,6 +80,7 @@ MVP10_SCHEMA_VERSION = 8
 MVP11_SCHEMA_VERSION = 9
 MLP4_SCHEMA_VERSION = 10
 V2_PHASE1_SCHEMA_VERSION = 11
+V2_PHASE3_SCHEMA_VERSION = 12
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -106,6 +109,7 @@ MIGRATION_DESCRIPTIONS = {
     9: "mvp-11 bounded research governor records",
     10: "mlp-4 provider-specific discovery query provenance",
     11: "researchassistant-v2 phase-1 artifact foundation",
+    12: "researchassistant-v2 phase-3 initial planner and round-1 searches",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -168,6 +172,13 @@ _V2_PHASE1_TRIGGERS = {
     "v2_run_identities_immutable_delete",
     "v2_artifacts_immutable_update",
     "v2_artifacts_immutable_delete",
+}
+_V2_PHASE3_TABLES = {"v2_initial_planner_outputs", "v2_round_one_search_queries"}
+_V2_PHASE3_TRIGGERS = {
+    "v2_initial_planner_outputs_immutable_update",
+    "v2_initial_planner_outputs_immutable_delete",
+    "v2_round_one_search_queries_immutable_update",
+    "v2_round_one_search_queries_immutable_delete",
 }
 _REQUIRED_INDEXES = {
     "provisional_extractions_run_snapshot_stance",
@@ -324,6 +335,9 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
     if latest >= V2_PHASE1_SCHEMA_VERSION:
         required_tables = required_tables | _V2_PHASE1_TABLES
         required_triggers = required_triggers | _V2_PHASE1_TRIGGERS
+    if latest >= V2_PHASE3_SCHEMA_VERSION:
+        required_tables = required_tables | _V2_PHASE3_TABLES
+        required_triggers = required_triggers | _V2_PHASE3_TRIGGERS
     missing = sorted(
         (required_tables - tables) | (required_triggers - triggers) | (_REQUIRED_INDEXES - indexes)
     )
@@ -929,6 +943,7 @@ def init_db(db_path: str) -> None:
         _apply_mvp11_research_governor_migration(conn)
         _apply_mlp4_discovery_query_migration(conn)
         _apply_v2_phase1_artifact_migration(conn)
+        _apply_v2_phase3_initial_planner_migration(conn)
     finally:
         conn.close()
 
@@ -1448,6 +1463,95 @@ def _apply_v2_phase1_artifact_migration(conn: sqlite3.Connection) -> None:
             (
                 V2_PHASE1_SCHEMA_VERSION,
                 MIGRATION_DESCRIPTIONS[V2_PHASE1_SCHEMA_VERSION],
+                "2026-08-20T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_v2_phase3_initial_planner_schema(conn: sqlite3.Connection) -> None:
+    """Verify v2 Round-1 planner persistence without altering historical artifacts."""
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_V2_PHASE3_TABLES - tables)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 12 v2 planner tables are missing: {', '.join(missing)}"
+        )
+    triggers = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+    }
+    missing_triggers = sorted(_V2_PHASE3_TRIGGERS - triggers)
+    if missing_triggers:
+        raise sqlite3.DatabaseError(
+            f"migration 12 v2 planner triggers are missing: {', '.join(missing_triggers)}"
+        )
+
+
+def _apply_v2_phase3_initial_planner_migration(conn: sqlite3.Connection) -> None:
+    """Persist only fresh-v2 initial plans and their Round-1 queries append-only."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (V2_PHASE3_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[V2_PHASE3_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 12 description is inconsistent")
+        _verify_v2_phase3_initial_planner_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS v2_initial_planner_outputs (
+                run_id TEXT PRIMARY KEY REFERENCES v2_run_identities(run_id),
+                raw_claim TEXT NOT NULL,
+                directions_json TEXT NOT NULL,
+                discovery_providers_json TEXT NOT NULL,
+                policy_identity TEXT NOT NULL,
+                scope_interpretations_json TEXT NOT NULL,
+                planner_prompt_version TEXT NOT NULL,
+                planner_model_name TEXT NOT NULL,
+                planned_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS v2_round_one_search_queries (
+                query_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES v2_initial_planner_outputs(run_id),
+                direction TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                round_number INTEGER NOT NULL CHECK (round_number = 1),
+                strategy TEXT NOT NULL,
+                query_text TEXT NOT NULL,
+                policy_identity TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (run_id, direction, provider, round_number, strategy)
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS v2_initial_planner_outputs_immutable_update
+                BEFORE UPDATE ON v2_initial_planner_outputs
+                BEGIN SELECT RAISE(ABORT, 'v2 initial planner outputs are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_initial_planner_outputs_immutable_delete
+                BEFORE DELETE ON v2_initial_planner_outputs
+                BEGIN SELECT RAISE(ABORT, 'v2 initial planner outputs are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_round_one_search_queries_immutable_update
+                BEFORE UPDATE ON v2_round_one_search_queries
+                BEGIN SELECT RAISE(ABORT, 'v2 Round-1 search queries are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_round_one_search_queries_immutable_delete
+                BEFORE DELETE ON v2_round_one_search_queries
+                BEGIN SELECT RAISE(ABORT, 'v2 Round-1 search queries are immutable'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_v2_phase3_initial_planner_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                V2_PHASE3_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[V2_PHASE3_SCHEMA_VERSION],
                 "2026-08-20T00:00:00+00:00",
             ),
         )
@@ -3049,10 +3153,13 @@ def insert_v2_pipeline_identity(
     conn = _connect(db_path)
     try:
         contract = conn.execute(
-            "SELECT policy_identity FROM provider_run_contracts WHERE run_id = ?", (str(run_id),)
+            "SELECT policy_identity, payload_json FROM provider_run_contracts WHERE run_id = ?",
+            (str(run_id),),
         ).fetchone()
         if contract is not None and contract["policy_identity"] != V2_POLICY_IDENTITY:
-            raise ValueError("a pre-v2 provider run cannot be resumed as a v2 run")
+            payload = parse_provider_contract_payload(contract["payload_json"])
+            if not payload["fingerprint_version"].startswith("researchassistant-v2-"):
+                raise ValueError("a pre-v2 provider run cannot be resumed as a v2 run")
         existing = conn.execute(
             "SELECT * FROM v2_run_identities WHERE run_id = ?", (str(run_id),)
         ).fetchone()
@@ -3172,6 +3279,122 @@ def read_v2_artifact(
         if row is None:
             raise KeyError(f"v2 artifact {artifact_key} for run {run_id} not found")
         return _row_to_v2_artifact(row)
+
+
+def insert_v2_initial_planner_output(
+    db_path: str,
+    output: V2InitialPlannerOutput,
+) -> None:
+    """Append one validated fresh-v2 initial plan and exactly its Round-1 search queries."""
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(output.run_id),),
+        ).fetchone()
+        if identity is None or identity["pipeline_identity"] != V2_PIPELINE_IDENTITY:
+            raise ValueError("v2 initial planner output requires an explicit v2 run identity")
+        existing = conn.execute(
+            "SELECT run_id FROM v2_initial_planner_outputs WHERE run_id = ?", (str(output.run_id),)
+        ).fetchone()
+        if existing is not None:
+            if read_v2_initial_planner_output(db_path, output.run_id) != output:
+                raise sqlite3.IntegrityError("v2 initial planner output is immutable")
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            """INSERT INTO v2_initial_planner_outputs
+               (run_id, raw_claim, directions_json, discovery_providers_json, policy_identity,
+                scope_interpretations_json, planner_prompt_version, planner_model_name, planned_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(output.run_id),
+                output.raw_claim,
+                json.dumps(
+                    output.directions.model_dump(mode="json"),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                json.dumps([provider.value for provider in output.discovery_providers]),
+                output.policy_identity,
+                json.dumps(
+                    [item.model_dump(mode="json") for item in output.scope_interpretations],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                output.planner_prompt_version,
+                output.planner_model_name,
+                _dt_to_iso(output.planned_at),
+            ),
+        )
+        for search in output.searches:
+            conn.execute(
+                """INSERT INTO v2_round_one_search_queries
+                   (query_id, run_id, direction, provider, round_number, strategy, query_text,
+                    policy_identity, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(search.query_id),
+                    str(search.run_id),
+                    search.direction.value,
+                    search.provider.value,
+                    search.round_number,
+                    search.strategy,
+                    search.query_text,
+                    search.policy_identity,
+                    _dt_to_iso(search.created_at),
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def read_v2_initial_planner_output(
+    db_path: DatabaseReader,
+    run_id: UUID,
+) -> V2InitialPlannerOutput:
+    """Reconstruct a typed fresh-v2 Round-1 plan without creating later-round searches."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM v2_initial_planner_outputs WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 initial planner output for run {run_id} not found")
+        searches = conn.execute(
+            "SELECT * FROM v2_round_one_search_queries WHERE run_id = ? ORDER BY rowid",
+            (str(run_id),),
+        ).fetchall()
+        return V2InitialPlannerOutput.model_validate(
+            {
+                "run_id": run_id,
+                "raw_claim": row["raw_claim"],
+                "directions": json.loads(row["directions_json"]),
+                "discovery_providers": json.loads(row["discovery_providers_json"]),
+                "policy_identity": row["policy_identity"],
+                "scope_interpretations": json.loads(row["scope_interpretations_json"]),
+                "searches": [
+                    {
+                        "run_id": item["run_id"],
+                        "query_id": item["query_id"],
+                        "direction": item["direction"],
+                        "provider": item["provider"],
+                        "round_number": item["round_number"],
+                        "strategy": item["strategy"],
+                        "query_text": item["query_text"],
+                        "policy_identity": item["policy_identity"],
+                        "created_at": _iso_to_dt(item["created_at"]),
+                    }
+                    for item in searches
+                ],
+                "planner_prompt_version": row["planner_prompt_version"],
+                "planner_model_name": row["planner_model_name"],
+                "planned_at": _iso_to_dt(row["planned_at"]),
+            }
+        )
 
 
 def _row_to_v2_artifact(row: sqlite3.Row) -> V2PersistedArtifact:

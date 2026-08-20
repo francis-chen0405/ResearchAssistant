@@ -14,6 +14,18 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-02-multi-model-routing.md`
 
+## ResearchAssistant v2 — Phase 3: Initial Planner and Broad Round 1
+
+The user explicitly authorized and completed v2 Phase 3 on 2026-08-20. Fresh v2 startup
+creates only an append-only, broad Round-1 Initial Planner output through MiMo-v2.5-Pro.
+One application-owned policy controls enabled provider/round lanes; it preserves the
+existing 2/3/1 SERP Search/Exa/OpenAlex query ceilings per enabled direction. No future
+search plan, targeted replanning, discovery execution, or provider call was added.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-03-initial-planner-round-one.md`
+
 ## CI Maintenance After MVP-1
 
 The user-authorized CI maintenance plan is

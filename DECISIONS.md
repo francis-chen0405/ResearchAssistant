@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-08-20 - ResearchAssistant v2 Phase 3 Initial Planner and Broad Round 1
+
+- Use MiMo-v2.5-Pro for the fresh-v2 Initial Planner and generate only broad Round-1
+  discovery queries at startup.
+- Centralize v2 direction/provider/round eligibility and the established 2/3/1
+  SERP Search/Exa/OpenAlex slots per enabled direction in one application-owned policy.
+  The prompt receives only the resulting lanes; it does not duplicate provider-round rules.
+- Preserve the exact submitted claim, allow only material scope interpretation records,
+  and forbid Planner-created objectives, importance scores, and future-round queries.
+- Add append-only migration 12 persistence for the typed initial plan and Round-1 queries.
+  Historical planner outputs, v2 Phase 1 artifacts, and pre-v2 runs remain readable.
+- Add no dependency, live provider call, discovery execution, Round 2/3 behavior, or UI work.
+
 ## 2026-08-17 - MLP-5 Provider Selection & SERP Search
 
 - Add SERP Search as a bearer-authenticated Google-style discovery provider using only

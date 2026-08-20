@@ -136,8 +136,21 @@ def test_fresh_database_installs_mvp6_8_schema_and_repeated_init_is_idempotent(
             ).fetchall()
         }
         columns = {row[1] for row in connection.execute("PRAGMA table_info(model_route_attempts)")}
-    assert CURRENT_SCHEMA_VERSION == 11
-    assert versions == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (10,), (11,)]
+    assert CURRENT_SCHEMA_VERSION == 12
+    assert versions == [
+        (1,),
+        (2,),
+        (3,),
+        (4,),
+        (5,),
+        (6,),
+        (7,),
+        (8,),
+        (9,),
+        (10,),
+        (11,),
+        (12,),
+    ]
     assert {
         "snapshots_immutable_update",
         "snapshots_immutable_delete",

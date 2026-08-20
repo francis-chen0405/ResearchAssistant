@@ -891,3 +891,20 @@ physical model identifier, and pricing are explicit deployment configuration. Ro
 physical provider/model identity, prompt and schema versions, pricing, and relevant
 non-secret provider settings are all provider-contract fingerprint inputs. Historical
 direct-MiMo contracts and persisted stage aliases remain readable.
+
+## ResearchAssistant v2 Phase 3 Initial Planner and Broad Round 1
+
+Fresh v2 startup performs exactly one MiMo-v2.5-Pro Initial Planner call and creates only
+the broad Round-1 plan. The exact submitted claim is retained unchanged; scope records
+are limited to material interpretations or ambiguities. A single application-owned v2
+policy determines the valid provider/strategy lanes for enabled directions and enabled
+discovery providers, preserving the established two SERP Search, three Exa, and one
+OpenAlex slots per enabled direction. The model supplies only scope text and query text
+for those lanes; application code owns IDs, timestamps, policy identity, and validation.
+
+Round-1 plans and queries are append-only records carrying run, direction, provider,
+numeric round `1`, strategy, query text, timestamps, and policy identity. Disabled
+directions and providers, invalid lanes, duplicate IDs, and normalized duplicate query
+text within a provider/direction/round lane fail before persistence. No objective,
+importance score, targeted replan, Round 2, or Round 3 query is created in this phase.
+Historical planner outputs and pre-v2 pipelines remain readable.

@@ -167,6 +167,7 @@ DEFAULT_RESEARCH_CONTROLS = ResearchControls()
 # they were written.
 V2_PIPELINE_IDENTITY = "researchassistant-v2"
 V2_POLICY_IDENTITY = "researchassistant-v2-phase-1"
+V2_INITIAL_PLANNER_POLICY_IDENTITY = "researchassistant-v2-phase-3-initial-planner-v1"
 
 
 class ResearchDirection(StrEnum):
@@ -289,6 +290,210 @@ class V2SearchRoundPlan(StrictModel):
     def validate_enabled_searches(self) -> V2SearchRoundPlan:
         for search in self.searches:
             self.directions.require_permitted(search.direction)
+        return self
+
+
+class V2InitialPlannerSearchLane(StrictModel):
+    """One application-owned valid slot in the v2 initial broad-search plan."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    direction: ResearchDirection
+    provider: DiscoveryProvider
+    strategy: NonEmptyStr
+    round_number: Literal[1] = 1
+
+
+class V2InitialPlannerPolicy(StrictModel):
+    """The single v2 authority for provider eligibility and Round-1 search lanes."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    policy_identity: Literal["researchassistant-v2-phase-3-initial-planner-v1"] = (
+        V2_INITIAL_PLANNER_POLICY_IDENTITY
+    )
+
+    def search_lanes(
+        self,
+        directions: ResearchDirections,
+        providers: tuple[DiscoveryProvider, ...],
+    ) -> tuple[V2InitialPlannerSearchLane, ...]:
+        """Return the only valid Round-1 slots for enabled directions and providers."""
+        _validate_v2_discovery_providers(providers)
+        strategies = {
+            DiscoveryProvider.SERPSEARCH: ("broad_web", "institutional_coverage"),
+            DiscoveryProvider.EXA: ("direct_evidence", "mechanism", "analysis"),
+            DiscoveryProvider.OPENALEX: ("academic_studies",),
+        }
+        return tuple(
+            V2InitialPlannerSearchLane(
+                direction=direction,
+                provider=provider,
+                strategy=strategy,
+            )
+            for direction in directions.enabled_directions
+            for provider in providers
+            for strategy in strategies[provider]
+        )
+
+    def validate_searches(
+        self,
+        directions: ResearchDirections,
+        providers: tuple[DiscoveryProvider, ...],
+        searches: tuple[V2RoundOneSearchQuery, ...],
+    ) -> None:
+        """Reject every query that is outside a selected application-owned search lane."""
+        expected_lanes = self.search_lanes(directions, providers)
+        actual_lanes = tuple(
+            V2InitialPlannerSearchLane(
+                direction=search.direction,
+                provider=search.provider,
+                strategy=search.strategy,
+                round_number=search.round_number,
+            )
+            for search in searches
+        )
+        if len({search.query_id for search in searches}) != len(searches):
+            raise ValueError("v2 Round-1 query IDs must be unique")
+        if len(set(actual_lanes)) != len(actual_lanes):
+            raise ValueError("v2 Round-1 search lanes must not contain duplicate queries")
+        if set(actual_lanes) != set(expected_lanes):
+            raise ValueError("v2 Round-1 queries must exactly fill the enabled policy lanes")
+        normalized_lanes: set[tuple[ResearchDirection, DiscoveryProvider, int, str]] = set()
+        for search in searches:
+            normalized = " ".join(search.query_text.split()).casefold()
+            lane = (search.direction, search.provider, search.round_number, normalized)
+            if lane in normalized_lanes:
+                raise ValueError("v2 Round-1 query text must be unique within its search lane")
+            normalized_lanes.add(lane)
+
+
+def _validate_v2_discovery_providers(value: tuple[DiscoveryProvider, ...]) -> None:
+    if not value:
+        raise ValueError("at least one v2 discovery provider must be enabled")
+    if len(set(value)) != len(value):
+        raise ValueError("v2 discovery providers must not contain duplicates")
+    canonical = tuple(provider for provider in DiscoveryProvider if provider in value)
+    if value != canonical:
+        raise ValueError("v2 discovery providers must use canonical provider order")
+
+
+class V2InitialPlannerInput(StrictModel):
+    """Application-owned controls for the only planner call in a fresh v2 startup."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    raw_claim: NonEmptyStr
+    directions: ResearchDirections
+    discovery_providers: tuple[DiscoveryProvider, ...]
+    policy_identity: Literal["researchassistant-v2-phase-3-initial-planner-v1"] = (
+        V2_INITIAL_PLANNER_POLICY_IDENTITY
+    )
+    search_lanes: tuple[V2InitialPlannerSearchLane, ...]
+
+    @field_validator("discovery_providers")
+    @classmethod
+    def validate_discovery_providers(
+        cls, value: tuple[DiscoveryProvider, ...]
+    ) -> tuple[DiscoveryProvider, ...]:
+        _validate_v2_discovery_providers(value)
+        return value
+
+    @model_validator(mode="after")
+    def validate_policy_lanes(self) -> V2InitialPlannerInput:
+        expected = V2InitialPlannerPolicy().search_lanes(self.directions, self.discovery_providers)
+        if self.search_lanes != expected:
+            raise ValueError("v2 initial planner lanes must be application-owned policy lanes")
+        return self
+
+
+class V2ScopeInterpretation(StrictModel):
+    """A material scope reading or ambiguity that could affect Round-1 discovery."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    description: NonEmptyStr
+    impact: NonEmptyStr
+
+
+class V2InitialPlannerSearchResponse(StrictModel):
+    """Narrow model-owned semantic content for one application-owned search lane."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    direction: ResearchDirection
+    provider: DiscoveryProvider
+    strategy: NonEmptyStr
+    query_text: NonEmptyStr
+
+
+class V2InitialPlannerModelOutput(StrictModel):
+    """Model response without application IDs, timestamps, policy, or future planning."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scope_interpretations: tuple[V2ScopeInterpretation, ...] = Field(default=(), max_length=4)
+    searches: tuple[V2InitialPlannerSearchResponse, ...]
+
+
+class V2RoundOneSearchQuery(StrictModel):
+    """A persisted fresh-v2 broad discovery query, constrained to actual Round 1."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    query_id: UUID
+    direction: ResearchDirection
+    provider: DiscoveryProvider
+    round_number: Literal[1] = 1
+    strategy: NonEmptyStr
+    query_text: NonEmptyStr
+    policy_identity: Literal["researchassistant-v2-phase-3-initial-planner-v1"] = (
+        V2_INITIAL_PLANNER_POLICY_IDENTITY
+    )
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class V2InitialPlannerOutput(StrictModel):
+    """Complete persisted output of the single broad Round-1 v2 planner call."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    raw_claim: NonEmptyStr
+    directions: ResearchDirections
+    discovery_providers: tuple[DiscoveryProvider, ...]
+    policy_identity: Literal["researchassistant-v2-phase-3-initial-planner-v1"] = (
+        V2_INITIAL_PLANNER_POLICY_IDENTITY
+    )
+    scope_interpretations: tuple[V2ScopeInterpretation, ...] = Field(default=(), max_length=4)
+    searches: tuple[V2RoundOneSearchQuery, ...]
+    planner_prompt_version: NonEmptyStr
+    planner_model_name: Literal["mimo-v2.5-pro"] = "mimo-v2.5-pro"
+    planned_at: datetime
+
+    _planned_at_is_aware = field_validator("planned_at")(_validate_aware_datetime)
+
+    @field_validator("discovery_providers")
+    @classmethod
+    def validate_discovery_providers(
+        cls, value: tuple[DiscoveryProvider, ...]
+    ) -> tuple[DiscoveryProvider, ...]:
+        _validate_v2_discovery_providers(value)
+        return value
+
+    @model_validator(mode="after")
+    def validate_round_one_plan(self) -> V2InitialPlannerOutput:
+        if any(search.run_id != self.run_id for search in self.searches):
+            raise ValueError("v2 Round-1 query run_id must match the planner output")
+        if any(search.policy_identity != self.policy_identity for search in self.searches):
+            raise ValueError("v2 Round-1 query policy must match the planner output")
+        V2InitialPlannerPolicy().validate_searches(
+            self.directions, self.discovery_providers, self.searches
+        )
         return self
 
 

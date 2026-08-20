@@ -34,6 +34,7 @@ from models import (
     StatementDraft,
     StrictModel,
     SynthesisOutput,
+    V2InitialPlannerModelOutput,
     V2InitialResearchPlan,
     V2SearchRoundPlan,
     VerbatimQuoteSelection,
@@ -672,7 +673,7 @@ def invoke_llm(
 
 def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.PLANNER:
-        return (PlannerOutput, V2InitialResearchPlan)
+        return (PlannerOutput, V2InitialResearchPlan, V2InitialPlannerModelOutput)
     if stage is LLMStage.SCOUT:
         return (ScoutBatch,)
     if stage is LLMStage.GAP_ANALYSIS:

@@ -1,5 +1,29 @@
 # Status
 
+## 2026-08-20 - ResearchAssistant v2 Phase 3 Initial Planner and Broad Round 1
+
+Status: Complete and verified.
+
+- Added a fresh-v2 Initial Planner entry point that validates the v2 MiMo-v2.5-Pro route,
+  performs one typed Planner request, and stops after persisting the broad Round-1 plan.
+- Added one application-owned policy for enabled direction/provider Round-1 lanes,
+  preserving two SERP Search, three Exa, and one OpenAlex query slots per enabled
+  direction. The model cannot produce objectives, importance scores, query IDs,
+  timestamps, policy identities, or future rounds.
+- Added strict fresh-v2 query contracts and append-only migration 12 records for the
+  initial plan and its Round-1 queries. Queries persist run, direction, provider, round,
+  strategy, text, timestamps, and policy identity. Restart reconstructs the stored plan
+  without another Planner call; changed provider-contract fingerprints fail closed.
+- Historical `PlannerOutput`, provider infrastructure, v2 Phase 1 artifacts, and
+  pre-v2 pipeline inspection remain unchanged and readable.
+
+Verification:
+
+- Focused v2 Phase 1–3 suite: 29 passed.
+- Complete Python suite: 691 passed, 2 expected opt-in skips.
+- Ruff lint and format checks plus `git diff --check`: passed.
+- No live provider call was made.
+
 ## Current project state — 2026-08-17
 
 On 2026-08-18, a live multi-provider run exposed stale ranking field limits: the

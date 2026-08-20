@@ -169,8 +169,8 @@ def test_v2_migration_is_additive_idempotent_and_persists_canonical_artifacts(
             row[0]
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
-    assert CURRENT_SCHEMA_VERSION == 11
-    assert versions == list(range(1, 12))
+    assert CURRENT_SCHEMA_VERSION == 12
+    assert versions == list(range(1, 13))
     assert {"v2_run_identities", "v2_artifacts"} <= tables
     assert persisted.payload_json == canonical_v2_artifact_json(plan)
     assert persisted.payload_sha256 == v2_artifact_fingerprint(plan)
@@ -184,6 +184,9 @@ def test_historical_schema_ten_stays_readable_for_inspection(tmp_path: Path) -> 
         connection.execute("DROP TABLE v2_artifacts")
         connection.execute("DROP TABLE v2_run_identities")
         connection.execute("DELETE FROM schema_migrations WHERE version = 11")
+        connection.execute("DROP TABLE v2_round_one_search_queries")
+        connection.execute("DROP TABLE v2_initial_planner_outputs")
+        connection.execute("DELETE FROM schema_migrations WHERE version = 12")
         connection.commit()
 
     with open_read_only_store(str(db_path)) as store:

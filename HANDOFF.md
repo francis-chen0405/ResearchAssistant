@@ -1,5 +1,26 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 3: Initial Planner and Broad Round 1
+
+Phase 3 is complete. `agents/v2_initial_planner.py` is the fresh-v2 startup boundary: it
+uses the frozen v2 MiMo-v2.5-Pro Planner route, sends a narrow typed request, and persists
+only the initial broad Round-1 plan. It does not execute discovery or generate later
+rounds. `V2InitialPlannerPolicy` in `models.py` is the one application-owned authority
+for enabled provider/direction lanes and preserves the existing 2/3/1
+SERP Search/Exa/OpenAlex ceilings for each enabled direction.
+
+Migration 12 adds append-only `v2_initial_planner_outputs` and
+`v2_round_one_search_queries`. Each stored query has run, direction, provider, numeric
+Round 1, strategy, text, timestamp, and policy identity. Restart returns the identical
+stored plan with no additional Planner call; a contract fingerprint drift fails closed.
+Historical planner outputs and Phase 1/2 v2 artifacts remain readable.
+
+Verification: 691 passed with 2 expected opt-in skips across the complete Python suite;
+Ruff lint/format and `git diff --check` passed. No live provider call was made.
+
+Do not start Round 2, Round 3, targeted replanning, discovery execution, Scout, Gap
+Analysis, source selection, or UI work without explicit user authorization.
+
 ## Current project state — 2026-08-17
 
 A 2026-08-18 live-run correction aligns typed ranking fields with the already-authorized
