@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import UUID
+
+from pydantic import ConfigDict, Field, field_validator
 
 from models import (
     ResearchGovernorDecision,
@@ -13,9 +16,158 @@ from models import (
     ResearchGovernorReasonCode,
     ResearchTerminalOutcome,
     ResearchTerminalResult,
+    StrictModel,
 )
 
 DEFAULT_RESEARCH_GOVERNOR_POLICY = ResearchGovernorPolicy()
+
+
+class V2RoundThreeReasonCode(StrEnum):
+    AUTHORIZED = "round_three_authorized"
+    NO_MATERIAL_GAP = "no_material_gap"
+    LUNA_STOP = "luna_recommended_stop"
+    NO_NEW_DIRECTION = "no_new_search_direction"
+    NO_ELIGIBLE_PROVIDER = "no_eligible_provider"
+    NO_NEW_QUERY = "no_materially_new_query"
+    DUPLICATE_HEAVY = "duplicate_heavy_round_two"
+    PROVIDER_CEILING = "provider_search_ceiling"
+    PROTECTED_BUDGET = "protected_downstream_budget"
+    INSUFFICIENT_RESERVATION = "insufficient_complete_workload_reservation"
+    CANCELLED = "cancelled"
+    TERMINAL_FAILURE = "terminal_provider_failure"
+    ROUND_LIMIT = "round_limit_reached"
+
+
+class V2RoundThreeGovernorInput(StrictModel):
+    """Typed v2 facts; Luna recommends while deterministic policy authorizes."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    current_round: int = Field(ge=2, le=3)
+    material_gap_remains: bool
+    luna_recommends_continue: bool
+    new_search_direction_exists: bool
+    eligible_provider_exists: bool
+    materially_new_queries: bool
+    provider_ceiling_permits: bool
+    protected_downstream_budget_remains: bool
+    complete_workload_reservable: bool
+    round_two_duplicate_rate: float = Field(ge=0, le=1)
+    cancelled: bool = False
+    terminal_provider_failure: bool = False
+    decided_at: datetime
+
+    @field_validator("decided_at")
+    @classmethod
+    def validate_decided_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("v2 Governor decided_at must be timezone-aware")
+        return value
+
+
+class V2RoundThreeGovernorDecision(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    authorized: bool
+    reason_code: V2RoundThreeReasonCode
+    explanation: str = Field(min_length=1)
+    policy_version: str = "researchassistant-v2-phase-7-governor-v1"
+    decided_at: datetime
+
+    @field_validator("decided_at")
+    @classmethod
+    def validate_decided_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("v2 Governor decided_at must be timezone-aware")
+        return value
+
+
+def evaluate_v2_round_three_authorization(
+    evaluation: V2RoundThreeGovernorInput,
+) -> V2RoundThreeGovernorDecision:
+    """Adapt the fixed Governor to v2 Gap Analysis and search-continuation facts."""
+    reason = _v2_reason(evaluation)
+    authorized = reason is V2RoundThreeReasonCode.AUTHORIZED
+    return V2RoundThreeGovernorDecision(
+        run_id=evaluation.run_id,
+        authorized=authorized,
+        reason_code=reason,
+        explanation=_v2_explanation(reason, evaluation.round_two_duplicate_rate),
+        decided_at=evaluation.decided_at,
+    )
+
+
+def _v2_reason(evaluation: V2RoundThreeGovernorInput) -> V2RoundThreeReasonCode:
+    if evaluation.cancelled:
+        return V2RoundThreeReasonCode.CANCELLED
+    if evaluation.terminal_provider_failure:
+        return V2RoundThreeReasonCode.TERMINAL_FAILURE
+    if evaluation.current_round >= 3:
+        return V2RoundThreeReasonCode.ROUND_LIMIT
+    if not evaluation.material_gap_remains:
+        return V2RoundThreeReasonCode.NO_MATERIAL_GAP
+    if not evaluation.luna_recommends_continue:
+        return V2RoundThreeReasonCode.LUNA_STOP
+    if not evaluation.new_search_direction_exists:
+        return V2RoundThreeReasonCode.NO_NEW_DIRECTION
+    if not evaluation.eligible_provider_exists:
+        return V2RoundThreeReasonCode.NO_ELIGIBLE_PROVIDER
+    if not evaluation.materially_new_queries:
+        return V2RoundThreeReasonCode.NO_NEW_QUERY
+    if evaluation.round_two_duplicate_rate >= 0.70:
+        return V2RoundThreeReasonCode.DUPLICATE_HEAVY
+    if not evaluation.provider_ceiling_permits:
+        return V2RoundThreeReasonCode.PROVIDER_CEILING
+    if not evaluation.protected_downstream_budget_remains:
+        return V2RoundThreeReasonCode.PROTECTED_BUDGET
+    if not evaluation.complete_workload_reservable:
+        return V2RoundThreeReasonCode.INSUFFICIENT_RESERVATION
+    return V2RoundThreeReasonCode.AUTHORIZED
+
+
+def _v2_explanation(reason: V2RoundThreeReasonCode, duplicate_rate: float) -> str:
+    explanations = {
+        V2RoundThreeReasonCode.AUTHORIZED: (
+            "Round 3 was authorized as a narrow, gap-directed search with eligible "
+            "providers and protected budget."
+        ),
+        V2RoundThreeReasonCode.NO_MATERIAL_GAP: (
+            "Round 3 was not started because no material Gap remains."
+        ),
+        V2RoundThreeReasonCode.LUNA_STOP: (
+            "Round 3 was not started because Luna recommended stopping after Round 2."
+        ),
+        V2RoundThreeReasonCode.NO_NEW_DIRECTION: (
+            "Round 3 was not started because no genuinely new search direction remains."
+        ),
+        V2RoundThreeReasonCode.NO_ELIGIBLE_PROVIDER: (
+            "Round 3 was not started because no enabled provider is eligible."
+        ),
+        V2RoundThreeReasonCode.NO_NEW_QUERY: (
+            "Round 3 was not started because the proposed queries were repeats or trivial rewrites."
+        ),
+        V2RoundThreeReasonCode.DUPLICATE_HEAVY: (
+            f"Round 3 was not started because Round 2 was duplicate-heavy ({duplicate_rate:.0%})."
+        ),
+        V2RoundThreeReasonCode.PROVIDER_CEILING: (
+            "Round 3 was not started because provider search ceilings do not permit the plan."
+        ),
+        V2RoundThreeReasonCode.PROTECTED_BUDGET: (
+            "Round 3 was not started because protected downstream budget would be consumed."
+        ),
+        V2RoundThreeReasonCode.INSUFFICIENT_RESERVATION: (
+            "Round 3 was not started because its complete workload cannot be "
+            "conservatively reserved."
+        ),
+        V2RoundThreeReasonCode.CANCELLED: ("Research stopped because cancellation was requested."),
+        V2RoundThreeReasonCode.TERMINAL_FAILURE: (
+            "Round 3 was not started after a terminal provider failure."
+        ),
+        V2RoundThreeReasonCode.ROUND_LIMIT: ("Research stopped at the fixed three-round maximum."),
+    }
+    return explanations[reason]
 
 
 def evaluate_round_three_authorization(

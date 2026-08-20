@@ -68,6 +68,7 @@ def run_v2_acquisition_probe(
     wigolo_provider: ScraperProvider | None,
     firecrawl_provider: ScraperProvider | None = None,
     policy: V2AcquisitionPolicy | None = None,
+    excluded_cluster_ids: frozenset[UUID] = frozenset(),
     clock: Callable[[], datetime] | None = None,
 ) -> V2AcquisitionProbeRunResult:
     """Acquire ordered Scout candidates once, snapshot them, Probe them, and persist audit data."""
@@ -75,10 +76,14 @@ def run_v2_acquisition_probe(
     policy = policy or V2AcquisitionPolicy()
     completed_at = now()
     _require_aware(completed_at, "clock result")
+    round_number = _discovery_round(discovery_output)
+    artifact_key = (
+        V2_ACQUISITION_PROBE_ARTIFACT_KEY
+        if round_number == 1
+        else f"phase-7-round-{round_number}-acquisition-probe"
+    )
     try:
-        existing = read_v2_artifact(
-            db_path, discovery_output.run_id, V2_ACQUISITION_PROBE_ARTIFACT_KEY
-        )
+        existing = read_v2_artifact(db_path, discovery_output.run_id, artifact_key)
     except KeyError:
         existing = None
     if existing is not None:
@@ -104,6 +109,8 @@ def run_v2_acquisition_probe(
     acquired_urls: set[str] = set()
 
     for cluster in ordered_clusters[: policy.max_clusters]:
+        if cluster.cluster_id in excluded_cluster_ids:
+            continue
         direction = _cluster_direction(cluster, item_by_id, decisions)
         if direction is None:
             # Scout skip remains an audit-preserved discovery decision, not an acquisition.
@@ -164,8 +171,20 @@ def run_v2_acquisition_probe(
         survivors=tuple(survivors),
         completed_at=completed_at,
     )
-    insert_v2_artifact(db_path, V2_ACQUISITION_PROBE_ARTIFACT_KEY, output, completed_at)
+    insert_v2_artifact(db_path, artifact_key, output, completed_at)
     return V2AcquisitionProbeRunResult(output=output, resumed=False)
+
+
+def _discovery_round(output: V2DiscoveryScoutOutput) -> int:
+    rounds = {item.round_number for item in output.items}
+    if not rounds:
+        raise ValueError("v2 discovery output requires at least one item")
+    if len(rounds) != 1:
+        raise ValueError("v2 discovery output cannot mix research rounds")
+    round_number = rounds.pop()
+    if round_number < 1 or round_number > 3:
+        raise ValueError("v2 acquisition permits only research rounds 1 through 3")
+    return round_number
 
 
 def probe_snapshot(*, snapshot: SourceSnapshot, cluster_id: UUID) -> V2ProbeResult:

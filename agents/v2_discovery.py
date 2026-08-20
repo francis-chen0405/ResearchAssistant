@@ -29,6 +29,8 @@ from models import (
     ScoutItem,
     SourceCluster,
     StrictModel,
+    V2AdaptiveRoundPlan,
+    V2AdaptiveSearchQuery,
     V2DiscoveryScoutOutput,
     V2InitialPlannerOutput,
     V2RoundOneSearchQuery,
@@ -57,11 +59,11 @@ _DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)\s*", re.IGNO
 
 
 class V2DiscoveryResponse(StrictModel):
-    """One provider response retained beside its application-owned Round-1 query."""
+    """One provider response retained beside its application-owned round query."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    query: V2RoundOneSearchQuery
+    query: V2RoundOneSearchQuery | V2AdaptiveSearchQuery
     results: tuple[SearchResult, ...]
 
 
@@ -229,19 +231,21 @@ def cluster_discovery_items(items: Sequence[NormalizedDiscoveryItem]) -> tuple[S
 def run_v2_discovery_and_scout(
     *,
     db_path: str | Path,
-    planner_output: V2InitialPlannerOutput,
+    planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan,
     responses: Sequence[V2DiscoveryResponse],
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime] | None = None,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
 ) -> V2DiscoveryScoutRunResult:
-    """Persist or resume normalized Round-1 discovery and bounded batched Scout decisions."""
+    """Persist or resume one round of normalized discovery and batched Scout decisions."""
     now = clock or _utc_now
     completed_at = now()
     _require_aware(completed_at, "clock result")
     try:
-        existing = read_v2_artifact(str(db_path), planner_output.run_id, V2_SCOUT_ARTIFACT_KEY)
+        existing = read_v2_artifact(
+            str(db_path), planner_output.run_id, _artifact_key(planner_output)
+        )
     except KeyError:
         existing = None
     if existing is not None:
@@ -274,7 +278,7 @@ def run_v2_discovery_and_scout(
         scout_audits=audits,
         completed_at=completed_at,
     )
-    insert_v2_artifact(str(db_path), V2_SCOUT_ARTIFACT_KEY, output, completed_at)
+    insert_v2_artifact(str(db_path), _artifact_key(planner_output), output, completed_at)
     return V2DiscoveryScoutRunResult(output=output, resumed=False)
 
 
@@ -391,10 +395,26 @@ def _decision_value(item_id: UUID, decisions: dict[UUID, object]) -> str:
     return decision.value if decision is not None else "maybe"
 
 
-def _item_id(run_id: UUID, query: V2RoundOneSearchQuery, rank: int, url: str) -> UUID:
+def _item_id(
+    run_id: UUID,
+    query: V2RoundOneSearchQuery | V2AdaptiveSearchQuery,
+    rank: int,
+    url: str,
+) -> UUID:
     return uuid5(
         NAMESPACE_URL,
         f"researchassistant-v2-discovery::{run_id}::{query.query_id}::{rank}::{canonical_discovery_url(url)}",
+    )
+
+
+def _artifact_key(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) -> str:
+    round_number = (
+        1 if isinstance(planner_output, V2InitialPlannerOutput) else planner_output.round_number
+    )
+    return (
+        V2_SCOUT_ARTIFACT_KEY
+        if round_number == 1
+        else f"phase-7-round-{round_number}-discovery-scout"
     )
 
 

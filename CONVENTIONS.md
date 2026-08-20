@@ -131,6 +131,9 @@ SDK or dependency.
   - MVP-11 migration 9 adds append-only research-round, Governor-decision, and terminal
     research-result records; SQLite accepts only research rounds 1–3 and historical
     MVP-9/MVP-10 runs remain readable without migration during inspection
+  - V2 Phase 7 adds no migration: adaptive plans, conservative model reservations, search
+    outcomes, round execution summaries, merged survivors, Governor decisions, and stopping
+    decisions use strict models in the existing append-only `v2_artifacts` boundary
   - Local brief export opens the database through the validated read-only inspection path;
     it may export only a re-hashed released brief and never creates or mutates artifacts
 

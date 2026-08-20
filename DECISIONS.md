@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-08-20 - ResearchAssistant v2 Phase 7 Adaptive Search Continuation
+
+- Treat Luna Gap Analysis as a recommendation boundary. MiMo-v2.5-Pro proposes gap-linked
+  queries, while application policy exclusively owns direction/provider eligibility,
+  provider-round ceilings, budget authorization, persistence, and the three-round maximum.
+- Reject exact normalized query repeats and clearly trivial token rewrites deterministically;
+  do not add embedding cost or permit model output to widen hard limits.
+- Reuse the established v2 search, conservative clustering, batched Scout, acquisition,
+  deterministic Probe, and survivor merge sequence for every authorized adaptive round.
+- Run Luna again after Round 2. Permit Round 3 only through the deterministic Governor when
+  every authorization condition passes, including duplicate rate below 70% and protected
+  downstream budget. Limit Round 3 to three queries and one provider/direction lane each.
+- Persist round plans, reservations, provider outcomes, execution counts, merged survivors,
+  Governor authorization, and final stop reason in existing append-only v2 artifacts. Add no
+  migration, dependency, live verification call, Round 4, or automatic citation tree.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 5 Acquisition, Snapshots, Probe, and Survivors
 
 - Reuse safe Wigolo acquisition as the primary v2 route; Firecrawl remains optional and is

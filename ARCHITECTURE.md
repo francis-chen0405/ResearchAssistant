@@ -949,3 +949,28 @@ character offsets, uses opening/conclusion/evidence-density/citation fallback wi
 does not assess Claim Fit, Evidence Quality, factual truth, or Ledger eligibility. Only a
 successful snapshot with one or more Probe windows enters the survivor pool. Probe failure
 preserves its snapshot and audit record but yields no Gap-Analysis input.
+
+## ResearchAssistant v2 Phase 6 Luna Gap Analysis
+
+After Round 1, GPT-5.6 Luna High receives only bounded, persisted discovery, survivor,
+Probe, failure, duplicate-family, query-history, and budget context. It returns typed,
+priority-ordered material gaps, gap-linked search directions, discovered terminology, and
+an explicit continue-or-stop recommendation. The result is advisory: it cannot execute
+searches, raise application limits, create evidence, or enter the Claim Ledger.
+
+## ResearchAssistant v2 Phase 7 Adaptive Search Continuation
+
+Adaptive continuation begins only from persisted Gap Analysis. A Round-1 stop creates no
+Round-2 plan. When continuation is useful, the MiMo-v2.5-Pro Search Agent proposes only
+queries linked to persisted Gap IDs, using discovered terminology and complete prior-query
+history. Application policy validates enabled directions and providers, authoritative
+provider-round ceilings, budget reservations, and exact or clearly trivial query rewrites.
+
+Each authorized round reuses the existing v2 sequence: provider search, normalization and
+conservative clustering, batched Scout, acquisition, deterministic Probe, and survivor
+merge. Luna runs again after Round 2. A deterministic Governor—not the model—then permits a
+narrow Round 3 only when a material gap, continued Luna recommendation, new direction,
+eligible provider, materially new query, provider capacity, and protected downstream
+budget all remain. Duplicate saturation of at least 70% stops continuation. Round 3 has at
+most three queries and one query per provider/direction lane. No Round 4, recursive
+continuation, automatic citation tree, or disabled-direction search is possible.

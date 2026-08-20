@@ -174,6 +174,7 @@ V2_INITIAL_PLANNER_POLICY_IDENTITY = "researchassistant-v2-phase-3-initial-plann
 V2_DISCOVERY_POLICY_IDENTITY = "researchassistant-v2-phase-4-discovery-scout-v1"
 V2_ACQUISITION_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v1"
 V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
+V2_ADAPTIVE_SEARCH_POLICY_IDENTITY = "researchassistant-v2-phase-7-adaptive-search-v1"
 
 
 class ResearchDirection(StrEnum):
@@ -503,6 +504,112 @@ class V2InitialPlannerOutput(StrictModel):
         V2InitialPlannerPolicy().validate_searches(
             self.directions, self.discovery_providers, self.searches
         )
+        return self
+
+
+class V2ProviderSearchBudget(StrictModel):
+    """Application-owned cumulative provider ceiling visible to adaptive planning."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: DiscoveryProvider
+    attempted_calls: NonNegativeInt
+    maximum_calls: PositiveInt
+
+    @model_validator(mode="after")
+    def validate_usage(self) -> V2ProviderSearchBudget:
+        if self.attempted_calls > self.maximum_calls:
+            raise ValueError("provider attempted calls cannot exceed its hard ceiling")
+        return self
+
+    @property
+    def remaining_calls(self) -> int:
+        return self.maximum_calls - self.attempted_calls
+
+
+class V2AdaptiveSearchProposal(StrictModel):
+    """Model-owned semantic query proposal without IDs, timestamps, or authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    direction: ResearchDirection
+    provider: DiscoveryProvider
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
+    strategy: NonEmptyStr
+    query_text: NonEmptyStr
+
+    @field_validator("targeted_gap_ids")
+    @classmethod
+    def validate_unique_gap_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("adaptive query Gap IDs must be unique")
+        return value
+
+
+class V2AdaptiveSearchModelOutput(StrictModel):
+    """Strict Search-Agent response validated again by deterministic application policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    searches: tuple[V2AdaptiveSearchProposal, ...] = Field(min_length=1, max_length=12)
+
+
+class V2AdaptiveSearchQuery(StrictModel):
+    """Application-owned persisted Round-2 or Round-3 query."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    query_id: UUID
+    round_number: Literal[2, 3]
+    direction: ResearchDirection
+    provider: DiscoveryProvider
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
+    strategy: NonEmptyStr
+    query_text: NonEmptyStr
+    policy_identity: Literal["researchassistant-v2-phase-7-adaptive-search-v1"] = (
+        V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
+    )
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class V2AdaptiveRoundPlan(StrictModel):
+    """Complete immutable plan for one permitted adaptive round."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    round_number: Literal[2, 3]
+    directions: ResearchDirections
+    enabled_providers: tuple[DiscoveryProvider, ...]
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=6)
+    discovered_terms: tuple[NonEmptyStr, ...] = Field(max_length=40)
+    searches: tuple[V2AdaptiveSearchQuery, ...] = Field(min_length=1, max_length=12)
+    search_agent_prompt_version: NonEmptyStr
+    search_agent_model_name: Literal["mimo-v2.5-pro"] = "mimo-v2.5-pro"
+    policy_identity: Literal["researchassistant-v2-phase-7-adaptive-search-v1"] = (
+        V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
+    )
+    planned_at: datetime
+
+    _planned_at_is_aware = field_validator("planned_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_adaptive_round(self) -> V2AdaptiveRoundPlan:
+        if len(set(self.targeted_gap_ids)) != len(self.targeted_gap_ids):
+            raise ValueError("adaptive round targeted Gap IDs must be unique")
+        if len({query.query_id for query in self.searches}) != len(self.searches):
+            raise ValueError("adaptive round query IDs must be unique")
+        for query in self.searches:
+            if query.run_id != self.run_id or query.round_number != self.round_number:
+                raise ValueError("adaptive queries must match their round and run")
+            self.directions.require_permitted(query.direction)
+            if query.provider not in self.enabled_providers:
+                raise ValueError("adaptive query provider must be enabled")
+            if not set(query.targeted_gap_ids).issubset(set(self.targeted_gap_ids)):
+                raise ValueError("adaptive queries must target persisted round Gap IDs")
         return self
 
 
@@ -1008,6 +1115,47 @@ class V2MaterialGap(StrictModel):
     rationale: NonEmptyStr
 
 
+class V2SearchAgentInput(StrictModel):
+    """Narrow Search-Agent context; application policy owns every allowed lane."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    round_number: Literal[2, 3]
+    directions: ResearchDirections
+    eligible_providers: tuple[DiscoveryProvider, ...]
+    material_gaps: tuple[V2MaterialGap, ...] = Field(min_length=1, max_length=6)
+    search_directions: tuple[V2GapSearchDirection, ...] = Field(min_length=1, max_length=6)
+    discovered_terms: tuple[NonEmptyStr, ...] = Field(max_length=40)
+    previous_queries: tuple[NonEmptyStr, ...] = Field(max_length=48)
+    provider_budgets: tuple[V2ProviderSearchBudget, ...]
+    maximum_queries: PositiveInt
+    policy_identity: Literal["researchassistant-v2-phase-7-adaptive-search-v1"] = (
+        V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
+    )
+
+    @model_validator(mode="after")
+    def validate_search_context(self) -> V2SearchAgentInput:
+        if not self.eligible_providers:
+            raise ValueError("adaptive Search Agent requires an eligible provider")
+        if len(set(self.eligible_providers)) != len(self.eligible_providers):
+            raise ValueError("eligible adaptive providers must be unique")
+        budget_by_provider = {item.provider: item for item in self.provider_budgets}
+        if set(budget_by_provider) != set(self.eligible_providers):
+            raise ValueError("provider budgets must exactly cover eligible providers")
+        if any(item.remaining_calls < 1 for item in self.provider_budgets):
+            raise ValueError("eligible providers must have remaining search capacity")
+        gap_ids = {gap.gap_id for gap in self.material_gaps}
+        for gap in self.material_gaps:
+            self.directions.require_permitted(gap.direction)
+        for item in self.search_directions:
+            self.directions.require_permitted(item.direction)
+            if item.gap_id not in gap_ids:
+                raise ValueError("adaptive search directions must reference persisted gaps")
+        return self
+
+
 class V2GapAnalysisInput(StrictModel):
     """Strict, bounded Round-1 strategy input; acquired documents are intentionally absent."""
 
@@ -1016,14 +1164,14 @@ class V2GapAnalysisInput(StrictModel):
     run_id: UUID
     exact_claim: NonEmptyStr
     directions: ResearchDirections
-    completed_round: Literal[1] = 1
-    attempted_queries: tuple[V2GapAttemptedQuery, ...] = Field(max_length=24)
-    surviving_sources: tuple[V2GapSurvivingSourceMetadata, ...] = Field(max_length=25)
+    completed_round: Literal[1, 2] = 1
+    attempted_queries: tuple[V2GapAttemptedQuery, ...] = Field(max_length=48)
+    surviving_sources: tuple[V2GapSurvivingSourceMetadata, ...] = Field(max_length=75)
     probe_passages: tuple[V2GapProbePassage, ...] = Field(max_length=40)
-    source_families: tuple[V2GapSourceFamily, ...] = Field(max_length=25)
+    source_families: tuple[V2GapSourceFamily, ...] = Field(max_length=75)
     discovered_terms: tuple[NonEmptyStr, ...] = Field(max_length=40)
     duplicate_patterns: tuple[V2GapDuplicatePattern, ...] = Field(max_length=25)
-    acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=50)
+    acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=150)
     previous_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
     remaining_budget: V2GapBudgetState
     policy_identity: Literal["researchassistant-v2-phase-6-gap-analysis-v1"] = (

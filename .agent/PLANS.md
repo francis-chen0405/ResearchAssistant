@@ -4,6 +4,17 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
+## ResearchAssistant v2 — Phase 7: Adaptive Search Continuation
+
+The user explicitly authorized and completed v2 Phase 7 on 2026-08-20. It connects completed Luna Gap
+Analysis to gap-directed Round-2 and narrowly governed Round-3 search by reusing the v2
+discovery, Scout, acquisition, Probe, persistence, routing, and deterministic Governor
+infrastructure. It adds no Round 4, live verification call, dependency, or migration.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-07-adaptive-search-continuation.md`
+
 ## ResearchAssistant v2 — Phase 2: Multi-Model Routing
 
 The user explicitly authorized v2 Phase 2 on 2026-08-20. It adds only logical model

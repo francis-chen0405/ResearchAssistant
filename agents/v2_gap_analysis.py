@@ -1,4 +1,4 @@
-"""Bounded Luna Gap Analysis over Phase-5 Probe data; it never executes Round 2."""
+"""Bounded Luna Gap Analysis over persisted Probe data; it never executes searches."""
 
 from __future__ import annotations
 
@@ -212,8 +212,13 @@ def run_v2_gap_analysis(
     now = clock or _utc_now
     completed_at = _aware_now(now)
     path = str(Path(db_path).resolve())
+    artifact_key = (
+        V2_GAP_ANALYSIS_ARTIFACT_KEY
+        if gap_input.completed_round == 1
+        else f"phase-7-gap-analysis-after-round-{gap_input.completed_round}"
+    )
     try:
-        stored = read_v2_artifact(path, gap_input.run_id, V2_GAP_ANALYSIS_ARTIFACT_KEY)
+        stored = read_v2_artifact(path, gap_input.run_id, artifact_key)
     except KeyError:
         stored = None
     if stored is not None:
@@ -281,7 +286,7 @@ def run_v2_gap_analysis(
                 stop_adaptive_continuation=not result.continue_research,
                 completed_at=completed_at,
             )
-            insert_v2_artifact(path, V2_GAP_ANALYSIS_ARTIFACT_KEY, output, completed_at)
+            insert_v2_artifact(path, artifact_key, output, completed_at)
             return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
         except (LLMInvocationError, TypeError, ValueError) as exc:
             attempts.append(
@@ -300,7 +305,7 @@ def run_v2_gap_analysis(
         stop_adaptive_continuation=True,
         completed_at=completed_at,
     )
-    insert_v2_artifact(path, V2_GAP_ANALYSIS_ARTIFACT_KEY, output, completed_at)
+    insert_v2_artifact(path, artifact_key, output, completed_at)
     return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
 
 

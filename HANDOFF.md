@@ -1,5 +1,29 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 7: Adaptive Search Continuation
+
+Phase 7 is complete. `agents/v2_adaptive_search.py` continues only from a persisted Luna
+decision. Stop after Round 1 creates no adaptive plan or provider work. Continue invokes the
+configured MiMo-v2.5-Pro Search Agent with typed Gap IDs, discovered terminology, prior-query
+history, enabled directions, and application-computed provider capacity. Exact normalized
+repeats and clearly trivial token rewrites are rejected without embeddings.
+
+Every authorized round reuses the existing v2 provider search → normalize/cluster → batched
+Scout → safe acquisition → deterministic Probe → survivor merge flow. Round-specific plans,
+model reservations, search outcomes, discovery/acquisition outputs, execution summaries,
+merged survivors, and stop decisions are strict append-only v2 artifacts. Restart reads the
+completed artifact at each round boundary and does not repeat provider or model work.
+
+Luna runs again after Round 2. `research_governor.py` owns deterministic Round-3 authority:
+all material-gap, recommendation, new-direction, provider, novelty, ceiling, duplicate-rate,
+and protected-budget checks must pass. Round 3 is limited to three searches with one query per
+provider/direction lane. The hard maximum remains three rounds; there is no recursive Round 4,
+automatic citation tree, disabled-direction search, dependency, or database migration.
+
+Verification: 21 focused Phase-7 tests passed. The complete offline suite passed with 727
+tests and 2 expected opt-in skips; the only warning is the pre-existing Starlette TestClient
+deprecation. Ruff lint, Ruff format check, and `git diff --check` passed. No live call occurred.
+
 ## ResearchAssistant v2 — Phase 6: Luna Gap Analysis
 
 Phase 6 is complete. `agents/v2_gap_analysis.py` consumes the immutable Phase-3/4/5 typed
@@ -19,7 +43,8 @@ Gap Analysis uses the configured GPT-5.6 Luna High route and records the conserv
 output, token, and cost reservation for every attempt. It retries once at most. Two failures
 (or insufficient remaining budget) persist a `DEGRADED` output with no result and
 `stop_adaptive_continuation=True`; restart returns the exact persisted state without a new call.
-Round 2 and all later execution remain unimplemented and unauthorized.
+At the Phase-6 boundary, Round 2 and later execution were intentionally absent. Phase 7 now
+implements the explicitly authorized continuation described above.
 
 ## ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
 

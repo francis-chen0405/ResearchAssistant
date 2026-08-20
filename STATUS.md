@@ -1,5 +1,35 @@
 # Status
 
+## 2026-08-20 - ResearchAssistant v2 Phase 7 Adaptive Search Continuation
+
+Status: Complete and verified.
+
+- Added restart-safe adaptive continuation from persisted Luna Gap Analysis. A Round-1 stop
+  creates no Round-2 plan; a continue decision invokes the MiMo-v2.5-Pro Search Agent with
+  persisted Gap IDs, discovered terms, prior queries, enabled directions, and only eligible
+  providers.
+- Reused the existing v2 discovery, conservative clustering, batched Scout, safe acquisition,
+  deterministic Probe, and survivor merge flow for Round 2 and the optional narrow Round 3.
+  Luna runs again after Round 2.
+- Extended the deterministic Governor so Round 3 requires a material remaining gap, Luna's
+  continue recommendation, a genuinely new direction and query, provider eligibility and
+  capacity, duplicate rate below 70%, and reserved protected downstream budget. Round 3 is
+  capped at three queries and one provider/direction lane; Round 4 is impossible.
+- Added deterministic exact-normalization and trivial-token-rewrite rejection without
+  embeddings. Disabled directions/providers and exhausted provider ceilings create no work.
+- Persisted every adaptive plan and reservation, targeted Gap IDs, provider outcomes, round
+  execution counts, merged survivors, Governor decision, and final stopping decision in the
+  existing append-only v2 artifact store.
+- Added 21 offline Phase-7 tests covering one-, two-, and three-round paths, both adaptive
+  stops, Governor acceptance/rejection, provider eligibility/exhaustion, duplicate saturation,
+  novelty, restart, cancellation, provider degradation, direction isolation, and the hard
+  three-round maximum. No live provider call, dependency, or schema migration was added.
+
+Verification:
+
+- Complete Python suite: 727 passed, 2 expected opt-in skips, 1 existing Starlette warning.
+- Ruff lint, Ruff format check, and `git diff --check`: passed.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 3 Initial Planner and Broad Round 1
 
 Status: Complete and verified.
