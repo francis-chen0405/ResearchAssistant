@@ -2501,3 +2501,14 @@ Next expected phase:
 - MVP-10 is the active authorized phase. Migration 8 is additive and transactional; it stores source-family membership, trail entries, portfolio items, and final coverage.
 - The new `evidence_portfolio.py` owns deterministic family and coverage labels. The provider workflow retains MVP-9 quote assembly and adds a bounded targeted Planner call when fewer than three approved families are present.
 - Verification: 584 passed with 2 expected opt-in skips; Ruff lint and format passed. No live provider calls or dependency changes were made.
+
+# ResearchAssistant v2 — Phase 1
+
+- The new foundation is isolated in strict frozen v2 schemas and additive migration 11.
+  `ResearchDirections` permits support only, challenge only, or both, and each fresh
+  v2 artifact rejects a disabled direction deterministically.
+- `ResearchControls` remains the historical focused/balanced compatibility reader.
+  Do not alter historical controls or use the v2 identity tables to resume a pre-v2
+  provider contract.
+- Future v2 phases may build behavior on these typed artifacts only after explicit
+  authorization; this phase intentionally changed no production research flow or UI.

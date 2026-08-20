@@ -869,3 +869,12 @@ post-extraction gates determine which candidates reach the Analyst.
 | Pro/Con Balance — both sides fairly represented where evidence exists | Monitored |
 | Completion Time | < 2 min |
 | Human Reviewer Preference — blind comparison vs. human research | Measured |
+
+## ResearchAssistant v2 Phase 1 Foundation
+
+Fresh v2 artifacts use independent immutable `support_enabled` and
+`challenge_enabled` controls; at least one is required. V2 directions are distinct
+from historical focused/balanced controls, which remain readable without rewriting
+persisted records. A v2 run identity fixes `researchassistant-v2` with the Phase-1
+policy identity before append-only v2 artifacts can be recorded. This phase adds no
+new research control flow, provider behavior, or UI behavior.

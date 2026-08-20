@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from enum import StrEnum
+from hashlib import sha256
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -37,6 +38,14 @@ def missing_required_query_exclusions(exclusion_parameters: str) -> tuple[str, .
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+def _validate_aware_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("datetime values must be timezone-aware")
+    return value
 
 
 class ResearchDepth(StrEnum):
@@ -151,6 +160,317 @@ class ResearchControls(StrictModel):
 
 
 DEFAULT_RESEARCH_CONTROLS = ResearchControls()
+
+
+# v2 contracts are intentionally separate from the historical focused/balanced
+# controls above.  Existing persisted contracts must continue to parse exactly as
+# they were written.
+V2_PIPELINE_IDENTITY = "researchassistant-v2"
+V2_POLICY_IDENTITY = "researchassistant-v2-phase-1"
+
+
+class ResearchDirection(StrEnum):
+    SUPPORT = "support"
+    CHALLENGE = "challenge"
+
+
+class ResearchDirections(StrictModel):
+    """The complete, independent direction selection for a fresh v2 run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    support_enabled: bool = True
+    challenge_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_at_least_one_enabled(self) -> ResearchDirections:
+        if not self.support_enabled and not self.challenge_enabled:
+            raise ValueError("at least one research direction must be enabled")
+        return self
+
+    @property
+    def enabled_directions(self) -> tuple[ResearchDirection, ...]:
+        return tuple(
+            direction
+            for direction, enabled in (
+                (ResearchDirection.SUPPORT, self.support_enabled),
+                (ResearchDirection.CHALLENGE, self.challenge_enabled),
+            )
+            if enabled
+        )
+
+    def permits(self, direction: ResearchDirection) -> bool:
+        return direction in self.enabled_directions
+
+    def require_permitted(self, direction: ResearchDirection) -> None:
+        if not self.permits(direction):
+            raise ValueError(
+                f"disabled research direction cannot appear in a v2 artifact: {direction}"
+            )
+
+    def canonical_json(self) -> str:
+        return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+
+
+class V2PipelineIdentity(StrictModel):
+    """Version and policy identity persisted before a v2 artifact is admitted."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pipeline_identity: Literal["researchassistant-v2"] = V2_PIPELINE_IDENTITY
+    policy_identity: Literal["researchassistant-v2-phase-1"] = V2_POLICY_IDENTITY
+
+    def canonical_json(self) -> str:
+        return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+
+
+def canonical_v2_artifact_json(artifact: StrictModel) -> str:
+    """Return canonical bytes for a strict v2 artifact at a persistence boundary."""
+    return json.dumps(artifact.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+
+
+def v2_artifact_fingerprint(artifact: StrictModel) -> str:
+    """Return the SHA-256 identity of a canonical v2 artifact."""
+    return sha256(canonical_v2_artifact_json(artifact).encode("utf-8")).hexdigest()
+
+
+class SearchDirectionGapReference(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    reference_id: NonEmptyStr
+    direction: ResearchDirection
+    gap_description: NonEmptyStr
+
+
+class V2PlannedSearch(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    search_id: NonEmptyStr
+    direction: ResearchDirection
+    query_text: NonEmptyStr
+    gap_references: tuple[SearchDirectionGapReference, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_gap_directions(self) -> V2PlannedSearch:
+        if any(reference.direction is not self.direction for reference in self.gap_references):
+            raise ValueError("search gap references must match the search direction")
+        return self
+
+
+class V2InitialResearchPlan(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    searches: tuple[V2PlannedSearch, ...]
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_searches(self) -> V2InitialResearchPlan:
+        for search in self.searches:
+            self.directions.require_permitted(search.direction)
+        return self
+
+
+class V2SearchRoundPlan(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    round_number: PositiveInt
+    directions: ResearchDirections
+    searches: tuple[V2PlannedSearch, ...]
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_searches(self) -> V2SearchRoundPlan:
+        for search in self.searches:
+            self.directions.require_permitted(search.direction)
+        return self
+
+
+class NormalizedDiscoveryItem(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    item_id: NonEmptyStr
+    direction: ResearchDirection
+    source_url: NonEmptyStr
+    canonical_url: NonEmptyStr
+    title: NonEmptyStr | None = None
+    discovered_at: datetime
+
+    _discovered_at_is_aware = field_validator("discovered_at")(_validate_aware_datetime)
+
+
+class SourceCluster(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cluster_id: NonEmptyStr
+    canonical_url: NonEmptyStr
+    alternate_urls: tuple[NonEmptyStr, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_alternate_urls(self) -> SourceCluster:
+        if self.canonical_url in self.alternate_urls:
+            raise ValueError("alternate URLs must not repeat the canonical URL")
+        if len(set(self.alternate_urls)) != len(self.alternate_urls):
+            raise ValueError("alternate URLs must be unique")
+        return self
+
+
+class ScoutDecision(StrEnum):
+    KEEP = "keep"
+    REJECT = "reject"
+    DEFER = "defer"
+
+
+class ScoutItem(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    discovery_item: NormalizedDiscoveryItem
+    decision: ScoutDecision
+    rationale: NonEmptyStr
+
+
+class ScoutBatch(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    items: tuple[ScoutItem, ...]
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_items(self) -> ScoutBatch:
+        for item in self.items:
+            self.directions.require_permitted(item.discovery_item.direction)
+        return self
+
+
+class ProbePassage(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    passage_id: NonEmptyStr
+    direction: ResearchDirection
+    source_cluster_id: NonEmptyStr
+    text: NonEmptyStr
+    source_url: NonEmptyStr
+
+
+class ProbeResult(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    passage: ProbePassage
+    accepted: bool
+    reason: NonEmptyStr
+    completed_at: datetime
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_direction(self) -> ProbeResult:
+        self.directions.require_permitted(self.passage.direction)
+        return self
+
+
+class GapAnalysisResult(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    gaps: tuple[SearchDirectionGapReference, ...]
+    analyzed_at: datetime
+
+    _analyzed_at_is_aware = field_validator("analyzed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_gaps(self) -> GapAnalysisResult:
+        for gap in self.gaps:
+            self.directions.require_permitted(gap.direction)
+        return self
+
+
+class SurvivingSourceRecord(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    direction: ResearchDirection
+    source_cluster: SourceCluster
+    reason: NonEmptyStr
+    recorded_at: datetime
+
+    _recorded_at_is_aware = field_validator("recorded_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_direction(self) -> SurvivingSourceRecord:
+        self.directions.require_permitted(self.direction)
+        return self
+
+
+class SourceRecommendationResult(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    direction: ResearchDirection
+    recommended_source_cluster_id: NonEmptyStr | None
+    rationale: NonEmptyStr
+    recommended_at: datetime
+
+    _recommended_at_is_aware = field_validator("recommended_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_direction(self) -> SourceRecommendationResult:
+        self.directions.require_permitted(self.direction)
+        return self
+
+
+class DeepAnalysisState(StrEnum):
+    NOT_STARTED = "not_started"
+    READY = "ready"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    BLOCKED = "blocked"
+
+
+class DeepAnalysisStatus(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    directions: ResearchDirections
+    direction: ResearchDirection
+    state: DeepAnalysisState
+    updated_at: datetime
+
+    _updated_at_is_aware = field_validator("updated_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_enabled_direction(self) -> DeepAnalysisStatus:
+        self.directions.require_permitted(self.direction)
+        return self
+
+
+class V2PersistedArtifact(StrictModel):
+    """Canonical persistence envelope for a typed v2 artifact."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    artifact_key: NonEmptyStr
+    artifact_type: NonEmptyStr
+    payload_json: NonEmptyStr
+    payload_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    created_at: datetime
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
 
 
 class RunStatus(StrEnum):
@@ -289,14 +609,6 @@ class ValidationErrorCode(StrEnum):
     INVALID_TEMPLATE = "invalid_template"
     ALTERED_STATEMENT = "altered_statement"
     SCHEMA_ERROR = "schema_error"
-
-
-def _validate_aware_datetime(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("datetime values must be timezone-aware")
-    return value
 
 
 def _validate_offsets(

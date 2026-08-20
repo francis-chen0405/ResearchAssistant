@@ -362,7 +362,7 @@ def test_snapshot_persistence_reconstructs_media_type_provenance(tmp_path: Path)
     assert historical.media_type_provenance == MediaTypeProvenance()
     assert historical.original_url is None
     assert historical.acquisition_version is None
-    assert CURRENT_SCHEMA_VERSION == 10
+    assert CURRENT_SCHEMA_VERSION == 11
     assert {
         "original_url",
         "canonical_url",

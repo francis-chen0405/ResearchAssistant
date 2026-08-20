@@ -2175,3 +2175,16 @@ Next phase:
 - Added strict source-family, source-trail, portfolio, coverage, and targeted-planning models; migration 8 adds append-only tables without rewriting snapshots or Ledger rows.
 - Provider orchestration now evaluates approved family coverage after round one and may issue one typed targeted Planner request before synthesis. The Evidence Browser exposes portfolio coverage and filtered trail outcomes.
 - Verification: 584 passed, 2 expected opt-in skips; `ruff check .` and `ruff format --check .` passed. No live provider calls were made.
+
+# ResearchAssistant v2 — Phase 1: Contracts, Direction Controls, and Compatibility
+
+Status: Complete and verified.
+
+- Added strict frozen v2 direction, planning, discovery, Scout, Probe, gap, source,
+  recommendation, and deep-analysis status schemas.
+- Added migration 11 with immutable `v2_run_identities` and `v2_artifacts` tables.
+  Historical focused/balanced controls and schema-10 inspection remain readable.
+- No production pipeline, provider routing, or web controls were changed. Phase 2+
+  work remains deferred.
+- Verification: 673 passed, 2 skipped, 1 existing dependency warning; Ruff, formatting,
+  and `git diff --check` passed. No live provider calls were made.

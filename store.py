@@ -22,6 +22,8 @@ from models import (
     BRIEF_TITLE,
     CLAIM_LABEL,
     RELEASE_SECTION_HEADINGS,
+    V2_PIPELINE_IDENTITY,
+    V2_POLICY_IDENTITY,
     AmbiguityRecord,
     CandidateQuoteBlock,
     ClaimDefinition,
@@ -55,8 +57,12 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2PersistedArtifact,
+    V2PipelineIdentity,
     ValidationError,
     ValidationResult,
+    canonical_v2_artifact_json,
+    v2_artifact_fingerprint,
 )
 from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 
@@ -64,13 +70,14 @@ from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 10
+CURRENT_SCHEMA_VERSION = 11
 RAW_CLAIM_SCHEMA_VERSION = 5
 MVP68_SCHEMA_VERSION = 6
 MVP69_SCHEMA_VERSION = 7
 MVP10_SCHEMA_VERSION = 8
 MVP11_SCHEMA_VERSION = 9
 MLP4_SCHEMA_VERSION = 10
+V2_PHASE1_SCHEMA_VERSION = 11
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -98,6 +105,7 @@ MIGRATION_DESCRIPTIONS = {
     8: "mvp-10 evidence portfolio and trail",
     9: "mvp-11 bounded research governor records",
     10: "mlp-4 provider-specific discovery query provenance",
+    11: "researchassistant-v2 phase-1 artifact foundation",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -153,6 +161,13 @@ _MVP11_TRIGGERS = {
     "research_governor_decisions_immutable_delete",
     "research_terminal_results_immutable_update",
     "research_terminal_results_immutable_delete",
+}
+_V2_PHASE1_TABLES = {"v2_run_identities", "v2_artifacts"}
+_V2_PHASE1_TRIGGERS = {
+    "v2_run_identities_immutable_update",
+    "v2_run_identities_immutable_delete",
+    "v2_artifacts_immutable_update",
+    "v2_artifacts_immutable_delete",
 }
 _REQUIRED_INDEXES = {
     "provisional_extractions_run_snapshot_stance",
@@ -306,6 +321,9 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
         required_tables = _REQUIRED_TABLES - _MVP11_TABLES
     else:
         required_triggers = _REQUIRED_TRIGGERS | _MVP11_TRIGGERS
+    if latest >= V2_PHASE1_SCHEMA_VERSION:
+        required_tables = required_tables | _V2_PHASE1_TABLES
+        required_triggers = required_triggers | _V2_PHASE1_TRIGGERS
     missing = sorted(
         (required_tables - tables) | (required_triggers - triggers) | (_REQUIRED_INDEXES - indexes)
     )
@@ -910,6 +928,7 @@ def init_db(db_path: str) -> None:
         _apply_mvp10_evidence_portfolio_migration(conn)
         _apply_mvp11_research_governor_migration(conn)
         _apply_mlp4_discovery_query_migration(conn)
+        _apply_v2_phase1_artifact_migration(conn)
     finally:
         conn.close()
 
@@ -1359,6 +1378,85 @@ def _apply_mlp4_discovery_query_migration(conn: sqlite3.Connection) -> None:
         raise
 
 
+def _verify_v2_phase1_artifact_schema(conn: sqlite3.Connection) -> None:
+    """Verify the additive, immutable v2 artifact persistence boundary."""
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_V2_PHASE1_TABLES - tables)
+    if missing:
+        raise sqlite3.DatabaseError(f"migration 11 v2 tables are missing: {', '.join(missing)}")
+    triggers = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+    }
+    missing_triggers = sorted(_V2_PHASE1_TRIGGERS - triggers)
+    if missing_triggers:
+        raise sqlite3.DatabaseError(
+            f"migration 11 v2 immutable triggers are missing: {', '.join(missing_triggers)}"
+        )
+
+
+def _apply_v2_phase1_artifact_migration(conn: sqlite3.Connection) -> None:
+    """Add v2 identities and append-only artifacts without touching historical rows."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (V2_PHASE1_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[V2_PHASE1_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 11 description is inconsistent")
+        _verify_v2_phase1_artifact_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS v2_run_identities (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                pipeline_identity TEXT NOT NULL,
+                policy_identity TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS v2_artifacts (
+                run_id TEXT NOT NULL REFERENCES v2_run_identities(run_id),
+                artifact_key TEXT NOT NULL,
+                artifact_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, artifact_key)
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS v2_run_identities_immutable_update
+                BEFORE UPDATE ON v2_run_identities
+                BEGIN SELECT RAISE(ABORT, 'v2 run identities are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_run_identities_immutable_delete
+                BEFORE DELETE ON v2_run_identities
+                BEGIN SELECT RAISE(ABORT, 'v2 run identities are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_artifacts_immutable_update
+                BEFORE UPDATE ON v2_artifacts
+                BEGIN SELECT RAISE(ABORT, 'v2 artifacts are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_artifacts_immutable_delete
+                BEFORE DELETE ON v2_artifacts
+                BEGIN SELECT RAISE(ABORT, 'v2 artifacts are immutable'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_v2_phase1_artifact_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                V2_PHASE1_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[V2_PHASE1_SCHEMA_VERSION],
+                "2026-08-20T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
 # ---------------------------------------------------------------------------
 # Serialisation helpers
 # ---------------------------------------------------------------------------
@@ -1367,6 +1465,12 @@ def _apply_mlp4_discovery_query_migration(conn: sqlite3.Connection) -> None:
 def _dt_to_iso(dt: datetime) -> str:
     """Convert a timezone-aware datetime to an ISO-8601 string."""
     return dt.astimezone(UTC).isoformat()
+
+
+def _require_aware_datetime(value: datetime, field_name: str) -> None:
+    """Reject naive timestamps at a store boundary before SQLite serialization."""
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
 
 
 def _iso_to_dt(value: str) -> datetime:
@@ -2930,6 +3034,153 @@ def _row_to_stage_artifact(row: sqlite3.Row) -> PersistedStageArtifact:
         artifact_key=row["artifact_key"],
         artifact_type=row["artifact_type"],
         payload_json=row["payload_json"],
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
+def insert_v2_pipeline_identity(
+    db_path: str,
+    run_id: UUID,
+    identity: V2PipelineIdentity,
+    created_at: datetime,
+) -> None:
+    """Explicitly identify a new run as v2; historical provider contracts cannot be relabeled."""
+    _require_aware_datetime(created_at, "created_at")
+    conn = _connect(db_path)
+    try:
+        contract = conn.execute(
+            "SELECT policy_identity FROM provider_run_contracts WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if contract is not None and contract["policy_identity"] != V2_POLICY_IDENTITY:
+            raise ValueError("a pre-v2 provider run cannot be resumed as a v2 run")
+        existing = conn.execute(
+            "SELECT * FROM v2_run_identities WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["pipeline_identity"] != identity.pipeline_identity
+                or existing["policy_identity"] != identity.policy_identity
+            ):
+                raise sqlite3.IntegrityError("v2 run identity already exists with different data")
+            return
+        conn.execute(
+            """INSERT INTO v2_run_identities
+               (run_id, pipeline_identity, policy_identity, created_at) VALUES (?, ?, ?, ?)""",
+            (
+                str(run_id),
+                identity.pipeline_identity,
+                identity.policy_identity,
+                _dt_to_iso(created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def insert_v2_artifact(
+    db_path: str,
+    artifact_key: str,
+    artifact: StrictModel,
+    created_at: datetime,
+) -> V2PersistedArtifact:
+    """Persist a canonical v2 artifact once, refusing a missing v2 identity or drift."""
+    if not artifact_key:
+        raise ValueError("artifact_key must not be empty")
+    _require_aware_datetime(created_at, "created_at")
+    run_id = getattr(artifact, "run_id", None)
+    if not isinstance(run_id, UUID):
+        raise ValueError("v2 artifacts must carry a UUID run_id")
+    artifact_type = type(artifact).__name__
+    if not (
+        artifact_type.startswith("V2")
+        or artifact_type
+        in {
+            "ScoutBatch",
+            "ProbeResult",
+            "GapAnalysisResult",
+            "SurvivingSourceRecord",
+            "SourceRecommendationResult",
+            "DeepAnalysisStatus",
+        }
+    ):
+        raise ValueError("only v2 artifact schemas may be persisted through the v2 boundary")
+    payload_json = canonical_v2_artifact_json(artifact)
+    payload_sha256 = v2_artifact_fingerprint(artifact)
+    persisted = V2PersistedArtifact(
+        run_id=run_id,
+        artifact_key=artifact_key,
+        artifact_type=artifact_type,
+        payload_json=payload_json,
+        payload_sha256=payload_sha256,
+        created_at=created_at,
+    )
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity, policy_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if identity is None:
+            raise ValueError("v2 artifacts require an explicit v2 run identity")
+        if (
+            identity["pipeline_identity"] != V2_PIPELINE_IDENTITY
+            or identity["policy_identity"] != V2_POLICY_IDENTITY
+        ):
+            raise ValueError("v2 run identity is incompatible with this pipeline")
+        existing = conn.execute(
+            "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+            (str(run_id), artifact_key),
+        ).fetchone()
+        if existing is not None:
+            restored = _row_to_v2_artifact(existing)
+            if restored != persisted:
+                raise sqlite3.IntegrityError(
+                    f"v2 artifact {artifact_key} already exists with different data"
+                )
+            return restored
+        conn.execute(
+            """INSERT INTO v2_artifacts
+               (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                str(persisted.run_id),
+                persisted.artifact_key,
+                persisted.artifact_type,
+                persisted.payload_json,
+                persisted.payload_sha256,
+                _dt_to_iso(persisted.created_at),
+            ),
+        )
+        conn.commit()
+        return persisted
+    finally:
+        conn.close()
+
+
+def read_v2_artifact(
+    db_path: DatabaseReader,
+    run_id: UUID,
+    artifact_key: str,
+) -> V2PersistedArtifact:
+    """Read a persisted v2 envelope without converting it into a mutable handoff."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+            (str(run_id), artifact_key),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 artifact {artifact_key} for run {run_id} not found")
+        return _row_to_v2_artifact(row)
+
+
+def _row_to_v2_artifact(row: sqlite3.Row) -> V2PersistedArtifact:
+    return V2PersistedArtifact(
+        run_id=UUID(row["run_id"]),
+        artifact_key=row["artifact_key"],
+        artifact_type=row["artifact_type"],
+        payload_json=row["payload_json"],
+        payload_sha256=row["payload_sha256"],
         created_at=_iso_to_dt(row["created_at"]),
     )
 

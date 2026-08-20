@@ -712,3 +712,15 @@
 - Validate final releases by exact Ledger claim ID, Reviewer approval ID, statement text, placement, stance, entailment, section compatibility, template compatibility, and one-use-per-Ledger-claim rules.
 - Compute the rendered brief SHA-256 hash only after final validation succeeds; invalid validation results carry no rendered hash.
 - Keep Phase 5 deterministic and fixture-oriented. No fixture pipeline, orchestration, CLI, live retrieval, scraping, LLM/API calls, provider integrations, dependencies, or Phase 6 behavior was added.
+
+## 2026-08-20 - ResearchAssistant v2 Phase 1
+
+- Preserve `ResearchControls.research_mode` for historical focused/balanced contracts;
+  do not migrate or mutate those immutable controls.
+- Give fresh v2 artifacts a separate support/challenge direction model, strict typed
+  schemas, canonical serialization/fingerprinting, and explicit v2 pipeline/policy
+  identity.
+- Use additive migration 11 for append-only v2 identities and artifacts. A provider
+  run with a pre-v2 policy cannot be relabeled or resumed as v2.
+- Defer all new v2 research execution, providers, analysis, recommendations, and UI
+  work to later authorized phases.
