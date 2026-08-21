@@ -162,6 +162,7 @@ def test_credentials_are_saved_and_never_returned() -> None:
     client, _, saved = _client()
     payload = {
         "mimo_api_key": "mimo-super-secret",
+        "luna_api_key": "openai-super-secret",
         "exa_api_key": "exa-super-secret",
         "openalex_api_key": "openalex-super-secret",
         "firecrawl_api_key": "firecrawl-super-secret",
@@ -174,6 +175,7 @@ def test_credentials_are_saved_and_never_returned() -> None:
     assert "secret" not in response.text
     assert saved[0].environment_items() == (
         ("MIMO_API_KEY", "mimo-super-secret"),
+        ("LUNA_API_KEY", "openai-super-secret"),
         ("EXA_API_KEY", "exa-super-secret"),
         ("OPENALEX_API_KEY", "openalex-super-secret"),
         ("FIRECRAWL_API_KEY", "firecrawl-super-secret"),
