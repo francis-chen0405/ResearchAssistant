@@ -1,5 +1,25 @@
 # Status
 
+## 2026-08-21 - ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
+
+Status: Complete and verified.
+
+- Added strict MiMo-v2.5-Pro synthesis input containing only exact claim, enabled directions,
+  approved Ledger projections, qualification/placement metadata, typed unresolved gaps,
+  deterministic stopping disclosure, and non-evidentiary recommendation state. Raw source
+  text and unreviewed claims cannot reach the v2 Synthesizer.
+- Added deterministic v2 final-output validation and rendering. It rejects disabled-direction
+  leakage, unknown source/recommendation IDs, Ledger/provenance mismatch, malformed source
+  status, and any release-integrity failure; invalid outputs have no rendered hash.
+- Added result source categories, scope disclosure, remaining gaps, stopping reasons,
+  append-only v2 final-output persistence, read-only API, conditional Next.js rendering, and
+  v2-aware local export while preserving historical result rendering.
+- Verification: all 762 Python tests passed in three complete non-overlapping batches with
+  2 expected opt-in skips; focused Phase-11/API/export coverage is included (14 passed).
+  `ruff check .`, `ruff format --check .`, and `git diff --check` passed. Frontend lint/build
+  could not start because pnpm attempted a registry install and the registry was unavailable;
+  no dependency directory was removed or changed. No live calls.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
 
 Status: Complete and verified.

@@ -33,8 +33,10 @@ from models import (
     Stance,
     StatementDraft,
     StrictModel,
+    SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2SynthesizerInput,
     _derive_ledger_score,
     _expected_placement,
     _is_ledger_eligible,
@@ -589,18 +591,42 @@ def _assemble_synthesis(
     created_at: datetime,
 ) -> SynthesisOutput:
     artifact = request.input_artifact
-    if not isinstance(artifact, SynthesizerLLMInput):
-        raise TypeError("direct MiMo synthesis requires SynthesizerLLMInput")
-    records = {record.ledger_claim_id: record for record in artifact.ledger_records}
+    if isinstance(artifact, SynthesizerLLMInput):
+        records = {record.ledger_claim_id: record for record in artifact.ledger_records}
+        item_for_claim = _item_from_ledger
+    elif isinstance(artifact, V2SynthesizerInput):
+        records = {record.ledger_claim_id: record for record in artifact.approved_ledger_items}
+
+        def item_for_claim(claim_id: UUID) -> SynthesisItem:
+            record = records[claim_id]
+            return SynthesisItem(
+                connective_template_id=(
+                    "partial_entailment"
+                    if record.entailment.value == "Partial"
+                    else "weak_entailment"
+                    if record.entailment.value == "Weak"
+                    else "scope_qualification"
+                    if record.placement.value == "qualified_only"
+                    else "supporting_evidence"
+                    if record.stance is Stance.SUPPORTING
+                    else "opposing_evidence"
+                ),
+                ledger_claim_id=record.ledger_claim_id,
+                reviewer_approval_id=record.reviewer_approval_id,
+                stance=record.stance,
+                placement=record.placement,
+                entailment=record.entailment,
+                approved_factual_statement=record.approved_factual_statement,
+            )
+    else:
+        raise TypeError("direct MiMo synthesis requires a supported typed synthesis input")
     selected = [claim_id for section in response.sections for claim_id in section.ledger_claim_ids]
     if len(selected) != len(set(selected)) or set(selected) != set(records):
         raise ValueError("synthesis must reference every input Ledger ID exactly once")
     sections = tuple(
         SynthesisSection(
             section_type=section.section_type,
-            items=tuple(
-                _item_from_ledger(records[claim_id]) for claim_id in section.ledger_claim_ids
-            ),
+            items=tuple(item_for_claim(claim_id) for claim_id in section.ledger_claim_ids),
         )
         for section in response.sections
     )

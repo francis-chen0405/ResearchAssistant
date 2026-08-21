@@ -1,5 +1,25 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
+
+Status: Complete and verified.
+
+- `agents/v2_final_output.py` builds the narrow v2 Synthesizer input, invokes only the
+  MiMo-v2.5-Pro route, derives all source/gap/stopping disclosures from persisted typed
+  artifacts, persists `phase-11-final-research-output`, and fails closed through a complete
+  output hash.
+- `models.py` contains presentation-safe v2 source/gap/stopping/release models. Facts remain
+  in `SynthesisOutput` as exact Ledger strings; recommendation/source metadata is not a new
+  factual-evidence path.
+- The local API exposes the persisted v2 result through a read-only endpoint; `web/` fetches
+  it conditionally and leaves historical brief rendering unchanged. `brief_export.py` exports
+  v2 output only after rehashing the complete validated rendering.
+- Verification passed: 762 Python tests in three complete non-overlapping batches with 2
+  expected opt-in skips; the 14 Phase-11 tests cover all direction configurations, source
+  states, gaps/stops, disabled leakage, Ledger mismatch, export, API schema, and restart.
+  Ruff lint/format and diff checks passed. Frontend lint/build could not start because pnpm
+  required an unavailable registry install. No live provider call occurred.
+
 ## ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
 
 Status: Complete and verified.

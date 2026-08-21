@@ -8,6 +8,7 @@ import {
   ResearchTrailItem,
   RunSnapshot,
   ServiceDiagnostic,
+  V2FinalResearchOutput,
   researchApi,
 } from "@/lib/api";
 
@@ -304,6 +305,7 @@ function StanceCard({ title, progress, accent }: { title: string; progress: RunS
 
 function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => void }) {
   const released = snapshot.classification === "released";
+  const [v2Result, setV2Result] = useState<V2FinalResearchOutput | null>(null);
   const [trailOpen, setTrailOpen] = useState(false);
   const [trail, setTrail] = useState<ResearchTrailItem[] | null>(null);
   const [trailError, setTrailError] = useState<string | null>(null);
@@ -317,11 +319,25 @@ function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => v
       setTrailError(error instanceof Error ? error.message : "The research trail could not be opened.");
     }
   };
+  useEffect(() => {
+    let disposed = false;
+    void researchApi.v2Result(snapshot.run_id, snapshot.db_path)
+      .then((result) => { if (!disposed) setV2Result(result); })
+      .catch(() => { if (!disposed) setV2Result(null); });
+    return () => { disposed = true; };
+  }, [snapshot.db_path, snapshot.run_id]);
   return <motion.section className={`result-view ${released ? "released" : "unreleased"}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <div className="result-masthead"><div><p className="eyebrow">{released ? "Validated release" : readableStage(snapshot.classification)}</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2></div><div className="release-stamp"><span>{released ? "Released" : "Not released"}</span><small>{snapshot.exit_code === null ? "—" : `Exit ${snapshot.exit_code}`}</small></div></div>
-    <div className="report-layout"><article className="brief-paper">{snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{snapshot.message}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{snapshot.message}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
+    <div className="report-layout"><article className="brief-paper">{v2Result ? <V2ResultPaper result={v2Result} /> : snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{snapshot.message}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{snapshot.message}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
     <AnimatePresence>{trailOpen && <ResearchTrailDrawer items={trail} error={trailError} onClose={() => setTrailOpen(false)} />}</AnimatePresence>
   </motion.section>;
+}
+
+function V2ResultPaper({ result }: { result: V2FinalResearchOutput }) {
+  const direction = result.directions.support_enabled && result.directions.challenge_enabled ? "Supporting and challenging evidence" : result.directions.support_enabled ? "Supporting evidence only" : "Challenging evidence only";
+  const heading = (section: "supporting" | "opposing" | "limitations") => section === "supporting" ? "Supporting evidence" : section === "opposing" ? "Challenging evidence" : "Evidence qualifications";
+  const sources = (items: V2FinalResearchOutput["all_surviving_sources"]) => <ul>{items.map((source) => <li key={source.source_id}><a href={source.source_url} target="_blank" rel="noreferrer">{source.title || source.source_url}</a><small> · {source.status.replaceAll("_", " ")} · round {source.discovery_round}</small></li>)}</ul>;
+  return <><p className="eyebrow">V2 validated research result</p><h1>Research Brief</h1><p>Claim under review: {result.exact_claim}</p><p><strong>Research direction:</strong> {direction}. This result does not imply that disabled directions were examined.</p>{result.synthesis.sections.map((section) => <section key={section.section_type}><h2>{heading(section.section_type)}</h2>{section.items.map((item, index) => <p key={index}>{item.approved_factual_statement}</p>)}</section>)}<section><h2>Recommended Sources</h2>{sources(result.recommended_sources)}</section><section><h2>All Surviving Sources</h2>{sources(result.all_surviving_sources)}</section><section><h2>Remaining Gaps</h2>{result.unresolved_material_gaps.length ? <ul>{result.unresolved_material_gaps.map((gap) => <li key={gap.gap_id}>{gap.direction}: {gap.missing_evidence}</li>)}</ul> : <p>No unresolved material gaps were recorded.</p>}</section><section><h2>Research Stopping Reason</h2><p>{result.stopping.reason.replaceAll("_", " ")}: {result.stopping.explanation}</p></section></>;
 }
 
 function ResearchTrailDrawer({ items, error, onClose }: { items: ResearchTrailItem[] | null; error: string | null; onClose: () => void }) {

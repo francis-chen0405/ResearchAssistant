@@ -19,6 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY
 from credential_store import (
     KeychainUnavailableError,
     ProviderCredentials,
@@ -38,7 +39,14 @@ from frontend.live_service import (
 )
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
-from models import DiscoveryProvider, ResearchControls, ResearchMode, StrictModel
+from models import (
+    DiscoveryProvider,
+    ResearchControls,
+    ResearchMode,
+    StrictModel,
+    V2FinalResearchOutput,
+)
+from store import open_read_only_store, read_v2_artifact
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -366,6 +374,22 @@ def create_app(
             return runtime.controller.research_trail(db_path, run_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Research run not found.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+
+    @app.get("/api/research/{run_id}/v2-result", response_model=V2FinalResearchOutput)
+    def v2_result(
+        run_id: UUID,
+        db_path: str = Query(min_length=1),
+    ) -> V2FinalResearchOutput:
+        try:
+            with open_read_only_store(db_path) as store:
+                artifact = read_v2_artifact(store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
+            if artifact.artifact_type != V2FinalResearchOutput.__name__:
+                raise ValueError("v2 final-output artifact has an unexpected type")
+            return V2FinalResearchOutput.model_validate_json(artifact.payload_json)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="V2 research result not found.") from exc
         except Exception as exc:
             raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
 

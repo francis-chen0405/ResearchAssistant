@@ -1,5 +1,16 @@
 # Decisions
 
+## 2026-08-21 - ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
+
+- Use MiMo-v2.5-Pro only for bounded ordering of strict typed v2 Ledger items. Exclude raw
+  source text and every unreviewed factual artifact from its input.
+- Keep canonical factual statements in the existing `SynthesisOutput`/Ledger path and add a
+  v2 release envelope that validates direction isolation, admission provenance, source IDs,
+  recommendation IDs, gaps, stopping disclosure, and the complete rendered-output hash.
+- Persist v2 final output through the existing immutable v2 artifact boundary. Extend local
+  read-only API, conditional product rendering, and export without changing historical result
+  shapes or adding a dependency/migration.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
 
 - Reuse the existing narrow Reviewer contract, MiMo-v2.5-Pro Reviewer route,

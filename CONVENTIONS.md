@@ -234,3 +234,13 @@ The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may 
 - Reserve twelve physical calls per queued source and two for mandatory Synthesis, plus
   conservative route-specific tokens and cost. Persist an explicit budget reason for every
   survivor outside the queue.
+
+## ResearchAssistant v2 Phase 11 Final Output Conventions
+
+- V2 synthesis receives a strict typed Ledger projection, never raw snapshots, quotes, or
+  unreviewed source text. Model output may select/arrange approved IDs only.
+- Direction, recommended-source IDs, all-survivor status, unresolved gaps, stopping reason,
+  and evidence items are independently revalidated before release. A failure has no output
+  hash and is neither rendered nor exported.
+- The v2 final output is an append-only generic v2 artifact; no migration changes historical
+  synthesis, validation, or brief records. API and export access it through read-only SQLite.

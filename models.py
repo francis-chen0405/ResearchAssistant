@@ -2660,6 +2660,70 @@ class V2ReviewerLedgerBatchResult(StrictModel):
         return self
 
 
+class V2SynthesizerLedgerItem(StrictModel):
+    """The only evidence projection available to the v2 Synthesizer."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    direction: ResearchDirection
+    ledger_claim_id: UUID
+    reviewer_approval_id: ReviewerApprovalId
+    stance: Stance
+    placement: Placement
+    entailment: Entailment
+    approved_factual_statement: NonEmptyStr
+
+
+class V2SynthesizerRecommendationMetadata(StrictModel):
+    """Non-evidentiary source-selection state retained for the v2 synthesizer."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    direction: ResearchDirection
+    recommended: bool
+    queued_for_deep_analysis: bool
+    budget_prevented_reason: V2DeepAnalysisBudgetReason | None = None
+
+
+class V2SynthesizerInput(StrictModel):
+    """Bounded v2 synthesis input with no raw-source text or unreviewed claims."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    directions: ResearchDirections
+    approved_ledger_items: tuple[V2SynthesizerLedgerItem, ...] = Field(min_length=1)
+    qualifications: tuple[V2SynthesizerLedgerItem, ...]
+    unresolved_material_gaps: tuple[V2SourceSelectionGap, ...]
+    stopping_reason: NonEmptyStr
+    recommendation_metadata: tuple[V2SynthesizerRecommendationMetadata, ...]
+
+    @model_validator(mode="after")
+    def validate_v2_synthesis_input(self) -> V2SynthesizerInput:
+        item_ids = tuple(item.ledger_claim_id for item in self.approved_ledger_items)
+        if len(item_ids) != len(set(item_ids)):
+            raise ValueError("v2 synthesis Ledger claim IDs must be unique")
+        if any(not self.directions.permits(item.direction) for item in self.approved_ledger_items):
+            raise ValueError("v2 synthesis cannot include disabled-direction evidence")
+        if any(
+            item.placement is not Placement.QUALIFIED_ONLY for item in self.qualifications
+        ) or not set(self.qualifications).issubset(set(self.approved_ledger_items)):
+            raise ValueError("v2 synthesis qualifications must be approved qualified-only evidence")
+        source_ids = tuple(item.source_id for item in self.recommendation_metadata)
+        if len(source_ids) != len(set(source_ids)):
+            raise ValueError("v2 synthesis recommendation metadata must have unique source IDs")
+        if any(
+            not self.directions.permits(item.direction) for item in self.recommendation_metadata
+        ):
+            raise ValueError("v2 synthesis cannot include disabled-direction recommendations")
+        if any(not self.directions.permits(gap.direction) for gap in self.unresolved_material_gaps):
+            raise ValueError("v2 synthesis cannot include disabled-direction gaps")
+        return self
+
+
 class StatementReviewResult(StrictModel):
     run_id: UUID
     statement_draft_id: UUID
@@ -3071,6 +3135,157 @@ class SynthesisOutput(StrictModel):
     sections: tuple[SynthesisSection, ...]
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class V2ResultSourceStatus(StrEnum):
+    RECOMMENDED_ANALYZED = "recommended_analyzed"
+    RECOMMENDED_NO_LEDGER_EVIDENCE = "recommended_no_ledger_evidence"
+    SURVIVING_ANALYZED = "surviving_analyzed"
+    SURVIVING_NOT_DEEPLY_ANALYZED = "surviving_not_deeply_analyzed"
+    BUDGET_PREVENTED_ANALYSIS = "budget_prevented_analysis"
+
+
+class V2ResultSource(StrictModel):
+    """Presentation-safe source metadata; it contains no source-derived factual prose."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    direction: ResearchDirection
+    source_url: NonEmptyStr
+    title: NonEmptyStr | None = None
+    source_type: NonEmptyStr | None = None
+    publication_date: NonEmptyStr | None = None
+    discovery_providers: tuple[DiscoveryProvider, ...]
+    discovery_round: Annotated[int, Field(ge=1, le=3)]
+    recommended: bool
+    recommendation_rank: PositiveInt | None = None
+    queue_rank: PositiveInt | None = None
+    status: V2ResultSourceStatus
+    ledger_claim_ids: tuple[UUID, ...] = ()
+    budget_prevented_reason: V2DeepAnalysisBudgetReason | None = None
+
+    @model_validator(mode="after")
+    def validate_source_status(self) -> V2ResultSource:
+        if self.recommended != (self.recommendation_rank is not None):
+            raise ValueError("v2 result recommendation state and rank must agree")
+        if self.status is V2ResultSourceStatus.BUDGET_PREVENTED_ANALYSIS:
+            if self.budget_prevented_reason is None or self.ledger_claim_ids:
+                raise ValueError("budget-prevented sources cannot have Ledger evidence")
+        elif self.budget_prevented_reason is not None:
+            raise ValueError("only budget-prevented sources may carry a budget reason")
+        if self.status is V2ResultSourceStatus.RECOMMENDED_ANALYZED:
+            if not self.recommended or not self.ledger_claim_ids:
+                raise ValueError("recommended analyzed sources require Ledger evidence")
+        if self.status is V2ResultSourceStatus.RECOMMENDED_NO_LEDGER_EVIDENCE:
+            if not self.recommended or self.ledger_claim_ids:
+                raise ValueError("recommended no-Ledger sources cannot carry Ledger evidence")
+        if self.status is V2ResultSourceStatus.SURVIVING_ANALYZED:
+            if self.recommended or not self.ledger_claim_ids:
+                raise ValueError(
+                    "surviving analyzed sources require nonrecommended Ledger evidence"
+                )
+        if self.status is V2ResultSourceStatus.SURVIVING_NOT_DEEPLY_ANALYZED:
+            if self.recommended or self.ledger_claim_ids:
+                raise ValueError("unanalysed surviving sources cannot carry Ledger evidence")
+        return self
+
+
+class V2UnresolvedMaterialGap(StrictModel):
+    """A persisted strategy gap, disclosed without inventing an answer."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    gap_id: NonEmptyStr
+    direction: ResearchDirection
+    missing_evidence: NonEmptyStr
+    assessed_after_round: Annotated[int, Field(ge=1, le=2)]
+
+
+class V2ResearchStoppingReason(StrEnum):
+    SUFFICIENT_SOURCE_POOL = "sufficient_source_pool"
+    NO_USEFUL_NEW_DIRECTION = "no_useful_new_direction"
+    DUPLICATE_HEAVY = "duplicate_heavy"
+    PROVIDER_ELIGIBILITY_EXHAUSTED = "provider_eligibility_exhausted"
+    BUDGET = "budget"
+    HARD_ROUND_LIMIT = "hard_round_limit"
+    DEGRADED_GAP_SEARCH_AGENT = "degraded_gap_search_agent"
+
+
+class V2ResearchStoppingDisclosure(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    reason: V2ResearchStoppingReason
+    explanation: NonEmptyStr
+    completed_rounds: Annotated[int, Field(ge=1, le=3)]
+
+
+class V2ReleaseValidation(StrictModel):
+    """The v2 release decision hashes the complete rendered output, not just evidence text."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evidence_validation: ValidationResult
+    valid: bool
+    errors: tuple[ValidationError, ...]
+    validator_config_version: NonEmptyStr
+    validated_at: datetime
+    rendered_output_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+
+    _validated_at_is_aware = field_validator("validated_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_release_state(self) -> V2ReleaseValidation:
+        if self.valid and not self.evidence_validation.valid:
+            raise ValueError("a v2 release cannot bypass failed evidence validation")
+        if self.valid:
+            if self.errors or self.rendered_output_hash is None:
+                raise ValueError("valid v2 releases require no errors and a complete output hash")
+        elif not self.errors or self.rendered_output_hash is not None:
+            raise ValueError("invalid v2 releases require errors and no output hash")
+        return self
+
+
+class V2FinalResearchOutput(StrictModel):
+    """Complete v2 result envelope, separating Ledger facts from research disclosures."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    directions: ResearchDirections
+    synthesis: SynthesisOutput
+    recommended_source_ids: tuple[UUID, ...]
+    recommended_sources: tuple[V2ResultSource, ...]
+    all_surviving_sources: tuple[V2ResultSource, ...]
+    unresolved_material_gaps: tuple[V2UnresolvedMaterialGap, ...]
+    stopping: V2ResearchStoppingDisclosure
+    created_at: datetime
+    release_validation: V2ReleaseValidation
+
+    _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_final_output(self) -> V2FinalResearchOutput:
+        if self.synthesis.run_id != self.run_id:
+            raise ValueError("v2 final output synthesis must match the run")
+        all_ids = tuple(item.source_id for item in self.all_surviving_sources)
+        if len(all_ids) != len(set(all_ids)):
+            raise ValueError("v2 final output sources must be unique")
+        if any(not self.directions.permits(item.direction) for item in self.all_surviving_sources):
+            raise ValueError("v2 final output cannot expose disabled-direction sources")
+        if any(
+            not self.directions.permits(item.direction) for item in self.unresolved_material_gaps
+        ):
+            raise ValueError("v2 final output cannot expose disabled-direction gaps")
+        recommended_ids = tuple(item.source_id for item in self.recommended_sources)
+        if recommended_ids != self.recommended_source_ids:
+            raise ValueError("recommended source list must reproduce recommendation IDs")
+        if any(not item.recommended for item in self.recommended_sources):
+            raise ValueError("recommended source list may contain only recommended sources")
+        if set(recommended_ids) - set(all_ids):
+            raise ValueError("recommended source IDs must exist in surviving source list")
+        return self
 
 
 class ValidationError(StrictModel):

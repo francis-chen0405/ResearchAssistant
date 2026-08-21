@@ -1038,3 +1038,20 @@ source family, recommendation state, survivor ID, and relevant Gap IDs. Recommen
 is informational only. Application policy rejects disabled-direction evidence before any
 Reviewer call. Migration 13 adds only append-only v2 Ledger-admission rows; it does not
 rewrite or weaken historical Ledger records or their SQLite immutability triggers.
+
+## ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
+
+Fresh-v2 synthesis sends MiMo-v2.5-Pro only a strict typed projection of the exact claim,
+enabled directions, Reviewer-approved Ledger statements, deterministic placement and
+entailment, qualified-only statements, unresolved typed gaps, stopping disclosure, and
+non-evidentiary recommendation metadata. It never receives raw source text, snapshots,
+quotes, unreviewed Analyst output, or a route to reinterpret sources. The model selects and
+orders approved Ledger IDs only; the application copies their canonical factual statements.
+
+The final result discloses the chosen direction, recommendation subset, complete surviving
+pool, unresolved gaps, and deterministic stopping reason. It labels each source as
+recommended-and-analyzed, recommended-without-Ledger-evidence, surviving-and-analyzed,
+surviving-not-deeply-analyzed, or budget-prevented. Support-only and challenge-only results
+must not contain or imply evidence from the disabled direction. V2 final validation layers
+direction/provenance/source/recommendation checks over exact Ledger validation and hashes the
+complete mechanically rendered output only after every check succeeds.

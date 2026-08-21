@@ -12,9 +12,10 @@ from xml.sax.saxutils import escape
 
 from pydantic import ConfigDict, Field, field_validator
 
-from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, StrictModel
+from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY, render_v2_final_output
+from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, StrictModel, V2FinalResearchOutput
 from orchestrator import ProviderRunStatus, inspect_provider_run
-from store import open_read_only_store, read_provider_run_contract
+from store import open_read_only_store, read_provider_run_contract, read_v2_artifact
 
 EXPORTER_VERSION = "mvp8-local-export-v1"
 
@@ -55,22 +56,36 @@ def export_released_brief(
     generated_at: datetime | None = None,
 ) -> BriefExportResult:
     """Write one local report only after re-verifying a released persisted run."""
-    result = inspect_provider_run(db_path, _parse_run_id(run_id))
-    if result.status is not ProviderRunStatus.RELEASED:
-        raise ValueError("only released runs with valid final validation may be exported")
-    if result.validation_result is None or not result.validation_result.valid:
-        raise ValueError("only released runs with valid final validation may be exported")
-    if result.final_brief is None or result.rendered_brief_hash is None:
-        raise ValueError("released run has no reconstructable final brief")
-    actual_hash = sha256(result.final_brief.encode("utf-8")).hexdigest()
-    if actual_hash != result.rendered_brief_hash:
-        raise ValueError("released brief hash does not match reconstructed brief")
+    parsed_run_id = _parse_run_id(run_id)
+    v2_output = _read_v2_final_output(db_path, parsed_run_id)
+    if v2_output is not None:
+        if not v2_output.release_validation.valid:
+            raise ValueError("only released runs with valid final validation may be exported")
+        final_brief = render_v2_final_output(v2_output)
+        rendered_hash = v2_output.release_validation.rendered_output_hash
+        if (
+            rendered_hash is None
+            or sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash
+        ):
+            raise ValueError("released v2 brief hash does not match reconstructed brief")
+    else:
+        result = inspect_provider_run(db_path, parsed_run_id)
+        if result.status is not ProviderRunStatus.RELEASED:
+            raise ValueError("only released runs with valid final validation may be exported")
+        if result.validation_result is None or not result.validation_result.valid:
+            raise ValueError("only released runs with valid final validation may be exported")
+        if result.final_brief is None or result.rendered_brief_hash is None:
+            raise ValueError("released run has no reconstructable final brief")
+        final_brief = result.final_brief
+        rendered_hash = result.rendered_brief_hash
+        if sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash:
+            raise ValueError("released brief hash does not match reconstructed brief")
 
     timestamp = generated_at or datetime.now(UTC)
-    controls = _read_controls(db_path, result.run_id)
+    controls = _read_controls(db_path, parsed_run_id)
     metadata = BriefExportMetadata(
-        run_id=str(result.run_id),
-        rendered_brief_hash=result.rendered_brief_hash,
+        run_id=str(parsed_run_id),
+        rendered_brief_hash=rendered_hash,
         format=export_format,
         generated_at=timestamp,
         exporter_version=EXPORTER_VERSION,
@@ -82,13 +97,26 @@ def export_released_brief(
     if destination.exists():
         raise FileExistsError(f"refusing to overwrite existing export: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = _render_export(result.final_brief, metadata)
+    payload = _render_export(final_brief, metadata)
     destination.write_bytes(payload)
     return BriefExportResult(
         metadata=metadata,
         output_path=str(destination),
         content_sha256=sha256(payload).hexdigest(),
     )
+
+
+def _read_v2_final_output(db_path: str | Path, run_id: UUID) -> V2FinalResearchOutput | None:
+    if not Path(db_path).is_file():
+        return None
+    with open_read_only_store(db_path) as store:
+        try:
+            artifact = read_v2_artifact(store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
+        except KeyError:
+            return None
+    if artifact.artifact_type != V2FinalResearchOutput.__name__:
+        raise ValueError("v2 final output artifact has an unexpected type")
+    return V2FinalResearchOutput.model_validate_json(artifact.payload_json)
 
 
 def _parse_run_id(value: str) -> UUID:

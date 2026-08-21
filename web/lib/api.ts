@@ -105,6 +105,36 @@ export type ResearchTrailItem = {
   } | null;
 };
 
+export type V2ResultSource = {
+  source_id: string;
+  direction: "support" | "challenge";
+  source_url: string;
+  title: string | null;
+  source_type: string | null;
+  publication_date: string | null;
+  discovery_providers: string[];
+  discovery_round: number;
+  recommended: boolean;
+  recommendation_rank: number | null;
+  queue_rank: number | null;
+  status: "recommended_analyzed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
+  ledger_claim_ids: string[];
+  budget_prevented_reason: string | null;
+};
+
+export type V2FinalResearchOutput = {
+  run_id: string;
+  exact_claim: string;
+  directions: { support_enabled: boolean; challenge_enabled: boolean };
+  synthesis: { sections: { section_type: "supporting" | "opposing" | "limitations"; items: { approved_factual_statement: string }[] }[] };
+  recommended_source_ids: string[];
+  recommended_sources: V2ResultSource[];
+  all_surviving_sources: V2ResultSource[];
+  unresolved_material_gaps: { gap_id: string; direction: "support" | "challenge"; missing_evidence: string; assessed_after_round: number }[];
+  stopping: { reason: string; explanation: string; completed_rounds: number };
+  release_validation: { valid: boolean; rendered_output_hash: string | null };
+};
+
 type StartInput = {
   raw_claim: string;
   acknowledged_public: boolean;
@@ -172,6 +202,8 @@ export const researchApi = {
     request<{ items: HistoryItem[] }>(`/api/history?db_path=${encodeURIComponent(database)}`),
   trail: (runId: string, database: string) =>
     request<{ run_id: string; items: ResearchTrailItem[] }>(`/api/research/${runId}/trail?db_path=${encodeURIComponent(database)}`),
+  v2Result: (runId: string, database: string) =>
+    request<V2FinalResearchOutput>(`/api/research/${runId}/v2-result?db_path=${encodeURIComponent(database)}`),
   service: () => request<ServiceDiagnostic>("/api/service"),
   startService: () => request<ServiceDiagnostic>("/api/service/start", { method: "POST" }),
   stopService: () => request<ServiceDiagnostic>("/api/service/stop", { method: "POST" }),

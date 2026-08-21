@@ -2,6 +2,17 @@
 
 Canonical phase plans live in `.agent/plans/`.
 
+## ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
+
+The user explicitly authorized v2 Phase 11 on 2026-08-21. It adds the constrained v2
+result envelope after Phase-10 Ledger admission: MiMo-v2.5-Pro receives only the strict
+Ledger projection and typed research disclosures; deterministic validation remains the
+release authority. It adds no raw-source synthesis, dependency, migration, or live call.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-11-synthesis-final-output.md`
+
 ## ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
 
 The user explicitly authorized v2 Phase 10 on 2026-08-20. It completes the v2
