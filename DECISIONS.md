@@ -814,3 +814,19 @@
   routing, route/provider identity, prompt/schema versions, pricing, and secret-free
   provider configuration in the provider-run contract fingerprint.
 - Do not wire the new roles into research execution in this phase.
+
+## 2026-08-20 - ResearchAssistant v2 Phase 9 Luna Evidence Analyst
+
+- Keep the shared historical Analyst prompt and direct-MiMo route unchanged. Use a distinct
+  v2-only Analyst prompt for fresh Phase-9 work.
+- Route fresh-v2 semantic assessment/scoring, initial canonical statement drafting, and the
+  one possible Reviewer-directed revision to GPT-5.6 Luna High.
+- Keep exact quote selection on MiMo-v2.5-Pro and retain all quote assembly, brackets,
+  offsets, hashes, exact membership, identity, and provenance validation in application code.
+- Preserve the existing Evidence Quality / Claim Fit table, deterministic placement,
+  `ScoreDecision`, `StatementDraft`, Reviewer, and Ledger admission contracts.
+- Persist source-supported proposition, claim relationship, limitations, inferential
+  boundaries, and rationale separately; never allow support/challenge direction crossing.
+- Reserve and finish every Luna physical attempt through `model_route_attempts`. Exhausted
+  retry retains the survivor and exact candidate but produces no Reviewer-ready statement
+  and cannot enter the Ledger.

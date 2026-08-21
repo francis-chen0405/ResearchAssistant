@@ -177,6 +177,7 @@ V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
 V2_ADAPTIVE_SEARCH_POLICY_IDENTITY = "researchassistant-v2-phase-7-adaptive-search-v1"
 V2_SOURCE_SELECTION_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v1"
 V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = "researchassistant-v2-phase-8-deep-analysis-queue-v1"
+V2_EVIDENCE_ANALYST_POLICY_IDENTITY = "researchassistant-v2-phase-9-luna-evidence-analyst-v1"
 
 
 class ResearchDirection(StrEnum):
@@ -2329,6 +2330,240 @@ class StatementDraft(StrictModel):
     drafted_at: datetime
 
     _drafted_at_is_aware = field_validator("drafted_at")(_validate_aware_datetime)
+
+
+class V2EvidenceRelationship(StrEnum):
+    """How a source-supported proposition relates to the requested claim."""
+
+    SUPPORTS = "supports"
+    CHALLENGES = "challenges"
+    QUALIFIES = "qualifies"
+    UNRELATED = "unrelated"
+
+
+class V2EvidenceAnalystModelOutput(StrictModel):
+    """Luna's semantic assessment; source quotation and provenance remain upstream."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    narrowest_supported_proposition: NonEmptyStr = Field(max_length=2000)
+    relationship_to_claim: V2EvidenceRelationship
+    material_limitations: tuple[NonEmptyStr, ...] = Field(default=(), max_length=12)
+    inferential_boundaries: tuple[NonEmptyStr, ...] = Field(default=(), max_length=12)
+    evidence_quality: Score
+    claim_fit: Score
+    reasoning: NonEmptyStr = Field(max_length=3000)
+
+    @model_validator(mode="after")
+    def validate_relationship_score(self) -> V2EvidenceAnalystModelOutput:
+        if self.relationship_to_claim is V2EvidenceRelationship.UNRELATED and self.claim_fit > 2:
+            raise ValueError("unrelated evidence cannot receive Claim Fit above 2")
+        return self
+
+
+class V2CanonicalStatementModelOutput(StrictModel):
+    """Luna's narrow statement draft, kept separate from its source assessment."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    narrowest_supported_proposition: NonEmptyStr = Field(max_length=2000)
+    canonical_factual_statement: NonEmptyStr = Field(max_length=2000)
+    reasoning: NonEmptyStr = Field(max_length=2000)
+
+
+class V2EvidenceAnalystCandidateInput(StrictModel):
+    """One exact, application-assembled candidate assigned to a queued survivor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    direction: ResearchDirection
+    candidate: CandidateQuoteBlock
+    snapshot: SourceSnapshot
+
+    @model_validator(mode="after")
+    def validate_exact_candidate_provenance(self) -> V2EvidenceAnalystCandidateInput:
+        if self.candidate.run_id != self.snapshot.run_id:
+            raise ValueError("Phase-9 candidate and snapshot must share a run_id")
+        if self.candidate.snapshot_id != self.snapshot.snapshot_id:
+            raise ValueError("Phase-9 candidate and snapshot IDs must match")
+        if self.candidate.snapshot_sha256 != self.snapshot.snapshot_sha256:
+            raise ValueError("Phase-9 candidate and snapshot hashes must match")
+        expected_stance = (
+            Stance.SUPPORTING if self.direction is ResearchDirection.SUPPORT else Stance.OPPOSING
+        )
+        if self.candidate.stance is not expected_stance:
+            raise ValueError("candidate stance must preserve its queued research direction")
+        return self
+
+
+class V2EvidenceAnalystBatchInput(StrictModel):
+    """Complete Phase-8 queue plus the exact candidates available for Analyst work."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    directions: ResearchDirections
+    queue_result: V2SourceSelectionQueueResult
+    queued_candidates: tuple[V2EvidenceAnalystCandidateInput, ...]
+    policy_identity: Literal["researchassistant-v2-phase-9-luna-evidence-analyst-v1"] = (
+        V2_EVIDENCE_ANALYST_POLICY_IDENTITY
+    )
+
+    @model_validator(mode="after")
+    def validate_complete_queue(self) -> V2EvidenceAnalystBatchInput:
+        if self.queue_result.run_id != self.run_id:
+            raise ValueError("Phase-9 input must match the Phase-8 run")
+        if self.queue_result.input.exact_claim != self.exact_claim:
+            raise ValueError("Phase-9 exact claim must match Phase-8")
+        if self.queue_result.input.directions != self.directions:
+            raise ValueError("Phase-9 directions must match Phase-8")
+        source_ids = tuple(item.source_id for item in self.queued_candidates)
+        if source_ids != self.queue_result.queued_source_ids:
+            raise ValueError("Phase-9 candidates must reproduce the complete queue order")
+        for item in self.queued_candidates:
+            if item.candidate.run_id != self.run_id:
+                raise ValueError("Phase-9 candidates must match the run")
+            self.directions.require_permitted(item.direction)
+        return self
+
+
+class V2EvidenceAnalystLLMInput(StrictModel):
+    """Bounded semantic input with source, proposition, and relationship kept distinct."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    direction: ResearchDirection
+    candidate: CandidateQuoteBlock
+    untrusted_snapshot_text: NonEmptyStr
+
+
+class V2CanonicalStatementLLMInput(StrictModel):
+    """Application-approved score context for one canonical factual statement draft."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    direction: ResearchDirection
+    candidate: CandidateQuoteBlock
+    assessment: V2EvidenceAnalystModelOutput
+    score_decision: ScoreDecision
+
+
+class V2CanonicalStatementRevisionLLMInput(StrictModel):
+    """One bounded Reviewer-directed revision without changing the proposition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    exact_claim: NonEmptyStr
+    direction: ResearchDirection
+    candidate: CandidateQuoteBlock
+    assessment: V2EvidenceAnalystModelOutput
+    score_decision: ScoreDecision
+    current_statement: StatementDraft
+    reviewer_rationale: NonEmptyStr = Field(max_length=3000)
+    revision_number: Literal[1] = 1
+
+
+class V2EvidenceAnalystRevisionResult(StrictModel):
+    """Typed post-Reviewer Analyst revision; it still grants no Ledger admission."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    source_id: UUID
+    previous_statement_draft_id: UUID
+    revised_statement: StatementDraft
+    analyst_attempt_ids: tuple[UUID, ...] = Field(min_length=1, max_length=2)
+
+
+class V2EvidenceAnalystState(StrEnum):
+    NOT_QUEUED = "not_queued"
+    READY_FOR_REVIEWER = "ready_for_reviewer"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class V2EvidenceAnalystSourceResult(StrictModel):
+    """Deep-analysis status for one survivor; no state grants Ledger admission."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    source_id: UUID
+    direction: ResearchDirection
+    state: V2EvidenceAnalystState
+    candidate: CandidateQuoteBlock | None = None
+    assessment: V2EvidenceAnalystModelOutput | None = None
+    score_decision: ScoreDecision | None = None
+    statement_draft: StatementDraft | None = None
+    analyst_attempt_ids: tuple[UUID, ...] = ()
+    failure: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def validate_state(self) -> V2EvidenceAnalystSourceResult:
+        semantic_values = (self.assessment, self.score_decision, self.statement_draft)
+        if self.state is V2EvidenceAnalystState.NOT_QUEUED:
+            if self.candidate is not None or any(value is not None for value in semantic_values):
+                raise ValueError("non-queued survivors cannot carry deep-analysis artifacts")
+            if self.analyst_attempt_ids or self.failure is not None:
+                raise ValueError("non-queued survivors cannot carry Analyst attempt state")
+            return self
+        if self.candidate is None:
+            raise ValueError("queued survivor results must retain their exact candidate")
+        if self.state is V2EvidenceAnalystState.FAILED:
+            if self.failure is None:
+                raise ValueError("failed Analyst results require a failure reason")
+            if self.statement_draft is not None:
+                raise ValueError("failed Analyst results cannot be Reviewer-ready")
+            return self
+        if self.failure is not None or self.assessment is None or self.score_decision is None:
+            raise ValueError("completed Analyst results require assessment and score decision")
+        if self.state is V2EvidenceAnalystState.REJECTED:
+            if self.score_decision.approved or self.statement_draft is not None:
+                raise ValueError("rejected Analyst results cannot carry a statement draft")
+        elif not self.score_decision.approved or self.statement_draft is None:
+            raise ValueError("Reviewer-ready results require an approved score and draft")
+        return self
+
+
+class V2EvidenceAnalystBatchResult(StrictModel):
+    """Restartable Phase-9 output covering every survivor and containing no Ledger records."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    input: V2EvidenceAnalystBatchInput
+    source_results: tuple[V2EvidenceAnalystSourceResult, ...]
+    completed_at: datetime
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_complete_survivor_output(self) -> V2EvidenceAnalystBatchResult:
+        if self.input.run_id != self.run_id:
+            raise ValueError("Phase-9 result must match its input run")
+        expected = tuple(item.source_id for item in self.input.queue_result.input.survivors)
+        actual = tuple(item.source_id for item in self.source_results)
+        if actual != expected or len(actual) != len(set(actual)):
+            raise ValueError("Phase-9 output must retain every survivor in Phase-8 order")
+        directions = {
+            item.source_id: item.direction for item in self.input.queue_result.input.survivors
+        }
+        queued = set(self.input.queue_result.queued_source_ids)
+        for item in self.source_results:
+            if item.run_id != self.run_id:
+                raise ValueError("Phase-9 source results must match the run")
+            if item.direction is not directions[item.source_id]:
+                raise ValueError("Phase-9 survivor direction cannot change")
+            if (item.source_id in queued) == (item.state is V2EvidenceAnalystState.NOT_QUEUED):
+                raise ValueError("Phase-9 queued state must match Phase-8")
+        return self
 
 
 class StatementReviewResult(StrictModel):

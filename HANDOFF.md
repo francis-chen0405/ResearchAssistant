@@ -1,5 +1,34 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
+
+Phase 9 is complete. `agents/v2_evidence_analyst.py` consumes the bounded Phase-8 queue only
+when every queued survivor has an exact `CandidateQuoteBlock` and matching immutable
+`SourceSnapshot`. It reuses deterministic quote verification before any semantic work. The
+Extractor remains MiMo-v2.5-Pro passage selection only; application code still owns assembly,
+brackets/context, offsets, exact membership, hashes, candidate identity, and provenance.
+
+Exactly three fresh-v2 Analyst logical calls are now routed to GPT-5.6 Luna High: semantic
+assessment/scoring, initial canonical statement drafting, and the one possible
+Reviewer-directed statement revision. They use `prompts/v2_evidence_analyst.md`; the shared
+historical `prompts/analyst.md` and direct-MiMo route remain unchanged. The semantic schema
+separates source text, narrowest supported proposition, and claim relationship while
+retaining limitations, inferential boundaries, and reasoning. Direction crossing fails
+closed; qualification remains valid in either enabled direction.
+
+Application code continues to interpret the existing Evidence Quality / Claim Fit table,
+derive placement, require explicit qualification at Claim Fit 3, and construct the existing
+`ScoreDecision` and `StatementDraft`. Each Luna attempt is reserved and finished through the
+existing `model_route_attempts` physical-call/token/exact-cost system, with at most two
+attempts per operation. Restart reuses per-source, batch, revision, and completed attempt
+artifacts. Final Analyst failure retains the survivor and exact candidate, records failure,
+creates no Reviewer-ready draft, and cannot enter the Ledger. Phase 9 itself creates no
+`LedgerRecord`; downstream Reviewer approval and deterministic admission remain required.
+
+Verification: 7 focused Phase-9 tests passed. The complete offline suite passed with 742
+tests and 2 expected opt-in skips; the only warning is the pre-existing Starlette TestClient
+deprecation. Ruff lint, Ruff format check, and `git diff --check` passed. No live call occurred.
+
 ## ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
 
 Phase 8 is complete and verified. `agents/v2_source_selection.py` builds a strict selection

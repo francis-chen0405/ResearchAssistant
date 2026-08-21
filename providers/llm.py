@@ -35,6 +35,8 @@ from models import (
     StrictModel,
     SynthesisOutput,
     V2AdaptiveSearchModelOutput,
+    V2CanonicalStatementModelOutput,
+    V2EvidenceAnalystModelOutput,
     V2GapAnalysisModelOutput,
     V2InitialPlannerModelOutput,
     V2InitialResearchPlan,
@@ -688,7 +690,12 @@ def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.EXTRACTOR:
         return (VerbatimQuoteSelection,)
     if stage is LLMStage.ANALYST:
-        return (ScoreDecision, StatementDraft)
+        return (
+            ScoreDecision,
+            StatementDraft,
+            V2EvidenceAnalystModelOutput,
+            V2CanonicalStatementModelOutput,
+        )
     if stage is LLMStage.REVIEWER:
         return (ReviewerDecision,)
     return (SynthesisOutput,)

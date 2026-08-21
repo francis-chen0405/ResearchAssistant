@@ -2,6 +2,18 @@
 
 Canonical phase plans live in `.agent/plans/`.
 
+## ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
+
+The user explicitly authorized v2 Phase 9 on 2026-08-20. It routes fresh v2 semantic
+evidence assessment and canonical statement drafting to GPT-5.6 Luna High while retaining
+MiMo-v2.5-Pro exact passage selection, application-owned quote provenance, the existing
+two-axis scoring system, bounded physical-attempt accounting, and downstream Reviewer and
+Ledger gates.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-09-luna-evidence-analyst.md`
+
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
 ## ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue

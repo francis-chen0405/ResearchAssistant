@@ -1,5 +1,35 @@
 # Status
 
+## 2026-08-20 - ResearchAssistant v2 Phase 9 Luna Evidence Analyst
+
+Status: Complete and verified.
+
+- Added a restart-safe Phase-9 Analyst stage over the bounded Phase-8 queue. Every survivor
+  remains in the result; queued survivors retain their exact candidate, including on final
+  Analyst failure.
+- Fresh-v2 semantic assessment/scoring, initial canonical factual-statement drafting, and the
+  one possible Reviewer-directed revision use GPT-5.6 Luna High and a v2-only prompt. The
+  historical direct-MiMo Analyst prompt and persisted records remain readable and unchanged.
+- Kept MiMo-v2.5-Pro exact passage selection and revalidated immutable snapshot hashes,
+  exact quote membership, offsets, bracket context, candidate identity, and provenance before
+  Luna. Analyst output never assembles or changes a quote.
+- Added strict proposition, claim-relationship, limitation, inferential-boundary, and reasoning
+  fields. Application validation enforces support/challenge isolation and Claim Fit 3 scope
+  qualification.
+- Reused the existing two-axis score table, deterministic approval/placement derivation,
+  `ScoreDecision`, and `StatementDraft`. Phase 9 creates no Ledger record; failed work has no
+  Reviewer-ready draft and remains behind the existing Reviewer and Ledger gates.
+- Every Luna attempt uses existing persisted physical-call, token, and exact-cost reservation
+  and finish accounting, with one bounded retry per logical operation.
+
+Verification:
+
+- Focused Phase-9 suite: 7 passed.
+- Complete offline Python suite: 742 passed, 2 expected opt-in skips, 1 existing Starlette
+  deprecation warning.
+- Ruff lint, Ruff format check, and `git diff --check`: passed.
+- No live provider call was made.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
 
 Status: Complete and verified.

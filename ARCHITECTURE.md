@@ -996,3 +996,28 @@ calls per source. Two additional physical calls and route-priced tokens/cost are
 for mandatory Synthesis. Every survivor persists recommendation and queue status, including
 the physical-call, token, or cost reason when budget prevents deep analysis. The hard total
 remains 160 physical calls.
+
+## ResearchAssistant v2 Phase 9 Luna Evidence Analyst
+
+Deep analysis accepts only Phase-8 queued survivors paired with an exact
+`CandidateQuoteBlock` and its immutable `SourceSnapshot`. MiMo-v2.5-Pro remains the v2
+Extractor route and selects snapshot passages only. Before semantic analysis, application
+code revalidates the snapshot hash, exact segment membership, offsets, bracket context,
+candidate identity, length policy, and provenance; Analyst output cannot rewrite any of it.
+
+Fresh-v2 Analyst work uses a v2-only prompt and GPT-5.6 Luna High for three logical
+operations: semantic proposition/relationship assessment and scoring, initial canonical
+factual-statement drafting, and the one possible Reviewer-directed revision. Source text,
+the narrowest supported proposition, and the proposition's relationship to the requested
+claim remain separate typed fields. Material limitations, inferential boundaries, and
+rationale persist with the assessment. Application validation prevents support/challenge
+crossing while allowing a qualification in either enabled direction.
+
+The existing 25-pair Evidence Quality / Claim Fit table remains authoritative. Application
+code derives approval, Ledger score, placement, and Claim Fit 3 qualification requirements,
+then constructs the existing `ScoreDecision` and `StatementDraft`. Every Luna physical
+attempt uses the persisted `model_route_attempts` reservation/finish boundary with the
+configured route's conservative tokens and exact cost, and each logical operation has at
+most two attempts. A final Analyst failure retains the survivor and exact candidate with a
+failed deep-analysis state but no Reviewer-ready draft. Phase 9 creates no `LedgerRecord`;
+separate Reviewer approval and deterministic Ledger admission remain mandatory.
