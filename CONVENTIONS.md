@@ -215,3 +215,20 @@ authorized.
 ```
 
 The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may exist only as a compatibility mirror for requested scaffolding and must not become a second source of truth.
+
+## ResearchAssistant v2 Phase 8 Selection and Queue Conventions
+
+- Persist the full merged survivor input before recommendation; stopping research never
+  deletes a legitimate survivor.
+- Source Selection is a strict MiMo-v2.5-Pro prioritization handoff. Recommendations may
+  reference only known source and Gap IDs and never imply proof, evidence approval, or
+  Ledger eligibility.
+- Prefer unused source families before repeated families in both model validation and
+  deterministic fallback ordering. The usual five-to-ten recommendation range is guidance,
+  not a quota.
+- Queue only a deterministic priority prefix: recommended survivors first, then
+  complementary non-recommended survivors. Never skip an unaffordable higher-priority
+  source to admit a lower-priority source.
+- Reserve twelve physical calls per queued source and two for mandatory Synthesis, plus
+  conservative route-specific tokens and cost. Persist an explicit budget reason for every
+  survivor outside the queue.

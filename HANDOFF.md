@@ -1,5 +1,31 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
+
+Phase 8 is complete and verified. `agents/v2_source_selection.py` builds a strict selection
+input from the complete
+merged survivor pool and persisted discovery, acquisition/Probe, Gap, family, metadata, and
+round provenance. It uses only the configured MiMo-v2.5-Pro Source Selection route. The
+model returns ordered known survivor IDs with short rationales and optional known
+same-direction Gap IDs; recommendation does not create evidence, proof, Reviewer approval,
+or Ledger eligibility.
+
+Application validation retries once on provider/schema/integrity failure, rejects invented
+or family-dominated output, and falls back to deterministic complementary ordering without
+dropping a survivor. The queue puts recommendations first and complementary survivors next,
+then keeps only the longest prefix safe under exact remaining physical-call, token, and cost
+budgets. Worst-case reservation is twelve calls per source—two attempts for one Extractor,
+three Analyst, and two Reviewer operations—plus two mandatory Synthesis attempts. Each
+survivor has a persisted recommendation/queue status and explicit budget-prevention reason.
+
+Phase 9 or deep-analysis execution is not authorized by this handoff. Do not start queued
+Extractor/Analyst/Reviewer work without explicit user direction. No dependency, schema
+migration, or live provider call was added.
+
+Verification: 8 focused Phase-8 tests passed. The complete offline suite passed with 735
+tests and 2 expected opt-in skips; the only warning is the pre-existing Starlette TestClient
+deprecation. Ruff lint, Ruff format check, and `git diff --check` passed.
+
 ## ResearchAssistant v2 — Phase 7: Adaptive Search Continuation
 
 Phase 7 is complete. `agents/v2_adaptive_search.py` continues only from a persisted Luna

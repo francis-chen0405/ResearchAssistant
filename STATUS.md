@@ -1,5 +1,33 @@
 # Status
 
+## 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
+
+Status: Complete and verified.
+
+- Added strict immutable contracts for the complete survivor selection input, model-only
+  recommendations, selection attempts, remaining budget, per-survivor status, cumulative
+  reservations, bounded queue, and restart result.
+- Final Source Selection uses the configured MiMo-v2.5-Pro route, can recommend only known
+  survivors and known same-direction Gap IDs, and rejects duplicate-family domination.
+  One retry is allowed before deterministic complementary fallback.
+- The queue preserves all survivors while prioritizing recommended sources and then
+  complementary non-recommended sources. It reserves twelve worst-case physical calls per
+  source plus two mandatory Synthesis calls and deterministically shrinks for the 160-call,
+  token, or cost boundary.
+- Every survivor persists whether it was recommended and queued, its ranks/rationale/Gap
+  links, and the budget reason when it could not be deeply analyzed. Restart reuses the
+  completed append-only result without another model call.
+- Added offline Phase-8 regression coverage; no live call, dependency, or migration was
+  added.
+
+Verification:
+
+- Focused Phase-8 suite: 8 passed.
+- Complete offline Python suite: 735 passed, 2 expected opt-in skips, 1 existing Starlette
+  deprecation warning.
+- Ruff lint, Ruff format check, and `git diff --check`: passed.
+- No live provider call was made.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 7 Adaptive Search Continuation
 
 Status: Complete and verified.

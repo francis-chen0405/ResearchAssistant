@@ -4,6 +4,19 @@ Canonical phase plans live in `.agent/plans/`.
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
+## ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
+
+The user explicitly authorized v2 Phase 8 on 2026-08-20. It preserves the complete
+multi-round survivor pool, uses MiMo-v2.5-Pro to recommend only persisted survivors as a
+complementary priority set, and deterministically bounds the expensive deep-analysis queue
+against physical-call, token, cost, retry, and mandatory Synthesis reserves. Recommendation
+does not create evidence or Ledger eligibility. No live verification call, dependency, or
+migration is part of this phase.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-08-source-selection-deep-analysis-queue.md`
+
 ## ResearchAssistant v2 — Phase 7: Adaptive Search Continuation
 
 The user explicitly authorized and completed v2 Phase 7 on 2026-08-20. It connects completed Luna Gap

@@ -1,5 +1,23 @@
 # Decisions
 
+## 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
+
+- Preserve every legitimate survivor across all completed rounds in an append-only Phase-8
+  input; selection controls expensive work and never prunes the source pool.
+- Route Final Source Selection through MiMo-v2.5-Pro with bounded Probe, Gap, family,
+  metadata, and round provenance. Accept only known source/Gap IDs and require unused-family
+  diversity before repeated families. Treat five to ten per enabled direction as a target,
+  not a quota.
+- Retry selection once, then use deterministic complementary ordering. Recommendation is not
+  evidence approval, proof, or Ledger eligibility.
+- Reserve the worst-case deep-analysis workload before starting: two attempts each for one
+  Extractor, three Analyst, and two Reviewer operations (twelve physical calls per source),
+  plus two mandatory Synthesis attempts. Shrink to the longest deterministic prefix that
+  fits the 160-call, token, and exact-cost reserves.
+- Persist one recommendation/queue status for every survivor and an explicit physical-call,
+  token, or cost reason for every survivor excluded by budget. Reuse generic v2 artifact
+  persistence; add no dependency, migration, or live verification call.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 7 Adaptive Search Continuation
 
 - Treat Luna Gap Analysis as a recommendation boundary. MiMo-v2.5-Pro proposes gap-linked

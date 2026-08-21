@@ -974,3 +974,25 @@ eligible provider, materially new query, provider capacity, and protected downst
 budget all remain. Duplicate saturation of at least 70% stops continuation. Round 3 has at
 most three queries and one query per provider/direction lane. No Round 4, recursive
 continuation, automatic citation tree, or disabled-direction search is possible.
+
+## ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
+
+After adaptive searching stops, the complete merged survivor pool remains an immutable,
+append-only input. Final Source Selection sends MiMo-v2.5-Pro only the exact claim, enabled
+directions, survivor metadata, deterministic source-family identities, bounded Probe
+passages, Gap history, and search-round provenance. Its ordered recommendations may contain
+only survivor IDs and short rationales with optional known Gap IDs. Application validation
+rejects invented sources, wrong-direction gaps, duplicates, more than ten recommendations
+per direction, and family domination while unused families remain. A failed attempt is
+retried once; repeated failure or insufficient safe selection budget uses deterministic
+family-round-robin ordering without removing a survivor.
+
+Recommendation is workload prioritization, not factual validation, evidence approval, or
+Claim Ledger admission. The deterministic deep-analysis queue places recommended survivors
+first, then complementary non-recommended survivors, and retains the longest safe prefix.
+Each source reserves two attempts for one Extractor operation, three Analyst operations
+(score, draft, and possible single revision), and two Reviewer operations: twelve physical
+calls per source. Two additional physical calls and route-priced tokens/cost are reserved
+for mandatory Synthesis. Every survivor persists recommendation and queue status, including
+the physical-call, token, or cost reason when budget prevents deep analysis. The hard total
+remains 160 physical calls.
