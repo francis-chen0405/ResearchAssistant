@@ -1021,3 +1021,20 @@ configured route's conservative tokens and exact cost, and each logical operatio
 most two attempts. A final Analyst failure retains the survivor and exact candidate with a
 failed deep-analysis state but no Reviewer-ready draft. Phase 9 creates no `LedgerRecord`;
 separate Reviewer approval and deterministic Ledger admission remain mandatory.
+
+## ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
+
+Phase 10 connects Phase-9 Reviewer-ready drafts to the established downstream quality
+gate. Fresh-v2 Reviewer calls use MiMo-v2.5-Pro and receive only the existing narrow
+Reviewer input. The application preserves exact Reviewer decision validation and derives
+the existing versioned approval ID; the Reviewer cannot supply IDs, confidence, or
+replacement wording. A rejected initial audit may use exactly one existing Analyst
+revision and one final Reviewer audit. A second rejection is terminal for that evidence.
+
+The existing score-pair table, placement derivation, Claim Fit 3 qualification rule,
+`QUALIFIED_ONLY` restriction, and `admit_ledger_record` validation remain authoritative.
+V2 Ledger admission adds immutable sidecar provenance for direction, discovery round,
+source family, recommendation state, survivor ID, and relevant Gap IDs. Recommendation
+is informational only. Application policy rejects disabled-direction evidence before any
+Reviewer call. Migration 13 adds only append-only v2 Ledger-admission rows; it does not
+rewrite or weaken historical Ledger records or their SQLite immutability triggers.

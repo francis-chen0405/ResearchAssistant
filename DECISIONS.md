@@ -1,5 +1,16 @@
 # Decisions
 
+## 2026-08-20 - ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
+
+- Reuse the existing narrow Reviewer contract, MiMo-v2.5-Pro Reviewer route,
+  application-derived `rappr_v1` approval IDs, deterministic placement, one-revision
+  maximum, and deterministic Ledger admission rather than creating a second quality gate.
+- Persist v2 direction, discovery round, source family, recommendation state, survivor ID,
+  and relevant Gap IDs in immutable Ledger sidecar provenance. Recommendation is never an
+  admission condition.
+- Reject disabled-direction evidence before review for fresh v2 runs. Migration 13 stores
+  only new append-only v2 Ledger-admission rows and never mutates historical Ledger data.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
 
 - Preserve every legitimate survivor across all completed rounds in an append-only Phase-8

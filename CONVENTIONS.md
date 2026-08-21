@@ -136,6 +136,8 @@ SDK or dependency.
     decisions use strict models in the existing append-only `v2_artifacts` boundary
   - Local brief export opens the database through the validated read-only inspection path;
     it may export only a re-hashed released brief and never creates or mutates artifacts
+  - V2 Phase 10 migration 13 adds append-only v2 Ledger-admission provenance; historical
+    Ledger rows remain unchanged and both historical and v2 admission rows are immutable
 
 ## 6. Environment Variables
 

@@ -1,5 +1,21 @@
 # Status
 
+## 2026-08-20 - ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
+
+Status: Complete and verified.
+
+- Added the v2 bridge from Phase-9 Analyst drafts through the existing narrow MiMo-v2.5-Pro
+  Reviewer to deterministic `LedgerRecord` admission. It reuses Reviewer decision
+  validation, `rappr_v1` approval IDs, score-pair/placement derivation, `QUALIFIED_ONLY`,
+  and the one-Analyst-revision maximum.
+- Added immutable v2 Ledger provenance for direction, discovery round, source family,
+  recommendation state, survivor ID, and relevant Gap IDs. Non-recommended sources remain
+  admissible; disabled-direction evidence is rejected before review.
+- Added migration 13 `v2_ledger_admissions` with update/delete SQLite triggers. Historical
+  Ledger rows remain untouched and their existing immutability triggers are unchanged.
+- Verification: 748 passed, 2 expected opt-in skips across the complete offline suite;
+  `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live calls.
+
 ## 2026-08-20 - ResearchAssistant v2 Phase 9 Luna Evidence Analyst
 
 Status: Complete and verified.

@@ -2,6 +2,17 @@
 
 Canonical phase plans live in `.agent/plans/`.
 
+## ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
+
+The user explicitly authorized v2 Phase 10 on 2026-08-20. It completes the v2
+downstream gate by reusing the narrow MiMo-v2.5-Pro Reviewer, deterministic placement,
+application-derived approval IDs, one-revision maximum, and existing Ledger admission.
+It adds only immutable v2 Ledger provenance and rejects disabled directions before review.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-10-reviewer-ledger-integration.md`
+
 ## ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
 
 The user explicitly authorized v2 Phase 9 on 2026-08-20. It routes fresh v2 semantic

@@ -58,6 +58,7 @@ from models import (
     SynthesisOutput,
     SynthesisSection,
     V2InitialPlannerOutput,
+    V2LedgerProvenance,
     V2PersistedArtifact,
     V2PipelineIdentity,
     ValidationError,
@@ -72,7 +73,7 @@ from provider_contract import parse_provider_contract_payload
 # Connection helpers
 # ---------------------------------------------------------------------------
 
-CURRENT_SCHEMA_VERSION = 12
+CURRENT_SCHEMA_VERSION = 13
 RAW_CLAIM_SCHEMA_VERSION = 5
 MVP68_SCHEMA_VERSION = 6
 MVP69_SCHEMA_VERSION = 7
@@ -81,6 +82,7 @@ MVP11_SCHEMA_VERSION = 9
 MLP4_SCHEMA_VERSION = 10
 V2_PHASE1_SCHEMA_VERSION = 11
 V2_PHASE3_SCHEMA_VERSION = 12
+V2_PHASE10_SCHEMA_VERSION = 13
 RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
 RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
 IMMUTABLE_ARTIFACT_TRIGGERS = {
@@ -110,6 +112,7 @@ MIGRATION_DESCRIPTIONS = {
     10: "mlp-4 provider-specific discovery query provenance",
     11: "researchassistant-v2 phase-1 artifact foundation",
     12: "researchassistant-v2 phase-3 initial planner and round-1 searches",
+    13: "researchassistant-v2 phase-10 reviewer Ledger provenance",
 }
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -179,6 +182,11 @@ _V2_PHASE3_TRIGGERS = {
     "v2_initial_planner_outputs_immutable_delete",
     "v2_round_one_search_queries_immutable_update",
     "v2_round_one_search_queries_immutable_delete",
+}
+_V2_PHASE10_TABLES = {"v2_ledger_admissions"}
+_V2_PHASE10_TRIGGERS = {
+    "v2_ledger_admissions_immutable_update",
+    "v2_ledger_admissions_immutable_delete",
 }
 _REQUIRED_INDEXES = {
     "provisional_extractions_run_snapshot_stance",
@@ -338,6 +346,9 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
     if latest >= V2_PHASE3_SCHEMA_VERSION:
         required_tables = required_tables | _V2_PHASE3_TABLES
         required_triggers = required_triggers | _V2_PHASE3_TRIGGERS
+    if latest >= V2_PHASE10_SCHEMA_VERSION:
+        required_tables = required_tables | _V2_PHASE10_TABLES
+        required_triggers = required_triggers | _V2_PHASE10_TRIGGERS
     missing = sorted(
         (required_tables - tables) | (required_triggers - triggers) | (_REQUIRED_INDEXES - indexes)
     )
@@ -944,6 +955,7 @@ def init_db(db_path: str) -> None:
         _apply_mlp4_discovery_query_migration(conn)
         _apply_v2_phase1_artifact_migration(conn)
         _apply_v2_phase3_initial_planner_migration(conn)
+        _apply_v2_phase10_reviewer_ledger_migration(conn)
     finally:
         conn.close()
 
@@ -1552,6 +1564,75 @@ def _apply_v2_phase3_initial_planner_migration(conn: sqlite3.Connection) -> None
             (
                 V2_PHASE3_SCHEMA_VERSION,
                 MIGRATION_DESCRIPTIONS[V2_PHASE3_SCHEMA_VERSION],
+                "2026-08-20T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_v2_phase10_reviewer_ledger_schema(conn: sqlite3.Connection) -> None:
+    """Verify the isolated immutable v2 Ledger-provenance boundary."""
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    triggers = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+    }
+    missing = sorted((_V2_PHASE10_TABLES - tables) | (_V2_PHASE10_TRIGGERS - triggers))
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 13 v2 Reviewer/Ledger schema is missing: {', '.join(missing)}"
+        )
+
+
+def _apply_v2_phase10_reviewer_ledger_migration(conn: sqlite3.Connection) -> None:
+    """Add append-only v2 Ledger provenance without altering historical Ledger rows."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (V2_PHASE10_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[V2_PHASE10_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 13 description is inconsistent")
+        _verify_v2_phase10_reviewer_ledger_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS v2_ledger_admissions (
+                ledger_claim_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES v2_run_identities(run_id),
+                source_id TEXT NOT NULL,
+                research_direction TEXT NOT NULL,
+                discovery_round INTEGER NOT NULL CHECK (discovery_round BETWEEN 1 AND 3),
+                source_family_id TEXT NOT NULL,
+                recommended INTEGER NOT NULL CHECK (recommended IN (0, 1)),
+                relevant_gap_ids_json TEXT NOT NULL,
+                ledger_record_json TEXT NOT NULL,
+                provenance_json TEXT NOT NULL,
+                admitted_at TEXT NOT NULL,
+                UNIQUE (run_id, source_id)
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS v2_ledger_admissions_immutable_update
+                BEFORE UPDATE ON v2_ledger_admissions
+                BEGIN SELECT RAISE(ABORT, 'v2 Ledger admission rows are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_ledger_admissions_immutable_delete
+                BEFORE DELETE ON v2_ledger_admissions
+                BEGIN SELECT RAISE(ABORT, 'v2 Ledger admission rows are immutable'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_v2_phase10_reviewer_ledger_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                V2_PHASE10_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[V2_PHASE10_SCHEMA_VERSION],
                 "2026-08-20T00:00:00+00:00",
             ),
         )
@@ -3279,6 +3360,77 @@ def read_v2_artifact(
         if row is None:
             raise KeyError(f"v2 artifact {artifact_key} for run {run_id} not found")
         return _row_to_v2_artifact(row)
+
+
+def insert_v2_ledger_admission(
+    db_path: str,
+    record: LedgerRecord,
+    provenance: V2LedgerProvenance,
+) -> None:
+    """Append one v2-approved Ledger record with immutable discovery provenance."""
+    record_json = record.model_dump_json()
+    provenance_json = provenance.model_dump_json()
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(record.run_id),),
+        ).fetchone()
+        if identity is None or identity["pipeline_identity"] != V2_PIPELINE_IDENTITY:
+            raise ValueError("v2 Ledger admissions require an explicit v2 run identity")
+        existing = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(record.ledger_claim_id),),
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["ledger_record_json"] != record_json
+                or existing["provenance_json"] != provenance_json
+            ):
+                raise sqlite3.IntegrityError("v2 Ledger admission is immutable")
+            return
+        conn.execute(
+            """INSERT INTO v2_ledger_admissions
+               (ledger_claim_id, run_id, source_id, research_direction, discovery_round,
+                source_family_id, recommended, relevant_gap_ids_json, ledger_record_json,
+                provenance_json, admitted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.ledger_claim_id),
+                str(record.run_id),
+                str(provenance.source_id),
+                provenance.research_direction.value,
+                provenance.discovery_round,
+                provenance.source_family_id,
+                int(provenance.recommended),
+                json.dumps(provenance.relevant_gap_ids, ensure_ascii=False, separators=(",", ":")),
+                record_json,
+                provenance_json,
+                _dt_to_iso(record.ledger_validated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_v2_ledger_admission(
+    db_path: DatabaseReader, ledger_claim_id: UUID
+) -> tuple[LedgerRecord, V2LedgerProvenance]:
+    """Read one immutable v2 Ledger admission and its separate provenance context."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(ledger_claim_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 Ledger admission {ledger_claim_id} not found")
+        return (
+            LedgerRecord.model_validate_json(row["ledger_record_json"]),
+            V2LedgerProvenance.model_validate_json(row["provenance_json"]),
+        )
 
 
 def insert_v2_initial_planner_output(

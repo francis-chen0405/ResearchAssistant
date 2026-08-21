@@ -178,6 +178,7 @@ V2_ADAPTIVE_SEARCH_POLICY_IDENTITY = "researchassistant-v2-phase-7-adaptive-sear
 V2_SOURCE_SELECTION_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v1"
 V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = "researchassistant-v2-phase-8-deep-analysis-queue-v1"
 V2_EVIDENCE_ANALYST_POLICY_IDENTITY = "researchassistant-v2-phase-9-luna-evidence-analyst-v1"
+V2_REVIEWER_LEDGER_POLICY_IDENTITY = "researchassistant-v2-phase-10-reviewer-ledger-v1"
 
 
 class ResearchDirection(StrEnum):
@@ -2563,6 +2564,99 @@ class V2EvidenceAnalystBatchResult(StrictModel):
                 raise ValueError("Phase-9 survivor direction cannot change")
             if (item.source_id in queued) == (item.state is V2EvidenceAnalystState.NOT_QUEUED):
                 raise ValueError("Phase-9 queued state must match Phase-8")
+        return self
+
+
+class V2LedgerProvenance(StrictModel):
+    """Immutable v2 discovery context attached to, but never used to relax, Ledger admission."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    research_direction: ResearchDirection
+    discovery_round: Annotated[int, Field(ge=1, le=3)]
+    source_family_id: NonEmptyStr
+    recommended: bool
+    relevant_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=18)
+
+
+class V2ReviewerLedgerState(StrEnum):
+    NOT_QUEUED = "not_queued"
+    ANALYST_REJECTED = "analyst_rejected"
+    ANALYST_FAILED = "analyst_failed"
+    REVIEWER_REJECTED = "reviewer_rejected"
+    REVIEWER_FAILED = "reviewer_failed"
+    ADMITTED = "admitted"
+
+
+class V2ReviewerLedgerSourceResult(StrictModel):
+    """Complete downstream outcome for one Phase-9 survivor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    source_id: UUID
+    direction: ResearchDirection
+    state: V2ReviewerLedgerState
+    provenance: V2LedgerProvenance
+    review_results: tuple[StatementReviewResult, ...] = Field(max_length=2)
+    ledger_record: LedgerRecord | None = None
+    failure: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def validate_terminal_shape(self) -> V2ReviewerLedgerSourceResult:
+        if self.provenance.source_id != self.source_id:
+            raise ValueError("Ledger provenance source_id must match the source result")
+        if self.provenance.research_direction is not self.direction:
+            raise ValueError("Ledger provenance direction must match the source result")
+        if self.state is V2ReviewerLedgerState.ADMITTED:
+            if self.ledger_record is None or not self.review_results or self.failure is not None:
+                raise ValueError(
+                    "admitted source results require a Ledger record and approval history"
+                )
+            return self
+        if self.ledger_record is not None:
+            raise ValueError("only admitted source results may carry a Ledger record")
+        if (
+            self.state
+            in {
+                V2ReviewerLedgerState.NOT_QUEUED,
+                V2ReviewerLedgerState.ANALYST_REJECTED,
+                V2ReviewerLedgerState.ANALYST_FAILED,
+            }
+            and self.review_results
+        ):
+            raise ValueError("non-Reviewer source results cannot carry Reviewer decisions")
+        if self.state is V2ReviewerLedgerState.REVIEWER_REJECTED and not self.review_results:
+            raise ValueError("Reviewer rejection requires the retained Reviewer decisions")
+        if self.state is V2ReviewerLedgerState.REVIEWER_FAILED and self.failure is None:
+            raise ValueError("Reviewer failure requires an explicit failure reason")
+        return self
+
+
+class V2ReviewerLedgerBatchResult(StrictModel):
+    """Restartable Phase-10 bridge from Analyst survivors to immutable Ledger admissions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    analyst_result: V2EvidenceAnalystBatchResult
+    source_results: tuple[V2ReviewerLedgerSourceResult, ...]
+    completed_at: datetime
+    policy_identity: Literal["researchassistant-v2-phase-10-reviewer-ledger-v1"] = (
+        V2_REVIEWER_LEDGER_POLICY_IDENTITY
+    )
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_complete_results(self) -> V2ReviewerLedgerBatchResult:
+        if self.analyst_result.run_id != self.run_id:
+            raise ValueError("Phase-10 result must match its Phase-9 input")
+        expected = tuple(item.source_id for item in self.analyst_result.source_results)
+        actual = tuple(item.source_id for item in self.source_results)
+        if actual != expected or len(actual) != len(set(actual)):
+            raise ValueError("Phase-10 output must retain every Phase-9 survivor in order")
         return self
 
 

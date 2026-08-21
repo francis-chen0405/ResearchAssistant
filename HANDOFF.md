@@ -1,5 +1,22 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
+
+Status: Complete and verified.
+
+- `agents/v2_reviewer_ledger.py` reuses the established narrow Reviewer input/decision,
+  application-owned approval ID derivation, one allowed Analyst revision, deterministic
+  score placement, and `admit_ledger_record`; it adds no confidence status, replacement
+  wording, or extra quality judge.
+- Migration 13 persists append-only `v2_ledger_admissions` provenance without changing
+  historical Ledger records. Metadata includes direction, round, family, recommendation,
+  survivor, and Gap IDs; recommendation never controls admission.
+- Tests cover approval, rejection/revision, qualified-only, non-recommended admission,
+  disabled directions, approval IDs, migration/immutability, restart, prior release tests,
+  type contracts, and compatibility.
+- Final verification: 748 passed, 2 expected opt-in skips; Ruff check, Ruff format check,
+  and diff check passed. No live call occurred.
+
 ## ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
 
 Phase 9 is complete. `agents/v2_evidence_analyst.py` consumes the bounded Phase-8 queue only

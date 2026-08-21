@@ -253,7 +253,7 @@ def test_v2_initial_planner_persists_and_restarts_without_another_planner_call(
     assert read_v2_artifact(str(db_path), run_id, "phase-3-initial-round-1-plan").artifact_type == (
         "V2InitialPlannerOutput"
     )
-    assert CURRENT_SCHEMA_VERSION == 12
+    assert CURRENT_SCHEMA_VERSION == 13
 
 
 def test_v2_initial_planner_rejects_fingerprint_mismatch(tmp_path: Path) -> None:
