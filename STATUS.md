@@ -1,5 +1,34 @@
 # Status
 
+## 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
+
+Status: Complete and verified.
+
+- Added a complete restart-safe v2 production coordinator covering broad Round 1 through the
+  canonical Phase 11 result envelope, including the previously missing exact-extraction bridge.
+- Added persisted run-wide accounting for every MiMo normal, MiMo Pro, and Luna physical call,
+  including failures/retries. Hard maxima are 160 calls and 300,000 tokens; lower configured
+  ceilings fail closed. Optional continuation protects fourteen downstream calls and Phase 8
+  sizes deep analysis from actual remaining calls, tokens, and cost.
+- Added provider construction for all three physical model aliases and cut fresh website and
+  CLI launches to v2. Historical inspection, rendering, export, immutable evidence, and
+  explicitly injected compatibility paths remain under their original contracts.
+- Expanded the production fingerprint to cover semantic schemas/prompts/policies, directions,
+  provider adapters, model routes, ceilings, research limits, release semantics, and the final
+  output contract. Cross-version/configuration resume is rejected.
+- Added mocked full-path, restart, lower-budget, fingerprint, and all-direction integration
+  coverage. Existing Phase 4–11 suites retain provider/stage degradation, Round 2/3 Governor,
+  cancellation, direction-adversarial, Reviewer/Ledger, API/export, release-blocking, and
+  rendered-hash coverage. No paid provider call or dependency change was made.
+
+Verification:
+
+- Complete Python suite: 772 passed, 2 expected opt-in skips, 0 failed.
+- Focused Phase 12 production suite: 10 passed, including mocked Runs A–H.
+- `ruff check .`, `ruff format --check .`, `git diff --check`, Python compilation, and
+  launcher `zsh -n` syntax passed. Frontend ESLint and the Next.js 16.3.1 production build
+  passed from the existing local dependency installation.
+
 ## 2026-08-21 - ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
 
 Status: Complete and verified.

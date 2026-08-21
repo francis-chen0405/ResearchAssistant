@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import ValidationError as PydanticValidationError
 
+from agents.v2_final_output import render_v2_final_output
 from brief_export import BriefExportFormat, export_released_brief
 from models import (
     DiscoveryProvider,
@@ -19,7 +20,9 @@ from models import (
     ReportLength,
     ResearchControls,
     ResearchDepth,
+    ResearchDirections,
     ResearchFocus,
+    ResearchMode,
 )
 from orchestrator import (
     ClaimMismatchError,
@@ -38,7 +41,16 @@ from providers.config import (
     WigoloConfig,
 )
 from providers.mimo_factory import MimoProviderFactoryConfig
+from providers.v2_budget import V2RunCeilings
+from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 from store import open_read_only_store, read_provider_run_contract
+from v2_orchestrator import (
+    V2ProductionPipelineResult,
+    V2ProductionState,
+    run_v2_production_pipeline,
+)
+
+DEFAULT_PROVIDER_RUNNER = run_mvp3b_pipeline
 
 
 class CLIExitCode(IntEnum):
@@ -171,30 +183,69 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
         print(f"invalid input: {exc}", file=sys.stderr)
         return CLIExitCode.INVALID_INPUT
 
+    legacy_injected = run_mvp3b_pipeline is not DEFAULT_PROVIDER_RUNNER
     try:
         wigolo = WigoloConfig(base_url=environment.get("WIGOLO_BASE_URL", "http://127.0.0.1:8000"))
-        factory_config = MimoProviderFactoryConfig.from_environment(
-            environment,
-            repository_revision=repository_identity(),
-            wigolo=wigolo,
-            ceilings=ceilings,
-            research_controls=controls,
-        )
+        if legacy_injected:
+            factory_config: MimoProviderFactoryConfig | V2ProductionFactoryConfig = (
+                MimoProviderFactoryConfig.from_environment(
+                    environment,
+                    repository_revision=repository_identity(),
+                    wigolo=wigolo,
+                    ceilings=ceilings,
+                    research_controls=controls,
+                )
+            )
+        else:
+            factory_config = V2ProductionFactoryConfig.from_environment(
+                environment,
+                repository_revision=repository_identity(),
+                wigolo=wigolo,
+                discovery_providers=controls.discovery_providers,
+                ceilings=V2RunCeilings(
+                    max_physical_calls=ceilings.max_llm_calls,
+                    max_total_tokens=ceilings.max_tokens,
+                    max_total_cost_usd=ceilings.max_cost_usd,
+                ),
+            )
     except (ProviderConfigurationError, PydanticValidationError, ValueError) as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         return CLIExitCode.CONFIGURATION_ERROR
 
     run_id = args.run_id or UUID(bytes=urandom(16), version=4)
     db_path = args.db_path.resolve()
-    _print_launch_summary(db_path, run_id, claim, factory_config)
+    if isinstance(factory_config, MimoProviderFactoryConfig):
+        _print_launch_summary(db_path, run_id, claim, factory_config)
+    else:
+        _print_v2_launch_summary(db_path, run_id, claim, factory_config, controls)
     try:
-        result = run_mvp3b_pipeline(
-            claim,
-            db_path=db_path,
-            factory_config=factory_config,
-            run_id=run_id,
-            research_controls=controls,
-        )
+        if isinstance(factory_config, MimoProviderFactoryConfig):
+            result = run_mvp3b_pipeline(
+                claim,
+                db_path=db_path,
+                factory_config=factory_config,
+                run_id=run_id,
+                research_controls=controls,
+            )
+        else:
+            bundle = build_v2_production_bundle(factory_config)
+            v2_result = run_v2_production_pipeline(
+                claim,
+                db_path=db_path,
+                directions=ResearchDirections(
+                    support_enabled=True,
+                    challenge_enabled=controls.research_mode is ResearchMode.BALANCED,
+                ),
+                discovery_providers=factory_config.discovery_providers,
+                search_providers=bundle.search_providers,
+                wigolo_provider=bundle.wigolo,
+                firecrawl_provider=bundle.firecrawl,
+                llm_provider=bundle.llm,
+                routing_config=factory_config.routing,
+                ceilings=factory_config.ceilings,
+                run_id=run_id,
+                provider_policy_fingerprint=factory_config.semantic_fingerprint_sha256(),
+            )
     except ClaimMismatchError as exc:
         print(f"invalid input: {exc}", file=sys.stderr)
         return CLIExitCode.INVALID_INPUT
@@ -210,7 +261,11 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
     except Exception as exc:
         print(f"run failed before a terminal result: {type(exc).__name__}: {exc}", file=sys.stderr)
         return CLIExitCode.FAILED
-    return _print_provider_result(result)
+    return (
+        _print_provider_result(result)
+        if isinstance(factory_config, MimoProviderFactoryConfig)
+        else _print_v2_result(v2_result)
+    )
 
 
 def _validate_exact_claim(value: str) -> str:
@@ -331,6 +386,47 @@ def _print_provider_result(result: ProviderPipelineResult) -> int:
         print("run state: valid and nonterminal")
         return CLIExitCode.RUNNING
     raise ValueError(f"unsupported provider run status: {result.status!r}")
+
+
+def _print_v2_launch_summary(
+    db_path: Path,
+    run_id: UUID,
+    claim: str,
+    config: V2ProductionFactoryConfig,
+    controls: ResearchControls,
+) -> None:
+    print(f"database: {db_path}")
+    print(f"run id: {run_id}")
+    print(f"claim: {claim}")
+    print("production pipeline: ResearchAssistant v2 Phases 3-11")
+    print(
+        "model routes: MiMo-v2.5 planning/selection, MiMo-v2.5-Pro extraction/synthesis, "
+        "Luna analysis/gap/review"
+    )
+    print(f"token budget: {config.ceilings.max_total_tokens}")
+    print(f"cost budget usd: {config.ceilings.max_total_cost_usd}")
+    print(f"physical llm call budget: {config.ceilings.max_physical_calls}")
+    print(f"research mode: {controls.research_mode.value}")
+
+
+def _print_v2_result(result: V2ProductionPipelineResult) -> int:
+    print(f"status: {result.state.value}")
+    print(f"physical model calls: {result.budget.physical_calls_used}")
+    print(f"token exposure: {result.budget.token_exposure}")
+    if result.state is V2ProductionState.RELEASED:
+        assert result.final_output is not None
+        print(f"rendered hash: {result.final_output.release_validation.rendered_output_hash}")
+        print("final brief:")
+        print(render_v2_final_output(result.final_output))
+        return CLIExitCode.RELEASED
+    if result.state is V2ProductionState.BLOCKED:
+        print(f"reason: {result.failure_reason}")
+        return CLIExitCode.BLOCKED
+    if result.state is V2ProductionState.CANCELLED:
+        print(f"reason: {result.failure_reason}")
+        return CLIExitCode.CANCELLED
+    print(f"reason: {result.failure_reason}")
+    return CLIExitCode.FAILED
 
 
 def _run_fixture_command(fixture_dir: Path, output_dir: Path | None) -> int:

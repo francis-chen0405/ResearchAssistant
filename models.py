@@ -1457,7 +1457,7 @@ class V2DeepAnalysisBudget(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    physical_call_ceiling: Literal[160] = 160
+    physical_call_ceiling: Annotated[int, Field(ge=1, le=160)] = 160
     physical_calls_used: Annotated[int, Field(ge=0, le=160)]
     tokens_remaining: NonNegativeInt
     cost_remaining_usd: ExactUSD
@@ -2421,8 +2421,15 @@ class V2EvidenceAnalystBatchInput(StrictModel):
         if self.queue_result.input.directions != self.directions:
             raise ValueError("Phase-9 directions must match Phase-8")
         source_ids = tuple(item.source_id for item in self.queued_candidates)
-        if source_ids != self.queue_result.queued_source_ids:
-            raise ValueError("Phase-9 candidates must reproduce the complete queue order")
+        expected_order = tuple(
+            source_id
+            for source_id in self.queue_result.queued_source_ids
+            if source_id in set(source_ids)
+        )
+        if source_ids != expected_order or len(source_ids) != len(set(source_ids)):
+            raise ValueError(
+                "Phase-9 candidates must be a unique order-preserving subset of the queue"
+            )
         for item in self.queued_candidates:
             if item.candidate.run_id != self.run_id:
                 raise ValueError("Phase-9 candidates must match the run")
@@ -2515,14 +2522,16 @@ class V2EvidenceAnalystSourceResult(StrictModel):
             if self.analyst_attempt_ids or self.failure is not None:
                 raise ValueError("non-queued survivors cannot carry Analyst attempt state")
             return self
-        if self.candidate is None:
-            raise ValueError("queued survivor results must retain their exact candidate")
         if self.state is V2EvidenceAnalystState.FAILED:
             if self.failure is None:
                 raise ValueError("failed Analyst results require a failure reason")
             if self.statement_draft is not None:
                 raise ValueError("failed Analyst results cannot be Reviewer-ready")
+            if self.candidate is None and any(value is not None for value in semantic_values):
+                raise ValueError("failed extraction cannot carry Analyst semantic artifacts")
             return self
+        if self.candidate is None:
+            raise ValueError("completed queued results must retain their exact candidate")
         if self.failure is not None or self.assessment is None or self.score_decision is None:
             raise ValueError("completed Analyst results require assessment and score decision")
         if self.state is V2EvidenceAnalystState.REJECTED:

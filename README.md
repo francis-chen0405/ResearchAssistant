@@ -1,14 +1,15 @@
 # ResearchAssistant
 
-ResearchAssistant is a phase-gated research system that investigates a claim with an optional
-counterevidence lane and produces an evidence-constrained brief. It separates
+ResearchAssistant is a phase-gated research system that investigates a claim with independently
+controlled supporting and challenging directions and produces an evidence-constrained result.
+Fresh website and CLI runs use the completed ResearchAssistant v2 production pipeline. It separates
 retrieval, semantic review, Ledger admission, synthesis, and deterministic release validation so
 that a released factual sentence must exactly match a separately reviewed statement in the Claim
 Ledger.
 
-The research pipeline is complete through MVP-11 Adaptive Research Expansion & Cost
-Control (Research Governor). MLP-1 through MLP-4 are complete; MLP-4 Research Quality &
-OpenAlex Integration is the latest product-experience phase.
+The v2 research pipeline is complete through Phase 12 Production Hardening and Cutover.
+The historical MVP-11/MLP product pipeline remains readable for persisted runs but is no
+longer the fresh-run execution route.
 It includes strict Pydantic contracts, SQLite audit
 persistence, deterministic source and quotation checks, vendor-neutral provider protocols,
 synchronous provider-backed orchestration, live CLI and local live website, a separate offline
@@ -69,6 +70,43 @@ claim-keyword match remains audit metadata for semantic Analyst review. Exact sn
 Reviewer, Ledger, and final-release gates remain strict.
 
 ## How the system works
+
+Fresh v2 production runs follow this path:
+
+```text
+exact claim + support/challenge controls
+  -> broad Round 1 planning and provider search
+  -> normalization, conservative clustering, batched Scout
+  -> Wigolo acquisition with optional verified Firecrawl fallback
+  -> immutable snapshots and deterministic Probe
+  -> Luna Gap Analysis
+  -> optional gap-directed Round 2
+  -> optional Governor-authorized Round 3 (never Round 4)
+  -> complete survivor pool and MiMo source recommendations
+  -> budget-derived deep-analysis queue
+  -> MiMo Pro exact passage selection and application quote assembly
+  -> Luna Evidence Analyst
+  -> MiMo Pro Reviewer and immutable Claim Ledger admission
+  -> MiMo Pro Ledger-constrained synthesis
+  -> canonical Phase 11 result envelope
+  -> deterministic release validation and complete rendered-output hash
+```
+
+One persisted provider boundary counts every physical model attempt and retry across all
+three model routes. Fresh runs cannot exceed 160 calls or 300,000 tokens and may configure
+lower ceilings. Optional continuation protects downstream work; deep-analysis capacity is
+derived from the actual remaining calls, tokens, and exact cost. Survivors excluded from
+deep analysis remain visible with an explicit budget or failure status, while recommended
+sources are a prioritized subset rather than a replacement for the complete pool.
+
+Model routing is fixed: MiMo-v2.5 handles Scout; MiMo-v2.5-Pro handles initial planning,
+adaptive search planning, source selection, exact extraction, Reviewer, and synthesis;
+GPT-5.6 Luna High handles Gap Analysis and semantic Evidence Analyst work. The application,
+not a model, owns direction enforcement, quote construction, score/placement derivation,
+Ledger admission, research-round authorization, and release validation.
+
+The following diagram documents the retained historical MVP/MLP pipeline used to inspect
+older runs; it is not the fresh-run route after Phase 12.
 
 ```text
 Raw claim

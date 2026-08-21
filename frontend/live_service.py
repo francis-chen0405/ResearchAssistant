@@ -14,14 +14,19 @@ from uuid import UUID, uuid4
 
 from pydantic import Field, field_validator
 
+from agents.v2_final_output import render_v2_final_output
 from cli import CLIExitCode, repository_identity
 from frontend.security import redact_text
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
     ResearchControls,
+    ResearchDirections,
+    ResearchMode,
     RunManifest,
+    Stage,
     StrictModel,
+    V2ResultSource,
 )
 from money import ExactUSD
 from orchestrator import (
@@ -36,15 +41,23 @@ from orchestrator import (
     ResearcherPairResult,
     inspect_provider_run,
     request_run_cancellation,
-    run_mvp3b_pipeline,
 )
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
+from providers.v2_budget import V2RunCeilings
+from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 from store import (
     list_runs,
     open_read_only_store,
     read_provider_run_contract,
     read_stage_artifact,
+    read_v2_artifact,
+)
+from v2_orchestrator import (
+    V2_PRODUCTION_ARTIFACT_KEY,
+    V2ProductionPipelineResult,
+    V2ProductionState,
+    run_v2_production_pipeline,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -75,7 +88,7 @@ class LiveRunRequest(StrictModel):
     raw_claim: str = Field(min_length=1)
     db_path: str = Field(min_length=1)
     run_id: UUID | None = None
-    max_tokens: int = Field(ge=1, le=1_000_000)
+    max_tokens: int = Field(ge=1, le=300_000)
     max_cost_usd: Decimal = Field(gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS
@@ -240,12 +253,12 @@ class LiveResearchController:
         self,
         *,
         environment: Mapping[str, str],
-        runner: Callable[..., ProviderPipelineResult] = run_mvp3b_pipeline,
+        runner: Callable[..., ProviderPipelineResult] | None = None,
         inspector: Callable[..., ProviderPipelineResult] = inspect_provider_run,
         max_workers: int = 2,
     ) -> None:
         self._environment = environment
-        self._runner = runner
+        self._legacy_runner = runner
         self._inspector = inspector
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="mvp5-live")
         self._lock = Lock()
@@ -254,10 +267,17 @@ class LiveResearchController:
 
     def configuration_message(self) -> str | None:
         try:
-            MimoProviderFactoryConfig.from_environment(
-                self._environment,
-                repository_revision=repository_identity(),
-            )
+            if self._legacy_runner is None:
+                V2ProductionFactoryConfig.from_environment(
+                    self._environment,
+                    repository_revision=repository_identity(),
+                    discovery_providers=LEGACY_LIVE_RESEARCH_CONTROLS.discovery_providers,
+                )
+            else:
+                MimoProviderFactoryConfig.from_environment(
+                    self._environment,
+                    repository_revision=repository_identity(),
+                )
         except Exception as exc:
             return self._redact(exc)
         return None
@@ -293,21 +313,35 @@ class LiveResearchController:
                     ),
                 )
         try:
-            ceilings = RunCeilings(
-                max_tokens=request.max_tokens,
-                max_cost_usd=request.max_cost_usd,
-                max_llm_calls=request.max_llm_calls,
-            )
             wigolo = WigoloConfig(
                 base_url=self._environment.get("WIGOLO_BASE_URL", "http://127.0.0.1:8000")
             )
-            factory_config = MimoProviderFactoryConfig.from_environment(
-                self._environment,
-                repository_revision=repository_identity(),
-                wigolo=wigolo,
-                ceilings=ceilings,
-                research_controls=request.research_controls,
-            )
+            if self._legacy_runner is None:
+                factory_config: MimoProviderFactoryConfig | V2ProductionFactoryConfig = (
+                    V2ProductionFactoryConfig.from_environment(
+                        self._environment,
+                        repository_revision=repository_identity(),
+                        discovery_providers=request.research_controls.discovery_providers,
+                        wigolo=wigolo,
+                        ceilings=V2RunCeilings(
+                            max_physical_calls=request.max_llm_calls,
+                            max_total_tokens=request.max_tokens,
+                            max_total_cost_usd=request.max_cost_usd,
+                        ),
+                    )
+                )
+            else:
+                factory_config = MimoProviderFactoryConfig.from_environment(
+                    self._environment,
+                    repository_revision=repository_identity(),
+                    wigolo=wigolo,
+                    ceilings=RunCeilings(
+                        max_tokens=request.max_tokens,
+                        max_cost_usd=request.max_cost_usd,
+                        max_llm_calls=request.max_llm_calls,
+                    ),
+                    research_controls=request.research_controls,
+                )
         except Exception as exc:
             snapshot = self._early_snapshot(
                 request,
@@ -360,6 +394,13 @@ class LiveResearchController:
             active = self._active.get(key)
             early = self._early_results.get(key)
         if Path(resolved).is_file():
+            try:
+                artifact = read_v2_artifact(resolved, run_id, V2_PRODUCTION_ARTIFACT_KEY)
+                return self._snapshot_from_v2_result(
+                    V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
+                )
+            except KeyError:
+                pass
             try:
                 result = self._inspector(resolved, run_id)
                 return self._snapshot_from_result(result)
@@ -528,18 +569,42 @@ class LiveResearchController:
         self,
         request: LiveRunRequest,
         run_id: UUID,
-        factory_config: MimoProviderFactoryConfig,
+        factory_config: MimoProviderFactoryConfig | V2ProductionFactoryConfig,
         database_lock: _DatabaseLock,
     ) -> LiveRunSnapshot:
         try:
-            result = self._runner(
+            if isinstance(factory_config, V2ProductionFactoryConfig):
+                bundle = build_v2_production_bundle(factory_config)
+                result = run_v2_production_pipeline(
+                    request.raw_claim,
+                    db_path=request.db_path,
+                    directions=ResearchDirections(
+                        support_enabled=True,
+                        challenge_enabled=(
+                            request.research_controls.research_mode is ResearchMode.BALANCED
+                        ),
+                    ),
+                    discovery_providers=factory_config.discovery_providers,
+                    search_providers=bundle.search_providers,
+                    wigolo_provider=bundle.wigolo,
+                    firecrawl_provider=bundle.firecrawl,
+                    llm_provider=bundle.llm,
+                    routing_config=factory_config.routing,
+                    ceilings=factory_config.ceilings,
+                    run_id=run_id,
+                    provider_policy_fingerprint=(factory_config.semantic_fingerprint_sha256()),
+                )
+                return self._snapshot_from_v2_result(result)
+            if self._legacy_runner is None:
+                raise TypeError("legacy factory cannot be used by the fresh-v2 runner")
+            legacy_result = self._legacy_runner(
                 request.raw_claim,
                 db_path=request.db_path,
                 factory_config=factory_config,
                 run_id=run_id,
                 research_controls=request.research_controls,
             )
-            return self._snapshot_from_result(result)
+            return self._snapshot_from_result(legacy_result)
         except ClaimMismatchError as exc:
             return self._early_snapshot(
                 request, run_id, "invalid_input", CLIExitCode.INVALID_INPUT, self._redact(exc)
@@ -633,6 +698,66 @@ class LiveResearchController:
                 contract_controls(contract.policy_identity)
                 if contract is not None
                 else DEFAULT_RESEARCH_CONTROLS
+            ),
+        )
+
+    def _snapshot_from_v2_result(
+        self,
+        result: V2ProductionPipelineResult,
+    ) -> LiveRunSnapshot:
+        output = result.final_output
+        directions = output.directions if output is not None else ResearchDirections()
+        sources = output.all_surviving_sources if output is not None else ()
+        classification: LiveClassification = result.state.value
+        exit_code = {
+            V2ProductionState.RELEASED: CLIExitCode.RELEASED,
+            V2ProductionState.BLOCKED: CLIExitCode.BLOCKED,
+            V2ProductionState.FAILED: CLIExitCode.FAILED,
+            V2ProductionState.CANCELLED: CLIExitCode.CANCELLED,
+        }[result.state]
+        return LiveRunSnapshot(
+            run_id=result.run_id,
+            db_path=result.db_path,
+            raw_claim=result.raw_claim,
+            classification=classification,
+            exit_code=int(exit_code),
+            stage=Stage.FINAL_RENDERER_VALIDATOR.value,
+            latest_checkpoint=V2_PRODUCTION_ARTIFACT_KEY,
+            completed_checkpoints=10,
+            total_checkpoints=10,
+            current_research_round=(output.stopping.completed_rounds if output else 1),
+            progress_percent=100,
+            message=(
+                "Research completed and passed release validation."
+                if result.state is V2ProductionState.RELEASED
+                else result.failure_reason or "Research stopped before release."
+            ),
+            diagnostic_component="v2-production",
+            model_calls_used=result.budget.physical_calls_used,
+            retrieval_attempts_used=len(sources),
+            total_tokens=result.budget.token_exposure,
+            total_cost_usd=result.budget.cost_exposure_usd,
+            known_token_subtotal=result.budget.token_exposure,
+            known_cost_subtotal_usd=result.budget.cost_exposure_usd,
+            token_usage_complete=True,
+            cost_usage_complete=True,
+            conservative_reserved_tokens=result.budget.token_exposure,
+            conservative_reserved_cost_usd=result.budget.cost_exposure_usd,
+            supporting=_v2_research_progress(sources, "supporting", directions.support_enabled),
+            opposing=_v2_research_progress(sources, "opposing", directions.challenge_enabled),
+            validation_errors=(
+                tuple(error.message for error in output.release_validation.errors)
+                if output is not None
+                else ()
+            ),
+            final_brief=(render_v2_final_output(output) if output is not None else None),
+            rendered_brief_hash=(
+                output.release_validation.rendered_output_hash if output is not None else None
+            ),
+            research_controls=ResearchControls(
+                research_mode=(
+                    ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+                ),
             ),
         )
 
@@ -771,6 +896,24 @@ def _empty_progress(stance: Literal["supporting", "opposing"]) -> ResearchProgre
         retrieval_attempts=0,
         usable_snapshots=0,
         candidates=0,
+    )
+
+
+def _v2_research_progress(
+    sources: tuple[V2ResultSource, ...],
+    stance: Literal["supporting", "opposing"],
+    enabled: bool,
+) -> ResearchProgress:
+    direction = "support" if stance == "supporting" else "challenge"
+    matching = tuple(source for source in sources if source.direction.value == direction)
+    analyzed = sum("analyzed" in source.status.value for source in matching)
+    return ResearchProgress(
+        stance=stance,
+        status="completed" if enabled else "disabled",
+        model_attempts=analyzed,
+        retrieval_attempts=len(matching),
+        usable_snapshots=len(matching),
+        candidates=analyzed,
     )
 
 

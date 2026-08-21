@@ -22,5 +22,8 @@ class ProviderClients(StrictModel):
     acquisition: httpx.Client | None = None
     fallback_acquisition: httpx.Client | None = None
     llm: httpx.Client | None = None
+    mimo_v25_llm: httpx.Client | None = None
+    mimo_v25_pro_llm: httpx.Client | None = None
+    luna_llm: httpx.Client | None = None
     health_verified: bool = False
     host_resolver: Callable[[str], Sequence[str]] | None = None

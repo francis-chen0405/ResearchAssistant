@@ -1,5 +1,42 @@
 # Debate Research Agent System
 
+## Fresh v2 Production Architecture
+
+`v2_orchestrator.py` is the only fresh website/CLI research coordinator. It joins the
+completed Phase 3–11 boundaries without replacing their append-only artifacts:
+
+```text
+claim + direction controls -> broad Round 1 -> normalize/cluster -> Scout
+-> acquisition -> deterministic Probe -> Luna Gap Analysis
+-> optional Round 2 -> optional Governor-authorized Round 3
+-> complete survivor pool -> recommendation -> budget-derived queue
+-> exact extraction -> Luna Evidence Analyst -> Reviewer -> Claim Ledger
+-> Ledger-only synthesis -> Phase 11 result envelope
+-> deterministic release validation -> rendered-output hash
+```
+
+The persisted `BudgetedV2LLMProvider` is the run-wide authority for every physical model
+attempt, including failures and retries. The immutable ceiling is at most 160 calls and
+300,000 tokens, with lower configured values supported. It reserves conservatively before
+each physical call, reconciles exact usage when available, and preserves uncertain exposure.
+Optional research receives budget only after the downstream reserve; Phase 8 derives queue
+capacity from the remaining call/token/cost budget and retains a status for every survivor.
+
+Fresh routing is MiMo-v2.5 for Scout; MiMo-v2.5-Pro for Planner, Search Agent, Source
+Selection, exact Extractor, Reviewer, and Synthesizer; and GPT-5.6 Luna High for Gap Analysis
+and Evidence Analyst. All direction, provider/round eligibility, exact quote assembly,
+score/placement derivation, Ledger admission, and final release decisions remain
+application-owned. The production fingerprint covers routes/models/prices, custom prompt
+hashes, key schemas, direction/provider controls, provider adapter policies, evidence and
+release policies, research-governor settings, downstream reserve, ceilings, and the canonical
+Phase 11 final-output contract.
+
+Every stage is restart-safe. Compatible completed artifacts are reused; incomplete physical
+attempts remain charged conservatively. Cross-claim, cross-route, cross-provider-policy, or
+cross-semantic-policy resume fails before new work. Historical provider contracts, evidence,
+rendering, inspection, and exports remain under their original versions and are never migrated
+or reinterpreted as v2.
+
 ## Agent Roster
 
 **Claim Planner** — Defines scope, logical angles, and search strategy.
@@ -19,7 +56,7 @@ connection, cursor, transaction, or in-memory mutable handoff between workers. E
 worker returns typed Pydantic output to the coordinator; any persistence is performed
 after workers finish or through worker-local short-lived SQLite connections.
 
-## Required Workflow
+## Historical MVP/MLP Workflow (retained compatibility)
 
 ```text
 Raw Claim

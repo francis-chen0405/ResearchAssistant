@@ -43,7 +43,7 @@ from models import (
     validate_planner_provider_selection,
 )
 from money import parse_exact_usd
-from providers.config import MimoConfig, MimoRouteConfig
+from providers.config import LunaConfig, MimoConfig, MimoRouteConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
 from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap, conservative_token_estimate
 
@@ -161,7 +161,7 @@ class XiaomiMimoAdapter:
 
     def __init__(
         self,
-        config: MimoConfig | MimoRouteConfig,
+        config: MimoConfig | MimoRouteConfig | LunaConfig,
         *,
         client: httpx.Client | None = None,
         price_cap: ModelPriceCap = DIRECT_MIMO_PRICE_CAP,
@@ -362,7 +362,10 @@ class XiaomiMimoAdapter:
         self._thread_state.last_failure_usage = usage
 
 
-def _request_payload(request: LLMRequest, config: MimoConfig) -> dict[str, Any]:
+def _request_payload(
+    request: LLMRequest,
+    config: MimoConfig | MimoRouteConfig | LunaConfig,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": config.model,
         "messages": [{"role": "user", "content": _direct_mimo_prompt(request)}],
@@ -639,7 +642,10 @@ def _assemble_synthesis(
     )
 
 
-def _deadline_for(stage: LLMStage, config: MimoConfig | MimoRouteConfig) -> float:
+def _deadline_for(
+    stage: LLMStage,
+    config: MimoConfig | MimoRouteConfig | LunaConfig,
+) -> float:
     return getattr(config.deadlines, f"{stage.value}_seconds")
 
 

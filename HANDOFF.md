@@ -1,5 +1,34 @@
 # Handoff
 
+## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
+
+Status: Complete. Fresh website and CLI runs now use `run_v2_production_pipeline()` and the
+three-route production bundle. The Phase 11 `V2FinalResearchOutput` remains the canonical
+fresh result; the API, Next.js renderer, and local exports consume that persisted envelope.
+Historical runs continue through historical inspection/render/export and are not relabeled.
+
+The coordinator persists Round-1 search outcomes, every existing Phase 3–11 checkpoint, an
+exact-extraction bridge artifact, a semantic/provider production fingerprint, per-physical-call
+starts/completions, and the terminal Phase 12 result. Restart reuses compatible artifacts and
+cannot duplicate Ledger admissions. A failed run may resume under the exact claim and complete
+fingerprint; incomplete calls remain conservatively counted.
+
+Hard ceilings are 160 physical LLM calls and 300,000 tokens, with lower limits supported.
+Fourteen calls are protected before downstream selection/extraction/analysis/review/synthesis;
+Phase 8 then applies its existing worst-case per-source reservation. Ordinary provider/source
+failures preserve typed audit state and compatible work; direction, immutable quote, Reviewer,
+Ledger, synthesis, and release-integrity failures remain closed gates.
+
+Fresh model routes are MiMo-v2.5 Scout; MiMo-v2.5-Pro Planner/Search Agent/Source
+Selection/Extractor/Reviewer/Synthesizer; and GPT-5.6 Luna High Gap Analysis/Evidence Analyst.
+The transport remains OpenAI-compatible and validates the exact configured returned model.
+No live paid calls or dependency changes were made.
+
+Final verification at this handoff: complete Python suite 772 passed, 2 expected opt-in skips;
+focused Phase 12 suite 10 passed with mocked Runs A–H; Ruff lint/format, diff check, Python compilation, launcher
+syntax, frontend ESLint, and the Next.js 16.3.1 production build passed. The only warning is
+the existing Starlette TestClient/httpx deprecation.
+
 ## ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
 
 Status: Complete and verified.

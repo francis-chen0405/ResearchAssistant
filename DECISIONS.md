@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
+
+- Make `v2_orchestrator.py` the only default coordinator for fresh website and CLI runs.
+  Preserve the historical coordinator for read-only inspection, rendering, export, and
+  explicitly injected compatibility tests; never reinterpret historical rows as v2.
+- Put a persisted run-wide accounting wrapper immediately around the routed physical LLM
+  provider. Count every attempt and retry before transport, cap fresh runs at 160 calls and
+  300,000 tokens, support lower limits, and retain conservative exposure when exact usage is
+  unavailable.
+- Protect fourteen downstream calls before optional continuation and fail closed when that
+  reserve cannot cover selection, extraction, analysis, review, and synthesis. Continue to
+  use Phase 8's worst-case per-source queue reservations against actual remaining budget.
+- Add the missing restart-safe exact-extraction bridge between the Phase 8 queue and Phase 9
+  Analyst. Preserve per-source extraction failure without fuzzy healing or removing the source
+  from the final survivor disclosures.
+- Fingerprint LLM routes/models/prices, custom v2 prompts, key schemas, directions, provider
+  adapter policies, round/evidence/Governor/release policies, ceilings, reserve, and the Phase
+  11 result contract. Any mismatch requires a new run ID.
+- Keep the Phase 11 envelope canonical. Product snapshots, API, rendering, and exports read it
+  additively; only its deterministic validated rendering may be released or hashed.
+
 ## 2026-08-21 - ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
 
 - Use MiMo-v2.5-Pro only for bounded ordering of strict typed v2 Ledger items. Exclude raw

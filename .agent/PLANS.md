@@ -2,6 +2,19 @@
 
 Canonical phase plans live in `.agent/plans/`.
 
+## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
+
+The user explicitly authorized and completed v2 Phase 12 on 2026-08-21. It joins the
+restart-safe Phase 3–11 stages into the fresh website/CLI production path, adds one
+persisted 160-call/300,000-token accounting authority and exact-extraction bridge, protects
+downstream budget, closes the semantic/provider fingerprint, and keeps historical runs under
+their original inspection/render/export contracts. No paid provider call, dependency, or
+historical evidence migration is part of the phase.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-12-production-hardening-cutover.md`
+
 ## ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
 
 The user explicitly authorized v2 Phase 11 on 2026-08-21. It adds the constrained v2

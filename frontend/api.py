@@ -166,7 +166,7 @@ class ResearchStartInput(StrictModel):
     acknowledged_public: bool
     db_path: str | None = None
     run_id: UUID | None = None
-    max_tokens: int = Field(default=200_000, ge=1, le=1_000_000)
+    max_tokens: int = Field(default=200_000, ge=1, le=300_000)
     max_cost_usd: Decimal = Field(default=Decimal("0.15"), gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     include_counterevidence: bool = False

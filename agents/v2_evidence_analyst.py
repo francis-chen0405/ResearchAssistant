@@ -105,12 +105,22 @@ def run_v2_evidence_analyst(
     for survivor in batch_input.queue_result.input.survivors:
         candidate_input = queued.get(survivor.source_id)
         if candidate_input is None:
+            queued_for_analysis = survivor.source_id in batch_input.queue_result.queued_source_ids
             results.append(
                 V2EvidenceAnalystSourceResult(
                     run_id=batch_input.run_id,
                     source_id=survivor.source_id,
                     direction=survivor.direction,
-                    state=V2EvidenceAnalystState.NOT_QUEUED,
+                    state=(
+                        V2EvidenceAnalystState.FAILED
+                        if queued_for_analysis
+                        else V2EvidenceAnalystState.NOT_QUEUED
+                    ),
+                    failure=(
+                        "Exact extraction did not produce a deterministically valid candidate."
+                        if queued_for_analysis
+                        else None
+                    ),
                 )
             )
             continue
