@@ -92,6 +92,7 @@ class LiveRunRequest(StrictModel):
     max_cost_usd: Decimal = Field(gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS
+    directions: ResearchDirections = ResearchDirections()
 
     @field_validator("raw_claim")
     @classmethod
@@ -578,12 +579,7 @@ class LiveResearchController:
                 result = run_v2_production_pipeline(
                     request.raw_claim,
                     db_path=request.db_path,
-                    directions=ResearchDirections(
-                        support_enabled=True,
-                        challenge_enabled=(
-                            request.research_controls.research_mode is ResearchMode.BALANCED
-                        ),
-                    ),
+                    directions=request.directions,
                     discovery_providers=factory_config.discovery_providers,
                     search_providers=bundle.search_providers,
                     wigolo_provider=bundle.wigolo,

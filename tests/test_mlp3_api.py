@@ -256,6 +256,24 @@ def test_start_freezes_selected_discovery_sources_and_rejects_an_empty_set(tmp_p
     assert "at least one" in rejected.json()["detail"]
 
 
+def test_start_preserves_independent_v2_research_directions(tmp_path: Path) -> None:
+    client, controller, _ = _client()
+    response = client.post(
+        "/api/research/start",
+        json={
+            "raw_claim": "A public claim",
+            "acknowledged_public": True,
+            "db_path": str(tmp_path / "challenge-only.sqlite3"),
+            "support_enabled": False,
+            "challenge_enabled": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert controller.started[0].directions.support_enabled is False
+    assert controller.started[0].directions.challenge_enabled is True
+
+
 def test_snapshot_history_cancellation_and_service_controls(tmp_path: Path) -> None:
     client, controller, _ = _client()
     database = str(tmp_path / "live.sqlite3")

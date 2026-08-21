@@ -108,6 +108,13 @@ dd { margin: 0; font-family: Georgia, serif; font-size: 23px; }
 .brief-paper h3 { margin: 28px 0 12px; font-size: 13px; letter-spacing: 0.07em; text-transform: uppercase; }
 .brief-paper p { color: #3e413b; font-family: Georgia, serif; font-size: 18px; line-height: 1.72; }
 .brief-paper mark { margin: 0 2px; padding: 2px 5px; border-radius: 4px; color: var(--signal-dark); background: rgba(228, 91, 53, 0.1); font-family: "Helvetica Neue", sans-serif; font-size: 11px; font-weight: 600; }
+.source-cards, .evidence-list { display: grid; gap: 12px; }
+.source-card, .evidence-card { padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 254, 250, 0.52); }
+.source-card > a { color: var(--ink); font-family: Georgia, serif; font-size: 18px; text-decoration-color: var(--signal); }
+.source-card small { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+.source-card p, .evidence-card p { margin: 11px 0 0; font-size: 14px; line-height: 1.55; }
+.evidence-card h3 { margin-top: 0; color: var(--ink); font-family: Georgia, serif; font-size: 22px; letter-spacing: -0.02em; text-transform: none; }
+.evidence-card blockquote { margin: 16px 0; padding: 13px 16px; border-left: 3px solid var(--signal); background: rgba(228, 91, 53, 0.06); color: #3e413b; font-family: Georgia, serif; font-size: 16px; line-height: 1.55; }
 .empty-brief { padding: 30px; border-left: 3px solid var(--signal); background: rgba(255, 254, 250, 0.5); }
 .empty-brief h3 { font-family: Georgia, serif; font-size: 28px; font-weight: 400; text-transform: none; }
 .report-meta { position: sticky; top: 30px; align-self: start; }
@@ -166,6 +173,7 @@ dd { margin: 0; font-family: Georgia, serif; font-size: 23px; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0; }
 .research-options { display: grid; grid-template-columns: 1fr auto; gap: 18px 20px; align-items: center; margin-top: 28px; padding: 20px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 254, 250, 0.52); }
 .option-copy { display: grid; gap: 5px; }
+.option-row { display: contents; }
 .option-copy strong { font-size: 13px; font-weight: 600; }
 .option-copy span { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .switch { position: relative; width: 44px; height: 24px; padding: 0; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper-deep); cursor: pointer; transition: background 160ms ease; }

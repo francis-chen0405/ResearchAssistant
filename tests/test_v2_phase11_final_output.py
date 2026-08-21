@@ -233,6 +233,14 @@ def test_v2_export_and_api_schema_use_the_persisted_final_output(tmp_path: Path)
     }
     assert response.json()["all_surviving_sources"][0]["status"] == "recommended_analyzed"
 
+    with TestClient(app) as client:
+        evidence = client.get(
+            f"/api/research/{reviewer_result.run_id}/v2-evidence", params={"db_path": path}
+        )
+    assert evidence.status_code == 200
+    assert evidence.json()["items"][0]["validation_status"] == "admitted"
+    assert evidence.json()["items"][0]["quote_passage"]
+
 
 @pytest.mark.parametrize(
     ("directions", "section_type"),

@@ -135,6 +135,25 @@ export type V2FinalResearchOutput = {
   release_validation: { valid: boolean; rendered_output_hash: string | null };
 };
 
+export type V2EvidenceDisplay = {
+  run_id: string;
+  items: {
+    source_id: string;
+    title: string | null;
+    source_url: string;
+    source_family: string;
+    direction: "support" | "challenge";
+    recommendation_status: string;
+    selection_rationale: string | null;
+    gap_ids: string[];
+    evidence_summary: string;
+    supporting_proposition: string;
+    quote_passage: string;
+    limitations: string[];
+    validation_status: string;
+  }[];
+};
+
 type StartInput = {
   raw_claim: string;
   acknowledged_public: boolean;
@@ -143,7 +162,8 @@ type StartInput = {
   max_tokens: number;
   max_cost_usd: string;
   max_llm_calls: number;
-  include_counterevidence: boolean;
+  support_enabled: boolean;
+  challenge_enabled: boolean;
   sources_per_stance_per_round: 5 | 10 | 15 | 20;
   use_serpsearch: boolean;
   use_exa: boolean;
@@ -204,6 +224,8 @@ export const researchApi = {
     request<{ run_id: string; items: ResearchTrailItem[] }>(`/api/research/${runId}/trail?db_path=${encodeURIComponent(database)}`),
   v2Result: (runId: string, database: string) =>
     request<V2FinalResearchOutput>(`/api/research/${runId}/v2-result?db_path=${encodeURIComponent(database)}`),
+  v2Evidence: (runId: string, database: string) =>
+    request<V2EvidenceDisplay>(`/api/research/${runId}/v2-evidence?db_path=${encodeURIComponent(database)}`),
   service: () => request<ServiceDiagnostic>("/api/service"),
   startService: () => request<ServiceDiagnostic>("/api/service/start", { method: "POST" }),
   stopService: () => request<ServiceDiagnostic>("/api/service/stop", { method: "POST" }),

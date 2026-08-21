@@ -14,12 +14,13 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY
+from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_ARTIFACT_KEY
 from credential_store import (
     KeychainUnavailableError,
     ProviderCredentials,
@@ -42,9 +43,12 @@ from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
 from models import (
     DiscoveryProvider,
     ResearchControls,
+    ResearchDirections,
     ResearchMode,
     StrictModel,
+    V2EvidenceAnalystSourceResult,
     V2FinalResearchOutput,
+    V2ReviewerLedgerBatchResult,
 )
 from store import open_read_only_store, read_v2_artifact
 
@@ -169,11 +173,28 @@ class ResearchStartInput(StrictModel):
     max_tokens: int = Field(default=200_000, ge=1, le=300_000)
     max_cost_usd: Decimal = Field(default=Decimal("0.15"), gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
+    support_enabled: bool = True
+    challenge_enabled: bool = False
     include_counterevidence: bool = False
     sources_per_stance_per_round: Literal[5, 10, 15, 20] = 10
     use_serpsearch: bool = True
     use_exa: bool = True
     use_openalex: bool = True
+
+    @model_validator(mode="after")
+    def validate_research_directions(self) -> ResearchStartInput:
+        if not self.support_enabled and not (
+            self.challenge_enabled or self.include_counterevidence
+        ):
+            raise ValueError("Enable Support, Challenge, or both research directions.")
+        return self
+
+    def directions(self) -> ResearchDirections:
+        """Resolve the legacy counterevidence control without changing old clients."""
+        return ResearchDirections(
+            support_enabled=self.support_enabled,
+            challenge_enabled=self.challenge_enabled or self.include_counterevidence,
+        )
 
 
 class RunLocator(StrictModel):
@@ -187,6 +208,77 @@ class CancelResponse(StrictModel):
 
 class HistoryResponse(StrictModel):
     items: tuple[LiveHistoryItem, ...]
+
+
+class V2EvidenceDisplayItem(StrictModel):
+    """Read-only evidence detail suitable for the v2 result page."""
+
+    source_id: UUID
+    title: str | None = None
+    source_url: str = Field(min_length=1)
+    source_family: str = Field(min_length=1)
+    direction: str = Field(min_length=1)
+    recommendation_status: str = Field(min_length=1)
+    selection_rationale: str | None = None
+    gap_ids: tuple[str, ...] = ()
+    evidence_summary: str = Field(min_length=1)
+    supporting_proposition: str = Field(min_length=1)
+    quote_passage: str = Field(min_length=1)
+    limitations: tuple[str, ...] = ()
+    validation_status: str = Field(min_length=1)
+
+
+class V2EvidenceDisplay(StrictModel):
+    run_id: UUID
+    items: tuple[V2EvidenceDisplayItem, ...]
+
+
+def _build_v2_evidence_display(
+    output: V2FinalResearchOutput,
+    reviewer: V2ReviewerLedgerBatchResult,
+) -> V2EvidenceDisplay:
+    """Project persisted v2 evidence into a read-only result-page view."""
+    sources = {source.source_id: source for source in output.all_surviving_sources}
+    analyst_results: dict[UUID, V2EvidenceAnalystSourceResult] = {
+        source.source_id: source for source in reviewer.analyst_result.source_results
+    }
+    selections = {
+        status.source_id: status
+        for status in reviewer.analyst_result.input.queue_result.source_statuses
+    }
+    items: list[V2EvidenceDisplayItem] = []
+    for review in reviewer.source_results:
+        analyst = analyst_results[review.source_id]
+        if analyst.candidate is None or analyst.assessment is None:
+            continue
+        source = sources[review.source_id]
+        selection = selections[review.source_id]
+        limitations = (
+            *analyst.assessment.material_limitations,
+            *analyst.assessment.inferential_boundaries,
+        )
+        items.append(
+            V2EvidenceDisplayItem(
+                source_id=source.source_id,
+                title=source.title,
+                source_url=source.source_url,
+                source_family=review.provenance.source_family_id,
+                direction=source.direction.value,
+                recommendation_status=(
+                    "Recommended for deeper analysis"
+                    if selection.recommended
+                    else "Survived source evaluation"
+                ),
+                selection_rationale=selection.selection_rationale,
+                gap_ids=selection.gap_ids,
+                evidence_summary=analyst.assessment.reasoning,
+                supporting_proposition=analyst.assessment.narrowest_supported_proposition,
+                quote_passage=analyst.candidate.extracted_quote_block,
+                limitations=limitations,
+                validation_status=review.state.value,
+            )
+        )
+    return V2EvidenceDisplay(run_id=output.run_id, items=tuple(items))
 
 
 def create_default_runtime() -> ApiRuntime:
@@ -330,7 +422,7 @@ def create_app(
             research_controls=ResearchControls(
                 research_mode=(
                     ResearchMode.BALANCED
-                    if payload.include_counterevidence
+                    if payload.directions().challenge_enabled
                     else ResearchMode.FOCUSED
                 ),
                 sources_per_stance_per_round=payload.sources_per_stance_per_round,
@@ -344,6 +436,7 @@ def create_app(
                     if enabled
                 ),
             ),
+            directions=payload.directions(),
         )
         return runtime.controller.start(request)
 
@@ -390,6 +483,29 @@ def create_app(
             return V2FinalResearchOutput.model_validate_json(artifact.payload_json)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="V2 research result not found.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+
+    @app.get("/api/research/{run_id}/v2-evidence", response_model=V2EvidenceDisplay)
+    def v2_evidence(
+        run_id: UUID,
+        db_path: str = Query(min_length=1),
+    ) -> V2EvidenceDisplay:
+        try:
+            with open_read_only_store(db_path) as store:
+                final_artifact = read_v2_artifact(
+                    store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY
+                )
+                reviewer_artifact = read_v2_artifact(
+                    store.connection, run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY
+                )
+            output = V2FinalResearchOutput.model_validate_json(final_artifact.payload_json)
+            reviewer = V2ReviewerLedgerBatchResult.model_validate_json(
+                reviewer_artifact.payload_json
+            )
+            return _build_v2_evidence_display(output, reviewer)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="V2 evidence details not found.") from exc
         except Exception as exc:
             raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
 

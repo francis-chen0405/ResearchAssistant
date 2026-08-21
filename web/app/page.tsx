@@ -8,6 +8,7 @@ import {
   ResearchTrailItem,
   RunSnapshot,
   ServiceDiagnostic,
+  V2EvidenceDisplay,
   V2FinalResearchOutput,
   researchApi,
 } from "@/lib/api";
@@ -19,7 +20,8 @@ type Settings = {
   maxTokens: number;
   maxCost: string;
   maxCalls: number;
-  includeCounterevidence: boolean;
+  supportEnabled: boolean;
+  challengeEnabled: boolean;
   sourceTarget: 5 | 10 | 15 | 20;
   useSerpSearch: boolean;
   useExa: boolean;
@@ -30,18 +32,34 @@ const PROVIDER_PREFERENCES_KEY = "researchassistant.provider-preferences.v1";
 
 const terminalStates = new Set(["released", "blocked", "failed", "cancelled", "configuration_error", "invalid_input"]);
 const stageOrder = [
-  { key: "claim_planner", label: "Frame the claim" },
-  { key: "researchers", label: "Follow the sources" },
-  { key: "evidence_analyst", label: "Test the evidence" },
-  { key: "statement_reviewer", label: "Review each statement" },
-  { key: "final_renderer_validator", label: "Assemble & validate" },
+  { key: "planning", label: "Planning" },
+  { key: "discovery", label: "Discovery" },
+  { key: "source_evaluation", label: "Source Evaluation" },
+  { key: "acquisition", label: "Acquisition" },
+  { key: "evidence_extraction", label: "Evidence Extraction" },
+  { key: "gap_analysis", label: "Gap Analysis" },
+  { key: "adaptive_search", label: "Adaptive Search" },
+  { key: "deep_analysis", label: "Deep Analysis" },
+  { key: "review", label: "Review" },
+  { key: "synthesis", label: "Synthesis" },
+  { key: "validation", label: "Validation" },
 ];
 
 function stageIndex(stage: string): number {
-  if (["supporting_researcher", "opposing_researcher"].includes(stage)) return 1;
-  if (["claim_ledger", "debate_synthesizer"].includes(stage)) return 4;
-  const index = stageOrder.findIndex((item) => item.key === stage);
-  return Math.max(index, 0);
+  const stages: Record<string, number> = {
+    claim_planner: 0, v2_initial_planner: 0,
+    discovery: 1, v2_discovery: 1,
+    researchers: 2, supporting_researcher: 2, opposing_researcher: 2, scout: 2,
+    acquisition: 3, probe: 3,
+    extractor: 4, evidence_extraction: 4,
+    gap_analysis: 5,
+    adaptive_search: 6,
+    evidence_analyst: 7, deep_analysis: 7,
+    statement_reviewer: 8, claim_ledger: 8,
+    debate_synthesizer: 9, synthesis: 9,
+    final_renderer_validator: 10, validation: 10,
+  };
+  return stages[stage] ?? 0;
 }
 
 function readableStage(stage: string): string {
@@ -57,13 +75,21 @@ function formatCost(value: string | number | null): string {
   return `$${Number(value).toFixed(4)}`;
 }
 
+function understandableRunMessage(snapshot: RunSnapshot): string {
+  if (snapshot.classification === "configuration_error") return "A provider could not be reached or configured. Check Provider setup, then try again.";
+  if (snapshot.classification === "failed") return "This research run did not finish. After the provider issue is resolved, reopen the saved run to recover compatible progress.";
+  if (snapshot.classification === "cancelled") return "This research run was cancelled. Its saved evidence and progress remain available for inspection.";
+  if (snapshot.classification === "blocked" && /budget|limit|ceiling/i.test(snapshot.message)) return "Stopped due to a budget limit. The result reports any evidence and gaps that were completed before the limit.";
+  return snapshot.message;
+}
+
 export default function Home() {
   const reduceMotion = useReducedMotion();
   const [view, setView] = useState<MainView>("research");
   const [claim, setClaim] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [configuration, setConfiguration] = useState<Configuration | null>(null);
-  const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160, includeCounterevidence: false, sourceTarget: 10, useSerpSearch: true, useExa: true, useOpenAlex: true });
+  const [settings, setSettings] = useState<Settings>({ dbPath: "", runId: "", maxTokens: 200_000, maxCost: "0.15", maxCalls: 160, supportEnabled: true, challengeEnabled: false, sourceTarget: 10, useSerpSearch: true, useExa: true, useOpenAlex: true });
   const [providerPreferencesLoaded, setProviderPreferencesLoaded] = useState(false);
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [activeRun, setActiveRun] = useState<{ id: string; database: string } | null>(null);
@@ -185,7 +211,8 @@ export default function Home() {
         max_tokens: settings.maxTokens,
         max_cost_usd: settings.maxCost,
         max_llm_calls: settings.maxCalls,
-        include_counterevidence: settings.includeCounterevidence,
+        support_enabled: settings.supportEnabled,
+        challenge_enabled: settings.challengeEnabled,
         sources_per_stance_per_round: settings.sourceTarget,
         use_serpsearch: settings.useSerpSearch,
         use_exa: settings.useExa,
@@ -241,7 +268,7 @@ export default function Home() {
           ) : activeRun ? (
             <StartingView key="starting" claim={claim} reduceMotion={Boolean(reduceMotion)} />
           ) : (
-            <ResearchView key="new" claim={claim} acknowledged={acknowledged} busy={busy} counterevidence={settings.includeCounterevidence} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
+            <ResearchView key="new" claim={claim} acknowledged={acknowledged} busy={busy} supportEnabled={settings.supportEnabled} challengeEnabled={settings.challengeEnabled} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
           )}
         </AnimatePresence>
         <AnimatePresence>
@@ -268,7 +295,7 @@ function Header({ view, providerState, onView, onSetup, onAdvanced }: { view: Ma
   </header>;
 }
 
-function ResearchView({ claim, acknowledged, busy, counterevidence, reduceMotion, onClaim, onAcknowledged, onSubmit }: { claim: string; acknowledged: boolean; busy: boolean; counterevidence: boolean; reduceMotion: boolean; onClaim: (claim: string) => void; onAcknowledged: (acknowledged: boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; }) {
+function ResearchView({ claim, acknowledged, busy, supportEnabled, challengeEnabled, reduceMotion, onClaim, onAcknowledged, onSubmit }: { claim: string; acknowledged: boolean; busy: boolean; supportEnabled: boolean; challengeEnabled: boolean; reduceMotion: boolean; onClaim: (claim: string) => void; onAcknowledged: (acknowledged: boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; }) {
   const reveal = (delay: number) => reduceMotion ? {} : { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] as const } };
   return <motion.section className="hero" initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }}>
     <motion.p className="eyebrow" {...reveal(0.02)}>Evidence, in context</motion.p>
@@ -278,7 +305,7 @@ function ResearchView({ claim, acknowledged, busy, counterevidence, reduceMotion
       <motion.i className="composer-signal" aria-hidden="true" initial={reduceMotion ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 0.9, delay: 0.48, ease: [0.22, 1, 0.36, 1] }} />
       <label htmlFor="claim">What would you like to examine?</label><textarea id="claim" value={claim} onChange={(event) => onClaim(event.target.value)} placeholder="e.g. Remote work makes software teams less productive." rows={3} />
       <label className="acknowledgement"><input type="checkbox" checked={acknowledged} onChange={(event) => onAcknowledged(event.target.checked)} /><span>This is public and non-sensitive, and I’ll review what comes back.</span></label>
-      <div className="composer-footer"><span>{counterevidence ? "Supporting + counterevidence" : "Focused research"} · preserved sources</span><motion.button type="submit" className="primary-action" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} disabled={!claim.trim() || !acknowledged || busy}>{busy ? "Starting…" : "Begin research"} <span aria-hidden="true">↗</span></motion.button></div>
+      <div className="composer-footer"><span>{supportEnabled && challengeEnabled ? "Support + challenge" : supportEnabled ? "Support only" : "Challenge only"} · preserved sources</span><motion.button type="submit" className="primary-action" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} disabled={!claim.trim() || !acknowledged || busy}>{busy ? "Starting…" : "Begin research"} <span aria-hidden="true">↗</span></motion.button></div>
     </motion.form>
   </motion.section>;
 }
@@ -305,7 +332,9 @@ function StanceCard({ title, progress, accent }: { title: string; progress: RunS
 
 function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => void }) {
   const released = snapshot.classification === "released";
+  const userStatus = understandableRunMessage(snapshot);
   const [v2Result, setV2Result] = useState<V2FinalResearchOutput | null>(null);
+  const [v2Evidence, setV2Evidence] = useState<V2EvidenceDisplay | null>(null);
   const [trailOpen, setTrailOpen] = useState(false);
   const [trail, setTrail] = useState<ResearchTrailItem[] | null>(null);
   const [trailError, setTrailError] = useState<string | null>(null);
@@ -324,20 +353,23 @@ function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => v
     void researchApi.v2Result(snapshot.run_id, snapshot.db_path)
       .then((result) => { if (!disposed) setV2Result(result); })
       .catch(() => { if (!disposed) setV2Result(null); });
+    void researchApi.v2Evidence(snapshot.run_id, snapshot.db_path)
+      .then((result) => { if (!disposed) setV2Evidence(result); })
+      .catch(() => { if (!disposed) setV2Evidence(null); });
     return () => { disposed = true; };
   }, [snapshot.db_path, snapshot.run_id]);
   return <motion.section className={`result-view ${released ? "released" : "unreleased"}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <div className="result-masthead"><div><p className="eyebrow">{released ? "Validated release" : readableStage(snapshot.classification)}</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2></div><div className="release-stamp"><span>{released ? "Released" : "Not released"}</span><small>{snapshot.exit_code === null ? "—" : `Exit ${snapshot.exit_code}`}</small></div></div>
-    <div className="report-layout"><article className="brief-paper">{v2Result ? <V2ResultPaper result={v2Result} /> : snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{snapshot.message}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{snapshot.message}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
+    <div className="report-layout"><article className="brief-paper">{v2Result ? <V2ResultPaper result={v2Result} evidence={v2Evidence} /> : snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{userStatus}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{userStatus}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div><div><dt>Budget status</dt><dd>{snapshot.classification === "blocked" ? "Stopped" : "Within run limit"}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
     <AnimatePresence>{trailOpen && <ResearchTrailDrawer items={trail} error={trailError} onClose={() => setTrailOpen(false)} />}</AnimatePresence>
   </motion.section>;
 }
 
-function V2ResultPaper({ result }: { result: V2FinalResearchOutput }) {
+function V2ResultPaper({ result, evidence }: { result: V2FinalResearchOutput; evidence: V2EvidenceDisplay | null }) {
   const direction = result.directions.support_enabled && result.directions.challenge_enabled ? "Supporting and challenging evidence" : result.directions.support_enabled ? "Supporting evidence only" : "Challenging evidence only";
   const heading = (section: "supporting" | "opposing" | "limitations") => section === "supporting" ? "Supporting evidence" : section === "opposing" ? "Challenging evidence" : "Evidence qualifications";
-  const sources = (items: V2FinalResearchOutput["all_surviving_sources"]) => <ul>{items.map((source) => <li key={source.source_id}><a href={source.source_url} target="_blank" rel="noreferrer">{source.title || source.source_url}</a><small> · {source.status.replaceAll("_", " ")} · round {source.discovery_round}</small></li>)}</ul>;
-  return <><p className="eyebrow">V2 validated research result</p><h1>Research Brief</h1><p>Claim under review: {result.exact_claim}</p><p><strong>Research direction:</strong> {direction}. This result does not imply that disabled directions were examined.</p>{result.synthesis.sections.map((section) => <section key={section.section_type}><h2>{heading(section.section_type)}</h2>{section.items.map((item, index) => <p key={index}>{item.approved_factual_statement}</p>)}</section>)}<section><h2>Recommended Sources</h2>{sources(result.recommended_sources)}</section><section><h2>All Surviving Sources</h2>{sources(result.all_surviving_sources)}</section><section><h2>Remaining Gaps</h2>{result.unresolved_material_gaps.length ? <ul>{result.unresolved_material_gaps.map((gap) => <li key={gap.gap_id}>{gap.direction}: {gap.missing_evidence}</li>)}</ul> : <p>No unresolved material gaps were recorded.</p>}</section><section><h2>Research Stopping Reason</h2><p>{result.stopping.reason.replaceAll("_", " ")}: {result.stopping.explanation}</p></section></>;
+  const sourceCards = (items: V2FinalResearchOutput["all_surviving_sources"]) => <div className="source-cards">{items.map((source) => { const details = evidence?.items.find((item) => item.source_id === source.source_id); return <article className="source-card" key={source.source_id}><a href={source.source_url} target="_blank" rel="noreferrer">{source.title || source.source_url}</a><small>{details?.source_family || source.source_type || "Source family unavailable"} · {details?.recommendation_status || (source.recommended ? "Recommended for deep analysis" : "Survived selection")} · round {source.discovery_round}</small><p>{details?.selection_rationale || (source.recommended ? "Selected for deeper analysis from the surviving source pool." : "Passed selection but was not recommended for deeper analysis.")}</p>{details?.gap_ids.length ? <p><strong>Related gaps:</strong> {details.gap_ids.join(", ")}</p> : null}</article>; })}</div>;
+  return <><p className="eyebrow">V2 validated research result</p><h1>Research Brief</h1><p>Claim under review: {result.exact_claim}</p><p><strong>Research direction:</strong> {direction}. This result does not imply that disabled directions were examined.</p>{result.synthesis.sections.map((section) => <section key={section.section_type}><h2>{heading(section.section_type)}</h2>{section.items.map((item, index) => <p key={index}>{item.approved_factual_statement}</p>)}</section>)}<section><h2>Evidence</h2><p>Each item is limited to the narrow proposition the reviewed passage supports; it is not a blanket endorsement of the full claim.</p>{evidence?.items.length ? <div className="evidence-list">{evidence.items.map((item) => <article className="evidence-card" key={item.source_id}><h3>{item.supporting_proposition}</h3><p>{item.evidence_summary}</p><blockquote>{item.quote_passage}</blockquote><p><strong>Source:</strong> <a href={item.source_url} target="_blank" rel="noreferrer">{item.title || item.source_url}</a> · {item.source_family}</p><p><strong>Validation:</strong> {readableStage(item.validation_status)}</p>{item.limitations.length ? <p><strong>Limitations:</strong> {item.limitations.join(" ")}</p> : <p><strong>Limitations:</strong> No additional limitations were recorded for this narrow proposition.</p>}</article>)}</div> : <p>Detailed passage display is unavailable for this persisted result.</p>}</section><section><h2>Recommended Sources</h2>{sourceCards(result.recommended_sources)}</section><section><h2>Survivor Sources</h2>{sourceCards(result.all_surviving_sources)}</section><section><h2>Remaining Gaps</h2>{result.unresolved_material_gaps.length ? <ul>{result.unresolved_material_gaps.map((gap) => <li key={gap.gap_id}>{gap.direction}: {gap.missing_evidence} <small>({gap.gap_id})</small></li>)}</ul> : <p>No unresolved material gaps were recorded.</p>}</section><section><h2>Research Status</h2><p><strong>{result.stopping.reason === "sufficient_source_pool" ? "Stopped after sufficient evidence coverage" : readableStage(result.stopping.reason)}.</strong> {result.stopping.explanation}</p><p>{result.release_validation.valid ? "Validation completed successfully." : "Validation did not complete successfully."}</p></section></>;
 }
 
 function ResearchTrailDrawer({ items, error, onClose }: { items: ResearchTrailItem[] | null; error: string | null; onClose: () => void }) {
@@ -389,7 +421,8 @@ function AdvancedPanel({ settings, configuration, active, onSettings, onClose, o
     ["useOpenAlex", "OpenAlex", "Best for academic studies, papers, and other scholarly research."],
   ] as const;
   const selectedCount = sources.filter(([key]) => settings[key]).length;
-  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced</p><h2>Run settings</h2><p className="panel-intro">Research choices and local limits. The default is a focused ten-source run.</p><section className="research-options">{sources.map(([key, label, copy]) => <><div className="option-copy" key={`${key}-copy`}><strong>{label}</strong><span>{copy}</span></div><button key={key} type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></>)}<div className="option-copy"><strong>Counterevidence</strong><span>Add a separate challenging-evidence search. Off by default.</span></div><button type="button" role="switch" aria-checked={settings.includeCounterevidence} className={`switch ${settings.includeCounterevidence ? "on" : ""}`} disabled={active} onClick={() => update("includeCounterevidence", !settings.includeCounterevidence)}><i /></button><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each active side, with five bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="1000000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>MiMo cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Turning counterevidence off reduces actual use; it does not raise or lower any usage ceiling.</p></motion.aside></motion.div>;
+  const directionCount = Number(settings.supportEnabled) + Number(settings.challengeEnabled);
+  return <motion.div className="overlay drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><motion.aside className="advanced-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }}><button className="close-button" type="button" onClick={onClose} aria-label="Close">×</button><p className="eyebrow">Advanced</p><h2>Run settings</h2><p className="panel-intro">Choose the research direction, providers, and local limits. At least one direction is required.</p><section className="research-options"><div className="option-copy"><strong>Support</strong><span>Look for evidence that supports the claim.</span></div><button type="button" role="switch" aria-label="Support research" aria-checked={settings.supportEnabled} className={`switch ${settings.supportEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.supportEnabled)} onClick={() => update("supportEnabled", !settings.supportEnabled)}><i /></button><div className="option-copy"><strong>Challenge</strong><span>Look for evidence that challenges or limits the claim.</span></div><button type="button" role="switch" aria-label="Challenge research" aria-checked={settings.challengeEnabled} className={`switch ${settings.challengeEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.challengeEnabled)} onClick={() => update("challengeEnabled", !settings.challengeEnabled)}><i /></button>{sources.map(([key, label, copy]) => <div className="option-row" key={key}><div className="option-copy"><strong>{label}</strong><span>{copy}</span></div><button type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></div>)}<div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each enabled direction, with bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="300000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>MiMo cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Directions determine the scope of research. A disabled direction is not searched or inferred in the result.</p></motion.aside></motion.div>;
 }
 
 function ServiceCard({ service, active, onService }: { service: ServiceDiagnostic | null; active: boolean; onService: (action: "start" | "stop") => void }) {
