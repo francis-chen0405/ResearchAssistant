@@ -21,7 +21,7 @@ from models import (
     Stance,
     VerbatimQuoteSelection,
 )
-from providers.config import MimoConfig, ProviderConfigurationError
+from providers.config import LunaConfig, MimoConfig, ProviderConfigurationError
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, build_stage_request
 from providers.mimo import (
     MimoFailureCode,
@@ -32,7 +32,7 @@ from providers.mimo import (
     _assemble_direct_mimo_output,
     _direct_mimo_prompt,
 )
-from providers.pricing import DIRECT_MIMO_PRICE_CAP
+from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap
 
 
 def _request() -> object:
@@ -365,6 +365,55 @@ def test_direct_mimo_json_mode_returns_exact_typed_output_and_estimated_cost() -
     assert metadata.usage.total_tokens == 15
     expected = DIRECT_MIMO_PRICE_CAP.upper_bound(10, 5)
     assert metadata.usage.cost_usd == expected
+
+
+def test_luna_openai_compatible_transport_uses_bearer_auth_and_parses_chat_completion() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["authorization"] = request.headers.get("authorization")
+        observed["api_key"] = request.headers.get("api-key")
+        observed["payload"] = __import__("json").loads(request.content)
+        return _response(request, model="gpt-5.6-luna")
+
+    config = LunaConfig(
+        api_key=SecretStr("luna-secret-value"),
+        base_url="https://api.openai.com/v1",
+        model="gpt-5.6-luna",
+    )
+    adapter = XiaomiMimoAdapter(
+        config,
+        client=httpx.Client(
+            base_url=config.base_url,
+            transport=httpx.MockTransport(handler),
+        ),
+        price_cap=ModelPriceCap(
+            model="gpt-5.6-luna",
+            input_usd_per_token=Decimal("0.0000002"),
+            output_usd_per_token=Decimal("0.0000012"),
+        ),
+        max_call_cost_usd=Decimal("0.10"),
+        max_call_tokens=25_000,
+        expected_model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+    )
+
+    output = adapter.generate(
+        _request().model_copy(update={"model_alias": ModelAlias.GPT_5_6_LUNA_HIGH})
+    )
+    metadata = adapter.last_call_metadata()
+
+    assert isinstance(output, ReviewerDecision)
+    assert observed["authorization"] == "Bearer luna-secret-value"
+    assert observed["api_key"] is None
+    payload = observed["payload"]
+    assert isinstance(payload, dict)
+    assert payload["model"] == "gpt-5.6-luna"
+    assert payload["response_format"] == {"type": "json_object"}
+    assert "temperature" not in payload
+    assert metadata.returned_model == "gpt-5.6-luna"
+    assert metadata.usage.total_tokens == 15
+    assert metadata.usage.cost_usd == Decimal("0.000008")
+    assert "luna-secret-value" not in repr(metadata)
 
 
 def test_direct_mimo_uses_cache_aware_cost_when_provider_reports_cached_tokens() -> None:

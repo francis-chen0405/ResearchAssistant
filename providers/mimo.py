@@ -180,7 +180,7 @@ class XiaomiMimoAdapter:
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.synthesizer_seconds),
             follow_redirects=False,
-            headers={"api-key": config.api_key.get_secret_value()},
+            headers=_auth_headers(config),
         )
         self._price_cap = price_cap
         self._max_call_cost_usd = parse_exact_usd(max_call_cost_usd)
@@ -214,7 +214,7 @@ class XiaomiMimoAdapter:
                 "/chat/completions",
                 json=_request_payload(request, self._config),
                 timeout=_deadline_for(request.stage, self._config),
-                headers={"api-key": self._config.api_key.get_secret_value()},
+                headers=_auth_headers(self._config),
             )
         except httpx.TimeoutException as exc:
             raise MimoProviderError(
@@ -373,9 +373,18 @@ def _request_payload(
         "stream": False,
         "max_completion_tokens": config.max_completion_tokens,
     }
-    if request.generation.temperature is not None:
+    if request.generation.temperature is not None and not isinstance(config, LunaConfig):
         payload["temperature"] = request.generation.temperature
     return payload
+
+
+def _auth_headers(
+    config: MimoConfig | MimoRouteConfig | LunaConfig,
+) -> dict[str, str]:
+    """Select the configured provider's authentication header without changing routing."""
+    if isinstance(config, LunaConfig):
+        return {"Authorization": f"Bearer {config.api_key.get_secret_value()}"}
+    return {"api-key": config.api_key.get_secret_value()}
 
 
 def _direct_mimo_prompt(request: LLMRequest) -> str:
