@@ -17,6 +17,7 @@ from agents.v2_acquisition import run_v2_acquisition_probe
 from agents.v2_discovery import V2DiscoveryResponse, run_v2_discovery_and_scout
 from agents.v2_gap_analysis import V2GapAnalysisRunResult, run_v2_gap_analysis
 from models import (
+    CrossrefIdentityMetadata,
     DiscoveryProvider,
     ResearchDirection,
     SourceCluster,
@@ -276,6 +277,7 @@ def run_v2_adaptive_search_continuation(
     routing_config: V2RoutingConfig,
     wigolo_provider: ScraperProvider | None,
     firecrawl_provider: ScraperProvider | None = None,
+    crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     budget: V2AdaptiveBudgetState,
     provider_attempts: Mapping[DiscoveryProvider, int] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
@@ -337,6 +339,7 @@ def run_v2_adaptive_search_continuation(
         routing_config=routing_config,
         wigolo_provider=wigolo_provider,
         firecrawl_provider=firecrawl_provider,
+        crossref_resolver=crossref_resolver,
         known_urls=_known_urls((round_one_discovery,)),
         base_pool=initial_pool,
         budget=budget,
@@ -512,6 +515,7 @@ def run_v2_adaptive_search_continuation(
         routing_config=routing_config,
         wigolo_provider=wigolo_provider,
         firecrawl_provider=firecrawl_provider,
+        crossref_resolver=crossref_resolver,
         known_urls=_known_urls((round_one_discovery, discovery_two)),
         cancellation_requested=cancellation_requested,
         clock=now,
@@ -556,6 +560,7 @@ def _run_round(
     routing_config: V2RoutingConfig,
     wigolo_provider: ScraperProvider | None,
     firecrawl_provider: ScraperProvider | None,
+    crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None,
     known_urls: frozenset[str],
     base_pool: V2MergedSurvivorPool,
     budget: V2AdaptiveBudgetState,
@@ -620,6 +625,7 @@ def _run_round(
         routing_config=routing_config,
         wigolo_provider=wigolo_provider,
         firecrawl_provider=firecrawl_provider,
+        crossref_resolver=crossref_resolver,
         known_urls=known_urls,
         cancellation_requested=cancellation_requested,
         clock=clock,
@@ -781,6 +787,7 @@ def _run_round_from_plan(
     routing_config: V2RoutingConfig,
     wigolo_provider: ScraperProvider | None,
     firecrawl_provider: ScraperProvider | None,
+    crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None,
     known_urls: frozenset[str],
     cancellation_requested: Callable[[], bool] | None,
     clock: Callable[[], datetime],
@@ -806,6 +813,7 @@ def _run_round_from_plan(
             llm_provider=llm_provider,
             routing_config=routing_config,
             clock=clock,
+            crossref_resolver=crossref_resolver,
         ).output
     else:
         discovery = V2DiscoveryScoutOutput(
@@ -906,7 +914,12 @@ def _execute_searches(
                     provider=query.provider,
                     intent=(
                         SearchIntent.ACADEMIC_STUDY
-                        if query.provider is DiscoveryProvider.OPENALEX
+                        if query.provider
+                        in {
+                            DiscoveryProvider.OPENALEX,
+                            DiscoveryProvider.ARXIV,
+                            DiscoveryProvider.PUBMED,
+                        }
                         else SearchIntent.BROAD_WEB
                     ),
                     query_text=query.query_text,

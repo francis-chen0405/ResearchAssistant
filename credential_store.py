@@ -35,6 +35,7 @@ class ProviderCredentials(StrictModel):
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
+    pubmed_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
     @field_validator(
@@ -43,6 +44,7 @@ class ProviderCredentials(StrictModel):
         "exa_api_key",
         "openalex_api_key",
         "serpsearch_api_key",
+        "pubmed_api_key",
         "firecrawl_api_key",
         mode="before",
     )
@@ -69,6 +71,8 @@ class ProviderCredentials(StrictModel):
             items += (("OPENALEX_API_KEY", self.openalex_api_key.get_secret_value()),)
         if self.serpsearch_api_key is not None:
             items += (("SERPSEARCH_API_KEY", self.serpsearch_api_key.get_secret_value()),)
+        if self.pubmed_api_key is not None:
+            items += (("PUBMED_API_KEY", self.pubmed_api_key.get_secret_value()),)
         if self.firecrawl_api_key is None:
             return items
         return items + (("FIRECRAWL_API_KEY", self.firecrawl_api_key.get_secret_value()),)
@@ -82,23 +86,25 @@ def save_credentials(credentials: ProviderCredentials) -> None:
 
 
 def load_saved_credentials() -> ProviderCredentials | None:
-    """Read the required model key and any saved discovery-provider keys."""
+    """Read every saved key so optional discovery choices survive API restart."""
     if not _keychain_available():
         return None
     try:
         mimo = _read_secret("MIMO_API_KEY")
     except KeychainUnavailableError:
         return None
-    if not mimo:
-        return None
-    return ProviderCredentials(
+    credentials = ProviderCredentials(
         mimo_api_key=mimo,
         luna_api_key=_read_optional_secret("LUNA_API_KEY"),
         exa_api_key=_read_optional_secret("EXA_API_KEY"),
         openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
         serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),
+        pubmed_api_key=_read_optional_secret("PUBMED_API_KEY"),
         firecrawl_api_key=_read_optional_secret(),
     )
+    if not credentials.environment_items():
+        return None
+    return credentials
 
 
 def apply_credentials_to_environment(

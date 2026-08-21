@@ -44,6 +44,7 @@ from agents.v2_source_selection import (
     run_v2_source_selection_and_queue,
 )
 from models import (
+    CrossrefIdentityMetadata,
     DiscoveryProvider,
     ResearchDirections,
     RunManifest,
@@ -198,6 +199,7 @@ def run_v2_production_pipeline(
     routing_config: V2RoutingConfig,
     ceilings: V2RunCeilings | None = None,
     firecrawl_provider: ScraperProvider | None = None,
+    crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     run_id: UUID | None = None,
     provider_policy_fingerprint: str = "injected-provider-policy-v1",
     cancellation_requested: Callable[[], bool] | None = None,
@@ -273,6 +275,7 @@ def run_v2_production_pipeline(
             llm_provider=budgeted_llm,
             routing_config=routing_config,
             clock=now,
+            crossref_resolver=crossref_resolver,
         ).output
         acquisition_one = run_v2_acquisition_probe(
             db_path=path,
@@ -310,6 +313,7 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             wigolo_provider=wigolo_provider,
             firecrawl_provider=firecrawl_provider,
+            crossref_resolver=crossref_resolver,
             budget=adaptive_budget,
             cancellation_requested=cancellation_requested,
             clock=now,
@@ -565,7 +569,12 @@ def _run_round_one_search(
                     provider=query.provider,
                     intent=(
                         SearchIntent.ACADEMIC_STUDY
-                        if query.provider is DiscoveryProvider.OPENALEX
+                        if query.provider
+                        in {
+                            DiscoveryProvider.OPENALEX,
+                            DiscoveryProvider.ARXIV,
+                            DiscoveryProvider.PUBMED,
+                        }
                         else SearchIntent.BROAD_WEB
                     ),
                     query_text=query.query_text,

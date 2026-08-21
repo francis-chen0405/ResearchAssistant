@@ -18,6 +18,9 @@ class ProviderClients(StrictModel):
     search: httpx.Client | None = None
     openalex_search: httpx.Client | None = None
     serpsearch: httpx.Client | None = None
+    arxiv_search: httpx.Client | None = None
+    pubmed_search: httpx.Client | None = None
+    crossref: httpx.Client | None = None
     source: httpx.Client | None = None
     acquisition: httpx.Client | None = None
     fallback_acquisition: httpx.Client | None = None

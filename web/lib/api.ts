@@ -15,6 +15,7 @@ export type Configuration = {
   message: string;
   default_db_path: string;
   firecrawl_enabled: boolean;
+  saved_credentials: string[];
   service: ServiceDiagnostic;
 };
 
@@ -62,6 +63,7 @@ export type RunSnapshot = {
   research_controls: {
     research_mode: "focused" | "balanced";
     sources_per_stance_per_round: 5 | 10 | 15 | 20;
+    discovery_providers: string[];
   };
 };
 
@@ -77,7 +79,7 @@ export type HistoryItem = {
 export type ResearchTrailItem = {
   research_round: number;
   stance: "supporting" | "opposing";
-  provider: "serpsearch" | "exa" | "openalex";
+  provider: "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper";
   intent: string;
   query_text: string;
   title: string;
@@ -168,6 +170,9 @@ type StartInput = {
   use_serpsearch: boolean;
   use_exa: boolean;
   use_openalex: boolean;
+  use_arxiv: boolean;
+  use_pubmed: boolean;
+  use_crossref: boolean;
 };
 
 type StartResult = {
@@ -183,6 +188,7 @@ type CredentialInput = {
   exa_api_key?: string;
   openalex_api_key?: string;
   serpsearch_api_key?: string;
+  pubmed_api_key?: string;
   firecrawl_api_key?: string;
 };
 

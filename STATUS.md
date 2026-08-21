@@ -1,5 +1,24 @@
 # Status
 
+## 2026-08-21 - v2 provider setup and discovery wiring
+
+Status: Complete and verified.
+
+- Provider setup now reports saved Keychain credentials separately from full run readiness,
+  so a persisted key no longer appears unsaved when another required route is incomplete.
+  Saved optional discovery keys also reload after an API restart even if the MiMo key has not
+  yet been stored.
+- Fresh v2 website runs can independently enable arXiv and PubMed discovery, and can enable
+  optional Crossref DOI identity enrichment. arXiv is keyless; PubMed accepts an optional key;
+  Crossref remains metadata-only and cannot become evidence. The v2 factory now instantiates
+  the selected adapters and fingerprints the Crossref choice for restart safety.
+- The result page now displays the persisted discovery providers for the run and for each
+  survivor source. Historical result rendering remains unchanged.
+
+Verification: complete Python suite 778 passed with 2 expected skips; Ruff check, Ruff format
+check, and diff check passed. Next.js ESLint and production build passed. No live provider call
+or dependency change was made.
+
 ## 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
 
 Status: Complete and verified.

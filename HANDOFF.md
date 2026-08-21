@@ -1,5 +1,22 @@
 # Handoff
 
+## v2 provider setup and discovery wiring — 2026-08-21
+
+The Next.js provider panel now accepts OpenAI/Luna and optional PubMed credentials in addition
+to the existing fields, confirms Keychain persistence without returning secrets, and displays a
+distinct “Provider keys saved” state when route preflight is not yet complete. It also exposes
+independent arXiv, PubMed, and Crossref controls. arXiv has no key requirement; PubMed's key is
+optional; Crossref verifies DOI bibliographic metadata only and is never evidence.
+
+Fresh v2 runs pass the selected arXiv/PubMed controls into `ResearchControls`, instantiate the
+corresponding metadata adapters in `providers/v2_factory.py`, and pass an optional Crossref
+resolver through Round 1 and adaptive rounds. The Crossref selection is part of the fresh-run
+provider-policy fingerprint. Result views display the frozen discovery sources; historical runs
+retain their original rendering and contracts.
+
+Verification: 778 passed, 2 expected skips; Ruff lint/format, diff check, frontend ESLint, and
+Next.js production build passed. No dependency or live provider call was added.
+
 ## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
 
 Status: Complete. Fresh website and CLI runs now use `run_v2_production_pipeline()` and the

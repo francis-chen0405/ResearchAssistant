@@ -93,6 +93,7 @@ class LiveRunRequest(StrictModel):
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS
     directions: ResearchDirections = ResearchDirections()
+    crossref_enabled: bool = False
 
     @field_validator("raw_claim")
     @classmethod
@@ -329,6 +330,7 @@ class LiveResearchController:
                             max_total_tokens=request.max_tokens,
                             max_total_cost_usd=request.max_cost_usd,
                         ),
+                        crossref_enabled=request.crossref_enabled,
                     )
                 )
             else:
@@ -584,6 +586,7 @@ class LiveResearchController:
                     search_providers=bundle.search_providers,
                     wigolo_provider=bundle.wigolo,
                     firecrawl_provider=bundle.firecrawl,
+                    crossref_resolver=bundle.crossref_resolver,
                     llm_provider=bundle.llm,
                     routing_config=factory_config.routing,
                     ceilings=factory_config.ceilings,

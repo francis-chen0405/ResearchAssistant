@@ -186,6 +186,63 @@ class SerpSearchConfig(StrictModel):
         )
 
 
+class ArxivConfig(StrictModel):
+    """Keyless arXiv API configuration for metadata-only v2 discovery."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["arxiv"] = "arxiv"
+    provider_version: Literal["api"] = "api"
+    adapter_version: Literal["v2-arxiv-atom-v1"] = "v2-arxiv-atom-v1"
+    base_url: str = "https://export.arxiv.org"
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("arXiv base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("arXiv base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> ArxivConfig:
+        return cls(base_url=environment.get("ARXIV_BASE_URL", "https://export.arxiv.org").strip())
+
+
+class PubMedConfig(StrictModel):
+    """PubMed E-utilities configuration; the API key is optional but increases quota."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_name: Literal["pubmed"] = "pubmed"
+    provider_version: Literal["eutils"] = "eutils"
+    adapter_version: Literal["v2-pubmed-eutils-v1"] = "v2-pubmed-eutils-v1"
+    base_url: str = "https://eutils.ncbi.nlm.nih.gov"
+    api_key: SecretStr | None = None
+    deadlines: DeadlineConfig = DeadlineConfig()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_https(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("PubMed base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("PubMed base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str]) -> PubMedConfig:
+        api_key = environment.get("PUBMED_API_KEY", "").strip()
+        return cls(
+            base_url=environment.get("PUBMED_BASE_URL", "https://eutils.ncbi.nlm.nih.gov").strip(),
+            api_key=SecretStr(api_key) if api_key else None,
+        )
+
+
 class FirecrawlConfig(StrictModel):
     """Optional Firecrawl acquisition-fallback configuration."""
 

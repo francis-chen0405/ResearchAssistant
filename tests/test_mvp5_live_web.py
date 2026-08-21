@@ -430,13 +430,15 @@ def test_live_next_provider_setup_uses_password_fields() -> None:
         label in source
         for label in (
             "MiMo API key",
+            "OpenAI API key",
             "SERP Search API key",
             "Exa API key",
             "OpenAlex API key",
+            "PubMed API key",
             "Firecrawl API key",
         )
     )
-    assert source.count('type="password"') == 5
+    assert source.count('type="password"') == 7
     assert "Keys go directly to your macOS Keychain" in source
     assert "They are never returned to this page" in source
 

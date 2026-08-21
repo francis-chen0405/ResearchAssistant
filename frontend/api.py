@@ -147,6 +147,7 @@ class ConfigurationResponse(StrictModel):
     message: str
     default_db_path: str = Field(min_length=1)
     firecrawl_enabled: bool
+    saved_credentials: tuple[str, ...] = ()
     service: ServiceDiagnostic
 
 
@@ -156,6 +157,7 @@ class CredentialSetupRequest(StrictModel):
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
+    pubmed_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
 
@@ -163,6 +165,20 @@ class CredentialSetupResponse(StrictModel):
     saved: bool
     configured: bool
     message: str = Field(min_length=1)
+
+
+def _saved_credential_names(environment: MutableMapping[str, str]) -> tuple[str, ...]:
+    """Expose presence only; browser clients never receive credential values."""
+    labels = (
+        ("mimo", "MIMO_API_KEY"),
+        ("openai", "LUNA_API_KEY"),
+        ("serpsearch", "SERPSEARCH_API_KEY"),
+        ("exa", "EXA_API_KEY"),
+        ("openalex", "OPENALEX_API_KEY"),
+        ("pubmed", "PUBMED_API_KEY"),
+        ("firecrawl", "FIRECRAWL_API_KEY"),
+    )
+    return tuple(label for label, key in labels if environment.get(key, "").strip())
 
 
 class ResearchStartInput(StrictModel):
@@ -180,6 +196,9 @@ class ResearchStartInput(StrictModel):
     use_serpsearch: bool = True
     use_exa: bool = True
     use_openalex: bool = True
+    use_arxiv: bool = False
+    use_pubmed: bool = False
+    use_crossref: bool = True
 
     @model_validator(mode="after")
     def validate_research_directions(self) -> ResearchStartInput:
@@ -337,6 +356,7 @@ def create_app(
             message=config_message or "MiMo and your selected research sources are connected.",
             default_db_path=str(prepare_default_database()),
             firecrawl_enabled=bool(runtime.environment.get("FIRECRAWL_API_KEY", "").strip()),
+            saved_credentials=_saved_credential_names(runtime.environment),
             service=runtime.services.probe(),
         )
 
@@ -350,6 +370,7 @@ def create_app(
                 payload.exa_api_key,
                 payload.openalex_api_key,
                 payload.firecrawl_api_key,
+                payload.pubmed_api_key,
             )
         ):
             raise HTTPException(status_code=422, detail="Enter at least one API key to save.")
@@ -377,6 +398,11 @@ def create_app(
                 if payload.serpsearch_api_key is not None
                 else None
             ),
+            pubmed_api_key=(
+                payload.pubmed_api_key.get_secret_value()
+                if payload.pubmed_api_key is not None
+                else None
+            ),
             firecrawl_api_key=(
                 payload.firecrawl_api_key.get_secret_value()
                 if payload.firecrawl_api_key is not None
@@ -395,7 +421,8 @@ def create_app(
             message=(
                 "Provider keys saved securely in macOS Keychain."
                 if config_message is None
-                else redact_text(config_message)
+                else "Provider keys saved securely in macOS Keychain. "
+                + redact_text(config_message)
             ),
         )
 
@@ -409,7 +436,13 @@ def create_app(
                     "review the result."
                 ),
             )
-        if not (payload.use_serpsearch or payload.use_exa or payload.use_openalex):
+        if not (
+            payload.use_serpsearch
+            or payload.use_exa
+            or payload.use_openalex
+            or payload.use_arxiv
+            or payload.use_pubmed
+        ):
             raise HTTPException(status_code=422, detail="Select at least one research source.")
         database = payload.db_path or str(prepare_default_database())
         request = LiveRunRequest(
@@ -432,11 +465,14 @@ def create_app(
                         (DiscoveryProvider.SERPSEARCH, payload.use_serpsearch),
                         (DiscoveryProvider.EXA, payload.use_exa),
                         (DiscoveryProvider.OPENALEX, payload.use_openalex),
+                        (DiscoveryProvider.ARXIV, payload.use_arxiv),
+                        (DiscoveryProvider.PUBMED, payload.use_pubmed),
                     )
                     if enabled
                 ),
             ),
             directions=payload.directions(),
+            crossref_enabled=payload.use_crossref,
         )
         return runtime.controller.start(request)
 

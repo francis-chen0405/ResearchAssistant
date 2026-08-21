@@ -165,6 +165,7 @@ def test_credentials_are_saved_and_never_returned() -> None:
         "luna_api_key": "openai-super-secret",
         "exa_api_key": "exa-super-secret",
         "openalex_api_key": "openalex-super-secret",
+        "pubmed_api_key": "pubmed-super-secret",
         "firecrawl_api_key": "firecrawl-super-secret",
     }
 
@@ -178,6 +179,7 @@ def test_credentials_are_saved_and_never_returned() -> None:
         ("LUNA_API_KEY", "openai-super-secret"),
         ("EXA_API_KEY", "exa-super-secret"),
         ("OPENALEX_API_KEY", "openalex-super-secret"),
+        ("PUBMED_API_KEY", "pubmed-super-secret"),
         ("FIRECRAWL_API_KEY", "firecrawl-super-secret"),
     )
 
@@ -256,6 +258,41 @@ def test_start_freezes_selected_discovery_sources_and_rejects_an_empty_set(tmp_p
     assert controller.started[0].research_controls.discovery_providers == ("serpsearch",)
     assert rejected.status_code == 422
     assert "at least one" in rejected.json()["detail"]
+
+
+def test_start_links_arxiv_pubmed_and_crossref_controls(tmp_path: Path) -> None:
+    client, controller, _ = _client()
+
+    response = client.post(
+        "/api/research/start",
+        json={
+            "raw_claim": "A public claim",
+            "acknowledged_public": True,
+            "db_path": str(tmp_path / "academic.sqlite3"),
+            "use_serpsearch": False,
+            "use_exa": False,
+            "use_openalex": False,
+            "use_arxiv": True,
+            "use_pubmed": True,
+            "use_crossref": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert controller.started[0].research_controls.discovery_providers == ("arxiv", "pubmed")
+    assert controller.started[0].crossref_enabled is True
+
+
+def test_configuration_reports_saved_key_presence_without_returning_secrets() -> None:
+    client, _, _ = _client()
+    client.post("/api/credentials", json={"pubmed_api_key": "pubmed-super-secret"})
+
+    response = client.get("/api/configuration")
+
+    assert response.status_code == 200
+    assert response.json()["configured"] is False
+    assert response.json()["saved_credentials"] == ["pubmed"]
+    assert "secret" not in response.text
 
 
 def test_start_preserves_independent_v2_research_directions(tmp_path: Path) -> None:

@@ -10,20 +10,25 @@ from pydantic import ConfigDict, model_validator
 
 from models import DiscoveryProvider, StrictModel
 from providers.acquisition import WigoloAcquisitionAdapter
+from providers.arxiv import ArxivSearchAdapter
 from providers.clients import ProviderClients
 from providers.composite_search import CompositeSearchProvider
 from providers.config import (
+    ArxivConfig,
     ExaConfig,
     FirecrawlConfig,
     OpenAlexConfig,
+    PubMedConfig,
     SerpSearchConfig,
     WigoloConfig,
 )
+from providers.crossref import CrossrefEnricher
 from providers.exa import ExaSearchAdapter
 from providers.firecrawl import FirecrawlAcquisitionAdapter
 from providers.llm import ModelAlias
 from providers.mimo import XiaomiMimoAdapter
 from providers.openalex import OpenAlexSearchAdapter
+from providers.pubmed import PubMedSearchAdapter
 from providers.scraper import ScraperProvider
 from providers.search import SearchProvider
 from providers.serpsearch import SerpSearchAdapter
@@ -43,6 +48,9 @@ class V2ProductionFactoryConfig(StrictModel):
     exa: ExaConfig | None = None
     openalex: OpenAlexConfig | None = None
     serpsearch: SerpSearchConfig | None = None
+    arxiv: ArxivConfig | None = None
+    pubmed: PubMedConfig | None = None
+    crossref_enabled: bool = False
     firecrawl: FirecrawlConfig | None = None
 
     @model_validator(mode="after")
@@ -56,6 +64,8 @@ class V2ProductionFactoryConfig(StrictModel):
                 (DiscoveryProvider.EXA, self.exa),
                 (DiscoveryProvider.OPENALEX, self.openalex),
                 (DiscoveryProvider.SERPSEARCH, self.serpsearch),
+                (DiscoveryProvider.ARXIV, self.arxiv),
+                (DiscoveryProvider.PUBMED, self.pubmed),
             )
             if value is not None
         }
@@ -72,6 +82,7 @@ class V2ProductionFactoryConfig(StrictModel):
         discovery_providers: tuple[DiscoveryProvider, ...],
         ceilings: V2RunCeilings | None = None,
         wigolo: WigoloConfig | None = None,
+        crossref_enabled: bool = False,
     ) -> V2ProductionFactoryConfig:
         enabled = set(discovery_providers)
         return cls(
@@ -97,6 +108,17 @@ class V2ProductionFactoryConfig(StrictModel):
                 if DiscoveryProvider.SERPSEARCH in enabled
                 else None
             ),
+            arxiv=(
+                ArxivConfig.from_environment(environment)
+                if DiscoveryProvider.ARXIV in enabled
+                else None
+            ),
+            pubmed=(
+                PubMedConfig.from_environment(environment)
+                if DiscoveryProvider.PUBMED in enabled
+                else None
+            ),
+            crossref_enabled=crossref_enabled,
             firecrawl=FirecrawlConfig.from_environment(environment),
         )
 
@@ -115,6 +137,11 @@ class V2ProductionFactoryConfig(StrictModel):
                 if self.serpsearch
                 else None
             ),
+            "arxiv": self.arxiv.model_dump(mode="json") if self.arxiv else None,
+            "pubmed": (
+                self.pubmed.model_dump(mode="json", exclude={"api_key"}) if self.pubmed else None
+            ),
+            "crossref_enabled": self.crossref_enabled,
             "firecrawl": (
                 self.firecrawl.model_dump(mode="json", exclude={"api_key"})
                 if self.firecrawl
@@ -132,6 +159,7 @@ class V2ProductionProviderBundle(StrictModel):
     wigolo: ScraperProvider
     firecrawl: ScraperProvider | None
     llm: RoutedV2LLMProvider
+    crossref_resolver: object | None = None
 
 
 def build_v2_production_bundle(
@@ -151,6 +179,14 @@ def build_v2_production_bundle(
         serpsearch=(
             SerpSearchAdapter(config.serpsearch, client=injected.serpsearch)
             if config.serpsearch
+            else None
+        ),
+        arxiv=(
+            ArxivSearchAdapter(config.arxiv, client=injected.arxiv_search) if config.arxiv else None
+        ),
+        pubmed=(
+            PubMedSearchAdapter(config.pubmed, client=injected.pubmed_search)
+            if config.pubmed
             else None
         ),
     )
@@ -204,4 +240,7 @@ def build_v2_production_bundle(
         wigolo=wigolo,
         firecrawl=firecrawl,
         llm=llm,
+        crossref_resolver=(
+            CrossrefEnricher(client=injected.crossref).resolve if config.crossref_enabled else None
+        ),
     )
