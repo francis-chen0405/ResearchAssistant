@@ -199,6 +199,17 @@ type CredentialInput = {
   firecrawl_api_key?: string;
 };
 
+function readableErrorDetail(detail: unknown): string | null {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (!Array.isArray(detail)) return null;
+  const messages = detail.flatMap((item): string[] => {
+    if (!item || typeof item !== "object") return [];
+    const message = (item as { msg?: unknown }).msg;
+    return typeof message === "string" && message.trim() ? [message] : [];
+  });
+  return messages.length ? messages.join(" ") : null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -207,7 +218,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-    const detail = typeof payload?.detail === "string" ? payload.detail : "The local service could not complete that request.";
+    const detail = readableErrorDetail(payload?.detail) ?? "The local service could not complete that request.";
     throw new Error(detail);
   }
   return (await response.json()) as T;
@@ -216,7 +227,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const researchApi = {
   configuration: () => request<Configuration>("/api/configuration"),
   saveCredentials: (payload: CredentialInput) =>
-    request<{ saved: boolean; configured: boolean; message: string }>("/api/credentials", {
+    request<{ saved: boolean; configured: boolean; message: string; saved_settings: string[] }>("/api/credentials", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

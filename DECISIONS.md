@@ -7,7 +7,7 @@
   explicitly injected compatibility tests; never reinterpret historical rows as v2.
 - Put a persisted run-wide accounting wrapper immediately around the routed physical LLM
   provider. Count every attempt and retry before transport, cap fresh runs at 160 calls and
-  300,000 tokens, support lower limits, and retain conservative exposure when exact usage is
+  500,000 tokens, support lower limits, and retain conservative exposure when exact usage is
   unavailable.
 - Protect fourteen downstream calls before optional continuation and fail closed when that
   reserve cannot cover selection, extraction, analysis, review, and synthesis. Continue to

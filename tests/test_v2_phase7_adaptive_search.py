@@ -104,6 +104,13 @@ class FakeAdaptiveLLM:
         raise AssertionError(f"unexpected stage {request.stage}")
 
 
+class FailingSearchAgentLLM(FakeAdaptiveLLM):
+    def generate(self, request: object) -> object:
+        if request.stage is LLMStage.SEARCH_AGENT:
+            raise RuntimeError("fixture returned malformed JSON")
+        return super().generate(request)
+
+
 class FakeSearch:
     def __init__(self, *, fail: bool = False, duplicate_url: str | None = None) -> None:
         self.fail = fail
@@ -556,6 +563,20 @@ def test_provider_failure_degrades_without_inventing_survivors(tmp_path: Path) -
     assert result.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
     assert result.rounds[0].failed_query_count == 1
     assert result.rounds[0].survivor_additions == 0
+
+
+def test_search_agent_provider_failure_preserves_round_one_work(tmp_path: Path) -> None:
+    llm = FailingSearchAgentLLM(search_outputs=[], gap_outputs=[])
+    result = _run(
+        tmp_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=FakeSearch(),
+    )
+
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
+    assert result.stopping_decision.completed_rounds == 1
+    assert "Search Agent failed" in result.stopping_decision.stopping_reason
 
 
 def test_duplicate_heavy_round_two_stops_before_round_three(tmp_path: Path) -> None:

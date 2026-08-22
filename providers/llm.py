@@ -42,6 +42,7 @@ from models import (
     V2InitialResearchPlan,
     V2SearchRoundPlan,
     V2SourceSelectionModelOutput,
+    V2VerbatimQuoteSelection,
     VerbatimQuoteSelection,
 )
 
@@ -688,7 +689,7 @@ def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.SOURCE_SELECTION:
         return (SourceRecommendationResult, V2SourceSelectionModelOutput)
     if stage is LLMStage.EXTRACTOR:
-        return (VerbatimQuoteSelection,)
+        return (V2VerbatimQuoteSelection, VerbatimQuoteSelection)
     if stage is LLMStage.ANALYST:
         return (
             ScoreDecision,

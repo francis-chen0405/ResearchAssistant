@@ -16,6 +16,7 @@ from models import (
     ResearchDirections,
     ScoutBatch,
     ScoutItem,
+    SelectedSentenceRange,
     SynthesisOutput,
     SynthesisSection,
     V2AdaptiveSearchModelOutput,
@@ -30,7 +31,7 @@ from models import (
     V2MaterialGap,
     V2SourceSelectionModelOutput,
     V2SourceSelectionRecommendation,
-    VerbatimQuoteSelection,
+    V2VerbatimQuoteSelection,
 )
 from providers.llm import LLMProviderCapabilities, LLMRequest
 from providers.scraper import ScrapeRequest, ScrapeResponse
@@ -218,8 +219,10 @@ class _V2Model:
                     ),
                 )
             )
-        if output_name == "VerbatimQuoteSelection":
-            return VerbatimQuoteSelection(selected_segments=(QUOTE,))
+        if output_name in {"V2VerbatimQuoteSelection", "VerbatimQuoteSelection"}:
+            return V2VerbatimQuoteSelection(
+                selected_sentence_ranges=(SelectedSentenceRange(start_sentence=2, end_sentence=2),)
+            )
         if output_name == "V2EvidenceAnalystModelOutput":
             relationship = (
                 V2EvidenceRelationship.SUPPORTS
@@ -390,6 +393,46 @@ def test_run_wide_lower_call_ceiling_fails_closed_before_an_overrun(tmp_path: Pa
     assert result.budget.physical_calls_used == 1
     assert len(model.requests) == 1
     assert "downstream reserve" in (result.failure_reason or "")
+    persisted = V2ProductionPipelineResult.model_validate_json(
+        read_v2_artifact(
+            str(tmp_path / "lower-limit.sqlite3"),
+            result.run_id,
+            V2_PRODUCTION_ARTIFACT_KEY,
+        ).payload_json
+    )
+    assert persisted == result
+
+
+def test_empty_deep_analysis_queue_reports_budget_reason_and_persists_failure(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "empty-queue.sqlite3"
+    result = _run(
+        db_path,
+        _V2Model(),
+        _Search(),
+        _Scraper(),
+        ceilings=V2RunCeilings(
+            max_physical_calls=40,
+            max_total_tokens=100_000,
+            max_total_cost_usd=Decimal("0.01"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.FAILED
+    assert "deep-analysis queue is empty" in (result.failure_reason or "")
+    assert "cost_reserve" in (result.failure_reason or "")
+    persisted = V2ProductionPipelineResult.model_validate_json(
+        read_v2_artifact(str(db_path), result.run_id, V2_PRODUCTION_ARTIFACT_KEY).payload_json
+    )
+    assert persisted == result
+
+
+def test_default_v2_ceiling_matches_product_budget() -> None:
+    defaults = V2RunCeilings()
+
+    assert defaults.max_total_tokens == 500_000
+    assert defaults.max_total_cost_usd == Decimal("0.20")
 
 
 def test_policy_fingerprint_rejects_cross_configuration_resume(tmp_path: Path) -> None:

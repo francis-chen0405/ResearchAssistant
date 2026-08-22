@@ -1,5 +1,29 @@
 # Status
 
+## 2026-08-21 - Budget and failure-diagnostics correction
+
+Status: Complete and verified.
+
+- Fresh website/API and direct v2 runs now default to a $0.20 cost ceiling alongside the
+  500,000-token hard maximum.
+- Terminal v2 failures are persisted before the worker returns, and an empty deep-analysis
+  queue now reports the actual call, token, or cost reservation that blocked evidence work.
+- The frontend preserves structured API validation messages instead of replacing them with a
+  generic local-service toast, and failed runs display their actionable persisted reason.
+- The launcher validates the current API version and only retires a stale ResearchAssistant
+  backend process; an unrelated listener on port 8765 is reported as a conflict.
+- Luna setup now rejects the OpenAI dashboard URL and points to the API endpoint, while the
+  saved local route was corrected to `https://api.openai.com/v1`.
+- Extraction now uses application-owned sentence ranges, and malformed adaptive Search Agent
+  responses degrade to preserved Round-1 work instead of aborting the whole run.
+- The local API was restarted and verified with the pinned Wigolo acquisition service healthy;
+  the rebuilt frontend is serving on loopback port 3000.
+
+Verification: complete Python suite 782 passed with 2 expected skips; focused adaptive,
+production, routing, and extraction suite 89 passed with 1 expected skip; Ruff check, Ruff
+format check, and diff check passed. Frontend ESLint and the Next.js 16.3.1 production build
+passed. No dependency change or live paid research run was made.
+
 ## 2026-08-21 - v2 provider setup and discovery wiring
 
 Status: Complete and verified.
@@ -17,6 +41,13 @@ Status: Complete and verified.
   pricing requirement without fabricating cost values.
 - The modal remains open after a save and exposes a presence-only checklist for saved route
   settings, so clearing transient fields cannot be mistaken for a failed Keychain write.
+- A failed launch due to incomplete provider configuration now keeps the user on the research
+  page with the returned explanation instead of automatically reopening the provider modal.
+  This separates persisted credentials from the remaining run-readiness requirement.
+- The credential-save response now returns a presence-only list of accepted non-secret route
+  settings. The setup panel uses that response immediately, labels incomplete setup honestly,
+  accepts only plain numeric price values, and converts low-level missing-price errors into
+  actionable language.
 - Fresh v2 website runs can independently enable arXiv and PubMed discovery, and can enable
   optional Crossref DOI identity enrichment. arXiv is keyless; PubMed accepts an optional key;
   Crossref remains metadata-only and cannot become evidence. The v2 factory now instantiates
@@ -24,9 +55,9 @@ Status: Complete and verified.
 - The result page now displays the persisted discovery providers for the run and for each
   survivor source. Historical result rendering remains unchanged.
 
-Verification: complete Python suite 778 passed with 2 expected skips; Ruff check, Ruff format
-check, and diff check passed. Next.js ESLint and production build passed. No live provider call
-or dependency change was made.
+Verification: complete Python suite 778 passed with 2 expected skips; focused API/frontend
+regression suite now passes 35 tests; Ruff check, Ruff format check, and diff check passed.
+Next.js ESLint and production build passed. No live provider call or dependency change was made.
 
 ## 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
 
@@ -35,7 +66,7 @@ Status: Complete and verified.
 - Added a complete restart-safe v2 production coordinator covering broad Round 1 through the
   canonical Phase 11 result envelope, including the previously missing exact-extraction bridge.
 - Added persisted run-wide accounting for every MiMo normal, MiMo Pro, and Luna physical call,
-  including failures/retries. Hard maxima are 160 calls and 300,000 tokens; lower configured
+  including failures/retries. Hard maxima are 160 calls and 500,000 tokens; lower configured
   ceilings fail closed. Optional continuation protects fourteen downstream calls and Phase 8
   sizes deep analysis from actual remaining calls, tokens, and cost.
 - Added provider construction for all three physical model aliases and cut fresh website and
@@ -271,7 +302,8 @@ fingerprint, and orchestration policy identities, so it applies to fresh runs an
 silently resume an older contract. No live Exa, OpenAlex, Wigolo, Firecrawl, or MiMo call
 was made, so this implementation spent no provider credit. No dependency, migration,
 hosting, account, telemetry, visual redesign, or historical immutable-row rewrite was
-added. MLP-5 remains unstarted and requires separate user authorization.
+added. The earlier MLP-4 record predates the completed MLP-5 provider-selection work; the
+current MLP-5 status is recorded above.
 
 The 2026-08-17 expanded-retrieval correction removes a stale `search_rank <= 5`
 pre-Analyst candidate constraint that rejected otherwise valid exact quotes from later

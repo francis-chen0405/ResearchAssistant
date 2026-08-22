@@ -30,7 +30,7 @@ from models import (
     V2EvidenceAnalystBatchInput,
     V2EvidenceAnalystCandidateInput,
     V2SourceSelectionQueueResult,
-    VerbatimQuoteSelection,
+    V2VerbatimQuoteSelection,
 )
 from providers.llm import (
     V2_LLM_ROUTING,
@@ -46,7 +46,7 @@ from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_EXTRACTION_ARTIFACT_KEY = "phase-12-exact-extraction"
-V2_EXTRACTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-exact-extraction-v1"
+V2_EXTRACTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-exact-extraction-v2"
 V2_EXTRACTION_FILTER_VERSION = "researchassistant-v2-phase-12-post-filter-v1"
 V2_EXTRACTION_MAX_ATTEMPTS = 2
 _CLAIM_TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -238,10 +238,10 @@ def _extract_source(
         run_id=snapshot.run_id,
         stage=LLMStage.EXTRACTOR,
         prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, input_artifact, VerbatimQuoteSelection),
+        rendered_prompt=render_stage_prompt(prompt, input_artifact, V2VerbatimQuoteSelection),
         input_artifact=input_artifact,
         input_artifact_ids=(snapshot.snapshot_id,),
-        requested_output_type=VerbatimQuoteSelection,
+        requested_output_type=V2VerbatimQuoteSelection,
         model_alias=ModelAlias.MIMO_V25_PRO,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
     )
@@ -250,7 +250,7 @@ def _extract_source(
         try:
             invocation = invoke_llm(llm_provider, request, clock=clock)
             selection = invocation.output_artifact
-            if not isinstance(selection, VerbatimQuoteSelection):
+            if not isinstance(selection, V2VerbatimQuoteSelection):
                 raise TypeError("Extractor returned an unexpected typed artifact")
         except Exception as exc:
             last_failure = f"{type(exc).__name__}: {exc}"[:1000]

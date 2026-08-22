@@ -44,6 +44,7 @@ from models import (
 from money import add_usd
 from providers.llm import (
     V2_LLM_ROUTING,
+    LLMInvocationError,
     LLMProvider,
     LLMRequest,
     LLMStage,
@@ -450,6 +451,17 @@ def run_v2_adaptive_search_continuation(
             budget=budget,
             clock=now,
         )
+    except LLMInvocationError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.PROVIDER_FAILURE,
+            f"Adaptive Search Agent failed; completed work was preserved: {exc}",
+            2,
+            now,
+        )
     except (LookupError, ValueError) as exc:
         reason = (
             V2RoundThreeReasonCode.NO_ELIGIBLE_PROVIDER
@@ -600,6 +612,17 @@ def _run_round(
             routing_config=routing_config,
             budget=budget,
             clock=clock,
+        )
+    except LLMInvocationError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.PROVIDER_FAILURE,
+            f"Adaptive Search Agent failed; completed work was preserved: {exc}",
+            round_number - 1,
+            clock,
         )
     except (LookupError, ValueError) as exc:
         code = (

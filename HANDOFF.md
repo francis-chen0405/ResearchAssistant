@@ -1,5 +1,31 @@
 # Handoff
 
+## Budget and failure-diagnostics correction — 2026-08-21
+
+The default fresh-run budget is now $0.20 with the already-authorized 500,000-token hard
+maximum. Terminal v2 failures are persisted before returning to the live controller, and an
+empty deep-analysis queue reports the reservation reason instead of reaching synthesis with
+zero evidence. The Next.js API helper now renders FastAPI validation arrays, and failed-result
+views retain the backend's actionable failure message. The launcher validates the current
+loopback API version before reusing a listener and only stops a stale ResearchAssistant API
+process it can identify.
+
+The saved Luna route was corrected from the OpenAI dashboard URL to
+`https://api.openai.com/v1`, and setup now rejects the dashboard URL if entered again.
+Extractor output is now constrained to application-owned sentence ranges. Adaptive Search Agent
+provider failures preserve completed Round-1 work and stop with a typed provider-failure reason
+instead of aborting the entire run. The API and rebuilt frontend were restarted; the pinned
+Wigolo acquisition service reports healthy.
+
+Verification: complete Python suite 782 passed with 2 expected skips; focused adaptive,
+production, routing, and extraction suite 89 passed with 1 expected skip; Ruff lint/format,
+diff check, frontend ESLint, and Next.js 16.3.1 production build passed. No live paid run or
+dependency change was made.
+
+The earlier handoff records below are historical. Where they say MLP-5 is unauthorized or
+defer the visual redesign to MLP-5, they refer to the pre-MLP-5 state; the completed
+MLP-5 provider-selection scope is recorded in the current status above.
+
 ## v2 provider setup and discovery wiring — 2026-08-21
 
 The Next.js provider panel now accepts OpenAI/Luna and optional PubMed credentials in addition
@@ -18,6 +44,11 @@ budget enforcement. Never invent or silently default those prices.
 
 The setup modal remains open after a successful save and displays a presence-only route-setting
 checklist. Password inputs intentionally remain blank after save; never echo credentials.
+When route pricing is still missing, a launch attempt reports that readiness issue in place and
+does not force the provider modal open again. The separate `saved_settings` API field is the
+frontend contract for confirming the four non-secret budget settings across a panel reopen.
+The credential-save response also includes that confirmation immediately; do not restore a
+generic “Provider keys saved” label while required price settings remain absent.
 
 Fresh v2 runs pass the selected arXiv/PubMed controls into `ResearchControls`, instantiate the
 corresponding metadata adapters in `providers/v2_factory.py`, and pass an optional Crossref
@@ -25,8 +56,9 @@ resolver through Round 1 and adaptive rounds. The Crossref selection is part of 
 provider-policy fingerprint. Result views display the frozen discovery sources; historical runs
 retain their original rendering and contracts.
 
-Verification: 778 passed, 2 expected skips; Ruff lint/format, diff check, frontend ESLint, and
-Next.js production build passed. No dependency or live provider call was added.
+Verification: 778 passed, 2 expected skips; focused API/frontend regression suite now passes
+35 tests; Ruff lint/format, diff check, frontend ESLint, and Next.js production build passed.
+No dependency or live provider call was added.
 
 ## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
 
@@ -41,7 +73,7 @@ starts/completions, and the terminal Phase 12 result. Restart reuses compatible 
 cannot duplicate Ledger admissions. A failed run may resume under the exact claim and complete
 fingerprint; incomplete calls remain conservatively counted.
 
-Hard ceilings are 160 physical LLM calls and 300,000 tokens, with lower limits supported.
+Hard ceilings are 160 physical LLM calls and 500,000 tokens, with lower limits supported.
 Fourteen calls are protected before downstream selection/extraction/analysis/review/synthesis;
 Phase 8 then applies its existing worst-case per-source reservation. Ordinary provider/source
 failures preserve typed audit state and compatible work; direction, immutable quote, Reviewer,
@@ -287,7 +319,8 @@ dependencies before rerunning it.
 MLP-4 Research Quality & OpenAlex Integration is complete. Its corrective quality pass
 uses bounded source backfill, optional claim-facet ranking bonuses, source sentence-range
 selection, and a clean insufficient-evidence terminal path. `web/` remains the sole live
-product surface; the full visual redesign is deferred to MLP-5. The current page now has
+product surface; a broader visual redesign remains outside the completed MLP-5 provider-selection
+scope. The current page now has
 default-off counterevidence, an Advanced 5/10/15/20 source target (default 10), required
 OpenAlex setup, mode-aware progress/results, honest estimated-cost wording, and a hidden
 terminal Research Trail drawer.
@@ -324,7 +357,8 @@ Regression proof is concentrated in `tests/test_mlp4_research_quality.py`,
 dependency or migration and made no live provider call. Its policy/fingerprint identity
 bumps require a fresh run: restart the launcher and leave Run ID blank rather than
 resuming a run created under the previous thresholds. Old terminal runs remain readable.
-MLP-5 is not authorized.
+MLP-5 Provider Selection & SERP Search is complete; any later visual redesign remains outside
+the authorized scope.
 
 Correction verification passed: 651 tests with 2 expected opt-in skips, Ruff lint and
 format, frontend ESLint and optimized production build using installed dependencies,

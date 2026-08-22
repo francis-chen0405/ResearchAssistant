@@ -19,7 +19,8 @@ from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_MAX_PHYSICAL_CALLS = 160
-V2_MAX_TOTAL_TOKENS = 300_000
+V2_MAX_TOTAL_TOKENS = 500_000
+V2_DEFAULT_TOTAL_COST_USD = Decimal("0.20")
 V2_BUDGET_POLICY_IDENTITY = "researchassistant-v2-phase-12-run-budget-v1"
 
 
@@ -35,8 +36,8 @@ class V2RunCeilings(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     max_physical_calls: int = Field(default=V2_MAX_PHYSICAL_CALLS, ge=1, le=160)
-    max_total_tokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=300_000)
-    max_total_cost_usd: Decimal = Field(default=Decimal("1.00"), gt=0)
+    max_total_tokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=500_000)
+    max_total_cost_usd: Decimal = Field(default=V2_DEFAULT_TOTAL_COST_USD, gt=0)
     policy_identity: str = V2_BUDGET_POLICY_IDENTITY
 
 

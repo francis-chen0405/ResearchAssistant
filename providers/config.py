@@ -391,6 +391,11 @@ class LunaConfig(StrictModel):
         parsed = urlsplit(value)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("Luna base URL must use HTTPS")
+        if parsed.hostname.casefold() == "platform.openai.com":
+            raise ValueError(
+                "Luna API base URL must be an API endpoint such as "
+                "https://api.openai.com/v1, not the OpenAI dashboard URL"
+            )
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("Luna base URL cannot contain credentials, query, or fragment")
         return value.rstrip("/")

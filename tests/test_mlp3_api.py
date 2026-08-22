@@ -179,6 +179,14 @@ def test_credentials_are_saved_and_never_returned() -> None:
 
     assert response.status_code == 200
     assert response.json()["configured"] is True
+    assert response.json()["saved_settings"] == [
+        "MiMo input price",
+        "MiMo output price",
+        "Luna input price",
+        "Luna output price",
+        "Luna API base URL",
+        "Luna model ID",
+    ]
     assert "secret" not in response.text
     assert saved[0].environment_items() == (
         ("MIMO_API_KEY", "mimo-super-secret"),
@@ -232,8 +240,8 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
     assert accepted.status_code == 200
     request = controller.started[0]
     assert request.raw_claim == "A public claim"
-    assert request.max_tokens == 200_000
-    assert request.max_cost_usd == Decimal("0.15")
+    assert request.max_tokens == 500_000
+    assert request.max_cost_usd == Decimal("0.20")
     assert request.max_llm_calls == 160
     assert request.research_controls.depth.value == "standard"
     assert request.research_controls.sources_per_stance_per_round == 20
@@ -297,13 +305,20 @@ def test_start_links_arxiv_pubmed_and_crossref_controls(tmp_path: Path) -> None:
 
 def test_configuration_reports_saved_key_presence_without_returning_secrets() -> None:
     client, _, _ = _client()
-    client.post("/api/credentials", json={"pubmed_api_key": "pubmed-super-secret"})
+    client.post(
+        "/api/credentials",
+        json={
+            "pubmed_api_key": "pubmed-super-secret",
+            "mimo_v25_input_usd_per_million": "1.25",
+        },
+    )
 
     response = client.get("/api/configuration")
 
     assert response.status_code == 200
     assert response.json()["configured"] is False
     assert response.json()["saved_credentials"] == ["pubmed"]
+    assert response.json()["saved_settings"] == ["MiMo input price"]
     assert "secret" not in response.text
 
 

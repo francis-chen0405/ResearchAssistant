@@ -14,6 +14,7 @@ from models import (
     SegmentOffset,
     SourceSnapshot,
     StrictModel,
+    V2VerbatimQuoteSelection,
     VerbatimQuoteSelection,
 )
 from utils import compute_sha256, count_words, derive_quote_block_id
@@ -190,7 +191,7 @@ def find_segment_offsets(normalized_text: str, segments: list[str]) -> list[Segm
 
 def assemble_quote_block_from_selected_segments(
     normalized_text: str,
-    selection: VerbatimQuoteSelection,
+    selection: VerbatimQuoteSelection | V2VerbatimQuoteSelection,
     *,
     truncated: bool,
 ) -> str:
@@ -220,10 +221,10 @@ def numbered_source_text(normalized_text: str) -> str:
 
 def selected_segments_from_selection(
     normalized_text: str,
-    selection: VerbatimQuoteSelection,
+    selection: VerbatimQuoteSelection | V2VerbatimQuoteSelection,
 ) -> list[str]:
     """Turn a model's source sentence references into exact immutable snapshot text."""
-    if selection.selected_segments:
+    if isinstance(selection, VerbatimQuoteSelection) and selection.selected_segments:
         return list(selection.selected_segments)
     spans = _sentence_spans(normalized_text)
     selected_segments: list[str] = []

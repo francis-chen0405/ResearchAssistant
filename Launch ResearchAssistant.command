@@ -6,6 +6,7 @@ cd "$SCRIPT_DIR"
 
 WEB_URL="http://127.0.0.1:3000/"
 API_URL="http://127.0.0.1:8765/api/health"
+EXPECTED_API_VERSION="mlp-5-v2-phase12"
 
 if [[ ! -x ".venv/bin/python" ]]; then
   osascript -e 'display alert "ResearchAssistant is not installed" message "Create .venv and install requirements.txt, then try again." as critical'
@@ -34,7 +35,31 @@ trap cleanup EXIT INT TERM
 export PATH="$SCRIPT_DIR/.venv/bin:$PATH"
 export NEXT_TELEMETRY_DISABLED=1
 
-if ! /usr/sbin/lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1; then
+api_is_ready() {
+  /usr/bin/curl --fail --silent --max-time 2 "$API_URL" |
+    /usr/bin/grep -Fq "\"api_version\":\"$EXPECTED_API_VERSION\""
+}
+
+if ! api_is_ready; then
+  for pid in ${(f)"$(/usr/sbin/lsof -nP -tiTCP:8765 -sTCP:LISTEN 2>/dev/null || true)"}; do
+    process_command=$(/bin/ps -p "$pid" -o command= 2>/dev/null || true)
+    if [[ "$process_command" == *"$SCRIPT_DIR/.venv/bin/python -m frontend.api"* ]]; then
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  done
+  for _ in {1..20}; do
+    if ! /usr/sbin/lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.1
+  done
+fi
+
+if ! api_is_ready; then
+  if /usr/sbin/lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1; then
+    osascript -e 'display alert "ResearchAssistant API conflict" message "Port 8765 is occupied by a different service. Stop it, then launch ResearchAssistant again." as critical'
+    exit 1
+  fi
   "$SCRIPT_DIR/.venv/bin/python" -m frontend.api &
   API_PID=$!
 fi
@@ -48,7 +73,7 @@ if ! /usr/sbin/lsof -nP -iTCP:3000 -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 for _ in {1..45}; do
-  if /usr/bin/curl --fail --silent "$API_URL" >/dev/null 2>&1 && \
+  if api_is_ready && \
      /usr/bin/curl --fail --silent "$WEB_URL" >/dev/null 2>&1; then
     open "$WEB_URL"
     break
@@ -56,7 +81,7 @@ for _ in {1..45}; do
   sleep 1
 done
 
-if ! /usr/bin/curl --fail --silent "$API_URL" >/dev/null 2>&1 || \
+if ! api_is_ready || \
    ! /usr/bin/curl --fail --silent "$WEB_URL" >/dev/null 2>&1; then
   osascript -e 'display alert "ResearchAssistant could not start" message "The local website or research service did not become ready. Check this Terminal window for details." as critical'
   exit 1

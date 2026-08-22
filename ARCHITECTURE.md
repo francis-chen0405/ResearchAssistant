@@ -17,7 +17,7 @@ claim + direction controls -> broad Round 1 -> normalize/cluster -> Scout
 
 The persisted `BudgetedV2LLMProvider` is the run-wide authority for every physical model
 attempt, including failures and retries. The immutable ceiling is at most 160 calls and
-300,000 tokens, with lower configured values supported. It reserves conservatively before
+500,000 tokens, with lower configured values supported. It reserves conservatively before
 each physical call, reconciles exact usage when available, and preserves uncertain exposure.
 Optional research receives budget only after the downstream reserve; Phase 8 derives queue
 capacity from the remaining call/token/cost budget and retains a status for every survivor.

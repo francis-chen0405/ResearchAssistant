@@ -2209,6 +2209,23 @@ class VerbatimQuoteSelection(StrictModel):
         return self
 
 
+class V2VerbatimQuoteSelection(StrictModel):
+    """V2 Extractor output narrowed to application-owned sentence ranges."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    selected_sentence_ranges: tuple[SelectedSentenceRange, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_selection_shape(self) -> V2VerbatimQuoteSelection:
+        previous_end = 0
+        for selection_range in self.selected_sentence_ranges:
+            if selection_range.start_sentence <= previous_end:
+                raise ValueError("sentence ranges must be ordered and non-overlapping")
+            previous_end = selection_range.end_sentence
+        return self
+
+
 class ProvisionalCandidate(StrictModel):
     run_id: UUID
     stance: Stance

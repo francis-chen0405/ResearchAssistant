@@ -67,7 +67,7 @@ from models import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
     V2SourceSelectionModelOutput,
-    VerbatimQuoteSelection,
+    V2VerbatimQuoteSelection,
 )
 from providers.llm import LLMProvider
 from providers.scraper import ScraperProvider
@@ -356,6 +356,16 @@ def run_v2_production_pipeline(
             ),
             clock=now,
         ).result
+        if not selection.queued_source_ids:
+            reason = (
+                selection.limiting_reason.value
+                if selection.limiting_reason is not None
+                else "unknown"
+            )
+            raise V2BudgetExceededError(
+                "v2 deep-analysis queue is empty; budget reservation blocked all "
+                f"surviving sources ({reason}). Increase the cost, token, or call ceiling."
+            )
         extraction = run_v2_exact_extraction(
             db_path=path,
             queue_result=selection,
@@ -379,6 +389,17 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             clock=now,
         )
+        approved_records = tuple(
+            item for item in reviewer.source_results if item.ledger_record is not None
+        )
+        if not approved_records:
+            reasons = tuple(
+                dict.fromkeys(
+                    item.failure for item in reviewer.source_results if item.failure is not None
+                )
+            )
+            detail = f" Details: {'; '.join(reasons)}" if reasons else ""
+            raise ValueError("v2 produced no Reviewer-approved evidence records." + detail)
         final = run_v2_final_research_output(
             db_path=path,
             reviewer_result=reviewer,
@@ -406,14 +427,7 @@ def run_v2_production_pipeline(
         _persist_terminal(path, result, now)
         return result
     except Exception as exc:
-        _set_run_state(
-            path,
-            resolved_run_id,
-            RunStatus.FAILED,
-            Stage.FINAL_RENDERER_VALIDATOR,
-            now,
-        )
-        return V2ProductionPipelineResult(
+        result = V2ProductionPipelineResult(
             run_id=resolved_run_id,
             db_path=path,
             raw_claim=raw_claim,
@@ -422,6 +436,8 @@ def run_v2_production_pipeline(
             budget=budgeted_llm.snapshot(),
             completed_at=_aware(now()),
         )
+        _persist_terminal(path, result, now)
+        return result
 
 
 def _prepare_identity(
@@ -501,7 +517,7 @@ def _semantic_policy_payload() -> dict[str, object]:
         V2GapAnalysisModelOutput,
         V2AdaptiveSearchModelOutput,
         V2SourceSelectionModelOutput,
-        VerbatimQuoteSelection,
+        V2VerbatimQuoteSelection,
         V2EvidenceAnalystModelOutput,
         V2CanonicalStatementModelOutput,
         ReviewerDecision,

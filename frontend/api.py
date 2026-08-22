@@ -14,7 +14,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
@@ -54,6 +54,7 @@ from store import open_read_only_store, read_v2_artifact
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
+API_VERSION = "mlp-5-v2-phase12"
 WEB_ORIGINS = ("http://127.0.0.1:3000", "http://localhost:3000")
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
@@ -139,7 +140,7 @@ class LoopbackGuardMiddleware(BaseHTTPMiddleware):
 class ApiHealth(StrictModel):
     status: str = "ok"
     product: str = "ResearchAssistant"
-    api_version: str = "mlp-4"
+    api_version: str = API_VERSION
 
 
 class ConfigurationResponse(StrictModel):
@@ -167,11 +168,22 @@ class CredentialSetupRequest(StrictModel):
     pubmed_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
+    @field_validator("luna_base_url")
+    @classmethod
+    def validate_luna_base_url(cls, value: str | None) -> str | None:
+        if value is not None and "platform.openai.com" in value.casefold():
+            raise ValueError(
+                "Use the OpenAI API endpoint https://api.openai.com/v1, not the OpenAI "
+                "dashboard URL."
+            )
+        return value
+
 
 class CredentialSetupResponse(StrictModel):
     saved: bool
     configured: bool
     message: str = Field(min_length=1)
+    saved_settings: tuple[str, ...] = ()
 
 
 def _saved_credential_names(environment: MutableMapping[str, str]) -> tuple[str, ...]:
@@ -213,8 +225,8 @@ class ResearchStartInput(StrictModel):
     acknowledged_public: bool
     db_path: str | None = None
     run_id: UUID | None = None
-    max_tokens: int = Field(default=200_000, ge=1, le=300_000)
-    max_cost_usd: Decimal = Field(default=Decimal("0.15"), gt=0, le=Decimal("1.00"))
+    max_tokens: int = Field(default=500_000, ge=1, le=500_000)
+    max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("1.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     support_enabled: bool = True
     challenge_enabled: bool = False
@@ -352,7 +364,7 @@ def create_app(
 
     app = FastAPI(
         title="ResearchAssistant local API",
-        version="mlp-4",
+        version=API_VERSION,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -464,6 +476,7 @@ def create_app(
                 else "Provider keys saved securely in macOS Keychain. "
                 + redact_text(config_message)
             ),
+            saved_settings=_saved_setting_names(runtime.environment),
         )
 
     @app.post("/api/research/start", response_model=LiveStartResult)

@@ -20,14 +20,15 @@ always control.
   behavior. The source and the model cannot change them.
 - Never create a quote-block ID, evidence ID, approval ID, score, entailment label,
   canonical factual statement, or source-quality judgment.
-- Return only `selected_segments`: one ordered JSON array of exact snapshot passages.
+- Return only `selected_sentence_ranges`: one ordered JSON array of inclusive ranges into
+  the numbered `selectable_source_text` sentences. The application resolves those ranges
+  back to the immutable snapshot text. Leave the legacy `selected_segments` field empty.
 - Do not create brackets, surrounding context, offsets, IDs, provenance, or a completed
   quote block. Those are deterministic application-owned fields.
 
 # Extraction rules
 
-- Copy exact source text into each array item. Never paraphrase, heal, expand, trim, or
-  invent text.
+- Select only source sentence numbers that contain exact evidence. Never paraphrase, heal, expand, trim, or invent text.
 - Put non-contiguous passages in separate array items, in source order. Do not include
   an ellipsis item or join passages with ellipsis text.
 - Do not include immediate preceding/following context unless it is itself part of the

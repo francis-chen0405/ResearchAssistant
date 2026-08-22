@@ -94,6 +94,14 @@ def test_luna_route_uses_production_defaults_and_allows_deployment_overrides() -
         _config(environment)
 
 
+def test_luna_route_rejects_openai_dashboard_url() -> None:
+    environment = _environment()
+    environment["LUNA_BASE_URL"] = "https://platform.openai.com"
+
+    with pytest.raises(ProviderConfigurationError, match="API endpoint"):
+        _config(environment)
+
+
 def test_v2_preflight_rejects_unknown_normal_route_pricing() -> None:
     environment = _environment()
     del environment["MIMO_V25_INPUT_USD_PER_TOKEN"]
