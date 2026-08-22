@@ -7,6 +7,7 @@ import os
 import sys
 from collections.abc import MutableMapping
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, SecretStr, field_validator
 
@@ -32,6 +33,12 @@ class ProviderCredentials(StrictModel):
 
     mimo_api_key: SecretStr | None = None
     luna_api_key: SecretStr | None = None
+    luna_base_url: str | None = None
+    luna_model: str | None = None
+    mimo_v25_input_usd_per_token: str | None = None
+    mimo_v25_output_usd_per_token: str | None = None
+    luna_input_usd_per_token: str | None = None
+    luna_output_usd_per_token: str | None = None
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
@@ -41,6 +48,12 @@ class ProviderCredentials(StrictModel):
     @field_validator(
         "mimo_api_key",
         "luna_api_key",
+        "luna_base_url",
+        "luna_model",
+        "mimo_v25_input_usd_per_token",
+        "mimo_v25_output_usd_per_token",
+        "luna_input_usd_per_token",
+        "luna_output_usd_per_token",
         "exa_api_key",
         "openalex_api_key",
         "serpsearch_api_key",
@@ -49,14 +62,26 @@ class ProviderCredentials(StrictModel):
         mode="before",
     )
     @classmethod
-    def validate_api_key(cls, value: object) -> object:
+    def validate_provider_value(cls, value: object) -> object:
         if value is None:
             return value
         if not isinstance(value, str) or not value or value != value.strip():
-            raise ValueError("API keys must be non-empty and have no surrounding whitespace")
+            raise ValueError("Provider values must be non-empty and have no surrounding whitespace")
         if "\n" in value or "\r" in value:
-            raise ValueError("API keys must be single-line values")
+            raise ValueError("Provider values must be single-line values")
         return value
+
+    @field_validator("luna_base_url")
+    @classmethod
+    def validate_luna_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("Luna base URL must use HTTPS")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Luna base URL cannot contain credentials, query, or fragment")
+        return value.rstrip("/")
 
     def environment_items(self) -> tuple[tuple[str, str], ...]:
         """Return explicit process-environment boundary values."""
@@ -65,6 +90,18 @@ class ProviderCredentials(StrictModel):
             items += (("MIMO_API_KEY", self.mimo_api_key.get_secret_value()),)
         if self.luna_api_key is not None:
             items += (("LUNA_API_KEY", self.luna_api_key.get_secret_value()),)
+        if self.luna_base_url is not None:
+            items += (("LUNA_BASE_URL", self.luna_base_url),)
+        if self.luna_model is not None:
+            items += (("LUNA_MODEL", self.luna_model),)
+        if self.mimo_v25_input_usd_per_token is not None:
+            items += (("MIMO_V25_INPUT_USD_PER_TOKEN", self.mimo_v25_input_usd_per_token),)
+        if self.mimo_v25_output_usd_per_token is not None:
+            items += (("MIMO_V25_OUTPUT_USD_PER_TOKEN", self.mimo_v25_output_usd_per_token),)
+        if self.luna_input_usd_per_token is not None:
+            items += (("LUNA_INPUT_USD_PER_TOKEN", self.luna_input_usd_per_token),)
+        if self.luna_output_usd_per_token is not None:
+            items += (("LUNA_OUTPUT_USD_PER_TOKEN", self.luna_output_usd_per_token),)
         if self.exa_api_key is not None:
             items += (("EXA_API_KEY", self.exa_api_key.get_secret_value()),)
         if self.openalex_api_key is not None:
@@ -96,6 +133,12 @@ def load_saved_credentials() -> ProviderCredentials | None:
     credentials = ProviderCredentials(
         mimo_api_key=mimo,
         luna_api_key=_read_optional_secret("LUNA_API_KEY"),
+        luna_base_url=_read_optional_secret("LUNA_BASE_URL"),
+        luna_model=_read_optional_secret("LUNA_MODEL"),
+        mimo_v25_input_usd_per_token=_read_optional_secret("MIMO_V25_INPUT_USD_PER_TOKEN"),
+        mimo_v25_output_usd_per_token=_read_optional_secret("MIMO_V25_OUTPUT_USD_PER_TOKEN"),
+        luna_input_usd_per_token=_read_optional_secret("LUNA_INPUT_USD_PER_TOKEN"),
+        luna_output_usd_per_token=_read_optional_secret("LUNA_OUTPUT_USD_PER_TOKEN"),
         exa_api_key=_read_optional_secret("EXA_API_KEY"),
         openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
         serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),

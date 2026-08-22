@@ -148,12 +148,19 @@ class ConfigurationResponse(StrictModel):
     default_db_path: str = Field(min_length=1)
     firecrawl_enabled: bool
     saved_credentials: tuple[str, ...] = ()
+    saved_settings: tuple[str, ...] = ()
     service: ServiceDiagnostic
 
 
 class CredentialSetupRequest(StrictModel):
     mimo_api_key: SecretStr | None = None
     luna_api_key: SecretStr | None = None
+    luna_base_url: str | None = None
+    luna_model: str | None = None
+    mimo_v25_input_usd_per_million: Decimal | None = Field(default=None, gt=0)
+    mimo_v25_output_usd_per_million: Decimal | None = Field(default=None, gt=0)
+    luna_input_usd_per_million: Decimal | None = Field(default=None, gt=0)
+    luna_output_usd_per_million: Decimal | None = Field(default=None, gt=0)
     exa_api_key: SecretStr | None = None
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
@@ -177,6 +184,26 @@ def _saved_credential_names(environment: MutableMapping[str, str]) -> tuple[str,
         ("openalex", "OPENALEX_API_KEY"),
         ("pubmed", "PUBMED_API_KEY"),
         ("firecrawl", "FIRECRAWL_API_KEY"),
+    )
+    return tuple(label for label, key in labels if environment.get(key, "").strip())
+
+
+def _per_token_price(value: Decimal | None) -> str | None:
+    """Convert the user-facing USD-per-million price into the strict route unit."""
+    if value is None:
+        return None
+    return format(value / Decimal("1000000"), "f")
+
+
+def _saved_setting_names(environment: MutableMapping[str, str]) -> tuple[str, ...]:
+    """Expose non-secret route-setting presence for the local setup checklist."""
+    labels = (
+        ("MiMo input price", "MIMO_V25_INPUT_USD_PER_TOKEN"),
+        ("MiMo output price", "MIMO_V25_OUTPUT_USD_PER_TOKEN"),
+        ("Luna input price", "LUNA_INPUT_USD_PER_TOKEN"),
+        ("Luna output price", "LUNA_OUTPUT_USD_PER_TOKEN"),
+        ("Luna API base URL", "LUNA_BASE_URL"),
+        ("Luna model ID", "LUNA_MODEL"),
     )
     return tuple(label for label, key in labels if environment.get(key, "").strip())
 
@@ -357,6 +384,7 @@ def create_app(
             default_db_path=str(prepare_default_database()),
             firecrawl_enabled=bool(runtime.environment.get("FIRECRAWL_API_KEY", "").strip()),
             saved_credentials=_saved_credential_names(runtime.environment),
+            saved_settings=_saved_setting_names(runtime.environment),
             service=runtime.services.probe(),
         )
 
@@ -366,6 +394,12 @@ def create_app(
             (
                 payload.mimo_api_key,
                 payload.luna_api_key,
+                payload.luna_base_url,
+                payload.luna_model,
+                payload.mimo_v25_input_usd_per_million,
+                payload.mimo_v25_output_usd_per_million,
+                payload.luna_input_usd_per_million,
+                payload.luna_output_usd_per_million,
                 payload.serpsearch_api_key,
                 payload.exa_api_key,
                 payload.openalex_api_key,
@@ -385,6 +419,12 @@ def create_app(
                 if payload.luna_api_key is not None
                 else None
             ),
+            luna_base_url=payload.luna_base_url,
+            luna_model=payload.luna_model,
+            mimo_v25_input_usd_per_token=_per_token_price(payload.mimo_v25_input_usd_per_million),
+            mimo_v25_output_usd_per_token=_per_token_price(payload.mimo_v25_output_usd_per_million),
+            luna_input_usd_per_token=_per_token_price(payload.luna_input_usd_per_million),
+            luna_output_usd_per_token=_per_token_price(payload.luna_output_usd_per_million),
             exa_api_key=(
                 payload.exa_api_key.get_secret_value() if payload.exa_api_key is not None else None
             ),

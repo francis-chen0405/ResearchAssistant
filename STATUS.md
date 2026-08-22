@@ -8,6 +8,15 @@ Status: Complete and verified.
   so a persisted key no longer appears unsaved when another required route is incomplete.
   Saved optional discovery keys also reload after an API restart even if the MiMo key has not
   yet been stored.
+- The setup form can optionally override the Luna API base URL and model ID. Fresh v2 runs use
+  the production OpenAI-compatible default route and `gpt-5.6-luna` when no override is saved,
+  while missing keys and pricing caps still fail closed.
+- Provider setup now captures the required MiMo-v2.5 and Luna input/output budget caps as the
+  published USD-per-million-token prices and persists their exact per-token equivalents for the
+  strict production routing configuration. This replaces the inaccessible terminal-only route
+  pricing requirement without fabricating cost values.
+- The modal remains open after a save and exposes a presence-only checklist for saved route
+  settings, so clearing transient fields cannot be mistaken for a failed Keychain write.
 - Fresh v2 website runs can independently enable arXiv and PubMed discovery, and can enable
   optional Crossref DOI identity enrichment. arXiv is keyless; PubMed accepts an optional key;
   Crossref remains metadata-only and cannot become evidence. The v2 factory now instantiates

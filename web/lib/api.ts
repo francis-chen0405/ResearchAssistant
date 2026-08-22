@@ -16,6 +16,7 @@ export type Configuration = {
   default_db_path: string;
   firecrawl_enabled: boolean;
   saved_credentials: string[];
+  saved_settings: string[];
   service: ServiceDiagnostic;
 };
 
@@ -185,6 +186,12 @@ type StartResult = {
 type CredentialInput = {
   mimo_api_key?: string;
   luna_api_key?: string;
+  luna_base_url?: string;
+  luna_model?: string;
+  mimo_v25_input_usd_per_million?: string;
+  mimo_v25_output_usd_per_million?: string;
+  luna_input_usd_per_million?: string;
+  luna_output_usd_per_million?: string;
   exa_api_key?: string;
   openalex_api_key?: string;
   serpsearch_api_key?: string;

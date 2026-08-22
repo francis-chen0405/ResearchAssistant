@@ -431,6 +431,12 @@ def test_live_next_provider_setup_uses_password_fields() -> None:
         for label in (
             "MiMo API key",
             "OpenAI API key",
+            "Luna API base URL",
+            "Luna model ID",
+            "MiMo v2.5 input price",
+            "MiMo v2.5 output price",
+            "Luna input price",
+            "Luna output price",
             "SERP Search API key",
             "Exa API key",
             "OpenAlex API key",

@@ -33,6 +33,9 @@ nav { display: flex; gap: 28px; }
 .status-dot { display: inline-block; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 .status-dot.ready { background: #4e8266; box-shadow: 0 0 0 4px rgba(78, 130, 102, 0.11); }
 .status-dot.saved { background: var(--cool); box-shadow: 0 0 0 4px rgba(68, 107, 112, 0.11); }
+.setup-status, .setup-saved { margin: 0 0 14px; padding: 10px 12px; border-radius: 9px; font-size: 12px; line-height: 1.45; }
+.setup-status.missing { color: #8a351f; background: rgba(228, 91, 53, 0.1); }
+.setup-status.ready, .setup-saved { color: #315f49; background: rgba(78, 130, 102, 0.1); }
 .status-dot.offline { background: var(--signal); }
 .hero { width: min(900px, 100%); margin: auto; padding: clamp(64px, 9vh, 118px) 0 48px; }
 .eyebrow { margin: 0 0 20px; color: var(--signal-dark); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }

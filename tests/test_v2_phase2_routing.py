@@ -74,7 +74,7 @@ def test_v2_mimo_normal_and_pro_routes_are_independent() -> None:
     assert normal.price_cap != pro.price_cap
 
 
-def test_luna_route_requires_explicit_deployment_configuration() -> None:
+def test_luna_route_uses_production_defaults_and_allows_deployment_overrides() -> None:
     route = _config().preflight().for_stage(LLMStage.GAP_ANALYSIS)
 
     assert route.logical_alias is ModelAlias.GPT_5_6_LUNA_HIGH
@@ -83,7 +83,14 @@ def test_luna_route_requires_explicit_deployment_configuration() -> None:
 
     environment = _environment()
     del environment["LUNA_MODEL"]
-    with pytest.raises(ProviderConfigurationError, match="LUNA_MODEL"):
+    del environment["LUNA_BASE_URL"]
+    default_route = _config(environment).preflight().for_stage(LLMStage.GAP_ANALYSIS)
+
+    assert default_route.base_url == "https://api.openai.com/v1"
+    assert default_route.physical_model == "gpt-5.6-luna"
+
+    del environment["LUNA_API_KEY"]
+    with pytest.raises(ProviderConfigurationError, match="LUNA_API_KEY"):
         _config(environment)
 
 

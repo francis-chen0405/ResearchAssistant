@@ -8,6 +8,17 @@ distinct “Provider keys saved” state when route preflight is not yet complet
 independent arXiv, PubMed, and Crossref controls. arXiv has no key requirement; PubMed's key is
 optional; Crossref verifies DOI bibliographic metadata only and is never evidence.
 
+Provider setup also accepts optional Luna API base URL and model overrides. Without overrides,
+fresh v2 uses the production OpenAI-compatible route and `gpt-5.6-luna`; the OpenAI key and
+deployment-owned price caps remain fail-closed requirements.
+
+The setup form also stores the MiMo-v2.5 and Luna input/output price caps entered as published
+USD per million tokens, converting them deterministically into the per-token values used by
+budget enforcement. Never invent or silently default those prices.
+
+The setup modal remains open after a successful save and displays a presence-only route-setting
+checklist. Password inputs intentionally remain blank after save; never echo credentials.
+
 Fresh v2 runs pass the selected arXiv/PubMed controls into `ResearchControls`, instantiate the
 corresponding metadata adapters in `providers/v2_factory.py`, and pass an optional Crossref
 resolver through Round 1 and adaptive rounds. The Crossref selection is part of the fresh-run

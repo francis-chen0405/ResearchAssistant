@@ -379,9 +379,9 @@ class LunaConfig(StrictModel):
 
     provider_name: Literal["luna"] = "luna"
     adapter_version: Literal["v2-luna-configuration-v1"] = "v2-luna-configuration-v1"
-    base_url: str
+    base_url: str = "https://api.openai.com/v1"
     api_key: SecretStr
-    model: str = Field(min_length=1)
+    model: str = Field(default="gpt-5.6-luna", min_length=1)
     max_completion_tokens: int = Field(default=4096, ge=1, le=32768)
     deadlines: DeadlineConfig = DeadlineConfig()
 
@@ -397,19 +397,15 @@ class LunaConfig(StrictModel):
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str]) -> LunaConfig:
-        missing = tuple(
-            name
-            for name in ("LUNA_API_KEY", "LUNA_BASE_URL", "LUNA_MODEL")
-            if not environment.get(name, "").strip()
-        )
-        if missing:
+        api_key = environment.get("LUNA_API_KEY", "").strip()
+        if not api_key:
             raise ProviderConfigurationError(
-                f"{', '.join(missing)} are required for the selected Luna v2 route"
+                "LUNA_API_KEY is required for the selected Luna v2 route"
             )
         return cls(
-            api_key=SecretStr(environment["LUNA_API_KEY"].strip()),
-            base_url=environment["LUNA_BASE_URL"].strip(),
-            model=environment["LUNA_MODEL"].strip(),
+            api_key=SecretStr(api_key),
+            base_url=environment.get("LUNA_BASE_URL", "https://api.openai.com/v1").strip(),
+            model=environment.get("LUNA_MODEL", "gpt-5.6-luna").strip(),
         )
 
 
