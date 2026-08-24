@@ -47,6 +47,7 @@ from providers.llm import (
     LLMInvocationError,
     LLMProvider,
     LLMRequest,
+    LLMResponseValidationError,
     LLMStage,
     invoke_llm,
     load_prompt,
@@ -92,6 +93,22 @@ _ROUND_TWO_PER_DIRECTION_CAPS = {
 }
 
 
+class V2AdaptivePlanValidationError(ValueError):
+    """A Search Agent proposal failed deterministic semantic plan validation."""
+
+
+class V2AdaptiveNoEligibleProviderError(LookupError):
+    """No enabled provider remains within its application-owned search ceiling."""
+
+
+class V2AdaptiveBudgetError(LookupError):
+    """Adaptive Search Agent work cannot fit the protected application budget."""
+
+
+class V2AdaptiveNoContinuationError(LookupError):
+    """The persisted gap result does not authorize another adaptive search round."""
+
+
 def _aware_datetime(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("adaptive continuation timestamps must be timezone-aware")
@@ -113,6 +130,7 @@ class V2AdaptiveStopCode(StrEnum):
     BUDGET = "insufficient_budget"
     CANCELLED = "cancelled"
     PROVIDER_FAILURE = "provider_failure"
+    INVALID_SEARCH_AGENT_PLAN = "invalid_search_agent_plan"
     GAP_ANALYSIS_DEGRADED = "gap_analysis_degraded"
     GOVERNOR_REJECTED = "governor_rejected"
 
@@ -451,6 +469,26 @@ def run_v2_adaptive_search_continuation(
             budget=budget,
             clock=now,
         )
+    except LLMResponseValidationError as exc:
+        reason = V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
+        decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, now())
+        insert_v2_artifact(
+            path,
+            "phase-7-round-3-governor-decision",
+            decision,
+            decision.decided_at,
+        )
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN,
+            f"Search Agent plan validation failed; completed work was preserved: {exc}",
+            2,
+            now,
+            decision,
+        )
     except LLMInvocationError as exc:
         return _finish(
             path,
@@ -462,12 +500,88 @@ def run_v2_adaptive_search_continuation(
             2,
             now,
         )
-    except (LookupError, ValueError) as exc:
-        reason = (
-            V2RoundThreeReasonCode.NO_ELIGIBLE_PROVIDER
-            if "provider" in str(exc).casefold()
-            else V2RoundThreeReasonCode.NO_NEW_QUERY
+    except V2AdaptivePlanValidationError as exc:
+        reason = V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
+        decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, now())
+        insert_v2_artifact(
+            path,
+            "phase-7-round-3-governor-decision",
+            decision,
+            decision.decided_at,
         )
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN,
+            f"Search Agent plan validation failed; completed work was preserved: {exc}",
+            2,
+            now,
+            decision,
+        )
+    except V2AdaptiveNoEligibleProviderError as exc:
+        reason = V2RoundThreeReasonCode.NO_ELIGIBLE_PROVIDER
+        decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, now())
+        insert_v2_artifact(
+            path,
+            "phase-7-round-3-governor-decision",
+            decision,
+            decision.decided_at,
+        )
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.NO_ELIGIBLE_PROVIDER,
+            str(exc),
+            2,
+            now,
+            decision,
+        )
+    except V2AdaptiveBudgetError as exc:
+        reason = V2RoundThreeReasonCode.PROTECTED_BUDGET
+        decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, now())
+        insert_v2_artifact(
+            path,
+            "phase-7-round-3-governor-decision",
+            decision,
+            decision.decided_at,
+        )
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.BUDGET,
+            str(exc),
+            2,
+            now,
+            decision,
+        )
+    except V2AdaptiveNoContinuationError:
+        reason = V2RoundThreeReasonCode.LUNA_STOP
+        decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, now())
+        insert_v2_artifact(
+            path,
+            "phase-7-round-3-governor-decision",
+            decision,
+            decision.decided_at,
+        )
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.GOVERNOR_REJECTED,
+            decision.explanation,
+            2,
+            now,
+            decision,
+        )
+    except (LookupError, ValueError):
+        reason = V2RoundThreeReasonCode.NO_NEW_QUERY
         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, now())
         insert_v2_artifact(
             path,
@@ -613,6 +727,17 @@ def _run_round(
             budget=budget,
             clock=clock,
         )
+    except LLMResponseValidationError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN,
+            f"Search Agent plan validation failed; completed work was preserved: {exc}",
+            round_number - 1,
+            clock,
+        )
     except LLMInvocationError as exc:
         return _finish(
             path,
@@ -624,12 +749,52 @@ def _run_round(
             round_number - 1,
             clock,
         )
-    except (LookupError, ValueError) as exc:
-        code = (
-            V2AdaptiveStopCode.NO_ELIGIBLE_PROVIDER
-            if "provider" in str(exc).casefold()
-            else V2AdaptiveStopCode.NO_NEW_QUERY
+    except V2AdaptivePlanValidationError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN,
+            f"Search Agent plan validation failed; completed work was preserved: {exc}",
+            round_number - 1,
+            clock,
         )
+    except V2AdaptiveNoEligibleProviderError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.NO_ELIGIBLE_PROVIDER,
+            str(exc),
+            round_number - 1,
+            clock,
+        )
+    except V2AdaptiveBudgetError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.BUDGET,
+            str(exc),
+            round_number - 1,
+            clock,
+        )
+    except V2AdaptiveNoContinuationError as exc:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.NO_NEW_QUERY,
+            str(exc),
+            round_number - 1,
+            clock,
+        )
+    except (LookupError, ValueError) as exc:
+        code = V2AdaptiveStopCode.NO_NEW_QUERY
         return _finish(
             path,
             initial_plan.run_id,
@@ -678,10 +843,14 @@ def _plan_round(
     if stored is not None:
         return V2AdaptivePlannedRound.model_validate_json(stored.payload_json)
     if gap_output.result is None or not gap_output.result.continue_research:
-        raise LookupError("Luna did not authorize a material adaptive search recommendation")
+        raise V2AdaptiveNoContinuationError(
+            "Luna did not authorize a material adaptive search recommendation"
+        )
     budgets = _eligible_budgets(initial_plan, provider_attempts, search_providers)
     if not budgets:
-        raise LookupError("No eligible enabled provider remains within its search ceiling.")
+        raise V2AdaptiveNoEligibleProviderError(
+            "No eligible enabled provider remains within its search ceiling."
+        )
     maximum_queries = _maximum_queries(round_number, initial_plan, budgets)
     request_input = V2SearchAgentInput(
         run_id=initial_plan.run_id,
@@ -723,7 +892,7 @@ def _plan_round(
     invocation = invoke_llm(llm_provider, request, clock=clock)
     response = invocation.output_artifact
     if not isinstance(response, V2AdaptiveSearchModelOutput):
-        raise TypeError("Search Agent returned an unexpected typed artifact")
+        raise V2AdaptivePlanValidationError("Search Agent returned an unexpected typed artifact")
     plan = _validate_and_assemble_plan(request_input, response, prompt.version, clock())
     planned = V2AdaptivePlannedRound(
         run_id=initial_plan.run_id,
@@ -745,29 +914,40 @@ def _validate_and_assemble_plan(
     prompt_version: str,
     planned_at: datetime,
 ) -> V2AdaptiveRoundPlan:
-    if len(response.searches) > request.maximum_queries:
-        raise ValueError("Search Agent exceeded the application-owned round query ceiling")
     gap_by_id = {gap.gap_id: gap for gap in request.material_gaps}
     counts: Counter[tuple[ResearchDirection, DiscoveryProvider]] = Counter()
     accepted: list[V2AdaptiveSearchQuery] = []
     history = list(request.previous_queries)
+    total_cap = (
+        min(request.maximum_queries, 3) if request.round_number == 3 else request.maximum_queries
+    )
     for index, item in enumerate(response.searches, start=1):
-        request.directions.require_permitted(item.direction)
+        try:
+            request.directions.require_permitted(item.direction)
+        except ValueError as exc:
+            raise V2AdaptivePlanValidationError(str(exc)) from exc
         if item.provider not in request.eligible_providers:
-            raise ValueError("Search Agent selected a disabled or ineligible provider")
+            raise V2AdaptivePlanValidationError(
+                "Search Agent selected a disabled or ineligible provider"
+            )
         if any(gap_id not in gap_by_id for gap_id in item.targeted_gap_ids):
-            raise ValueError("Search Agent query must target persisted Gap IDs")
+            raise V2AdaptivePlanValidationError("Search Agent query must target persisted Gap IDs")
         if any(
             gap_by_id[gap_id].direction is not item.direction for gap_id in item.targeted_gap_ids
         ):
-            raise ValueError("Search Agent query direction must match every targeted Gap")
+            raise V2AdaptivePlanValidationError(
+                "Search Agent query direction must match every targeted Gap"
+            )
         if not queries_are_materially_new(item.query_text, tuple(history)):
-            raise ValueError("Search Agent query repeats or trivially rewrites query history")
-        counts[(item.direction, item.provider)] += 1
-        cap = 1 if request.round_number == 3 else _ROUND_TWO_PER_DIRECTION_CAPS[item.provider]
-        if counts[(item.direction, item.provider)] > cap:
-            raise ValueError("Search Agent exceeded the authoritative provider-round lane")
+            raise V2AdaptivePlanValidationError(
+                "Search Agent query repeats or trivially rewrites query history"
+            )
         history.append(item.query_text)
+        cap = 1 if request.round_number == 3 else _ROUND_TWO_PER_DIRECTION_CAPS[item.provider]
+        lane = (item.direction, item.provider)
+        if len(accepted) >= total_cap or counts[lane] >= cap:
+            continue
+        counts[lane] += 1
         accepted.append(
             V2AdaptiveSearchQuery(
                 run_id=request.run_id,
@@ -784,8 +964,6 @@ def _validate_and_assemble_plan(
                 created_at=planned_at,
             )
         )
-    if request.round_number == 3 and len(accepted) > 3:
-        raise ValueError("Round 3 must remain narrow with at most three queries")
     return V2AdaptiveRoundPlan(
         run_id=request.run_id,
         round_number=request.round_number,
@@ -1174,6 +1352,7 @@ def _rejected_governor(
         round_two_duplicate_rate=duplicate_rate,
         cancelled=reason is V2RoundThreeReasonCode.CANCELLED,
         terminal_provider_failure=reason is V2RoundThreeReasonCode.TERMINAL_FAILURE,
+        search_agent_plan_valid=(reason is not V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN),
         decided_at=decided_at,
     )
     decision = evaluate_v2_round_three_authorization(probe)
@@ -1226,14 +1405,18 @@ def _cluster_direction(cluster_id: UUID, output: V2DiscoveryScoutOutput) -> Rese
 
 def _require_budget(budget: V2AdaptiveBudgetState, tokens: int, cost: Decimal) -> None:
     if budget.model_calls_remaining <= budget.protected_downstream_model_calls:
-        raise LookupError("Insufficient protected model-call budget for adaptive search.")
+        raise V2AdaptiveBudgetError("Insufficient protected model-call budget for adaptive search.")
     if budget.tokens_remaining is not None and tokens > budget.tokens_remaining:
-        raise LookupError("Insufficient token budget for adaptive Search Agent reservation.")
+        raise V2AdaptiveBudgetError(
+            "Insufficient token budget for adaptive Search Agent reservation."
+        )
     if (
         budget.cost_remaining_usd is not None
         and add_usd(Decimal("0"), cost) > budget.cost_remaining_usd
     ):
-        raise LookupError("Insufficient cost budget for adaptive Search Agent reservation.")
+        raise V2AdaptiveBudgetError(
+            "Insufficient cost budget for adaptive Search Agent reservation."
+        )
 
 
 def _validate_round_one_inputs(

@@ -36,6 +36,7 @@ class V2RoundThreeReasonCode(StrEnum):
     CANCELLED = "cancelled"
     TERMINAL_FAILURE = "terminal_provider_failure"
     ROUND_LIMIT = "round_limit_reached"
+    INVALID_SEARCH_AGENT_PLAN = "invalid_search_agent_plan"
 
 
 class V2RoundThreeGovernorInput(StrictModel):
@@ -56,6 +57,7 @@ class V2RoundThreeGovernorInput(StrictModel):
     round_two_duplicate_rate: float = Field(ge=0, le=1)
     cancelled: bool = False
     terminal_provider_failure: bool = False
+    search_agent_plan_valid: bool = True
     decided_at: datetime
 
     @field_validator("decided_at")
@@ -106,6 +108,8 @@ def _v2_reason(evaluation: V2RoundThreeGovernorInput) -> V2RoundThreeReasonCode:
         return V2RoundThreeReasonCode.TERMINAL_FAILURE
     if evaluation.current_round >= 3:
         return V2RoundThreeReasonCode.ROUND_LIMIT
+    if not evaluation.search_agent_plan_valid:
+        return V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
     if not evaluation.material_gap_remains:
         return V2RoundThreeReasonCode.NO_MATERIAL_GAP
     if not evaluation.luna_recommends_continue:
@@ -166,6 +170,10 @@ def _v2_explanation(reason: V2RoundThreeReasonCode, duplicate_rate: float) -> st
             "Round 3 was not started after a terminal provider failure."
         ),
         V2RoundThreeReasonCode.ROUND_LIMIT: ("Research stopped at the fixed three-round maximum."),
+        V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN: (
+            "Round 3 was not started because the Search Agent plan failed deterministic "
+            "application validation."
+        ),
     }
     return explanations[reason]
 

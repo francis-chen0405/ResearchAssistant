@@ -454,6 +454,9 @@ def _stopping_disclosure(
         V2AdaptiveStopCode.PROVIDER_FAILURE: (
             V2ResearchStoppingReason.PROVIDER_ELIGIBILITY_EXHAUSTED
         ),
+        V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN: (
+            V2ResearchStoppingReason.INVALID_SEARCH_AGENT_PLAN
+        ),
     }
     reason = (
         _governor_stopping_reason(continuation)
@@ -473,6 +476,8 @@ def _governor_stopping_reason(
     governor = continuation.governor_decision
     if governor is None:
         raise ValueError("Governor-rejected continuation must retain its Governor decision")
+    if governor.reason_code is V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN:
+        return V2ResearchStoppingReason.INVALID_SEARCH_AGENT_PLAN
     if governor.reason_code is V2RoundThreeReasonCode.DUPLICATE_HEAVY:
         return V2ResearchStoppingReason.DUPLICATE_HEAVY
     if governor.reason_code in {

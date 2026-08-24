@@ -3236,6 +3236,7 @@ class V2ResearchStoppingReason(StrEnum):
     BUDGET = "budget"
     HARD_ROUND_LIMIT = "hard_round_limit"
     DEGRADED_GAP_SEARCH_AGENT = "degraded_gap_search_agent"
+    INVALID_SEARCH_AGENT_PLAN = "invalid_search_agent_plan"
 
 
 class V2ResearchStoppingDisclosure(StrictModel):

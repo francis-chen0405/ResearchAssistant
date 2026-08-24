@@ -91,9 +91,9 @@ textarea::placeholder { color: #9a988f; opacity: 1; }
 .evidence-meter i { display: block; height: 100%; background: var(--signal); }
 .cool .evidence-meter i { background: var(--cool); }
 .stance-card dl, .run-footnote, .report-meta dl { margin: 0; }
-.stance-card dl { display: grid; grid-template-columns: repeat(3, 1fr); }
-.stance-card dl div { display: grid; gap: 7px; }
-dt { color: var(--muted); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+.stance-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stance-card dl div { display: grid; gap: 7px; min-width: 0; }
+dt { color: var(--muted); font-size: 10px; line-height: 1.2; letter-spacing: 0.06em; text-transform: uppercase; }
 dd { margin: 0; font-family: Georgia, serif; font-size: 23px; }
 .run-footnote { display: flex; align-items: end; gap: 36px; margin-top: 22px; padding: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .run-footnote div { display: grid; gap: 5px; }

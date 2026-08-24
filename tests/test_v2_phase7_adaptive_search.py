@@ -111,6 +111,13 @@ class FailingSearchAgentLLM(FakeAdaptiveLLM):
         return super().generate(request)
 
 
+class MalformedSearchAgentLLM(FakeAdaptiveLLM):
+    def generate(self, request: object) -> object:
+        if request.stage is LLMStage.SEARCH_AGENT:
+            return object()
+        return super().generate(request)
+
+
 class FakeSearch:
     def __init__(self, *, fail: bool = False, duplicate_url: str | None = None) -> None:
         self.fail = fail
@@ -169,23 +176,43 @@ def _routing() -> V2RoutingConfig:
     )
 
 
-def _initial_plan(run_id: UUID) -> V2InitialPlannerOutput:
+def _initial_plan(
+    run_id: UUID,
+    *,
+    directions: ResearchDirections | None = None,
+    discovery_providers: tuple[DiscoveryProvider, ...] = (DiscoveryProvider.EXA,),
+) -> V2InitialPlannerOutput:
+    selected_directions = directions or ResearchDirections()
+    strategies = {
+        DiscoveryProvider.SERPSEARCH: ("broad_web", "institutional_coverage"),
+        DiscoveryProvider.EXA: ("direct_evidence", "mechanism", "analysis"),
+        DiscoveryProvider.OPENALEX: ("academic_studies",),
+        DiscoveryProvider.ARXIV: ("preprints",),
+        DiscoveryProvider.PUBMED: ("biomedical_studies",),
+        DiscoveryProvider.SERPER: ("broad_web",),
+    }
     return V2InitialPlannerOutput(
         run_id=run_id,
         raw_claim="A public claim.",
-        directions=ResearchDirections(),
-        discovery_providers=(DiscoveryProvider.EXA,),
+        directions=selected_directions,
+        discovery_providers=discovery_providers,
         searches=tuple(
             V2RoundOneSearchQuery(
                 run_id=run_id,
                 query_id=uuid4(),
-                direction=ResearchDirection.SUPPORT,
-                provider=DiscoveryProvider.EXA,
+                direction=direction,
+                provider=provider,
                 strategy=strategy,
-                query_text=f"broad round one {strategy}",
+                query_text=(
+                    f"broad round one {strategy}"
+                    if provider is DiscoveryProvider.EXA
+                    else f"broad round one {provider.value} {strategy}"
+                ),
                 created_at=NOW,
             )
-            for strategy in ("direct_evidence", "mechanism", "analysis")
+            for direction in selected_directions.enabled_directions
+            for provider in discovery_providers
+            for strategy in strategies[provider]
         ),
         planner_prompt_version="fixture-v1",
         planned_at=NOW,
@@ -315,16 +342,43 @@ def _gap(plan: V2InitialPlannerOutput, *, continue_research: bool) -> V2GapAnaly
     )
 
 
-def _proposal(query: str) -> V2AdaptiveSearchModelOutput:
+def _proposal(
+    query: str,
+    *,
+    direction: ResearchDirection = ResearchDirection.SUPPORT,
+    provider: DiscoveryProvider = DiscoveryProvider.EXA,
+    targeted_gap_ids: tuple[str, ...] = ("gap-outcome",),
+) -> V2AdaptiveSearchModelOutput:
     return V2AdaptiveSearchModelOutput(
         searches=(
             V2AdaptiveSearchProposal(
-                direction=ResearchDirection.SUPPORT,
-                provider=DiscoveryProvider.EXA,
-                targeted_gap_ids=("gap-outcome",),
+                direction=direction,
+                provider=provider,
+                targeted_gap_ids=targeted_gap_ids,
                 strategy="independent_outcome",
                 query_text=query,
             ),
+        )
+    )
+
+
+def _proposal_batch(
+    queries: tuple[str, ...],
+    *,
+    direction: ResearchDirection = ResearchDirection.SUPPORT,
+    provider: DiscoveryProvider = DiscoveryProvider.EXA,
+    targeted_gap_ids: tuple[str, ...] = ("gap-outcome",),
+) -> V2AdaptiveSearchModelOutput:
+    return V2AdaptiveSearchModelOutput(
+        searches=tuple(
+            V2AdaptiveSearchProposal(
+                direction=direction,
+                provider=provider,
+                targeted_gap_ids=targeted_gap_ids,
+                strategy=f"independent_outcome_{index}",
+                query_text=query,
+            )
+            for index, query in enumerate(queries, start=1)
         )
     )
 
@@ -395,17 +449,27 @@ def _run(
     cancellation_requested: object | None = None,
     known_round_one_url: str | None = None,
     provider_attempts: dict[DiscoveryProvider, int] | None = None,
+    directions: ResearchDirections | None = None,
+    discovery_providers: tuple[DiscoveryProvider, ...] = (DiscoveryProvider.EXA,),
+    additional_search_providers: dict[DiscoveryProvider, FakeSearch] | None = None,
 ) -> object:
     run_id = uuid4()
-    plan = _initial_plan(run_id)
+    plan = _initial_plan(
+        run_id,
+        directions=directions,
+        discovery_providers=discovery_providers,
+    )
     discovery, acquisition = _round_one_outputs(plan, known_round_one_url)
+    search_providers = {} if search is None else {DiscoveryProvider.EXA: search}
+    if additional_search_providers:
+        search_providers.update(additional_search_providers)
     return run_v2_adaptive_search_continuation(
         db_path=_db(tmp_path, run_id),
         initial_plan=plan,
         round_one_discovery=discovery,
         round_one_acquisition=acquisition,
         round_one_gap=_gap(plan, continue_research=initial_gap_continue),
-        search_providers={} if search is None else {DiscoveryProvider.EXA: search},
+        search_providers=search_providers,
         llm_provider=llm,
         routing_config=_routing(),
         wigolo_provider=FakeScraper(),
@@ -517,8 +581,8 @@ def test_round_three_rejects_a_trivial_query_rewrite(tmp_path: Path) -> None:
     )
 
     assert result.stopping_decision.completed_rounds == 2
-    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.GOVERNOR_REJECTED
-    assert result.governor_decision.reason_code is V2RoundThreeReasonCode.NO_NEW_QUERY
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN
+    assert result.governor_decision.reason_code is V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
 
 
 def test_no_eligible_provider_stops_before_search_agent(tmp_path: Path) -> None:
@@ -612,6 +676,159 @@ def test_cancellation_stops_before_round_two_work(tmp_path: Path) -> None:
     assert result.stopping_decision.stop_code is V2AdaptiveStopCode.CANCELLED
     assert result.stopping_decision.completed_rounds == 1
     assert llm.requests == []
+
+
+def test_round_two_lane_overflow_preserves_earliest_exa_queries(
+    tmp_path: Path,
+) -> None:
+    llm = FakeAdaptiveLLM(
+        search_outputs=[
+            _proposal_batch(
+                (
+                    "independent cohort outcome instrument evaluation one",
+                    "independent cohort outcome instrument evaluation two",
+                    "independent cohort outcome instrument evaluation three",
+                    "independent cohort outcome instrument evaluation four",
+                )
+            )
+        ],
+        gap_outputs=[_luna_stop()],
+    )
+    search = FakeSearch()
+    openalex = FakeSearch()
+    result = _run(
+        tmp_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=search,
+        discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX),
+        additional_search_providers={DiscoveryProvider.OPENALEX: openalex},
+    )
+
+    assert result.rounds[0].planned_query_count == 3
+    assert result.rounds[0].completed_query_count == 3
+    assert [request.query_text for request in search.requests] == [
+        "independent cohort outcome instrument evaluation one",
+        "independent cohort outcome instrument evaluation two",
+        "independent cohort outcome instrument evaluation three",
+    ]
+    assert openalex.requests == []
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.ROUND_TWO_COMPLETE
+
+
+def test_round_two_total_query_overflow_preserves_earliest_queries(tmp_path: Path) -> None:
+    llm = FakeAdaptiveLLM(
+        search_outputs=[
+            _proposal_batch(
+                (
+                    "independent cohort outcome instrument evaluation one",
+                    "independent cohort outcome instrument evaluation two",
+                    "independent cohort outcome instrument evaluation three",
+                    "independent cohort outcome instrument evaluation four",
+                    "independent cohort outcome instrument evaluation five",
+                )
+            )
+        ],
+        gap_outputs=[_luna_stop()],
+    )
+    search = FakeSearch()
+    result = _run(
+        tmp_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=search,
+    )
+
+    assert result.rounds[0].planned_query_count == 3
+    assert len(search.requests) == 3
+    assert [request.query_text for request in search.requests] == [
+        "independent cohort outcome instrument evaluation one",
+        "independent cohort outcome instrument evaluation two",
+        "independent cohort outcome instrument evaluation three",
+    ]
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.ROUND_TWO_COMPLETE
+
+
+@pytest.mark.parametrize(
+    ("case_name", "proposal"),
+    [
+        (
+            "disabled-provider",
+            _proposal(
+                "independent disabled provider outcome",
+                provider=DiscoveryProvider.OPENALEX,
+            ),
+        ),
+        (
+            "disabled-direction",
+            _proposal(
+                "independent disabled direction outcome",
+                direction=ResearchDirection.CHALLENGE,
+            ),
+        ),
+        (
+            "unknown-gap",
+            _proposal(
+                "independent unknown gap outcome",
+                targeted_gap_ids=("gap-unknown",),
+            ),
+        ),
+    ],
+)
+def test_semantically_invalid_search_agent_plans_fail_closed(
+    tmp_path: Path,
+    case_name: str,
+    proposal: V2AdaptiveSearchModelOutput,
+) -> None:
+    case_path = tmp_path / case_name
+    case_path.mkdir()
+    llm = FakeAdaptiveLLM(search_outputs=[proposal], gap_outputs=[])
+    search = FakeSearch()
+    result = _run(
+        case_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=search,
+    )
+
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN
+    assert result.stopping_decision.completed_rounds == 1
+    assert search.requests == []
+
+
+def test_gap_direction_mismatch_is_an_invalid_search_agent_plan(tmp_path: Path) -> None:
+    llm = FakeAdaptiveLLM(
+        search_outputs=[
+            _proposal(
+                "independent challenge direction outcome",
+                direction=ResearchDirection.CHALLENGE,
+            )
+        ],
+        gap_outputs=[],
+    )
+    search = FakeSearch()
+    result = _run(
+        tmp_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=search,
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=True),
+    )
+
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN
+    assert search.requests == []
+
+
+def test_malformed_search_agent_output_is_an_invalid_plan(tmp_path: Path) -> None:
+    llm = MalformedSearchAgentLLM(search_outputs=[], gap_outputs=[])
+    result = _run(
+        tmp_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=FakeSearch(),
+    )
+
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN
 
 
 def test_restart_after_completed_round_boundary_reuses_every_artifact(tmp_path: Path) -> None:
@@ -711,7 +928,7 @@ def test_invalid_search_agent_repeat_is_rejected_before_provider_work(tmp_path: 
         search=search,
     )
 
-    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.NO_NEW_QUERY
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.INVALID_SEARCH_AGENT_PLAN
     assert search.requests == []
 
 
