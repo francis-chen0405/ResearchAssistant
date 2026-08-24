@@ -1822,6 +1822,14 @@ class ModelAttemptStatus(StrEnum):
 
 class Stage(StrEnum):
     CLAIM_PLANNER = "claim_planner"
+    DISCOVERY = "discovery"
+    ACQUISITION = "acquisition"
+    GAP_ANALYSIS = "gap_analysis"
+    ADAPTIVE_SEARCH = "adaptive_search"
+    SOURCE_SELECTION = "source_selection"
+    DEEP_ANALYSIS = "deep_analysis"
+    REVIEW = "review"
+    SYNTHESIS = "synthesis"
     SUPPORTING_RESEARCHER = "supporting_researcher"
     OPPOSING_RESEARCHER = "opposing_researcher"
     EVIDENCE_ANALYST = "evidence_analyst"
@@ -2449,6 +2457,15 @@ class V2EvidenceAnalystSnapshotContext(StrictModel):
     following_context: NonEmptyStr
 
 
+class V2EvidenceAnalystExtractionFailure(StrictModel):
+    """Exact Phase-8 extraction failure retained for the Phase-9 handoff."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    failure: NonEmptyStr
+
+
 class V2EvidenceAnalystBatchInput(StrictModel):
     """Complete Phase-8 queue plus the exact candidates available for Analyst work."""
 
@@ -2459,6 +2476,7 @@ class V2EvidenceAnalystBatchInput(StrictModel):
     directions: ResearchDirections
     queue_result: V2SourceSelectionQueueResult
     queued_candidates: tuple[V2EvidenceAnalystCandidateInput, ...]
+    extraction_failures: tuple[V2EvidenceAnalystExtractionFailure, ...] = ()
     policy_identity: Literal["researchassistant-v2-phase-9-luna-evidence-analyst-v2"] = (
         V2_EVIDENCE_ANALYST_POLICY_IDENTITY
     )
@@ -2481,6 +2499,12 @@ class V2EvidenceAnalystBatchInput(StrictModel):
             raise ValueError(
                 "Phase-9 candidates must be a unique order-preserving subset of the queue"
             )
+        extraction_failure_ids = tuple(item.source_id for item in self.extraction_failures)
+        queued_ids = set(self.queue_result.queued_source_ids)
+        if len(extraction_failure_ids) != len(set(extraction_failure_ids)):
+            raise ValueError("Phase-9 extraction failures must identify unique sources")
+        if not set(extraction_failure_ids).issubset(queued_ids):
+            raise ValueError("Phase-9 extraction failures must belong to the queued sources")
         for item in self.queued_candidates:
             if item.candidate.run_id != self.run_id:
                 raise ValueError("Phase-9 candidates must match the run")
@@ -3303,6 +3327,61 @@ class SynthesisOutput(StrictModel):
     sections: tuple[SynthesisSection, ...]
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+
+class V2ProviderRunDiagnostics(StrictModel):
+    """Persisted, non-evidentiary outcome counts for one discovery provider."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: DiscoveryProvider
+    query_attempts: NonNegativeInt = 0
+    non_empty_queries: NonNegativeInt = 0
+    empty_queries: NonNegativeInt = 0
+    timeout_queries: NonNegativeInt = 0
+    failed_queries: NonNegativeInt = 0
+    search_results: NonNegativeInt = 0
+    surviving_sources: NonNegativeInt = 0
+
+    @model_validator(mode="after")
+    def validate_query_counts(self) -> V2ProviderRunDiagnostics:
+        counted_attempts = (
+            self.non_empty_queries + self.empty_queries + self.timeout_queries + self.failed_queries
+        )
+        if counted_attempts != self.query_attempts:
+            raise ValueError("provider query outcome counts must reconcile to query attempts")
+        return self
+
+
+class V2RunDiagnostics(StrictModel):
+    """Persisted v2 execution facts used by the live result page."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    configured_providers: tuple[DiscoveryProvider, ...] = Field(min_length=1, max_length=6)
+    provider_outcomes: tuple[V2ProviderRunDiagnostics, ...]
+    search_attempts: NonNegativeInt = 0
+    search_results: NonNegativeInt = 0
+    acquisition_attempts: NonNegativeInt = 0
+    sources_acquired: NonNegativeInt = 0
+    sources_survived_probe: NonNegativeInt = 0
+    sources_queued_for_analysis: NonNegativeInt = 0
+    sources_analyzed: NonNegativeInt = 0
+    approved_evidence_records: NonNegativeInt = 0
+
+    @model_validator(mode="after")
+    def validate_diagnostics(self) -> V2RunDiagnostics:
+        configured = self.configured_providers
+        outcome_providers = tuple(item.provider for item in self.provider_outcomes)
+        if len(set(configured)) != len(configured):
+            raise ValueError("configured discovery providers must be unique")
+        if outcome_providers != configured:
+            raise ValueError("provider diagnostics must preserve configured provider order")
+        if self.search_attempts != sum(item.query_attempts for item in self.provider_outcomes):
+            raise ValueError("search attempts must reconcile to provider diagnostics")
+        if self.search_results != sum(item.search_results for item in self.provider_outcomes):
+            raise ValueError("search results must reconcile to provider diagnostics")
+        return self
 
 
 class V2ResultSourceStatus(StrEnum):

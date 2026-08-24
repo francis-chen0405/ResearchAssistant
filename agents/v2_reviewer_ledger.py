@@ -150,9 +150,19 @@ def _process_source(
     if source_result.state is V2EvidenceAnalystState.NOT_QUEUED:
         return _terminal(source_result, provenance, V2ReviewerLedgerState.NOT_QUEUED)
     if source_result.state is V2EvidenceAnalystState.REJECTED:
-        return _terminal(source_result, provenance, V2ReviewerLedgerState.ANALYST_REJECTED)
+        return _terminal(
+            source_result,
+            provenance,
+            V2ReviewerLedgerState.ANALYST_REJECTED,
+            source_result.failure,
+        )
     if source_result.state is V2EvidenceAnalystState.FAILED:
-        return _terminal(source_result, provenance, V2ReviewerLedgerState.ANALYST_FAILED)
+        return _terminal(
+            source_result,
+            provenance,
+            V2ReviewerLedgerState.ANALYST_FAILED,
+            source_result.failure,
+        )
     if not isinstance(candidate_input, V2EvidenceAnalystCandidateInput):
         raise ValueError("Reviewer-ready source is missing its exact Phase-9 candidate")
     if (

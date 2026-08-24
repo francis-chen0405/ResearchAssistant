@@ -36,6 +36,7 @@ from models import (
     V2DeepAnalysisBudget,
     V2EvidenceAnalystBatchInput,
     V2EvidenceAnalystCandidateInput,
+    V2EvidenceAnalystExtractionFailure,
     V2EvidenceAnalystModelOutput,
     V2EvidenceAnalystState,
     V2EvidenceRelationship,
@@ -385,6 +386,36 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert all(item.reserved_tokens is not None and item.reserved_tokens > 120 for item in attempts)
     assert all(item.usage is not None and item.usage.total_tokens == 120 for item in attempts)
     assert resumed == first and len(provider.requests) == 2
+
+
+def test_extraction_failure_reason_survives_the_phase9_handoff(tmp_path: Path) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    source_id = batch.queue_result.queued_source_ids[0]
+    exact_failure = "ValueError: selected quote segment does not appear in snapshot text"
+    failed_batch = batch.model_copy(
+        update={
+            "queued_candidates": (),
+            "extraction_failures": (
+                V2EvidenceAnalystExtractionFailure(
+                    source_id=source_id,
+                    failure=exact_failure,
+                ),
+            ),
+        }
+    )
+
+    result = run_v2_evidence_analyst(
+        db_path=_prepare_db(tmp_path, run_id),
+        batch_input=failed_batch,
+        llm_provider=FakeLunaAnalyst([]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    source = result.source_results[0]
+    assert source.state is V2EvidenceAnalystState.FAILED
+    assert source.failure == exact_failure
 
 
 def test_claim_fit_three_requires_qualification_and_retries_draft(tmp_path: Path) -> None:

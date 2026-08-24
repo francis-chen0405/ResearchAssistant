@@ -231,12 +231,9 @@ def selected_segments_from_selection(
     for selection_range in selection.selected_sentence_ranges:
         if selection_range.end_sentence > len(spans):
             raise ValueError("selected sentence range exceeds the snapshot")
-        selected_segments.append(
-            " ".join(
-                span.text
-                for span in spans[selection_range.start_sentence - 1 : selection_range.end_sentence]
-            )
-        )
+        first_span = spans[selection_range.start_sentence - 1]
+        last_span = spans[selection_range.end_sentence - 1]
+        selected_segments.append(normalized_text[first_span.start_char : last_span.end_char])
     if not selected_segments:
         raise ValueError("quote selection has no source-backed segments")
     return selected_segments

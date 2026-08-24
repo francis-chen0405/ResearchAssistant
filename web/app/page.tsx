@@ -10,6 +10,7 @@ import {
   ServiceDiagnostic,
   V2EvidenceDisplay,
   V2FinalResearchOutput,
+  V2ProviderRunDiagnostics,
   researchApi,
 } from "@/lib/api";
 
@@ -67,6 +68,32 @@ function stageIndex(stage: string): number {
 
 function readableStage(stage: string): string {
   return stage.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function readableProvider(provider: string): string {
+  return ({
+    serpsearch: "SERP Search",
+    exa: "Exa",
+    openalex: "OpenAlex",
+    arxiv: "arXiv",
+    pubmed: "PubMed",
+    serper: "Serper",
+  } as Record<string, string>)[provider] ?? readableStage(provider);
+}
+
+function providerOutcomeLabel(outcome: V2ProviderRunDiagnostics): string {
+  if (outcome.query_attempts === 0) return "Not queried";
+  const details = [
+    `${outcome.query_attempts} quer${outcome.query_attempts === 1 ? "y" : "ies"}`,
+    `${outcome.search_results} result${outcome.search_results === 1 ? "" : "s"}`,
+  ];
+  if (outcome.empty_queries) details.push(`${outcome.empty_queries} empty`);
+  if (outcome.timeout_queries) details.push(`${outcome.timeout_queries} timeout`);
+  if (outcome.failed_queries) details.push(`${outcome.failed_queries} failed`);
+  if (outcome.surviving_sources) {
+    details.push(`${outcome.surviving_sources} surviving source${outcome.surviving_sources === 1 ? "" : "s"}`);
+  }
+  return details.join(" · ");
 }
 
 function formatDate(value: string): string {
@@ -355,6 +382,7 @@ function StanceCard({ title, progress, accent }: { title: string; progress: RunS
 function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => void }) {
   const released = snapshot.classification === "released";
   const userStatus = understandableRunMessage(snapshot);
+  const diagnostics = snapshot.v2_diagnostics;
   const [v2Result, setV2Result] = useState<V2FinalResearchOutput | null>(null);
   const [v2Evidence, setV2Evidence] = useState<V2EvidenceDisplay | null>(null);
   const [trailOpen, setTrailOpen] = useState(false);
@@ -382,7 +410,7 @@ function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => v
   }, [snapshot.db_path, snapshot.run_id]);
   return <motion.section className={`result-view ${released ? "released" : "unreleased"}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <div className="result-masthead"><div><p className="eyebrow">{released ? "Validated release" : readableStage(snapshot.classification)}</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2></div><div className="release-stamp"><span>{released ? "Released" : "Not released"}</span><small>{snapshot.exit_code === null ? "—" : `Exit ${snapshot.exit_code}`}</small></div></div>
-    <div className="report-layout"><article className="brief-paper">{v2Result ? <V2ResultPaper result={v2Result} evidence={v2Evidence} /> : snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{userStatus}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{userStatus}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Discovery sources</dt><dd>{snapshot.research_controls.discovery_providers.length ? snapshot.research_controls.discovery_providers.join(", ") : "Historical run"}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Retrieval attempts</dt><dd>{snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div><div><dt>Budget status</dt><dd>{snapshot.classification === "blocked" ? "Stopped" : "Within run limit"}</dd></div></dl>{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
+    <div className="report-layout"><article className="brief-paper">{v2Result ? <V2ResultPaper result={v2Result} evidence={v2Evidence} /> : snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{userStatus}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{userStatus}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Discovery sources</dt><dd>{(diagnostics?.configured_providers ?? snapshot.research_controls.discovery_providers).map(readableProvider).join(", ") || "Historical run"}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Search attempts</dt><dd>{diagnostics?.search_attempts ?? snapshot.retrieval_attempts_used}</dd></div><div><dt>Sources acquired</dt><dd>{diagnostics?.sources_acquired ?? snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div><div><dt>Budget status</dt><dd>{snapshot.classification === "blocked" ? "Stopped" : "Within run limit"}</dd></div></dl>{diagnostics && <section className="provider-diagnostics"><span>Provider outcomes</span>{diagnostics.provider_outcomes.map((outcome) => <p key={outcome.provider}><strong>{readableProvider(outcome.provider)}</strong><small>{providerOutcomeLabel(outcome)}</small></p>)}</section>}{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span>↗</span></button></aside></div>
     <AnimatePresence>{trailOpen && <ResearchTrailDrawer items={trail} error={trailError} onClose={() => setTrailOpen(false)} />}</AnimatePresence>
   </motion.section>;
 }

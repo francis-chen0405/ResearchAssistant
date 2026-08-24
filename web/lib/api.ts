@@ -29,6 +29,30 @@ export type ResearchProgress = {
   candidates: number;
 };
 
+export type V2ProviderRunDiagnostics = {
+  provider: string;
+  query_attempts: number;
+  non_empty_queries: number;
+  empty_queries: number;
+  timeout_queries: number;
+  failed_queries: number;
+  search_results: number;
+  surviving_sources: number;
+};
+
+export type V2RunDiagnostics = {
+  configured_providers: string[];
+  provider_outcomes: V2ProviderRunDiagnostics[];
+  search_attempts: number;
+  search_results: number;
+  acquisition_attempts: number;
+  sources_acquired: number;
+  sources_survived_probe: number;
+  sources_queued_for_analysis: number;
+  sources_analyzed: number;
+  approved_evidence_records: number;
+};
+
 export type RunSnapshot = {
   run_id: string;
   db_path: string;
@@ -66,6 +90,7 @@ export type RunSnapshot = {
     sources_per_stance_per_round: 5 | 10 | 15 | 20;
     discovery_providers: string[];
   };
+  v2_diagnostics: V2RunDiagnostics | null;
 };
 
 export type HistoryItem = {

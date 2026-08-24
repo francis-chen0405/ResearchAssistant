@@ -9,6 +9,7 @@ import pytest
 
 from agents.reviewer import ReviewerDecision
 from agents.synthesizer import _item_from_ledger
+from frontend.live_service import LiveResearchController
 from models import (
     DiscoveryProvider,
     ModelUsageMetadata,
@@ -17,6 +18,7 @@ from models import (
     ScoutBatch,
     ScoutItem,
     SelectedSentenceRange,
+    Stage,
     SynthesisOutput,
     SynthesisSection,
     V2AdaptiveSearchModelOutput,
@@ -306,6 +308,18 @@ class _V2Model:
         )
 
 
+class _ExtractionFailureModel(_V2Model):
+    def generate(self, request: LLMRequest) -> object:
+        if request.requested_output_type.__name__ == "V2VerbatimQuoteSelection":
+            self.requests.append(request)
+            return V2VerbatimQuoteSelection(
+                selected_sentence_ranges=(
+                    SelectedSentenceRange(start_sentence=99, end_sentence=99),
+                )
+            )
+        return super().generate(request)
+
+
 def _routing() -> V2RoutingConfig:
     return V2RoutingConfig.from_environment(
         {
@@ -366,6 +380,13 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
 
     assert first.state is V2ProductionState.RELEASED, first.failure_reason
     assert first.final_output is not None and first.final_output.release_validation.valid
+    assert first.current_stage is Stage.FINAL_RENDERER_VALIDATOR
+    assert first.diagnostics is not None
+    assert first.diagnostics.configured_providers == (DiscoveryProvider.EXA,)
+    assert first.diagnostics.search_attempts >= 1
+    assert first.diagnostics.sources_acquired >= 1
+    assert first.diagnostics.sources_analyzed >= 1
+    assert first.diagnostics.approved_evidence_records >= 1
     assert first.budget.physical_calls_used == len(model.requests)
     assert first.budget.physical_calls_used < 40
     assert first.budget.token_exposure == len(model.requests) * 15
@@ -373,6 +394,35 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
 
     resumed = _run(db_path, _V2Model(), _Search(), _Scraper(), run_id=run_id)
     assert resumed == first
+
+
+def test_extraction_failure_is_preserved_in_final_pipeline_reason(tmp_path: Path) -> None:
+    result = _run(
+        tmp_path / "extraction-failure.sqlite3",
+        _ExtractionFailureModel(),
+        _Search(),
+        _Scraper(),
+    )
+
+    assert result.state is V2ProductionState.FAILED
+    assert result.failure_reason is not None
+    assert "no Reviewer-approved evidence records" in result.failure_reason
+    assert "extraction_failed" in result.failure_reason
+    assert "selected sentence range exceeds the snapshot" in result.failure_reason
+    assert result.current_stage is Stage.REVIEW
+    assert result.diagnostics is not None
+    assert result.diagnostics.sources_acquired >= 1
+    assert result.diagnostics.sources_analyzed >= 1
+    assert result.diagnostics.approved_evidence_records == 0
+
+    legacy_result = V2ProductionPipelineResult.model_validate_json(
+        result.model_dump_json(exclude={"current_stage", "diagnostics"})
+    )
+    snapshot = LiveResearchController(environment={})._snapshot_from_v2_result(legacy_result)
+    assert snapshot.stage == Stage.REVIEW.value
+    assert snapshot.retrieval_attempts_used == result.diagnostics.sources_acquired
+    assert snapshot.research_controls.discovery_providers == (DiscoveryProvider.EXA,)
+    assert snapshot.v2_diagnostics == result.diagnostics
 
 
 def test_run_wide_lower_call_ceiling_fails_closed_before_an_overrun(tmp_path: Path) -> None:

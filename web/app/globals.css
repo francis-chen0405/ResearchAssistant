@@ -126,6 +126,11 @@ dd { margin: 0; font-family: Georgia, serif; font-size: 23px; }
 .report-meta dl { margin: 28px 0; border-top: 1px solid var(--line); }
 .report-meta dl div { display: flex; justify-content: space-between; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--line); }
 .report-meta dd { font-family: inherit; font-size: 12px; text-align: right; }
+.provider-diagnostics { margin: 28px 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.provider-diagnostics > span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+.provider-diagnostics p { display: grid; gap: 4px; margin: 14px 0 0; }
+.provider-diagnostics strong { font-size: 12px; font-weight: 600; }
+.provider-diagnostics small { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .hash-button { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px; border: 1px solid var(--line); background: transparent; cursor: pointer; text-align: left; }
 .hash-button span { color: var(--muted); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
 .hash-button code { grid-column: 1; font-size: 11px; }

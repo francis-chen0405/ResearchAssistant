@@ -29,6 +29,7 @@ from models import (
     V2DiscoveryScoutOutput,
     V2EvidenceAnalystBatchInput,
     V2EvidenceAnalystCandidateInput,
+    V2EvidenceAnalystExtractionFailure,
     V2SourceSelectionQueueResult,
     V2VerbatimQuoteSelection,
 )
@@ -142,6 +143,14 @@ class V2ExactExtractionResult(StrictModel):
             directions=self.queue_result.input.directions,
             queue_result=self.queue_result,
             queued_candidates=candidates,
+            extraction_failures=tuple(
+                V2EvidenceAnalystExtractionFailure(
+                    source_id=item.source_id,
+                    failure=item.failure,
+                )
+                for item in self.sources
+                if item.candidate is None and item.failure is not None
+            ),
         )
 
 

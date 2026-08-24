@@ -24,9 +24,9 @@ from models import (
     ResearchDirections,
     ResearchMode,
     RunManifest,
-    Stage,
     StrictModel,
     V2ResultSource,
+    V2RunDiagnostics,
 )
 from money import ExactUSD
 from orchestrator import (
@@ -57,6 +57,9 @@ from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
     V2ProductionPipelineResult,
     V2ProductionState,
+    build_v2_run_diagnostics_or_empty,
+    configured_v2_providers,
+    infer_v2_stage,
     run_v2_production_pipeline,
 )
 
@@ -161,6 +164,7 @@ class LiveRunSnapshot(StrictModel):
     model_identity: str | None = None
     fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
+    v2_diagnostics: V2RunDiagnostics | None = None
 
 
 class LiveHistoryItem(StrictModel):
@@ -453,10 +457,35 @@ class LiveResearchController:
         if not path.is_file():
             return ()
         with open_read_only_store(path) as store:
-            return tuple(
-                self._history_item(manifest)
-                for manifest in list_runs(store.connection, limit=limit)
-            )
+            manifests = list_runs(store.connection, limit=limit)
+            items: list[LiveHistoryItem] = []
+            for manifest in manifests:
+                try:
+                    artifact = read_v2_artifact(
+                        store.connection, manifest.run_id, V2_PRODUCTION_ARTIFACT_KEY
+                    )
+                    result = V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
+                except (KeyError, ValueError):
+                    items.append(self._history_item(manifest))
+                    continue
+                items.append(
+                    LiveHistoryItem(
+                        run_id=manifest.run_id,
+                        raw_claim=manifest.raw_claim,
+                        status=manifest.status.value,
+                        stage=infer_v2_stage(
+                            str(path),
+                            manifest.run_id,
+                            result.current_stage,
+                            result.final_output is not None,
+                        ).value,
+                        updated_at=manifest.updated_at.isoformat(),
+                        completed_at=(
+                            manifest.completed_at.isoformat() if manifest.completed_at else None
+                        ),
+                    )
+                )
+        return tuple(items)
 
     def research_trail(self, db_path: str | Path, run_id: UUID) -> ResearchTrail:
         path = Path(db_path).resolve()
@@ -707,6 +736,22 @@ class LiveResearchController:
         output = result.final_output
         directions = output.directions if output is not None else ResearchDirections()
         sources = output.all_surviving_sources if output is not None else ()
+        diagnostics = result.diagnostics
+        if diagnostics is None:
+            providers = configured_v2_providers(result.db_path, result.run_id)
+            if providers:
+                diagnostics = build_v2_run_diagnostics_or_empty(
+                    result.db_path,
+                    result.run_id,
+                    providers,
+                    final_output=output,
+                )
+        stage = infer_v2_stage(
+            result.db_path,
+            result.run_id,
+            result.current_stage,
+            output is not None,
+        )
         classification: LiveClassification = result.state.value
         exit_code = {
             V2ProductionState.RELEASED: CLIExitCode.RELEASED,
@@ -720,7 +765,7 @@ class LiveResearchController:
             raw_claim=result.raw_claim,
             classification=classification,
             exit_code=int(exit_code),
-            stage=Stage.FINAL_RENDERER_VALIDATOR.value,
+            stage=stage.value,
             latest_checkpoint=V2_PRODUCTION_ARTIFACT_KEY,
             completed_checkpoints=10,
             total_checkpoints=10,
@@ -733,7 +778,9 @@ class LiveResearchController:
             ),
             diagnostic_component="v2-production",
             model_calls_used=result.budget.physical_calls_used,
-            retrieval_attempts_used=len(sources),
+            retrieval_attempts_used=(
+                diagnostics.sources_acquired if diagnostics is not None else len(sources)
+            ),
             total_tokens=result.budget.token_exposure,
             total_cost_usd=result.budget.cost_exposure_usd,
             known_token_subtotal=result.budget.token_exposure,
@@ -757,7 +804,13 @@ class LiveResearchController:
                 research_mode=(
                     ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
                 ),
+                discovery_providers=(
+                    diagnostics.configured_providers
+                    if diagnostics is not None
+                    else DEFAULT_RESEARCH_CONTROLS.discovery_providers
+                ),
             ),
+            v2_diagnostics=diagnostics,
         )
 
     def _early_snapshot(

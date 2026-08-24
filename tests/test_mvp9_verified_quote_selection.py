@@ -73,6 +73,25 @@ def test_application_assembles_exact_text_from_source_sentence_ranges() -> None:
     )
 
 
+def test_sentence_range_preserves_snapshot_whitespace_between_sentences() -> None:
+    text = (
+        "Opening context.\n"
+        "First exact evidence sentence.\n\n"
+        "Second exact evidence sentence.\n"
+        "Closing context."
+    )
+    selection = VerbatimQuoteSelection.model_validate(
+        {"selected_sentence_ranges": ({"start_sentence": 2, "end_sentence": 3},)}
+    )
+
+    quote = assemble_quote_block_from_selected_segments(text, selection, truncated=False)
+
+    assert quote == (
+        '[Opening context.] "First exact evidence sentence.\n\n'
+        'Second exact evidence sentence." [Closing context.]'
+    )
+
+
 def test_source_sentence_ranges_reject_overlap_and_out_of_bounds() -> None:
     with pytest.raises(ValidationError, match="ordered and non-overlapping"):
         VerbatimQuoteSelection.model_validate(

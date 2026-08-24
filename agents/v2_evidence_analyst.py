@@ -103,6 +103,7 @@ def run_v2_evidence_analyst(
         raise ValueError("configured Analyst route does not match the v2 routing policy")
 
     queued = {item.source_id: item for item in batch_input.queued_candidates}
+    extraction_failures = {item.source_id: item.failure for item in batch_input.extraction_failures}
     results: list[V2EvidenceAnalystSourceResult] = []
     for survivor in batch_input.queue_result.input.survivors:
         candidate_input = queued.get(survivor.source_id)
@@ -119,7 +120,10 @@ def run_v2_evidence_analyst(
                         else V2EvidenceAnalystState.NOT_QUEUED
                     ),
                     failure=(
-                        "Exact extraction did not produce a deterministically valid candidate."
+                        extraction_failures.get(
+                            survivor.source_id,
+                            "Exact extraction did not produce a deterministically valid candidate.",
+                        )
                         if queued_for_analysis
                         else None
                     ),
