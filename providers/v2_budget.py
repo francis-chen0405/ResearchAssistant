@@ -11,7 +11,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from models import ModelUsageMetadata, StrictModel
+from models import (
+    V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+    V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+    ModelUsageMetadata,
+    StrictModel,
+)
 from money import add_usd
 from providers.llm import LLMProvider, LLMProviderCapabilities, LLMRequest, ModelAlias
 from providers.pricing import conservative_token_estimate
@@ -50,6 +55,17 @@ class V2PhysicalCallStart(StrictModel):
     model_alias: str = Field(min_length=1)
     reserved_tokens: int = Field(ge=1)
     reserved_cost_usd: Decimal = Field(ge=0)
+    source_id: UUID | None = None
+    source_token_cap: int = Field(
+        default=V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+        ge=1,
+        le=V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+    )
+    source_physical_call_cap: int = Field(
+        default=V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+        ge=1,
+        le=V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+    )
     started_at: datetime
 
     _started_at_is_aware = field_validator("started_at")(_aware)
@@ -182,6 +198,23 @@ class BudgetedV2LLMProvider:
                 raise V2BudgetExceededError("v2 total-token ceiling cannot cover this call")
             if reservation.reserved_cost_usd > current.cost_remaining_usd:
                 raise V2BudgetExceededError("v2 cost ceiling cannot cover this call")
+            if request.source_id is not None:
+                source_starts = [
+                    item for item in self._starts if item.source_id == request.source_id
+                ]
+                source_tokens, _source_cost = _source_exposure(source_starts, self._completions)
+                source_token_cap = request.source_token_cap or V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
+                source_call_cap = (
+                    request.source_physical_call_cap or V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+                )
+                if len(source_starts) >= source_call_cap:
+                    raise V2BudgetExceededError(
+                        f"source {request.source_id} physical-call cap is exhausted"
+                    )
+                if source_tokens + reservation.reserved_tokens > source_token_cap:
+                    raise V2BudgetExceededError(
+                        f"source {request.source_id} token cap cannot cover this call"
+                    )
             sequence = len(self._starts) + 1
             started = V2PhysicalCallStart(
                 run_id=self._run_id,
@@ -190,6 +223,11 @@ class BudgetedV2LLMProvider:
                 model_alias=request.model_alias.value,
                 reserved_tokens=reservation.reserved_tokens,
                 reserved_cost_usd=reservation.reserved_cost_usd,
+                source_id=request.source_id,
+                source_token_cap=(request.source_token_cap or V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP),
+                source_physical_call_cap=(
+                    request.source_physical_call_cap or V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+                ),
                 started_at=_aware(self._clock()),
             )
             insert_v2_artifact(
@@ -281,6 +319,30 @@ def _snapshot(
         tokens_remaining=max(0, ceilings.max_total_tokens - tokens),
         cost_remaining_usd=remaining_cost,
     )
+
+
+def _source_exposure(
+    starts: list[V2PhysicalCallStart],
+    completions: dict[int, V2PhysicalCallCompletion],
+) -> tuple[int, Decimal]:
+    tokens = 0
+    cost = Decimal("0")
+    for started in starts:
+        completed = completions.get(started.sequence)
+        tokens += (
+            completed.usage_tokens
+            if completed is not None and completed.usage_tokens is not None
+            else started.reserved_tokens
+        )
+        cost = add_usd(
+            cost,
+            (
+                completed.usage_cost_usd
+                if completed is not None and completed.usage_cost_usd is not None
+                else started.reserved_cost_usd
+            ),
+        )
+    return tokens, cost
 
 
 def _read_audit(

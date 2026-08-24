@@ -1,5 +1,35 @@
 # Status
 
+## 2026-08-24 - Phase 8 source-cap and deterministic deep-analysis backfill correction
+
+Status: Complete and verified.
+
+- Preserved the exact run-wide v2 ceiling of 500,000 tokens, 160 physical calls, and the
+  configured cost ceiling. Final Source Selection now reserves a hard 60,000-token allowance
+  per source and records the reduced seven-call workload: two Extractor attempts, four
+  Analyst attempts across assessment/draft, and one independent Reviewer call.
+- Analyst prompts now contain only the exact candidate quote block, immediate context, and
+  necessary source metadata; the complete normalized snapshot remains available for exact
+  application verification and is not sent to Luna.
+- Reviewer rejection is terminal for that source. The former revision plus second-Reviewer
+  path is removed from normal execution while immutable Reviewer validation and Ledger
+  admission remain unchanged.
+- Added a typed, versioned deep-analysis backfill artifact with persisted full priority,
+  original queued IDs, replacement IDs, final execution order, terminal source outcomes,
+  per-source conservative token/cost reconciliation, and remaining run budget. Extraction,
+  Analyst, and Reviewer terminal failures backfill the next unqueued survivor without
+  duplicates or reordering; completed source artifacts and the final backfill resume
+  idempotently.
+- Added source attribution at the physical-call budget boundary. Exact provider usage is
+  reconciled when available; missing usage remains conservatively charged, and released
+  source allowance is never added back to the global `tokens_remaining` snapshot.
+
+Verification: focused Phase-8/9/10/12 suite passes, including six-source 60k queue admission,
+reduced workload metadata, Analyst prompt reduction, one-call Reviewer rejection, source
+reconciliation, and restart-safe artifacts. Complete pytest passes 792 tests with 2 expected
+skips; Ruff check, Ruff format check, and diff check pass. No dependency change or live paid
+research run was made.
+
 ## 2026-08-21 - Budget and failure-diagnostics correction
 
 Status: Complete and verified.

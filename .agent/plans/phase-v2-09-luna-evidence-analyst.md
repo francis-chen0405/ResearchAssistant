@@ -2,6 +2,12 @@
 
 Status: Complete and verified.
 
+Authorized 2026-08-24 correction: fresh Phase-9 execution performs only the assessment and
+canonical-draft Analyst operations (each bounded to two attempts). The Analyst request carries
+the exact candidate quote block, immediate context, and typed source metadata, not the complete
+normalized snapshot. Reviewer-directed revision remains available only as a historical/direct
+compatibility API and is not part of normal Phase-10 recovery.
+
 ## Scope
 
 - Consume only the deterministic Phase-8 deep-analysis queue and exact, application-

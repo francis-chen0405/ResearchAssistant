@@ -16,7 +16,6 @@ from agents.reviewer import (
     build_statement_review_result,
     validate_reviewer_decision,
 )
-from agents.v2_evidence_analyst import revise_v2_canonical_statement
 from models import (
     CandidateQuoteBlock,
     ModelAttemptStatus,
@@ -60,7 +59,7 @@ from store import (
 )
 
 V2_REVIEWER_LEDGER_ARTIFACT_KEY = "phase-10-reviewer-ledger"
-V2_REVIEWER_LEDGER_POLICY_VERSION = "v2rledger_v1"
+V2_REVIEWER_LEDGER_POLICY_VERSION = "v2rledger_v2"
 
 
 def run_v2_reviewer_ledger(
@@ -69,12 +68,13 @@ def run_v2_reviewer_ledger(
     analyst_result: V2EvidenceAnalystBatchResult,
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
+    artifact_key: str = V2_REVIEWER_LEDGER_ARTIFACT_KEY,
     clock: Callable[[], datetime] | None = None,
 ) -> V2ReviewerLedgerBatchResult:
     """Review v2 drafts with MiMo and admit only exact application-validated records."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
-    stored = _read_artifact(path, analyst_result.run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY)
+    stored = _read_artifact(path, analyst_result.run_id, artifact_key)
     if stored is not None:
         result = V2ReviewerLedgerBatchResult.model_validate_json(stored)
         if result.analyst_result != analyst_result:
@@ -105,8 +105,8 @@ def run_v2_reviewer_ledger(
             recommended=statuses[survivor.source_id].recommended,
             relevant_gap_ids=statuses[survivor.source_id].gap_ids,
         )
-        key = _source_artifact_key(analyst_source.source_id)
-        existing = _read_artifact(path, analyst_result.run_id, key)
+        source_artifact_key = _source_artifact_key(analyst_source.source_id)
+        existing = _read_artifact(path, analyst_result.run_id, source_artifact_key)
         if existing is not None:
             result = V2ReviewerLedgerSourceResult.model_validate_json(existing)
         else:
@@ -120,7 +120,7 @@ def run_v2_reviewer_ledger(
                 routing_config=routing_config,
                 clock=now,
             )
-            insert_v2_artifact(path, key, result, _aware_now(now))
+            insert_v2_artifact(path, source_artifact_key, result, _aware_now(now))
         if result.source_id != analyst_source.source_id or result.provenance != provenance:
             raise ValueError("persisted Phase-10 source result does not match source provenance")
         results.append(result)
@@ -132,7 +132,7 @@ def run_v2_reviewer_ledger(
         source_results=tuple(results),
         completed_at=completed_at,
     )
-    insert_v2_artifact(path, V2_REVIEWER_LEDGER_ARTIFACT_KEY, output, completed_at)
+    insert_v2_artifact(path, artifact_key, output, completed_at)
     return output
 
 
@@ -175,57 +175,15 @@ def _process_source(
     )
     if first is None:
         return _terminal(source_result, provenance, V2ReviewerLedgerState.REVIEWER_FAILED, failure)
-    reviews = [first]
-    final_draft = source_result.statement_draft
     if not first.approved:
-        try:
-            revision = revise_v2_canonical_statement(
-                db_path=path,
-                batch_input=analyst_result.input,
-                source_result=source_result,
-                reviewer_rationale=first.rationale,
-                llm_provider=llm_provider,
-                routing_config=routing_config,
-                clock=clock,
-            )
-        except (ValueError, TypeError, RuntimeError) as exc:
-            return _terminal(
-                source_result,
-                provenance,
-                V2ReviewerLedgerState.REVIEWER_FAILED,
-                f"Analyst revision failed: {type(exc).__name__}: {exc}"[:1000],
-                tuple(reviews),
-            )
-        final_draft = revision.revised_statement
-        second, failure = _review_once(
-            path,
-            analyst_result,
-            source_result.source_id,
-            source_result.candidate,
-            final_draft,
-            llm_provider,
-            routing_config,
-            clock,
-            1,
+        return _terminal(
+            source_result,
+            provenance,
+            V2ReviewerLedgerState.REVIEWER_REJECTED,
+            reviews=(first,),
         )
-        if second is None:
-            return _terminal(
-                source_result,
-                provenance,
-                V2ReviewerLedgerState.REVIEWER_FAILED,
-                failure,
-                tuple(reviews),
-            )
-        reviews.append(second)
-        if not second.approved:
-            return _terminal(
-                source_result,
-                provenance,
-                V2ReviewerLedgerState.REVIEWER_REJECTED,
-                reviews=tuple(reviews),
-            )
 
-    final = reviews[-1]
+    final = first
     if final.approved_factual_statement is None:
         raise ValueError("approved Reviewer result must retain its exact statement")
     record = admit_ledger_record(
@@ -233,12 +191,8 @@ def _process_source(
             candidate=source_result.candidate,
             snapshot=candidate_input.snapshot,
             score_decision=source_result.score_decision,
-            statement_drafts=(
-                [source_result.statement_draft]
-                if len(reviews) == 1
-                else [source_result.statement_draft, final_draft]
-            ),
-            review_results=reviews,
+            statement_drafts=[source_result.statement_draft],
+            review_results=[final],
             approved_factual_statement=final.approved_factual_statement,
             entailment=entailment_for_claim_fit(source_result.score_decision.claim_fit),
         ),
@@ -252,7 +206,7 @@ def _process_source(
         direction=source_result.direction,
         state=V2ReviewerLedgerState.ADMITTED,
         provenance=provenance,
-        review_results=tuple(reviews),
+        review_results=(final,),
         ledger_record=record,
     )
 
@@ -301,6 +255,7 @@ def _review_once(
         pinned_model_snapshot=route.physical_model,
         configured_fallbacks=(),
         generation=V2_LLM_ROUTING.for_stage(LLMStage.REVIEWER).generation,
+        source_id=source_id,
     )
     operation_id = uuid5(
         NAMESPACE_URL, f"v2-phase10::{batch.run_id}::{source_id}::reviewer::{revision_number}"
@@ -383,7 +338,7 @@ def _review_once(
             reviewer_model_name=route.physical_model,
             reviewed_at=_aware_now(clock),
         ), None
-    except (LLMInvocationError, ValueError, TypeError) as exc:
+    except (LLMInvocationError, ValueError, TypeError, RuntimeError) as exc:
         finish_model_route_attempt(
             path,
             running.model_copy(

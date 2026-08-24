@@ -153,13 +153,14 @@ def run_v2_exact_extraction(
     acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
+    artifact_key: str = V2_EXTRACTION_ARTIFACT_KEY,
     clock: Callable[[], datetime] | None = None,
 ) -> V2ExactExtractionResult:
     """Select exact passages for every queued survivor, preserving per-source failure."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
     try:
-        stored = read_v2_artifact(path, queue_result.run_id, V2_EXTRACTION_ARTIFACT_KEY)
+        stored = read_v2_artifact(path, queue_result.run_id, artifact_key)
     except KeyError:
         stored = None
     if stored is not None:
@@ -198,7 +199,7 @@ def run_v2_exact_extraction(
         sources=tuple(results),
         completed_at=_aware(now()),
     )
-    insert_v2_artifact(path, V2_EXTRACTION_ARTIFACT_KEY, output, output.completed_at)
+    insert_v2_artifact(path, artifact_key, output, output.completed_at)
     return output
 
 
@@ -244,6 +245,7 @@ def _extract_source(
         requested_output_type=V2VerbatimQuoteSelection,
         model_alias=ModelAlias.MIMO_V25_PRO,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
+        source_id=source_id,
     )
     last_failure = "Extractor did not return a valid selection."
     for attempt in range(1, V2_EXTRACTION_MAX_ATTEMPTS + 1):

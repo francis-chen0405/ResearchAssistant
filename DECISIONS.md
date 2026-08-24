@@ -45,6 +45,16 @@
 
 ## 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
 
+### Authorized correction — 2026-08-24
+
+The Phase-8 queue contract is corrected to a hard 60,000-token allowance per source and a
+seven-call workload: two Extractor attempts, four Analyst attempts across two operations, and
+one independent Reviewer call. Reviewer rejection is terminal and invokes deterministic typed
+backfill from the persisted full priority. The run-wide token ceiling remains exactly 500,000;
+source-level released allowance is audit reconciliation only and never refunds the global
+budget snapshot. The earlier twelve-call arithmetic below is historical and is superseded by
+this correction for fresh versioned artifacts.
+
 - Preserve every legitimate survivor across all completed rounds in an append-only Phase-8
   input; selection controls expensive work and never prunes the source pool.
 - Route Final Source Selection through MiMo-v2.5-Pro with bounded Probe, Gap, family,

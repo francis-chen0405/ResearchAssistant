@@ -14,6 +14,8 @@ from pydantic import ConfigDict
 from agents.v2_adaptive_search import V2MergedSurvivorPool
 from evidence_portfolio import identify_source_family
 from models import (
+    V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+    V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     ResearchDirection,
     V2AcquisitionProbeOutput,
     V2DeepAnalysisBudget,
@@ -302,6 +304,7 @@ def run_v2_source_selection_and_queue(
         used_fallback=used_fallback,
         selection_attempts=len(attempts),
         selection_attempt_records=tuple(attempts),
+        priority_source_ids=ordered_source_ids,
         queued_source_ids=queue_plan.queued_source_ids,
         source_statuses=queue_plan.source_statuses,
         queue_capacity=queue_plan.queue_capacity,
@@ -367,7 +370,9 @@ def calculate_v2_deep_analysis_queue(
             )
             total_tokens = proposed_source_tokens + synthesis_tokens
             total_cost = add_usd(proposed_source_cost, synthesis_cost)
-            physical_calls = synthesis_calls + (len(queued) + 1) * 12
+            physical_calls = (
+                synthesis_calls + (len(queued) + 1) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+            )
             limiting_reason = _limiting_reason(
                 budget,
                 physical_calls=physical_calls,
@@ -398,7 +403,11 @@ def calculate_v2_deep_analysis_queue(
     if queued:
         total_tokens = reservation_points[-1].cumulative_reserved_tokens
         total_cost = reservation_points[-1].cumulative_reserved_cost_usd
-        physical_after = budget.physical_calls_used + synthesis_calls + len(queued) * 12
+        physical_after = (
+            budget.physical_calls_used
+            + synthesis_calls
+            + len(queued) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+        )
     elif synthesis_reservable:
         total_tokens, total_cost = synthesis_zero
         physical_after = budget.physical_calls_used + synthesis_calls
@@ -600,15 +609,15 @@ def _source_reservation(
     candidate: V2SourceSelectionCandidate,
 ) -> tuple[int, Decimal]:
     totals: list[tuple[int, Decimal]] = []
-    for stage, logical_calls in (
-        (LLMStage.EXTRACTOR, 1),
-        (LLMStage.ANALYST, 3),
-        (LLMStage.REVIEWER, 2),
+    for stage, physical_attempts in (
+        (LLMStage.EXTRACTOR, 2),
+        (LLMStage.ANALYST, 4),
+        (LLMStage.REVIEWER, 1),
     ):
         reservation = preflight.reserve(stage, candidate.deep_analysis_input_tokens)
-        for _ in range(logical_calls * 2):
+        for _ in range(physical_attempts):
             totals.append((reservation.reserved_tokens, reservation.reserved_cost_usd))
-    return sum(item[0] for item in totals), add_usd(*(item[1] for item in totals))
+    return V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP, add_usd(*(item[1] for item in totals))
 
 
 def _synthesis_reservation(preflight: object, queue_size: int) -> tuple[int, Decimal]:

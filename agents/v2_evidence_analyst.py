@@ -17,7 +17,7 @@ from agents.analyst import (
     score_candidate,
     statement_has_required_qualification,
 )
-from agents.researcher import verify_candidate_against_snapshot
+from agents.researcher import parse_extracted_quote_block, verify_candidate_against_snapshot
 from models import (
     ModelAttemptStatus,
     ModelRouteAttempt,
@@ -32,6 +32,7 @@ from models import (
     V2EvidenceAnalystLLMInput,
     V2EvidenceAnalystModelOutput,
     V2EvidenceAnalystRevisionResult,
+    V2EvidenceAnalystSnapshotContext,
     V2EvidenceAnalystSourceResult,
     V2EvidenceAnalystState,
     V2EvidenceRelationship,
@@ -79,12 +80,13 @@ def run_v2_evidence_analyst(
     batch_input: V2EvidenceAnalystBatchInput,
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
+    artifact_key: str = V2_EVIDENCE_ANALYST_ARTIFACT_KEY,
     clock: Callable[[], datetime] | None = None,
 ) -> V2EvidenceAnalystBatchResult:
     """Analyze the complete queue with Luna and persist status for every survivor."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
-    stored = _read_artifact(path, batch_input.run_id, V2_EVIDENCE_ANALYST_ARTIFACT_KEY)
+    stored = _read_artifact(path, batch_input.run_id, artifact_key)
     if stored is not None:
         result = V2EvidenceAnalystBatchResult.model_validate_json(stored)
         if result.input != batch_input:
@@ -124,8 +126,8 @@ def run_v2_evidence_analyst(
                 )
             )
             continue
-        artifact_key = _source_artifact_key(survivor.source_id)
-        persisted_source = _read_artifact(path, batch_input.run_id, artifact_key)
+        source_artifact_key = _source_artifact_key(survivor.source_id)
+        persisted_source = _read_artifact(path, batch_input.run_id, source_artifact_key)
         if persisted_source is not None:
             source_result = V2EvidenceAnalystSourceResult.model_validate_json(persisted_source)
         else:
@@ -137,7 +139,7 @@ def run_v2_evidence_analyst(
                 routing_config=routing_config,
                 clock=now,
             )
-            insert_v2_artifact(path, artifact_key, source_result, _aware_now(now))
+            insert_v2_artifact(path, source_artifact_key, source_result, _aware_now(now))
         if source_result.source_id != survivor.source_id:
             raise ValueError("persisted Phase-9 source result does not match survivor")
         results.append(source_result)
@@ -149,7 +151,7 @@ def run_v2_evidence_analyst(
         source_results=tuple(results),
         completed_at=completed_at,
     )
-    insert_v2_artifact(path, V2_EVIDENCE_ANALYST_ARTIFACT_KEY, output, completed_at)
+    insert_v2_artifact(path, artifact_key, output, completed_at)
     return output
 
 
@@ -262,7 +264,19 @@ def _analyze_source(
             exact_claim=batch_input.exact_claim,
             direction=source_input.direction,
             candidate=candidate,
-            untrusted_snapshot_text=source_input.snapshot.normalized_text,
+            snapshot_context=V2EvidenceAnalystSnapshotContext(
+                snapshot_id=source_input.snapshot.snapshot_id,
+                snapshot_sha256=source_input.snapshot.snapshot_sha256,
+                source_url=source_input.snapshot.source_url,
+                word_count=source_input.snapshot.word_count,
+                truncated=source_input.snapshot.truncated,
+                preceding_context=parse_extracted_quote_block(
+                    candidate.extracted_quote_block
+                ).preceding_context,
+                following_context=parse_extracted_quote_block(
+                    candidate.extracted_quote_block
+                ).following_context,
+            ),
         )
         assessment, score_attempts = _invoke_bounded_analyst(
             db_path=db_path,
@@ -349,7 +363,7 @@ def _analyze_source(
             statement_draft=statement_draft,
             analyst_attempt_ids=tuple(attempt_ids),
         )
-    except (V2EvidenceAnalystFailure, ValueError, TypeError) as exc:
+    except (V2EvidenceAnalystFailure, ValueError, TypeError, RuntimeError) as exc:
         attempt_ids = list(_source_attempt_ids(db_path, batch_input.run_id, source_input.source_id))
         return V2EvidenceAnalystSourceResult(
             run_id=batch_input.run_id,
@@ -394,6 +408,7 @@ def _invoke_bounded_analyst(
         model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
         configured_fallbacks=(),
         generation=V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).generation,
+        source_id=source_id,
     )
     operation_id = uuid5(
         NAMESPACE_URL, f"v2-phase9::{batch_input.run_id}::{source_id}::{operation}"
@@ -493,7 +508,7 @@ def _invoke_bounded_analyst(
             )
             finish_model_route_attempt(db_path, completed)
             return output, tuple(attempt_ids)
-        except (LLMInvocationError, ValueError, TypeError) as exc:
+        except (LLMInvocationError, ValueError, TypeError, RuntimeError) as exc:
             failures.append(f"{type(exc).__name__}: {exc}")
             failed = running.model_copy(
                 update={

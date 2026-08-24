@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
 from typing import Annotated, Literal
@@ -176,9 +177,16 @@ V2_ACQUISITION_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition
 V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
 V2_ADAPTIVE_SEARCH_POLICY_IDENTITY = "researchassistant-v2-phase-7-adaptive-search-v1"
 V2_SOURCE_SELECTION_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v1"
-V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = "researchassistant-v2-phase-8-deep-analysis-queue-v1"
-V2_EVIDENCE_ANALYST_POLICY_IDENTITY = "researchassistant-v2-phase-9-luna-evidence-analyst-v1"
-V2_REVIEWER_LEDGER_POLICY_IDENTITY = "researchassistant-v2-phase-10-reviewer-ledger-v1"
+V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-8-deep-analysis-queue-v2-source-cap-60k-v1"
+)
+V2_EVIDENCE_ANALYST_POLICY_IDENTITY = "researchassistant-v2-phase-9-luna-evidence-analyst-v2"
+V2_REVIEWER_LEDGER_POLICY_IDENTITY = "researchassistant-v2-phase-10-reviewer-ledger-v2"
+V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-12-deep-analysis-backfill-v1"
+)
+V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP = 60_000
+V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP = 7
 
 
 class ResearchDirection(StrEnum):
@@ -1467,6 +1475,7 @@ class V2DeepAnalysisBudgetReason(StrEnum):
     PHYSICAL_CALL_CEILING = "physical_call_ceiling"
     TOKEN_RESERVE = "token_reserve"
     COST_RESERVE = "cost_reserve"
+    BACKFILL_REPLACED = "backfill_replaced"
 
 
 class V2DeepAnalysisSourceStatus(StrictModel):
@@ -1519,9 +1528,11 @@ class V2DeepAnalysisQueuePlan(StrictModel):
     queue_capacity: NonNegativeInt
     attempts_per_logical_operation: Literal[2] = 2
     extractor_logical_calls_per_source: Literal[1] = 1
-    analyst_logical_calls_per_source: Literal[3] = 3
-    reviewer_logical_calls_per_source: Literal[2] = 2
-    physical_calls_per_source: Literal[12] = 12
+    analyst_logical_calls_per_source: Literal[2] = 2
+    reviewer_logical_calls_per_source: Literal[1] = 1
+    physical_calls_per_source: Literal[7] = 7
+    source_token_cap: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
+    source_physical_call_cap: Literal[7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
     mandatory_synthesis_physical_calls: Literal[2] = 2
     mandatory_synthesis_reservable: bool
     physical_calls_after_reserve: Annotated[int, Field(ge=0, le=160)]
@@ -1529,9 +1540,9 @@ class V2DeepAnalysisQueuePlan(StrictModel):
     total_reserved_cost_usd: ExactUSD
     token_reservations: tuple[V2DeepAnalysisTokenReservation, ...]
     limiting_reason: V2DeepAnalysisBudgetReason | None = None
-    policy_identity: Literal["researchassistant-v2-phase-8-deep-analysis-queue-v1"] = (
-        V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY
-    )
+    policy_identity: Literal[
+        "researchassistant-v2-phase-8-deep-analysis-queue-v2-source-cap-60k-v1"
+    ] = V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY
 
     @model_validator(mode="after")
     def validate_queue_plan(self) -> V2DeepAnalysisQueuePlan:
@@ -1587,10 +1598,13 @@ class V2SourceSelectionQueueResult(StrictModel):
     selection_attempts: NonNegativeInt
     selection_attempt_records: tuple[V2SourceSelectionAttempt, ...] = Field(max_length=2)
     selection_stage: Literal["source_selection"] = "source_selection"
+    priority_source_ids: tuple[UUID, ...] = ()
     queued_source_ids: tuple[UUID, ...]
     source_statuses: tuple[V2DeepAnalysisSourceStatus, ...]
     queue_capacity: NonNegativeInt
-    physical_calls_per_source: Literal[12] = 12
+    physical_calls_per_source: Literal[7] = 7
+    source_token_cap: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
+    source_physical_call_cap: Literal[7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
     mandatory_synthesis_physical_calls: Literal[2] = 2
     mandatory_synthesis_reservable: bool
     physical_calls_after_reserve: Annotated[int, Field(ge=0, le=160)]
@@ -1622,6 +1636,12 @@ class V2SourceSelectionQueueResult(StrictModel):
             raise ValueError("queued source IDs must be unique")
         if not set(self.queued_source_ids).issubset(source_ids):
             raise ValueError("deep-analysis queue cannot invent sources")
+        if self.priority_source_ids and (
+            len(self.priority_source_ids) != len(source_ids)
+            or set(self.priority_source_ids) != source_ids
+            or len(set(self.priority_source_ids)) != len(self.priority_source_ids)
+        ):
+            raise ValueError("persisted deep-analysis priority must retain every survivor once")
         if self.queue_capacity != len(self.queued_source_ids):
             raise ValueError("queue capacity must match queued source count")
         status_by_id = {item.source_id: item for item in self.source_statuses}
@@ -2415,6 +2435,20 @@ class V2EvidenceAnalystCandidateInput(StrictModel):
         return self
 
 
+class V2EvidenceAnalystSnapshotContext(StrictModel):
+    """Small source envelope supplied to Luna instead of the complete snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    snapshot_id: UUID
+    snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_url: NonEmptyStr
+    word_count: NonNegativeInt
+    truncated: bool
+    preceding_context: NonEmptyStr
+    following_context: NonEmptyStr
+
+
 class V2EvidenceAnalystBatchInput(StrictModel):
     """Complete Phase-8 queue plus the exact candidates available for Analyst work."""
 
@@ -2425,7 +2459,7 @@ class V2EvidenceAnalystBatchInput(StrictModel):
     directions: ResearchDirections
     queue_result: V2SourceSelectionQueueResult
     queued_candidates: tuple[V2EvidenceAnalystCandidateInput, ...]
-    policy_identity: Literal["researchassistant-v2-phase-9-luna-evidence-analyst-v1"] = (
+    policy_identity: Literal["researchassistant-v2-phase-9-luna-evidence-analyst-v2"] = (
         V2_EVIDENCE_ANALYST_POLICY_IDENTITY
     )
 
@@ -2463,7 +2497,7 @@ class V2EvidenceAnalystLLMInput(StrictModel):
     exact_claim: NonEmptyStr
     direction: ResearchDirection
     candidate: CandidateQuoteBlock
-    untrusted_snapshot_text: NonEmptyStr
+    snapshot_context: V2EvidenceAnalystSnapshotContext
 
 
 class V2CanonicalStatementLLMInput(StrictModel):
@@ -2625,7 +2659,7 @@ class V2ReviewerLedgerSourceResult(StrictModel):
     direction: ResearchDirection
     state: V2ReviewerLedgerState
     provenance: V2LedgerProvenance
-    review_results: tuple[StatementReviewResult, ...] = Field(max_length=2)
+    review_results: tuple[StatementReviewResult, ...] = Field(max_length=1)
     ledger_record: LedgerRecord | None = None
     failure: NonEmptyStr | None = None
 
@@ -2669,7 +2703,7 @@ class V2ReviewerLedgerBatchResult(StrictModel):
     analyst_result: V2EvidenceAnalystBatchResult
     source_results: tuple[V2ReviewerLedgerSourceResult, ...]
     completed_at: datetime
-    policy_identity: Literal["researchassistant-v2-phase-10-reviewer-ledger-v1"] = (
+    policy_identity: Literal["researchassistant-v2-phase-10-reviewer-ledger-v2"] = (
         V2_REVIEWER_LEDGER_POLICY_IDENTITY
     )
 
@@ -2683,6 +2717,114 @@ class V2ReviewerLedgerBatchResult(StrictModel):
         actual = tuple(item.source_id for item in self.source_results)
         if actual != expected or len(actual) != len(set(actual)):
             raise ValueError("Phase-10 output must retain every Phase-9 survivor in order")
+        return self
+
+
+class V2DeepAnalysisSourceExecutionState(StrEnum):
+    ADMITTED = "admitted"
+    BUDGET_EXHAUSTED = "budget_exhausted"
+    EXTRACTION_FAILED = "extraction_failed"
+    ANALYST_REJECTED = "analyst_rejected"
+    ANALYST_FAILED = "analyst_failed"
+    REVIEWER_REJECTED = "reviewer_rejected"
+    REVIEWER_FAILED = "reviewer_failed"
+    NOT_ATTEMPTED = "not_attempted"
+
+
+class V2DeepAnalysisSourceExecution(StrictModel):
+    """Typed terminal outcome retained by the source backfill controller."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    state: V2DeepAnalysisSourceExecutionState
+    physical_call_sequences: tuple[PositiveInt, ...] = ()
+    failure_reason: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def validate_execution(self) -> V2DeepAnalysisSourceExecution:
+        if self.state is V2DeepAnalysisSourceExecutionState.NOT_ATTEMPTED:
+            if self.physical_call_sequences or self.failure_reason is not None:
+                raise ValueError("unattempted sources cannot carry execution evidence")
+        elif self.state is V2DeepAnalysisSourceExecutionState.ADMITTED:
+            if self.failure_reason is not None:
+                raise ValueError("admitted sources cannot carry a failure reason")
+        elif self.failure_reason is None:
+            raise ValueError("terminal source failures require an explicit reason")
+        return self
+
+
+class V2DeepAnalysisSourceReconciliation(StrictModel):
+    """Per-source conservative exposure reconciliation, independent of run totals."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    source_cap_tokens: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
+    source_cap_cost_usd: ExactUSD
+    accounted_tokens: NonNegativeInt
+    released_tokens: NonNegativeInt
+    accounted_cost_usd: ExactUSD
+    released_cost_usd: ExactUSD
+    physical_call_sequences: tuple[PositiveInt, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_reconciliation(self) -> V2DeepAnalysisSourceReconciliation:
+        expected_release = max(0, self.source_cap_tokens - self.accounted_tokens)
+        if self.released_tokens != expected_release:
+            raise ValueError("source token release must reconcile exactly to its cap")
+        expected_cost_release = max(
+            Decimal("0"), self.source_cap_cost_usd - self.accounted_cost_usd
+        )
+        if self.released_cost_usd != expected_cost_release:
+            raise ValueError("source cost release must reconcile exactly to its cap")
+        return self
+
+
+class V2DeepAnalysisBackfillResult(StrictModel):
+    """Versioned final deep-analysis execution consumed by downstream synthesis."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    original_queued_source_ids: tuple[UUID, ...]
+    replacement_source_ids: tuple[UUID, ...]
+    final_execution_order: tuple[UUID, ...]
+    final_queue_result: V2SourceSelectionQueueResult
+    final_reviewer_result: V2ReviewerLedgerBatchResult
+    source_executions: tuple[V2DeepAnalysisSourceExecution, ...]
+    source_reconciliations: tuple[V2DeepAnalysisSourceReconciliation, ...]
+    remaining_run_budget: V2DeepAnalysisBudget
+    terminal_reasons: tuple[NonEmptyStr, ...] = ()
+    completed_at: datetime
+    policy_identity: Literal["researchassistant-v2-phase-12-deep-analysis-backfill-v1"] = (
+        V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY
+    )
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_backfill(self) -> V2DeepAnalysisBackfillResult:
+        if self.run_id != self.final_queue_result.run_id:
+            raise ValueError("backfill and final queue must share the run")
+        if self.final_reviewer_result.run_id != self.run_id:
+            raise ValueError("backfill and final Reviewer result must share the run")
+        if len(self.final_execution_order) != len(set(self.final_execution_order)):
+            raise ValueError("final execution order cannot contain duplicates")
+        if self.final_queue_result.queued_source_ids != self.final_execution_order:
+            raise ValueError("final queue must reproduce the final execution order")
+        if len(self.replacement_source_ids) != len(set(self.replacement_source_ids)):
+            raise ValueError("replacement source IDs must be unique")
+        if set(self.replacement_source_ids) & set(self.original_queued_source_ids):
+            raise ValueError("replacement source IDs cannot repeat original queued sources")
+        if not set(self.original_queued_source_ids).issubset(
+            set(self.final_execution_order) | set(item.source_id for item in self.source_executions)
+        ):
+            raise ValueError("backfill must retain every original queued source outcome")
+        if tuple(item.source_id for item in self.source_executions) != tuple(
+            item.source_id for item in self.source_reconciliations
+        ):
+            raise ValueError("source execution and reconciliation order must match")
         return self
 
 

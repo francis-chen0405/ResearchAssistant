@@ -1,6 +1,6 @@
 # ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
 
-Status: Complete and verified.
+Status: Complete and verified. Corrected 2026-08-24 under the authorized Phase-8 boundary.
 
 ## Scope
 
@@ -19,11 +19,13 @@ Status: Complete and verified.
 - Build a bounded deep-analysis queue with recommended survivors first and complementary
   non-recommended survivors second.
 - Compute a safe queue prefix before deep analysis using the remaining 160-call ceiling,
-  one retry per logical operation, one Extractor operation, three possible Analyst operations,
-  two possible Reviewer operations, two mandatory Synthesis attempts, and conservative
-  route-specific token/cost reservations.
+  a hard 60,000-token allowance per source, two Extractor attempts, four Analyst attempts
+  across two operations, one independent Reviewer call, two mandatory Synthesis attempts,
+  and conservative route-specific cost reservations. The run-wide token ceiling remains
+  exactly 500,000.
 - Persist one explicit status for every survivor: recommendation state, queue state, ranks,
-  and a stable reason when physical-call, token, or cost reserve prevents deep analysis.
+  full priority, and a stable reason when physical-call, token, or cost reserve prevents deep
+  analysis. Persist a versioned typed backfill result with source-level reconciliation.
 - Reuse the append-only generic v2 artifact boundary; add no migration or dependency.
 
 ## Hard limits

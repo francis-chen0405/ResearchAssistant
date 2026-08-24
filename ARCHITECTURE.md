@@ -1027,12 +1027,16 @@ family-round-robin ordering without removing a survivor.
 Recommendation is workload prioritization, not factual validation, evidence approval, or
 Claim Ledger admission. The deterministic deep-analysis queue places recommended survivors
 first, then complementary non-recommended survivors, and retains the longest safe prefix.
-Each source reserves two attempts for one Extractor operation, three Analyst operations
-(score, draft, and possible single revision), and two Reviewer operations: twelve physical
-calls per source. Two additional physical calls and route-priced tokens/cost are reserved
-for mandatory Synthesis. Every survivor persists recommendation and queue status, including
-the physical-call, token, or cost reason when budget prevents deep analysis. The hard total
-remains 160 physical calls.
+Each source has a hard 60,000-token allowance and a seven-call workload envelope: two
+Extractor attempts, up to two attempts for each of two Analyst operations, and one
+independent Reviewer call. Normal Reviewer rejection is terminal for that source; there is
+no Reviewer-directed Analyst revision or second Reviewer call. Two additional physical
+calls and route-priced tokens/cost are reserved for mandatory Synthesis. Every survivor
+persists recommendation, full priority order, queue status, source attribution, and the
+physical-call, token, or cost reason when budget prevents deep analysis. Terminal extraction,
+Analyst, or Reviewer outcomes are replaced from the unqueued deterministic priority pool by
+a versioned typed backfill artifact. The hard total remains 160 physical calls and the
+run-wide token ceiling remains exactly 500,000.
 
 ## ResearchAssistant v2 Phase 9 Luna Evidence Analyst
 
@@ -1042,9 +1046,10 @@ Extractor route and selects snapshot passages only. Before semantic analysis, ap
 code revalidates the snapshot hash, exact segment membership, offsets, bracket context,
 candidate identity, length policy, and provenance; Analyst output cannot rewrite any of it.
 
-Fresh-v2 Analyst work uses a v2-only prompt and GPT-5.6 Luna High for three logical
-operations: semantic proposition/relationship assessment and scoring, initial canonical
-factual-statement drafting, and the one possible Reviewer-directed revision. Source text,
+Fresh-v2 Analyst work uses a v2-only prompt and GPT-5.6 Luna High for two logical
+operations: semantic proposition/relationship assessment and scoring, then initial canonical
+factual-statement drafting. The prompt contains only the exact candidate quote block,
+immediate context, and necessary metadata; it does not contain the complete snapshot. Source text,
 the narrowest supported proposition, and the proposition's relationship to the requested
 claim remain separate typed fields. Material limitations, inferential boundaries, and
 rationale persist with the assessment. Application validation prevents support/challenge
@@ -1065,8 +1070,9 @@ Phase 10 connects Phase-9 Reviewer-ready drafts to the established downstream qu
 gate. Fresh-v2 Reviewer calls use MiMo-v2.5-Pro and receive only the existing narrow
 Reviewer input. The application preserves exact Reviewer decision validation and derives
 the existing versioned approval ID; the Reviewer cannot supply IDs, confidence, or
-replacement wording. A rejected initial audit may use exactly one existing Analyst
-revision and one final Reviewer audit. A second rejection is terminal for that evidence.
+replacement wording. One independent Reviewer call is allowed per source. Rejection is
+terminal for that source and triggers Phase-12 deterministic backfill; no Analyst revision
+or second Reviewer audit occurs.
 
 The existing score-pair table, placement derivation, Claim Fit 3 qualification rule,
 `QUALIFIED_ONLY` restriction, and `admit_ledger_record` validation remain authoritative.

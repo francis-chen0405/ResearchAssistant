@@ -231,9 +231,12 @@ The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may 
 - Queue only a deterministic priority prefix: recommended survivors first, then
   complementary non-recommended survivors. Never skip an unaffordable higher-priority
   source to admit a lower-priority source.
-- Reserve twelve physical calls per queued source and two for mandatory Synthesis, plus
-  conservative route-specific tokens and cost. Persist an explicit budget reason for every
-  survivor outside the queue.
+- Reserve a 60,000-token source allowance, seven physical calls per queued source, and two
+  calls for mandatory Synthesis, plus conservative route-specific cost. The seven calls are
+  two Extractor attempts, four Analyst attempts across two operations, and one independent
+  Reviewer call. Persist the complete deterministic priority and an explicit budget reason
+  for every survivor outside the queue; terminal source outcomes use the typed backfill
+  artifact to admit the next unqueued survivor without duplicates or reordering.
 
 ## ResearchAssistant v2 Phase 11 Final Output Conventions
 

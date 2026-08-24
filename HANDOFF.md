@@ -1,5 +1,34 @@
 # Handoff
 
+## Phase 8 source-cap and deterministic deep-analysis backfill correction — 2026-08-24
+
+The authorized Phase-8 correction keeps the run-wide v2 maximum exactly 500,000 tokens and
+the existing 160 physical-call/cost ceilings. Each source now receives a hard 60,000-token
+allowance and a seven-call envelope: two bounded Extractor attempts, two bounded Analyst
+operations with up to two attempts each, and one independent Reviewer call. Reviewer rejection
+is terminal for that source; normal execution no longer performs Analyst revision or a second
+Reviewer call.
+
+Final Source Selection persists the full deterministic priority and reduced queue metadata.
+The source-aware provider boundary attributes physical calls to typed source IDs and charges
+unknown usage conservatively. A versioned typed backfill artifact records the original queue,
+replacement IDs, final order, terminal status/reasons, source token/cost reconciliation, and
+remaining run budget. Extraction, Analyst, and Reviewer terminal failures select the next
+unqueued survivor; successful source artifacts and completed backfill results are restart-safe.
+Downstream final-output generation consumes the typed final Reviewer result from the backfill
+artifact, while the existing validators, immutable Ledger admission, and synthesis contract
+remain unchanged.
+
+The Luna prompt now receives only the exact candidate quote block, its immediate context, and
+necessary metadata. Complete snapshots remain available for exact application verification but
+are not included in the Analyst request.
+
+Verification for this correction: focused Phase-8/9/10/12 tests pass, including six-source
+admission under the 500k ceiling, reduced workload metadata, one-call Reviewer rejection,
+prompt reduction, source reconciliation, and restart reuse. Complete pytest passes 792 tests
+with 2 expected skips; Ruff check, Ruff format check, and diff check pass. No dependency change
+or live paid run was made.
+
 ## Budget and failure-diagnostics correction — 2026-08-21
 
 The default fresh-run budget is now $0.20 with the already-authorized 500,000-token hard

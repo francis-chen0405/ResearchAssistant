@@ -155,21 +155,22 @@ def test_v2_reviewer_approval_admits_immutable_ledger_metadata(tmp_path: Path) -
         conn.execute("UPDATE v2_ledger_admissions SET recommended = 0")
 
 
-def test_v2_reviewer_rejection_revises_once_then_approves(tmp_path: Path) -> None:
+def test_v2_reviewer_rejection_is_terminal_without_revision(tmp_path: Path) -> None:
     _, result = _run(tmp_path, Phase10Provider([_rejected(), _approved()]))
-    source = result.source_results[0]
-    assert source.state is V2ReviewerLedgerState.ADMITTED
-    assert len(source.review_results) == 2
-    assert source.review_results[0].approved is False
-    assert source.review_results[1].approved is True
-
-
-def test_v2_second_reviewer_rejection_never_enters_the_ledger(tmp_path: Path) -> None:
-    _, result = _run(tmp_path, Phase10Provider([_rejected(), _rejected()]))
     source = result.source_results[0]
     assert source.state is V2ReviewerLedgerState.REVIEWER_REJECTED
     assert source.ledger_record is None
-    assert len(source.review_results) == 2
+    assert len(source.review_results) == 1
+    assert source.review_results[0].approved is False
+    assert len(result.source_results) == 1
+
+
+def test_v2_second_reviewer_rejection_never_enters_the_ledger(tmp_path: Path) -> None:
+    _, result = _run(tmp_path, Phase10Provider([_rejected()]))
+    source = result.source_results[0]
+    assert source.state is V2ReviewerLedgerState.REVIEWER_REJECTED
+    assert source.ledger_record is None
+    assert len(source.review_results) == 1
 
 
 def test_v2_qualified_only_and_nonrecommended_source_are_admitted(tmp_path: Path) -> None:

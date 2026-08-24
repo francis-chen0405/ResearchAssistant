@@ -306,10 +306,10 @@ def test_queue_math_protects_the_160_call_ceiling_and_synthesis() -> None:
         ordered_source_ids=source_ids,
         recommended_source_ids=source_ids,
         routing_config=_routing(),
-        budget=_budget(physical_calls_used=146),
+        budget=_budget(physical_calls_used=151),
     )
 
-    assert result.physical_calls_per_source == 12
+    assert result.physical_calls_per_source == 7
     assert result.mandatory_synthesis_physical_calls == 2
     assert result.queue_capacity == 1
     assert result.physical_calls_after_reserve == 160
@@ -318,6 +318,29 @@ def test_queue_math_protects_the_160_call_ceiling_and_synthesis() -> None:
         status.budget_prevented_reason == "physical_call_ceiling"
         for status in result.source_statuses[1:]
     )
+
+
+def test_six_survivors_fit_the_500k_ceiling_with_60k_source_allowances() -> None:
+    source_ids = tuple(uuid4() for _ in range(6))
+    selection_input = _selection_input(
+        tuple(
+            _candidate(source_id, family=f"family-{index}", probe_score=10 - index)
+            for index, source_id in enumerate(source_ids)
+        )
+    )
+
+    result = calculate_v2_deep_analysis_queue(
+        selection_input=selection_input,
+        ordered_source_ids=source_ids,
+        recommended_source_ids=source_ids,
+        routing_config=_routing(),
+        budget=_budget(tokens_remaining=500_000),
+    )
+
+    assert result.queued_source_ids == source_ids
+    assert result.queue_capacity == 6
+    assert result.physical_calls_after_reserve == 44
+    assert result.total_reserved_tokens < 500_000
 
 
 def test_token_reserve_shrinks_queue_as_a_deterministic_prefix() -> None:

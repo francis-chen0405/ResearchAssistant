@@ -26,6 +26,8 @@ from pydantic import (
 
 from agents.reviewer import ReviewerDecision
 from models import (
+    V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+    V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     GapAnalysisResult,
     PlannerOutput,
     ScoreDecision,
@@ -263,6 +265,9 @@ class LLMRequest(StrictModel):
     pinned_model_snapshot: str | None = None
     configured_fallbacks: Annotated[tuple[ModelAlias, ...], Field(max_length=2)] = ()
     generation: GenerationSettings
+    source_id: UUID | None = None
+    source_token_cap: int | None = Field(default=None, ge=1)
+    source_physical_call_cap: int | None = Field(default=None, ge=1)
 
     @field_validator("input_artifact")
     @classmethod
@@ -293,6 +298,20 @@ class LLMRequest(StrictModel):
             raise ValueError("primary model alias cannot also be a configured fallback")
         if self.requested_output_type not in _allowed_output_types(self.stage):
             raise ValueError("requested output type is not allowed for this stage")
+        if self.source_id is None and (
+            self.source_token_cap is not None or self.source_physical_call_cap is not None
+        ):
+            raise ValueError("source caps require an attributed source_id")
+        if (
+            self.source_token_cap is not None
+            and self.source_token_cap > V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
+        ):
+            raise ValueError("source_token_cap cannot exceed the v2 hard source allowance")
+        if (
+            self.source_physical_call_cap is not None
+            and self.source_physical_call_cap > V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+        ):
+            raise ValueError("source_physical_call_cap cannot exceed the v2 hard source cap")
         return self
 
 

@@ -2,6 +2,11 @@
 
 Status: Complete and verified.
 
+Authorized 2026-08-24 correction: fresh Phase-10 execution permits one independent Reviewer
+call per source. Rejection is terminal for that source and is handled by the Phase-12 typed
+deterministic backfill; no Analyst revision or second Reviewer call occurs. Existing Reviewer
+validation and immutable Ledger admission are unchanged.
+
 ## Scope
 
 - Consume the complete, append-only Phase-9 Analyst result and reuse the existing narrow
@@ -10,9 +15,8 @@ Status: Complete and verified.
 - Route fresh v2 Reviewer audits only to MiMo-v2.5-Pro. The Reviewer receives no claim,
   stance, Evidence Quality, source-selection, or provenance context and never supplies
   replacement wording or approval IDs.
-- Permit one initial Reviewer audit and, only after rejection, the existing one bounded
-  Luna Analyst revision followed by one final Reviewer audit. A second rejection admits
-  no Ledger record.
+- Permit one independent Reviewer audit. A rejection admits no Ledger record and is terminal
+  for the source; the next survivor is selected by Phase-12 deterministic backfill.
 - Persist each admitted v2 `LedgerRecord` beside immutable v2 provenance: research
   direction, discovery round, source family, recommendation flag, survivor ID, and
   relevant Gap IDs. Recommendation remains provenance only, never an admission rule.

@@ -368,7 +368,12 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert source.statement_draft is not None
     assert all(request.model_alias is ModelAlias.GPT_5_6_LUNA_HIGH for request in provider.requests)
     assert all(
-        request.prompt.version == "phase9-luna-evidence-analyst-v1" for request in provider.requests
+        request.prompt.version == "phase9-luna-evidence-analyst-v2-source-context"
+        for request in provider.requests
+    )
+    assert all(
+        not hasattr(request.input_artifact, "untrusted_snapshot_text")
+        for request in provider.requests
     )
     assert all(
         request.pinned_model_snapshot == "deployment-owned-luna-model"

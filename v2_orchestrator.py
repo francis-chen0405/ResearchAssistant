@@ -21,13 +21,9 @@ from agents.v2_adaptive_search import (
     V2AdaptiveStopCode,
     run_v2_adaptive_search_continuation,
 )
+from agents.v2_deep_analysis import run_v2_deep_analysis_with_backfill
 from agents.v2_discovery import V2DiscoveryResponse, run_v2_discovery_and_scout
-from agents.v2_evidence_analyst import run_v2_evidence_analyst
-from agents.v2_extraction import (
-    V2_EXTRACTION_POLICY_IDENTITY,
-    run_v2_exact_extraction,
-    snapshots_by_source,
-)
+from agents.v2_extraction import V2_EXTRACTION_POLICY_IDENTITY
 from agents.v2_final_output import (
     V2_FINAL_OUTPUT_POLICY_IDENTITY,
     V2_FINAL_VALIDATOR_CONFIG_VERSION,
@@ -35,15 +31,15 @@ from agents.v2_final_output import (
 )
 from agents.v2_gap_analysis import build_v2_gap_analysis_input, run_v2_gap_analysis
 from agents.v2_initial_planner import run_v2_initial_planner
-from agents.v2_reviewer_ledger import (
-    V2_REVIEWER_LEDGER_POLICY_VERSION,
-    run_v2_reviewer_ledger,
-)
+from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_POLICY_VERSION
 from agents.v2_source_selection import (
     build_v2_source_selection_input,
     run_v2_source_selection_and_queue,
 )
 from models import (
+    V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
+    V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+    V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     CrossrefIdentityMetadata,
     DiscoveryProvider,
     ResearchDirections,
@@ -56,6 +52,7 @@ from models import (
     V2AcquisitionProbeOutput,
     V2AdaptiveSearchModelOutput,
     V2CanonicalStatementModelOutput,
+    V2DeepAnalysisBackfillResult,
     V2DeepAnalysisBudget,
     V2DiscoveryScoutOutput,
     V2EvidenceAnalystModelOutput,
@@ -67,6 +64,7 @@ from models import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
     V2SourceSelectionModelOutput,
+    V2SourceSelectionQueueResult,
     V2VerbatimQuoteSelection,
 )
 from providers.llm import LLMProvider
@@ -102,7 +100,7 @@ from store import (
 V2_PRODUCTION_ARTIFACT_KEY = "phase-12-production-result"
 V2_PRODUCTION_FINGERPRINT_KEY = "phase-12-production-fingerprint"
 V2_ROUND_ONE_SEARCH_KEY = "phase-12-round-1-search"
-V2_PRODUCTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-production-cutover-v1"
+V2_PRODUCTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-production-cutover-v2"
 V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 14
 V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE = 8
 
@@ -366,7 +364,7 @@ def run_v2_production_pipeline(
                 "v2 deep-analysis queue is empty; budget reservation blocked all "
                 f"surviving sources ({reason}). Increase the cost, token, or call ceiling."
             )
-        extraction = run_v2_exact_extraction(
+        deep_analysis = run_v2_deep_analysis_with_backfill(
             db_path=path,
             queue_result=selection,
             discovery_outputs=discoveries,
@@ -375,20 +373,7 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             clock=now,
         )
-        analyst = run_v2_evidence_analyst(
-            db_path=path,
-            batch_input=extraction.analyst_input(snapshots_by_source(acquisitions)),
-            llm_provider=budgeted_llm,
-            routing_config=routing_config,
-            clock=now,
-        )
-        reviewer = run_v2_reviewer_ledger(
-            db_path=path,
-            analyst_result=analyst,
-            llm_provider=budgeted_llm,
-            routing_config=routing_config,
-            clock=now,
-        )
+        reviewer = deep_analysis.final_reviewer_result
         approved_records = tuple(
             item for item in reviewer.source_results if item.ledger_record is not None
         )
@@ -517,6 +502,8 @@ def _semantic_policy_payload() -> dict[str, object]:
         V2GapAnalysisModelOutput,
         V2AdaptiveSearchModelOutput,
         V2SourceSelectionModelOutput,
+        V2SourceSelectionQueueResult,
+        V2DeepAnalysisBackfillResult,
         V2VerbatimQuoteSelection,
         V2EvidenceAnalystModelOutput,
         V2CanonicalStatementModelOutput,
@@ -531,6 +518,18 @@ def _semantic_policy_payload() -> dict[str, object]:
         separators=(",", ":"),
     )
     return {
+        "deep_analysis_queue_policy": (
+            "researchassistant-v2-phase-8-deep-analysis-queue-v2-source-cap-60k-v1"
+        ),
+        "deep_analysis_backfill_policy": V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
+        "deep_analysis_source_token_cap": V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+        "deep_analysis_source_physical_call_cap": V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+        "deep_analysis_workload": {
+            "extractor_logical_calls": 1,
+            "analyst_logical_calls": 2,
+            "reviewer_logical_calls": 1,
+            "attempts_per_logical_operation": 2,
+        },
         "custom_prompt_hashes": prompt_hashes,
         "schema_sha256": hashlib.sha256(schemas.encode()).hexdigest(),
         "evidence_policy": EVIDENCE_POLICY_VERSION,
