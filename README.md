@@ -56,7 +56,7 @@ The Ledger admits only reviewed evidence-backed statements. Final validation pre
 
 ## Providers
 
-**Discovery:** OpenAlex, arXiv, PubMed, Exa, and Serper.
+**Discovery:** OpenAlex, arXiv, PubMed, Exa, and SerpSearch.
 
 **Metadata:** Crossref. Crossref provides metadata only; it is not evidence.
 
