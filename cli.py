@@ -48,6 +48,7 @@ from v2_orchestrator import (
     V2ProductionPipelineResult,
     V2ProductionState,
     run_v2_production_pipeline,
+    v2_cancellation_requested,
 )
 
 DEFAULT_PROVIDER_RUNNER = run_mvp3b_pipeline
@@ -245,6 +246,7 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
                 ceilings=factory_config.ceilings,
                 run_id=run_id,
                 provider_policy_fingerprint=factory_config.semantic_fingerprint_sha256(),
+                cancellation_requested=lambda: v2_cancellation_requested(db_path, run_id),
             )
     except ClaimMismatchError as exc:
         print(f"invalid input: {exc}", file=sys.stderr)

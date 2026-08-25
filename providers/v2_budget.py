@@ -29,6 +29,10 @@ V2_DEFAULT_TOTAL_COST_USD = Decimal("0.20")
 V2_BUDGET_POLICY_IDENTITY = "researchassistant-v2-phase-12-run-budget-v1"
 
 
+class V2CancellationRequested(RuntimeError):
+    """Stop v2 work before a new external model call is started."""
+
+
 def _aware(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("v2 budget timestamps must be timezone-aware")
@@ -168,6 +172,7 @@ class BudgetedV2LLMProvider:
         provider: LLMProvider,
         routing_config: V2RoutingConfig,
         ceilings: V2RunCeilings,
+        cancellation_requested: Callable[[], bool] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._path = str(Path(db_path).resolve())
@@ -175,6 +180,7 @@ class BudgetedV2LLMProvider:
         self._provider = provider
         self._routing = routing_config
         self._ceilings = ceilings
+        self._cancellation_requested = cancellation_requested
         self._clock = clock or _utc_now
         self._lock = Lock()
         self._starts, self._completions = _read_audit(self._path, run_id)
@@ -186,6 +192,8 @@ class BudgetedV2LLMProvider:
     def generate(self, request: LLMRequest) -> BaseModel:
         if request.run_id != self._run_id:
             raise ValueError("budgeted provider request must match its v2 run")
+        if self._cancellation_requested is not None and self._cancellation_requested():
+            raise V2CancellationRequested("v2 cancellation was observed before a model call")
         reservation = self._routing.preflight().reserve(
             request.stage,
             conservative_token_estimate(request.rendered_prompt),

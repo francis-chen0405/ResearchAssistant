@@ -47,6 +47,7 @@ from providers.llm import (
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import (
     ModelAttemptBudgetError,
@@ -348,6 +349,8 @@ def _review_once(
             reviewer_model_name=route.physical_model,
             reviewed_at=_aware_now(clock),
         ), None
+    except V2CancellationRequested:
+        raise
     except (LLMInvocationError, ValueError, TypeError, RuntimeError) as exc:
         finish_model_route_attempt(
             path,

@@ -32,6 +32,7 @@ from models import (
 )
 from providers.acquisition import AcquisitionFailureCode
 from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProvider, ScraperProviderError
+from providers.v2_budget import V2CancellationRequested
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_ACQUISITION_PROBE_ARTIFACT_KEY = "phase-5-acquisition-probe"
@@ -69,6 +70,7 @@ def run_v2_acquisition_probe(
     firecrawl_provider: ScraperProvider | None = None,
     policy: V2AcquisitionPolicy | None = None,
     excluded_cluster_ids: frozenset[UUID] = frozenset(),
+    cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2AcquisitionProbeRunResult:
     """Acquire ordered Scout candidates once, snapshot them, Probe them, and persist audit data."""
@@ -109,6 +111,7 @@ def run_v2_acquisition_probe(
     acquired_urls: set[str] = set()
 
     for cluster in ordered_clusters[: policy.max_clusters]:
+        _raise_if_cancelled(cancellation_requested)
         if cluster.cluster_id in excluded_cluster_ids:
             continue
         direction = _cluster_direction(cluster, item_by_id, decisions)
@@ -125,6 +128,7 @@ def run_v2_acquisition_probe(
             fallback=firecrawl_provider,
             policy=policy,
             retrieved_at=completed_at,
+            cancellation_requested=cancellation_requested,
         )
         attempts.extend(cluster_attempts)
         if source is None:
@@ -241,10 +245,12 @@ def _acquire_cluster(
     fallback: ScraperProvider | None,
     policy: V2AcquisitionPolicy,
     retrieved_at: datetime,
+    cancellation_requested: Callable[[], bool] | None,
 ) -> tuple[V2AcquiredSource | None, tuple[V2AcquisitionAttempt, ...]]:
     attempts: list[V2AcquisitionAttempt] = []
     urls = (cluster.preferred_url, *cluster.alternate_urls)[: policy.max_urls_per_cluster]
     for url in urls:
+        _raise_if_cancelled(cancellation_requested)
         response: ScrapeResponse | None = None
         primary_error: ScraperProviderError | None = None
         if primary is None:
@@ -259,6 +265,7 @@ def _acquire_cluster(
             )
         else:
             try:
+                _raise_if_cancelled(cancellation_requested)
                 response = primary.scrape(
                     ScrapeRequest(url=url, timeout_seconds=policy.timeout_seconds)
                 )
@@ -289,6 +296,7 @@ def _acquire_cluster(
                 )
         if response is None and _can_fallback(primary_error, fallback, policy):
             try:
+                _raise_if_cancelled(cancellation_requested)
                 response = fallback.scrape(  # type: ignore[union-attr]
                     ScrapeRequest(
                         url=url,
@@ -336,6 +344,11 @@ def _acquire_cluster(
                 tuple(attempts),
             )
     return None, tuple(attempts)
+
+
+def _raise_if_cancelled(callback: Callable[[], bool] | None) -> None:
+    if callback is not None and callback():
+        raise V2CancellationRequested("v2 cancellation was observed before acquisition work")
 
 
 def _snapshot_from_response(

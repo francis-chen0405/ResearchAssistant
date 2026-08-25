@@ -93,6 +93,7 @@ from providers.v2_budget import (
     BudgetedV2LLMProvider,
     V2BudgetExceededError,
     V2BudgetSnapshot,
+    V2CancellationRequested,
     V2RunCeilings,
 )
 from providers.v2_routing import V2RoutingConfig
@@ -104,6 +105,7 @@ from store import (
     insert_v2_artifact,
     insert_v2_pipeline_identity,
     open_read_only_store,
+    read_cancellation_request,
     read_provider_run_contract,
     read_run,
     read_v2_artifact,
@@ -499,6 +501,20 @@ class V2ProductionPipelineResult(StrictModel):
         return self
 
 
+def v2_cancellation_requested(db_path: str | Path, run_id: UUID) -> bool:
+    """Read the persisted cooperative-cancellation flag for one v2 run."""
+    try:
+        read_cancellation_request(str(Path(db_path).resolve()), run_id)
+    except KeyError:
+        return False
+    return True
+
+
+def _raise_if_v2_cancelled(callback: Callable[[], bool] | None) -> None:
+    if _cancelled(callback):
+        raise V2CancellationRequested("v2 cancellation was observed at an orchestration boundary")
+
+
 def run_v2_production_pipeline(
     raw_claim: str,
     *,
@@ -528,6 +544,12 @@ def run_v2_production_pipeline(
     now = clock or _utc_now
     resolved_run_id = run_id or uuid4()
     path = str(Path(db_path).resolve())
+
+    def effective_cancellation_requested() -> bool:
+        return _cancelled(cancellation_requested) or v2_cancellation_requested(
+            path, resolved_run_id
+        )
+
     _prepare_identity(path, resolved_run_id, raw_claim, routing_config, now)
     fingerprint = _production_fingerprint(
         resolved_run_id,
@@ -552,11 +574,13 @@ def run_v2_production_pipeline(
         provider=llm_provider,
         routing_config=routing_config,
         ceilings=resolved_ceilings,
+        cancellation_requested=effective_cancellation_requested,
         clock=now,
     )
     current_stage = Stage.CLAIM_PLANNER
     try:
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         planner = run_v2_initial_planner(
             raw_claim,
             db_path=path,
@@ -567,25 +591,17 @@ def run_v2_production_pipeline(
             run_id=resolved_run_id,
             clock=now,
         ).planner_output
-        if _cancelled(cancellation_requested):
-            return _cancel(
-                path,
-                resolved_run_id,
-                raw_claim,
-                budgeted_llm,
-                current_stage,
-                discovery_providers,
-                now,
-            )
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.DISCOVERY
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         round_one_search = _run_round_one_search(
             path,
             planner.searches,
             search_providers,
-            cancellation_requested,
+            effective_cancellation_requested,
             now,
         )
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         responses = tuple(
             V2DiscoveryResponse(query=item.query, results=item.results)
             for item in round_one_search.outcomes
@@ -600,7 +616,9 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             clock=now,
             crossref_resolver=crossref_resolver,
+            cancellation_requested=effective_cancellation_requested,
         ).output
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.ACQUISITION
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         acquisition_one = run_v2_acquisition_probe(
@@ -608,8 +626,10 @@ def run_v2_production_pipeline(
             discovery_output=discovery_one,
             wigolo_provider=wigolo_provider,
             firecrawl_provider=firecrawl_provider,
+            cancellation_requested=effective_cancellation_requested,
             clock=now,
         ).output
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         budget_after_round_one = budgeted_llm.snapshot()
         current_stage = Stage.GAP_ANALYSIS
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
@@ -629,6 +649,7 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             clock=now,
         )
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.ADAPTIVE_SEARCH
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         adaptive_budget = _adaptive_budget(budgeted_llm.snapshot())
@@ -645,7 +666,7 @@ def run_v2_production_pipeline(
             firecrawl_provider=firecrawl_provider,
             crossref_resolver=crossref_resolver,
             budget=adaptive_budget,
-            cancellation_requested=cancellation_requested,
+            cancellation_requested=effective_cancellation_requested,
             clock=now,
         )
         if continuation.stopping_decision.stop_code is V2AdaptiveStopCode.CANCELLED:
@@ -658,6 +679,7 @@ def run_v2_production_pipeline(
                 discovery_providers,
                 now,
             )
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         if budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE:
             raise V2BudgetExceededError(
                 "v2 downstream reserve cannot cover selection, extraction, analysis, "
@@ -675,6 +697,7 @@ def run_v2_production_pipeline(
             raise ValueError("no source survived acquisition and deterministic Probe")
         current_stage = Stage.SOURCE_SELECTION
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         selection_input = build_v2_source_selection_input(
             exact_claim=raw_claim,
             merged_survivors=continuation.merged_survivors,
@@ -696,6 +719,7 @@ def run_v2_production_pipeline(
             ),
             clock=now,
         ).result
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         if not selection.queued_source_ids:
             reason = (
                 selection.limiting_reason.value
@@ -708,6 +732,7 @@ def run_v2_production_pipeline(
             )
         current_stage = Stage.DEEP_ANALYSIS
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         deep_analysis = run_v2_deep_analysis_with_backfill(
             db_path=path,
             queue_result=selection,
@@ -717,9 +742,11 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             clock=now,
         )
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         reviewer = deep_analysis.final_reviewer_result
         current_stage = Stage.REVIEW
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         approved_records = tuple(
             item for item in reviewer.source_results if item.ledger_record is not None
         )
@@ -727,6 +754,7 @@ def run_v2_production_pipeline(
             raise ValueError(_format_no_approved_evidence_failure(deep_analysis))
         current_stage = Stage.SYNTHESIS
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         final = run_v2_final_research_output(
             db_path=path,
             reviewer_result=reviewer,
@@ -735,6 +763,7 @@ def run_v2_production_pipeline(
             routing_config=routing_config,
             clock=now,
         ).final_output
+        _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.FINAL_RENDERER_VALIDATOR
         state = (
             V2ProductionState.RELEASED
@@ -761,6 +790,16 @@ def run_v2_production_pipeline(
         )
         _persist_terminal(path, result, now)
         return result
+    except V2CancellationRequested:
+        return _cancel(
+            path,
+            resolved_run_id,
+            raw_claim,
+            budgeted_llm,
+            current_stage,
+            discovery_providers,
+            now,
+        )
     except Exception as exc:
         result = V2ProductionPipelineResult(
             run_id=resolved_run_id,

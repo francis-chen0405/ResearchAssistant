@@ -43,6 +43,7 @@ from providers.llm import (
     load_prompt,
     render_stage_prompt,
 )
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
@@ -277,6 +278,8 @@ def _extract_source(
             selection = invocation.output_artifact
             if not isinstance(selection, V2VerbatimQuoteSelection):
                 raise TypeError("Extractor returned an unexpected typed artifact")
+        except V2CancellationRequested:
+            raise
         except Exception as exc:
             last_failure = f"{type(exc).__name__}: {exc}"[:1000]
             if attempt < V2_EXTRACTION_MAX_ATTEMPTS:

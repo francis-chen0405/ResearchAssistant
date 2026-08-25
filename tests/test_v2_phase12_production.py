@@ -38,6 +38,7 @@ from models import (
     V2SourceSelectionRecommendation,
     V2VerbatimQuoteSelection,
 )
+from orchestrator import request_run_cancellation
 from providers.llm import LLMProviderCapabilities, LLMRequest
 from providers.scraper import ScrapeRequest, ScrapeResponse
 from providers.search import SearchRequest, SearchResponse, SearchResult
@@ -56,8 +57,10 @@ from v2_orchestrator import (
     V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
+    _prepare_identity,
     _production_fingerprint,
     run_v2_production_pipeline,
+    v2_cancellation_requested,
 )
 
 NOW = datetime(2026, 8, 21, tzinfo=UTC)
@@ -330,6 +333,33 @@ class _ExtractionFailureModel(_V2Model):
                 )
             )
         return super().generate(request)
+
+
+class _CancellingV2Model(_V2Model):
+    def __init__(
+        self,
+        *,
+        db_path: Path,
+        run_id: UUID,
+        cancel_after_output_type: str,
+        fail_on_cancellation: bool = False,
+    ) -> None:
+        super().__init__()
+        self._db_path = db_path
+        self._run_id = run_id
+        self._cancel_after_output_type = cancel_after_output_type
+        self._fail_on_cancellation = fail_on_cancellation
+
+    def generate(self, request: LLMRequest) -> object:
+        output_name = request.requested_output_type.__name__
+        if output_name == self._cancel_after_output_type and self._fail_on_cancellation:
+            self.requests.append(request)
+            request_run_cancellation(self._db_path, self._run_id, reason="test cancellation")
+            raise RuntimeError("test provider failure before retry")
+        output = super().generate(request)
+        if output_name == self._cancel_after_output_type:
+            request_run_cancellation(self._db_path, self._run_id, reason="test cancellation")
+        return output
 
 
 def _routing() -> V2RoutingConfig:
@@ -714,3 +744,96 @@ def test_run_h_release_integrity_violation_blocks_final_output(tmp_path: Path) -
     assert result.final_output is not None
     assert not result.final_output.release_validation.valid
     assert result.final_output.release_validation.rendered_output_hash is None
+
+
+def test_persisted_cancellation_before_first_model_call_stops_v2_run(tmp_path: Path) -> None:
+    db_path = tmp_path / "phase12-cancel-before-planner.sqlite3"
+    run_id = uuid4()
+    routing = _routing()
+    _prepare_identity(
+        str(db_path),
+        run_id,
+        "The regional program increases course completion.",
+        routing,
+        lambda: NOW,
+    )
+    request_run_cancellation(db_path, run_id, reason="cancel before model work")
+
+    result = _run(db_path, _V2Model(), _Search(), _Scraper(), run_id=run_id)
+
+    assert v2_cancellation_requested(db_path, run_id)
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.CLAIM_PLANNER
+    assert result.budget.physical_calls_used == 0
+
+
+@pytest.mark.parametrize(
+    ("cancel_after_output_type", "expected_stage"),
+    (
+        ("V2InitialPlannerModelOutput", Stage.CLAIM_PLANNER),
+        ("V2SourceSelectionModelOutput", Stage.SOURCE_SELECTION),
+        ("V2VerbatimQuoteSelection", Stage.DEEP_ANALYSIS),
+        ("ReviewerDecision", Stage.DEEP_ANALYSIS),
+        ("SynthesisOutput", Stage.SYNTHESIS),
+    ),
+)
+def test_persisted_cancellation_stops_before_later_v2_model_work(
+    tmp_path: Path,
+    cancel_after_output_type: str,
+    expected_stage: Stage,
+) -> None:
+    db_path = tmp_path / f"phase12-cancel-{cancel_after_output_type}.sqlite3"
+    run_id = uuid4()
+    model = _CancellingV2Model(
+        db_path=db_path,
+        run_id=run_id,
+        cancel_after_output_type=cancel_after_output_type,
+    )
+
+    result = _run(db_path, model, _Search(), _Scraper(), run_id=run_id)
+
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is expected_stage
+    assert model.requests[-1].requested_output_type.__name__ == cancel_after_output_type
+    assert result.budget.physical_calls_used == len(model.requests)
+
+
+def test_cancellation_after_scout_stops_before_acquisition_requests(tmp_path: Path) -> None:
+    db_path = tmp_path / "phase12-cancel-before-acquisition.sqlite3"
+    run_id = uuid4()
+    model = _CancellingV2Model(
+        db_path=db_path,
+        run_id=run_id,
+        cancel_after_output_type="ScoutBatch",
+    )
+    scraper = _Scraper()
+
+    result = _run(db_path, model, _Search(), scraper, run_id=run_id)
+
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.DISCOVERY
+    assert scraper.requests == []
+
+
+def test_cancellation_between_selection_retries_prevents_a_second_model_call(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase12-cancel-before-selection-retry.sqlite3"
+    run_id = uuid4()
+    model = _CancellingV2Model(
+        db_path=db_path,
+        run_id=run_id,
+        cancel_after_output_type="V2SourceSelectionModelOutput",
+        fail_on_cancellation=True,
+    )
+
+    result = _run(db_path, model, _Search(), _Scraper(), run_id=run_id)
+
+    selection_requests = [
+        request
+        for request in model.requests
+        if request.requested_output_type.__name__ == "V2SourceSelectionModelOutput"
+    ]
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.SOURCE_SELECTION
+    assert len(selection_requests) == 1

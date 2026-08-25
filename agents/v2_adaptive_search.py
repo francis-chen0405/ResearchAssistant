@@ -1015,6 +1015,7 @@ def _run_round_from_plan(
             routing_config=routing_config,
             clock=clock,
             crossref_resolver=crossref_resolver,
+            cancellation_requested=cancellation_requested,
         ).output
     else:
         discovery = V2DiscoveryScoutOutput(
@@ -1043,6 +1044,7 @@ def _run_round_from_plan(
             wigolo_provider=wigolo_provider,
             firecrawl_provider=firecrawl_provider,
             excluded_cluster_ids=duplicate_ids,
+            cancellation_requested=cancellation_requested,
             clock=clock,
         ).output
     else:

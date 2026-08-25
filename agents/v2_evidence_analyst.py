@@ -51,6 +51,7 @@ from providers.llm import (
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import (
     ModelAttemptBudgetError,
@@ -383,6 +384,8 @@ def _analyze_source(
             statement_draft=statement_draft,
             analyst_attempt_ids=tuple(attempt_ids),
         )
+    except V2CancellationRequested:
+        raise
     except (V2EvidenceAnalystFailure, ValueError, TypeError, RuntimeError) as exc:
         attempt_ids = list(_source_attempt_ids(db_path, batch_input.run_id, source_input.source_id))
         return V2EvidenceAnalystSourceResult(
@@ -536,6 +539,8 @@ def _invoke_bounded_analyst(
             )
             finish_model_route_attempt(db_path, completed)
             return output, tuple(attempt_ids)
+        except V2CancellationRequested:
+            raise
         except (LLMInvocationError, ValueError, TypeError, RuntimeError) as exc:
             failures.append(f"{type(exc).__name__}: {exc}")
             failed = running.model_copy(

@@ -48,6 +48,7 @@ from providers.llm import (
 )
 from providers.ranking import canonical_discovery_url
 from providers.search import SearchResult
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
@@ -91,6 +92,7 @@ def normalize_discovery_responses(
     responses: Sequence[V2DiscoveryResponse],
     discovered_at: datetime,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
 ) -> tuple[NormalizedDiscoveryItem, ...]:
     """Normalize every provider result while retaining all provider/query provenance."""
     _require_aware(discovered_at, "discovered_at")
@@ -102,6 +104,7 @@ def normalize_discovery_responses(
             raise ValueError("discovery response query belongs to another run")
         directions.require_permitted(query.direction)
         for result in response.results:
+            _raise_if_cancelled(cancellation_requested)
             item_id = _item_id(run_id, query, result.rank, result.original_url)
             if item_id in seen_ids:
                 raise ValueError("stable discovery item IDs must be unique")
@@ -237,6 +240,7 @@ def run_v2_discovery_and_scout(
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime] | None = None,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
 ) -> V2DiscoveryScoutRunResult:
     """Persist or resume one round of normalized discovery and batched Scout decisions."""
     now = clock or _utc_now
@@ -260,6 +264,7 @@ def run_v2_discovery_and_scout(
         responses=responses,
         discovered_at=completed_at,
         crossref_resolver=crossref_resolver,
+        cancellation_requested=cancellation_requested,
     )
     clusters = cluster_discovery_items(items)
     batches, audits = _run_scout_batches(
@@ -280,6 +285,11 @@ def run_v2_discovery_and_scout(
     )
     insert_v2_artifact(str(db_path), _artifact_key(planner_output), output, completed_at)
     return V2DiscoveryScoutRunResult(output=output, resumed=False)
+
+
+def _raise_if_cancelled(callback: Callable[[], bool] | None) -> None:
+    if callback is not None and callback():
+        raise V2CancellationRequested("v2 cancellation was observed before discovery work")
 
 
 def scout_ordered_item_ids(output: V2DiscoveryScoutOutput) -> tuple[UUID, ...]:

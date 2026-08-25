@@ -79,6 +79,7 @@ from v2_orchestrator import (
     configured_v2_providers,
     infer_v2_stage,
     run_v2_production_pipeline,
+    v2_cancellation_requested,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -645,6 +646,9 @@ class LiveResearchController:
                     ceilings=factory_config.ceilings,
                     run_id=run_id,
                     provider_policy_fingerprint=(factory_config.semantic_fingerprint_sha256()),
+                    cancellation_requested=lambda: v2_cancellation_requested(
+                        request.db_path, run_id
+                    ),
                 )
                 return self._snapshot_from_v2_result(result)
             if self._legacy_runner is None:

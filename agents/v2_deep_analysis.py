@@ -53,6 +53,7 @@ from providers.llm import LLMProvider
 from providers.v2_budget import (
     V2BudgetExceededError,
     V2BudgetSnapshot,
+    V2CancellationRequested,
     V2PhysicalCallCompletion,
     V2PhysicalCallStart,
 )
@@ -124,6 +125,8 @@ def run_v2_deep_analysis_with_backfill(
             )
             attempted[source_id] = wave
             execution = _execution_from_wave(path, wave)
+        except V2CancellationRequested:
+            raise
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"[:1000]
             terminal_reasons.append(reason)

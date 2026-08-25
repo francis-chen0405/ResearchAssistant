@@ -46,6 +46,7 @@ from providers.llm import (
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
@@ -270,6 +271,8 @@ def run_v2_source_selection_and_queue(
                 )
             )
             break
+        except V2CancellationRequested:
+            raise
         except Exception as exc:
             attempts.append(
                 V2SourceSelectionAttempt(
