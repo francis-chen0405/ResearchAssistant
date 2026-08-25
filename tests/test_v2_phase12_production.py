@@ -15,6 +15,8 @@ from models import (
     ModelUsageMetadata,
     ResearchDirection,
     ResearchDirections,
+    RunManifest,
+    RunStatus,
     ScoutBatch,
     ScoutItem,
     SelectedSentenceRange,
@@ -31,6 +33,7 @@ from models import (
     V2InitialPlannerModelOutput,
     V2InitialPlannerSearchResponse,
     V2MaterialGap,
+    V2PipelineIdentity,
     V2SourceSelectionModelOutput,
     V2SourceSelectionRecommendation,
     V2VerbatimQuoteSelection,
@@ -38,13 +41,22 @@ from models import (
 from providers.llm import LLMProviderCapabilities, LLMRequest
 from providers.scraper import ScrapeRequest, ScrapeResponse
 from providers.search import SearchRequest, SearchResponse, SearchResult
-from providers.v2_budget import V2RunCeilings
+from providers.v2_budget import V2PhysicalCallStart, V2RunCeilings
 from providers.v2_routing import V2RoutingConfig
-from store import read_v2_artifact
+from store import (
+    init_db,
+    insert_run,
+    insert_v2_artifact,
+    insert_v2_pipeline_identity,
+    read_v2_artifact,
+)
 from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
+    V2_PRODUCTION_FINGERPRINT_KEY,
+    V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
+    _production_fingerprint,
     run_v2_production_pipeline,
 )
 
@@ -394,6 +406,83 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
 
     resumed = _run(db_path, _V2Model(), _Search(), _Scraper(), run_id=run_id)
     assert resumed == first
+
+
+def test_running_v2_snapshot_reports_persisted_progress(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "running-v2.sqlite3")
+    run_id = uuid4()
+    ceilings = V2RunCeilings(
+        max_physical_calls=40,
+        max_total_tokens=100_000,
+        max_total_cost_usd=Decimal("1"),
+    )
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    init_db(db_path)
+    insert_run(
+        db_path,
+        RunManifest(
+            run_id=run_id,
+            status=RunStatus.RUNNING,
+            raw_claim="The regional program increases course completion.",
+            current_stage=Stage.ADAPTIVE_SEARCH,
+            created_at=NOW,
+            updated_at=NOW,
+        ),
+    )
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    fingerprint = _production_fingerprint(
+        run_id,
+        directions,
+        (DiscoveryProvider.EXA,),
+        ceilings,
+        _routing(),
+        "test-provider-policy",
+        NOW,
+    )
+    assert isinstance(fingerprint, V2ProductionFingerprint)
+    insert_v2_artifact(db_path, V2_PRODUCTION_FINGERPRINT_KEY, fingerprint, NOW)
+
+    controller = LiveResearchController(environment={})
+    before_call = controller.snapshot(db_path, run_id)
+
+    assert before_call.classification == "running"
+    assert before_call.stage == Stage.ADAPTIVE_SEARCH.value
+    assert before_call.progress_percent == 50
+    assert before_call.model_calls_used == 0
+
+    insert_v2_artifact(
+        db_path,
+        "phase-12-physical-call-001-start",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=1,
+            stage=Stage.ADAPTIVE_SEARCH.value,
+            model_alias="mimo-v2.5",
+            reserved_tokens=100,
+            reserved_cost_usd=Decimal("0.001"),
+            started_at=NOW,
+        ),
+        NOW,
+    )
+    insert_v2_artifact(
+        db_path,
+        "phase-12-physical-call-002-start",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=2,
+            stage=Stage.ADAPTIVE_SEARCH.value,
+            model_alias="mimo-v2.5",
+            reserved_tokens=100,
+            reserved_cost_usd=Decimal("0.001"),
+            started_at=NOW,
+        ),
+        NOW,
+    )
+    after_call = controller.snapshot(db_path, run_id)
+
+    assert after_call.classification == "running"
+    assert after_call.model_calls_used == 2
+    assert after_call.progress_percent == before_call.progress_percent + 1
 
 
 def test_extraction_failure_is_preserved_in_final_pipeline_reason(tmp_path: Path) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -14,21 +15,30 @@ from uuid import UUID, uuid4
 
 from pydantic import Field, field_validator
 
+from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
+from agents.v2_evidence_analyst import V2_EVIDENCE_ANALYST_ARTIFACT_KEY
 from agents.v2_final_output import render_v2_final_output
+from agents.v2_source_selection import V2_SOURCE_SELECTION_COMPLETION_KEY
 from cli import CLIExitCode, repository_identity
 from frontend.security import redact_text
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
     ResearchControls,
+    ResearchDirection,
     ResearchDirections,
     ResearchMode,
     RunManifest,
+    RunStatus,
+    Stage,
     StrictModel,
+    V2AcquisitionProbeOutput,
+    V2EvidenceAnalystSourceResult,
     V2ResultSource,
     V2RunDiagnostics,
+    V2SourceSelectionQueueResult,
 )
-from money import ExactUSD
+from money import ExactUSD, add_usd
 from orchestrator import (
     MVP10_TARGETED_RESEARCHERS_ARTIFACT,
     MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
@@ -44,17 +54,25 @@ from orchestrator import (
 )
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
-from providers.v2_budget import V2RunCeilings
+from providers.v2_budget import (
+    V2BudgetSnapshot,
+    V2PhysicalCallCompletion,
+    V2PhysicalCallStart,
+    V2RunCeilings,
+)
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 from store import (
     list_runs,
     open_read_only_store,
     read_provider_run_contract,
+    read_run,
     read_stage_artifact,
     read_v2_artifact,
 )
 from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
+    V2_PRODUCTION_FINGERPRINT_KEY,
+    V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
     build_v2_run_diagnostics_or_empty,
@@ -408,6 +426,12 @@ class LiveResearchController:
                 )
             except KeyError:
                 pass
+            v2_providers = configured_v2_providers(resolved, run_id)
+            if v2_providers:
+                try:
+                    return self._snapshot_from_v2_progress(resolved, run_id, v2_providers)
+                except KeyError:
+                    pass
             try:
                 result = self._inspector(resolved, run_id)
                 return self._snapshot_from_result(result)
@@ -729,6 +753,94 @@ class LiveResearchController:
             ),
         )
 
+    def _snapshot_from_v2_progress(
+        self,
+        db_path: str,
+        run_id: UUID,
+        providers: tuple[DiscoveryProvider, ...],
+    ) -> LiveRunSnapshot:
+        manifest = read_run(db_path, run_id)
+        directions = _read_v2_directions(db_path, run_id)
+        diagnostics = build_v2_run_diagnostics_or_empty(db_path, run_id, providers)
+        budget = _read_v2_budget_snapshot(db_path, run_id)
+        stage = infer_v2_stage(db_path, run_id, manifest.current_stage, False)
+        current_round = _v2_current_round(db_path, run_id)
+        supporting, opposing = _read_v2_directional_progress(
+            db_path,
+            run_id,
+            directions,
+            manifest.status,
+        )
+        contract = None
+        try:
+            contract = read_provider_run_contract(db_path, run_id)
+        except KeyError:
+            pass
+        classification: LiveClassification = {
+            RunStatus.PLANNED: "starting",
+            RunStatus.RUNNING: "running",
+            RunStatus.COMPLETED: "released",
+            RunStatus.BLOCKED: "blocked",
+            RunStatus.CANCELLED: "cancelled",
+            RunStatus.FAILED: "failed",
+        }[manifest.status]
+        exit_code = CLIExitCode.RUNNING if manifest.status is RunStatus.RUNNING else None
+        if manifest.status is RunStatus.FAILED:
+            exit_code = CLIExitCode.FAILED
+        elif manifest.status is RunStatus.BLOCKED:
+            exit_code = CLIExitCode.BLOCKED
+        elif manifest.status is RunStatus.CANCELLED:
+            exit_code = CLIExitCode.CANCELLED
+        elif manifest.status is RunStatus.COMPLETED:
+            exit_code = CLIExitCode.RELEASED
+        return LiveRunSnapshot(
+            run_id=run_id,
+            db_path=db_path,
+            raw_claim=manifest.raw_claim,
+            classification=classification,
+            exit_code=int(exit_code) if exit_code is not None else None,
+            stage=stage.value,
+            latest_checkpoint=stage.value,
+            completed_checkpoints=0,
+            total_checkpoints=10,
+            current_research_round=current_round,
+            progress_percent=_v2_progress_percent(
+                stage,
+                current_round,
+                diagnostics,
+                budget,
+                supporting,
+                opposing,
+            ),
+            message=(
+                f"Research is running in {stage.value}."
+                if manifest.status is RunStatus.RUNNING
+                else f"Research is {classification}."
+            ),
+            diagnostic_component="v2-production",
+            model_calls_used=budget.physical_calls_used,
+            retrieval_attempts_used=diagnostics.acquisition_attempts,
+            total_tokens=budget.token_exposure,
+            total_cost_usd=budget.cost_exposure_usd,
+            known_token_subtotal=budget.token_exposure,
+            known_cost_subtotal_usd=budget.cost_exposure_usd,
+            token_usage_complete=False,
+            cost_usage_complete=False,
+            conservative_reserved_tokens=budget.token_exposure,
+            conservative_reserved_cost_usd=budget.cost_exposure_usd,
+            supporting=supporting,
+            opposing=opposing,
+            provider_identity=contract.provider_identity if contract is not None else None,
+            model_identity=contract.model_identity if contract is not None else None,
+            fingerprint=contract.fingerprint_sha256 if contract is not None else None,
+            research_controls=ResearchControls(
+                research_mode=(
+                    ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+                ),
+                discovery_providers=providers,
+            ),
+        )
+
     def _snapshot_from_v2_result(
         self,
         result: V2ProductionPipelineResult,
@@ -967,6 +1079,221 @@ def _v2_research_progress(
         usable_snapshots=len(matching),
         candidates=analyzed,
     )
+
+
+def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
+    try:
+        artifact = read_v2_artifact(db_path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+        fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
+        payload = json.loads(fingerprint.canonical_payload_json)
+        return ResearchDirections.model_validate(payload["directions"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return ResearchDirections()
+
+
+def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
+    ceilings = V2RunCeilings()
+    try:
+        artifact = read_v2_artifact(db_path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+        fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
+        payload = json.loads(fingerprint.canonical_payload_json)
+        ceilings = V2RunCeilings.model_validate(payload["ceilings"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+    starts: list[V2PhysicalCallStart] = []
+    completions: dict[int, V2PhysicalCallCompletion] = {}
+    for sequence in range(1, ceilings.max_physical_calls + 1):
+        try:
+            start_artifact = read_v2_artifact(
+                db_path,
+                run_id,
+                f"phase-12-physical-call-{sequence:03d}-start",
+            )
+        except KeyError:
+            break
+        start = V2PhysicalCallStart.model_validate_json(start_artifact.payload_json)
+        starts.append(start)
+        try:
+            completion_artifact = read_v2_artifact(
+                db_path,
+                run_id,
+                f"phase-12-physical-call-{sequence:03d}-completion",
+            )
+        except KeyError:
+            continue
+        completions[sequence] = V2PhysicalCallCompletion.model_validate_json(
+            completion_artifact.payload_json
+        )
+
+    token_exposure = 0
+    cost_exposure = Decimal("0")
+    for start in starts:
+        completion = completions.get(start.sequence)
+        token_exposure += (
+            completion.usage_tokens
+            if completion is not None and completion.usage_tokens is not None
+            else start.reserved_tokens
+        )
+        cost_exposure = add_usd(
+            cost_exposure,
+            (
+                completion.usage_cost_usd
+                if completion is not None and completion.usage_cost_usd is not None
+                else start.reserved_cost_usd
+            ),
+        )
+    return V2BudgetSnapshot(
+        physical_calls_used=len(starts),
+        token_exposure=token_exposure,
+        cost_exposure_usd=cost_exposure,
+        physical_calls_remaining=max(0, ceilings.max_physical_calls - len(starts)),
+        tokens_remaining=max(0, ceilings.max_total_tokens - token_exposure),
+        cost_remaining_usd=max(Decimal("0"), ceilings.max_total_cost_usd - cost_exposure),
+    )
+
+
+def _v2_current_round(db_path: str, run_id: UUID) -> int:
+    for round_number in (3, 2):
+        for suffix in ("search-results", "discovery-scout", "acquisition-probe"):
+            try:
+                read_v2_artifact(
+                    db_path,
+                    run_id,
+                    f"phase-7-round-{round_number}-{suffix}",
+                )
+            except KeyError:
+                continue
+            return round_number
+    return 1
+
+
+def _read_v2_directional_progress(
+    db_path: str,
+    run_id: UUID,
+    directions: ResearchDirections,
+    status: RunStatus,
+) -> tuple[ResearchProgress, ResearchProgress]:
+    acquired: dict[ResearchDirection, int] = {
+        ResearchDirection.SUPPORT: 0,
+        ResearchDirection.CHALLENGE: 0,
+    }
+    survivors: dict[ResearchDirection, set[UUID]] = {
+        ResearchDirection.SUPPORT: set(),
+        ResearchDirection.CHALLENGE: set(),
+    }
+    for round_number in (1, 2, 3):
+        artifact_key = (
+            V2_ACQUISITION_PROBE_ARTIFACT_KEY
+            if round_number == 1
+            else f"phase-7-round-{round_number}-acquisition-probe"
+        )
+        try:
+            artifact = read_v2_artifact(db_path, run_id, artifact_key)
+        except KeyError:
+            continue
+        output = V2AcquisitionProbeOutput.model_validate_json(artifact.payload_json)
+        for source in output.acquisitions:
+            acquired[source.direction] += 1
+        for survivor in output.survivors:
+            survivors[survivor.direction].add(survivor.snapshot_id)
+
+    queued: dict[ResearchDirection, tuple[UUID, ...]] = {
+        ResearchDirection.SUPPORT: (),
+        ResearchDirection.CHALLENGE: (),
+    }
+    try:
+        queue_artifact = read_v2_artifact(
+            db_path,
+            run_id,
+            V2_SOURCE_SELECTION_COMPLETION_KEY,
+        )
+    except KeyError:
+        pass
+    else:
+        queue = V2SourceSelectionQueueResult.model_validate_json(queue_artifact.payload_json)
+        queued_by_direction: dict[ResearchDirection, list[UUID]] = {
+            ResearchDirection.SUPPORT: [],
+            ResearchDirection.CHALLENGE: [],
+        }
+        for source_status in queue.source_statuses:
+            if source_status.queued_for_deep_analysis:
+                queued_by_direction[source_status.direction].append(source_status.source_id)
+        queued = {
+            direction: tuple(source_ids) for direction, source_ids in queued_by_direction.items()
+        }
+
+    analyzed: dict[ResearchDirection, int] = {
+        ResearchDirection.SUPPORT: 0,
+        ResearchDirection.CHALLENGE: 0,
+    }
+    for direction, source_ids in queued.items():
+        for source_id in source_ids:
+            try:
+                source_artifact = read_v2_artifact(
+                    db_path,
+                    run_id,
+                    f"{V2_EVIDENCE_ANALYST_ARTIFACT_KEY}-source-{source_id}",
+                )
+            except KeyError:
+                continue
+            source_result = V2EvidenceAnalystSourceResult.model_validate_json(
+                source_artifact.payload_json
+            )
+            if source_result.state.value != "not_queued":
+                analyzed[direction] += 1
+
+    def build_progress(direction: ResearchDirection) -> ResearchProgress:
+        enabled = directions.permits(direction)
+        terminal = status is not RunStatus.RUNNING
+        return ResearchProgress(
+            stance="supporting" if direction is ResearchDirection.SUPPORT else "opposing",
+            status=("disabled" if not enabled else "completed" if terminal else "running"),
+            model_attempts=analyzed[direction],
+            retrieval_attempts=acquired[direction],
+            usable_snapshots=len(survivors[direction]),
+            candidates=analyzed[direction],
+        )
+
+    return build_progress(ResearchDirection.SUPPORT), build_progress(ResearchDirection.CHALLENGE)
+
+
+def _v2_progress_percent(
+    stage: Stage,
+    current_round: int,
+    diagnostics: V2RunDiagnostics,
+    budget: V2BudgetSnapshot,
+    supporting: ResearchProgress,
+    opposing: ResearchProgress,
+) -> int:
+    stage_value = stage.value
+    base = {
+        "claim_planner": 4,
+        "discovery": 12,
+        "acquisition": 25,
+        "gap_analysis": 39,
+        "adaptive_search": 50,
+        "source_selection": 63,
+        "deep_analysis": 70,
+        "evidence_analyst": 70,
+        "review": 85,
+        "statement_reviewer": 85,
+        "claim_ledger": 87,
+        "debate_synthesizer": 92,
+        "final_renderer_validator": 97,
+    }.get(stage_value, 5)
+    analyzed = supporting.candidates + opposing.candidates
+    if stage_value in {"adaptive_search", "source_selection"}:
+        activity = min(9, budget.physical_calls_used // 2)
+        return min(69 if stage_value == "source_selection" else 61, base + activity)
+    if stage_value in {"deep_analysis", "evidence_analyst"}:
+        queued = max(1, diagnostics.sources_queued_for_analysis)
+        return min(84, base + round(14 * min(1.0, analyzed / queued)))
+    if stage_value in {"statement_reviewer", "claim_ledger"}:
+        return min(90, base + min(3, diagnostics.approved_evidence_records))
+    if current_round > 1:
+        return min(87, base + (current_round - 1) * 2)
+    return base
 
 
 def _research_round_and_progress(result: ProviderPipelineResult) -> tuple[int, int]:
