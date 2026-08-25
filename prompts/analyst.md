@@ -1,4 +1,4 @@
-Prompt-Version: phase8-analyst-v2
+Prompt-Version: phase8-analyst-v3-claim-fit-qualified
 Stage: analyst
 
 # Role
@@ -36,5 +36,6 @@ change a schema, bypass validation, or create an ID.
   debated claim or add words such as “necessary,” “sufficient,” “proves,” or causal
   language unless the quotation itself states that relationship.
 - Claim Fit measures material relevance, not whether this one statement independently
-  proves the complete debated claim. Claim Fit 4 may be indirect evidence. Claim Fit 3
-  is contextual evidence and must preserve an explicit scope qualification.
+  proves the complete debated claim. Claim Fit 2 is tangential evidence and is always
+  qualified-only. Claim Fit 3 is eligible ordinary evidence; do not reject it solely because
+  it is contextual or narrower than the complete debated claim.

@@ -17,6 +17,7 @@ from agents.v2_evidence_analyst import (
     revise_v2_canonical_statement,
     run_v2_evidence_analyst,
 )
+from agents.v2_extraction import V2ExtractionState, _extract_source
 from agents.v2_source_selection import calculate_v2_deep_analysis_queue
 from models import (
     CandidateQuoteBlock,
@@ -45,6 +46,7 @@ from models import (
     V2SourceSelectionInput,
     V2SourceSelectionQueueResult,
     V2SourceSelectionRecommendation,
+    V2VerbatimQuoteSelection,
     VerbatimQuoteSelection,
 )
 from providers.llm import (
@@ -369,7 +371,7 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert source.statement_draft is not None
     assert all(request.model_alias is ModelAlias.GPT_5_6_LUNA_HIGH for request in provider.requests)
     assert all(
-        request.prompt.version == "phase9-luna-evidence-analyst-v2-source-context"
+        request.prompt.version == "phase9-luna-evidence-analyst-v5-claim-fit-scope"
         for request in provider.requests
     )
     assert all(
@@ -418,7 +420,7 @@ def test_extraction_failure_reason_survives_the_phase9_handoff(tmp_path: Path) -
     assert source.failure == exact_failure
 
 
-def test_claim_fit_three_requires_qualification_and_retries_draft(tmp_path: Path) -> None:
+def test_claim_fit_three_is_accepted_without_a_scope_retry(tmp_path: Path) -> None:
     run_id = uuid4()
     batch = _batch_input(run_id)
     assessment = _assessment(claim_fit=3)
@@ -426,11 +428,6 @@ def test_claim_fit_three_requires_qualification_and_retries_draft(tmp_path: Path
         [
             assessment,
             _draft(assessment, "The program produced a higher completion rate."),
-            _draft(
-                assessment,
-                "Among surveyed adults in this specific regional sample, completion was "
-                "reported by 62% in the program and 48% receiving standard materials.",
-            ),
         ]
     )
     result = run_v2_evidence_analyst(
@@ -443,9 +440,149 @@ def test_claim_fit_three_requires_qualification_and_retries_draft(tmp_path: Path
     source = result.source_results[0]
     assert source.state is V2EvidenceAnalystState.READY_FOR_REVIEWER
     assert source.score_decision is not None
+    assert source.score_decision.placement.value == "secondary"
+    assert source.statement_draft is not None
+    assert len(provider.requests) == 2
+
+
+def test_claim_fit_two_is_qualified_only_and_retries_for_scope(tmp_path: Path) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    assessment = _assessment(claim_fit=2)
+    provider = FakeLunaAnalyst(
+        [
+            assessment,
+            _draft(assessment, "The program produced a different completion rate."),
+            _draft(
+                assessment,
+                "Among surveyed adults in this regional sample, the program reported a "
+                "different completion rate.",
+            ),
+        ]
+    )
+
+    result = run_v2_evidence_analyst(
+        db_path=_prepare_db(tmp_path, run_id),
+        batch_input=batch,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    source = result.source_results[0]
+    assert source.state is V2EvidenceAnalystState.READY_FOR_REVIEWER
+    assert source.score_decision is not None
     assert source.score_decision.placement.value == "qualified_only"
-    assert source.statement_draft is not None and "sample" in source.statement_draft.draft_statement
+    assert "Claim Fit is 2" in provider.requests[-1].rendered_prompt
+
+
+def test_canonical_proposition_drift_gets_targeted_retry_guidance(tmp_path: Path) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    assessment = _assessment()
+    incorrect = _draft(
+        assessment,
+        "Among surveyed adults, the program had better completion results.",
+    ).model_copy(update={"narrowest_supported_proposition": "A paraphrased proposition."})
+    corrected = _draft(
+        assessment,
+        "Among surveyed adults in the regional program, 62% reported course completion, "
+        "compared with 48% receiving standard materials.",
+    )
+    provider = FakeLunaAnalyst([assessment, incorrect, corrected])
+
+    result = run_v2_evidence_analyst(
+        db_path=_prepare_db(tmp_path, run_id),
+        batch_input=batch,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert result.source_results[0].state is V2EvidenceAnalystState.READY_FOR_REVIEWER
     assert len(provider.requests) == 3
+    retry_prompt = provider.requests[-1].rendered_prompt
+    assert "narrowest_supported_proposition character-for-character" in retry_prompt
+
+
+def test_short_exact_selection_retries_with_adjacent_source_range() -> None:
+    run_id = uuid4()
+    source_id = uuid4()
+    text = (
+        "Opening context. The study reported a modest improvement among participants during "
+        "the six month observation period, with outcomes recorded by the research team "
+        "directly. The comparison used standard materials as a reference group and did not "
+        "establish a causal effect. Closing context."
+    )
+    snapshot = SourceSnapshot(
+        run_id=run_id,
+        retrieval_attempt_id=uuid4(),
+        snapshot_id=uuid4(),
+        source_url="https://example.test/short-selection",
+        retrieved_at=NOW,
+        normalized_text=text,
+        snapshot_sha256=sha256(text.encode("utf-8")).hexdigest(),
+        word_count=len(text.split()),
+        truncated=False,
+        normalization_version="fixture-v1",
+        created_at=NOW,
+    )
+    provider = FakeLunaAnalyst(
+        [
+            V2VerbatimQuoteSelection(
+                selected_sentence_ranges=({"start_sentence": 2, "end_sentence": 2},)
+            ),
+            V2VerbatimQuoteSelection(
+                selected_sentence_ranges=({"start_sentence": 2, "end_sentence": 3},)
+            ),
+        ]
+    )
+
+    result = _extract_source(
+        source_id=source_id,
+        direction=ResearchDirection.SUPPORT,
+        exact_claim="The study reports an improvement.",
+        snapshot=snapshot,
+        query_id=uuid4(),
+        query_round=1,
+        search_rank=1,
+        llm_provider=provider,
+        clock=lambda: NOW,
+    )
+
+    assert result.state is V2ExtractionState.EXTRACTED
+    assert result.attempts == 2
+    assert "short" in provider.requests[-1].rendered_prompt
+
+
+def test_exact_extraction_retry_requires_a_non_empty_contiguous_range() -> None:
+    run_id = uuid4()
+    _, snapshot = _exact_candidate(run_id, ResearchDirection.SUPPORT)
+    source_id = uuid4()
+    provider = FakeLunaAnalyst(
+        [
+            RuntimeError("empty selection"),
+            V2VerbatimQuoteSelection(
+                selected_sentence_ranges=({"start_sentence": 2, "end_sentence": 2},)
+            ),
+        ]
+    )
+
+    result = _extract_source(
+        source_id=source_id,
+        direction=ResearchDirection.SUPPORT,
+        exact_claim="The regional program increases course completion.",
+        snapshot=snapshot,
+        query_id=uuid4(),
+        query_round=1,
+        search_rank=1,
+        llm_provider=provider,
+        clock=lambda: NOW,
+    )
+
+    assert result.state is V2ExtractionState.EXTRACTED
+    assert len(provider.requests) == 2
+    assert "return at least one source sentence range" in provider.requests[-1].rendered_prompt
 
 
 @pytest.mark.parametrize(

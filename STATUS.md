@@ -1,5 +1,20 @@
 # Status
 
+## 2026-08-25 - Claim Fit 2/3 admission policy correction
+
+Status: Implemented and verified offline.
+
+- Claim Fit 2 is now eligible only as `qualified_only` evidence and retains its explicit
+  qualification requirement.
+- Claim Fit 3 is now ordinary eligible evidence and no longer receives a special automatic
+  scope-marker rejection or qualified-only placement.
+- Exact quotation checks, Evidence Quality ≥2, independent Reviewer approval, and final Ledger
+  validation remain unchanged. Fresh-v2 Reviewer/Ledger policy identity is versioned; historical
+  run artifacts remain readable.
+
+Verification: focused policy and v2 Reviewer tests pass; full verification follows below. No
+live paid research run was made.
+
 ## 2026-08-24 - Phase 8 source-cap and deterministic deep-analysis backfill correction
 
 Status: Complete and verified.

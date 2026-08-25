@@ -51,6 +51,13 @@ V2_EXTRACTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-exact-extraction-
 V2_EXTRACTION_FILTER_VERSION = "researchassistant-v2-phase-12-post-filter-v1"
 V2_EXTRACTION_MAX_ATTEMPTS = 2
 _CLAIM_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_EXTRACTION_RETRY_GUIDANCE = (
+    "The prior attempt returned an invalid empty, short, or otherwise unusable selection. "
+    "On this retry, "
+    "return at least one source sentence range. If one relevant sentence is too short, "
+    "use a contiguous range of adjacent relevant sentences; do not return an empty array "
+    "and do not invent or paraphrase source text."
+)
 
 
 def _aware(value: datetime) -> datetime:
@@ -244,20 +251,27 @@ def _extract_source(
         selectable_source_text=numbered_source_text(snapshot.normalized_text),
     )
     prompt = load_prompt(LLMStage.EXTRACTOR)
-    request = LLMRequest(
-        run_id=snapshot.run_id,
-        stage=LLMStage.EXTRACTOR,
-        prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, input_artifact, V2VerbatimQuoteSelection),
-        input_artifact=input_artifact,
-        input_artifact_ids=(snapshot.snapshot_id,),
-        requested_output_type=V2VerbatimQuoteSelection,
-        model_alias=ModelAlias.MIMO_V25_PRO,
-        generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
-        source_id=source_id,
-    )
+    base_rendered_prompt = render_stage_prompt(prompt, input_artifact, V2VerbatimQuoteSelection)
     last_failure = "Extractor did not return a valid selection."
     for attempt in range(1, V2_EXTRACTION_MAX_ATTEMPTS + 1):
+        rendered_prompt = base_rendered_prompt
+        if attempt > 1:
+            rendered_prompt = (
+                f"{rendered_prompt}\n\n<RETRY_VALIDATION_GUIDANCE>\n"
+                f"{_EXTRACTION_RETRY_GUIDANCE}\n</RETRY_VALIDATION_GUIDANCE>"
+            )
+        request = LLMRequest(
+            run_id=snapshot.run_id,
+            stage=LLMStage.EXTRACTOR,
+            prompt=prompt,
+            rendered_prompt=rendered_prompt,
+            input_artifact=input_artifact,
+            input_artifact_ids=(snapshot.snapshot_id,),
+            requested_output_type=V2VerbatimQuoteSelection,
+            model_alias=ModelAlias.MIMO_V25_PRO,
+            generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
+            source_id=source_id,
+        )
         try:
             invocation = invoke_llm(llm_provider, request, clock=clock)
             selection = invocation.output_artifact
@@ -306,6 +320,10 @@ def _extract_source(
             )
             if not filtered.valid or filtered.candidate is None:
                 last_failure = filtered.rejection_message or "deterministic filter rejected quote"
+                if attempt < V2_EXTRACTION_MAX_ATTEMPTS and _is_retryable_quote_length_failure(
+                    last_failure
+                ):
+                    continue
                 return V2ExtractionSourceResult(
                     source_id=source_id,
                     direction=direction,
@@ -329,6 +347,11 @@ def _extract_source(
                 failure=f"{type(exc).__name__}: {exc}"[:1000],
             )
     raise AssertionError("bounded extraction loop did not return")
+
+
+def _is_retryable_quote_length_failure(message: str) -> bool:
+    """Retry a short exact selection so the Extractor can extend it contiguously."""
+    return message.startswith("quoted segments contain ") and "; need " in message
 
 
 def _snapshots_by_source(

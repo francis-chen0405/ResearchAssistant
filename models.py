@@ -1894,12 +1894,13 @@ def entailment_for_claim_fit(claim_fit: int) -> Entailment:
     """Return the single application-owned entailment label for a Ledger-eligible fit."""
     try:
         return {
-            3: Entailment.WEAK,
+            2: Entailment.WEAK,
+            3: Entailment.PARTIAL,
             4: Entailment.PARTIAL,
             5: Entailment.STRONG,
         }[claim_fit]
     except KeyError as exc:
-        raise ValueError("Ledger Claim Fit must be 3, 4, or 5") from exc
+        raise ValueError("Ledger Claim Fit must be 2, 3, 4, or 5") from exc
 
 
 class RetrievalStatus(StrEnum):
@@ -1955,7 +1956,7 @@ def _validate_offsets(
 
 
 def _is_ledger_eligible(evidence_quality: int, claim_fit: int) -> bool:
-    return evidence_quality >= 2 and claim_fit >= 3 and evidence_quality + claim_fit >= 5
+    return evidence_quality >= 2 and claim_fit >= 2
 
 
 def _derive_ledger_score(evidence_quality: int, claim_fit: int) -> int:
@@ -1969,13 +1970,24 @@ def _derive_ledger_score(evidence_quality: int, claim_fit: int) -> int:
 
 def _expected_placement(evidence_quality: int, claim_fit: int) -> Placement:
     ledger_score = _derive_ledger_score(evidence_quality, claim_fit)
-    if claim_fit == 3:
+    if claim_fit == 2:
         return Placement.QUALIFIED_ONLY
     if ledger_score == 5:
         return Placement.PRIMARY
     if ledger_score == 4:
         return Placement.SECONDARY
     return Placement.SUPPORTING
+
+
+def _placement_matches_score_policy(
+    evidence_quality: int,
+    claim_fit: int,
+    placement: Placement,
+) -> bool:
+    """Accept the prior Claim Fit 3 placement while reading historical artifacts."""
+    return placement is _expected_placement(evidence_quality, claim_fit) or (
+        claim_fit == 3 and placement is Placement.QUALIFIED_ONLY
+    )
 
 
 class SegmentOffset(StrictModel):
@@ -2354,10 +2366,11 @@ class ScoreDecision(StrictModel):
 
         if self.approved:
             expected_score = _derive_ledger_score(self.evidence_quality, self.claim_fit)
-            expected_placement = _expected_placement(self.evidence_quality, self.claim_fit)
             if self.ledger_score != expected_score:
                 raise ValueError("approved score decisions require the derived Ledger score")
-            if self.placement is not expected_placement:
+            if not _placement_matches_score_policy(
+                self.evidence_quality, self.claim_fit, self.placement
+            ):
                 raise ValueError("approved score decisions require the derived placement")
         elif self.ledger_score is not None or self.placement is not None:
             raise ValueError("rejected score decisions must not assign Ledger fields")
@@ -2991,9 +3004,17 @@ class LedgerRecord(StrictModel):
             raise ValueError("Ledger records require eligible two-axis scores")
         if self.ledger_score != _derive_ledger_score(self.evidence_quality, self.claim_fit):
             raise ValueError("Ledger records require the derived Ledger score")
-        if self.placement is not _expected_placement(self.evidence_quality, self.claim_fit):
+        if not _placement_matches_score_policy(
+            self.evidence_quality, self.claim_fit, self.placement
+        ):
             raise ValueError("Ledger records require the derived placement")
-        if self.entailment is not entailment_for_claim_fit(self.claim_fit):
+        expected_entailment = entailment_for_claim_fit(self.claim_fit)
+        legacy_entailment = (
+            self.claim_fit == 3
+            and self.placement is Placement.QUALIFIED_ONLY
+            and self.entailment is Entailment.WEAK
+        )
+        if self.entailment is not expected_entailment and not legacy_entailment:
             raise ValueError("Ledger entailment must be derived from Claim Fit")
         return self
 

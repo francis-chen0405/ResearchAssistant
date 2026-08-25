@@ -6,7 +6,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from agents.researcher import assemble_quote_block_from_selected_segments
+from agents.researcher import (
+    assemble_quote_block_from_selected_segments,
+    parse_extracted_quote_block,
+)
 from models import VerbatimQuoteSelection
 from store import CURRENT_SCHEMA_VERSION, init_db
 
@@ -102,6 +105,22 @@ def test_source_sentence_ranges_reject_overlap_and_out_of_bounds() -> None:
                 )
             }
         )
+
+
+def test_quote_parser_preserves_source_brackets_and_quotes() -> None:
+    text = (
+        'Opening [context]. The source says "quoted" evidence and [brackets] matter. '
+        "Closing context."
+    )
+    selection = VerbatimQuoteSelection.model_validate(
+        {"selected_sentence_ranges": ({"start_sentence": 2, "end_sentence": 2},)}
+    )
+
+    quote = assemble_quote_block_from_selected_segments(text, selection, truncated=False)
+
+    assert parse_extracted_quote_block(quote).segments == [
+        'The source says "quoted" evidence and [brackets] matter.'
+    ]
     with pytest.raises(ValueError, match="exceeds the snapshot"):
         assemble_quote_block_from_selected_segments(
             "One. Two.",

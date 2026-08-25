@@ -173,13 +173,21 @@ def test_v2_second_reviewer_rejection_never_enters_the_ledger(tmp_path: Path) ->
     assert len(source.review_results) == 1
 
 
-def test_v2_qualified_only_and_nonrecommended_source_are_admitted(tmp_path: Path) -> None:
-    _, result = _run(tmp_path, Phase10Provider([_approved()]), claim_fit=3, recommended=False)
+def test_v2_claim_fit_two_qualified_only_source_is_admitted(tmp_path: Path) -> None:
+    _, result = _run(tmp_path, Phase10Provider([_approved()]), claim_fit=2, recommended=False)
     source = result.source_results[0]
     assert source.state is V2ReviewerLedgerState.ADMITTED
     assert source.ledger_record is not None
     assert source.ledger_record.placement is Placement.QUALIFIED_ONLY
     assert source.provenance.recommended is False
+
+
+def test_v2_claim_fit_three_source_is_admitted_as_ordinary_evidence(tmp_path: Path) -> None:
+    _, result = _run(tmp_path, Phase10Provider([_approved()]), claim_fit=3)
+    source = result.source_results[0]
+    assert source.state is V2ReviewerLedgerState.ADMITTED
+    assert source.ledger_record is not None
+    assert source.ledger_record.placement is Placement.SECONDARY
 
 
 def test_v2_disabled_direction_is_rejected_before_reviewer_call(tmp_path: Path) -> None:

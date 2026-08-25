@@ -170,6 +170,8 @@ def test_direct_mimo_extractor_prompt_requires_source_sentence_ranges() -> None:
     assert "Return selected_sentence_ranges only" in prompt
     assert "selectable_source_text" in prompt
     assert "Do not return selected_segments, text, brackets, context sentences" in prompt
+    assert "selected_sentence_ranges array must never be empty" in prompt
+    assert "select a contiguous range of adjacent relevant sentences" in prompt
     assert "at least 20 exact quoted words only when" in prompt
     assert "at least one digit and at least one recognized statistical marker" in prompt
     assert "Otherwise, use at least 30 exact quoted words" in prompt
@@ -188,7 +190,8 @@ def test_direct_mimo_analyst_prompt_binds_candidate_stance() -> None:
     prompt = _direct_mimo_prompt(request)
 
     assert "The candidate stance is binding." in prompt
-    assert "assign claim_fit at most 2 and approved=false" in prompt
+    assert "assign claim_fit at most 1 and approved=false" in prompt
+    assert "evidence_quality >= 2, claim_fit >= 2" in prompt
     assert "It is not final factual approval" in prompt
 
 

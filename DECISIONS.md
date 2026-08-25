@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-08-25 - Claim Fit 2/3 admission policy correction
+
+- Keep Evidence Quality and Claim Fit as separate axes with minimum thresholds of 2 on each;
+  the derived Ledger score remains descriptive after eligibility and does not compensate for a
+  failing axis.
+- Admit Claim Fit 2 as `qualified_only` evidence only, requiring an explicit scope or
+  reliability qualification through Analyst, Reviewer, and Ledger validation.
+- Admit Claim Fit 3 as ordinary eligible evidence. Do not reject it solely because it is
+  contextual or narrower than the complete claim; exact quotation, neutral entailment,
+  independent Reviewer approval, and deterministic Ledger checks remain mandatory.
+- Version the fresh-v2 Reviewer/Ledger policy so historical runs remain readable and immutable.
+
 ## 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
 
 - Make `v2_orchestrator.py` the only default coordinator for fresh website and CLI runs.

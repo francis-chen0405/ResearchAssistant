@@ -67,6 +67,20 @@ _PHASE9_OUTPUT_TYPES = frozenset(
     {V2EvidenceAnalystModelOutput.__name__, V2CanonicalStatementModelOutput.__name__}
 )
 _V2_ANALYST_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts/v2_evidence_analyst.md"
+_CANONICAL_STATEMENT_RETRY_GUIDANCE = (
+    "The prior attempt failed validation. Copy the input assessment's "
+    "narrowest_supported_proposition character-for-character into the output "
+    "narrowest_supported_proposition field. Do not paraphrase, shorten, expand, "
+    "or normalize it. Only draft the canonical_factual_statement from that exact "
+    "proposition and the supplied evidence limitations."
+)
+_CLAIM_FIT_2_RETRY_GUIDANCE = (
+    "Because Claim Fit is 2, the canonical_factual_statement must explicitly scope "
+    "the evidence to the source's population, sample, setting, time period, or "
+    "reported association. Use a concrete scope marker such as 'among', 'within', "
+    "'according to', 'reported', 'in this sample', or 'may'. Do not state the "
+    "evidence as a universal claim."
+)
 _OutputT = TypeVar("_OutputT", bound=BaseModel)
 
 
@@ -226,6 +240,7 @@ def revise_v2_canonical_statement(
             source_result.assessment,
             source_result.score_decision.claim_fit,
         ),
+        retry_guidance=_canonical_statement_retry_guidance(source_result.score_decision.claim_fit),
     )
     statement = create_statement_draft(
         candidate=source_result.candidate,
@@ -344,6 +359,7 @@ def _analyze_source(
             objective_validator=lambda output: _validate_statement_output(
                 output, assessment, score_decision.claim_fit
             ),
+            retry_guidance=_canonical_statement_retry_guidance(score_decision.claim_fit),
         )
         attempt_ids.extend(draft_attempts)
         statement_draft = create_statement_draft(
@@ -394,26 +410,14 @@ def _invoke_bounded_analyst(
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime],
     objective_validator: Callable[[_OutputT], None],
+    retry_guidance: str | None = None,
 ) -> tuple[_OutputT, tuple[UUID, ...]]:
     route = routing_config.preflight().for_stage(LLMStage.ANALYST)
     prompt = load_prompt_file(
         _V2_ANALYST_PROMPT_PATH,
         expected_stage=LLMStage.ANALYST,
     )
-    request = LLMRequest(
-        run_id=batch_input.run_id,
-        stage=LLMStage.ANALYST,
-        prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, input_artifact, output_type),
-        input_artifact=input_artifact,
-        input_artifact_ids=(source_id,),
-        requested_output_type=output_type,
-        pinned_model_snapshot=route.physical_model,
-        model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
-        configured_fallbacks=(),
-        generation=V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).generation,
-        source_id=source_id,
-    )
+    base_rendered_prompt = render_stage_prompt(prompt, input_artifact, output_type)
     operation_id = uuid5(
         NAMESPACE_URL, f"v2-phase9::{batch_input.run_id}::{source_id}::{operation}"
     )
@@ -448,6 +452,26 @@ def _invoke_bounded_analyst(
     failures: list[str] = []
     for attempt_number in range(len(attempts) + 1, V2_EVIDENCE_ANALYST_MAX_ATTEMPTS + 1):
         started_at = _aware_now(clock)
+        rendered_prompt = base_rendered_prompt
+        if attempt_number > 1 and retry_guidance is not None:
+            rendered_prompt = (
+                f"{rendered_prompt}\n\n<RETRY_VALIDATION_GUIDANCE>\n"
+                f"{retry_guidance}\n</RETRY_VALIDATION_GUIDANCE>"
+            )
+        request = LLMRequest(
+            run_id=batch_input.run_id,
+            stage=LLMStage.ANALYST,
+            prompt=prompt,
+            rendered_prompt=rendered_prompt,
+            input_artifact=input_artifact,
+            input_artifact_ids=(source_id,),
+            requested_output_type=output_type,
+            pinned_model_snapshot=route.physical_model,
+            model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+            configured_fallbacks=(),
+            generation=V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).generation,
+            source_id=source_id,
+        )
         reservation = routing_config.preflight().reserve(
             LLMStage.ANALYST, conservative_token_estimate(request.rendered_prompt)
         )
@@ -550,10 +574,17 @@ def _validate_statement_output(
 ) -> None:
     if output.narrowest_supported_proposition != assessment.narrowest_supported_proposition:
         raise ValueError("canonical drafting cannot change the supported proposition")
-    if claim_fit == 3 and not statement_has_required_qualification(
+    if claim_fit == 2 and not statement_has_required_qualification(
         output.canonical_factual_statement
     ):
-        raise ValueError("Claim Fit 3 statements require an explicit scope qualification")
+        raise ValueError("Claim Fit 2 statements require an explicit scope qualification")
+
+
+def _canonical_statement_retry_guidance(claim_fit: int) -> str:
+    """Return targeted repair guidance without changing strict statement validation."""
+    if claim_fit == 2:
+        return f"{_CANONICAL_STATEMENT_RETRY_GUIDANCE} {_CLAIM_FIT_2_RETRY_GUIDANCE}"
+    return _CANONICAL_STATEMENT_RETRY_GUIDANCE
 
 
 def _assessment_rationale(assessment: V2EvidenceAnalystModelOutput) -> str:

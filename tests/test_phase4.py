@@ -232,23 +232,23 @@ _EXPECTED_SCORE_TABLE = [
     (1, 4, False, None, None),
     (1, 5, False, None, None),
     (2, 1, False, None, None),
-    (2, 2, False, None, None),
-    (2, 3, True, 3, Placement.QUALIFIED_ONLY),
+    (2, 2, True, 3, Placement.QUALIFIED_ONLY),
+    (2, 3, True, 3, Placement.SUPPORTING),
     (2, 4, True, 3, Placement.SUPPORTING),
     (2, 5, True, 4, Placement.SECONDARY),
     (3, 1, False, None, None),
-    (3, 2, False, None, None),
-    (3, 3, True, 3, Placement.QUALIFIED_ONLY),
+    (3, 2, True, 3, Placement.QUALIFIED_ONLY),
+    (3, 3, True, 3, Placement.SUPPORTING),
     (3, 4, True, 4, Placement.SECONDARY),
     (3, 5, True, 4, Placement.SECONDARY),
     (4, 1, False, None, None),
-    (4, 2, False, None, None),
-    (4, 3, True, 4, Placement.QUALIFIED_ONLY),
+    (4, 2, True, 3, Placement.QUALIFIED_ONLY),
+    (4, 3, True, 4, Placement.SECONDARY),
     (4, 4, True, 4, Placement.SECONDARY),
     (4, 5, True, 5, Placement.PRIMARY),
     (5, 1, False, None, None),
-    (5, 2, False, None, None),
-    (5, 3, True, 4, Placement.QUALIFIED_ONLY),
+    (5, 2, True, 4, Placement.QUALIFIED_ONLY),
+    (5, 3, True, 4, Placement.SECONDARY),
     (5, 4, True, 5, Placement.PRIMARY),
     (5, 5, True, 5, Placement.PRIMARY),
 ]
@@ -679,7 +679,7 @@ def test_reviewer_second_failure_rejects_quote_block() -> None:
         _admit(request)
 
 
-def test_claim_fit_3_full_claim_overclaim_is_rejected() -> None:
+def test_claim_fit_3_is_admitted_as_ordinary_evidence_after_review() -> None:
     snapshot, candidate = _snapshot_and_candidate()
     decision = _decision(candidate, eq=3, cf=3)
     statement = "The policy improves outcomes."
@@ -694,8 +694,69 @@ def test_claim_fit_3_full_claim_overclaim_is_rejected() -> None:
         statement=statement,
     )
 
-    with pytest.raises(ValueError, match="explicit qualification"):
-        _admit(request)
+    ledger = _admit(request)
+
+    assert ledger.claim_fit == 3
+    assert ledger.placement is Placement.SUPPORTING
+    assert ledger.entailment is Entailment.PARTIAL
+
+
+def test_claim_fit_2_is_eligible_as_qualified_only() -> None:
+    snapshot, candidate = _snapshot_and_candidate()
+    decision = _decision(candidate, eq=2, cf=2)
+    statement = "Among surveyed adults, the source reported a limited outcome difference."
+    draft = _draft(candidate, decision, statement)
+    review = _approved_review(candidate, draft)
+    request = _admission_request(
+        snapshot,
+        candidate,
+        decision,
+        draft,
+        review,
+        statement=statement,
+        entailment=Entailment.WEAK,
+    )
+
+    ledger = _admit(request)
+
+    assert ledger.claim_fit == 2
+    assert ledger.placement is Placement.QUALIFIED_ONLY
+    assert ledger.entailment is Entailment.WEAK
+
+
+def test_legacy_claim_fit_3_qualified_ledger_remains_readable() -> None:
+    snapshot, candidate = _snapshot_and_candidate()
+    legacy_decision = ScoreDecision(
+        run_id=candidate.run_id,
+        quote_block_id=candidate.quote_block_id,
+        evidence_quality=4,
+        claim_fit=3,
+        ledger_score=4,
+        placement=Placement.QUALIFIED_ONLY,
+        approved=True,
+        rationale="Historical score decision.",
+        analyst_prompt_version="phase8-analyst-v2",
+        analyst_model_name="mimo-v2.5-pro",
+        scored_at=_NOW,
+    )
+    statement = "Among surveyed adults, the source reported a limited outcome difference."
+    draft = _draft(candidate, legacy_decision, statement)
+    review = _approved_review(candidate, draft)
+    ledger = _admit(
+        _admission_request(
+            snapshot,
+            candidate,
+            legacy_decision,
+            draft,
+            review,
+            statement=statement,
+            entailment=Entailment.WEAK,
+        )
+    )
+
+    restored = LedgerRecord.model_validate_json(ledger.model_dump_json())
+    assert restored.placement is Placement.QUALIFIED_ONLY
+    assert restored.entailment is Entailment.WEAK
 
 
 def test_reviewer_input_rejects_forbidden_fields() -> None:
@@ -732,9 +793,9 @@ def test_claim_fit_4_partial_entailment_does_not_require_artificial_keyword() ->
     assert ledger.entailment is Entailment.PARTIAL
 
 
-def test_claim_fit_3_weak_entailment_requires_qualification() -> None:
+def test_claim_fit_2_weak_entailment_requires_qualification() -> None:
     snapshot, candidate = _snapshot_and_candidate()
-    decision = _decision(candidate, eq=4, cf=3)
+    decision = _decision(candidate, eq=4, cf=2)
     statement = "The policy improves outcomes."
     draft = _draft(candidate, decision, statement)
     review = _approved_review(candidate, draft)

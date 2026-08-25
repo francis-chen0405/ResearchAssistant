@@ -44,7 +44,7 @@ def _uuid(value: int) -> UUID:
 
 def _score_and_placement(evidence_quality: int, claim_fit: int) -> tuple[int, Placement]:
     total = evidence_quality + claim_fit
-    if claim_fit == 3:
+    if claim_fit == 2:
         return (3 if total <= 6 else 4, Placement.QUALIFIED_ONLY)
     if total <= 6:
         return 3, Placement.SUPPORTING
@@ -112,7 +112,7 @@ def _valid_ledgers() -> list[LedgerRecord]:
             stance=Stance.SUPPORTING,
             statement="Among surveyed schools, the pilot reported a 9% gain.",
             evidence_quality=3,
-            claim_fit=3,
+            claim_fit=2,
         ),
     ]
 
@@ -123,7 +123,7 @@ def _partial_ledger(entailment: Entailment = Entailment.PARTIAL) -> LedgerRecord
         stance=Stance.SUPPORTING,
         statement="Among surveyed families, the source reported limited program support.",
         evidence_quality=4,
-        claim_fit=3 if entailment is Entailment.WEAK else 4,
+        claim_fit=2 if entailment is Entailment.WEAK else 4,
         entailment=entailment,
     )
 

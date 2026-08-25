@@ -133,13 +133,13 @@ SCORE_PAIR_TABLE: tuple[ScorePairPolicy, ...] = (
         evidence_quality=1,
         claim_fit=1,
         accepted=False,
-        reason="Evidence Quality below 2 and Claim Fit below 3.",
+        reason="Evidence Quality below 2 and Claim Fit below 2.",
     ),
     ScorePairPolicy(
         evidence_quality=1,
         claim_fit=2,
         accepted=False,
-        reason="Evidence Quality below 2 and Claim Fit below 3.",
+        reason="Evidence Quality below 2 and Claim Fit below 2.",
     ),
     ScorePairPolicy(
         evidence_quality=1,
@@ -163,21 +163,23 @@ SCORE_PAIR_TABLE: tuple[ScorePairPolicy, ...] = (
         evidence_quality=2,
         claim_fit=1,
         accepted=False,
-        reason="Claim Fit below 3.",
+        reason="Claim Fit below 2.",
     ),
     ScorePairPolicy(
         evidence_quality=2,
         claim_fit=2,
-        accepted=False,
-        reason="Claim Fit below 3.",
+        accepted=True,
+        ledger_score=3,
+        placement=Placement.QUALIFIED_ONLY,
+        reason="Eligible qualified-only evidence at the minimum two-axis threshold.",
     ),
     ScorePairPolicy(
         evidence_quality=2,
         claim_fit=3,
         accepted=True,
         ledger_score=3,
-        placement=Placement.QUALIFIED_ONLY,
-        reason="Minimum eligible score pair; Claim Fit 3 requires qualified-only use.",
+        placement=Placement.SUPPORTING,
+        reason="Minimum eligible ordinary evidence at Claim Fit 3.",
     ),
     ScorePairPolicy(
         evidence_quality=2,
@@ -199,21 +201,23 @@ SCORE_PAIR_TABLE: tuple[ScorePairPolicy, ...] = (
         evidence_quality=3,
         claim_fit=1,
         accepted=False,
-        reason="Claim Fit below 3.",
+        reason="Claim Fit below 2.",
     ),
     ScorePairPolicy(
         evidence_quality=3,
         claim_fit=2,
-        accepted=False,
-        reason="Claim Fit below 3.",
+        accepted=True,
+        ledger_score=3,
+        placement=Placement.QUALIFIED_ONLY,
+        reason="Related evidence remains qualified-only at Claim Fit 2.",
     ),
     ScorePairPolicy(
         evidence_quality=3,
         claim_fit=3,
         accepted=True,
         ledger_score=3,
-        placement=Placement.QUALIFIED_ONLY,
-        reason="Related or narrower evidence must remain qualified-only.",
+        placement=Placement.SUPPORTING,
+        reason="Eligible ordinary evidence at Claim Fit 3.",
     ),
     ScorePairPolicy(
         evidence_quality=3,
@@ -235,21 +239,23 @@ SCORE_PAIR_TABLE: tuple[ScorePairPolicy, ...] = (
         evidence_quality=4,
         claim_fit=1,
         accepted=False,
-        reason="Claim Fit below 3.",
+        reason="Claim Fit below 2.",
     ),
     ScorePairPolicy(
         evidence_quality=4,
         claim_fit=2,
-        accepted=False,
-        reason="Claim Fit below 3.",
+        accepted=True,
+        ledger_score=3,
+        placement=Placement.QUALIFIED_ONLY,
+        reason="Strong evidence for a tangential claim remains qualified-only.",
     ),
     ScorePairPolicy(
         evidence_quality=4,
         claim_fit=3,
         accepted=True,
         ledger_score=4,
-        placement=Placement.QUALIFIED_ONLY,
-        reason="Strong evidence for a narrower claim must remain qualified-only.",
+        placement=Placement.SECONDARY,
+        reason="Eligible secondary evidence at Claim Fit 3.",
     ),
     ScorePairPolicy(
         evidence_quality=4,
@@ -271,21 +277,23 @@ SCORE_PAIR_TABLE: tuple[ScorePairPolicy, ...] = (
         evidence_quality=5,
         claim_fit=1,
         accepted=False,
-        reason="Claim Fit below 3.",
+        reason="Claim Fit below 2.",
     ),
     ScorePairPolicy(
         evidence_quality=5,
         claim_fit=2,
-        accepted=False,
-        reason="Claim Fit below 3.",
+        accepted=True,
+        ledger_score=4,
+        placement=Placement.QUALIFIED_ONLY,
+        reason="Excellent evidence for a tangential claim remains qualified-only.",
     ),
     ScorePairPolicy(
         evidence_quality=5,
         claim_fit=3,
         accepted=True,
         ledger_score=4,
-        placement=Placement.QUALIFIED_ONLY,
-        reason="Excellent evidence for a related claim must remain qualified-only.",
+        placement=Placement.SECONDARY,
+        reason="Excellent secondary evidence at Claim Fit 3.",
     ),
     ScorePairPolicy(
         evidence_quality=5,
@@ -503,7 +511,9 @@ def _validate_candidate_score_decision(
         raise ValueError("Analyst decision approval does not match score-pair policy")
     if score_decision.ledger_score != policy.ledger_score:
         raise ValueError("Analyst decision Ledger score does not match score-pair policy")
-    if score_decision.placement is not policy.placement:
+    if score_decision.placement is not policy.placement and not (
+        score_decision.claim_fit == 3 and score_decision.placement is Placement.QUALIFIED_ONLY
+    ):
         raise ValueError("Analyst decision placement does not match score-pair policy")
 
 
@@ -584,14 +594,18 @@ def _validate_entailment_and_qualification(
     placement: Placement,
     entailment: Entailment,
 ) -> None:
-    if entailment is not entailment_for_claim_fit(claim_fit):
+    expected_entailment = entailment_for_claim_fit(claim_fit)
+    legacy_entailment = (
+        claim_fit == 3 and placement is Placement.QUALIFIED_ONLY and entailment is Entailment.WEAK
+    )
+    if entailment is not expected_entailment and not legacy_entailment:
         raise ValueError("entailment must be derived from Claim Fit")
     qualification_required = (
-        claim_fit == 3 or placement is Placement.QUALIFIED_ONLY or entailment is Entailment.WEAK
+        claim_fit == 2 or placement is Placement.QUALIFIED_ONLY or entailment is Entailment.WEAK
     )
     if qualification_required and not statement_has_required_qualification(statement):
         raise ValueError(
-            "Claim Fit 3, qualified-only, and Weak statements require an explicit qualification"
+            "Claim Fit 2, qualified-only, and Weak statements require an explicit qualification"
         )
 
 

@@ -62,10 +62,6 @@ LEGACY_FIXTURE_QUOTE_LENGTH_POLICY = QuoteLengthPolicy(
     non_statistical_min_words=100,
 )
 
-_BRACKETED_QUOTE_RE = re.compile(
-    r'^\s*\[(?P<before>[^\[\]]+)\]\s+"(?P<quote>.+?)"\s+\[(?P<after>[^\[\]]+)\]\s*$',
-    re.DOTALL,
-)
 _ELLIPSIS_RE = re.compile(r"\s*\.\.\.\s*")
 _SENTENCE_RE = re.compile(r"[^.!?]+[.!?]+|[^.!?]+$", re.DOTALL)
 
@@ -161,18 +157,32 @@ def validate_snapshot_integrity(snapshot: SourceSnapshot) -> bool:
 
 
 def parse_extracted_quote_block(extracted_quote_block: str) -> ParsedQuoteBlock:
-    match = _BRACKETED_QUOTE_RE.match(extracted_quote_block)
-    if match is None:
+    if not extracted_quote_block.startswith("[") or not extracted_quote_block.endswith("]"):
         raise ValueError('quote block must match [context] "segments" [context]')
 
-    segments = [segment.strip() for segment in _ELLIPSIS_RE.split(match.group("quote"))]
+    separator = extracted_quote_block.find('] "')
+    closing_quote = extracted_quote_block.rfind('" [')
+    if (
+        separator <= 1
+        or closing_quote <= separator + 3
+        or closing_quote + 4 > len(extracted_quote_block)
+    ):
+        raise ValueError('quote block must match [context] "segments" [context]')
+
+    before = extracted_quote_block[1:separator]
+    quote = extracted_quote_block[separator + 3 : closing_quote]
+    after = extracted_quote_block[closing_quote + 3 : -1]
+    if not before.strip() or not quote.strip() or not after.strip():
+        raise ValueError('quote block must match [context] "segments" [context]')
+
+    segments = [segment.strip() for segment in _ELLIPSIS_RE.split(quote)]
     if not segments or any(segment == "" for segment in segments):
         raise ValueError("quote block must contain non-empty quoted segments")
 
     return ParsedQuoteBlock(
-        preceding_context=match.group("before").strip(),
+        preceding_context=before.strip(),
         segments=segments,
-        following_context=match.group("after").strip(),
+        following_context=after.strip(),
     )
 
 

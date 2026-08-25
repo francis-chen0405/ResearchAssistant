@@ -298,7 +298,7 @@ material qualifications, but does not require one approved fact to prove the com
 debated claim. Claim Fit 5 is rendered as direct evidence, Claim Fit 4 as indirect
 evidence that is not independently decisive, and Claim Fit 3 as contextual evidence that
 does not independently establish the claim. Partial evidence is qualified by the
-application-owned indirect connective; Claim Fit 3, qualified-only, and Weak statements
+application-owned indirect connective; Claim Fit 2, qualified-only, and Weak statements
 also require explicit statement scope qualification. A one-sided Ledger produces a
 deterministic not-balanced coverage warning; zero approved Ledger statements still fail
 closed.
@@ -710,9 +710,15 @@ Each candidate is scored independently on two dimensions. The two scores must be
 
 **Claim Fit (1–5)** — Precision with which the excerpt addresses the claim as worded, including all qualifications and superlatives. 5: directly addresses exact claim, population, mechanism, and scope. 4: addresses core claim with minor gaps. 3: addresses a related or narrower version. 2: tangential; requires inferential bridging. 1: does not address the claim as stated.
 
-Ledger eligibility is based on both axes, not on a compensating combined total alone. Evidence Quality must be at least 2, Claim Fit must be at least 3, and `total_score = evidence_quality + claim_fit` must be at least 5. Evidence with Evidence Quality below 2 is never eligible for the final Ledger. Evidence with Claim Fit below 3 is never eligible for the final Ledger, even if Evidence Quality is high.
+Ledger eligibility is based on both axes, not on a compensating combined score. Evidence Quality
+must be at least 2 and Claim Fit must be at least 2. Evidence with Evidence Quality below 2 or
+Claim Fit below 2 is never eligible for the final Ledger. The derived `ledger_score` remains a
+3–5 summary calculated from the two scores after both minimum thresholds pass; it does not
+override either threshold.
 
-Claim Fit 2 items may be reviewed, retained as borderline context, or used by the Analyst to understand the evidence landscape, but they cannot become final Ledger records unless the Analyst revises the final score to Claim Fit 3 or higher through the review process. The final Ledger score range remains 3–5.
+Claim Fit 2 items may enter the final Ledger only as `qualified_only` evidence and require an
+explicit scope or reliability qualification. Claim Fit 3 items are ordinary eligible evidence
+and are not rejected solely because they are contextual or narrower than the complete claim.
 
 Derived Ledger score:
 
@@ -730,7 +736,7 @@ The Analyst assigns `placement` deterministically from the score pair and derive
 
 | Condition | Placement |
 |---|---|
-| Claim Fit is 3 | `qualified_only` |
+| Claim Fit is 2 | `qualified_only` |
 | Otherwise, derived Ledger score is 5 | `primary` |
 | Otherwise, derived Ledger score is 4 | `secondary` |
 | Otherwise, derived Ledger score is 3 | `supporting` |
@@ -743,11 +749,11 @@ The Analyst assigns `placement` deterministically from the score pair and derive
 
 ### E. Canonical Approved Factual Statement (Draft)
 
-For every approved quote, the Analyst drafts one or more canonical factual statements. Each draft must be fully entailed by the quotation and brackets, preserve all material qualifications, add no outside facts, stand alone grammatically, contain no rhetorical connective, and accurately reflect the Claim Fit score — a Claim Fit 3 statement must not imply the source directly addresses the full claim. Drafts are submitted to the Statement Reviewer before Ledger entry and are not yet approved.
+For every approved quote, the Analyst drafts one or more canonical factual statements. Each draft must be fully entailed by the quotation and brackets, preserve all material qualifications, add no outside facts, stand alone grammatically, contain no rhetorical connective, and accurately reflect the Claim Fit score. Claim Fit 2 statements must preserve an explicit qualification; Claim Fit 3 statements may be ordinary eligible evidence when fully entailed and no broader than the source. Drafts are submitted to the Statement Reviewer before Ledger entry and are not yet approved.
 
 ### F. Statement Reviewer
 
-The Statement Reviewer is a separate LLM call receiving only the extracted quote block, the bracket sentences, the draft statement, and the assigned Claim Fit score. It has no access to the Evidence Quality score, the claim under debate, or any broader research context. It must confirm: (1) the statement is fully entailed by the quotation and brackets without outside inference; (2) all material qualifications are preserved; (3) no framing, emphasis, or omission systematically favors one side; (4) the statement's scope is consistent with the Claim Fit score — a Claim Fit 3 statement must not read as though it directly addresses the full claim.
+The Statement Reviewer is a separate LLM call receiving only the extracted quote block, the bracket sentences, the draft statement, and the assigned Claim Fit score. It has no access to the Evidence Quality score, the claim under debate, or any broader research context. It must confirm: (1) the statement is fully entailed by the quotation and brackets without outside inference; (2) all material qualifications are preserved; (3) no framing, emphasis, or omission systematically favors one side; (4) the statement's scope is consistent with the Claim Fit score — a Claim Fit 2 statement must remain qualified-only, while Claim Fit 3 must not be rejected solely because it is contextual or narrower than the full claim.
 
 If all conditions are met, the Reviewer returns `approved: true` and the statement enters the Ledger unchanged. On any failure it returns `approved: false` with a failure code and brief rationale. The Analyst may revise and resubmit once; a second failure rejects the quote block entirely. The Reviewer must not suggest replacement wording; its role is audit only.
 
@@ -1056,7 +1062,7 @@ rationale persist with the assessment. Application validation prevents support/c
 crossing while allowing a qualification in either enabled direction.
 
 The existing 25-pair Evidence Quality / Claim Fit table remains authoritative. Application
-code derives approval, Ledger score, placement, and Claim Fit 3 qualification requirements,
+code derives approval, Ledger score, placement, and Claim Fit 2 qualification requirements,
 then constructs the existing `ScoreDecision` and `StatementDraft`. Every Luna physical
 attempt uses the persisted `model_route_attempts` reservation/finish boundary with the
 configured route's conservative tokens and exact cost, and each logical operation has at
@@ -1074,7 +1080,7 @@ replacement wording. One independent Reviewer call is allowed per source. Reject
 terminal for that source and triggers Phase-12 deterministic backfill; no Analyst revision
 or second Reviewer audit occurs.
 
-The existing score-pair table, placement derivation, Claim Fit 3 qualification rule,
+The existing score-pair table, placement derivation, Claim Fit 2 qualification rule,
 `QUALIFIED_ONLY` restriction, and `admit_ledger_record` validation remain authoritative.
 V2 Ledger admission adds immutable sidecar provenance for direction, discovery round,
 source family, recommendation state, survivor ID, and relevant Gap IDs. Recommendation

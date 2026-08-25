@@ -63,7 +63,7 @@ and decision contracts; it does not permit provenance-free application handoffs.
 
 IDs are assigned only after the deterministic validation gate for that artifact passes. Failed candidates, rejected statements, and invalid rendered briefs receive no release-relevant IDs.
 
-Evidence scoring remains two-axis: `evidence_quality` and `claim_fit` are recorded and validated separately. The derived `ledger_score` is allowed only after both axis thresholds pass and must never compensate for a failing axis.
+Evidence scoring remains two-axis: `evidence_quality` and `claim_fit` are recorded and validated separately. Fresh policy eligibility requires Evidence Quality ≥2 and Claim Fit ≥2; the derived `ledger_score` is allowed only after both axis thresholds pass and must never compensate for a failing axis. Claim Fit 2 is `qualified_only`; Claim Fit 3 is ordinary eligible evidence.
 
 ## 3. Tech Stack
 

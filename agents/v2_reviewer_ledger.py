@@ -59,7 +59,7 @@ from store import (
 )
 
 V2_REVIEWER_LEDGER_ARTIFACT_KEY = "phase-10-reviewer-ledger"
-V2_REVIEWER_LEDGER_POLICY_VERSION = "v2rledger_v2"
+V2_REVIEWER_LEDGER_POLICY_VERSION = "v2rledger_v3-claim-fit-qualified"
 
 
 def run_v2_reviewer_ledger(

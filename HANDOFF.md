@@ -1,5 +1,16 @@
 # Handoff
 
+## Claim Fit 2/3 admission policy correction — 2026-08-25
+
+Fresh policy now requires Evidence Quality ≥2 and Claim Fit ≥2. Claim Fit 2 is admitted only as
+`qualified_only` evidence with explicit qualification; Claim Fit 3 uses ordinary placement and
+is not rejected merely for being contextual or narrower than the full claim. Exact quote
+verification, Reviewer approval, immutable Ledger admission, and final release validation remain
+mandatory. The fresh-v2 Reviewer/Ledger policy version is bumped so historical runs remain
+readable without relabeling.
+
+The focused policy and v2 Reviewer tests pass (116 tests). No live paid research run was made.
+
 ## Phase 8 source-cap and deterministic deep-analysis backfill correction — 2026-08-24
 
 The authorized Phase-8 correction keeps the run-wide v2 maximum exactly 500,000 tokens and
