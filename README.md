@@ -56,6 +56,8 @@ The Ledger admits only reviewed evidence-backed statements. Final validation pre
 
 ## Providers
 
+**LLM** OpenAI, Xiaomi
+
 **Discovery:** OpenAlex, arXiv, PubMed, Exa, and SerpSearch.
 
 **Metadata:** Crossref. Crossref provides metadata only; it is not evidence.
