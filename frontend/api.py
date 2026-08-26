@@ -60,7 +60,11 @@ LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
 
 class ControllerBoundary(Protocol):
-    def configuration_message(self) -> str | None: ...
+    def configuration_message(
+        self,
+        *,
+        discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+    ) -> str | None: ...
 
     def start(self, request: LiveRunRequest) -> LiveStartResult: ...
 
@@ -151,6 +155,28 @@ class ConfigurationResponse(StrictModel):
     saved_credentials: tuple[str, ...] = ()
     saved_settings: tuple[str, ...] = ()
     service: ServiceDiagnostic
+
+
+def _selected_discovery_providers(
+    *,
+    use_serpsearch: bool,
+    use_exa: bool,
+    use_openalex: bool,
+    use_arxiv: bool,
+    use_pubmed: bool,
+) -> tuple[DiscoveryProvider, ...]:
+    """Resolve website provider switches in the canonical provider order."""
+    return tuple(
+        provider
+        for provider, enabled in (
+            (DiscoveryProvider.SERPSEARCH, use_serpsearch),
+            (DiscoveryProvider.EXA, use_exa),
+            (DiscoveryProvider.OPENALEX, use_openalex),
+            (DiscoveryProvider.ARXIV, use_arxiv),
+            (DiscoveryProvider.PUBMED, use_pubmed),
+        )
+        if enabled
+    )
 
 
 class CredentialSetupRequest(StrictModel):
@@ -388,8 +414,22 @@ def create_app(
         return ApiHealth()
 
     @app.get("/api/configuration", response_model=ConfigurationResponse)
-    def configuration() -> ConfigurationResponse:
-        config_message = runtime.controller.configuration_message()
+    def configuration(
+        use_serpsearch: bool = True,
+        use_exa: bool = True,
+        use_openalex: bool = True,
+        use_arxiv: bool = False,
+        use_pubmed: bool = False,
+    ) -> ConfigurationResponse:
+        config_message = runtime.controller.configuration_message(
+            discovery_providers=_selected_discovery_providers(
+                use_serpsearch=use_serpsearch,
+                use_exa=use_exa,
+                use_openalex=use_openalex,
+                use_arxiv=use_arxiv,
+                use_pubmed=use_pubmed,
+            )
+        )
         return ConfigurationResponse(
             configured=config_message is None,
             message=config_message or "MiMo and your selected research sources are connected.",
@@ -401,7 +441,14 @@ def create_app(
         )
 
     @app.post("/api/credentials", response_model=CredentialSetupResponse)
-    def store_credentials(payload: CredentialSetupRequest) -> CredentialSetupResponse:
+    def store_credentials(
+        payload: CredentialSetupRequest,
+        use_serpsearch: bool = True,
+        use_exa: bool = True,
+        use_openalex: bool = True,
+        use_arxiv: bool = False,
+        use_pubmed: bool = False,
+    ) -> CredentialSetupResponse:
         if not any(
             (
                 payload.mimo_api_key,
@@ -466,7 +513,15 @@ def create_app(
             runtime.credential_applier(credentials, runtime.environment)
         except KeychainUnavailableError as exc:
             raise HTTPException(status_code=503, detail=redact_text(exc)) from exc
-        config_message = runtime.controller.configuration_message()
+        config_message = runtime.controller.configuration_message(
+            discovery_providers=_selected_discovery_providers(
+                use_serpsearch=use_serpsearch,
+                use_exa=use_exa,
+                use_openalex=use_openalex,
+                use_arxiv=use_arxiv,
+                use_pubmed=use_pubmed,
+            )
+        )
         return CredentialSetupResponse(
             saved=True,
             configured=config_message is None,
@@ -512,16 +567,12 @@ def create_app(
                     else ResearchMode.FOCUSED
                 ),
                 sources_per_stance_per_round=payload.sources_per_stance_per_round,
-                discovery_providers=tuple(
-                    provider
-                    for provider, enabled in (
-                        (DiscoveryProvider.SERPSEARCH, payload.use_serpsearch),
-                        (DiscoveryProvider.EXA, payload.use_exa),
-                        (DiscoveryProvider.OPENALEX, payload.use_openalex),
-                        (DiscoveryProvider.ARXIV, payload.use_arxiv),
-                        (DiscoveryProvider.PUBMED, payload.use_pubmed),
-                    )
-                    if enabled
+                discovery_providers=_selected_discovery_providers(
+                    use_serpsearch=payload.use_serpsearch,
+                    use_exa=payload.use_exa,
+                    use_openalex=payload.use_openalex,
+                    use_arxiv=payload.use_arxiv,
+                    use_pubmed=payload.use_pubmed,
                 ),
             ),
             directions=payload.directions(),

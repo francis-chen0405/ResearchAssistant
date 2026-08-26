@@ -26,6 +26,7 @@ from frontend.live_service import (
 from frontend.security import redact_text
 from frontend.service_manager import WigoloServiceManager
 from models import (
+    DiscoveryProvider,
     PresentationTone,
     ReportLength,
     ResearchControls,
@@ -109,6 +110,32 @@ def test_missing_configuration_is_friendly_and_creates_no_database(tmp_path: Pat
     assert not Path(request.db_path).exists()
 
 
+def test_configuration_readiness_uses_selected_discovery_providers() -> None:
+    environment = {
+        "MIMO_API_KEY": "mimo-test-secret",
+        "MIMO_V25_MODEL": "mimo-v2.5",
+        "MIMO_V25_INPUT_USD_PER_TOKEN": "0.000001",
+        "MIMO_V25_OUTPUT_USD_PER_TOKEN": "0.000002",
+        "LUNA_API_KEY": "luna-test-secret",
+        "LUNA_BASE_URL": "https://luna.example.test/v1",
+        "LUNA_MODEL": "luna-test-model",
+        "LUNA_INPUT_USD_PER_TOKEN": "0.000003",
+        "LUNA_OUTPUT_USD_PER_TOKEN": "0.000004",
+        "EXA_API_KEY": "exa-test-secret",
+        "OPENALEX_API_KEY": "openalex-test-secret",
+    }
+    controller = LiveResearchController(environment=environment)
+
+    default_message = controller.configuration_message()
+    optional_only_message = controller.configuration_message(
+        discovery_providers=(DiscoveryProvider.ARXIV, DiscoveryProvider.PUBMED)
+    )
+
+    assert default_message is not None
+    assert "SERPSEARCH_API_KEY" in default_message
+    assert optional_only_message is None
+
+
 def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> None:
     entered = Event()
     release = Event()
@@ -151,6 +178,65 @@ def test_duplicate_start_reconnects_without_second_worker(tmp_path: Path) -> Non
     assert "already has an active research run" in same_database_other_run.message
     assert snapshot.classification == "failed"
     assert calls == 1
+
+
+def test_completed_worker_state_is_evicted_and_unpersisted_result_is_one_shot(
+    tmp_path: Path,
+) -> None:
+    request = _request(tmp_path, run_id=uuid4())
+
+    def runner(raw_claim: str, **kwargs: object) -> ProviderPipelineResult:
+        return _terminal_result(str(kwargs["db_path"]), UUID(str(kwargs["run_id"])))
+
+    controller = LiveResearchController(
+        environment={
+            "MIMO_API_KEY": SECRET,
+            "EXA_API_KEY": "exa-test-secret",
+            "OPENALEX_API_KEY": "openalex-test-secret",
+            "SERPSEARCH_API_KEY": "serpsearch-test-secret",
+        },
+        runner=runner,
+    )
+    start = controller.start(request)
+    key = (str(Path(request.db_path).resolve()), start.run_id)
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        with controller._lock:
+            if key not in controller._active:
+                break
+        sleep(0.01)
+
+    with controller._lock:
+        assert key not in controller._active
+        assert key in controller._early_results
+
+    snapshot = controller.snapshot(request.db_path, start.run_id)
+
+    assert snapshot.classification == "failed"
+    with controller._lock:
+        assert key not in controller._early_results
+    with pytest.raises(KeyError, match="not found"):
+        controller.snapshot(request.db_path, start.run_id)
+
+
+def test_unpersisted_early_results_are_bounded(tmp_path: Path) -> None:
+    controller = LiveResearchController(environment={})
+    requests = tuple(
+        LiveRunRequest(
+            raw_claim=CLAIM,
+            db_path=str(tmp_path / f"run-{index}.sqlite3"),
+            run_id=uuid4(),
+            max_tokens=100_000,
+            max_cost_usd=Decimal("0.15"),
+        )
+        for index in range(40)
+    )
+
+    for request in requests:
+        result = controller.start(request)
+        assert result.classification == "configuration_error"
+
+    assert len(controller._early_results) < len(requests)
 
 
 def test_live_controller_passes_requested_research_controls_to_runner(tmp_path: Path) -> None:

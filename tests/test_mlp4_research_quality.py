@@ -12,6 +12,12 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from agents.supportingresearcher import AcquisitionPolicy, ResearcherRetrievalBatch
+from agents.v2_discovery import (
+    V2_SCOUT_ARTIFACT_KEY,
+    V2DiscoveryResponse,
+    cluster_discovery_items,
+    normalize_discovery_responses,
+)
 from frontend.live_service import LiveResearchController
 from models import (
     AmbiguityRecord,
@@ -20,16 +26,24 @@ from models import (
     PersistedStageArtifact,
     PlannerOutput,
     ResearchControls,
+    ResearchDirection,
+    ResearchDirections,
     ResearchMode,
     RetrievalRecord,
     RetrievalStatus,
     RunManifest,
     RunStatus,
+    ScoutBatch,
+    ScoutBatchAudit,
+    ScoutItem,
     SearchIntent,
     SearchQuery,
     SourceSnapshot,
     Stage,
     Stance,
+    V2DiscoveryScoutOutput,
+    V2PipelineIdentity,
+    V2RoundOneSearchQuery,
     validate_planner_provider_selection,
 )
 from orchestrator import (
@@ -60,6 +74,8 @@ from store import (
     insert_planner_output,
     insert_run,
     insert_stage_artifact,
+    insert_v2_artifact,
+    insert_v2_pipeline_identity,
     read_planner_output,
 )
 
@@ -840,3 +856,74 @@ def test_post_run_research_trail_reads_persisted_discovery_scores(tmp_path: Path
     assert trail.items[0].provider == "exa"
     assert trail.items[0].decision == "selected"
     assert trail.items[0].breakdown.penalties == -25
+
+
+def test_research_trail_reads_v2_discovery_and_rejects_unknown_run(tmp_path: Path) -> None:
+    run_id = uuid4()
+    query = V2RoundOneSearchQuery(
+        run_id=run_id,
+        query_id=uuid4(),
+        direction=ResearchDirection.SUPPORT,
+        provider=DiscoveryProvider.ARXIV,
+        strategy="academic evidence",
+        query_text="four day workweek productivity",
+        created_at=NOW,
+    )
+    items = normalize_discovery_responses(
+        run_id=run_id,
+        directions=ResearchDirections(),
+        responses=(
+            V2DiscoveryResponse(
+                query=query,
+                results=(
+                    SearchResult(
+                        original_url="https://example.org/preprint",
+                        title="A preprint",
+                        rank=1,
+                    ),
+                ),
+            ),
+        ),
+        discovered_at=NOW,
+    )
+    discovery = V2DiscoveryScoutOutput(
+        run_id=run_id,
+        directions=ResearchDirections(),
+        items=items,
+        clusters=cluster_discovery_items(items),
+        scout_batches=(
+            ScoutBatch(
+                run_id=run_id,
+                items=(ScoutItem(item_id=items[0].item_id, decision="retrieve", rationale="fit"),),
+            ),
+        ),
+        scout_audits=(ScoutBatchAudit(batch_number=1, attempted_calls=1),),
+        completed_at=NOW,
+    )
+    db_path = str(tmp_path / "v2-trail.sqlite3")
+    init_db(db_path)
+    insert_run(
+        db_path,
+        RunManifest(
+            run_id=run_id,
+            status=RunStatus.PLANNED,
+            raw_claim="A public claim.",
+            current_stage=Stage.DISCOVERY,
+            created_at=NOW,
+            updated_at=NOW,
+        ),
+    )
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    insert_v2_artifact(db_path, V2_SCOUT_ARTIFACT_KEY, discovery, NOW)
+
+    controller = LiveResearchController(environment={})
+    trail = controller.research_trail(db_path, run_id)
+
+    assert len(trail.items) == 1
+    assert trail.items[0].provider is DiscoveryProvider.ARXIV
+    assert trail.items[0].decision == "selected"
+    assert trail.items[0].score is None
+    assert trail.items[0].breakdown is None
+    assert trail.items[0].acquisition_state == "not_attempted"
+    with pytest.raises(KeyError, match="not found"):
+        controller.research_trail(db_path, uuid4())

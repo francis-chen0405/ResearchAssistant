@@ -142,8 +142,8 @@ tooling only; it does not start another product phase or alter runtime behavior.
 
 The user explicitly authorized and completed MLP-5 Provider Selection & SERP Search on
 2026-08-17. It adds typed per-run SERP Search, Exa, and OpenAlex selection, defaulting to
-all three, plus optional Keychain credentials and a twelve-call SERP Search ceiling. It
-does not begin the separately deferred visual redesign. A 2026-08-18 live-run correction
+all three, plus optional Keychain credentials and a twelve-call SERP Search ceiling. The
+broader visual redesign was not part of MLP-5 and is not authorized. A 2026-08-18 live-run correction
 aligns ranking model limits with the existing 20-source selection and 25-attempt bounded
 backfill policies so multi-provider batches cannot fail merely because a valid extraction
 rank exceeds ten.
@@ -167,7 +167,8 @@ audit metadata before semantic Analyst review, and permits candidate provenance 
 the bounded rank-25 pool, while preserving exact snapshot and downstream release gates.
 
 MLP-4 preserves the current Next.js visual language except for minimal functional
-controls. MLP-5 is the separately deferred visual redesign and is not authorized.
+controls. The broader visual redesign mentioned in this historical MLP-4 scope was not
+part of the completed MLP-5 Provider Selection & SERP Search phase and is not authorized.
 
 Canonical completed plan:
 
@@ -184,7 +185,8 @@ canonical plan is `.agent/plans/phase-mlp-3-nextjs-product-rebuild.md`.
 
 MLP-1 and MLP-2 remain complete. MVP-11 remains the latest completed research-pipeline
 phase. MLP-3 did not change that pipeline, its evidence rules, budgets, persistence, or
-release gate. MLP-4 is complete; MLP-5 is not authorized.
+release gate. MLP-4 and MLP-5 Provider Selection & SERP Search are complete. The broader
+visual redesign was not part of MLP-5 and is not authorized.
 
 ## Completed Research Pipeline: MVP-11
 

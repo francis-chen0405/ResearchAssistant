@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from decimal import Decimal
 from pathlib import Path
+from sqlite3 import Connection
 from threading import Lock
 from typing import IO, Literal
 from uuid import UUID, uuid4
@@ -16,6 +17,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, field_validator
 
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
+from agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
 from agents.v2_evidence_analyst import V2_EVIDENCE_ANALYST_ARTIFACT_KEY
 from agents.v2_final_output import render_v2_final_output
 from agents.v2_source_selection import V2_SOURCE_SELECTION_COMPLETION_KEY
@@ -33,6 +35,7 @@ from models import (
     Stage,
     StrictModel,
     V2AcquisitionProbeOutput,
+    V2DiscoveryScoutOutput,
     V2EvidenceAnalystSourceResult,
     V2ResultSource,
     V2RunDiagnostics,
@@ -99,6 +102,8 @@ LiveClassification = Literal[
     "invalid_input",
     "duplicate_active",
 ]
+
+_MAX_EARLY_RESULTS = 32
 
 
 def contract_controls(policy_identity: str) -> ResearchControls:
@@ -216,18 +221,19 @@ class AcquiredSourceScoreBreakdown(StrictModel):
 class ResearchTrailItem(StrictModel):
     research_round: int = Field(ge=1, le=3)
     stance: Literal["supporting", "opposing"]
-    provider: Literal["exa", "openalex"]
+    provider: DiscoveryProvider
     intent: str = Field(min_length=1)
     query_text: str = Field(min_length=1)
     title: str
     url: str = Field(min_length=1)
-    score: int = Field(ge=0, le=100)
+    score: int | None = Field(default=None, ge=0, le=100)
     decision: Literal["selected", "deferred", "discarded"]
     selection_rank: int | None = Field(default=None, ge=1, le=20)
-    breakdown: DiscoveryScoreBreakdown
+    breakdown: DiscoveryScoreBreakdown | None = None
     acquired_score: int | None = Field(default=None, ge=0, le=100)
     extraction_rank: int | None = Field(default=None, ge=1, le=25)
     acquired_breakdown: AcquiredSourceScoreBreakdown | None = None
+    acquisition_state: Literal["acquired", "attempted", "not_attempted"] | None = None
 
 
 class ResearchTrail(StrictModel):
@@ -290,13 +296,22 @@ class LiveResearchController:
         self._active: dict[tuple[str, UUID], _ActiveRun] = {}
         self._early_results: dict[tuple[str, UUID], LiveRunSnapshot] = {}
 
-    def configuration_message(self) -> str | None:
+    def configuration_message(
+        self,
+        *,
+        discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+    ) -> str | None:
+        selected_providers = (
+            discovery_providers
+            if discovery_providers is not None
+            else DEFAULT_RESEARCH_CONTROLS.discovery_providers
+        )
         try:
             if self._legacy_runner is None:
                 V2ProductionFactoryConfig.from_environment(
                     self._environment,
                     repository_revision=repository_identity(),
-                    discovery_providers=LEGACY_LIVE_RESEARCH_CONTROLS.discovery_providers,
+                    discovery_providers=selected_providers,
                 )
             else:
                 MimoProviderFactoryConfig.from_environment(
@@ -377,7 +392,7 @@ class LiveResearchController:
                 self._redact(exc),
             )
             with self._lock:
-                self._early_results[key] = snapshot
+                self._remember_early_result_locked(key, snapshot)
             return LiveStartResult(
                 started=False,
                 run_id=run_id,
@@ -406,6 +421,9 @@ class LiveResearchController:
         with self._lock:
             self._active[key] = _ActiveRun(future, database_lock)
             self._early_results.pop(key, None)
+        future.add_done_callback(
+            lambda completed_future: self._evict_completed_run(key, completed_future)
+        )
         return LiveStartResult(
             started=True,
             run_id=run_id,
@@ -418,7 +436,7 @@ class LiveResearchController:
         key = (resolved, run_id)
         with self._lock:
             active = self._active.get(key)
-            early = self._early_results.get(key)
+            early = self._early_results.pop(key, None)
         if Path(resolved).is_file():
             try:
                 artifact = read_v2_artifact(resolved, run_id, V2_PRODUCTION_ARTIFACT_KEY)
@@ -462,6 +480,30 @@ class LiveResearchController:
         if early is not None:
             return early
         raise KeyError(f"run {run_id} not found")
+
+    def _evict_completed_run(self, key: tuple[str, UUID], future: Future[LiveRunSnapshot]) -> None:
+        """Release completed worker state while preserving only unpersisted failures."""
+        try:
+            snapshot = future.result()
+        except Exception:
+            snapshot = None
+        with self._lock:
+            active = self._active.get(key)
+            if active is None or active.future is not future:
+                return
+            del self._active[key]
+            if snapshot is not None and not Path(snapshot.db_path).is_file():
+                self._remember_early_result_locked(key, snapshot)
+
+    def _remember_early_result_locked(
+        self, key: tuple[str, UUID], snapshot: LiveRunSnapshot
+    ) -> None:
+        """Keep a bounded one-shot cache for results produced before SQLite persistence."""
+        self._early_results.pop(key, None)
+        self._early_results[key] = snapshot
+        while len(self._early_results) > _MAX_EARLY_RESULTS:
+            oldest_key = next(iter(self._early_results))
+            del self._early_results[oldest_key]
 
     def cancel(self, db_path: str | Path, run_id: UUID) -> str:
         try:
@@ -524,6 +566,9 @@ class LiveResearchController:
         )
         items: list[ResearchTrailItem] = []
         with open_read_only_store(path) as store:
+            # An existing database is not evidence that this particular run exists.
+            read_run(store.connection, run_id)
+            items.extend(self._v2_research_trail_items(store.connection, run_id))
             for research_round, artifact_key in stage_keys:
                 try:
                     artifact = read_stage_artifact(store.connection, run_id, artifact_key)
@@ -611,12 +656,98 @@ class LiveResearchController:
                     key=lambda item: (
                         item.research_round,
                         item.stance,
-                        -item.score,
+                        item.score is None,
+                        -(item.score or 0),
                         item.url,
                     ),
                 )
             ),
         )
+
+    def _v2_research_trail_items(
+        self, connection: Connection, run_id: UUID
+    ) -> tuple[ResearchTrailItem, ...]:
+        """Project persisted v2 discovery and acquisition artifacts into the trail contract."""
+        items: list[ResearchTrailItem] = []
+        decision_map = {
+            "retrieve": "selected",
+            "maybe": "deferred",
+            "skip": "discarded",
+        }
+        for research_round in (1, 2, 3):
+            discovery_key = (
+                V2_SCOUT_ARTIFACT_KEY
+                if research_round == 1
+                else f"phase-7-round-{research_round}-discovery-scout"
+            )
+            acquisition_key = (
+                V2_ACQUISITION_PROBE_ARTIFACT_KEY
+                if research_round == 1
+                else f"phase-7-round-{research_round}-acquisition-probe"
+            )
+            try:
+                artifact = read_v2_artifact(connection, run_id, discovery_key)
+            except KeyError:
+                continue
+            discovery = V2DiscoveryScoutOutput.model_validate_json(artifact.payload_json)
+            try:
+                acquisition_artifact = read_v2_artifact(connection, run_id, acquisition_key)
+            except KeyError:
+                acquisition = None
+            else:
+                acquisition = V2AcquisitionProbeOutput.model_validate_json(
+                    acquisition_artifact.payload_json
+                )
+            decisions = {
+                scout_item.item_id: scout_item.decision.value
+                for batch in discovery.scout_batches
+                for scout_item in batch.items
+            }
+            cluster_by_item = {
+                item_id: cluster.cluster_id
+                for cluster in discovery.clusters
+                for item_id in cluster.item_ids
+            }
+            acquired_clusters = (
+                {source.cluster_id for source in acquisition.acquisitions}
+                if acquisition is not None
+                else set()
+            )
+            attempted_clusters = (
+                {attempt.cluster_id for attempt in acquisition.attempts}
+                if acquisition is not None
+                else set()
+            )
+            for discovery_item in discovery.items:
+                decision = decisions.get(discovery_item.item_id)
+                if decision is None:
+                    continue
+                cluster_id = cluster_by_item.get(discovery_item.item_id)
+                acquisition_state: Literal["acquired", "attempted", "not_attempted"]
+                if cluster_id in acquired_clusters:
+                    acquisition_state = "acquired"
+                elif cluster_id in attempted_clusters:
+                    acquisition_state = "attempted"
+                else:
+                    acquisition_state = "not_attempted"
+                items.append(
+                    ResearchTrailItem(
+                        research_round=research_round,
+                        stance=(
+                            "supporting"
+                            if discovery_item.direction.value == "support"
+                            else "opposing"
+                        ),
+                        provider=discovery_item.provider,
+                        intent="v2 discovery",
+                        query_text=discovery_item.query_text,
+                        title=discovery_item.title or "",
+                        url=discovery_item.canonical_url,
+                        decision=decision_map[decision],
+                        acquisition_state=acquisition_state,
+                    )
+                )
+        return tuple(items)
 
     def has_active_runs(self) -> bool:
         with self._lock:

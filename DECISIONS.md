@@ -153,9 +153,11 @@ this correction for fresh versioned artifacts.
   manufacture a subscription-provider per-call USD amount.
 - Make discovery credentials optional in Keychain; block only when an enabled source has
   no saved key. Preserve Exa/OpenAlex defaults for legacy CLI/programmatic compatibility.
-- Add no dependency, migration, live provider call, or visual redesign. Preserve all
-  discovery ranking, acquisition, immutable snapshot, exact quotation, review, Ledger, and
-  final-release safeguards.
+- Add no dependency, migration, live provider call, or visual redesign. This completed
+  MLP-5 scope is Provider Selection & SERP Search; the broader visual redesign referenced
+  by the earlier MLP-4 decision was not authorized. Preserve all discovery ranking,
+  acquisition, immutable snapshot, exact quotation, review, Ledger, and final-release
+  safeguards.
 
 ## 2026-08-17 - MLP-4 Expanded Retrieval Yield
 

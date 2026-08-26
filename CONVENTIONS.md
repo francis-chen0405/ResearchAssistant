@@ -202,7 +202,8 @@ Product Experience are complete. MLP-3 Next.js Product Rebuild and its dependenc
 were explicitly authorized on 2026-08-14 and are complete. MLP-4 is the latest completed
 product-experience phase and preserves the completed MVP-11 release contracts. Its local
 credential source remains macOS Keychain; `.env` and shell-profile loading remain
-forbidden. MLP-4 Research Quality & OpenAlex Integration is complete; MLP-5 is not
+forbidden. MLP-4 Research Quality & OpenAlex Integration and MLP-5 Provider Selection &
+SERP Search are complete. The broader visual redesign was not part of MLP-5 and is not
 authorized.
 
 ## 8. Done Criteria Per Phase

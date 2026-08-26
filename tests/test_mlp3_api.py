@@ -15,8 +15,10 @@ from frontend.live_service import (
     LiveRunSnapshot,
     LiveStartResult,
     ResearchProgress,
+    ResearchTrail,
 )
 from frontend.service_manager import ServiceDiagnostic
+from models import DiscoveryProvider
 
 
 class FakeController:
@@ -24,9 +26,15 @@ class FakeController:
         self.environment = environment
         self.started: list[LiveRunRequest] = []
         self.cancelled: list[tuple[str, UUID]] = []
+        self.configuration_requests: list[tuple[DiscoveryProvider, ...] | None] = []
         self.run_id = uuid4()
 
-    def configuration_message(self) -> str | None:
+    def configuration_message(
+        self,
+        *,
+        discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+    ) -> str | None:
+        self.configuration_requests.append(discovery_providers)
         if self.environment.get("MIMO_API_KEY") and self.environment.get("EXA_API_KEY"):
             return None
         return "Provider configuration is incomplete."
@@ -81,6 +89,12 @@ class FakeController:
                 updated_at="2026-08-14T12:00:00+00:00",
             ),
         )
+
+    def research_trail(self, db_path: str | Path, run_id: UUID) -> ResearchTrail:
+        del db_path
+        if run_id != self.run_id:
+            raise KeyError(run_id)
+        return ResearchTrail(run_id=run_id, items=())
 
     def has_active_runs(self) -> bool:
         return False
@@ -247,6 +261,13 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
     assert request.research_controls.sources_per_stance_per_round == 20
 
 
+def test_browser_claim_submission_trims_whitespace_before_api_request() -> None:
+    page_source = (Path(__file__).parents[1] / "web" / "app" / "page.tsx").read_text()
+
+    assert "const trimmedClaim = claim.trim();" in page_source
+    assert "raw_claim: trimmedClaim" in page_source
+
+
 def test_start_freezes_selected_discovery_sources_and_rejects_an_empty_set(tmp_path: Path) -> None:
     client, controller, _ = _client()
     database = tmp_path / "live.sqlite3"
@@ -322,6 +343,27 @@ def test_configuration_reports_saved_key_presence_without_returning_secrets() ->
     assert "secret" not in response.text
 
 
+def test_configuration_checks_the_selected_provider_switches() -> None:
+    client, controller, _ = _client()
+
+    response = client.get(
+        "/api/configuration",
+        params={
+            "use_serpsearch": False,
+            "use_exa": False,
+            "use_openalex": False,
+            "use_arxiv": True,
+            "use_pubmed": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert controller.configuration_requests[-1] == (
+        DiscoveryProvider.ARXIV,
+        DiscoveryProvider.PUBMED,
+    )
+
+
 def test_start_preserves_independent_v2_research_directions(tmp_path: Path) -> None:
     client, controller, _ = _client()
     response = client.post(
@@ -363,3 +405,15 @@ def test_snapshot_history_cancellation_and_service_controls(tmp_path: Path) -> N
     assert controller.cancelled == [(database, controller.run_id)]
     assert started.json()["wigolo_ready"] is True
     assert stopped.json()["state"] == "stopped"
+
+
+def test_research_trail_returns_not_found_for_an_unknown_run(tmp_path: Path) -> None:
+    client, _, _ = _client()
+
+    response = client.get(
+        f"/api/research/{uuid4()}/trail",
+        params={"db_path": str(tmp_path / "live.sqlite3")},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Research run not found."

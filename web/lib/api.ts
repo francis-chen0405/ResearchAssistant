@@ -110,7 +110,7 @@ export type ResearchTrailItem = {
   query_text: string;
   title: string;
   url: string;
-  score: number;
+  score: number | null;
   decision: "selected" | "deferred" | "discarded";
   selection_rank: number | null;
   breakdown: {
@@ -121,7 +121,7 @@ export type ResearchTrailItem = {
     likely_accessibility: number;
     source_novelty: number;
     penalties: number;
-  };
+  } | null;
   acquired_score: number | null;
   extraction_rank: number | null;
   acquired_breakdown: {
@@ -131,6 +131,7 @@ export type ResearchTrailItem = {
     evidence_language: number;
     penalties: number;
   } | null;
+  acquisition_state: "acquired" | "attempted" | "not_attempted" | null;
 };
 
 export type V2ResultSource = {
@@ -201,6 +202,11 @@ type StartInput = {
   use_crossref: boolean;
 };
 
+export type ProviderSelection = Pick<
+  StartInput,
+  "use_serpsearch" | "use_exa" | "use_openalex" | "use_arxiv" | "use_pubmed"
+>;
+
 type StartResult = {
   started: boolean;
   run_id: string;
@@ -250,9 +256,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const researchApi = {
-  configuration: () => request<Configuration>("/api/configuration"),
-  saveCredentials: (payload: CredentialInput) =>
-    request<{ saved: boolean; configured: boolean; message: string; saved_settings: string[] }>("/api/credentials", {
+  configuration: (selection: ProviderSelection) =>
+    request<Configuration>(`/api/configuration?${new URLSearchParams({
+      use_serpsearch: String(selection.use_serpsearch),
+      use_exa: String(selection.use_exa),
+      use_openalex: String(selection.use_openalex),
+      use_arxiv: String(selection.use_arxiv),
+      use_pubmed: String(selection.use_pubmed),
+    }).toString()}`),
+  saveCredentials: (payload: CredentialInput, selection: ProviderSelection) =>
+    request<{ saved: boolean; configured: boolean; message: string; saved_settings: string[] }>(`/api/credentials?${new URLSearchParams({
+      use_serpsearch: String(selection.use_serpsearch),
+      use_exa: String(selection.use_exa),
+      use_openalex: String(selection.use_openalex),
+      use_arxiv: String(selection.use_arxiv),
+      use_pubmed: String(selection.use_pubmed),
+    }).toString()}`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
