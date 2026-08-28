@@ -117,8 +117,28 @@ dd { margin: 0; font-family: Georgia, serif; font-size: 23px; }
 .source-card > a { color: var(--ink); font-family: Georgia, serif; font-size: 18px; text-decoration-color: var(--signal); }
 .source-card small { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
 .source-card p, .evidence-card p { margin: 11px 0 0; font-size: 14px; line-height: 1.55; }
-.evidence-card h3 { margin-top: 0; color: var(--ink); font-family: Georgia, serif; font-size: 22px; letter-spacing: -0.02em; text-transform: none; }
+.overview-items { display: grid; gap: 12px; }
+.brief-paper .overview-item { margin: 0; font-size: 16px; line-height: 1.52; }
+.overview-more { margin-top: 15px; border-top: 1px solid var(--line); }
+.overview-more summary { padding-top: 12px; color: var(--muted); cursor: pointer; font-size: 11px; letter-spacing: 0.05em; list-style: none; text-transform: uppercase; }
+.overview-more summary::-webkit-details-marker { display: none; }
+.overview-more summary::before { content: "+"; display: inline-block; margin-right: 7px; color: var(--signal-dark); font-size: 15px; }
+.overview-more[open] summary::before { content: "−"; }
+.overview-more .overview-items { padding-top: 13px; }
+.evidence-card { padding: 0; overflow: hidden; }
+.evidence-card summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 15px 17px; cursor: pointer; list-style: none; }
+.evidence-card summary::-webkit-details-marker { display: none; }
+.evidence-card summary:focus-visible, .overview-more summary:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.evidence-card-summary { display: grid; min-width: 0; gap: 6px; }
+.evidence-card-title { display: -webkit-box; overflow: hidden; color: var(--ink); font-family: Georgia, serif; font-size: 17px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.evidence-card-source { overflow: hidden; color: var(--muted); font-size: 10px; letter-spacing: 0.04em; line-height: 1.35; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.evidence-toggle { flex: 0 0 auto; color: var(--muted); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
+.evidence-toggle::before { content: "Open"; }
+.evidence-card[open] .evidence-toggle::before { content: "Close"; }
+.evidence-card-body { padding: 0 17px 17px; border-top: 1px solid var(--line); }
+.evidence-card-body p:first-child { margin-top: 14px; }
 .evidence-card blockquote { margin: 16px 0; padding: 13px 16px; border-left: 3px solid var(--signal); background: rgba(228, 91, 53, 0.06); color: #3e413b; font-family: Georgia, serif; font-size: 16px; line-height: 1.55; }
+.evidence-label { color: var(--muted); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
 .empty-brief { padding: 30px; border-left: 3px solid var(--signal); background: rgba(255, 254, 250, 0.5); }
 .empty-brief h3 { font-family: Georgia, serif; font-size: 28px; font-weight: 400; text-transform: none; }
 .report-meta { position: sticky; top: 30px; align-self: start; }

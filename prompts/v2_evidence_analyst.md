@@ -1,4 +1,4 @@
-Prompt-Version: phase13-luna-evidence-analyst-v6-analyzer-admission
+Prompt-Version: phase13-luna-evidence-analyst-v7-analyzer-admission
 Stage: analyst
 
 # Role
@@ -31,6 +31,9 @@ create an ID.
   as three distinct reasoning steps.
 - Preserve only material limitations and the most important inferential boundary; keep the
   response concise.
+- Write `canonical_factual_statement` as one concise sentence, targeting 15–35 words and
+  never exceeding 45 words. Include only the central result and the one qualification needed
+  to prevent overclaiming; do not combine multiple studies, findings, or unrelated statistics.
 - Score Evidence Quality and Claim Fit independently from 1 through 5. Do not average them.
 - A support-direction candidate may support or qualify the claim, but cannot become challenge
   evidence. A challenge-direction candidate may challenge or qualify the claim, but cannot

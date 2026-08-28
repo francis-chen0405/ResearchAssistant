@@ -370,7 +370,7 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert source.statement_draft is not None
     assert all(request.model_alias is ModelAlias.GPT_5_6_LUNA_HIGH for request in provider.requests)
     assert all(
-        request.prompt.version == "phase13-luna-evidence-analyst-v6-analyzer-admission"
+        request.prompt.version == "phase13-luna-evidence-analyst-v7-analyzer-admission"
         for request in provider.requests
     )
     assert all(
