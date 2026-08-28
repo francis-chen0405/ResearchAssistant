@@ -56,9 +56,9 @@ The historical flow is:
 
 Fresh v2 Phase 13 uses a separate typed flow:
   Analyst output (`V2EvidenceAnalystBatchResult`) → deterministic Analyzer Admission
-  (`V2EvidenceAdmissionBatchResult`) → analyzer-admitted evidence records → Synthesizer
-  `SynthesisOutput` → Renderer. Analyzer-admitted records omit Reviewer metadata and are
-  labeled as not independently reviewer-approved.
+  (`V2EvidenceAdmissionBatchResult`) → analyzer-admitted evidence records → deterministic
+  synthesis assembly (`SynthesisOutput`) → Renderer. Analyzer-admitted records omit Reviewer
+  metadata and are labeled as not independently reviewer-approved.
 
 Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, admission method, optional historical `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the admitted evidence record.
 
@@ -258,6 +258,9 @@ The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may 
   approved sources that pass provenance, score, placement, qualification, and statement checks.
   Rejected and failed sources never enter evidence, and analyzer records contain no fabricated
   Reviewer approval ID.
+- Fresh-v2 synthesis is deterministic Python assembly of the typed analyzer-admitted projection;
+  it makes no Synthesizer model call. The direct-MiMo synthesis adapter remains a historical
+  compatibility path and must preserve the input admission method when used.
 - Fresh Phase-13 artifact keys, policy identities, fingerprints, and budget constants are
   versioned. Legacy Phase-12 budget, extraction, Reviewer, Ledger, and final-output artifacts
   remain readable without relabeling or migration.

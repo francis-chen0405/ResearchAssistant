@@ -1475,6 +1475,7 @@ def _v2_progress_percent(
         "statement_reviewer": 85,
         "claim_ledger": 87,
         "debate_synthesizer": 92,
+        "synthesis": 92,
         "final_renderer_validator": 97,
     }.get(stage_value, 5)
     analyzed = supporting.candidates + opposing.candidates

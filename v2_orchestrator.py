@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from agents.researcher import EVIDENCE_POLICY_VERSION
+from agents.synthesizer import V2_DETERMINISTIC_SYNTHESIZER_VERSION
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY, run_v2_acquisition_probe
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
@@ -81,6 +82,7 @@ from models import (
     V2RunDiagnostics,
     V2SourceSelectionModelOutput,
     V2SourceSelectionQueueResult,
+    V2SynthesizerInput,
     V2VerbatimQuoteSelection,
 )
 from providers.llm import LLMProvider
@@ -126,7 +128,7 @@ V2_PRODUCTION_POLICY_IDENTITY = (
     "researchassistant-v2-phase-13-production-cutover-analyzer-admission-v1"
 )
 V2_DEEP_ANALYSIS_BACKFILL_LEGACY_ARTIFACT_KEY = "phase-12-deep-analysis-backfill-v1"
-V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 10
+V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 8
 V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE = 8
 
 
@@ -747,8 +749,7 @@ def run_v2_production_pipeline(
         _raise_if_v2_cancelled(effective_cancellation_requested)
         if budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE:
             raise V2BudgetExceededError(
-                "v2 downstream reserve cannot cover selection, extraction, analysis, "
-                "admission, and synthesis"
+                "v2 downstream reserve cannot cover selection, extraction, analysis, and admission"
             )
         discoveries, acquisitions, gaps = _completed_round_artifacts(
             path,
@@ -968,6 +969,7 @@ def _semantic_policy_payload() -> dict[str, object]:
         V2EvidenceAdmissionBatchResult,
         V2EvidenceAdmissionSourceResult,
         V2EvidenceAdmissionRecord,
+        V2SynthesizerInput,
         SynthesisOutput,
         V2FinalResearchOutput,
         V2ProductionPipelineResult,
@@ -988,12 +990,15 @@ def _semantic_policy_payload() -> dict[str, object]:
             "extractor_logical_calls": 1,
             "analyst_logical_calls": 1,
             "reviewer_logical_calls": 0,
+            "synthesizer_logical_calls": 0,
             "attempts_per_logical_operation": {
                 "extractor": 2,
                 "analyst": 1,
                 "reviewer": 0,
+                "synthesizer": 0,
             },
         },
+        "synthesis_assembly": V2_DETERMINISTIC_SYNTHESIZER_VERSION,
         "custom_prompt_hashes": prompt_hashes,
         "schema_sha256": hashlib.sha256(schemas.encode()).hexdigest(),
         "evidence_policy": EVIDENCE_POLICY_VERSION,

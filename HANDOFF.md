@@ -10,12 +10,13 @@ Reviewer metadata. Fresh deep analysis uses a three-call per-source reservation 
 through the full priority pool until the existing run-wide budget is reached, preserving real
 attempted, rejected, failed, and budget-prevented states.
 
-Synthesis, release validation, API, UI, and export accept analyzer-admitted records and display
-that they were not independently reviewer-approved. Phase-13 keys and policy identities are
-versioned; Phase-12 and older Reviewer artifacts remain readable without relabeling. The prior
-`not_queued` collision is covered by restart regression tests.
+Deterministic synthesis, release validation, API, UI, and export accept analyzer-admitted
+records and display that they were not independently reviewer-approved. Fresh synthesis makes
+no model call; the direct-MiMo route remains historical compatibility. Phase-13 keys and policy
+identities are versioned; Phase-12 and older Reviewer artifacts remain readable without
+relabeling. The prior `not_queued` collision is covered by restart regression tests.
 
-Verification: 822 Python tests passed with 2 expected skips; Ruff lint/format passed; frontend
+Verification: 826 Python tests passed with 2 expected skips; Ruff lint/format passed; frontend
 ESLint, TypeScript, and the Next.js 16.3.1 production build passed. No live paid run or dependency
 change was made. `pnpm` was not used for the final check because its wrapper attempted a registry
 fetch; installed local frontend tools passed directly.
@@ -31,7 +32,7 @@ remains readable without relabeling historical artifacts.
 
 The focused policy and v2 Reviewer tests pass (116 tests). No live paid research run was made.
 
-## Phase 8 source-cap and deterministic deep-analysis backfill correction — 2026-08-24
+## Historical Phase 8 source-cap and deterministic deep-analysis backfill correction — 2026-08-24
 
 The authorized Phase-8 correction keeps the run-wide v2 maximum exactly 500,000 tokens and
 the existing 160 physical-call/cost ceilings. Each source now receives a hard 60,000-token
@@ -120,7 +121,7 @@ Verification: 778 passed, 2 expected skips; focused API/frontend regression suit
 35 tests; Ruff lint/format, diff check, frontend ESLint, and Next.js production build passed.
 No dependency or live provider call was added.
 
-## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
+## Historical ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
 
 Status: Complete. Fresh website and CLI runs now use `run_v2_production_pipeline()` and the
 three-route production bundle. The Phase 11 `V2FinalResearchOutput` remains the canonical
@@ -149,7 +150,7 @@ focused Phase 12 suite 10 passed with mocked Runs A–H; Ruff lint/format, diff 
 syntax, frontend ESLint, and the Next.js 16.3.1 production build passed. The only warning is
 the existing Starlette TestClient/httpx deprecation.
 
-## ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
+## Historical ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
 
 Status: Complete and verified.
 
@@ -169,7 +170,7 @@ Status: Complete and verified.
   Ruff lint/format and diff checks passed. Frontend lint/build could not start because pnpm
   required an unavailable registry install. No live provider call occurred.
 
-## ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
+## Historical ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
 
 Status: Complete and verified.
 
@@ -186,7 +187,7 @@ Status: Complete and verified.
 - Final verification: 748 passed, 2 expected opt-in skips; Ruff check, Ruff format check,
   and diff check passed. No live call occurred.
 
-## ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
+## Historical ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
 
 Phase 9 is complete. `agents/v2_evidence_analyst.py` consumes the bounded Phase-8 queue only
 when every queued survivor has an exact `CandidateQuoteBlock` and matching immutable
@@ -194,7 +195,7 @@ when every queued survivor has an exact `CandidateQuoteBlock` and matching immut
 Extractor remains MiMo-v2.5-Pro passage selection only; application code still owns assembly,
 brackets/context, offsets, exact membership, hashes, candidate identity, and provenance.
 
-Exactly three fresh-v2 Analyst logical calls are now routed to GPT-5.6 Luna High: semantic
+Historical Phase-9 execution routed three Analyst logical calls to GPT-5.6 Luna High: semantic
 assessment/scoring, initial canonical statement drafting, and the one possible
 Reviewer-directed statement revision. They use `prompts/v2_evidence_analyst.md`; the shared
 historical `prompts/analyst.md` and direct-MiMo route remain unchanged. The semantic schema

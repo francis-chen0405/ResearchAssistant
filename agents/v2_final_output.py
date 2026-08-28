@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import UUID
 
 from agents.renderer import APPROVED_CONNECTIVE_TEMPLATES, validate_final_release
+from agents.synthesizer import build_v2_synthesis_output
 from agents.v2_adaptive_search import V2AdaptiveContinuationResult, V2AdaptiveStopCode
 from models import (
     Placement,
@@ -94,7 +95,7 @@ def run_v2_final_research_output(
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime] | None = None,
 ) -> V2FinalOutputRunResult:
-    """Create and persist the v2 result using MiMo only for Ledger-item arrangement."""
+    """Create and persist the v2 result with deterministic fresh-v2 synthesis."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
     evidence_result = _choose_evidence_result(admission_result, reviewer_result)
@@ -115,31 +116,39 @@ def run_v2_final_research_output(
         return V2FinalOutputRunResult(final_output=output, resumed=True)
 
     synthesis_input = build_v2_synthesizer_input(evidence_result, continuation)
-    route = routing_config.preflight().for_stage(LLMStage.SYNTHESIZER)
-    if route.logical_alias is not ModelAlias.MIMO_V25_PRO:
-        raise ValueError("fresh v2 synthesis must use MiMo-v2.5-Pro")
-    if V2_LLM_ROUTING.for_stage(LLMStage.SYNTHESIZER).primary is not route.logical_alias:
-        raise ValueError("configured Synthesizer route does not match the v2 routing policy")
-    prompt = load_prompt(LLMStage.SYNTHESIZER)
-    request = LLMRequest(
-        run_id=evidence_result.run_id,
-        stage=LLMStage.SYNTHESIZER,
-        prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, synthesis_input, SynthesisOutput),
-        input_artifact=synthesis_input,
-        input_artifact_ids=tuple(
-            item.ledger_claim_id for item in synthesis_input.approved_ledger_items
-        ),
-        requested_output_type=SynthesisOutput,
-        model_alias=route.logical_alias,
-        generation=V2_LLM_ROUTING.for_stage(LLMStage.SYNTHESIZER).generation,
-    )
-    invocation = invoke_llm(llm_provider, request, clock=now)
-    synthesis = invocation.output_artifact
-    if not isinstance(synthesis, SynthesisOutput):
-        raise TypeError("v2 Synthesizer returned an unexpected typed artifact")
-    if synthesis.run_id != evidence_result.run_id:
-        raise ValueError("v2 Synthesizer output run_id does not match the run")
+    if isinstance(evidence_result, V2EvidenceAdmissionBatchResult):
+        synthesis = build_v2_synthesis_output(
+            synthesis_input=synthesis_input,
+            created_at=_aware(now()),
+        )
+    else:
+        route = routing_config.preflight().for_stage(LLMStage.SYNTHESIZER)
+        if route.logical_alias is not ModelAlias.MIMO_V25_PRO:
+            raise ValueError("historical v2 synthesis must use MiMo-v2.5-Pro")
+        if V2_LLM_ROUTING.for_stage(LLMStage.SYNTHESIZER).primary is not route.logical_alias:
+            raise ValueError(
+                "configured historical Synthesizer route does not match the v2 routing policy"
+            )
+        prompt = load_prompt(LLMStage.SYNTHESIZER)
+        request = LLMRequest(
+            run_id=evidence_result.run_id,
+            stage=LLMStage.SYNTHESIZER,
+            prompt=prompt,
+            rendered_prompt=render_stage_prompt(prompt, synthesis_input, SynthesisOutput),
+            input_artifact=synthesis_input,
+            input_artifact_ids=tuple(
+                item.ledger_claim_id for item in synthesis_input.approved_ledger_items
+            ),
+            requested_output_type=SynthesisOutput,
+            model_alias=route.logical_alias,
+            generation=V2_LLM_ROUTING.for_stage(LLMStage.SYNTHESIZER).generation,
+        )
+        invocation = invoke_llm(llm_provider, request, clock=now)
+        synthesis = invocation.output_artifact
+        if not isinstance(synthesis, SynthesisOutput):
+            raise TypeError("v2 Synthesizer returned an unexpected typed artifact")
+        if synthesis.run_id != evidence_result.run_id:
+            raise ValueError("v2 Synthesizer output run_id does not match the run")
     output = build_v2_final_research_output(
         admission_result=evidence_result,
         continuation=continuation,
@@ -154,7 +163,7 @@ def build_v2_synthesizer_input(
     evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
 ) -> V2SynthesizerInput:
-    """Project only validated Ledger evidence and typed research disclosures to MiMo."""
+    """Project only validated evidence and typed research disclosures for synthesis."""
     _validate_chain(evidence_result, continuation)
     selection = evidence_result.analyst_result.input.queue_result
     statements = tuple(

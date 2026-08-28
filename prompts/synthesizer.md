@@ -1,6 +1,9 @@
 Prompt-Version: phase13-v2-synthesizer-analyzer-admission-v2
 Stage: synthesizer
 
+This prompt is retained for historical direct-MiMo compatibility. Fresh Phase-13 runs assemble
+the same typed projection deterministically in Python and do not invoke a Synthesizer model.
+
 # Role
 
 Arrange approved immutable v2 evidence items into the requested structured brief artifact.

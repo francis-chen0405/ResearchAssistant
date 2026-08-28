@@ -629,6 +629,7 @@ def _assemble_synthesis(
                 ),
                 ledger_claim_id=record.ledger_claim_id,
                 reviewer_approval_id=record.reviewer_approval_id,
+                admission_method=record.admission_method,
                 stance=record.stance,
                 placement=record.placement,
                 entailment=record.entailment,

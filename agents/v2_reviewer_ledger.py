@@ -1,4 +1,4 @@
-"""Phase-10 bridge from v2 Analyst drafts to Reviewer-approved immutable Ledger records."""
+"""Historical Phase-10 bridge from v2 Analyst drafts to Reviewer-approved Ledger records."""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def run_v2_reviewer_ledger(
     artifact_key: str = V2_REVIEWER_LEDGER_ARTIFACT_KEY,
     clock: Callable[[], datetime] | None = None,
 ) -> V2ReviewerLedgerBatchResult:
-    """Review v2 drafts with MiMo and admit only exact application-validated records."""
+    """Review historical v2 drafts with MiMo and admit exact application-validated records."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
     stored = _read_artifact(path, analyst_result.run_id, artifact_key)
@@ -84,7 +84,7 @@ def run_v2_reviewer_ledger(
 
     route = routing_config.preflight().for_stage(LLMStage.REVIEWER)
     if route.logical_alias is not ModelAlias.MIMO_V25_PRO:
-        raise ValueError("fresh v2 Reviewer work must use MiMo-v2.5-Pro")
+        raise ValueError("historical v2 Reviewer work must use MiMo-v2.5-Pro")
     if V2_LLM_ROUTING.for_stage(LLMStage.REVIEWER).primary is not route.logical_alias:
         raise ValueError("configured Reviewer route does not match the v2 routing policy")
 

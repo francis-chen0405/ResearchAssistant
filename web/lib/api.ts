@@ -155,7 +155,7 @@ export type V2FinalResearchOutput = {
   run_id: string;
   exact_claim: string;
   directions: { support_enabled: boolean; challenge_enabled: boolean };
-  synthesis: { sections: { section_type: "supporting" | "opposing" | "limitations"; items: { approved_factual_statement: string }[] }[] };
+  synthesis: { sections: { section_type: "supporting" | "opposing" | "limitations"; items: { approved_factual_statement: string; admission_method: "analyzer_admitted" | "reviewer_approved" }[] }[] };
   recommended_source_ids: string[];
   recommended_sources: V2ResultSource[];
   all_surviving_sources: V2ResultSource[];

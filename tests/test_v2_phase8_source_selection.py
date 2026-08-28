@@ -348,8 +348,8 @@ def test_selection_failure_falls_back_without_dropping_survivors(tmp_path: Path)
     assert len(provider.requests) == V2_SOURCE_SELECTION_MAX_ATTEMPTS
 
 
-def test_queue_math_protects_the_160_call_ceiling_and_synthesis() -> None:
-    source_ids = tuple(uuid4() for _ in range(3))
+def test_queue_math_protects_the_160_call_ceiling_without_model_synthesis() -> None:
+    source_ids = tuple(uuid4() for _ in range(4))
     selection_input = _selection_input(
         tuple(
             _candidate(source_id, family=f"family-{index}", probe_score=10 - index)
@@ -367,13 +367,13 @@ def test_queue_math_protects_the_160_call_ceiling_and_synthesis() -> None:
     assert result.physical_calls_per_source == 3
     assert result.attempts_per_logical_operation == 1
     assert result.extractor_attempts_per_source == 2
-    assert result.mandatory_synthesis_physical_calls == 2
-    assert result.queue_capacity == 2
-    assert result.physical_calls_after_reserve == 159
-    assert result.queued_source_ids == source_ids[:2]
+    assert result.mandatory_synthesis_physical_calls == 0
+    assert result.queue_capacity == 3
+    assert result.physical_calls_after_reserve == 160
+    assert result.queued_source_ids == source_ids[:3]
     assert all(
         status.budget_prevented_reason == "physical_call_ceiling"
-        for status in result.source_statuses[2:]
+        for status in result.source_statuses[3:]
     )
 
 
@@ -396,7 +396,7 @@ def test_six_survivors_fit_the_500k_ceiling_with_60k_source_allowances() -> None
 
     assert result.queued_source_ids == source_ids
     assert result.queue_capacity == 6
-    assert result.physical_calls_after_reserve == 20
+    assert result.physical_calls_after_reserve == 18
     assert result.total_reserved_tokens < 500_000
 
 

@@ -25,10 +25,12 @@ policy derives queue capacity from the remaining call/token/cost budget and reta
 every survivor.
 
 Fresh routing is MiMo-v2.5 for Scout; MiMo-v2.5-Pro for Planner, Search Agent, Source
-Selection, exact Extractor, and Synthesizer; and GPT-5.6 Luna High for Gap Analysis and
-Evidence Analyst. Each successfully extracted source receives one Analyst call. All
-direction, provider/round eligibility, exact quote assembly, score/placement derivation,
-Analyzer Admission, and final release decisions remain application-owned. The production
+Selection, and exact Extractor; and GPT-5.6 Luna High for Gap Analysis and Evidence Analyst.
+Fresh v2 synthesis is deterministic Python assembly and makes no Synthesizer model call;
+the historical direct-MiMo synthesis route remains available only for compatibility. Each
+successfully extracted source receives one Analyst call. All direction, provider/round
+eligibility, exact quote assembly, score/placement derivation, Analyzer Admission, and final
+release decisions remain application-owned. The production
 fingerprint covers routes/models/prices, custom prompt hashes, key schemas, direction/provider
 controls, provider adapter policies, evidence/admission and release policies,
 research-governor settings, downstream reserve, ceilings, and the Phase 13 final-output
@@ -48,7 +50,9 @@ or reinterpreted as v2.
 **Evidence Analyst** — Scores evidence on two dimensions, verifies quotations against trusted snapshots, and returns the final factual statement in the same call.
 **Analyzer Admission** — Performs deterministic provenance, score, placement, qualification, and statement checks before creating an analyzer-admitted evidence record.
 **Claim Ledger** — Stores analyzer-admitted fresh-v2 factual statements and their evidence, scoring, placement, and provenance records; historical Reviewer-approved records remain supported.
-**Debate Synthesizer** — Builds a typed structured brief from approved Ledger records and fixed non-factual connective templates.
+**Debate Synthesizer** — Deterministically builds a typed structured brief from approved Ledger
+records and fixed non-factual connective templates; historical direct-MiMo arrangement remains
+compatibility-only.
 **Deterministic Final Renderer & Validator** — Renders the final brief; blocks release unless every factual sentence exactly matches an approved Ledger statement.
 
 In balanced mode, Supporting and Opposing Researchers may run in parallel; focused mode
@@ -1062,7 +1066,7 @@ Extractor route and selects snapshot passages only. Before semantic analysis, ap
 code revalidates the snapshot hash, exact segment membership, offsets, bracket context,
 candidate identity, length policy, and provenance; Analyst output cannot rewrite any of it.
 
-Fresh-v2 Analyst work uses a v2-only prompt and GPT-5.6 Luna High for two logical
+Historical Phase-9 Analyst work used a v2-only prompt and GPT-5.6 Luna High for two logical
 operations: semantic proposition/relationship assessment and scoring, then initial canonical
 factual-statement drafting. The prompt contains only the exact candidate quote block,
 immediate context, and necessary metadata; it does not contain the complete snapshot. Source text,
@@ -1083,7 +1087,7 @@ separate Reviewer approval and deterministic Ledger admission remain mandatory.
 ## Historical ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
 
 Phase 10 connects Phase-9 Reviewer-ready drafts to the established downstream quality
-gate. Fresh-v2 Reviewer calls use MiMo-v2.5-Pro and receive only the existing narrow
+gate. Historical Phase-10 Reviewer calls used MiMo-v2.5-Pro and received only the existing narrow
 Reviewer input. The application preserves exact Reviewer decision validation and derives
 the existing versioned approval ID; the Reviewer cannot supply IDs, confidence, or
 replacement wording. One independent Reviewer call is allowed per source. Rejection is
@@ -1100,7 +1104,7 @@ rewrite or weaken historical Ledger records or their SQLite immutability trigger
 
 ## Historical ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
 
-Fresh-v2 synthesis sends MiMo-v2.5-Pro only a strict typed projection of the exact claim,
+Historical Phase-11 synthesis sent MiMo-v2.5-Pro only a strict typed projection of the exact claim,
 enabled directions, Reviewer-approved Ledger statements, deterministic placement and
 entailment, qualified-only statements, unresolved typed gaps, stopping disclosure, and
 non-evidentiary recommendation metadata. It never receives raw source text, snapshots,
@@ -1138,3 +1142,6 @@ Synthesis, final validation, API, UI, and export accept the analyzer-admitted pr
 display that it was not independently reviewer-approved. Phase-13 keys, policy identities,
 fingerprints, and budget constants are additive. Phase-12 and earlier Reviewer, Ledger,
 extraction, budget, and final-output artifacts remain readable with their original meaning.
+Fresh synthesis is deterministic Python assembly of the typed analyzer-admitted projection and
+makes no Synthesizer model call; direct MiMo synthesis remains compatibility-only for historical
+Reviewer-backed artifacts.

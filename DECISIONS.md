@@ -11,6 +11,9 @@
 - Replace the seven-call per-source reservation with three physical calls: up to two extraction
   attempts and one Analyst call. Process the full priority pool until the existing run-wide
   budget is reached and preserve real terminal source states.
+- Assemble fresh-v2 synthesis deterministically from the typed analyzer-admitted projection;
+  make no fresh Synthesizer model call or synthesis retry. Retain the direct-MiMo synthesis
+  path only for historical compatibility.
 - Version fresh Phase-13 artifact keys, policies, fingerprints, and budget constants. Keep
   historical Reviewer/Ledger artifacts readable and unchanged.
 

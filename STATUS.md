@@ -12,11 +12,12 @@ Status: Complete and verified.
 - Deep analysis processes the full priority pool until the existing run-wide budget is reached;
   actual analyzed, rejected, failed, and budget-prevented states are preserved. The physical
   reservation is now three calls per source: two extraction attempts plus one Analyst call.
-- Synthesis, final validation, API, UI, and export label fresh evidence as analyzer-admitted and
-  not independently reviewer-approved. Phase-13 artifact keys, policies, fingerprints, and
-  budget constants are versioned; historical Reviewer-backed artifacts remain readable.
+- Fresh synthesis is deterministic Python assembly with zero Synthesizer model calls; final
+  validation, API, UI, and export label fresh evidence as analyzer-admitted and not independently
+  reviewer-approved. Phase-13 artifact keys, policies, fingerprints, and budget constants are
+  versioned; historical Reviewer-backed artifacts remain readable.
 
-Verification: 822 Python tests passed, 2 expected skips; Ruff lint and format checks passed;
+Verification: 826 Python tests passed, 2 expected skips; Ruff lint and format checks passed;
 frontend ESLint, TypeScript, and Next.js 16.3.1 production build passed. No live paid research
 run or dependency change was made. The `pnpm` wrapper was not used for final validation because
 it attempted a registry fetch; the installed local tools passed directly.
@@ -37,7 +38,7 @@ Status: Implemented and verified offline.
 Verification: focused policy and v2 Reviewer tests pass; full verification follows below. No
 live paid research run was made.
 
-## 2026-08-24 - Phase 8 source-cap and deterministic deep-analysis backfill correction
+## Historical 2026-08-24 - Phase 8 source-cap and deterministic deep-analysis backfill correction
 
 Status: Complete and verified.
 
@@ -126,7 +127,7 @@ Verification: complete Python suite 778 passed with 2 expected skips; focused AP
 regression suite now passes 35 tests; Ruff check, Ruff format check, and diff check passed.
 Next.js ESLint and production build passed. No live provider call or dependency change was made.
 
-## 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
+## Historical 2026-08-21 - ResearchAssistant v2 Phase 12 Production Hardening and Cutover
 
 Status: Complete and verified.
 
@@ -157,7 +158,7 @@ Verification:
   launcher `zsh -n` syntax passed. Frontend ESLint and the Next.js 16.3.1 production build
   passed from the existing local dependency installation.
 
-## 2026-08-21 - ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
+## Historical 2026-08-21 - ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
 
 Status: Complete and verified.
 
@@ -177,7 +178,7 @@ Status: Complete and verified.
   could not start because pnpm attempted a registry install and the registry was unavailable;
   no dependency directory was removed or changed. No live calls.
 
-## 2026-08-20 - ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
+## Historical 2026-08-20 - ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
 
 Status: Complete and verified.
 
@@ -193,14 +194,14 @@ Status: Complete and verified.
 - Verification: 748 passed, 2 expected opt-in skips across the complete offline suite;
   `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live calls.
 
-## 2026-08-20 - ResearchAssistant v2 Phase 9 Luna Evidence Analyst
+## Historical 2026-08-20 - ResearchAssistant v2 Phase 9 Luna Evidence Analyst
 
 Status: Complete and verified.
 
 - Added a restart-safe Phase-9 Analyst stage over the bounded Phase-8 queue. Every survivor
   remains in the result; queued survivors retain their exact candidate, including on final
   Analyst failure.
-- Fresh-v2 semantic assessment/scoring, initial canonical factual-statement drafting, and the
+- Historical Phase-9 semantic assessment/scoring, initial canonical factual-statement drafting, and the
   one possible Reviewer-directed revision use GPT-5.6 Luna High and a v2-only prompt. The
   historical direct-MiMo Analyst prompt and persisted records remain readable and unchanged.
 - Kept MiMo-v2.5-Pro exact passage selection and revalidated immutable snapshot hashes,
@@ -223,7 +224,7 @@ Verification:
 - Ruff lint, Ruff format check, and `git diff --check`: passed.
 - No live provider call was made.
 
-## 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
+## Historical 2026-08-20 - ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
 
 Status: Complete and verified.
 

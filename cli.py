@@ -402,9 +402,10 @@ def _print_v2_launch_summary(
     print(f"claim: {claim}")
     print("production pipeline: ResearchAssistant v2 analyzer-admission release")
     print(
-        "model routes: MiMo-v2.5 planning/selection, MiMo-v2.5-Pro extraction/synthesis, "
+        "model routes: MiMo-v2.5 Scout, MiMo-v2.5-Pro planning/selection/extraction, "
         "Luna gap analysis/evidence analysis"
     )
+    print("synthesis: deterministic Python assembly")
     print(f"token budget: {config.ceilings.max_total_tokens}")
     print(f"cost budget usd: {config.ceilings.max_total_cost_usd}")
     print(f"physical llm call budget: {config.ceilings.max_physical_calls}")

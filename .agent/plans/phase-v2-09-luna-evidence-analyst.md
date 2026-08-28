@@ -1,8 +1,8 @@
-# ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
+# Historical ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
 
 Status: Complete and verified.
 
-Authorized 2026-08-24 correction: fresh Phase-9 execution performs only the assessment and
+Authorized 2026-08-24 correction: historical Phase-9 execution performed only the assessment and
 canonical-draft Analyst operations (each bounded to two attempts). The Analyst request carries
 the exact candidate quote block, immediate context, and typed source metadata, not the complete
 normalized snapshot. Reviewer-directed revision remains available only as a historical/direct
@@ -15,7 +15,7 @@ compatibility API and is not part of normal Phase-10 recovery.
 - Preserve MiMo-v2.5-Pro as the v2 Extractor route. The Extractor selects exact snapshot
   passages only; application code continues to own assembly, context brackets, offsets,
   exact membership, provenance, and candidate verification.
-- Route fresh v2 Analyst assessment and canonical statement drafting to GPT-5.6 Luna High.
+- Route historical v2 Analyst assessment and canonical statement drafting to GPT-5.6 Luna High.
 - Keep source text, the narrowest supported proposition, and its relationship to the exact
   requested claim as separate typed fields. Retain material limitations, inferential
   boundaries, and reasoning.

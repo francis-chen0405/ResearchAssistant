@@ -14,6 +14,8 @@ Status: Complete and verified.
   preserving actual analyzed, rejected, failed, and budget-prevented states.
 - Update synthesis, final validation, API, UI, persistence, and export to accept analyzer-
   admitted records with an explicit reduced-safety disclosure.
+- Assemble fresh-v2 synthesis deterministically from typed analyzer-admitted records; make no
+  fresh Synthesizer model call or retry, while retaining historical direct-MiMo compatibility.
 - Keep historical Reviewer, Ledger, extraction, budget, and final-output artifacts readable
   without relabeling or migration.
 
@@ -24,7 +26,8 @@ Status: Complete and verified.
 - Make Reviewer metadata optional for analyzer-admitted records and retain old canonical-
   drafting and Reviewer models for historical compatibility.
 - Version fresh Phase-13 artifact keys, policy identities, fingerprints, and budget constants.
-- Reserve three physical calls per source: up to two extraction attempts and one Analyst call.
+- Reserve three physical calls per source: up to two extraction attempts and one Analyst call;
+  deterministic synthesis reserves zero physical calls.
 
 ## Safety boundary
 
@@ -39,6 +42,7 @@ original label and interpretation.
 - One Analyst call is made per successfully extracted source; rejected and failed sources never
   enter evidence.
 - Analyzer-only records reach synthesis without fabricated Reviewer IDs.
+- Fresh synthesis makes zero model calls, preserves `ANALYZER_ADMITTED`, and remains restart-safe.
 - Restart, immutable persistence, cancellation, budget accounting, rendering, API output,
   frontend output, and historical compatibility are covered by tests.
 - Full Python tests, Ruff checks, frontend ESLint, TypeScript, and production build pass.

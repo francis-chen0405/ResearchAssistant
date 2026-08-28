@@ -22,7 +22,12 @@ from agents.v2_evidence_analyst import (
     V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
     run_v2_evidence_analyst,
 )
-from agents.v2_final_output import _result_sources, build_v2_synthesizer_input
+from agents.v2_final_output import (
+    V2_FINAL_OUTPUT_ARTIFACT_KEY,
+    _result_sources,
+    build_v2_synthesizer_input,
+    run_v2_final_research_output,
+)
 from models import (
     V2AdmissionMethod,
     V2DeepAnalysisBudgetReason,
@@ -79,6 +84,44 @@ def test_analyzer_admission_has_no_reviewer_metadata_and_enters_synthesis(
         V2AdmissionMethod.ANALYZER_ADMITTED
     )
     assert synthesis_input.approved_ledger_items[0].reviewer_approval_id is None
+
+
+def test_fresh_v2_synthesis_is_deterministic_and_preserves_admission_method(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    db_path = _prepare_db(tmp_path, run_id)
+    analyst = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=_batch_input(run_id),
+        llm_provider=FakeLunaAnalyst([_assessment()]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    admission = run_v2_evidence_admission(
+        db_path=db_path,
+        analyst_result=analyst,
+        clock=lambda: NOW,
+    )
+
+    final = run_v2_final_research_output(
+        db_path=db_path,
+        admission_result=admission,
+        continuation=_continuation(run_id),
+        llm_provider=object(),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert final.final_output.release_validation.valid
+    assert final.final_output.synthesis.synthesizer_model_name == "deterministic-v2-assembler"
+    assert final.final_output.synthesis.synthesizer_prompt_version == (
+        "phase13-deterministic-synthesizer-v1"
+    )
+    item = final.final_output.synthesis.sections[0].items[0]
+    assert item.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED
+    assert item.reviewer_approval_id is None
+    assert read_v2_artifact(db_path, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
 
 
 def test_rejected_and_failed_sources_never_create_evidence_records(tmp_path: Path) -> None:

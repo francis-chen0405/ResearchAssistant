@@ -6,14 +6,15 @@ Canonical phase plans live in `.agent/plans/`.
 
 The user explicitly authorized and completed v2 Phase 13 on 2026-08-26. Fresh v2 removes
 Reviewer calls, combines Luna assessment and factual-statement drafting into one call per
-source, and admits analyzer-approved records through deterministic validation. Versioned
-Phase-13 contracts and keys preserve historical Reviewer-backed runs without reinterpretation.
+source, admits analyzer-approved records through deterministic validation, and assembles the
+final brief deterministically without a Synthesizer model call. Versioned Phase-13 contracts
+and keys preserve historical Reviewer-backed runs without reinterpretation.
 
 Canonical plan:
 
 - `.agent/plans/phase-v2-13-analyzer-admission-cutover.md`
 
-## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
+## Historical ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
 
 The user explicitly authorized and completed v2 Phase 12 on 2026-08-21. It joins the
 restart-safe Phase 3–11 stages into the fresh website/CLI production path, adds one
@@ -27,7 +28,7 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-12-production-hardening-cutover.md`
 
-## ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
+## Historical ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
 
 The user explicitly authorized v2 Phase 11 on 2026-08-21. It adds the constrained v2
 result envelope after Phase-10 Ledger admission: MiMo-v2.5-Pro receives only the strict
@@ -38,7 +39,7 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-11-synthesis-final-output.md`
 
-## ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
+## Historical ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
 
 The user explicitly authorized v2 Phase 10 on 2026-08-20. It completes the v2
 downstream gate by reusing the narrow MiMo-v2.5-Pro Reviewer, deterministic placement,
@@ -49,9 +50,9 @@ Canonical plan:
 
 - `.agent/plans/phase-v2-10-reviewer-ledger-integration.md`
 
-## ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
+## Historical ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
 
-The user explicitly authorized v2 Phase 9 on 2026-08-20. It routes fresh v2 semantic
+The user explicitly authorized v2 Phase 9 on 2026-08-20. It routed historical fresh-v2 semantic
 evidence assessment and canonical statement drafting to GPT-5.6 Luna High while retaining
 MiMo-v2.5-Pro exact passage selection, application-owned quote provenance, the existing
 two-axis scoring system, bounded physical-attempt accounting, and downstream Reviewer and
@@ -63,7 +64,7 @@ Canonical plan:
 
 The requested `.agents/PLANS/` path is a compatibility mirror only when writable. It must not become a second source of truth.
 
-## ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
+## Historical ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
 
 The user explicitly authorized v2 Phase 8 on 2026-08-20. It preserves the complete
 multi-round survivor pool, uses MiMo-v2.5-Pro to recommend only persisted survivors as a

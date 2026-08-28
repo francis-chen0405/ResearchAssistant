@@ -1,4 +1,4 @@
-"""Restart-safe exact extraction for the Phase-8 deep-analysis queue."""
+"""Restart-safe exact extraction for the fresh-v2 deep-analysis queue."""
 
 from __future__ import annotations
 

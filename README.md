@@ -48,9 +48,10 @@ Fresh v2 evidence is analyzer-admitted after deterministic checks and is explici
 
 | Task | Model |
 | --- | --- |
-| Planner / Search / Selection / Synthesis | MiMo-v2.5-Pro |
+| Planner / Search / Selection | MiMo-v2.5-Pro |
 | Scout | MiMo-v2.5 |
 | Gap Analysis / Evidence Analyst | GPT-5.6 Luna |
+| Synthesis | Deterministic Python assembly |
 
 ## Providers
 

@@ -1,4 +1,4 @@
-# ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
+# Historical ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
 
 Status: Complete and verified. Corrected 2026-08-24 under the authorized Phase-8 boundary.
 

@@ -1,4 +1,4 @@
-"""Source-capped Phase-8 deep analysis with deterministic survivor backfill."""
+"""Source-capped fresh-v2 deep analysis with deterministic survivor backfill."""
 
 from __future__ import annotations
 
@@ -20,10 +20,7 @@ from agents.v2_extraction import (
     run_v2_exact_extraction,
     snapshots_by_source,
 )
-from agents.v2_source_selection import (
-    _source_reservation,
-    _synthesis_reservation,
-)
+from agents.v2_source_selection import _source_reservation
 from models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
@@ -359,8 +356,7 @@ def _queue_reservation(
 ) -> tuple[int, Decimal]:
     points = _reservation_points(candidates, routing_config)
     if not points:
-        synthesis = _synthesis_reservation(routing_config.preflight(), 0)
-        return synthesis
+        return 0, Decimal("0")
     return points[-1].cumulative_reserved_tokens, points[-1].cumulative_reserved_cost_usd
 
 
@@ -376,13 +372,12 @@ def _reservation_points(
         source_token_reserve, source_cost_reserve = _source_reservation(preflight, candidate)
         source_tokens += source_token_reserve
         source_cost = add_usd(source_cost, source_cost_reserve)
-        synthesis_tokens, synthesis_cost = _synthesis_reservation(preflight, len(points) + 1)
         points.append(
             V2DeepAnalysisTokenReservation(
                 source_id=candidate.source_id,
                 queue_size=len(points) + 1,
-                cumulative_reserved_tokens=source_tokens + synthesis_tokens,
-                cumulative_reserved_cost_usd=add_usd(source_cost, synthesis_cost),
+                cumulative_reserved_tokens=source_tokens,
+                cumulative_reserved_cost_usd=source_cost,
             )
         )
     return tuple(points)

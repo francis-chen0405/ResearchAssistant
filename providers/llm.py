@@ -152,6 +152,8 @@ DEFAULT_LLM_ROUTING = LLMRoutingConfig(
         generation=GenerationSettings(temperature=0.0),
     ),
     synthesizer=StageRoute(
+        # Retained for historical direct-MiMo compatibility; fresh v2 assembles
+        # synthesis deterministically after Analyzer Admission.
         primary=ModelAlias.MIMO_V25_PRO,
         fallbacks=(ModelAlias.MINIMAX_M3,),
         generation=GenerationSettings(temperature=0.15),
@@ -176,6 +178,8 @@ DIRECT_MIMO_ROUTING = LLMRoutingConfig(
         generation=GenerationSettings(temperature=0.0),
     ),
     synthesizer=StageRoute(
+        # Kept in the complete route schema for compatibility; fresh v2 uses
+        # deterministic assembly after Analyzer Admission.
         primary=ModelAlias.MIMO_V25_PRO,
         generation=GenerationSettings(temperature=0.15),
     ),
@@ -216,6 +220,8 @@ V2_LLM_ROUTING = LLMRoutingConfig(
         generation=GenerationSettings(temperature=0.0),
     ),
     synthesizer=StageRoute(
+        # Kept in the complete route schema for compatibility; fresh v2 uses
+        # deterministic assembly after Analyzer Admission.
         primary=ModelAlias.MIMO_V25_PRO,
         generation=GenerationSettings(temperature=0.15),
     ),

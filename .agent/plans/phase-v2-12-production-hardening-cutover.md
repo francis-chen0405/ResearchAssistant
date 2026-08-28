@@ -1,4 +1,4 @@
-# ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
+# Historical ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
 
 Status: Complete and verified.
 

@@ -59,8 +59,6 @@ V2_SOURCE_SELECTION_COMPLETION_KEY = (
 )
 V2_SOURCE_SELECTION_STATUS_KEY = "phase-13-source-statuses-analyzer-admission"
 _RECOMMENDATION_TARGET_MAX = 10
-_SYNTHESIS_BASE_INPUT_TOKENS = 1000
-_SYNTHESIS_INPUT_TOKENS_PER_SOURCE = 500
 
 
 class V2SourceSelectionRunResult(V2SourceSelectionQueueResult):
@@ -351,74 +349,45 @@ def calculate_v2_deep_analysis_queue(
 
     rationale_by_id = {item.source_id: item for item in recommendation_rationales}
     preflight = routing_config.preflight()
-    synthesis_zero = _synthesis_reservation(preflight, 0)
-    synthesis_calls = 2
-    synthesis_reservable = _fits(
-        budget,
-        physical_calls=synthesis_calls,
-        tokens=synthesis_zero[0],
-        cost=synthesis_zero[1],
-    )
     queued: list[UUID] = []
     reservation_points: list[V2DeepAnalysisTokenReservation] = []
     source_tokens = 0
     source_cost = Decimal("0")
     limiting_reason: V2DeepAnalysisBudgetReason | None = None
-    if synthesis_reservable:
-        for source_id in ordered_source_ids:
-            candidate_tokens, candidate_cost = _source_reservation(
-                preflight,
-                candidates[source_id],
-            )
-            proposed_source_tokens = source_tokens + candidate_tokens
-            proposed_source_cost = add_usd(source_cost, candidate_cost)
-            synthesis_tokens, synthesis_cost = _synthesis_reservation(
-                preflight,
-                len(queued) + 1,
-            )
-            total_tokens = proposed_source_tokens + synthesis_tokens
-            total_cost = add_usd(proposed_source_cost, synthesis_cost)
-            physical_calls = (
-                synthesis_calls + (len(queued) + 1) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
-            )
-            limiting_reason = _limiting_reason(
-                budget,
-                physical_calls=physical_calls,
-                tokens=total_tokens,
-                cost=total_cost,
-            )
-            if limiting_reason is not None:
-                break
-            queued.append(source_id)
-            source_tokens = proposed_source_tokens
-            source_cost = proposed_source_cost
-            reservation_points.append(
-                V2DeepAnalysisTokenReservation(
-                    source_id=source_id,
-                    queue_size=len(queued),
-                    cumulative_reserved_tokens=total_tokens,
-                    cumulative_reserved_cost_usd=total_cost,
-                )
-            )
-    else:
+    for source_id in ordered_source_ids:
+        candidate_tokens, candidate_cost = _source_reservation(
+            preflight,
+            candidates[source_id],
+        )
+        proposed_source_tokens = source_tokens + candidate_tokens
+        proposed_source_cost = add_usd(source_cost, candidate_cost)
+        physical_calls = (len(queued) + 1) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
         limiting_reason = _limiting_reason(
             budget,
-            physical_calls=synthesis_calls,
-            tokens=synthesis_zero[0],
-            cost=synthesis_zero[1],
+            physical_calls=physical_calls,
+            tokens=proposed_source_tokens,
+            cost=proposed_source_cost,
+        )
+        if limiting_reason is not None:
+            break
+        queued.append(source_id)
+        source_tokens = proposed_source_tokens
+        source_cost = proposed_source_cost
+        reservation_points.append(
+            V2DeepAnalysisTokenReservation(
+                source_id=source_id,
+                queue_size=len(queued),
+                cumulative_reserved_tokens=source_tokens,
+                cumulative_reserved_cost_usd=source_cost,
+            )
         )
 
     if queued:
         total_tokens = reservation_points[-1].cumulative_reserved_tokens
         total_cost = reservation_points[-1].cumulative_reserved_cost_usd
         physical_after = (
-            budget.physical_calls_used
-            + synthesis_calls
-            + len(queued) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+            budget.physical_calls_used + len(queued) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
         )
-    elif synthesis_reservable:
-        total_tokens, total_cost = synthesis_zero
-        physical_after = budget.physical_calls_used + synthesis_calls
     else:
         total_tokens, total_cost = 0, Decimal("0")
         physical_after = budget.physical_calls_used
@@ -460,7 +429,7 @@ def calculate_v2_deep_analysis_queue(
         queued_source_ids=tuple(queued),
         source_statuses=statuses,
         queue_capacity=len(queued),
-        mandatory_synthesis_reservable=synthesis_reservable,
+        mandatory_synthesis_reservable=True,
         physical_calls_after_reserve=physical_after,
         total_reserved_tokens=total_tokens,
         total_reserved_cost_usd=total_cost,
@@ -627,15 +596,6 @@ def _source_reservation(
     return V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP, add_usd(*(item[1] for item in totals))
 
 
-def _synthesis_reservation(preflight: object, queue_size: int) -> tuple[int, Decimal]:
-    input_tokens = _SYNTHESIS_BASE_INPUT_TOKENS + queue_size * _SYNTHESIS_INPUT_TOKENS_PER_SOURCE
-    reservation = preflight.reserve(LLMStage.SYNTHESIZER, input_tokens)
-    return reservation.reserved_tokens * 2, add_usd(
-        reservation.reserved_cost_usd,
-        reservation.reserved_cost_usd,
-    )
-
-
 def _selection_attempt_is_safe(
     budget: V2DeepAnalysisBudget,
     attempts: Sequence[V2SourceSelectionAttempt],
@@ -644,12 +604,11 @@ def _selection_attempt_is_safe(
 ) -> bool:
     prior_tokens = sum(item.reserved_tokens for item in attempts)
     prior_cost = add_usd(*(item.reserved_cost_usd for item in attempts))
-    synthesis_tokens, synthesis_cost = _synthesis_reservation(routing_config.preflight(), 0)
     return _fits(
         budget,
-        physical_calls=len(attempts) + 1 + 2,
-        tokens=prior_tokens + reservation.reserved_tokens + synthesis_tokens,
-        cost=add_usd(prior_cost, reservation.reserved_cost_usd, synthesis_cost),
+        physical_calls=len(attempts) + 1,
+        tokens=prior_tokens + reservation.reserved_tokens,
+        cost=add_usd(prior_cost, reservation.reserved_cost_usd),
     )
 
 

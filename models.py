@@ -1539,7 +1539,9 @@ class V2DeepAnalysisQueuePlan(StrictModel):
     physical_calls_per_source: Literal[3, 7] = 3
     source_token_cap: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
     source_physical_call_cap: Literal[3, 7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
-    mandatory_synthesis_physical_calls: Literal[2] = 2
+    # Historical Phase-8/12 plans may still carry two model synthesis attempts;
+    # fresh Phase-13 synthesis is deterministic and therefore reserves none.
+    mandatory_synthesis_physical_calls: Literal[0, 2] = 0
     mandatory_synthesis_reservable: bool
     physical_calls_after_reserve: Annotated[int, Field(ge=0, le=160)]
     total_reserved_tokens: NonNegativeInt
@@ -1609,7 +1611,9 @@ class V2SourceSelectionQueueResult(StrictModel):
     physical_calls_per_source: Literal[3, 7] = 3
     source_token_cap: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
     source_physical_call_cap: Literal[3, 7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
-    mandatory_synthesis_physical_calls: Literal[2] = 2
+    # Historical Phase-8/12 queue results may still carry two model synthesis attempts;
+    # fresh Phase-13 synthesis is deterministic and therefore reserves none.
+    mandatory_synthesis_physical_calls: Literal[0, 2] = 0
     mandatory_synthesis_reservable: bool
     physical_calls_after_reserve: Annotated[int, Field(ge=0, le=160)]
     total_reserved_tokens: NonNegativeInt
@@ -3056,7 +3060,7 @@ class V2SynthesizerRecommendationMetadata(StrictModel):
 
 
 class V2SynthesizerInput(StrictModel):
-    """Bounded v2 synthesis input with no raw-source text or unreviewed claims."""
+    """Bounded v2 synthesis projection with no raw-source text or unreviewed claims."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

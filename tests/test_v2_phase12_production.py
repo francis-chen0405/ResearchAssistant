@@ -7,8 +7,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from agents.synthesizer import _item_from_ledger
-from frontend.live_service import LiveResearchController
+import agents.v2_final_output as v2_final_output
+from frontend.live_service import LiveResearchController, ResearchProgress, _v2_progress_percent
 from models import (
     DiscoveryProvider,
     ModelUsageMetadata,
@@ -20,8 +20,6 @@ from models import (
     ScoutItem,
     SelectedSentenceRange,
     Stage,
-    SynthesisOutput,
-    SynthesisSection,
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
     V2AdmissionMethod,
@@ -33,6 +31,8 @@ from models import (
     V2InitialPlannerSearchResponse,
     V2MaterialGap,
     V2PipelineIdentity,
+    V2ProviderRunDiagnostics,
+    V2RunDiagnostics,
     V2SourceSelectionModelOutput,
     V2SourceSelectionRecommendation,
     V2VerbatimQuoteSelection,
@@ -131,13 +131,11 @@ class _V2Model:
         completed_rounds: int = 1,
         fail_first_scout: bool = False,
         fail_first_gap: bool = False,
-        invalid_synthesis: bool = False,
     ) -> None:
         self.requests: list[LLMRequest] = []
         self.completed_rounds = completed_rounds
         self.fail_first_scout = fail_first_scout
         self.fail_first_gap = fail_first_gap
-        self.invalid_synthesis = invalid_synthesis
         self.gap_attempts = 0
         self.scout_attempts = 0
         self.successful_gaps = 0
@@ -261,41 +259,6 @@ class _V2Model:
                 evidence_quality=4,
                 claim_fit=4,
                 reasoning="The quoted comparison is directly relevant but observational.",
-            )
-        if output_name == "SynthesisOutput":
-            items = request.input_artifact.approved_ledger_items
-            synthesis_items = tuple(_item_from_ledger(item) for item in items)
-            if self.invalid_synthesis:
-                synthesis_items = (
-                    synthesis_items[0].model_copy(
-                        update={"approved_factual_statement": "Unsupported altered statement."}
-                    ),
-                    *synthesis_items[1:],
-                )
-            return SynthesisOutput(
-                run_id=request.run_id,
-                synthesizer_prompt_version=request.prompt.version,
-                synthesizer_model_name=request.model_alias.value,
-                created_at=NOW,
-                sections=(
-                    SynthesisSection(
-                        section_type="supporting",
-                        items=tuple(
-                            item for item in synthesis_items if item.stance.value == "supporting"
-                        ),
-                    ),
-                )
-                if all(item.stance.value == "supporting" for item in synthesis_items)
-                else tuple(
-                    SynthesisSection(
-                        section_type=stance,
-                        items=tuple(
-                            item for item in synthesis_items if item.stance.value == stance
-                        ),
-                    )
-                    for stance in ("supporting", "opposing")
-                    if any(item.stance.value == stance for item in synthesis_items)
-                ),
             )
         raise AssertionError(f"unhandled output type: {output_name}")
 
@@ -427,7 +390,7 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
     assert first.budget.physical_calls_used < 40
     assert first.budget.token_exposure == len(model.requests) * 15
     assert read_v2_artifact(str(db_path), run_id, V2_PRODUCTION_ARTIFACT_KEY)
-    assert len(model.requests) == 7
+    assert len(model.requests) == 6
     assert all(request.stage is not LLMStage.REVIEWER for request in model.requests)
     assert all(
         request.requested_output_type.__name__ != "ReviewerDecision" for request in model.requests
@@ -583,6 +546,31 @@ def test_extraction_failure_is_preserved_in_final_pipeline_reason(tmp_path: Path
     assert snapshot.retrieval_attempts_used == result.diagnostics.sources_acquired
     assert snapshot.research_controls.discovery_providers == (DiscoveryProvider.EXA,)
     assert snapshot.v2_diagnostics == result.diagnostics
+
+
+def test_fresh_synthesis_progress_uses_the_synthesis_stage_value() -> None:
+    diagnostics = V2RunDiagnostics(
+        configured_providers=(DiscoveryProvider.EXA,),
+        provider_outcomes=(V2ProviderRunDiagnostics(provider=DiscoveryProvider.EXA),),
+    )
+    budget = V2BudgetSnapshot(
+        physical_calls_used=0,
+        token_exposure=0,
+        cost_exposure_usd=Decimal("0"),
+        physical_calls_remaining=160,
+        tokens_remaining=500_000,
+        cost_remaining_usd=Decimal("1"),
+    )
+    progress = ResearchProgress(
+        stance="supporting",
+        status="running",
+        model_attempts=0,
+        retrieval_attempts=0,
+        usable_snapshots=0,
+        candidates=0,
+    )
+
+    assert _v2_progress_percent(Stage.SYNTHESIS, 1, diagnostics, budget, progress, progress) == 92
 
 
 def test_run_wide_lower_call_ceiling_fails_closed_before_an_overrun(tmp_path: Path) -> None:
@@ -773,10 +761,25 @@ def test_run_g_transient_gap_degradation_preserves_valid_release(tmp_path: Path)
     assert result.budget.physical_calls_used == len(model.requests)
 
 
-def test_run_h_release_integrity_violation_blocks_final_output(tmp_path: Path) -> None:
+def test_run_h_release_integrity_violation_blocks_final_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_builder = v2_final_output.build_v2_synthesis_output
+
+    def invalid_builder(*, synthesis_input: object, created_at: datetime) -> object:
+        valid = original_builder(synthesis_input=synthesis_input, created_at=created_at)
+        first_section = valid.sections[0]
+        invalid_item = first_section.items[0].model_copy(
+            update={"approved_factual_statement": "Unsupported altered statement."}
+        )
+        invalid_section = first_section.model_copy(update={"items": (invalid_item,)})
+        return valid.model_copy(update={"sections": (invalid_section, *valid.sections[1:])})
+
+    monkeypatch.setattr(v2_final_output, "build_v2_synthesis_output", invalid_builder)
     result = _run(
         tmp_path / "run-h.sqlite3",
-        _V2Model(invalid_synthesis=True),
+        _V2Model(),
         _Search(),
         _Scraper(),
     )
@@ -815,7 +818,6 @@ def test_persisted_cancellation_before_first_model_call_stops_v2_run(tmp_path: P
         ("V2SourceSelectionModelOutput", Stage.SOURCE_SELECTION),
         ("V2VerbatimQuoteSelection", Stage.DEEP_ANALYSIS),
         ("V2EvidenceAnalystModelOutput", Stage.DEEP_ANALYSIS),
-        ("SynthesisOutput", Stage.SYNTHESIS),
     ),
 )
 def test_persisted_cancellation_stops_before_later_v2_model_work(

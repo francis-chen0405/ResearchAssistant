@@ -1,4 +1,4 @@
-# ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
+# Historical ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
 
 Status: Complete and verified.
 

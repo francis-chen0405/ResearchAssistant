@@ -24,10 +24,16 @@ from models import (
     SynthesisOutput,
     SynthesisSection,
     V2AdmissionMethod,
+    V2SynthesizerInput,
+    V2SynthesizerLedgerItem,
 )
 
 DEFAULT_SYNTHESIZER_PROMPT_VERSION = "phase5-deterministic-synthesizer-v1"
 DEFAULT_SYNTHESIZER_MODEL_NAME = "deterministic-fixture"
+V2_DETERMINISTIC_SYNTHESIZER_VERSION = "phase13-deterministic-synthesizer-v1"
+V2_DETERMINISTIC_SYNTHESIZER_MODEL_NAME = "deterministic-v2-assembler"
+
+SynthesisRecord = LedgerRecord | V2SynthesizerLedgerItem
 
 _PLACEMENT_ORDER = {
     Placement.PRIMARY: 0,
@@ -67,19 +73,45 @@ def build_synthesis_output(
         if record.run_id != run_id:
             raise ValueError("Ledger record run_id must match synthesis run_id")
 
+    sections = _build_synthesis_sections(typed_records)
+    return SynthesisOutput(
+        run_id=run_id,
+        synthesizer_prompt_version=synthesizer_prompt_version,
+        synthesizer_model_name=synthesizer_model_name,
+        created_at=created_at,
+        sections=sections,
+    )
+
+
+def build_v2_synthesis_output(
+    *,
+    synthesis_input: V2SynthesizerInput,
+    created_at: datetime,
+) -> SynthesisOutput:
+    """Assemble fresh-v2 evidence without a model-owned ordering decision."""
+    return SynthesisOutput(
+        run_id=synthesis_input.run_id,
+        synthesizer_prompt_version=V2_DETERMINISTIC_SYNTHESIZER_VERSION,
+        synthesizer_model_name=V2_DETERMINISTIC_SYNTHESIZER_MODEL_NAME,
+        created_at=created_at,
+        sections=_build_synthesis_sections(synthesis_input.approved_ledger_items),
+    )
+
+
+def _build_synthesis_sections(records: Sequence[SynthesisRecord]) -> tuple[SynthesisSection, ...]:
     sections: list[SynthesisSection] = []
     supporting = _ordered_records(
         record
-        for record in typed_records
+        for record in records
         if record.stance is Stance.SUPPORTING and record.placement is not Placement.QUALIFIED_ONLY
     )
     opposing = _ordered_records(
         record
-        for record in typed_records
+        for record in records
         if record.stance is Stance.OPPOSING and record.placement is not Placement.QUALIFIED_ONLY
     )
     limitations = _ordered_records(
-        record for record in typed_records if record.placement is Placement.QUALIFIED_ONLY
+        record for record in records if record.placement is Placement.QUALIFIED_ONLY
     )
 
     if supporting:
@@ -104,13 +136,7 @@ def build_synthesis_output(
             )
         )
 
-    return SynthesisOutput(
-        run_id=run_id,
-        synthesizer_prompt_version=synthesizer_prompt_version,
-        synthesizer_model_name=synthesizer_model_name,
-        created_at=created_at,
-        sections=sections,
-    )
+    return tuple(sections)
 
 
 def _require_ledger_record(record: object, location: str) -> LedgerRecord:
@@ -119,7 +145,7 @@ def _require_ledger_record(record: object, location: str) -> LedgerRecord:
     return record
 
 
-def _ordered_records(records: Iterable[LedgerRecord]) -> list[LedgerRecord]:
+def _ordered_records(records: Iterable[SynthesisRecord]) -> list[SynthesisRecord]:
     return sorted(
         records,
         key=lambda record: (
@@ -130,7 +156,7 @@ def _ordered_records(records: Iterable[LedgerRecord]) -> list[LedgerRecord]:
     )
 
 
-def _item_from_ledger(record: LedgerRecord) -> SynthesisItem:
+def _item_from_ledger(record: SynthesisRecord) -> SynthesisItem:
     return SynthesisItem(
         connective_template_id=_template_for_record(record),
         ledger_claim_id=record.ledger_claim_id,
@@ -143,7 +169,7 @@ def _item_from_ledger(record: LedgerRecord) -> SynthesisItem:
     )
 
 
-def _template_for_record(record: LedgerRecord) -> str:
+def _template_for_record(record: SynthesisRecord) -> str:
     if record.entailment is Entailment.PARTIAL:
         return PARTIAL_ENTAILMENT_TEMPLATE_ID
     if record.entailment is Entailment.WEAK:

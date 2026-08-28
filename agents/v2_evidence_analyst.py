@@ -185,7 +185,7 @@ def revise_v2_canonical_statement(
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime] | None = None,
 ) -> V2EvidenceAnalystRevisionResult:
-    """Run the one allowed post-Reviewer Luna revision under the same physical budget."""
+    """Run the historical post-Reviewer Luna revision under the same physical budget."""
     now = clock or _utc_now
     if source_result.run_id != batch_input.run_id:
         raise ValueError("revision source result must match the Phase-9 run")
