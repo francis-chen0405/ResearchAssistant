@@ -111,4 +111,5 @@ def test_launcher_defers_missing_credentials_to_local_provider_setup() -> None:
     assert "frontend.api" in launcher
     assert 'next" start' in launcher
     assert "127.0.0.1:3000" in launcher
+    assert 'EXPECTED_API_VERSION="mlp-5-v2-phase13-analyzer-admission"' in launcher
     assert "streamlit" not in launcher.lower()

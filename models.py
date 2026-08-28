@@ -178,15 +178,18 @@ V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
 V2_ADAPTIVE_SEARCH_POLICY_IDENTITY = "researchassistant-v2-phase-7-adaptive-search-v1"
 V2_SOURCE_SELECTION_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v1"
 V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = (
-    "researchassistant-v2-phase-8-deep-analysis-queue-v2-source-cap-60k-v1"
+    "researchassistant-v2-phase-13-deep-analysis-queue-analyzer-admission-v1"
 )
-V2_EVIDENCE_ANALYST_POLICY_IDENTITY = "researchassistant-v2-phase-9-luna-evidence-analyst-v2"
+V2_EVIDENCE_ANALYST_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-13-luna-evidence-analyst-analyzer-admission-v1"
+)
+V2_EVIDENCE_ADMISSION_POLICY_IDENTITY = "researchassistant-v2-phase-13-analyzer-admission-v1"
 V2_REVIEWER_LEDGER_POLICY_IDENTITY = "researchassistant-v2-phase-10-reviewer-ledger-v2"
 V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY = (
-    "researchassistant-v2-phase-12-deep-analysis-backfill-v1"
+    "researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v1"
 )
 V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP = 60_000
-V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP = 7
+V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP = 3
 
 
 class ResearchDirection(StrEnum):
@@ -1526,13 +1529,16 @@ class V2DeepAnalysisQueuePlan(StrictModel):
     queued_source_ids: tuple[UUID, ...]
     source_statuses: tuple[V2DeepAnalysisSourceStatus, ...]
     queue_capacity: NonNegativeInt
-    attempts_per_logical_operation: Literal[2] = 2
+    # Legacy Phase-8 plans used two attempts for every logical operation. Fresh
+    # Phase-13 work has one Analyst operation; extraction keeps its own retry cap.
+    attempts_per_logical_operation: Literal[1, 2] = 1
+    extractor_attempts_per_source: Literal[2] = 2
     extractor_logical_calls_per_source: Literal[1] = 1
-    analyst_logical_calls_per_source: Literal[2] = 2
-    reviewer_logical_calls_per_source: Literal[1] = 1
-    physical_calls_per_source: Literal[7] = 7
+    analyst_logical_calls_per_source: Literal[1, 2] = 1
+    reviewer_logical_calls_per_source: Literal[0, 1] = 0
+    physical_calls_per_source: Literal[3, 7] = 3
     source_token_cap: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
-    source_physical_call_cap: Literal[7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+    source_physical_call_cap: Literal[3, 7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
     mandatory_synthesis_physical_calls: Literal[2] = 2
     mandatory_synthesis_reservable: bool
     physical_calls_after_reserve: Annotated[int, Field(ge=0, le=160)]
@@ -1540,9 +1546,7 @@ class V2DeepAnalysisQueuePlan(StrictModel):
     total_reserved_cost_usd: ExactUSD
     token_reservations: tuple[V2DeepAnalysisTokenReservation, ...]
     limiting_reason: V2DeepAnalysisBudgetReason | None = None
-    policy_identity: Literal[
-        "researchassistant-v2-phase-8-deep-analysis-queue-v2-source-cap-60k-v1"
-    ] = V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY
+    policy_identity: str = V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY
 
     @model_validator(mode="after")
     def validate_queue_plan(self) -> V2DeepAnalysisQueuePlan:
@@ -1602,9 +1606,9 @@ class V2SourceSelectionQueueResult(StrictModel):
     queued_source_ids: tuple[UUID, ...]
     source_statuses: tuple[V2DeepAnalysisSourceStatus, ...]
     queue_capacity: NonNegativeInt
-    physical_calls_per_source: Literal[7] = 7
+    physical_calls_per_source: Literal[3, 7] = 3
     source_token_cap: Literal[60000] = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
-    source_physical_call_cap: Literal[7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+    source_physical_call_cap: Literal[3, 7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
     mandatory_synthesis_physical_calls: Literal[2] = 2
     mandatory_synthesis_reservable: bool
     physical_calls_after_reserve: Annotated[int, Field(ge=0, le=160)]
@@ -1833,6 +1837,7 @@ class Stage(StrEnum):
     SUPPORTING_RESEARCHER = "supporting_researcher"
     OPPOSING_RESEARCHER = "opposing_researcher"
     EVIDENCE_ANALYST = "evidence_analyst"
+    EVIDENCE_ADMISSION = "evidence_admission"
     STATEMENT_REVIEWER = "statement_reviewer"
     CLAIM_LEDGER = "claim_ledger"
     DEBATE_SYNTHESIZER = "debate_synthesizer"
@@ -2401,11 +2406,12 @@ class V2EvidenceRelationship(StrEnum):
 
 
 class V2EvidenceAnalystModelOutput(StrictModel):
-    """Luna's semantic assessment; source quotation and provenance remain upstream."""
+    """Luna's compact assessment and final factual statement."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     narrowest_supported_proposition: NonEmptyStr = Field(max_length=2000)
+    canonical_factual_statement: NonEmptyStr | None = Field(default=None, max_length=2000)
     relationship_to_claim: V2EvidenceRelationship
     material_limitations: tuple[NonEmptyStr, ...] = Field(default=(), max_length=12)
     inferential_boundaries: tuple[NonEmptyStr, ...] = Field(default=(), max_length=12)
@@ -2490,9 +2496,7 @@ class V2EvidenceAnalystBatchInput(StrictModel):
     queue_result: V2SourceSelectionQueueResult
     queued_candidates: tuple[V2EvidenceAnalystCandidateInput, ...]
     extraction_failures: tuple[V2EvidenceAnalystExtractionFailure, ...] = ()
-    policy_identity: Literal["researchassistant-v2-phase-9-luna-evidence-analyst-v2"] = (
-        V2_EVIDENCE_ANALYST_POLICY_IDENTITY
-    )
+    policy_identity: str = V2_EVIDENCE_ANALYST_POLICY_IDENTITY
 
     @model_validator(mode="after")
     def validate_complete_queue(self) -> V2EvidenceAnalystBatchInput:
@@ -2580,6 +2584,7 @@ class V2EvidenceAnalystRevisionResult(StrictModel):
 
 class V2EvidenceAnalystState(StrEnum):
     NOT_QUEUED = "not_queued"
+    READY_FOR_ADMISSION = "ready_for_admission"
     READY_FOR_REVIEWER = "ready_for_reviewer"
     REJECTED = "rejected"
     FAILED = "failed"
@@ -2639,6 +2644,7 @@ class V2EvidenceAnalystBatchResult(StrictModel):
     input: V2EvidenceAnalystBatchInput
     source_results: tuple[V2EvidenceAnalystSourceResult, ...]
     completed_at: datetime
+    policy_identity: str = V2_EVIDENCE_ANALYST_POLICY_IDENTITY
 
     _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
 
@@ -2675,6 +2681,150 @@ class V2LedgerProvenance(StrictModel):
     source_family_id: NonEmptyStr
     recommended: bool
     relevant_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=18)
+
+
+class V2AdmissionMethod(StrEnum):
+    """Semantic boundary that admitted a v2 evidence record."""
+
+    ANALYZER_ADMITTED = "analyzer_admitted"
+    REVIEWER_APPROVED = "reviewer_approved"
+
+
+class V2EvidenceAdmissionRecord(StrictModel):
+    """Analyzer-admitted evidence; Reviewer metadata is retained only for compatibility."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    ledger_claim_id: UUID
+    quote_block_id: UUID
+    stance: Stance
+    approved_factual_statement: NonEmptyStr
+    approved_claim_text: NonEmptyStr
+    evidence_quality: Score
+    claim_fit: Score
+    ledger_score: ApprovedScore
+    placement: Placement
+    entailment: Entailment
+    source_url: NonEmptyStr
+    retrieval_attempt_id: UUID
+    snapshot_id: UUID
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    segment_offsets: Annotated[tuple[SegmentOffset, ...], Field(min_length=1)]
+    analyst_prompt_version: NonEmptyStr
+    analyst_model_name: NonEmptyStr
+    analyst_completed_at: datetime
+    admission_method: V2AdmissionMethod
+    admission_policy_identity: NonEmptyStr
+    admitted_at: datetime
+    reviewer_prompt_version: NonEmptyStr | None = None
+    reviewer_model_name: NonEmptyStr | None = None
+    reviewed_at: datetime | None = None
+    reviewer_approval_id: ReviewerApprovalId | None = None
+    ledger_validated_at: datetime
+
+    _segment_offsets_are_ordered = field_validator("segment_offsets")(_validate_offsets)
+    _analyst_completed_at_is_aware = field_validator("analyst_completed_at")(
+        _validate_aware_datetime
+    )
+    _admitted_at_is_aware = field_validator("admitted_at")(_validate_aware_datetime)
+    _reviewed_at_is_aware = field_validator("reviewed_at")(_validate_aware_datetime)
+    _ledger_validated_at_is_aware = field_validator("ledger_validated_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_score_and_admission(self) -> V2EvidenceAdmissionRecord:
+        if not _is_ledger_eligible(self.evidence_quality, self.claim_fit):
+            raise ValueError("evidence admission requires eligible two-axis scores")
+        if self.ledger_score != _derive_ledger_score(self.evidence_quality, self.claim_fit):
+            raise ValueError("evidence admission requires the derived Ledger score")
+        if not _placement_matches_score_policy(
+            self.evidence_quality, self.claim_fit, self.placement
+        ):
+            raise ValueError("evidence admission requires the derived placement")
+        if self.entailment is not entailment_for_claim_fit(self.claim_fit):
+            raise ValueError("evidence admission entailment must be derived from Claim Fit")
+        reviewer_values = (
+            self.reviewer_prompt_version,
+            self.reviewer_model_name,
+            self.reviewed_at,
+            self.reviewer_approval_id,
+        )
+        if self.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED and any(
+            value is not None for value in reviewer_values
+        ):
+            raise ValueError("analyzer-admitted evidence cannot carry Reviewer metadata")
+        if self.admission_method is V2AdmissionMethod.REVIEWER_APPROVED and any(
+            value is None for value in reviewer_values
+        ):
+            raise ValueError("Reviewer-approved evidence requires complete Reviewer metadata")
+        return self
+
+
+class V2EvidenceAdmissionState(StrEnum):
+    NOT_QUEUED = "not_queued"
+    ANALYST_REJECTED = "analyst_rejected"
+    ANALYST_FAILED = "analyst_failed"
+    ANALYZER_ADMITTED = "analyzer_admitted"
+
+
+class V2EvidenceAdmissionSourceResult(StrictModel):
+    """Deterministic admission outcome for one analyzed survivor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    source_id: UUID
+    direction: ResearchDirection
+    state: V2EvidenceAdmissionState
+    provenance: V2LedgerProvenance
+    evidence_record: V2EvidenceAdmissionRecord | None = None
+    failure: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def validate_admission_shape(self) -> V2EvidenceAdmissionSourceResult:
+        if self.provenance.source_id != self.source_id:
+            raise ValueError("admission provenance source_id must match the source result")
+        if self.provenance.research_direction is not self.direction:
+            raise ValueError("admission provenance direction must match the source result")
+        if self.state is V2EvidenceAdmissionState.ANALYZER_ADMITTED:
+            if self.evidence_record is None or self.failure is not None:
+                raise ValueError("analyzer-admitted results require an evidence record")
+            if self.evidence_record.admission_method is not V2AdmissionMethod.ANALYZER_ADMITTED:
+                raise ValueError("fresh evidence records must be analyzer-admitted")
+            if self.evidence_record.run_id != self.run_id:
+                raise ValueError("evidence record run_id must match the source result")
+            return self
+        if self.evidence_record is not None:
+            raise ValueError("only analyzer-admitted results may carry an evidence record")
+        if self.state is V2EvidenceAdmissionState.ANALYST_FAILED and self.failure is None:
+            raise ValueError("failed admission results require a failure reason")
+        if self.state is not V2EvidenceAdmissionState.ANALYST_FAILED and self.failure is not None:
+            raise ValueError("only failed admission results may carry a failure reason")
+        return self
+
+
+class V2EvidenceAdmissionBatchResult(StrictModel):
+    """Restartable deterministic bridge from the Analyst to final synthesis."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    analyst_result: V2EvidenceAnalystBatchResult
+    source_results: tuple[V2EvidenceAdmissionSourceResult, ...]
+    completed_at: datetime
+    policy_identity: str = V2_EVIDENCE_ADMISSION_POLICY_IDENTITY
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_complete_results(self) -> V2EvidenceAdmissionBatchResult:
+        if self.analyst_result.run_id != self.run_id:
+            raise ValueError("evidence admission must match its Analyst result")
+        expected = tuple(item.source_id for item in self.analyst_result.source_results)
+        actual = tuple(item.source_id for item in self.source_results)
+        if actual != expected or len(actual) != len(set(actual)):
+            raise ValueError("evidence admission must retain every survivor in order")
+        return self
 
 
 class V2ReviewerLedgerState(StrEnum):
@@ -2759,6 +2909,7 @@ class V2ReviewerLedgerBatchResult(StrictModel):
 
 class V2DeepAnalysisSourceExecutionState(StrEnum):
     ADMITTED = "admitted"
+    ANALYZER_ADMITTED = "analyzer_admitted"
     BUDGET_EXHAUSTED = "budget_exhausted"
     EXTRACTION_FAILED = "extraction_failed"
     ANALYST_REJECTED = "analyst_rejected"
@@ -2783,7 +2934,10 @@ class V2DeepAnalysisSourceExecution(StrictModel):
         if self.state is V2DeepAnalysisSourceExecutionState.NOT_ATTEMPTED:
             if self.physical_call_sequences or self.failure_reason is not None:
                 raise ValueError("unattempted sources cannot carry execution evidence")
-        elif self.state is V2DeepAnalysisSourceExecutionState.ADMITTED:
+        elif self.state in {
+            V2DeepAnalysisSourceExecutionState.ADMITTED,
+            V2DeepAnalysisSourceExecutionState.ANALYZER_ADMITTED,
+        }:
             if self.failure_reason is not None:
                 raise ValueError("admitted sources cannot carry a failure reason")
         elif self.failure_reason is None:
@@ -2828,15 +2982,14 @@ class V2DeepAnalysisBackfillResult(StrictModel):
     replacement_source_ids: tuple[UUID, ...]
     final_execution_order: tuple[UUID, ...]
     final_queue_result: V2SourceSelectionQueueResult
-    final_reviewer_result: V2ReviewerLedgerBatchResult
     source_executions: tuple[V2DeepAnalysisSourceExecution, ...]
     source_reconciliations: tuple[V2DeepAnalysisSourceReconciliation, ...]
     remaining_run_budget: V2DeepAnalysisBudget
+    final_admission_result: V2EvidenceAdmissionBatchResult | None = None
+    final_reviewer_result: V2ReviewerLedgerBatchResult | None = None
     terminal_reasons: tuple[NonEmptyStr, ...] = ()
     completed_at: datetime
-    policy_identity: Literal["researchassistant-v2-phase-12-deep-analysis-backfill-v1"] = (
-        V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY
-    )
+    policy_identity: str = V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY
 
     _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
 
@@ -2844,8 +2997,17 @@ class V2DeepAnalysisBackfillResult(StrictModel):
     def validate_backfill(self) -> V2DeepAnalysisBackfillResult:
         if self.run_id != self.final_queue_result.run_id:
             raise ValueError("backfill and final queue must share the run")
-        if self.final_reviewer_result.run_id != self.run_id:
-            raise ValueError("backfill and final Reviewer result must share the run")
+        if self.final_admission_result is None and self.final_reviewer_result is None:
+            raise ValueError("backfill must retain an admission or historical Reviewer result")
+        if self.final_admission_result is not None and (
+            self.final_admission_result.run_id != self.run_id
+        ):
+            raise ValueError("backfill and final admission result must share the run")
+        if (
+            self.final_reviewer_result is not None
+            and self.final_reviewer_result.run_id != self.run_id
+        ):
+            raise ValueError("backfill and historical Reviewer result must share the run")
         if len(self.final_execution_order) != len(set(self.final_execution_order)):
             raise ValueError("final execution order cannot contain duplicates")
         if self.final_queue_result.queued_source_ids != self.final_execution_order:
@@ -2873,7 +3035,8 @@ class V2SynthesizerLedgerItem(StrictModel):
     source_id: UUID
     direction: ResearchDirection
     ledger_claim_id: UUID
-    reviewer_approval_id: ReviewerApprovalId
+    reviewer_approval_id: ReviewerApprovalId | None = None
+    admission_method: V2AdmissionMethod = V2AdmissionMethod.REVIEWER_APPROVED
     stance: Stance
     placement: Placement
     entailment: Entailment
@@ -3310,7 +3473,8 @@ class SynthesisItem(StrictModel):
 
     connective_template_id: NonEmptyStr
     ledger_claim_id: UUID
-    reviewer_approval_id: ReviewerApprovalId
+    reviewer_approval_id: ReviewerApprovalId | None = None
+    admission_method: V2AdmissionMethod = V2AdmissionMethod.REVIEWER_APPROVED
     stance: Stance
     placement: Placement
     entailment: Entailment
@@ -3407,8 +3571,14 @@ class V2RunDiagnostics(StrictModel):
 
 class V2ResultSourceStatus(StrEnum):
     RECOMMENDED_ANALYZED = "recommended_analyzed"
+    RECOMMENDED_ANALYZER_ADMITTED = "recommended_analyzer_admitted"
+    RECOMMENDED_ANALYZER_REJECTED = "recommended_analyzer_rejected"
+    RECOMMENDED_ANALYZER_FAILED = "recommended_analyzer_failed"
     RECOMMENDED_NO_LEDGER_EVIDENCE = "recommended_no_ledger_evidence"
     SURVIVING_ANALYZED = "surviving_analyzed"
+    SURVIVING_ANALYZER_ADMITTED = "surviving_analyzer_admitted"
+    SURVIVING_ANALYZER_REJECTED = "surviving_analyzer_rejected"
+    SURVIVING_ANALYZER_FAILED = "surviving_analyzer_failed"
     SURVIVING_NOT_DEEPLY_ANALYZED = "surviving_not_deeply_analyzed"
     BUDGET_PREVENTED_ANALYSIS = "budget_prevented_analysis"
 
@@ -3445,6 +3615,15 @@ class V2ResultSource(StrictModel):
         if self.status is V2ResultSourceStatus.RECOMMENDED_ANALYZED:
             if not self.recommended or not self.ledger_claim_ids:
                 raise ValueError("recommended analyzed sources require Ledger evidence")
+        if self.status is V2ResultSourceStatus.RECOMMENDED_ANALYZER_ADMITTED:
+            if not self.recommended or not self.ledger_claim_ids:
+                raise ValueError("recommended analyzer-admitted sources require evidence")
+        if self.status in {
+            V2ResultSourceStatus.RECOMMENDED_ANALYZER_REJECTED,
+            V2ResultSourceStatus.RECOMMENDED_ANALYZER_FAILED,
+        }:
+            if not self.recommended or self.ledger_claim_ids:
+                raise ValueError("recommended analyzer-terminal sources cannot carry evidence")
         if self.status is V2ResultSourceStatus.RECOMMENDED_NO_LEDGER_EVIDENCE:
             if not self.recommended or self.ledger_claim_ids:
                 raise ValueError("recommended no-Ledger sources cannot carry Ledger evidence")
@@ -3453,6 +3632,17 @@ class V2ResultSource(StrictModel):
                 raise ValueError(
                     "surviving analyzed sources require nonrecommended Ledger evidence"
                 )
+        if self.status is V2ResultSourceStatus.SURVIVING_ANALYZER_ADMITTED:
+            if self.recommended or not self.ledger_claim_ids:
+                raise ValueError(
+                    "surviving analyzer-admitted sources require nonrecommended evidence"
+                )
+        if self.status in {
+            V2ResultSourceStatus.SURVIVING_ANALYZER_REJECTED,
+            V2ResultSourceStatus.SURVIVING_ANALYZER_FAILED,
+        }:
+            if self.recommended or self.ledger_claim_ids:
+                raise ValueError("surviving analyzer-terminal sources cannot carry evidence")
         if self.status is V2ResultSourceStatus.SURVIVING_NOT_DEEPLY_ANALYZED:
             if self.recommended or self.ledger_claim_ids:
                 raise ValueError("unanalysed surviving sources cannot carry Ledger evidence")

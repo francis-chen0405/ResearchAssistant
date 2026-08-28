@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from agents.v2_source_selection import (
+    V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
     V2_SOURCE_SELECTION_MAX_ATTEMPTS,
     V2_SOURCE_SELECTION_POOL_KEY,
     calculate_v2_deep_analysis_queue,
@@ -27,7 +28,13 @@ from models import (
 )
 from providers.llm import LLMProviderCapabilities, LLMStage
 from providers.v2_routing import V2RoutingConfig
-from store import init_db, insert_run, insert_v2_pipeline_identity, read_v2_artifact
+from store import (
+    init_db,
+    insert_run,
+    insert_v2_artifact,
+    insert_v2_pipeline_identity,
+    read_v2_artifact,
+)
 
 NOW = datetime(2026, 8, 21, tzinfo=UTC)
 
@@ -218,6 +225,54 @@ def test_all_survivors_are_retained_and_complementary_recommendations_are_queued
     assert tuple(item.source_id for item in persisted_pool.survivors) == source_ids
 
 
+def test_phase13_queue_does_not_resume_legacy_phase8_queue_artifact(tmp_path: Path) -> None:
+    source_id = uuid4()
+    selection_input = _selection_input((_candidate(source_id, family="family-a", probe_score=10),))
+    source_output = V2SourceSelectionModelOutput(
+        recommendations=(
+            V2SourceSelectionRecommendation.model_validate(_recommendation(source_id)),
+        )
+    )
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    source_db = _prepare_db(source_dir, selection_input.run_id)
+    source_result = run_v2_source_selection_and_queue(
+        db_path=source_db,
+        selection_input=selection_input,
+        llm_provider=FakeSourceSelector([source_output]),
+        routing_config=_routing(),
+        budget=_budget(),
+        clock=lambda: NOW,
+    )
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    legacy_db = _prepare_db(legacy_dir, selection_input.run_id)
+    legacy_result = source_result.model_copy(
+        update={"physical_calls_per_source": 7, "source_physical_call_cap": 7}
+    )
+    insert_v2_artifact(
+        legacy_db,
+        V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
+        legacy_result,
+        NOW,
+    )
+
+    provider = FakeSourceSelector([source_output])
+    fresh_result = run_v2_source_selection_and_queue(
+        db_path=legacy_db,
+        selection_input=selection_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        budget=_budget(),
+        clock=lambda: NOW,
+    )
+
+    assert len(provider.requests) == 1
+    assert fresh_result.physical_calls_per_source == 3
+    assert fresh_result.source_physical_call_cap == 3
+
+
 def test_duplicate_family_domination_retries_then_accepts_diverse_prefix(tmp_path: Path) -> None:
     source_ids = tuple(uuid4() for _ in range(3))
     selection_input = _selection_input(
@@ -309,14 +364,16 @@ def test_queue_math_protects_the_160_call_ceiling_and_synthesis() -> None:
         budget=_budget(physical_calls_used=151),
     )
 
-    assert result.physical_calls_per_source == 7
+    assert result.physical_calls_per_source == 3
+    assert result.attempts_per_logical_operation == 1
+    assert result.extractor_attempts_per_source == 2
     assert result.mandatory_synthesis_physical_calls == 2
-    assert result.queue_capacity == 1
-    assert result.physical_calls_after_reserve == 160
-    assert result.queued_source_ids == (source_ids[0],)
+    assert result.queue_capacity == 2
+    assert result.physical_calls_after_reserve == 159
+    assert result.queued_source_ids == source_ids[:2]
     assert all(
         status.budget_prevented_reason == "physical_call_ceiling"
-        for status in result.source_statuses[1:]
+        for status in result.source_statuses[2:]
     )
 
 
@@ -339,7 +396,7 @@ def test_six_survivors_fit_the_500k_ceiling_with_60k_source_allowances() -> None
 
     assert result.queued_source_ids == source_ids
     assert result.queue_capacity == 6
-    assert result.physical_calls_after_reserve == 44
+    assert result.physical_calls_after_reserve == 20
     assert result.total_reserved_tokens < 500_000
 
 

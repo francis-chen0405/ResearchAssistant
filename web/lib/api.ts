@@ -146,7 +146,7 @@ export type V2ResultSource = {
   recommended: boolean;
   recommendation_rank: number | null;
   queue_rank: number | null;
-  status: "recommended_analyzed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
+  status: "recommended_analyzed" | "recommended_analyzer_admitted" | "recommended_analyzer_rejected" | "recommended_analyzer_failed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_analyzer_admitted" | "surviving_analyzer_rejected" | "surviving_analyzer_failed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
   ledger_claim_ids: string[];
   budget_prevented_reason: string | null;
 };

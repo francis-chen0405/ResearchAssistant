@@ -12,6 +12,7 @@ from pydantic import ConfigDict
 
 from agents.v2_acquisition import V2AcquisitionProbeOutput
 from agents.v2_discovery import V2DiscoveryScoutOutput
+from agents.v2_evidence_admission import run_v2_evidence_admission
 from agents.v2_evidence_analyst import run_v2_evidence_analyst
 from agents.v2_extraction import (
     V2ExactExtractionResult,
@@ -19,7 +20,6 @@ from agents.v2_extraction import (
     run_v2_exact_extraction,
     snapshots_by_source,
 )
-from agents.v2_reviewer_ledger import run_v2_reviewer_ledger
 from agents.v2_source_selection import (
     _source_reservation,
     _synthesis_reservation,
@@ -36,21 +36,23 @@ from models import (
     V2DeepAnalysisSourceReconciliation,
     V2DeepAnalysisSourceStatus,
     V2DeepAnalysisTokenReservation,
+    V2EvidenceAdmissionBatchResult,
+    V2EvidenceAdmissionState,
     V2EvidenceAnalystBatchInput,
     V2EvidenceAnalystBatchResult,
     V2EvidenceAnalystCandidateInput,
+    V2EvidenceAnalystExtractionFailure,
     V2EvidenceAnalystSourceResult,
     V2EvidenceAnalystState,
     V2LedgerProvenance,
-    V2ReviewerLedgerBatchResult,
-    V2ReviewerLedgerSourceResult,
-    V2ReviewerLedgerState,
     V2SourceSelectionCandidate,
     V2SourceSelectionQueueResult,
 )
 from money import add_usd
 from providers.llm import LLMProvider
 from providers.v2_budget import (
+    V2_PHYSICAL_CALL_ARTIFACT_PREFIX,
+    V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX,
     V2BudgetExceededError,
     V2BudgetSnapshot,
     V2CancellationRequested,
@@ -60,7 +62,7 @@ from providers.v2_budget import (
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
-V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY = "phase-12-deep-analysis-backfill-v1"
+V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY = "phase-13-deep-analysis-backfill-analyzer-admission"
 
 
 class V2DeepAnalysisWave(StrictModel):
@@ -71,7 +73,7 @@ class V2DeepAnalysisWave(StrictModel):
     source_id: UUID
     extraction: V2ExactExtractionResult
     analyst: V2EvidenceAnalystBatchResult
-    reviewer: V2ReviewerLedgerBatchResult
+    admission: V2EvidenceAdmissionBatchResult | None = None
 
 
 def run_v2_deep_analysis_with_backfill(
@@ -101,17 +103,16 @@ def run_v2_deep_analysis_with_backfill(
         *queue_result.queued_source_ids,
         *(source_id for source_id in source_ids if source_id not in queue_result.queued_source_ids),
     )
-    target_size = len(queue_result.queued_source_ids)
     admitted: list[UUID] = []
     attempted: dict[UUID, V2DeepAnalysisWave] = {}
+    attempted_source_ids: list[UUID] = []
     executions: dict[UUID, V2DeepAnalysisSourceExecution] = {}
     terminal_reasons: list[str] = []
 
     for source_id in priority:
-        if len(admitted) >= target_size:
-            break
         if source_id in attempted:
             continue
+        attempted_source_ids.append(source_id)
         try:
             wave = _run_source_wave(
                 path=path,
@@ -135,24 +136,33 @@ def run_v2_deep_analysis_with_backfill(
                 state=(
                     V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
                     if isinstance(exc, V2BudgetExceededError)
-                    else V2DeepAnalysisSourceExecutionState.REVIEWER_FAILED
+                    else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
                 ),
                 failure_reason=reason,
             )
         executions[source_id] = execution
-        if execution.state is V2DeepAnalysisSourceExecutionState.ADMITTED:
+        if execution.state in {
+            V2DeepAnalysisSourceExecutionState.ADMITTED,
+            V2DeepAnalysisSourceExecutionState.ANALYZER_ADMITTED,
+        }:
             admitted.append(source_id)
         elif execution.failure_reason is not None:
             terminal_reasons.append(execution.failure_reason)
+        if execution.state is V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED:
+            break
 
     final_queue = _final_queue_result(
         queue_result,
-        tuple(admitted),
+        tuple(attempted_source_ids),
         routing_config,
-        attempted_source_ids=tuple(attempted),
+        attempted_source_ids=tuple(attempted_source_ids),
     )
-    final_analyst = _final_analyst_result(final_queue, attempted, tuple(admitted))
-    final_reviewer = _final_reviewer_result(final_analyst, attempted, tuple(admitted))
+    final_analyst = _final_analyst_result(final_queue, attempted, tuple(attempted_source_ids))
+    final_admission = run_v2_evidence_admission(
+        db_path=path,
+        analyst_result=final_analyst,
+        clock=now,
+    )
     source_executions = tuple(
         executions.get(
             source_id,
@@ -181,12 +191,12 @@ def run_v2_deep_analysis_with_backfill(
         replacement_source_ids=tuple(
             source_id for source_id in admitted if source_id not in queue_result.queued_source_ids
         ),
-        final_execution_order=tuple(admitted),
+        final_execution_order=tuple(attempted_source_ids),
         final_queue_result=final_queue,
-        final_reviewer_result=final_reviewer,
         source_executions=source_executions,
         source_reconciliations=reconciliations,
         remaining_run_budget=remaining,
+        final_admission_result=final_admission,
         terminal_reasons=tuple(dict.fromkeys(terminal_reasons)),
         completed_at=_aware(now()),
     )
@@ -213,7 +223,7 @@ def _run_source_wave(
         acquisition_outputs=acquisition_outputs,
         llm_provider=llm_provider,
         routing_config=routing_config,
-        artifact_key=f"phase-12-exact-extraction-{suffix}",
+        artifact_key=f"phase-13-exact-extraction-{suffix}",
         clock=clock,
     )
     analyst = run_v2_evidence_analyst(
@@ -221,22 +231,20 @@ def _run_source_wave(
         batch_input=extraction.analyst_input(snapshots_by_source(acquisition_outputs)),
         llm_provider=llm_provider,
         routing_config=routing_config,
-        artifact_key=f"phase-9-luna-evidence-analyst-batch-{suffix}",
+        artifact_key=f"phase-13-luna-evidence-analyst-batch-{suffix}",
         clock=clock,
     )
-    reviewer = run_v2_reviewer_ledger(
+    admission = run_v2_evidence_admission(
         db_path=path,
         analyst_result=analyst,
-        llm_provider=llm_provider,
-        routing_config=routing_config,
-        artifact_key=f"phase-10-reviewer-ledger-batch-{suffix}",
         clock=clock,
+        artifact_key=f"phase-13-evidence-admission-batch-{suffix}",
     )
     return V2DeepAnalysisWave(
         source_id=source_id,
         extraction=extraction,
         analyst=analyst,
-        reviewer=reviewer,
+        admission=admission,
     )
 
 
@@ -386,9 +394,10 @@ def _execution_from_wave(
 ) -> V2DeepAnalysisSourceExecution:
     extraction = wave.extraction.sources[0]
     analyst = next(item for item in wave.analyst.source_results if item.source_id == wave.source_id)
-    reviewer = next(
-        item for item in wave.reviewer.source_results if item.source_id == wave.source_id
-    )
+    admission = wave.admission
+    if admission is None:
+        raise ValueError("fresh deep-analysis waves require an evidence admission result")
+    admitted = next(item for item in admission.source_results if item.source_id == wave.source_id)
     sequences = _physical_sequences(path, wave.extraction.run_id, wave.source_id)
     if extraction.state is V2ExtractionState.FAILED:
         extraction_failure = extraction.failure or "exact extraction failed"
@@ -421,46 +430,77 @@ def _execution_from_wave(
             physical_call_sequences=sequences,
             failure_reason=analyst_failure,
         )
-    if reviewer.state is V2ReviewerLedgerState.ADMITTED:
+    if admitted.state is V2EvidenceAdmissionState.ANALYZER_ADMITTED:
         return V2DeepAnalysisSourceExecution(
             source_id=wave.source_id,
-            state=V2DeepAnalysisSourceExecutionState.ADMITTED,
+            state=V2DeepAnalysisSourceExecutionState.ANALYZER_ADMITTED,
             physical_call_sequences=sequences,
         )
-    reviewer_failure = reviewer.failure or "Reviewer rejected the source"
+    if admitted.state is V2EvidenceAdmissionState.ANALYST_REJECTED:
+        return V2DeepAnalysisSourceExecution(
+            source_id=wave.source_id,
+            state=V2DeepAnalysisSourceExecutionState.ANALYST_REJECTED,
+            physical_call_sequences=sequences,
+            failure_reason="Deterministic admission retained the Analyst rejection",
+        )
+    admission_failure = admitted.failure or "Deterministic admission rejected the source"
     return V2DeepAnalysisSourceExecution(
         source_id=wave.source_id,
         state=(
             V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
-            if "V2BudgetExceededError" in reviewer_failure
-            else V2DeepAnalysisSourceExecutionState.REVIEWER_REJECTED
-            if reviewer.state is V2ReviewerLedgerState.REVIEWER_REJECTED
-            else V2DeepAnalysisSourceExecutionState.REVIEWER_FAILED
+            if "V2BudgetExceededError" in admission_failure
+            else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
         ),
         physical_call_sequences=sequences,
-        failure_reason=reviewer_failure,
+        failure_reason=admission_failure,
     )
 
 
 def _final_analyst_result(
     queue_result: V2SourceSelectionQueueResult,
     waves: dict[UUID, V2DeepAnalysisWave],
-    admitted: tuple[UUID, ...],
+    attempted_source_ids: tuple[UUID, ...],
 ) -> V2EvidenceAnalystBatchResult:
-    admitted_set = set(admitted)
+    attempted = set(attempted_source_ids)
     source_results: list[V2EvidenceAnalystSourceResult] = []
     candidate_by_id: dict[UUID, V2EvidenceAnalystCandidateInput] = {}
+    extraction_failures: dict[UUID, str] = {}
     for candidate in queue_result.input.survivors:
-        if candidate.source_id in admitted_set:
-            wave = waves[candidate.source_id]
-            source_results.append(
+        if candidate.source_id in attempted:
+            wave = waves.get(candidate.source_id)
+            source_result = (
                 next(
                     item
                     for item in wave.analyst.source_results
                     if item.source_id == candidate.source_id
                 )
+                if wave is not None
+                else V2EvidenceAnalystSourceResult(
+                    run_id=queue_result.run_id,
+                    source_id=candidate.source_id,
+                    direction=candidate.direction,
+                    state=V2EvidenceAnalystState.FAILED,
+                    failure="Deep analysis stopped before an Analyst result was produced.",
+                )
             )
-            candidate_by_id[candidate.source_id] = wave.analyst.input.queued_candidates[0]
+            source_results.append(source_result)
+            candidate_input = (
+                next(
+                    (
+                        item
+                        for item in wave.analyst.input.queued_candidates
+                        if item.source_id == candidate.source_id
+                    ),
+                    None,
+                )
+                if wave is not None
+                else None
+            )
+            if candidate_input is not None:
+                candidate_by_id[candidate.source_id] = candidate_input
+            if wave is not None:
+                for failure in wave.analyst.input.extraction_failures:
+                    extraction_failures[failure.source_id] = failure.failure
         else:
             source_results.append(
                 V2EvidenceAnalystSourceResult(
@@ -477,53 +517,19 @@ def _final_analyst_result(
             exact_claim=queue_result.input.exact_claim,
             directions=queue_result.input.directions,
             queue_result=queue_result,
-            queued_candidates=tuple(candidate_by_id[source_id] for source_id in admitted),
+            queued_candidates=tuple(
+                candidate_by_id[source_id]
+                for source_id in queue_result.queued_source_ids
+                if source_id in candidate_by_id
+            ),
+            extraction_failures=tuple(
+                V2EvidenceAnalystExtractionFailure(source_id=source_id, failure=failure)
+                for source_id, failure in extraction_failures.items()
+                if source_id in set(queue_result.queued_source_ids)
+            ),
         ),
         source_results=tuple(source_results),
         completed_at=queue_result.completed_at,
-    )
-
-
-def _final_reviewer_result(
-    analyst_result: V2EvidenceAnalystBatchResult,
-    waves: dict[UUID, V2DeepAnalysisWave],
-    admitted: tuple[UUID, ...],
-) -> V2ReviewerLedgerBatchResult:
-    admitted_set = set(admitted)
-    survivor_by_id = {
-        item.source_id: item for item in analyst_result.input.queue_result.input.survivors
-    }
-    status_by_id = {
-        item.source_id: item for item in analyst_result.input.queue_result.source_statuses
-    }
-    results: list[V2ReviewerLedgerSourceResult] = []
-    for source_result in analyst_result.source_results:
-        survivor = survivor_by_id[source_result.source_id]
-        status = status_by_id[source_result.source_id]
-        if source_result.source_id in admitted_set:
-            results.append(
-                next(
-                    item
-                    for item in waves[source_result.source_id].reviewer.source_results
-                    if item.source_id == source_result.source_id
-                )
-            )
-            continue
-        results.append(
-            V2ReviewerLedgerSourceResult(
-                run_id=analyst_result.run_id,
-                source_id=source_result.source_id,
-                direction=source_result.direction,
-                state=V2ReviewerLedgerState.NOT_QUEUED,
-                provenance=_provenance(survivor, status),
-                review_results=(),
-            )
-        )
-    return V2ReviewerLedgerBatchResult(
-        run_id=analyst_result.run_id,
-        analyst_result=analyst_result,
-        source_results=tuple(results),
-        completed_at=analyst_result.completed_at,
     )
 
 
@@ -587,18 +593,28 @@ def _read_source_audit(
     starts: list[V2PhysicalCallStart] = []
     completions: list[V2PhysicalCallCompletion | None] = []
     for sequence in range(1, 161):
-        try:
-            row = read_v2_artifact(path, run_id, f"phase-12-physical-call-{sequence:03d}-start")
-        except KeyError:
+        row = None
+        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
+            try:
+                row = read_v2_artifact(path, run_id, f"{prefix}-{sequence:03d}-start")
+            except KeyError:
+                continue
+            break
+        if row is None:
             break
         start = V2PhysicalCallStart.model_validate_json(row.payload_json)
         if start.source_id != source_id:
             continue
-        try:
-            completion_row = read_v2_artifact(
-                path, run_id, f"phase-12-physical-call-{sequence:03d}-completion"
-            )
-        except KeyError:
+        completion_row = None
+        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
+            try:
+                completion_row = read_v2_artifact(
+                    path, run_id, f"{prefix}-{sequence:03d}-completion"
+                )
+            except KeyError:
+                continue
+            break
+        if completion_row is None:
             completion_row = None
         starts.append(start)
         completions.append(

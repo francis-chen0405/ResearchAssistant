@@ -400,10 +400,10 @@ def _print_v2_launch_summary(
     print(f"database: {db_path}")
     print(f"run id: {run_id}")
     print(f"claim: {claim}")
-    print("production pipeline: ResearchAssistant v2 Phases 3-11")
+    print("production pipeline: ResearchAssistant v2 analyzer-admission release")
     print(
         "model routes: MiMo-v2.5 planning/selection, MiMo-v2.5-Pro extraction/synthesis, "
-        "Luna analysis/gap/review"
+        "Luna gap analysis/evidence analysis"
     )
     print(f"token budget: {config.ceilings.max_total_tokens}")
     print(f"cost budget usd: {config.ceilings.max_total_cost_usd}")

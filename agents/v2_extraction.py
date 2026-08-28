@@ -47,8 +47,11 @@ from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
-V2_EXTRACTION_ARTIFACT_KEY = "phase-12-exact-extraction"
-V2_EXTRACTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-exact-extraction-v2"
+V2_EXTRACTION_LEGACY_ARTIFACT_KEY = "phase-12-exact-extraction"
+V2_EXTRACTION_ARTIFACT_KEY = "phase-13-exact-extraction-analyzer-admission"
+V2_EXTRACTION_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-13-exact-extraction-analyzer-admission-v1"
+)
 V2_EXTRACTION_FILTER_VERSION = "researchassistant-v2-phase-12-post-filter-v1"
 V2_EXTRACTION_MAX_ATTEMPTS = 2
 _CLAIM_TOKEN_RE = re.compile(r"[a-z0-9]+")

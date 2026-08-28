@@ -10,7 +10,7 @@ Fresh website and CLI runs use the production ResearchAssistant v2 pipeline. His
 
 - **Research directions:** choose Support, Challenge, or both. A disabled direction is not researched or implied by the result.
 - **Adaptive research:** an initial search is followed by evidence inspection, gap analysis, and targeted follow-up rounds when useful and within budget.
-- **Evidence pipeline:** discovery → acquisition → immutable snapshots → passage extraction → evidence analysis → review → Ledger-backed synthesis.
+- **Evidence pipeline:** discovery → acquisition → immutable snapshots → passage extraction → Luna evidence analysis → deterministic admission → Ledger-backed synthesis.
 - **Provenance:** source tracking, immutable hashes, evidence locations, research-round context, and stated limitations travel with the result.
 - **Reliability:** restart-safe execution, deterministic validation, bounded model budgets, and compatibility with historical runs.
 
@@ -35,22 +35,20 @@ Adaptive Search
   ↓
 Evidence Analysis
   ↓
-Reviewer
-  ↓
-Ledger
+Analyzer Admission
   ↓
 Synthesis
   ↓
 Validated Result
 ```
 
-The Ledger admits only reviewed evidence-backed statements. Final validation prevents unreviewed or unsupported factual statements from being released.
+Fresh v2 evidence is analyzer-admitted after deterministic checks and is explicitly labeled as not independently reviewer-approved. Historical Reviewer-backed runs remain readable.
 
 ## Models
 
 | Task | Model |
 | --- | --- |
-| Planner / Search / Selection / Reviewer / Synthesis | MiMo-v2.5-Pro |
+| Planner / Search / Selection / Synthesis | MiMo-v2.5-Pro |
 | Scout | MiMo-v2.5 |
 | Gap Analysis / Evidence Analyst | GPT-5.6 Luna |
 

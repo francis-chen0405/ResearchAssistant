@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from threading import Lock, local
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -26,7 +27,9 @@ from store import insert_v2_artifact, read_v2_artifact
 V2_MAX_PHYSICAL_CALLS = 160
 V2_MAX_TOTAL_TOKENS = 500_000
 V2_DEFAULT_TOTAL_COST_USD = Decimal("0.20")
-V2_BUDGET_POLICY_IDENTITY = "researchassistant-v2-phase-12-run-budget-v1"
+V2_BUDGET_POLICY_IDENTITY = "researchassistant-v2-phase-13-run-budget-analyzer-admission-v1"
+V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX = "phase-12-physical-call"
+V2_PHYSICAL_CALL_ARTIFACT_PREFIX = "phase-13-physical-call"
 
 
 class V2CancellationRequested(RuntimeError):
@@ -65,11 +68,7 @@ class V2PhysicalCallStart(StrictModel):
         ge=1,
         le=V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     )
-    source_physical_call_cap: int = Field(
-        default=V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
-        ge=1,
-        le=V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
-    )
+    source_physical_call_cap: Literal[3, 7] = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
     started_at: datetime
 
     _started_at_is_aware = field_validator("started_at")(_aware)
@@ -360,14 +359,26 @@ def _read_audit(
     starts: list[V2PhysicalCallStart] = []
     completions: dict[int, V2PhysicalCallCompletion] = {}
     for sequence in range(1, V2_MAX_PHYSICAL_CALLS + 1):
-        try:
-            start_row = read_v2_artifact(path, run_id, _start_key(sequence))
-        except KeyError:
+        start_row = None
+        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
+            try:
+                start_row = read_v2_artifact(path, run_id, f"{prefix}-{sequence:03d}-start")
+            except KeyError:
+                continue
+            break
+        if start_row is None:
             break
         starts.append(V2PhysicalCallStart.model_validate_json(start_row.payload_json))
-        try:
-            completion_row = read_v2_artifact(path, run_id, _completion_key(sequence))
-        except KeyError:
+        completion_row = None
+        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
+            try:
+                completion_row = read_v2_artifact(
+                    path, run_id, f"{prefix}-{sequence:03d}-completion"
+                )
+            except KeyError:
+                continue
+            break
+        if completion_row is None:
             continue
         completions[sequence] = V2PhysicalCallCompletion.model_validate_json(
             completion_row.payload_json
@@ -412,11 +423,11 @@ def _usage_tokens(usage: ModelUsageMetadata | None) -> int | None:
 
 
 def _start_key(sequence: int) -> str:
-    return f"phase-12-physical-call-{sequence:03d}-start"
+    return f"{V2_PHYSICAL_CALL_ARTIFACT_PREFIX}-{sequence:03d}-start"
 
 
 def _completion_key(sequence: int) -> str:
-    return f"phase-12-physical-call-{sequence:03d}-completion"
+    return f"{V2_PHYSICAL_CALL_ARTIFACT_PREFIX}-{sequence:03d}-completion"
 
 
 def _utc_now() -> datetime:

@@ -12,7 +12,11 @@ from xml.sax.saxutils import escape
 
 from pydantic import ConfigDict, Field, field_validator
 
-from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY, render_v2_final_output
+from agents.v2_final_output import (
+    V2_FINAL_OUTPUT_ARTIFACT_KEY,
+    V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+    render_v2_final_output,
+)
 from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, StrictModel, V2FinalResearchOutput
 from orchestrator import ProviderRunStatus, inspect_provider_run
 from store import open_read_only_store, read_provider_run_contract, read_v2_artifact
@@ -110,9 +114,13 @@ def _read_v2_final_output(db_path: str | Path, run_id: UUID) -> V2FinalResearchO
     if not Path(db_path).is_file():
         return None
     with open_read_only_store(db_path) as store:
-        try:
-            artifact = read_v2_artifact(store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
-        except KeyError:
+        for artifact_key in (V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY):
+            try:
+                artifact = read_v2_artifact(store.connection, run_id, artifact_key)
+            except KeyError:
+                continue
+            break
+        else:
             return None
     if artifact.artifact_type != V2FinalResearchOutput.__name__:
         raise ValueError("v2 final output artifact has an unexpected type")

@@ -51,8 +51,13 @@ from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_SOURCE_SELECTION_MAX_ATTEMPTS = 2
-V2_SOURCE_SELECTION_POOL_KEY = "phase-8-complete-survivor-pool"
-V2_SOURCE_SELECTION_COMPLETION_KEY = "phase-8-source-selection-deep-analysis-queue"
+V2_SOURCE_SELECTION_LEGACY_POOL_KEY = "phase-8-complete-survivor-pool"
+V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY = "phase-8-source-selection-deep-analysis-queue"
+V2_SOURCE_SELECTION_POOL_KEY = "phase-13-complete-survivor-pool-analyzer-admission"
+V2_SOURCE_SELECTION_COMPLETION_KEY = (
+    "phase-13-source-selection-deep-analysis-queue-analyzer-admission"
+)
+V2_SOURCE_SELECTION_STATUS_KEY = "phase-13-source-statuses-analyzer-admission"
 _RECOMMENDATION_TARGET_MAX = 10
 _SYNTHESIS_BASE_INPUT_TOKENS = 1000
 _SYNTHESIS_INPUT_TOKENS_PER_SOURCE = 500
@@ -319,7 +324,7 @@ def run_v2_source_selection_and_queue(
         limiting_reason=queue_plan.limiting_reason,
         completed_at=completed_at,
     )
-    insert_v2_artifact(path, "phase-8-source-statuses", result, completed_at)
+    insert_v2_artifact(path, V2_SOURCE_SELECTION_STATUS_KEY, result, completed_at)
     insert_v2_artifact(path, V2_SOURCE_SELECTION_COMPLETION_KEY, result, completed_at)
     return V2SourceSelectionRunResult(**result.model_dump(), resumed=False)
 
@@ -614,8 +619,7 @@ def _source_reservation(
     totals: list[tuple[int, Decimal]] = []
     for stage, physical_attempts in (
         (LLMStage.EXTRACTOR, 2),
-        (LLMStage.ANALYST, 4),
-        (LLMStage.REVIEWER, 1),
+        (LLMStage.ANALYST, 1),
     ):
         reservation = preflight.reserve(stage, candidate.deep_analysis_input_tokens)
         for _ in range(physical_attempts):

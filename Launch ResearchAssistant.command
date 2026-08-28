@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 
 WEB_URL="http://127.0.0.1:3000/"
 API_URL="http://127.0.0.1:8765/api/health"
-EXPECTED_API_VERSION="mlp-5-v2-phase12"
+EXPECTED_API_VERSION="mlp-5-v2-phase13-analyzer-admission"
 
 if [[ ! -x ".venv/bin/python" ]]; then
   osascript -e 'display alert "ResearchAssistant is not installed" message "Create .venv and install requirements.txt, then try again." as critical'

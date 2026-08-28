@@ -18,9 +18,15 @@ from pydantic import Field, field_validator
 
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
 from agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
-from agents.v2_evidence_analyst import V2_EVIDENCE_ANALYST_ARTIFACT_KEY
+from agents.v2_evidence_analyst import (
+    V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
+    V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
+)
 from agents.v2_final_output import render_v2_final_output
-from agents.v2_source_selection import V2_SOURCE_SELECTION_COMPLETION_KEY
+from agents.v2_source_selection import (
+    V2_SOURCE_SELECTION_COMPLETION_KEY,
+    V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
+)
 from cli import CLIExitCode, repository_identity
 from frontend.security import redact_text
 from models import (
@@ -37,7 +43,9 @@ from models import (
     V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
     V2EvidenceAnalystSourceResult,
+    V2PersistedArtifact,
     V2ResultSource,
+    V2ResultSourceStatus,
     V2RunDiagnostics,
     V2SourceSelectionQueueResult,
 )
@@ -75,6 +83,8 @@ from store import (
 from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
     V2_PRODUCTION_FINGERPRINT_KEY,
+    V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+    V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
     V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
@@ -109,6 +119,20 @@ _MAX_EARLY_RESULTS = 32
 def contract_controls(policy_identity: str) -> ResearchControls:
     """Recover immutable controls persisted in the canonical provider contract."""
     return ResearchControls.from_policy_identity(policy_identity)
+
+
+def _read_first_v2_artifact(
+    db_path: str | Path | Connection,
+    run_id: UUID,
+    artifact_keys: tuple[str, ...],
+) -> V2PersistedArtifact:
+    """Read the newest key first while preserving access to historical v2 artifacts."""
+    for artifact_key in artifact_keys:
+        try:
+            return read_v2_artifact(db_path, run_id, artifact_key)
+        except KeyError:
+            continue
+    raise KeyError(f"none of the v2 artifacts exist for run {run_id}: {artifact_keys}")
 
 
 class LiveRunRequest(StrictModel):
@@ -439,7 +463,11 @@ class LiveResearchController:
             early = self._early_results.pop(key, None)
         if Path(resolved).is_file():
             try:
-                artifact = read_v2_artifact(resolved, run_id, V2_PRODUCTION_ARTIFACT_KEY)
+                artifact = _read_first_v2_artifact(
+                    resolved,
+                    run_id,
+                    (V2_PRODUCTION_ARTIFACT_KEY, V2_PRODUCTION_LEGACY_ARTIFACT_KEY),
+                )
                 return self._snapshot_from_v2_result(
                     V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
                 )
@@ -528,8 +556,10 @@ class LiveResearchController:
             items: list[LiveHistoryItem] = []
             for manifest in manifests:
                 try:
-                    artifact = read_v2_artifact(
-                        store.connection, manifest.run_id, V2_PRODUCTION_ARTIFACT_KEY
+                    artifact = _read_first_v2_artifact(
+                        store.connection,
+                        manifest.run_id,
+                        (V2_PRODUCTION_ARTIFACT_KEY, V2_PRODUCTION_LEGACY_ARTIFACT_KEY),
                     )
                     result = V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
                 except (KeyError, ValueError):
@@ -1205,7 +1235,17 @@ def _v2_research_progress(
 ) -> ResearchProgress:
     direction = "support" if stance == "supporting" else "challenge"
     matching = tuple(source for source in sources if source.direction.value == direction)
-    analyzed = sum("analyzed" in source.status.value for source in matching)
+    analyzed_statuses = {
+        V2ResultSourceStatus.RECOMMENDED_ANALYZED,
+        V2ResultSourceStatus.RECOMMENDED_ANALYZER_ADMITTED,
+        V2ResultSourceStatus.RECOMMENDED_ANALYZER_REJECTED,
+        V2ResultSourceStatus.RECOMMENDED_ANALYZER_FAILED,
+        V2ResultSourceStatus.SURVIVING_ANALYZED,
+        V2ResultSourceStatus.SURVIVING_ANALYZER_ADMITTED,
+        V2ResultSourceStatus.SURVIVING_ANALYZER_REJECTED,
+        V2ResultSourceStatus.SURVIVING_ANALYZER_FAILED,
+    }
+    analyzed = sum(source.status in analyzed_statuses for source in matching)
     return ResearchProgress(
         stance=stance,
         status="completed" if enabled else "disabled",
@@ -1218,7 +1258,11 @@ def _v2_research_progress(
 
 def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
     try:
-        artifact = read_v2_artifact(db_path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+        artifact = _read_first_v2_artifact(
+            db_path,
+            run_id,
+            (V2_PRODUCTION_FINGERPRINT_KEY, V2_PRODUCTION_LEGACY_FINGERPRINT_KEY),
+        )
         fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
         payload = json.loads(fingerprint.canonical_payload_json)
         return ResearchDirections.model_validate(payload["directions"])
@@ -1229,7 +1273,11 @@ def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
 def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
     ceilings = V2RunCeilings()
     try:
-        artifact = read_v2_artifact(db_path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+        artifact = _read_first_v2_artifact(
+            db_path,
+            run_id,
+            (V2_PRODUCTION_FINGERPRINT_KEY, V2_PRODUCTION_LEGACY_FINGERPRINT_KEY),
+        )
         fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
         payload = json.loads(fingerprint.canonical_payload_json)
         ceilings = V2RunCeilings.model_validate(payload["ceilings"])
@@ -1240,20 +1288,26 @@ def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
     completions: dict[int, V2PhysicalCallCompletion] = {}
     for sequence in range(1, ceilings.max_physical_calls + 1):
         try:
-            start_artifact = read_v2_artifact(
+            start_artifact = _read_first_v2_artifact(
                 db_path,
                 run_id,
-                f"phase-12-physical-call-{sequence:03d}-start",
+                (
+                    f"phase-13-physical-call-{sequence:03d}-start",
+                    f"phase-12-physical-call-{sequence:03d}-start",
+                ),
             )
         except KeyError:
             break
         start = V2PhysicalCallStart.model_validate_json(start_artifact.payload_json)
         starts.append(start)
         try:
-            completion_artifact = read_v2_artifact(
+            completion_artifact = _read_first_v2_artifact(
                 db_path,
                 run_id,
-                f"phase-12-physical-call-{sequence:03d}-completion",
+                (
+                    f"phase-13-physical-call-{sequence:03d}-completion",
+                    f"phase-12-physical-call-{sequence:03d}-completion",
+                ),
             )
         except KeyError:
             continue
@@ -1333,44 +1387,49 @@ def _read_v2_directional_progress(
         for survivor in output.survivors:
             survivors[survivor.direction].add(survivor.snapshot_id)
 
-    queued: dict[ResearchDirection, tuple[UUID, ...]] = {
+    survivor_ids: dict[ResearchDirection, tuple[UUID, ...]] = {
         ResearchDirection.SUPPORT: (),
         ResearchDirection.CHALLENGE: (),
     }
     try:
-        queue_artifact = read_v2_artifact(
+        queue_artifact = _read_first_v2_artifact(
             db_path,
             run_id,
-            V2_SOURCE_SELECTION_COMPLETION_KEY,
+            (V2_SOURCE_SELECTION_COMPLETION_KEY, V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY),
         )
     except KeyError:
         pass
     else:
         queue = V2SourceSelectionQueueResult.model_validate_json(queue_artifact.payload_json)
-        queued_by_direction: dict[ResearchDirection, list[UUID]] = {
-            ResearchDirection.SUPPORT: [],
-            ResearchDirection.CHALLENGE: [],
+        survivor_ids = {
+            direction: tuple(
+                item.source_id for item in queue.input.survivors if item.direction is direction
+            )
+            for direction in (ResearchDirection.SUPPORT, ResearchDirection.CHALLENGE)
         }
-        for source_status in queue.source_statuses:
-            if source_status.queued_for_deep_analysis:
-                queued_by_direction[source_status.direction].append(source_status.source_id)
-        queued = {
-            direction: tuple(source_ids) for direction, source_ids in queued_by_direction.items()
-        }
-
     analyzed: dict[ResearchDirection, int] = {
         ResearchDirection.SUPPORT: 0,
         ResearchDirection.CHALLENGE: 0,
     }
-    for direction, source_ids in queued.items():
+    source_prefixes = (
+        V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
+        V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
+        "phase-9-luna-evidence-analyst-source",
+    )
+    for direction, source_ids in survivor_ids.items():
         for source_id in source_ids:
-            try:
-                source_artifact = read_v2_artifact(
-                    db_path,
-                    run_id,
-                    f"{V2_EVIDENCE_ANALYST_ARTIFACT_KEY}-source-{source_id}",
-                )
-            except KeyError:
+            source_artifact = None
+            for prefix in source_prefixes:
+                try:
+                    source_artifact = read_v2_artifact(
+                        db_path,
+                        run_id,
+                        f"{prefix}-{source_id}",
+                    )
+                except KeyError:
+                    continue
+                break
+            if source_artifact is None:
                 continue
             source_result = V2EvidenceAnalystSourceResult.model_validate_json(
                 source_artifact.payload_json
@@ -1411,6 +1470,7 @@ def _v2_progress_percent(
         "source_selection": 63,
         "deep_analysis": 70,
         "evidence_analyst": 70,
+        "evidence_admission": 85,
         "review": 85,
         "statement_reviewer": 85,
         "claim_ledger": 87,
@@ -1424,7 +1484,7 @@ def _v2_progress_percent(
     if stage_value in {"deep_analysis", "evidence_analyst"}:
         queued = max(1, diagnostics.sources_queued_for_analysis)
         return min(84, base + round(14 * min(1.0, analyzed / queued)))
-    if stage_value in {"statement_reviewer", "claim_ledger"}:
+    if stage_value in {"evidence_admission", "statement_reviewer", "claim_ledger"}:
         return min(90, base + min(3, diagnostics.approved_evidence_records))
     if current_round > 1:
         return min(87, base + (current_round - 1) * 2)
@@ -1448,6 +1508,7 @@ def _research_round_and_progress(result: ProviderPipelineResult) -> tuple[int, i
         "supporting_researcher": 28,
         "opposing_researcher": 34,
         "evidence_analyst": 52,
+        "evidence_admission": 58,
         "statement_reviewer": 58,
         "claim_ledger": 62,
     }.get(result.current_stage.value, 5)

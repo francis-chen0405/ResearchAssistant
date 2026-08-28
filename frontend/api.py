@@ -19,7 +19,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY
+from agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
+from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
 from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_ARTIFACT_KEY
 from credential_store import (
     KeychainUnavailableError,
@@ -46,6 +47,7 @@ from models import (
     ResearchDirections,
     ResearchMode,
     StrictModel,
+    V2EvidenceAdmissionBatchResult,
     V2EvidenceAnalystSourceResult,
     V2FinalResearchOutput,
     V2ReviewerLedgerBatchResult,
@@ -54,7 +56,7 @@ from store import open_read_only_store, read_v2_artifact
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
-API_VERSION = "mlp-5-v2-phase12"
+API_VERSION = "mlp-5-v2-phase13-analyzer-admission"
 WEB_ORIGINS = ("http://127.0.0.1:3000", "http://localhost:3000")
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
@@ -319,24 +321,24 @@ class V2EvidenceDisplay(StrictModel):
 
 def _build_v2_evidence_display(
     output: V2FinalResearchOutput,
-    reviewer: V2ReviewerLedgerBatchResult,
+    evidence_result: V2EvidenceAdmissionBatchResult | V2ReviewerLedgerBatchResult,
 ) -> V2EvidenceDisplay:
     """Project persisted v2 evidence into a read-only result-page view."""
     sources = {source.source_id: source for source in output.all_surviving_sources}
     analyst_results: dict[UUID, V2EvidenceAnalystSourceResult] = {
-        source.source_id: source for source in reviewer.analyst_result.source_results
+        source.source_id: source for source in evidence_result.analyst_result.source_results
     }
     selections = {
         status.source_id: status
-        for status in reviewer.analyst_result.input.queue_result.source_statuses
+        for status in evidence_result.analyst_result.input.queue_result.source_statuses
     }
     items: list[V2EvidenceDisplayItem] = []
-    for review in reviewer.source_results:
-        analyst = analyst_results[review.source_id]
+    for admission in evidence_result.source_results:
+        analyst = analyst_results[admission.source_id]
         if analyst.candidate is None or analyst.assessment is None:
             continue
-        source = sources[review.source_id]
-        selection = selections[review.source_id]
+        source = sources[admission.source_id]
+        selection = selections[admission.source_id]
         limitations = (
             *analyst.assessment.material_limitations,
             *analyst.assessment.inferential_boundaries,
@@ -346,7 +348,7 @@ def _build_v2_evidence_display(
                 source_id=source.source_id,
                 title=source.title,
                 source_url=source.source_url,
-                source_family=review.provenance.source_family_id,
+                source_family=admission.provenance.source_family_id,
                 direction=source.direction.value,
                 recommendation_status=(
                     "Recommended for deeper analysis"
@@ -359,7 +361,11 @@ def _build_v2_evidence_display(
                 supporting_proposition=analyst.assessment.narrowest_supported_proposition,
                 quote_passage=analyst.candidate.extracted_quote_block,
                 limitations=limitations,
-                validation_status=review.state.value,
+                validation_status=(
+                    "analyzer_admitted_not_independently_reviewed"
+                    if getattr(admission, "evidence_record", None) is not None
+                    else admission.state.value
+                ),
             )
         )
     return V2EvidenceDisplay(run_id=output.run_id, items=tuple(items))
@@ -617,7 +623,14 @@ def create_app(
     ) -> V2FinalResearchOutput:
         try:
             with open_read_only_store(db_path) as store:
-                artifact = read_v2_artifact(store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
+                try:
+                    artifact = read_v2_artifact(
+                        store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY
+                    )
+                except KeyError:
+                    artifact = read_v2_artifact(
+                        store.connection, run_id, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
+                    )
             if artifact.artifact_type != V2FinalResearchOutput.__name__:
                 raise ValueError("v2 final-output artifact has an unexpected type")
             return V2FinalResearchOutput.model_validate_json(artifact.payload_json)
@@ -633,17 +646,27 @@ def create_app(
     ) -> V2EvidenceDisplay:
         try:
             with open_read_only_store(db_path) as store:
-                final_artifact = read_v2_artifact(
-                    store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY
-                )
-                reviewer_artifact = read_v2_artifact(
-                    store.connection, run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY
-                )
+                try:
+                    final_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY
+                    )
+                except KeyError:
+                    final_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
+                    )
+                try:
+                    evidence_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
+                    )
+                    evidence_type = V2EvidenceAdmissionBatchResult
+                except KeyError:
+                    evidence_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY
+                    )
+                    evidence_type = V2ReviewerLedgerBatchResult
             output = V2FinalResearchOutput.model_validate_json(final_artifact.payload_json)
-            reviewer = V2ReviewerLedgerBatchResult.model_validate_json(
-                reviewer_artifact.payload_json
-            )
-            return _build_v2_evidence_display(output, reviewer)
+            evidence_result = evidence_type.model_validate_json(evidence_artifact.payload_json)
+            return _build_v2_evidence_display(output, evidence_result)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="V2 evidence details not found.") from exc
         except Exception as exc:

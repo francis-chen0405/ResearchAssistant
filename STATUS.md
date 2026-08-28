@@ -1,6 +1,27 @@
 # Status
 
-## 2026-08-25 - Claim Fit 2/3 admission policy correction
+## 2026-08-26 - Phase 13 analyzer-admission cutover
+
+Status: Complete and verified.
+
+- Fresh v2 no longer invokes the Reviewer. Luna Evidence Analyst returns assessment and final
+  factual statement in one call with one attempt per successfully extracted source.
+- Deterministic Analyzer Admission now creates analyzer-only evidence records, validates exact
+  quote/provenance, direction, scores, placement, qualification, and statement identity, and
+  never creates a fabricated Reviewer approval ID.
+- Deep analysis processes the full priority pool until the existing run-wide budget is reached;
+  actual analyzed, rejected, failed, and budget-prevented states are preserved. The physical
+  reservation is now three calls per source: two extraction attempts plus one Analyst call.
+- Synthesis, final validation, API, UI, and export label fresh evidence as analyzer-admitted and
+  not independently reviewer-approved. Phase-13 artifact keys, policies, fingerprints, and
+  budget constants are versioned; historical Reviewer-backed artifacts remain readable.
+
+Verification: 822 Python tests passed, 2 expected skips; Ruff lint and format checks passed;
+frontend ESLint, TypeScript, and Next.js 16.3.1 production build passed. No live paid research
+run or dependency change was made. The `pnpm` wrapper was not used for final validation because
+it attempted a registry fetch; the installed local tools passed directly.
+
+## Historical 2026-08-25 - Claim Fit 2/3 admission policy correction
 
 Status: Implemented and verified offline.
 
@@ -8,9 +29,10 @@ Status: Implemented and verified offline.
   qualification requirement.
 - Claim Fit 3 is now ordinary eligible evidence and no longer receives a special automatic
   scope-marker rejection or qualified-only placement.
-- Exact quotation checks, Evidence Quality ≥2, independent Reviewer approval, and final Ledger
-  validation remain unchanged. Fresh-v2 Reviewer/Ledger policy identity is versioned; historical
-  run artifacts remain readable.
+- For the then-current Phase-12 Reviewer-backed path, exact quotation checks, Evidence Quality
+  ≥2, independent Reviewer approval, and final Ledger validation remained unchanged. This policy
+  record is superseded for new Phase-13 runs, which use Analyzer Admission; the historical
+  Reviewer/Ledger policy identity remains readable.
 
 Verification: focused policy and v2 Reviewer tests pass; full verification follows below. No
 live paid research run was made.
@@ -115,8 +137,10 @@ Status: Complete and verified.
   ceilings fail closed. Optional continuation protects fourteen downstream calls and Phase 8
   sizes deep analysis from actual remaining calls, tokens, and cost.
 - Added provider construction for all three physical model aliases and cut fresh website and
-  CLI launches to v2. Historical inspection, rendering, export, immutable evidence, and
-  explicitly injected compatibility paths remain under their original contracts.
+  CLI launches to v2. The Phase-12 path protected its then-current fourteen-call downstream
+  reserve; fresh Phase-13 execution uses the versioned Analyzer Admission workload. Historical
+  inspection, rendering, export, immutable evidence, and explicitly injected compatibility paths
+  remain under their original contracts.
 - Expanded the production fingerprint to cover semantic schemas/prompts/policies, directions,
   provider adapters, model routes, ceilings, research limits, release semantics, and the final
   output contract. Cross-version/configuration resume is rejected.

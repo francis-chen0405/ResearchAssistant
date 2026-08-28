@@ -23,6 +23,7 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2AdmissionMethod,
 )
 
 DEFAULT_SYNTHESIZER_PROMPT_VERSION = "phase5-deterministic-synthesizer-v1"
@@ -133,7 +134,8 @@ def _item_from_ledger(record: LedgerRecord) -> SynthesisItem:
     return SynthesisItem(
         connective_template_id=_template_for_record(record),
         ledger_claim_id=record.ledger_claim_id,
-        reviewer_approval_id=record.reviewer_approval_id,
+        reviewer_approval_id=getattr(record, "reviewer_approval_id", None),
+        admission_method=getattr(record, "admission_method", V2AdmissionMethod.REVIEWER_APPROVED),
         stance=record.stance,
         placement=record.placement,
         entailment=record.entailment,

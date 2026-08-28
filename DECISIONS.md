@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-08-26 - ResearchAssistant v2 Phase 13 Analyzer Admission Cutover
+
+- Remove all fresh-v2 `ReviewerDecision` and `LLMStage.REVIEWER` calls. Luna Evidence Analyst
+  is the sole fresh-v2 semantic judge and returns assessment plus final factual statement in one
+  concise call with one attempt per successfully extracted source.
+- Use deterministic Analyzer Admission for structure, provenance, direction, scores, placement,
+  qualification, and exact statement identity. This deliberately does not independently prove
+  entailment; fresh evidence is labeled analyzer-admitted and not independently reviewer-approved.
+- Replace the seven-call per-source reservation with three physical calls: up to two extraction
+  attempts and one Analyst call. Process the full priority pool until the existing run-wide
+  budget is reached and preserve real terminal source states.
+- Version fresh Phase-13 artifact keys, policies, fingerprints, and budget constants. Keep
+  historical Reviewer/Ledger artifacts readable and unchanged.
+
 ## 2026-08-25 - Claim Fit 2/3 admission policy correction
 
 - Keep Evidence Quality and Claim Fit as separate axes with minimum thresholds of 2 on each;
@@ -21,9 +35,9 @@
   provider. Count every attempt and retry before transport, cap fresh runs at 160 calls and
   500,000 tokens, support lower limits, and retain conservative exposure when exact usage is
   unavailable.
-- Protect fourteen downstream calls before optional continuation and fail closed when that
-  reserve cannot cover selection, extraction, analysis, review, and synthesis. Continue to
-  use Phase 8's worst-case per-source queue reservations against actual remaining budget.
+- The Phase-12 path protected fourteen downstream calls before optional continuation, covering
+  selection, extraction, analysis, review, and synthesis. This historical reserve was superseded
+  for fresh Phase-13 runs by the versioned Analyzer Admission workload and budget constants.
 - Add the missing restart-safe exact-extraction bridge between the Phase 8 queue and Phase 9
   Analyst. Preserve per-source extraction failure without fuzzy healing or removing the source
   from the final survivor disclosures.

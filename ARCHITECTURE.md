@@ -1,17 +1,18 @@
 # Debate Research Agent System
 
-## Fresh v2 Production Architecture
+## Fresh v2 Production Architecture — Phase 13
 
 `v2_orchestrator.py` is the only fresh website/CLI research coordinator. It joins the
-completed Phase 3–11 boundaries without replacing their append-only artifacts:
+completed Phase 3–12 boundaries without replacing their append-only artifacts:
 
 ```text
 claim + direction controls -> broad Round 1 -> normalize/cluster -> Scout
 -> acquisition -> deterministic Probe -> Luna Gap Analysis
 -> optional Round 2 -> optional Governor-authorized Round 3
 -> complete survivor pool -> recommendation -> budget-derived queue
--> exact extraction -> Luna Evidence Analyst -> Reviewer -> Claim Ledger
--> Ledger-only synthesis -> Phase 11 result envelope
+-> exact extraction -> Luna Evidence Analyst (assessment + statement)
+-> deterministic Analyzer Admission -> Claim Ledger projection
+-> Ledger-only synthesis -> Phase 13 result envelope
 -> deterministic release validation -> rendered-output hash
 ```
 
@@ -19,17 +20,19 @@ The persisted `BudgetedV2LLMProvider` is the run-wide authority for every physic
 attempt, including failures and retries. The immutable ceiling is at most 160 calls and
 500,000 tokens, with lower configured values supported. It reserves conservatively before
 each physical call, reconciles exact usage when available, and preserves uncertain exposure.
-Optional research receives budget only after the downstream reserve; Phase 8 derives queue
-capacity from the remaining call/token/cost budget and retains a status for every survivor.
+Optional research receives budget only after the downstream reserve; the versioned source-selection
+policy derives queue capacity from the remaining call/token/cost budget and retains a status for
+every survivor.
 
 Fresh routing is MiMo-v2.5 for Scout; MiMo-v2.5-Pro for Planner, Search Agent, Source
-Selection, exact Extractor, Reviewer, and Synthesizer; and GPT-5.6 Luna High for Gap Analysis
-and Evidence Analyst. All direction, provider/round eligibility, exact quote assembly,
-score/placement derivation, Ledger admission, and final release decisions remain
-application-owned. The production fingerprint covers routes/models/prices, custom prompt
-hashes, key schemas, direction/provider controls, provider adapter policies, evidence and
-release policies, research-governor settings, downstream reserve, ceilings, and the canonical
-Phase 11 final-output contract.
+Selection, exact Extractor, and Synthesizer; and GPT-5.6 Luna High for Gap Analysis and
+Evidence Analyst. Each successfully extracted source receives one Analyst call. All
+direction, provider/round eligibility, exact quote assembly, score/placement derivation,
+Analyzer Admission, and final release decisions remain application-owned. The production
+fingerprint covers routes/models/prices, custom prompt hashes, key schemas, direction/provider
+controls, provider adapter policies, evidence/admission and release policies,
+research-governor settings, downstream reserve, ceilings, and the Phase 13 final-output
+contract.
 
 Every stage is restart-safe. Compatible completed artifacts are reused; incomplete physical
 attempts remain charged conservatively. Cross-claim, cross-route, cross-provider-policy, or
@@ -42,9 +45,9 @@ or reinterpreted as v2.
 **Claim Planner** — Defines scope, logical angles, and search strategy.
 **Supporting Evidence Researcher** — Finds affirming evidence; extracts candidate quotations.
 **Opposing Evidence Researcher** — Finds contradicting or limiting evidence; extracts candidate quotations.
-**Evidence Analyst** — Scores evidence on two dimensions, verifies quotations against trusted snapshots, and drafts canonical factual statements.
-**Statement Reviewer** — Independently audits each drafted factual statement before it may enter the Claim Ledger.
-**Claim Ledger** — Stores only Reviewer-approved factual statements and their evidence, scoring, placement, and provenance records.
+**Evidence Analyst** — Scores evidence on two dimensions, verifies quotations against trusted snapshots, and returns the final factual statement in the same call.
+**Analyzer Admission** — Performs deterministic provenance, score, placement, qualification, and statement checks before creating an analyzer-admitted evidence record.
+**Claim Ledger** — Stores analyzer-admitted fresh-v2 factual statements and their evidence, scoring, placement, and provenance records; historical Reviewer-approved records remain supported.
 **Debate Synthesizer** — Builds a typed structured brief from approved Ledger records and fixed non-factual connective templates.
 **Deterministic Final Renderer & Validator** — Renders the final brief; blocks release unless every factual sentence exactly matches an approved Ledger statement.
 
@@ -97,7 +100,7 @@ Claim Planner
 
 ## Core Architectural Principle
 
-Retrieval, semantic approval, and deterministic release are strictly separated. Researchers identify candidates. The Analyst scores evidence on two independent dimensions and drafts exact canonical statements. A separate Statement Reviewer audits those statements before Ledger entry. The final stage permits only approved statements as factual content. The validator performs no semantic reasoning; all semantic judgment occurs in the Analyst and Reviewer stages.
+Retrieval, semantic assessment, deterministic admission, and deterministic release are strictly separated. Researchers identify candidates. Fresh v2 Luna Analyst calls score evidence on two independent dimensions and return exact factual statements. Analyzer Admission verifies structure, provenance, scores, placement, qualification, and exact statement identity; it does not independently prove entailment. The final stage permits only analyzer-admitted statements as factual content and labels that reduced safety boundary. Historical Reviewer-backed artifacts retain their original interpretation.
 
 MVP-10 adds an auditable Evidence Portfolio before synthesis. MVP-11 replaces its
 single targeted-expansion limit with a deterministic Research Governor: Round 1 proceeds
@@ -606,9 +609,13 @@ existing one.
 
 ## Run Provenance
 
+The numbered contracts below preserve the historical MVP/MLP evidence and Reviewer
+interfaces. Fresh v2 Phase 13 uses the Analyzer Admission contract described at the top of
+this document and in the Phase 13 section below; it does not reinterpret historical records.
+
 Every persisted artifact and every application-owned Pydantic handoff or envelope that can affect release must carry provenance. At minimum, release-relevant records include `run_id`, UTC ISO-8601 timestamps for creation or validation, and the stage-specific fields listed below. Retrieval records include `retrieval_attempt_id`, `query_id`, `query_round`, search rank, URL, status, and timestamp. LLM-produced records include `prompt_version`, `model_name`, and timestamp. Deterministic validators include the validator or filter version and validation timestamp. A deliberately narrow model-facing schema may omit contextual provenance fields only when its enclosing typed application request/result envelope and persisted domain artifact carry them; fields forbidden by that model-facing contract must not be exposed to the model merely to duplicate envelope provenance.
 
-IDs are not preallocated. An ID is assigned only after the deterministic validation gate for that artifact succeeds: quote block IDs after post-extraction validation, Ledger claim IDs after Ledger schema validation and Reviewer approval, and rendered brief hashes only after final validation succeeds.
+IDs are not preallocated. An ID is assigned only after the deterministic validation gate for that artifact succeeds: quote block IDs after post-extraction validation, Analyzer claim IDs after Analyzer Admission validation, historical Ledger claim IDs after Reviewer approval, and rendered brief hashes only after final validation succeeds.
 
 ## 1. Claim Planner
 
@@ -869,11 +876,14 @@ submit free-form prose or structural framing directly.
 
 ## Non-Negotiable Rules
 
-- Every factual sentence must exactly match an approved Ledger statement and carry both a `ledger_claim_id` and a `reviewer_approval_id`; the validator must compare exact text, not merely confirm IDs exist.
+- Every factual sentence must exactly match an admitted evidence statement and carry its
+  `ledger_claim_id` and `admission_method`; historical Reviewer-backed items additionally
+  carry `reviewer_approval_id`. The validator must compare exact text, not merely confirm IDs exist.
 - `evidence_quality` and `claim_fit` must be recorded and used separately; eligibility must fail when either axis is below its threshold, even if the combined total is high.
 - `ledger_score` is derived deterministically from the two sub-scores only after eligibility passes; it must not be used to compensate for a failing Evidence Quality or Claim Fit score.
 - `placement` is set by the Analyst, passed through the Synthesizer unchanged, and verified by the Validator; no stage may alter it.
-- No canonical factual statement may enter the Ledger without passing Statement Reviewer approval.
+- No fresh-v2 factual statement may enter evidence without passing Analyzer Admission. Historical
+  records retain their original Statement Reviewer requirement.
 - The Synthesizer must not produce unrestricted factual prose.
 - Source snapshots must be immutable and readable by the Analyst and deterministic validators; a hash proves integrity only — quotation membership must be verified through exact text and offsets.
 - Supporting and opposing researchers receive comparable search depth, standards, and limits; source quality must be judged independently of stance.
@@ -1018,7 +1028,7 @@ budget all remain. Duplicate saturation of at least 70% stops continuation. Roun
 most three queries and one query per provider/direction lane. No Round 4, recursive
 continuation, automatic citation tree, or disabled-direction search is possible.
 
-## ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
+## Historical ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
 
 After adaptive searching stops, the complete merged survivor pool remains an immutable,
 append-only input. Final Source Selection sends MiMo-v2.5-Pro only the exact claim, enabled
@@ -1044,7 +1054,7 @@ Analyst, or Reviewer outcomes are replaced from the unqueued deterministic prior
 a versioned typed backfill artifact. The hard total remains 160 physical calls and the
 run-wide token ceiling remains exactly 500,000.
 
-## ResearchAssistant v2 Phase 9 Luna Evidence Analyst
+## Historical ResearchAssistant v2 Phase 9 Luna Evidence Analyst
 
 Deep analysis accepts only Phase-8 queued survivors paired with an exact
 `CandidateQuoteBlock` and its immutable `SourceSnapshot`. MiMo-v2.5-Pro remains the v2
@@ -1070,7 +1080,7 @@ most two attempts. A final Analyst failure retains the survivor and exact candid
 failed deep-analysis state but no Reviewer-ready draft. Phase 9 creates no `LedgerRecord`;
 separate Reviewer approval and deterministic Ledger admission remain mandatory.
 
-## ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
+## Historical ResearchAssistant v2 Phase 10 Reviewer and Claim Ledger Integration
 
 Phase 10 connects Phase-9 Reviewer-ready drafts to the established downstream quality
 gate. Fresh-v2 Reviewer calls use MiMo-v2.5-Pro and receive only the existing narrow
@@ -1088,7 +1098,7 @@ is informational only. Application policy rejects disabled-direction evidence be
 Reviewer call. Migration 13 adds only append-only v2 Ledger-admission rows; it does not
 rewrite or weaken historical Ledger records or their SQLite immutability triggers.
 
-## ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
+## Historical ResearchAssistant v2 Phase 11 Synthesis and Final Research Output
 
 Fresh-v2 synthesis sends MiMo-v2.5-Pro only a strict typed projection of the exact claim,
 enabled directions, Reviewer-approved Ledger statements, deterministic placement and
@@ -1104,3 +1114,27 @@ surviving-not-deeply-analyzed, or budget-prevented. Support-only and challenge-o
 must not contain or imply evidence from the disabled direction. V2 final validation layers
 direction/provenance/source/recommendation checks over exact Ledger validation and hashes the
 complete mechanically rendered output only after every check succeeds.
+
+## ResearchAssistant v2 Phase 13 Analyzer Admission Cutover
+
+Fresh v2 replaces the historical Reviewer boundary with one concise GPT-5.6 Luna High Analyst
+call per successfully extracted source. The typed response contains the two scores, direction,
+exact candidate identity, entailment and qualification fields, and the final factual statement.
+There is no fresh-v2 self-revision, duplicate drafting call, `ReviewerDecision`, or
+`LLMStage.REVIEWER` request.
+
+Deep analysis reserves three physical calls per source: up to two exact-extraction attempts and
+one Analyst call. It processes the full deterministic priority pool until the run-wide budget
+is reached. Every source retains its actual terminal state: analyzed, analyzer-rejected,
+analyzer-failed, not queued, or budget-prevented. Persisted per-source artifact keys are unique.
+
+`V2EvidenceAdmissionBatchResult` performs the deterministic boundary after Analyst execution.
+It admits only analyzer-approved sources that pass exact quote and snapshot provenance,
+direction, score, placement, qualification, and final-statement checks. It derives the claim ID
+from the Phase-13 admission policy, run, source, and statement. Analyzer-admitted records have
+no Reviewer approval ID; rejected and failed sources create no evidence record.
+
+Synthesis, final validation, API, UI, and export accept the analyzer-admitted projection and
+display that it was not independently reviewer-approved. Phase-13 keys, policy identities,
+fingerprints, and budget constants are additive. Phase-12 and earlier Reviewer, Ledger,
+extraction, budget, and final-output artifacts remain readable with their original meaning.

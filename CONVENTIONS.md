@@ -47,14 +47,20 @@ debate_agent/
 
 Agents communicate by passing Pydantic model instances in memory within a run.
 SQLite is the persistence layer — not the message bus.
-The flow is:
+The historical flow is:
   Planner output → `PlannerOutput` passed directly to Researcher functions
   Researcher output → `list[CandidateQuoteBlock]` written to SQLite, then read by Analyst
   Analyst output → `StatementDraft` passed directly to Statement Reviewer
   Reviewer-approved result → `LedgerRecord` written to SQLite, then read by Synthesizer
   Synthesizer output → `SynthesisOutput` passed directly to Renderer
 
-Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the Ledger.
+Fresh v2 Phase 13 uses a separate typed flow:
+  Analyst output (`V2EvidenceAnalystBatchResult`) → deterministic Analyzer Admission
+  (`V2EvidenceAdmissionBatchResult`) → analyzer-admitted evidence records → Synthesizer
+  `SynthesisOutput` → Renderer. Analyzer-admitted records omit Reviewer metadata and are
+  labeled as not independently reviewer-approved.
+
+Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, admission method, optional historical `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the admitted evidence record.
 
 Deliberately narrow model-facing schemas may keep forbidden contextual provenance outside
 the model payload only when a typed application-owned request/result envelope and the
@@ -219,7 +225,7 @@ authorized.
 
 The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may exist only as a compatibility mirror for requested scaffolding and must not become a second source of truth.
 
-## ResearchAssistant v2 Phase 8 Selection and Queue Conventions
+## Historical ResearchAssistant v2 Phase 8 Selection and Queue Conventions
 
 - Persist the full merged survivor input before recommendation; stopping research never
   deletes a legitimate survivor.
@@ -239,7 +245,24 @@ The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may 
   for every survivor outside the queue; terminal source outcomes use the typed backfill
   artifact to admit the next unqueued survivor without duplicates or reordering.
 
-## ResearchAssistant v2 Phase 11 Final Output Conventions
+## ResearchAssistant v2 Phase 13 Analyzer Admission Conventions
+
+- Fresh v2 uses one Luna Analyst call per successfully extracted source. The response contains
+  dual scores, direction, exact quote identity, qualification state, and the final factual
+  statement. No fresh-v2 request may use `ReviewerDecision` or `LLMStage.REVIEWER`.
+- The physical per-source reservation is three calls: up to two exact-extraction attempts and
+  one Analyst call. Deep analysis processes the full deterministic priority pool until the
+  existing run-wide budget is reached and preserves actual attempted, rejected, failed, and
+  budget-prevented states.
+- Deterministic Analyzer Admission creates `V2EvidenceAdmissionRecord` only for analyzer-
+  approved sources that pass provenance, score, placement, qualification, and statement checks.
+  Rejected and failed sources never enter evidence, and analyzer records contain no fabricated
+  Reviewer approval ID.
+- Fresh Phase-13 artifact keys, policy identities, fingerprints, and budget constants are
+  versioned. Legacy Phase-12 budget, extraction, Reviewer, Ledger, and final-output artifacts
+  remain readable without relabeling or migration.
+
+## Historical ResearchAssistant v2 Phase 11 Final Output Conventions
 
 - V2 synthesis receives a strict typed Ledger projection, never raw snapshots, quotes, or
   unreviewed source text. Model output may select/arrange approved IDs only.

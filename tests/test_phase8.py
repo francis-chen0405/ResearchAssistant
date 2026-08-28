@@ -278,7 +278,7 @@ def test_all_stage_prompts_are_versioned_and_hashed() -> None:
 
     assert len({prompt.version for prompt in prompts}) == len(LLMStage)
     assert all(
-        prompt.version.startswith(("phase8-", "mvp9-", "mvp11-", "mlp4-", "mlp5-"))
+        prompt.version.startswith(("phase8-", "mvp9-", "mvp11-", "mlp4-", "mlp5-", "phase13-"))
         for prompt in prompts
     )
     assert all(len(prompt.sha256) == 64 for prompt in prompts)

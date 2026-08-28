@@ -1,13 +1,33 @@
 # Handoff
 
-## Claim Fit 2/3 admission policy correction — 2026-08-25
+## Phase 13 analyzer-admission cutover — 2026-08-26
 
-Fresh policy now requires Evidence Quality ≥2 and Claim Fit ≥2. Claim Fit 2 is admitted only as
-`qualified_only` evidence with explicit qualification; Claim Fit 3 uses ordinary placement and
-is not rejected merely for being contextual or narrower than the full claim. Exact quote
-verification, Reviewer approval, immutable Ledger admission, and final release validation remain
-mandatory. The fresh-v2 Reviewer/Ledger policy version is bumped so historical runs remain
-readable without relabeling.
+Fresh v2 now uses Luna Evidence Analyst as its sole semantic judge. Assessment and final factual
+statement are returned in one call with one attempt per successfully extracted source. A new
+deterministic Analyzer Admission stage validates exact quote/provenance, direction, scores,
+placement, qualification, and statement identity, then persists analyzer-only evidence without
+Reviewer metadata. Fresh deep analysis uses a three-call per-source reservation and continues
+through the full priority pool until the existing run-wide budget is reached, preserving real
+attempted, rejected, failed, and budget-prevented states.
+
+Synthesis, release validation, API, UI, and export accept analyzer-admitted records and display
+that they were not independently reviewer-approved. Phase-13 keys and policy identities are
+versioned; Phase-12 and older Reviewer artifacts remain readable without relabeling. The prior
+`not_queued` collision is covered by restart regression tests.
+
+Verification: 822 Python tests passed with 2 expected skips; Ruff lint/format passed; frontend
+ESLint, TypeScript, and the Next.js 16.3.1 production build passed. No live paid run or dependency
+change was made. `pnpm` was not used for the final check because its wrapper attempted a registry
+fetch; installed local frontend tools passed directly.
+
+## Historical Claim Fit 2/3 admission policy correction — 2026-08-25
+
+The then-current Phase-12 policy required Evidence Quality ≥2 and Claim Fit ≥2. Claim Fit 2 was
+admitted only as `qualified_only` evidence with explicit qualification; Claim Fit 3 used ordinary
+placement and was not rejected merely for being contextual or narrower than the full claim. Exact
+quote verification, Reviewer approval, immutable Ledger admission, and final release validation
+were mandatory for that historical path. New Phase-13 runs use Analyzer Admission; this record
+remains readable without relabeling historical artifacts.
 
 The focused policy and v2 Reviewer tests pass (116 tests). No live paid research run was made.
 

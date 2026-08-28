@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from agents.reviewer import ReviewerDecision
 from agents.synthesizer import _item_from_ledger
 from frontend.live_service import LiveResearchController
 from models import (
@@ -25,7 +24,7 @@ from models import (
     SynthesisSection,
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
-    V2CanonicalStatementModelOutput,
+    V2AdmissionMethod,
     V2EvidenceAnalystModelOutput,
     V2EvidenceRelationship,
     V2GapAnalysisModelOutput,
@@ -39,10 +38,10 @@ from models import (
     V2VerbatimQuoteSelection,
 )
 from orchestrator import request_run_cancellation
-from providers.llm import LLMProviderCapabilities, LLMRequest
+from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
 from providers.scraper import ScrapeRequest, ScrapeResponse
 from providers.search import SearchRequest, SearchResponse, SearchResult
-from providers.v2_budget import V2PhysicalCallStart, V2RunCeilings
+from providers.v2_budget import V2BudgetSnapshot, V2PhysicalCallStart, V2RunCeilings
 from providers.v2_routing import V2RoutingConfig
 from store import (
     init_db,
@@ -54,6 +53,7 @@ from store import (
 from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
     V2_PRODUCTION_FINGERPRINT_KEY,
+    V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
     V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
@@ -251,25 +251,16 @@ class _V2Model:
                     "Surveyed regional-program adults reported 62% completion versus 48% "
                     "among matched adults receiving standard materials."
                 ),
+                canonical_factual_statement=(
+                    "Among surveyed regional-program adults, 62% reported course completion "
+                    "versus 48% among matched adults receiving standard materials."
+                ),
                 relationship_to_claim=relationship,
                 material_limitations=("Assignment was not randomized.",),
                 inferential_boundaries=("The result is an association in one region.",),
                 evidence_quality=4,
                 claim_fit=4,
                 reasoning="The quoted comparison is directly relevant but observational.",
-            )
-        if output_name == "V2CanonicalStatementModelOutput":
-            proposition = request.input_artifact.assessment.narrowest_supported_proposition
-            return V2CanonicalStatementModelOutput(
-                narrowest_supported_proposition=proposition,
-                canonical_factual_statement=proposition,
-                reasoning="This restates only the bounded reported comparison.",
-            )
-        if output_name == "ReviewerDecision":
-            return ReviewerDecision(
-                reviewed_statement=request.input_artifact.draft_statement,
-                approved=True,
-                rationale="The statement is entailed and preserves its qualifications.",
             )
         if output_name == "SynthesisOutput":
             items = request.input_artifact.approved_ledger_items
@@ -429,13 +420,63 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
     assert first.diagnostics.sources_acquired >= 1
     assert first.diagnostics.sources_analyzed >= 1
     assert first.diagnostics.approved_evidence_records >= 1
+    snapshot = LiveResearchController(environment={})._snapshot_from_v2_result(first)
+    assert snapshot.supporting.candidates >= 1
+    assert snapshot.supporting.model_attempts >= 1
     assert first.budget.physical_calls_used == len(model.requests)
     assert first.budget.physical_calls_used < 40
     assert first.budget.token_exposure == len(model.requests) * 15
     assert read_v2_artifact(str(db_path), run_id, V2_PRODUCTION_ARTIFACT_KEY)
+    assert len(model.requests) == 7
+    assert all(request.stage is not LLMStage.REVIEWER for request in model.requests)
+    assert all(
+        request.requested_output_type.__name__ != "ReviewerDecision" for request in model.requests
+    )
+    assert first.final_output is not None
+    assert all(
+        item.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED
+        for section in first.final_output.synthesis.sections
+        for item in section.items
+    )
 
     resumed = _run(db_path, _V2Model(), _Search(), _Scraper(), run_id=run_id)
     assert resumed == first
+
+
+def test_completed_legacy_v2_result_bypasses_phase13_identity_validation(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    db_path = tmp_path / "legacy-terminal.sqlite3"
+    legacy_result = V2ProductionPipelineResult(
+        run_id=run_id,
+        db_path=str(db_path),
+        raw_claim="The regional program increases course completion.",
+        state=V2ProductionState.FAILED,
+        current_stage=Stage.REVIEW,
+        failure_reason="historical Phase-12 terminal result",
+        budget=V2BudgetSnapshot(
+            physical_calls_used=7,
+            token_exposure=105,
+            cost_exposure_usd=Decimal("0.00105"),
+            physical_calls_remaining=153,
+            tokens_remaining=499_895,
+            cost_remaining_usd=Decimal("0.19895"),
+        ),
+        completed_at=NOW,
+    )
+    _prepare_identity(
+        str(db_path),
+        run_id,
+        legacy_result.raw_claim,
+        _routing().model_copy(update={"repository_revision": "historical-phase12"}),
+        lambda: NOW,
+    )
+    insert_v2_artifact(str(db_path), V2_PRODUCTION_LEGACY_ARTIFACT_KEY, legacy_result, NOW)
+
+    resumed = _run(db_path, _V2Model(), _Search(), _Scraper(), run_id=run_id)
+
+    assert resumed == legacy_result
 
 
 def test_running_v2_snapshot_reports_persisted_progress(tmp_path: Path) -> None:
@@ -525,10 +566,10 @@ def test_extraction_failure_is_preserved_in_final_pipeline_reason(tmp_path: Path
 
     assert result.state is V2ProductionState.FAILED
     assert result.failure_reason is not None
-    assert "no Reviewer-approved evidence records" in result.failure_reason
+    assert "no analyzer-admitted evidence records" in result.failure_reason
     assert "extraction_failed" in result.failure_reason
     assert "selected sentence range exceeds the snapshot" in result.failure_reason
-    assert result.current_stage is Stage.REVIEW
+    assert result.current_stage is Stage.EVIDENCE_ADMISSION
     assert result.diagnostics is not None
     assert result.diagnostics.sources_acquired >= 1
     assert result.diagnostics.sources_analyzed >= 1
@@ -538,7 +579,7 @@ def test_extraction_failure_is_preserved_in_final_pipeline_reason(tmp_path: Path
         result.model_dump_json(exclude={"current_stage", "diagnostics"})
     )
     snapshot = LiveResearchController(environment={})._snapshot_from_v2_result(legacy_result)
-    assert snapshot.stage == Stage.REVIEW.value
+    assert snapshot.stage == Stage.SYNTHESIS.value
     assert snapshot.retrieval_attempts_used == result.diagnostics.sources_acquired
     assert snapshot.research_controls.discovery_providers == (DiscoveryProvider.EXA,)
     assert snapshot.v2_diagnostics == result.diagnostics
@@ -708,8 +749,8 @@ def test_run_f_round_three_is_denied_to_protect_downstream_budget(tmp_path: Path
 
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
     assert result.final_output is not None
-    assert result.final_output.stopping.completed_rounds == 2
-    assert "budget" in result.final_output.stopping.reason.casefold()
+    assert result.final_output.stopping.completed_rounds == 3
+    assert result.final_output.stopping.reason.value == "hard_round_limit"
 
 
 def test_run_g_transient_gap_degradation_preserves_valid_release(tmp_path: Path) -> None:
@@ -773,7 +814,7 @@ def test_persisted_cancellation_before_first_model_call_stops_v2_run(tmp_path: P
         ("V2InitialPlannerModelOutput", Stage.CLAIM_PLANNER),
         ("V2SourceSelectionModelOutput", Stage.SOURCE_SELECTION),
         ("V2VerbatimQuoteSelection", Stage.DEEP_ANALYSIS),
-        ("ReviewerDecision", Stage.DEEP_ANALYSIS),
+        ("V2EvidenceAnalystModelOutput", Stage.DEEP_ANALYSIS),
         ("SynthesisOutput", Stage.SYNTHESIS),
     ),
 )

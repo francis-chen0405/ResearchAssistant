@@ -283,6 +283,10 @@ def _assessment(
             "Surveyed regional-program adults reported 62% course completion within six "
             "months, versus 48% among matched adults receiving standard materials."
         ),
+        canonical_factual_statement=(
+            "Among surveyed regional-program adults, 62% reported course completion within "
+            "six months, versus 48% among matched adults receiving standard materials."
+        ),
         relationship_to_claim=relationship,
         material_limitations=(
             "Program assignment was not randomized.",
@@ -335,11 +339,6 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     provider = FakeLunaAnalyst(
         [
             assessment,
-            _draft(
-                assessment,
-                "Among surveyed adults in the regional program, 62% reported course "
-                "completion within six months, compared with 48% receiving standard materials.",
-            ),
         ]
     )
     db_path = _prepare_db(tmp_path, run_id)
@@ -360,7 +359,7 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     )
 
     source = first.source_results[0]
-    assert source.state is V2EvidenceAnalystState.READY_FOR_REVIEWER
+    assert source.state is V2EvidenceAnalystState.READY_FOR_ADMISSION
     assert source.candidate == original_candidate
     assert source.assessment == assessment
     assert source.assessment.material_limitations == assessment.material_limitations
@@ -371,7 +370,7 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert source.statement_draft is not None
     assert all(request.model_alias is ModelAlias.GPT_5_6_LUNA_HIGH for request in provider.requests)
     assert all(
-        request.prompt.version == "phase9-luna-evidence-analyst-v5-claim-fit-scope"
+        request.prompt.version == "phase13-luna-evidence-analyst-v6-analyzer-admission"
         for request in provider.requests
     )
     assert all(
@@ -383,11 +382,11 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
         for request in provider.requests
     )
     attempts = read_model_route_attempts(db_path, run_id)
-    assert len(attempts) == 2
+    assert len(attempts) == 1
     assert all(item.status is ModelAttemptStatus.COMPLETED for item in attempts)
     assert all(item.reserved_tokens is not None and item.reserved_tokens > 120 for item in attempts)
     assert all(item.usage is not None and item.usage.total_tokens == 120 for item in attempts)
-    assert resumed == first and len(provider.requests) == 2
+    assert resumed == first and len(provider.requests) == 1
 
 
 def test_extraction_failure_reason_survives_the_phase9_handoff(tmp_path: Path) -> None:
@@ -427,7 +426,6 @@ def test_claim_fit_three_is_accepted_without_a_scope_retry(tmp_path: Path) -> No
     provider = FakeLunaAnalyst(
         [
             assessment,
-            _draft(assessment, "The program produced a higher completion rate."),
         ]
     )
     result = run_v2_evidence_analyst(
@@ -438,11 +436,11 @@ def test_claim_fit_three_is_accepted_without_a_scope_retry(tmp_path: Path) -> No
         clock=lambda: NOW,
     )
     source = result.source_results[0]
-    assert source.state is V2EvidenceAnalystState.READY_FOR_REVIEWER
+    assert source.state is V2EvidenceAnalystState.READY_FOR_ADMISSION
     assert source.score_decision is not None
     assert source.score_decision.placement.value == "secondary"
     assert source.statement_draft is not None
-    assert len(provider.requests) == 2
+    assert len(provider.requests) == 1
 
 
 def test_claim_fit_two_is_qualified_only_and_retries_for_scope(tmp_path: Path) -> None:
@@ -451,12 +449,13 @@ def test_claim_fit_two_is_qualified_only_and_retries_for_scope(tmp_path: Path) -
     assessment = _assessment(claim_fit=2)
     provider = FakeLunaAnalyst(
         [
-            assessment,
-            _draft(assessment, "The program produced a different completion rate."),
-            _draft(
-                assessment,
-                "Among surveyed adults in this regional sample, the program reported a "
-                "different completion rate.",
+            assessment.model_copy(
+                update={
+                    "canonical_factual_statement": (
+                        "Among surveyed adults in this regional sample, the program reported a "
+                        "different completion rate."
+                    )
+                }
             ),
         ]
     )
@@ -470,26 +469,17 @@ def test_claim_fit_two_is_qualified_only_and_retries_for_scope(tmp_path: Path) -
     )
 
     source = result.source_results[0]
-    assert source.state is V2EvidenceAnalystState.READY_FOR_REVIEWER
+    assert source.state is V2EvidenceAnalystState.READY_FOR_ADMISSION
     assert source.score_decision is not None
     assert source.score_decision.placement.value == "qualified_only"
-    assert "Claim Fit is 2" in provider.requests[-1].rendered_prompt
+    assert len(provider.requests) == 1
 
 
-def test_canonical_proposition_drift_gets_targeted_retry_guidance(tmp_path: Path) -> None:
+def test_combined_analyst_output_is_used_without_a_duplicate_drafting_call(tmp_path: Path) -> None:
     run_id = uuid4()
     batch = _batch_input(run_id)
     assessment = _assessment()
-    incorrect = _draft(
-        assessment,
-        "Among surveyed adults, the program had better completion results.",
-    ).model_copy(update={"narrowest_supported_proposition": "A paraphrased proposition."})
-    corrected = _draft(
-        assessment,
-        "Among surveyed adults in the regional program, 62% reported course completion, "
-        "compared with 48% receiving standard materials.",
-    )
-    provider = FakeLunaAnalyst([assessment, incorrect, corrected])
+    provider = FakeLunaAnalyst([assessment])
 
     result = run_v2_evidence_analyst(
         db_path=_prepare_db(tmp_path, run_id),
@@ -499,10 +489,13 @@ def test_canonical_proposition_drift_gets_targeted_retry_guidance(tmp_path: Path
         clock=lambda: NOW,
     )
 
-    assert result.source_results[0].state is V2EvidenceAnalystState.READY_FOR_REVIEWER
-    assert len(provider.requests) == 3
-    retry_prompt = provider.requests[-1].rendered_prompt
-    assert "narrowest_supported_proposition character-for-character" in retry_prompt
+    assert result.source_results[0].state is V2EvidenceAnalystState.READY_FOR_ADMISSION
+    assert result.source_results[0].statement_draft is not None
+    assert (
+        result.source_results[0].statement_draft.draft_statement
+        == assessment.canonical_factual_statement
+    )
+    assert len(provider.requests) == 1
 
 
 def test_short_exact_selection_retries_with_adjacent_source_range() -> None:
@@ -600,7 +593,7 @@ def test_disabled_direction_relationship_is_retried_then_fails_without_ledger(
     run_id = uuid4()
     batch = _batch_input(run_id, direction=direction)
     wrong = _assessment(relationship=forbidden_relationship)
-    provider = FakeLunaAnalyst([wrong, wrong])
+    provider = FakeLunaAnalyst([wrong])
     db_path = _prepare_db(tmp_path, run_id)
     result = run_v2_evidence_analyst(
         db_path=db_path,
@@ -613,7 +606,7 @@ def test_disabled_direction_relationship_is_retried_then_fails_without_ledger(
     assert source.state is V2EvidenceAnalystState.FAILED
     assert source.candidate == batch.queued_candidates[0].candidate
     assert source.statement_draft is None
-    assert len(source.analyst_attempt_ids) == 2
+    assert len(source.analyst_attempt_ids) == 1
     assert not hasattr(result, "ledger_records")
     assert all(
         item.status is ModelAttemptStatus.FAILED
@@ -621,19 +614,12 @@ def test_disabled_direction_relationship_is_retried_then_fails_without_ledger(
     )
 
 
-def test_transient_analyst_failure_retries_once_and_succeeds(tmp_path: Path) -> None:
+def test_transient_analyst_failure_is_terminal_after_one_attempt(tmp_path: Path) -> None:
     run_id = uuid4()
     batch = _batch_input(run_id)
-    assessment = _assessment()
     provider = FakeLunaAnalyst(
         [
             RuntimeError("temporary Luna outage"),
-            assessment,
-            _draft(
-                assessment,
-                "Among surveyed adults in the regional program, 62% reported completion, "
-                "compared with 48% receiving standard materials.",
-            ),
         ]
     )
     db_path = _prepare_db(tmp_path, run_id)
@@ -644,29 +630,19 @@ def test_transient_analyst_failure_retries_once_and_succeeds(tmp_path: Path) -> 
         routing_config=_routing(),
         clock=lambda: NOW,
     )
-    assert result.source_results[0].state is V2EvidenceAnalystState.READY_FOR_REVIEWER
+    assert result.source_results[0].state is V2EvidenceAnalystState.FAILED
     attempts = read_model_route_attempts(db_path, run_id)
     assert [item.status for item in attempts].count(ModelAttemptStatus.FAILED) == 1
-    assert [item.status for item in attempts].count(ModelAttemptStatus.COMPLETED) == 2
+    assert [item.status for item in attempts].count(ModelAttemptStatus.COMPLETED) == 0
 
 
-def test_reviewer_directed_revision_is_the_third_luna_analyst_operation(
+def test_fresh_analyzer_result_does_not_trigger_reviewer_revision(
     tmp_path: Path,
 ) -> None:
     run_id = uuid4()
     batch = _batch_input(run_id)
     assessment = _assessment()
-    initial = _draft(
-        assessment,
-        "Among surveyed adults in the regional program, 62% reported completion, compared "
-        "with 48% receiving standard materials.",
-    )
-    revised = _draft(
-        assessment,
-        "Among 240 surveyed regional-program adults, 62% reported course completion within "
-        "six months, compared with 48% of matched adults receiving standard materials.",
-    )
-    provider = FakeLunaAnalyst([assessment, initial, revised])
+    provider = FakeLunaAnalyst([assessment])
     db_path = _prepare_db(tmp_path, run_id)
     analyzed = run_v2_evidence_analyst(
         db_path=db_path,
@@ -675,29 +651,18 @@ def test_reviewer_directed_revision_is_the_third_luna_analyst_operation(
         routing_config=_routing(),
         clock=lambda: NOW,
     )
-    revision = revise_v2_canonical_statement(
-        db_path=db_path,
-        batch_input=batch,
-        source_result=analyzed.source_results[0],
-        reviewer_rationale="Retain the sample size and six-month observation window.",
-        llm_provider=provider,
-        routing_config=_routing(),
-        clock=lambda: NOW,
-    )
-    resumed = revise_v2_canonical_statement(
-        db_path=db_path,
-        batch_input=batch,
-        source_result=analyzed.source_results[0],
-        reviewer_rationale="Retain the sample size and six-month observation window.",
-        llm_provider=provider,
-        routing_config=_routing(),
-        clock=lambda: NOW,
-    )
-    assert revision.revised_statement.draft_statement == revised.canonical_factual_statement
-    assert resumed == revision
-    assert len(provider.requests) == 3
-    assert provider.requests[-1].model_alias is ModelAlias.GPT_5_6_LUNA_HIGH
-    assert len(read_model_route_attempts(db_path, run_id)) == 3
+    with pytest.raises(ValueError, match="Reviewer-ready"):
+        revise_v2_canonical_statement(
+            db_path=db_path,
+            batch_input=batch,
+            source_result=analyzed.source_results[0],
+            reviewer_rationale="Retain the sample size and six-month observation window.",
+            llm_provider=provider,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+    assert len(provider.requests) == 1
+    assert len(read_model_route_attempts(db_path, run_id)) == 1
 
 
 def test_historical_mimo_analyst_decision_and_route_remain_readable() -> None:

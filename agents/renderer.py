@@ -26,12 +26,16 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2AdmissionMethod,
+    V2EvidenceAdmissionRecord,
     ValidationError,
     ValidationErrorCode,
     ValidationResult,
 )
 
 VALIDATOR_CONFIG_VERSION = "post-mvp5-release-validator-v2"
+
+EvidenceRecord = LedgerRecord | V2EvidenceAdmissionRecord
 
 SUPPORTING_EVIDENCE_TEMPLATE_ID = "supporting_evidence"
 OPPOSING_EVIDENCE_TEMPLATE_ID = "opposing_evidence"
@@ -137,7 +141,7 @@ APPROVED_CONNECTIVE_TEMPLATES: Mapping[str, ApprovedConnectiveTemplate] = Mappin
 
 def validate_final_release(
     synthesis: SynthesisOutput,
-    ledger_records: Sequence[LedgerRecord],
+    ledger_records: Sequence[EvidenceRecord],
     *,
     authoritative_claim: str,
     validated_at: datetime,
@@ -183,7 +187,7 @@ def validate_final_release(
 
 def render_brief(
     synthesis: SynthesisOutput,
-    ledger_records: Sequence[LedgerRecord],
+    ledger_records: Sequence[EvidenceRecord],
     *,
     authoritative_claim: str,
     research_mode: ResearchMode | None = None,
@@ -222,12 +226,12 @@ def _authoritative_claim_errors(authoritative_claim: str) -> list[ValidationErro
 
 def _ledger_lookup(
     synthesis: SynthesisOutput,
-    ledger_records: Sequence[LedgerRecord],
-) -> tuple[dict[object, LedgerRecord], list[ValidationError]]:
+    ledger_records: Sequence[EvidenceRecord],
+) -> tuple[dict[object, EvidenceRecord], list[ValidationError]]:
     errors: list[ValidationError] = []
-    lookup: dict[object, LedgerRecord] = {}
+    lookup: dict[object, EvidenceRecord] = {}
     for index, record in enumerate(ledger_records):
-        if not isinstance(record, LedgerRecord):
+        if not isinstance(record, (LedgerRecord, V2EvidenceAdmissionRecord)):
             errors.append(
                 _error(
                     ValidationErrorCode.SCHEMA_ERROR,
@@ -260,9 +264,9 @@ def _ledger_lookup(
     return lookup, errors
 
 
-def _ledger_schema_errors(record: LedgerRecord, index: int) -> list[ValidationError]:
+def _ledger_schema_errors(record: EvidenceRecord, index: int) -> list[ValidationError]:
     try:
-        LedgerRecord.model_validate(record.model_dump(mode="python"))
+        type(record).model_validate(record.model_dump(mode="python"))
     except PydanticValidationError as exc:
         return [
             _error(
@@ -382,7 +386,7 @@ def _section_structure_errors(synthesis: SynthesisOutput) -> list[ValidationErro
 
 def _content_errors(
     synthesis: SynthesisOutput,
-    ledger_lookup: Mapping[object, LedgerRecord],
+    ledger_lookup: Mapping[object, EvidenceRecord],
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     claim_use_counts: Counter[object] = Counter()
@@ -506,7 +510,7 @@ def _append_template_errors(
 
 def _append_ledger_match_errors(
     errors: list[ValidationError],
-    ledger: LedgerRecord,
+    ledger: EvidenceRecord,
     item: SynthesisItem,
     item_location: str,
 ) -> None:
@@ -516,6 +520,16 @@ def _append_ledger_match_errors(
                 ValidationErrorCode.LEDGER_MISMATCH,
                 f"{item_location}.reviewer_approval_id",
                 "Reviewer approval ID does not match the Ledger record.",
+            )
+        )
+    if item.admission_method is not getattr(
+        ledger, "admission_method", V2AdmissionMethod.REVIEWER_APPROVED
+    ):
+        errors.append(
+            _error(
+                ValidationErrorCode.LEDGER_MISMATCH,
+                f"{item_location}.admission_method",
+                "Evidence admission method does not match the persisted record.",
             )
         )
     if item.approved_factual_statement != ledger.approved_factual_statement:
@@ -554,7 +568,7 @@ def _append_ledger_match_errors(
 
 def _append_template_policy_errors(
     errors: list[ValidationError],
-    ledger: LedgerRecord,
+    ledger: EvidenceRecord,
     template: ApprovedConnectiveTemplate,
     item: SynthesisItem,
     item_location: str,
@@ -601,7 +615,7 @@ def _append_template_policy_errors(
 
 def _render_validated_brief(
     synthesis: SynthesisOutput,
-    ledger_lookup: Mapping[object, LedgerRecord],
+    ledger_lookup: Mapping[object, EvidenceRecord],
     authoritative_claim: str,
     *,
     research_mode: ResearchMode | None,

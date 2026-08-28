@@ -19,6 +19,10 @@ Status: Complete and verified.
 - Add mocked end-to-end, restart, failure-matrix, direction-adversarial, budget, fingerprint,
   API/export/render, and release-integrity tests. Make no paid provider call.
 
+The completed implementation follows the approved correction recorded on 2026-08-21: the
+run-wide token ceiling is 500,000. The 300,000-token value above is retained as the original
+authorized scope for historical accuracy and is superseded for implementation.
+
 ## Hard boundaries
 
 - No new product feature, frontend redesign, dependency, hidden live call, Round 4,

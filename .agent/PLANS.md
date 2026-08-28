@@ -2,14 +2,26 @@
 
 Canonical phase plans live in `.agent/plans/`.
 
+## ResearchAssistant v2 — Phase 13: Analyzer Admission Cutover
+
+The user explicitly authorized and completed v2 Phase 13 on 2026-08-26. Fresh v2 removes
+Reviewer calls, combines Luna assessment and factual-statement drafting into one call per
+source, and admits analyzer-approved records through deterministic validation. Versioned
+Phase-13 contracts and keys preserve historical Reviewer-backed runs without reinterpretation.
+
+Canonical plan:
+
+- `.agent/plans/phase-v2-13-analyzer-admission-cutover.md`
+
 ## ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
 
 The user explicitly authorized and completed v2 Phase 12 on 2026-08-21. It joins the
 restart-safe Phase 3–11 stages into the fresh website/CLI production path, adds one
-persisted 160-call/300,000-token accounting authority and exact-extraction bridge, protects
+persisted 160-call/500,000-token accounting authority and exact-extraction bridge, protects
 downstream budget, closes the semantic/provider fingerprint, and keeps historical runs under
-their original inspection/render/export contracts. No paid provider call, dependency, or
-historical evidence migration is part of the phase.
+their original inspection/render/export contracts. The original 300,000-token scope was
+corrected to 500,000 before completion. No paid provider call, dependency, or historical
+evidence migration is part of the phase.
 
 Canonical plan:
 

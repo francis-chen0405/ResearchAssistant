@@ -57,6 +57,7 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2EvidenceAdmissionRecord,
     V2InitialPlannerOutput,
     V2LedgerProvenance,
     V2PersistedArtifact,
@@ -3429,6 +3430,79 @@ def read_v2_ledger_admission(
             raise KeyError(f"v2 Ledger admission {ledger_claim_id} not found")
         return (
             LedgerRecord.model_validate_json(row["ledger_record_json"]),
+            V2LedgerProvenance.model_validate_json(row["provenance_json"]),
+        )
+
+
+def insert_v2_evidence_admission(
+    db_path: str,
+    record: V2EvidenceAdmissionRecord,
+    provenance: V2LedgerProvenance,
+) -> None:
+    """Append one immutable analyzer-admitted evidence record."""
+    if record.admission_method.value != "analyzer_admitted":
+        raise ValueError("fresh evidence admissions must use analyzer_admitted")
+    record_json = record.model_dump_json()
+    provenance_json = provenance.model_dump_json()
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(record.run_id),),
+        ).fetchone()
+        if identity is None or identity["pipeline_identity"] != V2_PIPELINE_IDENTITY:
+            raise ValueError("v2 evidence admissions require an explicit v2 run identity")
+        existing = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(record.ledger_claim_id),),
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["ledger_record_json"] != record_json
+                or existing["provenance_json"] != provenance_json
+            ):
+                raise sqlite3.IntegrityError("v2 evidence admission is immutable")
+            return
+        conn.execute(
+            """INSERT INTO v2_ledger_admissions
+               (ledger_claim_id, run_id, source_id, research_direction, discovery_round,
+                source_family_id, recommended, relevant_gap_ids_json, ledger_record_json,
+                provenance_json, admitted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.ledger_claim_id),
+                str(record.run_id),
+                str(provenance.source_id),
+                provenance.research_direction.value,
+                provenance.discovery_round,
+                provenance.source_family_id,
+                int(provenance.recommended),
+                json.dumps(provenance.relevant_gap_ids, ensure_ascii=False, separators=(",", ":")),
+                record_json,
+                provenance_json,
+                _dt_to_iso(record.ledger_validated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_v2_evidence_admission(
+    db_path: DatabaseReader, ledger_claim_id: UUID
+) -> tuple[V2EvidenceAdmissionRecord, V2LedgerProvenance]:
+    """Read one immutable analyzer admission and its discovery provenance."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(ledger_claim_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 evidence admission {ledger_claim_id} not found")
+        return (
+            V2EvidenceAdmissionRecord.model_validate_json(row["ledger_record_json"]),
             V2LedgerProvenance.model_validate_json(row["provenance_json"]),
         )
 

@@ -1,4 +1,4 @@
-"""Luna semantic evidence analysis over exact Phase-8 deep-analysis candidates."""
+"""Luna semantic evidence analysis over exact fresh-v2 deep-analysis candidates."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from models import (
     ModelRouteAttempt,
     ModelUsageMetadata,
     ResearchDirection,
-    V2CanonicalStatementLLMInput,
     V2CanonicalStatementModelOutput,
     V2CanonicalStatementRevisionLLMInput,
     V2EvidenceAnalystBatchInput,
@@ -62,8 +61,10 @@ from store import (
     reserve_model_route_attempt,
 )
 
-V2_EVIDENCE_ANALYST_ARTIFACT_KEY = "phase-9-luna-evidence-analyst"
-V2_EVIDENCE_ANALYST_MAX_ATTEMPTS = 2
+V2_EVIDENCE_ANALYST_ARTIFACT_KEY = "phase-13-luna-evidence-analyst-analyzer-admission"
+V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX = "phase-13-luna-evidence-analyst-source-v2"
+V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX = "phase-13-luna-evidence-analyst-source"
+V2_EVIDENCE_ANALYST_MAX_ATTEMPTS = 1
 _PHASE9_OUTPUT_TYPES = frozenset(
     {V2EvidenceAnalystModelOutput.__name__, V2CanonicalStatementModelOutput.__name__}
 )
@@ -105,7 +106,7 @@ def run_v2_evidence_analyst(
     if stored is not None:
         result = V2EvidenceAnalystBatchResult.model_validate_json(stored)
         if result.input != batch_input:
-            raise ValueError("persisted Phase-9 input does not match the requested queue")
+            raise ValueError("persisted Phase-13 input does not match the requested queue")
         return result
 
     analyst_route = routing_config.preflight().for_stage(LLMStage.ANALYST)
@@ -146,9 +147,9 @@ def run_v2_evidence_analyst(
             )
             continue
         source_artifact_key = _source_artifact_key(survivor.source_id)
-        persisted_source = _read_artifact(path, batch_input.run_id, source_artifact_key)
+        persisted_source = _read_source_result(path, batch_input.run_id, survivor.source_id)
         if persisted_source is not None:
-            source_result = V2EvidenceAnalystSourceResult.model_validate_json(persisted_source)
+            source_result = persisted_source
         else:
             source_result = _analyze_source(
                 db_path=path,
@@ -160,7 +161,7 @@ def run_v2_evidence_analyst(
             )
             insert_v2_artifact(path, source_artifact_key, source_result, _aware_now(now))
         if source_result.source_id != survivor.source_id:
-            raise ValueError("persisted Phase-9 source result does not match survivor")
+            raise ValueError("persisted Phase-13 source result does not match survivor")
         results.append(source_result)
 
     completed_at = _aware_now(now)
@@ -242,6 +243,7 @@ def revise_v2_canonical_statement(
             source_result.score_decision.claim_fit,
         ),
         retry_guidance=_canonical_statement_retry_guidance(source_result.score_decision.claim_fit),
+        max_attempts=2,
     )
     statement = create_statement_draft(
         candidate=source_result.candidate,
@@ -302,7 +304,7 @@ def _analyze_source(
             db_path=db_path,
             batch_input=batch_input,
             source_id=source_input.source_id,
-            operation="assessment",
+            operation="analysis-and-statement",
             input_artifact=semantic_input,
             output_type=V2EvidenceAnalystModelOutput,
             llm_provider=llm_provider,
@@ -311,6 +313,7 @@ def _analyze_source(
             objective_validator=lambda output: _validate_assessment_direction(
                 output, source_input.direction
             ),
+            retry_guidance=None,
         )
         attempt_ids.extend(score_attempts)
         route = routing_config.preflight().for_stage(LLMStage.ANALYST)
@@ -339,45 +342,21 @@ def _analyze_source(
                 score_decision=score_decision,
                 analyst_attempt_ids=tuple(attempt_ids),
             )
-        draft_input = V2CanonicalStatementLLMInput(
-            run_id=batch_input.run_id,
-            exact_claim=batch_input.exact_claim,
-            direction=source_input.direction,
-            candidate=candidate,
-            assessment=assessment,
-            score_decision=score_decision,
-        )
-        drafted, draft_attempts = _invoke_bounded_analyst(
-            db_path=db_path,
-            batch_input=batch_input,
-            source_id=source_input.source_id,
-            operation="canonical-statement",
-            input_artifact=draft_input,
-            output_type=V2CanonicalStatementModelOutput,
-            llm_provider=llm_provider,
-            routing_config=routing_config,
-            clock=clock,
-            objective_validator=lambda output: _validate_statement_output(
-                output, assessment, score_decision.claim_fit
-            ),
-            retry_guidance=_canonical_statement_retry_guidance(score_decision.claim_fit),
-        )
-        attempt_ids.extend(draft_attempts)
         statement_draft = create_statement_draft(
             candidate=candidate,
             score_decision=score_decision,
             statement_draft_id=uuid5(
                 NAMESPACE_URL,
-                f"v2-phase9-draft::{batch_input.run_id}::{candidate.quote_block_id}",
+                f"v2-phase13-draft::{batch_input.run_id}::{candidate.quote_block_id}",
             ),
-            draft_statement=drafted.canonical_factual_statement,
+            draft_statement=assessment.canonical_factual_statement,
             drafted_at=_aware_now(clock),
         )
         return V2EvidenceAnalystSourceResult(
             run_id=batch_input.run_id,
             source_id=source_input.source_id,
             direction=source_input.direction,
-            state=V2EvidenceAnalystState.READY_FOR_REVIEWER,
+            state=V2EvidenceAnalystState.READY_FOR_ADMISSION,
             candidate=candidate,
             assessment=assessment,
             score_decision=score_decision,
@@ -414,6 +393,7 @@ def _invoke_bounded_analyst(
     clock: Callable[[], datetime],
     objective_validator: Callable[[_OutputT], None],
     retry_guidance: str | None = None,
+    max_attempts: int | None = None,
 ) -> tuple[_OutputT, tuple[UUID, ...]]:
     route = routing_config.preflight().for_stage(LLMStage.ANALYST)
     prompt = load_prompt_file(
@@ -421,8 +401,9 @@ def _invoke_bounded_analyst(
         expected_stage=LLMStage.ANALYST,
     )
     base_rendered_prompt = render_stage_prompt(prompt, input_artifact, output_type)
+    attempt_limit = max_attempts or V2_EVIDENCE_ANALYST_MAX_ATTEMPTS
     operation_id = uuid5(
-        NAMESPACE_URL, f"v2-phase9::{batch_input.run_id}::{source_id}::{operation}"
+        NAMESPACE_URL, f"v2-phase13::{batch_input.run_id}::{source_id}::{operation}"
     )
     attempts = read_model_route_attempts(db_path, batch_input.run_id, operation_id)
     attempt_ids = [item.attempt_id for item in attempts]
@@ -449,11 +430,11 @@ def _invoke_bounded_analyst(
                     }
                 ),
             )
-    if len(attempts) >= V2_EVIDENCE_ANALYST_MAX_ATTEMPTS:
+    if len(attempts) >= attempt_limit:
         raise V2EvidenceAnalystFailure(f"{operation} exhausted bounded Analyst retry")
 
     failures: list[str] = []
-    for attempt_number in range(len(attempts) + 1, V2_EVIDENCE_ANALYST_MAX_ATTEMPTS + 1):
+    for attempt_number in range(len(attempts) + 1, attempt_limit + 1):
         started_at = _aware_now(clock)
         rendered_prompt = base_rendered_prompt
         if attempt_number > 1 and retry_guidance is not None:
@@ -480,7 +461,7 @@ def _invoke_bounded_analyst(
         )
         attempt_id = uuid5(
             NAMESPACE_URL,
-            f"v2-phase9-attempt::{operation_id}::{attempt_number}",
+            f"v2-phase13-attempt::{operation_id}::{attempt_number}",
         )
         running = ModelRouteAttempt(
             run_id=batch_input.run_id,
@@ -518,7 +499,7 @@ def _invoke_bounded_analyst(
                 request,
                 retry_metadata=RetryMetadata(
                     attempt_number=attempt_number,
-                    max_attempts=V2_EVIDENCE_ANALYST_MAX_ATTEMPTS,
+                    max_attempts=attempt_limit,
                     retry_count=attempt_number - 1,
                     automatic_retry_performed=attempt_number > 1,
                 ),
@@ -563,6 +544,8 @@ def _validate_assessment_direction(
     assessment: V2EvidenceAnalystModelOutput,
     direction: ResearchDirection,
 ) -> None:
+    if assessment.canonical_factual_statement is None:
+        raise ValueError("combined Analyst output requires a final factual statement")
     forbidden = (
         V2EvidenceRelationship.CHALLENGES
         if direction is ResearchDirection.SUPPORT
@@ -660,7 +643,31 @@ def _provider_failure_usage(provider: LLMProvider) -> ModelUsageMetadata | None:
 
 
 def _source_artifact_key(source_id: UUID) -> str:
-    return f"phase-9-luna-evidence-analyst-source-{source_id}"
+    return f"{V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX}-{source_id}"
+
+
+def _source_artifact_keys(source_id: UUID) -> tuple[str, ...]:
+    return (
+        _source_artifact_key(source_id),
+        f"{V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX}-{source_id}",
+    )
+
+
+def _read_source_result(
+    db_path: str,
+    run_id: UUID,
+    source_id: UUID,
+) -> V2EvidenceAnalystSourceResult | None:
+    for artifact_key in _source_artifact_keys(source_id):
+        payload = _read_artifact(db_path, run_id, artifact_key)
+        if payload is None:
+            continue
+        result = V2EvidenceAnalystSourceResult.model_validate_json(payload)
+        if result.state is V2EvidenceAnalystState.NOT_QUEUED:
+            # Single-source waves must not let a placeholder reserve a future wave.
+            continue
+        return result
+    return None
 
 
 def _revision_artifact_key(source_id: UUID) -> str:

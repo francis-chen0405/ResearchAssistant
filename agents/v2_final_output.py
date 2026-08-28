@@ -16,6 +16,9 @@ from models import (
     Stance,
     StrictModel,
     SynthesisOutput,
+    V2AdmissionMethod,
+    V2EvidenceAdmissionBatchResult,
+    V2EvidenceAdmissionState,
     V2FinalResearchOutput,
     V2ReleaseValidation,
     V2ResearchStoppingDisclosure,
@@ -23,7 +26,6 @@ from models import (
     V2ResultSource,
     V2ResultSourceStatus,
     V2ReviewerLedgerBatchResult,
-    V2ReviewerLedgerState,
     V2SourceSelectionGap,
     V2SynthesizerInput,
     V2SynthesizerLedgerItem,
@@ -46,9 +48,33 @@ from providers.v2_routing import V2RoutingConfig
 from research_governor import V2RoundThreeReasonCode
 from store import insert_v2_artifact, read_v2_artifact
 
-V2_FINAL_OUTPUT_ARTIFACT_KEY = "phase-11-final-research-output"
-V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-phase-11-final-output-v1"
-V2_FINAL_VALIDATOR_CONFIG_VERSION = "researchassistant-v2-phase-11-release-validator-v1"
+V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY = "phase-11-final-research-output"
+V2_FINAL_OUTPUT_ARTIFACT_KEY = "phase-13-final-research-output-analyzer-admission"
+V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-phase-13-final-output-analyzer-admission-v1"
+V2_FINAL_VALIDATOR_CONFIG_VERSION = "researchassistant-v2-phase-13-release-validator-v1"
+
+V2EvidenceInputResult = V2EvidenceAdmissionBatchResult | V2ReviewerLedgerBatchResult
+
+
+def _choose_evidence_result(
+    admission_result: V2EvidenceAdmissionBatchResult | None,
+    reviewer_result: V2ReviewerLedgerBatchResult | None,
+) -> V2EvidenceInputResult:
+    if admission_result is not None and reviewer_result is not None:
+        raise ValueError(
+            "v2 final output accepts either fresh admission or historical Reviewer data"
+        )
+    result = admission_result or reviewer_result
+    if result is None:
+        raise ValueError("v2 final output requires an evidence admission result")
+    return result
+
+
+def _source_record(source: object) -> object | None:
+    record = getattr(source, "evidence_record", None)
+    if record is not None:
+        return record
+    return getattr(source, "ledger_record", None)
 
 
 class V2FinalOutputRunResult(StrictModel):
@@ -61,7 +87,8 @@ class V2FinalOutputRunResult(StrictModel):
 def run_v2_final_research_output(
     *,
     db_path: str | Path,
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    admission_result: V2EvidenceAdmissionBatchResult | None = None,
+    reviewer_result: V2ReviewerLedgerBatchResult | None = None,
     continuation: V2AdaptiveContinuationResult,
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
@@ -70,17 +97,24 @@ def run_v2_final_research_output(
     """Create and persist the v2 result using MiMo only for Ledger-item arrangement."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
-    _validate_chain(reviewer_result, continuation)
-    try:
-        stored = read_v2_artifact(path, reviewer_result.run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
-    except KeyError:
-        stored = None
+    evidence_result = _choose_evidence_result(admission_result, reviewer_result)
+    _validate_chain(evidence_result, continuation)
+    stored = None
+    output_keys = (V2_FINAL_OUTPUT_ARTIFACT_KEY,)
+    if isinstance(evidence_result, V2ReviewerLedgerBatchResult):
+        output_keys = (V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY)
+    for output_key in output_keys:
+        try:
+            stored = read_v2_artifact(path, evidence_result.run_id, output_key)
+        except KeyError:
+            continue
+        break
     if stored is not None:
         output = V2FinalResearchOutput.model_validate_json(stored.payload_json)
-        _validate_persisted_output(output, reviewer_result, continuation)
+        _validate_persisted_output(output, evidence_result, continuation)
         return V2FinalOutputRunResult(final_output=output, resumed=True)
 
-    synthesis_input = build_v2_synthesizer_input(reviewer_result, continuation)
+    synthesis_input = build_v2_synthesizer_input(evidence_result, continuation)
     route = routing_config.preflight().for_stage(LLMStage.SYNTHESIZER)
     if route.logical_alias is not ModelAlias.MIMO_V25_PRO:
         raise ValueError("fresh v2 synthesis must use MiMo-v2.5-Pro")
@@ -88,7 +122,7 @@ def run_v2_final_research_output(
         raise ValueError("configured Synthesizer route does not match the v2 routing policy")
     prompt = load_prompt(LLMStage.SYNTHESIZER)
     request = LLMRequest(
-        run_id=reviewer_result.run_id,
+        run_id=evidence_result.run_id,
         stage=LLMStage.SYNTHESIZER,
         prompt=prompt,
         rendered_prompt=render_stage_prompt(prompt, synthesis_input, SynthesisOutput),
@@ -104,10 +138,10 @@ def run_v2_final_research_output(
     synthesis = invocation.output_artifact
     if not isinstance(synthesis, SynthesisOutput):
         raise TypeError("v2 Synthesizer returned an unexpected typed artifact")
-    if synthesis.run_id != reviewer_result.run_id:
+    if synthesis.run_id != evidence_result.run_id:
         raise ValueError("v2 Synthesizer output run_id does not match the run")
     output = build_v2_final_research_output(
-        reviewer_result=reviewer_result,
+        admission_result=evidence_result,
         continuation=continuation,
         synthesis=synthesis,
         created_at=_aware(now()),
@@ -117,20 +151,20 @@ def run_v2_final_research_output(
 
 
 def build_v2_synthesizer_input(
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
 ) -> V2SynthesizerInput:
     """Project only validated Ledger evidence and typed research disclosures to MiMo."""
-    _validate_chain(reviewer_result, continuation)
-    selection = reviewer_result.analyst_result.input.queue_result
+    _validate_chain(evidence_result, continuation)
+    selection = evidence_result.analyst_result.input.queue_result
     statements = tuple(
-        _ledger_item(source.source_id, source.direction, source.ledger_record)
-        for source in reviewer_result.source_results
-        if source.state is V2ReviewerLedgerState.ADMITTED and source.ledger_record is not None
+        _ledger_item(source.source_id, source.direction, _source_record(source))
+        for source in evidence_result.source_results
+        if _source_record(source) is not None
     )
     if not statements:
-        raise ValueError("v2 synthesis requires at least one Reviewer-approved Ledger record")
-    unresolved = _unresolved_gaps(selection.input.gap_history, reviewer_result)
+        raise ValueError("v2 synthesis requires at least one analyzer-admitted evidence record")
+    unresolved = _unresolved_gaps(selection.input.gap_history, evidence_result)
     source_by_id = {item.source_id: item for item in selection.input.survivors}
     metadata = tuple(
         V2SynthesizerRecommendationMetadata(
@@ -144,7 +178,7 @@ def build_v2_synthesizer_input(
     )
     stopping = _stopping_disclosure(continuation)
     return V2SynthesizerInput(
-        run_id=reviewer_result.run_id,
+        run_id=evidence_result.run_id,
         exact_claim=selection.input.exact_claim,
         directions=selection.input.directions,
         approved_ledger_items=statements,
@@ -159,25 +193,27 @@ def build_v2_synthesizer_input(
 
 def build_v2_final_research_output(
     *,
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    admission_result: V2EvidenceInputResult | None = None,
+    reviewer_result: V2ReviewerLedgerBatchResult | None = None,
     continuation: V2AdaptiveContinuationResult,
     synthesis: SynthesisOutput,
     created_at: datetime,
 ) -> V2FinalResearchOutput:
     """Build the complete deterministic disclosure envelope around a typed synthesis."""
-    _validate_chain(reviewer_result, continuation)
-    selection = reviewer_result.analyst_result.input.queue_result
+    evidence_result = _choose_evidence_result(admission_result, reviewer_result)
+    _validate_chain(evidence_result, continuation)
+    selection = evidence_result.analyst_result.input.queue_result
     records = tuple(
-        source.ledger_record
-        for source in reviewer_result.source_results
-        if source.ledger_record is not None
+        _source_record(source)
+        for source in evidence_result.source_results
+        if _source_record(source) is not None
     )
     stopping = _stopping_disclosure(continuation)
-    all_sources = _result_sources(reviewer_result)
+    all_sources = _result_sources(evidence_result)
     recommended_ids = selection.recommended_source_ids
     by_id = {item.source_id: item for item in all_sources}
     output_without_validation = {
-        "run_id": reviewer_result.run_id,
+        "run_id": evidence_result.run_id,
         "exact_claim": selection.input.exact_claim,
         "directions": selection.input.directions,
         "synthesis": synthesis,
@@ -191,7 +227,7 @@ def build_v2_final_research_output(
                 missing_evidence=gap.missing_evidence,
                 assessed_after_round=gap.assessed_after_round,
             )
-            for gap in _unresolved_gaps(selection.input.gap_history, reviewer_result)
+            for gap in _unresolved_gaps(selection.input.gap_history, evidence_result)
         ),
         "stopping": stopping,
         "created_at": _aware(created_at),
@@ -199,7 +235,7 @@ def build_v2_final_research_output(
     validation = validate_v2_final_release(
         synthesis=synthesis,
         ledger_records=records,
-        reviewer_result=reviewer_result,
+        admission_result=evidence_result,
         continuation=continuation,
         output_fields=output_without_validation,
         validated_at=_aware(created_at),
@@ -211,13 +247,15 @@ def validate_v2_final_release(
     *,
     synthesis: SynthesisOutput,
     ledger_records: tuple[object, ...],
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    admission_result: V2EvidenceInputResult | None = None,
+    reviewer_result: V2ReviewerLedgerBatchResult | None = None,
     continuation: V2AdaptiveContinuationResult,
     output_fields: Mapping[str, object],
     validated_at: datetime,
 ) -> V2ReleaseValidation:
     """Fail closed unless the evidence brief and every v2 disclosure are internally exact."""
-    selection = reviewer_result.analyst_result.input.queue_result
+    evidence_result = _choose_evidence_result(admission_result, reviewer_result)
+    selection = evidence_result.analyst_result.input.queue_result
     evidence = validate_final_release(
         synthesis,
         ledger_records,
@@ -225,7 +263,7 @@ def validate_v2_final_release(
         validated_at=validated_at,
     )
     errors = list(evidence.errors)
-    errors.extend(_v2_integrity_errors(synthesis, reviewer_result, continuation, output_fields))
+    errors.extend(_v2_integrity_errors(synthesis, evidence_result, continuation, output_fields))
     if errors:
         return V2ReleaseValidation(
             evidence_validation=evidence,
@@ -270,19 +308,19 @@ def render_v2_final_output(output: V2FinalResearchOutput) -> str:
 
 def _v2_integrity_errors(
     synthesis: SynthesisOutput,
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
     output_fields: Mapping[str, object],
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
-    selection = reviewer_result.analyst_result.input.queue_result
+    selection = evidence_result.analyst_result.input.queue_result
     source_by_id = {item.source_id: item for item in selection.input.survivors}
     status_by_id = {item.source_id: item for item in selection.source_statuses}
-    reviewer_by_id = {item.source_id: item for item in reviewer_result.source_results}
+    admission_by_id = {item.source_id: item for item in evidence_result.source_results}
     source_by_claim = {
-        source.ledger_record.ledger_claim_id: source
-        for source in reviewer_result.source_results
-        if source.ledger_record is not None
+        record.ledger_claim_id: source
+        for source in evidence_result.source_results
+        if (record := _source_record(source)) is not None
     }
     for section in synthesis.sections:
         for item in section.items:
@@ -318,8 +356,8 @@ def _v2_integrity_errors(
             continue
         expected = source_by_id.get(source.source_id)
         status = status_by_id.get(source.source_id)
-        review = reviewer_by_id.get(source.source_id)
-        if expected is None or status is None or review is None:
+        admission = admission_by_id.get(source.source_id)
+        if expected is None or status is None or admission is None:
             errors.append(_error("all_surviving_sources.source_id", "Source ID does not exist."))
             continue
         if source.direction is not expected.direction:
@@ -335,9 +373,8 @@ def _v2_integrity_errors(
                     "Recommendation state does not match selection.",
                 )
             )
-        expected_claims = (
-            (review.ledger_record.ledger_claim_id,) if review.ledger_record is not None else ()
-        )
+        record = _source_record(admission)
+        expected_claims = (record.ledger_claim_id,) if record is not None else ()
         if source.ledger_claim_ids != expected_claims:
             errors.append(
                 _error(
@@ -356,16 +393,23 @@ def _v2_integrity_errors(
     return errors
 
 
-def _result_sources(reviewer_result: V2ReviewerLedgerBatchResult) -> tuple[V2ResultSource, ...]:
-    selection = reviewer_result.analyst_result.input.queue_result
+def _result_sources(evidence_result: V2EvidenceInputResult) -> tuple[V2ResultSource, ...]:
+    selection = evidence_result.analyst_result.input.queue_result
     status_by_id = {item.source_id: item for item in selection.source_statuses}
-    review_by_id = {item.source_id: item for item in reviewer_result.source_results}
+    admission_by_id = {item.source_id: item for item in evidence_result.source_results}
     sources: list[V2ResultSource] = []
     for survivor in selection.input.survivors:
         status = status_by_id[survivor.source_id]
-        review = review_by_id[survivor.source_id]
-        claims = (review.ledger_record.ledger_claim_id,) if review.ledger_record is not None else ()
-        display_status = _source_status(status.recommended, status.budget_prevented_reason, claims)
+        admission = admission_by_id[survivor.source_id]
+        record = _source_record(admission)
+        claims = (record.ledger_claim_id,) if record is not None else ()
+        display_status = _source_status(
+            status.recommended,
+            status.budget_prevented_reason,
+            claims,
+            analyzer_admitted=isinstance(evidence_result, V2EvidenceAdmissionBatchResult),
+            admission_state=admission.state,
+        )
         sources.append(
             V2ResultSource(
                 source_id=survivor.source_id,
@@ -391,15 +435,39 @@ def _source_status(
     recommended: bool,
     budget_reason: object,
     claim_ids: tuple[UUID, ...],
+    *,
+    analyzer_admitted: bool,
+    admission_state: object,
 ) -> V2ResultSourceStatus:
+    if analyzer_admitted:
+        if admission_state is V2EvidenceAdmissionState.ANALYST_REJECTED:
+            return (
+                V2ResultSourceStatus.RECOMMENDED_ANALYZER_REJECTED
+                if recommended
+                else V2ResultSourceStatus.SURVIVING_ANALYZER_REJECTED
+            )
+        if admission_state is V2EvidenceAdmissionState.ANALYST_FAILED:
+            return (
+                V2ResultSourceStatus.RECOMMENDED_ANALYZER_FAILED
+                if recommended
+                else V2ResultSourceStatus.SURVIVING_ANALYZER_FAILED
+            )
     if budget_reason is not None:
         return V2ResultSourceStatus.BUDGET_PREVENTED_ANALYSIS
     if recommended and claim_ids:
-        return V2ResultSourceStatus.RECOMMENDED_ANALYZED
+        return (
+            V2ResultSourceStatus.RECOMMENDED_ANALYZER_ADMITTED
+            if analyzer_admitted
+            else V2ResultSourceStatus.RECOMMENDED_ANALYZED
+        )
     if recommended:
         return V2ResultSourceStatus.RECOMMENDED_NO_LEDGER_EVIDENCE
     if claim_ids:
-        return V2ResultSourceStatus.SURVIVING_ANALYZED
+        return (
+            V2ResultSourceStatus.SURVIVING_ANALYZER_ADMITTED
+            if analyzer_admitted
+            else V2ResultSourceStatus.SURVIVING_ANALYZED
+        )
     return V2ResultSourceStatus.SURVIVING_NOT_DEEPLY_ANALYZED
 
 
@@ -414,7 +482,8 @@ def _ledger_item(
         source_id=source_id,
         direction=direction,
         ledger_claim_id=record.ledger_claim_id,
-        reviewer_approval_id=record.reviewer_approval_id,
+        reviewer_approval_id=getattr(record, "reviewer_approval_id", None),
+        admission_method=getattr(record, "admission_method", V2AdmissionMethod.REVIEWER_APPROVED),
         stance=record.stance,
         placement=record.placement,
         entailment=record.entailment,
@@ -423,12 +492,12 @@ def _ledger_item(
 
 
 def _unresolved_gaps(
-    gaps: tuple[V2SourceSelectionGap, ...], reviewer_result: V2ReviewerLedgerBatchResult
+    gaps: tuple[V2SourceSelectionGap, ...], evidence_result: V2EvidenceInputResult
 ) -> tuple[V2SourceSelectionGap, ...]:
     covered = {
         gap_id
-        for source in reviewer_result.source_results
-        if source.ledger_record is not None
+        for source in evidence_result.source_results
+        if _source_record(source) is not None
         for gap_id in source.provenance.relevant_gap_ids
     }
     return tuple(gap for gap in gaps if gap.gap_id not in covered)
@@ -502,24 +571,24 @@ def _governor_stopping_reason(
 
 
 def _validate_chain(
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
 ) -> None:
-    if continuation.run_id != reviewer_result.run_id:
+    if continuation.run_id != evidence_result.run_id:
         raise ValueError("v2 final output artifacts must match the same run")
-    selection = reviewer_result.analyst_result.input.queue_result
-    if selection.input.run_id != reviewer_result.run_id:
+    selection = evidence_result.analyst_result.input.queue_result
+    if selection.input.run_id != evidence_result.run_id:
         raise ValueError("v2 final output selection must match the same run")
-    if continuation.merged_survivors.run_id != reviewer_result.run_id:
+    if continuation.merged_survivors.run_id != evidence_result.run_id:
         raise ValueError("v2 final output survivor pool must match the same run")
 
 
 def _validate_persisted_output(
     output: V2FinalResearchOutput,
-    reviewer_result: V2ReviewerLedgerBatchResult,
+    evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
 ) -> None:
-    expected = build_v2_synthesizer_input(reviewer_result, continuation)
+    expected = build_v2_synthesizer_input(evidence_result, continuation)
     if output.run_id != expected.run_id or output.exact_claim != expected.exact_claim:
         raise ValueError("persisted v2 final output does not match the current inputs")
     if output.directions != expected.directions:
@@ -548,6 +617,12 @@ def _render_v2_components(
         raise ValueError("v2 final output directions are malformed")
     lines = ["# Research Brief", "", f"Claim under review: {exact_claim}", ""]
     lines.append(f"Research direction: {_direction_label(support, challenge)}")
+    if any(
+        item.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED
+        for section in synthesis.sections
+        for item in section.items
+    ):
+        lines.append("Evidence admission: Analyzer-admitted; not independently reviewed.")
     for section in synthesis.sections:
         if section.section_type.value == "supporting":
             heading = "Supporting Evidence"

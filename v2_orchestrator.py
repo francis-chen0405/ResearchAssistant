@@ -13,7 +13,6 @@ from uuid import UUID, uuid4
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from agents.researcher import EVIDENCE_POLICY_VERSION
-from agents.reviewer import ReviewerDecision
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY, run_v2_acquisition_probe
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
@@ -34,15 +33,16 @@ from agents.v2_discovery import (
 from agents.v2_extraction import V2_EXTRACTION_ARTIFACT_KEY, V2_EXTRACTION_POLICY_IDENTITY
 from agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
+    V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
     V2_FINAL_OUTPUT_POLICY_IDENTITY,
     V2_FINAL_VALIDATOR_CONFIG_VERSION,
     run_v2_final_research_output,
 )
 from agents.v2_gap_analysis import build_v2_gap_analysis_input, run_v2_gap_analysis
 from agents.v2_initial_planner import run_v2_initial_planner
-from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_POLICY_VERSION
 from agents.v2_source_selection import (
     V2_SOURCE_SELECTION_COMPLETION_KEY,
+    V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
     build_v2_source_selection_input,
     run_v2_source_selection_and_queue,
 )
@@ -50,6 +50,7 @@ from models import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+    V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     CrossrefIdentityMetadata,
     DiscoveryProvider,
     ResearchDirections,
@@ -61,10 +62,12 @@ from models import (
     SynthesisOutput,
     V2AcquisitionProbeOutput,
     V2AdaptiveSearchModelOutput,
-    V2CanonicalStatementModelOutput,
     V2DeepAnalysisBackfillResult,
     V2DeepAnalysisBudget,
     V2DiscoveryScoutOutput,
+    V2EvidenceAdmissionBatchResult,
+    V2EvidenceAdmissionRecord,
+    V2EvidenceAdmissionSourceResult,
     V2EvidenceAnalystModelOutput,
     V2FinalResearchOutput,
     V2GapAnalysisModelOutput,
@@ -73,6 +76,7 @@ from models import (
     V2InitialPlannerModelOutput,
     V2PipelineIdentity,
     V2ProviderRunDiagnostics,
+    V2ResultSourceStatus,
     V2RoundOneSearchQuery,
     V2RunDiagnostics,
     V2SourceSelectionModelOutput,
@@ -112,11 +116,17 @@ from store import (
     update_run,
 )
 
-V2_PRODUCTION_ARTIFACT_KEY = "phase-12-production-result"
-V2_PRODUCTION_FINGERPRINT_KEY = "phase-12-production-fingerprint"
-V2_ROUND_ONE_SEARCH_KEY = "phase-12-round-1-search"
-V2_PRODUCTION_POLICY_IDENTITY = "researchassistant-v2-phase-12-production-cutover-v2"
-V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 14
+V2_PRODUCTION_LEGACY_ARTIFACT_KEY = "phase-12-production-result"
+V2_PRODUCTION_LEGACY_FINGERPRINT_KEY = "phase-12-production-fingerprint"
+V2_PRODUCTION_ARTIFACT_KEY = "phase-13-production-result-analyzer-admission"
+V2_PRODUCTION_FINGERPRINT_KEY = "phase-13-production-fingerprint-analyzer-admission"
+V2_ROUND_ONE_LEGACY_SEARCH_KEY = "phase-12-round-1-search"
+V2_ROUND_ONE_SEARCH_KEY = "phase-13-round-1-search"
+V2_PRODUCTION_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-13-production-cutover-analyzer-admission-v1"
+)
+V2_DEEP_ANALYSIS_BACKFILL_LEGACY_ARTIFACT_KEY = "phase-12-deep-analysis-backfill-v1"
+V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 10
 V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE = 8
 
 
@@ -148,6 +158,8 @@ def _empty_v2_run_diagnostics(
 def configured_v2_providers(path: str | Path, run_id: UUID) -> tuple[DiscoveryProvider, ...]:
     """Read the configured discovery lanes from the immutable v2 fingerprint."""
     payload = _read_v2_payload(path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+    if payload is None:
+        payload = _read_v2_payload(path, run_id, V2_PRODUCTION_LEGACY_FINGERPRINT_KEY)
     if payload is None:
         return ()
     fingerprint = V2ProductionFingerprint.model_validate_json(payload)
@@ -272,6 +284,8 @@ def build_v2_run_diagnostics(
                 surviving_by_provider.setdefault(provider, set()).add(survivor.snapshot_id)
 
     queue_payload = _read_v2_payload(path, run_id, V2_SOURCE_SELECTION_COMPLETION_KEY)
+    if queue_payload is None:
+        queue_payload = _read_v2_payload(path, run_id, V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY)
     queued_sources = 0
     if queue_payload is not None:
         try:
@@ -284,21 +298,33 @@ def build_v2_run_diagnostics(
     analyzed_sources = 0
     approved_records = 0
     backfill_payload = _read_v2_payload(path, run_id, V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY)
+    if backfill_payload is None:
+        backfill_payload = _read_v2_payload(
+            path, run_id, V2_DEEP_ANALYSIS_BACKFILL_LEGACY_ARTIFACT_KEY
+        )
     if backfill_payload is not None:
         try:
             backfill = V2DeepAnalysisBackfillResult.model_validate_json(backfill_payload)
         except ValueError:
             backfill_json = json.loads(backfill_payload)
             executions = backfill_json.get("source_executions", ())
+            admission = backfill_json.get("final_admission_result")
             reviewer = backfill_json.get("final_reviewer_result", {})
-            reviewer_sources = reviewer.get("source_results", ())
+            admission_sources = (
+                admission.get("source_results", ())
+                if isinstance(admission, dict)
+                else reviewer.get("source_results", ())
+            )
             analyzed_sources = sum(
                 isinstance(item, dict) and item.get("state") != "not_attempted"
                 for item in executions
             )
             approved_records = sum(
-                isinstance(item, dict) and item.get("ledger_record") is not None
-                for item in reviewer_sources
+                isinstance(item, dict)
+                and (
+                    item.get("evidence_record") is not None or item.get("ledger_record") is not None
+                )
+                for item in admission_sources
             )
             final_queue = backfill_json.get("final_queue_result", {})
             queued_ids = final_queue.get("queued_source_ids", ())
@@ -308,14 +334,35 @@ def build_v2_run_diagnostics(
             analyzed_sources = sum(
                 execution.state.value != "not_attempted" for execution in backfill.source_executions
             )
-            approved_records = sum(
-                item.ledger_record is not None
-                for item in backfill.final_reviewer_result.source_results
+            approved_records = (
+                sum(
+                    item.evidence_record is not None
+                    for item in backfill.final_admission_result.source_results
+                )
+                if backfill.final_admission_result is not None
+                else sum(
+                    item.ledger_record is not None
+                    for item in (
+                        backfill.final_reviewer_result.source_results
+                        if backfill.final_reviewer_result
+                        else ()
+                    )
+                )
             )
             queued_sources = len(backfill.final_queue_result.queued_source_ids)
     elif final_output is not None:
+        analyzed_statuses = {
+            V2ResultSourceStatus.RECOMMENDED_ANALYZED,
+            V2ResultSourceStatus.RECOMMENDED_ANALYZER_ADMITTED,
+            V2ResultSourceStatus.RECOMMENDED_ANALYZER_REJECTED,
+            V2ResultSourceStatus.RECOMMENDED_ANALYZER_FAILED,
+            V2ResultSourceStatus.SURVIVING_ANALYZED,
+            V2ResultSourceStatus.SURVIVING_ANALYZER_ADMITTED,
+            V2ResultSourceStatus.SURVIVING_ANALYZER_REJECTED,
+            V2ResultSourceStatus.SURVIVING_ANALYZER_FAILED,
+        }
         analyzed_sources = sum(
-            "analyzed" in source.status.value for source in final_output.all_surviving_sources
+            source.status in analyzed_statuses for source in final_output.all_surviving_sources
         )
         approved_records = sum(
             len(source.ledger_claim_ids) for source in final_output.all_surviving_sources
@@ -370,18 +417,25 @@ def infer_v2_stage(
     """Recover a useful stage for v2 artifacts written before stage persistence existed."""
     if current_stage is not Stage.CLAIM_PLANNER:
         return current_stage
-    if final_output_present or _read_v2_payload(path, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY):
+    if final_output_present or any(
+        _read_v2_payload(path, run_id, artifact_key) is not None
+        for artifact_key in (V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY)
+    ):
         return Stage.FINAL_RENDERER_VALIDATOR
     for artifact_key, stage in (
-        (V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY, Stage.REVIEW),
+        (V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY, Stage.SYNTHESIS),
+        (V2_DEEP_ANALYSIS_BACKFILL_LEGACY_ARTIFACT_KEY, Stage.SYNTHESIS),
         ("phase-10-reviewer-ledger", Stage.REVIEW),
         (V2_EXTRACTION_ARTIFACT_KEY, Stage.DEEP_ANALYSIS),
+        ("phase-12-exact-extraction", Stage.DEEP_ANALYSIS),
         (V2_SOURCE_SELECTION_COMPLETION_KEY, Stage.SOURCE_SELECTION),
+        (V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY, Stage.SOURCE_SELECTION),
         ("phase-7-adaptive-search-completion", Stage.ADAPTIVE_SEARCH),
         ("phase-6-gap-analysis", Stage.GAP_ANALYSIS),
         (V2_ACQUISITION_PROBE_ARTIFACT_KEY, Stage.ACQUISITION),
         (V2_SCOUT_ARTIFACT_KEY, Stage.DISCOVERY),
         (V2_ROUND_ONE_SEARCH_KEY, Stage.DISCOVERY),
+        (V2_ROUND_ONE_LEGACY_SEARCH_KEY, Stage.DISCOVERY),
     ):
         if _read_v2_payload(path, run_id, artifact_key) is not None:
             return stage
@@ -391,7 +445,7 @@ def infer_v2_stage(
 def _format_no_approved_evidence_failure(
     deep_analysis: V2DeepAnalysisBackfillResult,
 ) -> str:
-    """Explain why deep analysis produced no Reviewer-approved evidence."""
+    """Explain why deep analysis produced no analyzer-admitted evidence."""
     attempted_count = sum(
         execution.state.value != "not_attempted" for execution in deep_analysis.source_executions
     )
@@ -411,7 +465,7 @@ def _format_no_approved_evidence_failure(
             details.append(reason)
             seen.add(reason)
     summary = (
-        "v2 produced no Reviewer-approved evidence records. "
+        "v2 produced no analyzer-admitted evidence records. "
         f"Attempted sources: {attempted_count}; admitted sources: 0."
     )
     if details:
@@ -544,6 +598,17 @@ def run_v2_production_pipeline(
     now = clock or _utc_now
     resolved_run_id = run_id or uuid4()
     path = str(Path(db_path).resolve())
+
+    # A completed Phase-12 run is an immutable historical result. Read it before
+    # creating or validating the Phase-13 identity, whose route fingerprint is
+    # intentionally different after the Analyzer Admission cutover.
+    init_db(path)
+    try:
+        legacy_terminal = read_v2_artifact(path, resolved_run_id, V2_PRODUCTION_LEGACY_ARTIFACT_KEY)
+    except KeyError:
+        legacy_terminal = None
+    if legacy_terminal is not None:
+        return V2ProductionPipelineResult.model_validate_json(legacy_terminal.payload_json)
 
     def effective_cancellation_requested() -> bool:
         return _cancelled(cancellation_requested) or v2_cancellation_requested(
@@ -683,7 +748,7 @@ def run_v2_production_pipeline(
         if budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE:
             raise V2BudgetExceededError(
                 "v2 downstream reserve cannot cover selection, extraction, analysis, "
-                "review, and synthesis"
+                "admission, and synthesis"
             )
         discoveries, acquisitions, gaps = _completed_round_artifacts(
             path,
@@ -743,12 +808,13 @@ def run_v2_production_pipeline(
             clock=now,
         )
         _raise_if_v2_cancelled(effective_cancellation_requested)
-        reviewer = deep_analysis.final_reviewer_result
-        current_stage = Stage.REVIEW
+        current_stage = Stage.EVIDENCE_ADMISSION
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
-        _raise_if_v2_cancelled(effective_cancellation_requested)
+        admission = deep_analysis.final_admission_result
+        if admission is None:
+            raise ValueError("fresh v2 deep analysis did not produce an evidence admission result")
         approved_records = tuple(
-            item for item in reviewer.source_results if item.ledger_record is not None
+            item for item in admission.source_results if item.evidence_record is not None
         )
         if not approved_records:
             raise ValueError(_format_no_approved_evidence_failure(deep_analysis))
@@ -757,7 +823,7 @@ def run_v2_production_pipeline(
         _raise_if_v2_cancelled(effective_cancellation_requested)
         final = run_v2_final_research_output(
             db_path=path,
-            reviewer_result=reviewer,
+            admission_result=admission,
             continuation=continuation,
             llm_provider=budgeted_llm,
             routing_config=routing_config,
@@ -873,7 +939,7 @@ def _production_fingerprint(
         "provider_policy_fingerprint": provider_policy_fingerprint,
         "semantic_policy": _semantic_policy_payload(),
         "round_limit": 3,
-        "final_output_contract": "researchassistant-v2-phase-11-final-output-v1",
+        "final_output_contract": "researchassistant-v2-phase-13-final-output-analyzer-admission-v1",
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return V2ProductionFingerprint(
@@ -899,8 +965,9 @@ def _semantic_policy_payload() -> dict[str, object]:
         V2DeepAnalysisBackfillResult,
         V2VerbatimQuoteSelection,
         V2EvidenceAnalystModelOutput,
-        V2CanonicalStatementModelOutput,
-        ReviewerDecision,
+        V2EvidenceAdmissionBatchResult,
+        V2EvidenceAdmissionSourceResult,
+        V2EvidenceAdmissionRecord,
         SynthesisOutput,
         V2FinalResearchOutput,
         V2ProductionPipelineResult,
@@ -912,22 +979,26 @@ def _semantic_policy_payload() -> dict[str, object]:
     )
     return {
         "deep_analysis_queue_policy": (
-            "researchassistant-v2-phase-8-deep-analysis-queue-v2-source-cap-60k-v1"
+            "researchassistant-v2-phase-13-deep-analysis-queue-analyzer-admission-v1"
         ),
         "deep_analysis_backfill_policy": V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
         "deep_analysis_source_token_cap": V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
         "deep_analysis_source_physical_call_cap": V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
         "deep_analysis_workload": {
             "extractor_logical_calls": 1,
-            "analyst_logical_calls": 2,
-            "reviewer_logical_calls": 1,
-            "attempts_per_logical_operation": 2,
+            "analyst_logical_calls": 1,
+            "reviewer_logical_calls": 0,
+            "attempts_per_logical_operation": {
+                "extractor": 2,
+                "analyst": 1,
+                "reviewer": 0,
+            },
         },
         "custom_prompt_hashes": prompt_hashes,
         "schema_sha256": hashlib.sha256(schemas.encode()).hexdigest(),
         "evidence_policy": EVIDENCE_POLICY_VERSION,
         "extraction_policy": V2_EXTRACTION_POLICY_IDENTITY,
-        "reviewer_ledger_policy": V2_REVIEWER_LEDGER_POLICY_VERSION,
+        "evidence_admission_policy": V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
         "final_output_policy": V2_FINAL_OUTPUT_POLICY_IDENTITY,
         "release_validator": V2_FINAL_VALIDATOR_CONFIG_VERSION,
         "research_governor": DEFAULT_RESEARCH_GOVERNOR_POLICY.model_dump(mode="json"),
