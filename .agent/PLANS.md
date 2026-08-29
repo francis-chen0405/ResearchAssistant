@@ -4,9 +4,10 @@ Canonical phase plans live in `.agent/plans/`.
 
 ## ResearchAssistant v2 — Phase 14: Conditional Round Four and Gap Reconciliation
 
-The user explicitly authorized and completed v2 Phase 14 on 2026-08-28. Fresh v2 may run one
-post-Round-3 cumulative Gap Analysis and, only after the typed Governor proves the complete
-bounded surplus workload fits, one narrow Round 4. It has no Round 5 or post-Round-4 Gap call.
+The user explicitly authorized and completed v2 Phase 14 on 2026-08-28, including a focused
+post-completion correction. Fresh v2 may run one post-Round-3 cumulative, claim-coverage Gap
+Analysis and, only after the typed Governor proves the complete bounded surplus workload fits,
+one narrow Round 4. It has no Round 5 or post-Round-4 Gap call.
 Final disclosures use deterministic Analyzer-Admission reconciliation against the original
 post-Round-3 gaps. Phase-13 and earlier artifacts remain immutable compatibility readers.
 

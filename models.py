@@ -1133,6 +1133,49 @@ class V2GapSearchDirection(StrictModel):
     direction: ResearchDirection
     missing_evidence: NonEmptyStr
     search_focus: NonEmptyStr
+    claim_dimension: V2ClaimCoverageDimension | None = None
+    resolving_evidence_kind: NonEmptyStr | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_claim_coverage_link(self) -> V2GapSearchDirection:
+        if (self.claim_dimension is None) != (self.resolving_evidence_kind is None):
+            raise ValueError(
+                "claim-linked search directions require both a dimension and resolving evidence"
+            )
+        return self
+
+
+class V2ClaimCoverageDimension(StrEnum):
+    EFFECT_OR_ASSOCIATION = "effect_or_association"
+    POPULATION_AND_SETTING = "population_and_setting"
+    MECHANISM_OR_PATHWAY = "mechanism_or_pathway"
+    LIMITATIONS_AND_BOUNDARIES = "limitations_and_boundaries"
+    COUNTEREVIDENCE_OR_ALTERNATIVES = "counterevidence_or_alternatives"
+    REPLICATION_OR_GENERALIZABILITY = "replication_or_generalizability"
+
+
+class V2ClaimCoverageState(StrEnum):
+    COVERED = "covered"
+    PARTIAL = "partial"
+    MISSING = "missing"
+    CONFLICTING = "conflicting"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class V2ClaimCoverageFocus(StrictModel):
+    """An application-derived exact-claim component that must be assessed after Round 3."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    dimension: V2ClaimCoverageDimension
+    claim_component: NonEmptyStr = Field(max_length=500)
+
+
+class V2ClaimCoverageAssessment(V2ClaimCoverageFocus):
+    """Luna's bounded coverage assessment; it cannot decide whether the claim is true."""
+
+    coverage_state: V2ClaimCoverageState
+    evidence_summary: NonEmptyStr = Field(max_length=1000)
 
 
 class V2MaterialGap(StrictModel):
@@ -1144,6 +1187,14 @@ class V2MaterialGap(StrictModel):
     direction: ResearchDirection
     missing_evidence: NonEmptyStr
     rationale: NonEmptyStr
+    claim_dimension: V2ClaimCoverageDimension | None = None
+    unsupported_claim_component: NonEmptyStr | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_claim_component(self) -> V2MaterialGap:
+        if (self.claim_dimension is None) != (self.unsupported_claim_component is None):
+            raise ValueError("claim-linked material gaps require a dimension and exact component")
+        return self
 
 
 class V2SearchAgentInput(StrictModel):
@@ -1209,6 +1260,7 @@ class V2GapAnalysisInput(StrictModel):
     duplicate_patterns: tuple[V2GapDuplicatePattern, ...] = Field(max_length=25)
     acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=150)
     previous_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
+    claim_coverage_focus: tuple[V2ClaimCoverageFocus, ...] = Field(default=(), max_length=6)
     remaining_budget: V2GapBudgetState
     policy_identity: Literal[
         "researchassistant-v2-phase-6-gap-analysis-v1",
@@ -1230,6 +1282,15 @@ class V2GapAnalysisInput(StrictModel):
         source_ids = {source.source_cluster_id for source in self.surviving_sources}
         if any(passage.source_cluster_id not in source_ids for passage in self.probe_passages):
             raise ValueError("Gap Analysis passages must belong to surviving sources")
+        if len({item.dimension for item in self.claim_coverage_focus}) != len(
+            self.claim_coverage_focus
+        ):
+            raise ValueError("claim-coverage dimensions must be unique")
+        if (
+            self.policy_identity == V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY
+            and not self.claim_coverage_focus
+        ):
+            raise ValueError("post-Round-3 Gap Analysis requires claim-coverage focus")
         return self
 
 
@@ -1239,6 +1300,7 @@ class V2GapAnalysisModelOutput(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     coverage_summary: NonEmptyStr = Field(max_length=2000)
+    claim_coverage_map: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
     material_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
     continue_research: bool
     stop_reason: NonEmptyStr | None = Field(default=None, max_length=1000)
@@ -1359,6 +1421,56 @@ class V2GapAnalysisOutput(StrictModel):
                 not self.result.continue_research
             ):
                 raise ValueError("completed Gap Analysis state must agree with its decision")
+            if self.input.policy_identity == V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY:
+                expected_dimensions = tuple(
+                    item.dimension for item in self.input.claim_coverage_focus
+                )
+                actual_dimensions = tuple(item.dimension for item in self.result.claim_coverage_map)
+                if actual_dimensions != expected_dimensions:
+                    raise ValueError(
+                        "post-Round-3 coverage map must exactly cover application focus dimensions"
+                    )
+                coverage_by_dimension = {
+                    item.dimension: item.coverage_state for item in self.result.claim_coverage_map
+                }
+                for gap in self.result.material_gaps:
+                    if (
+                        gap.claim_dimension is None
+                        or gap.unsupported_claim_component is None
+                        or coverage_by_dimension.get(gap.claim_dimension)
+                        not in {
+                            V2ClaimCoverageState.PARTIAL,
+                            V2ClaimCoverageState.MISSING,
+                            V2ClaimCoverageState.CONFLICTING,
+                        }
+                    ):
+                        raise ValueError(
+                            "post-Round-3 gaps must name an unsupported claim component"
+                        )
+                for direction in self.result.new_search_directions:
+                    if (
+                        direction.claim_dimension is None
+                        or direction.resolving_evidence_kind is None
+                    ):
+                        raise ValueError(
+                            "post-Round-3 search directions must name the claim component "
+                            "and resolving evidence"
+                        )
+                    related_gap = next(
+                        (
+                            gap
+                            for gap in self.result.material_gaps
+                            if gap.gap_id == direction.gap_id
+                        ),
+                        None,
+                    )
+                    if (
+                        related_gap is None
+                        or related_gap.claim_dimension != direction.claim_dimension
+                    ):
+                        raise ValueError(
+                            "post-Round-3 search directions must resolve their matching claim gap"
+                        )
         elif self.result is not None or not self.stop_adaptive_continuation:
             raise ValueError(
                 "degraded Gap Analysis must not invent a result and must stop continuation"
@@ -1400,6 +1512,13 @@ class V2RoundFourReservation(StrictModel):
     available_calls: NonNegativeInt
     available_tokens: NonNegativeInt | None = None
     available_cost_usd: ExactUSD | None = None
+    consumed_gap_attempt_calls: NonNegativeInt = 0
+    future_optional_calls: NonNegativeInt = 0
+    future_optional_tokens: NonNegativeInt = 0
+    future_optional_cost_usd: ExactUSD = Decimal("0")
+    post_gap_available_calls: NonNegativeInt | None = None
+    post_gap_available_tokens: NonNegativeInt | None = None
+    post_gap_available_cost_usd: ExactUSD | None = None
 
     @model_validator(mode="after")
     def validate_reservation(self) -> V2RoundFourReservation:
@@ -1407,6 +1526,12 @@ class V2RoundFourReservation(StrictModel):
             self.gap_attempt_calls + self.search_agent_calls + self.scout_calls
         ):
             raise ValueError("Round-4 optional calls must equal its LLM workload components")
+        if self.consumed_gap_attempt_calls > self.gap_attempt_calls:
+            raise ValueError("consumed Gap attempts cannot exceed the reserved Gap attempts")
+        if self.post_gap_available_calls is not None and self.future_optional_calls != (
+            self.search_agent_calls + self.scout_calls
+        ):
+            raise ValueError("future Round-4 calls must exclude consumed Gap Analysis attempts")
         if self.available_calls < self.protected_downstream_calls + self.optional_calls:
             raise ValueError("Round-4 reservation exceeds available physical-call capacity")
         if (
@@ -1420,6 +1545,34 @@ class V2RoundFourReservation(StrictModel):
             < self.protected_downstream_cost_usd + self.optional_cost_usd
         ):
             raise ValueError("Round-4 reservation exceeds available cost capacity")
+        post_gap_values = (
+            self.post_gap_available_calls,
+            self.post_gap_available_tokens,
+            self.post_gap_available_cost_usd,
+        )
+        if (
+            any(value is not None for value in post_gap_values)
+            and self.post_gap_available_calls is None
+        ):
+            raise ValueError("post-Gap reservation requires an actual call snapshot")
+        if (
+            self.post_gap_available_calls is not None
+            and self.post_gap_available_calls
+            < self.protected_downstream_calls + self.future_optional_calls
+        ):
+            raise ValueError("post-Gap reservation exceeds available physical-call capacity")
+        if (
+            self.post_gap_available_tokens is not None
+            and self.post_gap_available_tokens
+            < self.protected_downstream_tokens + self.future_optional_tokens
+        ):
+            raise ValueError("post-Gap reservation exceeds available token capacity")
+        if (
+            self.post_gap_available_cost_usd is not None
+            and self.post_gap_available_cost_usd
+            < self.protected_downstream_cost_usd + self.future_optional_cost_usd
+        ):
+            raise ValueError("post-Gap reservation exceeds available cost capacity")
         return self
 
 

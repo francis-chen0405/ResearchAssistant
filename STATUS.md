@@ -4,6 +4,18 @@
 
 Status: Complete and verified.
 
+- Focused post-completion correction: the post-Round-3 Gap contract now carries a deterministic
+  claim-coverage map, asks Luna to assess every relevant claim dimension, and requires every
+  material gap and Round-4 direction to name the unsupported component and resolving evidence.
+  Cumulative Round 1–3 sources, passages, queries, and true source families use deterministic
+  round/direction quotas instead of retaining the first rows.
+- The shared typed Research Governor now makes every Round-4 authorization outcome. Round-4
+  assembly caps each enabled direction at two provider lanes and four accepted queries even when
+  the Search Agent proposes three providers and five queries.
+- Reservation records now distinguish planned Gap attempts from consumed attempts and validate
+  future work against a fresh post-Gap budget snapshot. Resume validation also compares the
+  persisted final output's unresolved gaps with the same reconciliation used by a fresh run.
+
 - Added a fresh-v2-only post-Round-3 cumulative Luna Gap Analysis and one conditional,
   application-governed Round 4. It requires a completed non-degraded Round 3, material gaps,
   eligible capacity, novelty, duplicate/productivity checks, and a full conservative reserve.
@@ -19,7 +31,7 @@ Status: Complete and verified.
   reconciliation marks a gap covered only with matching Round-4 provenance and analyzer-admitted
   evidence; all other post-Round-3 gaps remain explicitly disclosed.
 
-Verification: `pytest` passed (834 passed, 2 skipped; one existing FastAPI/httpx deprecation
+Verification: `pytest` passed (846 passed, 2 skipped; one existing FastAPI/httpx deprecation
 warning). `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live provider
 call, dependency, migration, or historical-artifact rewrite was made.
 

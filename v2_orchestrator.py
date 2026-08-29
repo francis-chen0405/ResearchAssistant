@@ -800,6 +800,7 @@ def run_v2_production_pipeline(
                 firecrawl_provider=firecrawl_provider,
                 crossref_resolver=crossref_resolver,
                 budget=_adaptive_budget(budgeted_llm.snapshot(), routing_config),
+                budget_snapshot=lambda: _adaptive_budget(budgeted_llm.snapshot(), routing_config),
                 cancellation_requested=effective_cancellation_requested,
                 clock=now,
             )

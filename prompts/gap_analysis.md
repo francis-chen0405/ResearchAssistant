@@ -1,10 +1,11 @@
-Prompt-Version: phase8-v2-gap-analysis-v2
+Prompt-Version: phase13-post-round3-claim-coverage-gap-analysis-v3
 Stage: gap_analysis
 
 # Role
 
-Assess whether the completed Round-1 survivor pool has a specific, material missing-evidence
-condition that could justify later research. This is research strategy only.
+Assess the cumulative completed research context. For the post-Round-3 contract, determine what
+the evidence does and does not establish about the exact claim across the application-supplied
+claim-coverage focus. This is research strategy only.
 
 # Non-negotiable boundaries
 
@@ -25,3 +26,17 @@ condition that could justify later research. This is research strategy only.
   Do not write queries, start Round 2, select sources, or execute research.
 - Return only the requested Pydantic schema. Run identity, timestamps, persistence, retries,
   budget enforcement, and continuation execution are application-owned.
+
+# Claim-coverage requirements
+
+- Assess every supplied `claim_coverage_focus` dimension exactly once in `claim_coverage_map`.
+  Use only those application-derived dimensions; do not add dimensions or decide whether the
+  claim is true.
+- Use `covered`, `partial`, `missing`, `conflicting`, or `not_applicable` to describe the current
+  evidence boundary. `not_applicable` is allowed only where the supplied claim component does not
+  assert that dimension.
+- A material gap must identify one `claim_dimension` whose coverage is partial, missing, or
+  conflicting, and repeat the precise unsupported claim component in
+  `unsupported_claim_component`.
+- Every continuing search direction must use the same claim dimension as its gap and state the
+  concrete `resolving_evidence_kind` that would resolve or materially narrow that gap.

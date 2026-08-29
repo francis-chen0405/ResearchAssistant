@@ -122,7 +122,9 @@ def run_v2_final_research_output(
         break
     if stored is not None:
         output = V2FinalResearchOutput.model_validate_json(stored.payload_json)
-        _validate_persisted_output(output, evidence_result, continuation)
+        _validate_persisted_output(
+            output, evidence_result, continuation, gap_reconciliation=gap_reconciliation
+        )
         return V2FinalOutputRunResult(final_output=output, resumed=True)
 
     synthesis_input = build_v2_synthesizer_input(
@@ -634,12 +636,18 @@ def _validate_persisted_output(
     output: V2FinalResearchOutput,
     evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
+    *,
+    gap_reconciliation: V2GapCoverageReconciliation | None,
 ) -> None:
-    expected = build_v2_synthesizer_input(evidence_result, continuation)
+    expected = build_v2_synthesizer_input(
+        evidence_result, continuation, gap_reconciliation=gap_reconciliation
+    )
     if output.run_id != expected.run_id or output.exact_claim != expected.exact_claim:
         raise ValueError("persisted v2 final output does not match the current inputs")
     if output.directions != expected.directions:
         raise ValueError("persisted v2 final output directions do not match the current inputs")
+    if output.unresolved_material_gaps != expected.unresolved_material_gaps:
+        raise ValueError("persisted v2 final output gap reconciliation does not match inputs")
 
 
 def _render_v2_components(

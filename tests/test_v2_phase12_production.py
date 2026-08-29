@@ -23,6 +23,8 @@ from models import (
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
     V2AdmissionMethod,
+    V2ClaimCoverageAssessment,
+    V2ClaimCoverageState,
     V2EvidenceAnalystModelOutput,
     V2EvidenceRelationship,
     V2GapAnalysisModelOutput,
@@ -177,16 +179,36 @@ class _V2Model:
             if self.fail_first_gap and self.gap_attempts == 1:
                 raise RuntimeError("mocked transient Gap degradation")
             self.successful_gaps += 1
+            coverage_focus = request.input_artifact.claim_coverage_focus
+            coverage_map = tuple(
+                V2ClaimCoverageAssessment(
+                    dimension=item.dimension,
+                    claim_component=item.claim_component,
+                    coverage_state=(
+                        V2ClaimCoverageState.MISSING
+                        if self.successful_gaps < self.completed_rounds
+                        else V2ClaimCoverageState.COVERED
+                    ),
+                    evidence_summary="Fixture coverage assessment.",
+                )
+                for item in coverage_focus
+            )
             if self.successful_gaps < self.completed_rounds:
                 direction = request.input_artifact.directions.enabled_directions[0]
+                focus = coverage_focus[0] if coverage_focus else None
                 gap = V2MaterialGap(
                     gap_id=f"gap-round-{self.successful_gaps}",
                     direction=direction,
                     missing_evidence="Independent replication evidence remains missing.",
                     rationale="The current pool contains a material replication gap.",
+                    claim_dimension=focus.dimension if focus is not None else None,
+                    unsupported_claim_component=(
+                        focus.claim_component if focus is not None else None
+                    ),
                 )
                 return V2GapAnalysisModelOutput(
                     coverage_summary="A material replication gap remains.",
+                    claim_coverage_map=coverage_map,
                     material_gaps=(gap,),
                     continue_research=True,
                     new_search_directions=(
@@ -195,12 +217,17 @@ class _V2Model:
                             direction=direction,
                             missing_evidence=gap.missing_evidence,
                             search_focus="Independent replication with a distinct instrument",
+                            claim_dimension=focus.dimension if focus is not None else None,
+                            resolving_evidence_kind=(
+                                "independent replication" if focus is not None else None
+                            ),
                         ),
                     ),
                     discovered_terms=("replication",),
                 )
             return V2GapAnalysisModelOutput(
                 coverage_summary="The surviving source is adequate for this bounded run.",
+                claim_coverage_map=coverage_map,
                 material_gaps=(),
                 continue_research=False,
                 stop_reason="More searches would duplicate the same source family.",

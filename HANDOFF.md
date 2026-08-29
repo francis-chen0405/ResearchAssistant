@@ -8,15 +8,24 @@ Round 4. The new path has distinct post-Phase-13 artifact and fingerprint identi
 at most two provider lanes and two queries per lane per enabled direction, with a maximum of four
 queries per enabled direction. It cannot create Round 5 or run Gap Analysis after Round 4.
 
+The post-Round-3 checkpoint now requires a typed claim-coverage map and uses deterministic
+per-round/direction quotas over the complete Round 1–3 context, with actual source-family
+identities rather than cluster labels. Every material gap and Round-4 direction names the claim
+component at issue and the kind of evidence that would resolve it. The shared typed Governor
+owns all authorization outcomes. Reservation preserves the original conservative Gap envelope
+and separately validates only remaining future workload against an actual post-Gap snapshot.
+Persisted final output resumes only when its unresolved-gap disclosure agrees with the same
+reconciliation passed to fresh final-output generation.
+
 The final output carries deterministic reconciliation of the original post-Round-3 gaps. Coverage
 requires matching Round-4 targeted-gap provenance, analyzer-admitted evidence, and the Analyst's
 explicit addressed-gap declaration. A search result, recommendation, quotation, or unadmitted
 analysis alone never closes a gap. API, export, progress, and research-trail readers recognize the
 new version while preserving read-only Phase-13 and earlier artifacts unchanged.
 
-Verification: `pytest` passed (834 passed, 2 skipped; one existing FastAPI/httpx deprecation
-warning); `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live provider
-call, dependency, migration, or historical rewrite was made.
+Verification for the focused correction: `pytest` passed (846 passed, 2 skipped; one existing
+FastAPI/httpx deprecation warning); `ruff check .`, `ruff format --check .`, and `git diff --check`
+passed. No live provider call, dependency, migration, or historical rewrite was made.
 
 Do not begin another phase without explicit user direction.
 

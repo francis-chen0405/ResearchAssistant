@@ -926,6 +926,8 @@ def _validate_and_assemble_plan(
 ) -> V2AdaptiveRoundPlan:
     gap_by_id = {gap.gap_id: gap for gap in request.material_gaps}
     counts: Counter[tuple[ResearchDirection, DiscoveryProvider]] = Counter()
+    direction_counts: Counter[ResearchDirection] = Counter()
+    providers_by_direction: dict[ResearchDirection, set[DiscoveryProvider]] = {}
     accepted: list[V2AdaptiveSearchQuery] = []
     history = list(request.previous_queries)
     total_cap = (
@@ -961,9 +963,21 @@ def _validate_and_assemble_plan(
             else _ROUND_TWO_PER_DIRECTION_CAPS[item.provider]
         )
         lane = (item.direction, item.provider)
-        if len(accepted) >= total_cap or counts[lane] >= cap:
+        provider_lanes = providers_by_direction.setdefault(item.direction, set())
+        if (
+            len(accepted) >= total_cap
+            or counts[lane] >= cap
+            or (
+                request.round_number == 4
+                and item.provider not in provider_lanes
+                and len(provider_lanes) >= 2
+            )
+            or (request.round_number == 4 and direction_counts[item.direction] >= 4)
+        ):
             continue
         counts[lane] += 1
+        direction_counts[item.direction] += 1
+        provider_lanes.add(item.provider)
         accepted.append(
             V2AdaptiveSearchQuery(
                 run_id=request.run_id,

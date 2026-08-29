@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import TypeVar
 from uuid import UUID
 
 from pydantic import ConfigDict
@@ -25,14 +26,19 @@ from agents.v2_adaptive_search import (
     _validate_and_assemble_plan,
 )
 from agents.v2_gap_analysis import run_v2_gap_analysis
+from evidence_portfolio import identify_source_family
 from models import (
     V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
     CrossrefIdentityMetadata,
     DiscoveryProvider,
+    ResearchDirections,
     StrictModel,
     V2AcquisitionProbeOutput,
+    V2AdaptiveRoundPlan,
     V2AdaptiveSearchModelOutput,
+    V2ClaimCoverageDimension,
+    V2ClaimCoverageFocus,
     V2DiscoveryScoutOutput,
     V2GapAcquisitionFailure,
     V2GapAnalysisInput,
@@ -67,6 +73,7 @@ from providers.pricing import conservative_token_estimate
 from providers.scraper import ScraperProvider
 from providers.search import SearchProvider
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
+from research_governor import V2RoundFourGovernorInput, evaluate_v2_round_four_authorization
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_POST13_GAP_AFTER_ROUND_THREE_KEY = "post-phase-13-gap-analysis-after-round-3-v1"
@@ -74,6 +81,8 @@ V2_POST13_ROUND_FOUR_GOVERNOR_KEY = "post-phase-13-round-4-governor-decision-v1"
 V2_POST13_ROUND_FOUR_PLAN_KEY = "post-phase-13-round-4-plan-v1"
 V2_POST13_ROUND_FOUR_COMPLETION_KEY = "post-phase-13-round-4-completion-v1"
 V2_POST13_GAP_RECONCILIATION_KEY = "post-phase-13-gap-coverage-reconciliation-v1"
+
+_RowT = TypeVar("_RowT")
 
 
 class V2RoundFourBudgetError(LookupError):
@@ -106,6 +115,7 @@ def run_v2_round_four_continuation(
     firecrawl_provider: ScraperProvider | None,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None,
     budget: V2AdaptiveBudgetState,
+    budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2RoundFourRunResult:
@@ -153,6 +163,7 @@ def run_v2_round_four_continuation(
         artifact_key=V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
         clock=now,
     )
+    post_gap_budget = budget_snapshot() if budget_snapshot is not None else budget
     if _cancelled(cancellation_requested):
         return _finish(
             path,
@@ -267,7 +278,7 @@ def run_v2_round_four_continuation(
             ),
             now,
         )
-    reservation = _reservation(budget, plan, gap, routing_config)
+    reservation = _reservation(budget, post_gap_budget, plan, gap, routing_config)
     if reservation is None:
         return _finish(
             path,
@@ -370,13 +381,16 @@ def build_post_round_three_gap_input(
         if payload is None:
             raise ValueError("post-Round-3 Gap Analysis is missing an adaptive round plan")
         plans.append(V2AdaptivePlannedRound.model_validate_json(payload).plan)
-    sources: list[V2GapSurvivingSourceMetadata] = []
-    passages: list[V2GapProbePassage] = []
-    families: list[V2GapSourceFamily] = []
+    sources_by_round: dict[int, list[V2GapSurvivingSourceMetadata]] = {1: [], 2: [], 3: []}
+    passages_by_round: dict[int, list[V2GapProbePassage]] = {1: [], 2: [], 3: []}
+    families_by_id: dict[str, V2GapSourceFamily] = {}
+    family_rounds: dict[str, int] = {}
     duplicates: list[V2GapDuplicatePattern] = []
     failures: list[V2GapAcquisitionFailure] = []
     terms: list[str] = []
-    for discovery, acquisition in zip(discovery_outputs, acquisition_outputs, strict=True):
+    for round_number, (discovery, acquisition) in enumerate(
+        zip(discovery_outputs, acquisition_outputs, strict=True), start=1
+    ):
         items = {item.item_id: item for item in discovery.items}
         clusters = {item.cluster_id: item for item in discovery.clusters}
         acquired = {item.snapshot.snapshot_id: item for item in acquisition.acquisitions}
@@ -387,7 +401,8 @@ def build_post_round_three_gap_input(
                 key=lambda item: item.provider_rank,
             )
             source = acquired[survivor.snapshot_id]
-            sources.append(
+            family_id = str(identify_source_family(source.snapshot).source_family_id)
+            sources_by_round[round_number].append(
                 V2GapSurvivingSourceMetadata(
                     source_cluster_id=survivor.cluster_id,
                     direction=survivor.direction,
@@ -395,21 +410,44 @@ def build_post_round_three_gap_input(
                     snapshot_sha256=survivor.snapshot_sha256,
                     source_url=source.snapshot.source_url,
                     title=representative.title,
-                    source_family_id=f"cluster:{survivor.cluster_id}",
+                    source_family_id=family_id,
                 )
             )
-            families.append(
-                V2GapSourceFamily(
-                    family_id=f"cluster:{survivor.cluster_id}",
-                    direction=survivor.direction,
-                    source_cluster_ids=(survivor.cluster_id,),
-                    discovery_providers=tuple(
-                        dict.fromkeys(
-                            reference.provider for reference in cluster.provider_references
-                        )
-                    ),
-                )
+            existing_family = families_by_id.get(family_id)
+            family = V2GapSourceFamily(
+                family_id=family_id,
+                direction=survivor.direction,
+                source_cluster_ids=(survivor.cluster_id,),
+                discovery_providers=tuple(
+                    dict.fromkeys(reference.provider for reference in cluster.provider_references)
+                ),
             )
+            if existing_family is None:
+                families_by_id[family_id] = family
+                family_rounds[family_id] = round_number
+            else:
+                if existing_family.direction is not survivor.direction:
+                    raise ValueError("a source family cannot cross research directions")
+                families_by_id[family_id] = existing_family.model_copy(
+                    update={
+                        "source_cluster_ids": tuple(
+                            dict.fromkeys(
+                                (*existing_family.source_cluster_ids, survivor.cluster_id)
+                            )
+                        ),
+                        "discovery_providers": tuple(
+                            dict.fromkeys(
+                                (
+                                    *existing_family.discovery_providers,
+                                    *(
+                                        reference.provider
+                                        for reference in cluster.provider_references
+                                    ),
+                                )
+                            )
+                        ),
+                    }
+                )
             probe = next(
                 item for item in acquisition.probes if item.snapshot_id == survivor.snapshot_id
             )
@@ -417,7 +455,7 @@ def build_post_round_three_gap_input(
             for passage_id in survivor.passage_ids:
                 passage = by_id[passage_id]
                 text = passage.text[:1200]
-                passages.append(
+                passages_by_round[round_number].append(
                     V2GapProbePassage(
                         passage_id=passage_id,
                         source_cluster_id=survivor.cluster_id,
@@ -471,24 +509,15 @@ def build_post_round_three_gap_input(
         exact_claim=initial_plan.raw_claim,
         directions=initial_plan.directions,
         completed_round=3,
-        attempted_queries=tuple(
-            V2GapAttemptedQuery(
-                query_id=query.query_id,
-                direction=query.direction,
-                provider=query.provider,
-                strategy=query.strategy,
-                query_text=query.query_text,
-            )
-            for plan in plans
-            for query in plan.searches
-        )[:48],
-        surviving_sources=tuple(sources)[:75],
-        probe_passages=tuple(passages)[:40],
-        source_families=tuple(families)[:75],
+        attempted_queries=_representative_queries(plans),
+        surviving_sources=_representative_round_rows(sources_by_round, 75),
+        probe_passages=_representative_round_rows(passages_by_round, 40),
+        source_families=_representative_families(families_by_id, family_rounds, 75),
         discovered_terms=tuple(dict.fromkeys(terms))[:40],
         duplicate_patterns=tuple(duplicates)[:25],
         acquisition_failures=tuple(failures)[:150],
         previous_gaps=tuple(previous_gaps)[:6],
+        claim_coverage_focus=_claim_coverage_focus(initial_plan.raw_claim, initial_plan.directions),
         remaining_budget=V2GapBudgetState(
             model_calls_remaining=max(
                 0,
@@ -516,6 +545,124 @@ def build_post_round_three_gap_input(
         ),
         policy_identity=V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
     )
+
+
+def _representative_queries(
+    plans: list[V2InitialPlannerOutput | V2AdaptiveRoundPlan],
+) -> tuple[V2GapAttemptedQuery, ...]:
+    """Retain a deterministic, direction-balanced quota from every completed round."""
+    rows_by_round: dict[int, list[V2GapAttemptedQuery]] = {1: [], 2: [], 3: []}
+    for round_number, plan in enumerate(plans, start=1):
+        searches = getattr(plan, "searches", ())
+        rows_by_round[round_number] = [
+            V2GapAttemptedQuery(
+                query_id=query.query_id,
+                direction=query.direction,
+                provider=query.provider,
+                strategy=query.strategy,
+                query_text=query.query_text,
+            )
+            for query in searches
+        ]
+    return _representative_round_rows(rows_by_round, 48)
+
+
+def _representative_round_rows(
+    rows_by_round: dict[int, list[_RowT]], cap: int
+) -> tuple[_RowT, ...]:
+    """Allocate an even per-round quota before admitting deterministic overflow."""
+    if cap < 3:
+        raise ValueError("cumulative Round-3 context needs capacity for every completed round")
+    quota = cap // 3
+    selected: list[_RowT] = []
+    leftovers: list[_RowT] = []
+    for round_number in (1, 2, 3):
+        ordered = _direction_balanced(rows_by_round[round_number])
+        selected.extend(ordered[:quota])
+        leftovers.extend(ordered[quota:])
+    selected.extend(_direction_balanced(leftovers)[: cap - len(selected)])
+    return tuple(selected)
+
+
+def _direction_balanced(rows: list[_RowT]) -> list[_RowT]:
+    """Keep enabled-direction evidence from disappearing behind earlier same-lane rows."""
+    by_direction: dict[str, list[_RowT]] = {}
+    for row in sorted(rows, key=_row_sort_key):
+        direction = row.direction.value
+        by_direction.setdefault(direction, []).append(row)
+    ordered: list[_RowT] = []
+    index = 0
+    directions = sorted(by_direction)
+    while any(index < len(by_direction[direction]) for direction in directions):
+        for direction in directions:
+            if index < len(by_direction[direction]):
+                ordered.append(by_direction[direction][index])
+        index += 1
+    return ordered
+
+
+def _row_sort_key(row: _RowT) -> tuple[str, str]:
+    return (
+        row.direction.value,
+        str(
+            getattr(
+                row,
+                "source_cluster_id",
+                getattr(row, "passage_id", getattr(row, "query_id", "")),
+            )
+        ),
+    )
+
+
+def _representative_families(
+    families_by_id: dict[str, V2GapSourceFamily], family_rounds: dict[str, int], cap: int
+) -> tuple[V2GapSourceFamily, ...]:
+    rows_by_round = {1: [], 2: [], 3: []}
+    for family_id, family in families_by_id.items():
+        rows_by_round[family_rounds[family_id]].append(family)
+    return _representative_round_rows(rows_by_round, cap)
+
+
+def _claim_coverage_focus(
+    exact_claim: str, directions: ResearchDirections
+) -> tuple[V2ClaimCoverageFocus, ...]:
+    """Derive only claim-relevant coverage dimensions without judging claim truth."""
+    normalized = exact_claim.casefold()
+    focus = [
+        V2ClaimCoverageFocus(
+            dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            claim_component=exact_claim,
+        )
+    ]
+    if any(marker in normalized for marker in ("among", "in ", "for ", "within", "across")):
+        focus.append(
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+                claim_component="the population, setting, and conditions named in the exact claim",
+            )
+        )
+    if any(marker in normalized for marker in ("causes", "because", "mechanism", "pathway")):
+        focus.append(
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
+                claim_component="the causal mechanism or pathway asserted by the exact claim",
+            )
+        )
+    if directions.challenge_enabled:
+        focus.append(
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.COUNTEREVIDENCE_OR_ALTERNATIVES,
+                claim_component="counterevidence or alternative explanations relevant to the claim",
+            )
+        )
+    if any(marker in normalized for marker in ("general", "across", "replicat", "all ")):
+        focus.append(
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.REPLICATION_OR_GENERALIZABILITY,
+                claim_component="independent replication or generalizability required by the claim",
+            )
+        )
+    return tuple(focus)
 
 
 def reconcile_post_round_three_gaps(
@@ -730,6 +877,7 @@ def _plan_round_four(
 
 def _reservation(
     budget: V2AdaptiveBudgetState,
+    post_gap_budget: V2AdaptiveBudgetState,
     plan: V2AdaptivePlannedRound,
     gap: V2GapAnalysisOutput,
     routing_config: V2RoutingConfig,
@@ -747,6 +895,8 @@ def _reservation(
         + plan.reservation.reserved_cost_usd
         + scout_calls * scout_reserve.reserved_cost_usd
     )
+    future_tokens = plan.reservation.reserved_tokens + scout_calls * scout_reserve.reserved_tokens
+    future_cost = plan.reservation.reserved_cost_usd + scout_calls * scout_reserve.reserved_cost_usd
     try:
         return V2RoundFourReservation(
             protected_downstream_calls=budget.protected_downstream_model_calls,
@@ -763,6 +913,13 @@ def _reservation(
             available_calls=budget.model_calls_remaining,
             available_tokens=budget.tokens_remaining,
             available_cost_usd=budget.cost_remaining_usd,
+            consumed_gap_attempt_calls=len(gap.attempts),
+            future_optional_calls=1 + scout_calls,
+            future_optional_tokens=future_tokens,
+            future_optional_cost_usd=future_cost,
+            post_gap_available_calls=post_gap_budget.model_calls_remaining,
+            post_gap_available_tokens=post_gap_budget.tokens_remaining,
+            post_gap_available_cost_usd=post_gap_budget.cost_remaining_usd,
         )
     except ValueError:
         return None
@@ -852,13 +1009,33 @@ def _decision(
     clock: Callable[[], datetime],
     reservation: V2RoundFourReservation | None = None,
 ) -> V2RoundFourGovernorDecision:
-    return V2RoundFourGovernorDecision(
-        run_id=run_id,
-        authorized=authorized,
-        reason_code=code,
-        explanation=explanation,
+    if authorized != (code is V2RoundFourDecisionCode.AUTHORIZED):
+        raise ValueError("Round-4 decision authorization must agree with the Governor reason")
+    return evaluate_v2_round_four_authorization(
+        V2RoundFourGovernorInput(
+            run_id=run_id,
+            gap_analysis_usable=code is not V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE,
+            material_gap_remains=code
+            not in {
+                V2RoundFourDecisionCode.NO_MATERIAL_GAPS,
+                V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE,
+            },
+            luna_recommends_continue=code is not V2RoundFourDecisionCode.NO_MATERIAL_GAPS,
+            eligible_provider_exists=code is not V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER,
+            materially_new_queries=code is not V2RoundFourDecisionCode.NO_NOVEL_QUERY,
+            round_three_duplicate_rate=0.70
+            if code is V2RoundFourDecisionCode.DUPLICATE_HEAVY
+            else 0.0,
+            round_four_productive=code is not V2RoundFourDecisionCode.UNPRODUCTIVE,
+            protected_downstream_budget_remains=code
+            is not V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
+            complete_workload_reservable=code
+            is not V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
+            cancelled=code is V2RoundFourDecisionCode.CANCELLED,
+            terminal_provider_failure=code is V2RoundFourDecisionCode.TERMINAL_FAILURE,
+            decided_at=clock(),
+        ),
         reservation=reservation,
-        decided_at=clock(),
     )
 
 

@@ -17,6 +17,9 @@ from models import (
     ResearchTerminalOutcome,
     ResearchTerminalResult,
     StrictModel,
+    V2RoundFourDecisionCode,
+    V2RoundFourGovernorDecision,
+    V2RoundFourReservation,
 )
 
 DEFAULT_RESEARCH_GOVERNOR_POLICY = ResearchGovernorPolicy()
@@ -84,6 +87,115 @@ class V2RoundThreeGovernorDecision(StrictModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("v2 Governor decided_at must be timezone-aware")
         return value
+
+
+class V2RoundFourGovernorInput(StrictModel):
+    """Typed post-Round-3 facts evaluated by the shared deterministic Governor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    gap_analysis_usable: bool
+    material_gap_remains: bool
+    luna_recommends_continue: bool
+    eligible_provider_exists: bool
+    materially_new_queries: bool
+    round_three_duplicate_rate: float = Field(ge=0, le=1)
+    round_four_productive: bool = True
+    protected_downstream_budget_remains: bool = True
+    complete_workload_reservable: bool = True
+    cancelled: bool = False
+    terminal_provider_failure: bool = False
+    decided_at: datetime
+
+    @field_validator("decided_at")
+    @classmethod
+    def validate_decided_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("v2 Round-4 Governor decided_at must be timezone-aware")
+        return value
+
+
+def evaluate_v2_round_four_authorization(
+    evaluation: V2RoundFourGovernorInput,
+    *,
+    reservation: V2RoundFourReservation | None = None,
+) -> V2RoundFourGovernorDecision:
+    """Return the only post-Round-3 authorization decision; never plans a fifth round."""
+    reason = _v2_round_four_reason(evaluation)
+    authorized = reason is V2RoundFourDecisionCode.AUTHORIZED
+    if authorized != (reservation is not None):
+        raise ValueError("authorized Round 4 must carry exactly one complete reservation")
+    return V2RoundFourGovernorDecision(
+        run_id=evaluation.run_id,
+        authorized=authorized,
+        reason_code=reason,
+        explanation=_v2_round_four_explanation(reason, evaluation.round_three_duplicate_rate),
+        reservation=reservation,
+        decided_at=evaluation.decided_at,
+    )
+
+
+def _v2_round_four_reason(evaluation: V2RoundFourGovernorInput) -> V2RoundFourDecisionCode:
+    if evaluation.cancelled:
+        return V2RoundFourDecisionCode.CANCELLED
+    if evaluation.terminal_provider_failure:
+        return V2RoundFourDecisionCode.TERMINAL_FAILURE
+    if not evaluation.gap_analysis_usable:
+        return V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE
+    if not evaluation.material_gap_remains or not evaluation.luna_recommends_continue:
+        return V2RoundFourDecisionCode.NO_MATERIAL_GAPS
+    if not evaluation.eligible_provider_exists:
+        return V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER
+    if evaluation.round_three_duplicate_rate >= 0.70:
+        return V2RoundFourDecisionCode.DUPLICATE_HEAVY
+    if not evaluation.round_four_productive:
+        return V2RoundFourDecisionCode.UNPRODUCTIVE
+    if not evaluation.materially_new_queries:
+        return V2RoundFourDecisionCode.NO_NOVEL_QUERY
+    if (
+        not evaluation.protected_downstream_budget_remains
+        or not evaluation.complete_workload_reservable
+    ):
+        return V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION
+    return V2RoundFourDecisionCode.AUTHORIZED
+
+
+def _v2_round_four_explanation(reason: V2RoundFourDecisionCode, duplicate_rate: float) -> str:
+    explanations = {
+        V2RoundFourDecisionCode.AUTHORIZED: (
+            "Round 4 was authorized as one narrow claim-coverage continuation."
+        ),
+        V2RoundFourDecisionCode.NO_MATERIAL_GAPS: (
+            "Round 4 was not started because no material claim-coverage gap remains."
+        ),
+        V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE: (
+            "Round 4 was not started because post-Round-3 Gap Analysis was unusable."
+        ),
+        V2RoundFourDecisionCode.NO_NOVEL_QUERY: (
+            "Round 4 was not started because no materially new query remained."
+        ),
+        V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER: (
+            "Round 4 was not started because no eligible provider remained."
+        ),
+        V2RoundFourDecisionCode.DUPLICATE_HEAVY: (
+            f"Round 4 was not started because Round 3 was duplicate-heavy ({duplicate_rate:.0%})."
+        ),
+        V2RoundFourDecisionCode.UNPRODUCTIVE: (
+            "Round 4 was not started because the proposed continuation was unproductive."
+        ),
+        V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION: (
+            "Round 4 was not started because its complete workload cannot preserve "
+            "downstream budget."
+        ),
+        V2RoundFourDecisionCode.CANCELLED: (
+            "Round 4 was not started because cancellation was requested."
+        ),
+        V2RoundFourDecisionCode.TERMINAL_FAILURE: (
+            "Round 4 was not started after a terminal provider failure."
+        ),
+    }
+    return explanations[reason]
 
 
 def evaluate_v2_round_three_authorization(
