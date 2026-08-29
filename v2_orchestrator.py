@@ -18,6 +18,7 @@ from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY, run_v2_acqu
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
     V2AdaptiveContinuationResult,
+    V2AdaptiveRoundStatus,
     V2AdaptiveSearchResults,
     V2AdaptiveStopCode,
     run_v2_adaptive_search_continuation,
@@ -776,7 +777,12 @@ def run_v2_production_pipeline(
             )
         _raise_if_v2_cancelled(effective_cancellation_requested)
         round_four_gap = None
-        if continuation.stopping_decision.completed_rounds == 3:
+        if (
+            continuation.stopping_decision.completed_rounds == 3
+            and continuation.rounds
+            and continuation.rounds[-1].round_number == 3
+            and continuation.rounds[-1].status is V2AdaptiveRoundStatus.COMPLETED
+        ):
             round_three_discoveries, round_three_acquisitions, _round_three_gaps = (
                 _completed_round_artifacts(
                     path,

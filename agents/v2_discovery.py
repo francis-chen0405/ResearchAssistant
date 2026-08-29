@@ -273,6 +273,7 @@ def run_v2_discovery_and_scout(
         items=items,
         llm_provider=llm_provider,
         clock=now,
+        cancellation_requested=cancellation_requested,
     )
     output = V2DiscoveryScoutOutput(
         run_id=planner_output.run_id,
@@ -320,11 +321,14 @@ def _run_scout_batches(
     items: tuple[NormalizedDiscoveryItem, ...],
     llm_provider: LLMProvider,
     clock: Callable[[], datetime],
+    cancellation_requested: Callable[[], bool] | None,
 ) -> tuple[tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...]]:
+    _raise_if_cancelled(cancellation_requested)
     prompt = load_prompt_file(V2_SCOUT_PROMPT_PATH, expected_stage=LLMStage.SCOUT)
     batches: list[ScoutBatch] = []
     audits: list[ScoutBatchAudit] = []
     for start in range(0, len(items), V2_SCOUT_BATCH_SIZE):
+        _raise_if_cancelled(cancellation_requested)
         batch_items = items[start : start + V2_SCOUT_BATCH_SIZE]
         request_input = V2ScoutRequest(
             run_id=run_id,
@@ -336,6 +340,7 @@ def _run_scout_batches(
         response: ScoutBatch | None = None
         attempted = 0
         for _ in range(2):
+            _raise_if_cancelled(cancellation_requested)
             attempted += 1
             request = LLMRequest(
                 run_id=run_id,
@@ -356,8 +361,14 @@ def _run_scout_batches(
                 _validate_scout_mapping(request_input, candidate)
                 response = candidate
                 break
-            except (LLMInvocationError, ValueError) as exc:
-                last_error = exc if isinstance(exc, LLMInvocationError) else None
+            except V2CancellationRequested:
+                raise
+            except LLMInvocationError as exc:
+                if isinstance(exc.__cause__, V2CancellationRequested):
+                    raise exc.__cause__ from None
+                last_error = exc
+            except ValueError:
+                last_error = None
         if response is None:
             response = ScoutBatch(
                 run_id=run_id,

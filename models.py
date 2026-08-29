@@ -1516,6 +1516,8 @@ class V2GapAnalysisOutput(StrictModel):
     def validate_output(self) -> V2GapAnalysisOutput:
         if self.input.run_id != self.run_id:
             raise ValueError("Gap Analysis input run_id must match output")
+        if self.result is not None and self.result.run_id != self.run_id:
+            raise ValueError("Gap Analysis result run_id must match output")
         if self.state is V2GapAnalysisState.COMPLETED:
             if self.result is None or self.stop_adaptive_continuation != (
                 not self.result.continue_research

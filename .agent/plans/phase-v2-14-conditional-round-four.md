@@ -1,7 +1,7 @@
 # ResearchAssistant v2 — Phase 14: Conditional Round Four and Gap Reconciliation
 
-Status: Complete and verified. Authorized and completed on 2026-08-28; a focused Round-Four
-correction was completed the same day.
+Status: Complete and verified after post-completion audit remediation. Authorized and completed on
+2026-08-28; a focused Round-Four correction was completed the same day.
 
 The claim-coverage correction is now explicit rather than keyword-derived: the application owns
 a typed coverage specification, preserves unavailable counterevidence when that direction is
@@ -48,5 +48,8 @@ provenance. The typed Governor evaluates observed facts rather than a preselecte
 - Offline tests cover claim coverage, representative quotas, three-provider/five-query lane
   pressure, every typed Governor decision, reservations, end-to-end Round-4 execution,
   reconciliation linkage, admission failures, history compatibility, and fingerprint mismatches.
-- Verification completed: `pytest` (834 passed, 2 skipped), `ruff check .`,
-  `ruff format --check .`, and `git diff --check` all passed.
+- Final verification completed on 2026-08-29 using the existing project environment:
+  `env PYTHONPATH=. .venv/bin/pytest -q` (870 passed, 2 skipped; one existing FastAPI/httpx
+  deprecation warning), `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .` (118 files
+  already formatted), and `git diff --check` all passed. The bare `pytest` command was unavailable
+  on PATH. No live provider call, dependency, migration, or historical-artifact rewrite was made.

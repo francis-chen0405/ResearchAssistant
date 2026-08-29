@@ -1,14 +1,29 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
 
 import agents.v2_final_output as v2_final_output
+import v2_orchestrator
+from agents.v2_adaptive_search import (
+    V2AdaptiveBudgetState,
+    V2AdaptiveRoundStatus,
+    V2AdaptiveStopCode,
+)
+from agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
+from agents.v2_round_four import (
+    V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
+    V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
+    V2RoundFourRunResult,
+    reconcile_post_round_three_gaps,
+)
 from frontend.live_service import LiveResearchController, ResearchProgress, _v2_progress_percent
 from models import (
     DiscoveryProvider,
@@ -26,16 +41,19 @@ from models import (
     V2AdmissionMethod,
     V2ClaimCoverageAssessment,
     V2ClaimCoverageState,
+    V2EvidenceAdmissionBatchResult,
     V2EvidenceAnalystModelOutput,
     V2EvidenceRelationship,
     V2FinalResearchOutput,
     V2GapAnalysisModelOutput,
+    V2GapAnalysisOutput,
     V2GapSearchDirection,
     V2InitialPlannerModelOutput,
     V2InitialPlannerSearchResponse,
     V2MaterialGap,
     V2PipelineIdentity,
     V2ProviderRunDiagnostics,
+    V2RoundFourGovernorDecision,
     V2RoundFourTerminalOutcome,
     V2RunDiagnostics,
     V2SourceSelectionModelOutput,
@@ -115,6 +133,29 @@ class _FailsRoundFourSearch(_Search):
         return super().search(request)
 
 
+class _FailsAllRoundFourSearch(_Search):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        if "round 4" in request.query_text:
+            raise RuntimeError("fixture all Round-4 provider failure")
+        return super().search(request)
+
+
+class _FailsSecondRoundFourSearch(_Search):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        if "round 4" in request.query_text and any(
+            "round 4" in prior.query_text for prior in self.requests
+        ):
+            raise RuntimeError("fixture partial Round-4 provider failure")
+        return super().search(request)
+
+
+class _FailsRoundThreeSearch(_Search):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        if len(self.requests) >= 4:
+            raise RuntimeError("fixture Round-3 provider failure")
+        return super().search(request)
+
+
 class _Scraper:
     def __init__(self) -> None:
         self.requests: list[ScrapeRequest] = []
@@ -143,11 +184,13 @@ class _V2Model:
         completed_rounds: int = 1,
         fail_first_scout: bool = False,
         fail_first_gap: bool = False,
+        round_four_query_count: int = 1,
     ) -> None:
         self.requests: list[LLMRequest] = []
         self.completed_rounds = completed_rounds
         self.fail_first_scout = fail_first_scout
         self.fail_first_gap = fail_first_gap
+        self.round_four_query_count = round_four_query_count
         self.gap_attempts = 0
         self.scout_attempts = 0
         self.successful_gaps = 0
@@ -253,17 +296,24 @@ class _V2Model:
             self.search_agent_calls += 1
             gap = request.input_artifact.material_gaps[0]
             return V2AdaptiveSearchModelOutput(
-                searches=(
+                searches=tuple(
                     V2AdaptiveSearchProposal(
                         direction=gap.direction,
                         provider=DiscoveryProvider.EXA,
                         targeted_gap_ids=(gap.gap_id,),
-                        strategy=f"replication_round_{request.input_artifact.round_number}",
+                        strategy=(
+                            f"replication_round_{request.input_artifact.round_number}_{index}"
+                        ),
                         query_text=(
                             f"distinct replication instrument round "
-                            f"{request.input_artifact.round_number} outcome"
+                            f"{request.input_artifact.round_number} outcome variant {index}"
                         ),
-                    ),
+                    )
+                    for index in range(
+                        self.round_four_query_count
+                        if request.input_artifact.round_number == 4
+                        else 1
+                    )
                 )
             )
         if output_name == "V2SourceSelectionModelOutput":
@@ -317,6 +367,30 @@ class _V2Model:
             total_tokens=15,
             cost_usd=Decimal("0.00001"),
         )
+
+
+class _AuthorizationObservingV2Model(_V2Model):
+    def __init__(self, *, db_path: Path) -> None:
+        super().__init__(completed_rounds=4)
+        self._db_path = db_path
+        self.round_four_authorization_seen = False
+
+    def generate(self, request: LLMRequest) -> object:
+        if (
+            request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+            and request.input_artifact.round_number == 4
+        ):
+            decision = V2RoundFourGovernorDecision.model_validate_json(
+                read_v2_artifact(
+                    self._db_path,
+                    request.run_id,
+                    V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
+                ).payload_json
+            )
+            self.round_four_authorization_seen = (
+                decision.authorized and decision.reservation is not None
+            )
+        return super().generate(request)
 
 
 class _ExtractionFailureModel(_V2Model):
@@ -405,6 +479,151 @@ def _run(
     )
 
 
+@pytest.fixture(scope="module")
+def _reconciliation_inputs(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult]:
+    db_path = tmp_path_factory.mktemp("phase14-reconciliation") / "reconciliation.sqlite3"
+    run_id = uuid4()
+    result = _run(
+        db_path,
+        _V2Model(completed_rounds=4),
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+    assert result.final_output is not None
+    post_gap = V2GapAnalysisOutput.model_validate_json(
+        read_v2_artifact(db_path, run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY).payload_json
+    )
+    admission = V2EvidenceAdmissionBatchResult.model_validate_json(
+        read_v2_artifact(db_path, run_id, V2_EVIDENCE_ADMISSION_ARTIFACT_KEY).payload_json
+    )
+    return db_path, post_gap, admission
+
+
+def test_reconciliation_accepts_the_typed_admission_chain(
+    _reconciliation_inputs: tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult],
+) -> None:
+    db_path, post_gap, admission = _reconciliation_inputs
+
+    reconciliation = reconcile_post_round_three_gaps(
+        db_path=db_path,
+        post_round_three_gap=post_gap,
+        admission_result=admission,
+        clock=lambda: NOW,
+    )
+
+    assert reconciliation.run_id == admission.run_id
+    assert reconciliation.post_round_three_gap_artifact_key == V2_POST13_GAP_AFTER_ROUND_THREE_KEY
+
+
+@pytest.mark.parametrize("invalid_input", [{}, object()])
+def test_reconciliation_rejects_untyped_admission_input(
+    _reconciliation_inputs: tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult],
+    invalid_input: object,
+) -> None:
+    db_path, post_gap, _admission = _reconciliation_inputs
+
+    with pytest.raises(TypeError, match="V2EvidenceAdmissionBatchResult"):
+        reconcile_post_round_three_gaps(
+            db_path=db_path,
+            post_round_three_gap=post_gap,
+            admission_result=invalid_input,
+            clock=lambda: NOW,
+        )
+
+
+def test_reconciliation_rejects_foreign_admission_batch_run(
+    _reconciliation_inputs: tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult],
+) -> None:
+    db_path, post_gap, admission = _reconciliation_inputs
+
+    with pytest.raises(ValueError, match="batch run_id"):
+        reconcile_post_round_three_gaps(
+            db_path=db_path,
+            post_round_three_gap=post_gap,
+            admission_result=admission.model_copy(update={"run_id": uuid4()}),
+            clock=lambda: NOW,
+        )
+
+
+def test_reconciliation_rejects_foreign_nested_evidence_record(
+    _reconciliation_inputs: tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult],
+) -> None:
+    db_path, post_gap, admission = _reconciliation_inputs
+    source_index = next(
+        index
+        for index, source in enumerate(admission.source_results)
+        if source.evidence_record is not None
+    )
+    source = admission.source_results[source_index]
+    assert source.evidence_record is not None
+    tampered_source = source.model_copy(
+        update={"evidence_record": source.evidence_record.model_copy(update={"run_id": uuid4()})}
+    )
+    tampered_sources = list(admission.source_results)
+    tampered_sources[source_index] = tampered_source
+
+    with pytest.raises(ValueError, match="evidence record run_id"):
+        reconcile_post_round_three_gaps(
+            db_path=db_path,
+            post_round_three_gap=post_gap,
+            admission_result=admission.model_copy(
+                update={"source_results": tuple(tampered_sources)}
+            ),
+            clock=lambda: NOW,
+        )
+
+
+def test_reconciliation_rejects_mismatched_gap_and_round_four_provenance_ids(
+    _reconciliation_inputs: tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult],
+) -> None:
+    db_path, post_gap, admission = _reconciliation_inputs
+    assert post_gap.result is not None and post_gap.result.material_gaps
+    foreign_gap = post_gap.result.material_gaps[0].model_copy(update={"gap_id": "foreign-gap"})
+    tampered_post_gap = post_gap.model_copy(
+        update={"result": post_gap.result.model_copy(update={"material_gaps": (foreign_gap,)})}
+    )
+    with pytest.raises(ValueError, match="absent from source-selection history"):
+        reconcile_post_round_three_gaps(
+            db_path=db_path,
+            post_round_three_gap=tampered_post_gap,
+            admission_result=admission,
+            clock=lambda: NOW,
+        )
+
+    source_index = next(
+        index
+        for index, source in enumerate(admission.source_results)
+        if source.evidence_record is not None
+    )
+    source = admission.source_results[source_index]
+    tampered_source = source.model_copy(
+        update={
+            "provenance": source.provenance.model_copy(
+                update={"relevant_gap_ids": ("foreign-gap",)}
+            )
+        }
+    )
+    tampered_sources = list(admission.source_results)
+    tampered_sources[source_index] = tampered_source
+    with pytest.raises(ValueError, match="provenance"):
+        reconcile_post_round_three_gaps(
+            db_path=db_path,
+            post_round_three_gap=post_gap,
+            admission_result=admission.model_copy(
+                update={"source_results": tuple(tampered_sources)}
+            ),
+            clock=lambda: NOW,
+        )
+
+
 def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
     tmp_path: Path,
 ) -> None:
@@ -482,6 +701,230 @@ def test_post_phase13_round_four_is_bounded_and_uses_versioned_artifacts(
         V2FinalResearchOutput.model_validate(tampered)
 
 
+def test_round_four_authorization_is_persisted_before_search_agent_execution(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-authorization-order.sqlite3"
+    model = _AuthorizationObservingV2Model(db_path=db_path)
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=uuid4(),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert model.round_four_authorization_seen
+
+
+def test_orchestrator_round_four_uses_fresh_budget_after_gap_analysis(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_round_four = v2_orchestrator.run_v2_round_four_continuation
+    pre_gap_budgets: list[V2AdaptiveBudgetState] = []
+    post_gap_budgets: list[V2AdaptiveBudgetState] = []
+
+    def observe_round_four(**kwargs: object) -> V2RoundFourRunResult:
+        pre_gap_budgets.append(cast(V2AdaptiveBudgetState, kwargs["budget"]))
+        snapshot = cast(Callable[[], V2AdaptiveBudgetState], kwargs["budget_snapshot"])
+
+        def observe_snapshot() -> V2AdaptiveBudgetState:
+            current = snapshot()
+            post_gap_budgets.append(current)
+            return current
+
+        forwarded = dict(kwargs)
+        forwarded["budget_snapshot"] = observe_snapshot
+        return original_round_four(**forwarded)
+
+    monkeypatch.setattr(v2_orchestrator, "run_v2_round_four_continuation", observe_round_four)
+    db_path = tmp_path / "phase14-fresh-budget-orchestrator.sqlite3"
+    run_id = uuid4()
+    result = _run(
+        db_path,
+        _V2Model(completed_rounds=4),
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert len(pre_gap_budgets) == 1
+    assert len(post_gap_budgets) == 1
+    assert post_gap_budgets[0].model_calls_remaining < pre_gap_budgets[0].model_calls_remaining
+    assert post_gap_budgets[0].tokens_remaining < pre_gap_budgets[0].tokens_remaining
+    assert post_gap_budgets[0].cost_remaining_usd < pre_gap_budgets[0].cost_remaining_usd
+    decision = V2RoundFourGovernorDecision.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-governor-decision-v1").payload_json
+    )
+    assert decision.authorized
+    assert decision.reservation is not None
+    assert (
+        decision.reservation.post_gap_available_calls == post_gap_budgets[0].model_calls_remaining
+    )
+    assert decision.reservation.post_gap_available_tokens == post_gap_budgets[0].tokens_remaining
+    assert (
+        decision.reservation.post_gap_available_cost_usd == post_gap_budgets[0].cost_remaining_usd
+    )
+    assert decision.reservation.provider_search_calls == 2
+    assert decision.reservation.acquisition_cluster_capacity == 10
+    assert decision.reservation.optional_calls == 5
+
+
+def test_direct_round_four_requires_fresh_snapshot_and_rejects_stale_capacity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_round_four = v2_orchestrator.run_v2_round_four_continuation
+    captured: dict[str, object] = {}
+
+    def capture_round_four(**kwargs: object) -> object:
+        captured.update(kwargs)
+        raise RuntimeError("stop before direct Round-4 invocation")
+
+    monkeypatch.setattr(v2_orchestrator, "run_v2_round_four_continuation", capture_round_four)
+    db_path = tmp_path / "phase14-fresh-budget-direct.sqlite3"
+    model = _V2Model(completed_rounds=4)
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=uuid4(),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.FAILED
+    pre_gap_call_count = len(model.requests)
+    missing_snapshot = dict(captured)
+    missing_snapshot.pop("budget_snapshot")
+    with pytest.raises(TypeError, match="budget_snapshot"):
+        original_round_four(**missing_snapshot)
+
+    pre_gap_budget = cast(V2AdaptiveBudgetState, captured["budget"])
+    search_agent_calls_before_direct = model.search_agent_calls
+    snapshot_calls: list[int] = []
+
+    def reduced_post_gap_snapshot() -> V2AdaptiveBudgetState:
+        assert len(model.requests) > pre_gap_call_count
+        snapshot_calls.append(len(model.requests))
+        return pre_gap_budget.model_copy(
+            update={
+                "model_calls_remaining": 0,
+                "tokens_remaining": 0,
+                "cost_remaining_usd": Decimal("0"),
+            }
+        )
+
+    direct_arguments = dict(captured)
+    direct_arguments["budget_snapshot"] = reduced_post_gap_snapshot
+    direct = original_round_four(**direct_arguments)
+
+    assert snapshot_calls
+    assert not direct.governor_decision.authorized
+    assert direct.governor_decision.reservation is None
+    assert model.search_agent_calls == search_agent_calls_before_direct
+
+
+def test_round_four_planning_is_not_invoked_without_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_round_four = v2_orchestrator.run_v2_round_four_continuation
+    captured: dict[str, object] = {}
+
+    def capture_round_four(**kwargs: object) -> object:
+        captured.update(kwargs)
+        raise RuntimeError("stop before direct Round-4 invocation")
+
+    monkeypatch.setattr(v2_orchestrator, "run_v2_round_four_continuation", capture_round_four)
+    db_path = tmp_path / "phase14-planning-requires-authorization.sqlite3"
+    run_id = uuid4()
+    model = _V2Model(completed_rounds=4)
+    search = _Search(unique_results=True)
+    result = _run(
+        db_path,
+        model,
+        search,
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+    assert result.state is V2ProductionState.FAILED
+    search_calls_before_direct = len(search.requests)
+    search_agent_calls_before_direct = model.search_agent_calls
+    pre_gap_budget = cast(V2AdaptiveBudgetState, captured["budget"])
+
+    def planning_must_not_run(**kwargs: object) -> object:
+        raise AssertionError("Round-4 planning must not run without authorization")
+
+    monkeypatch.setattr("agents.v2_round_four._plan_round_four", planning_must_not_run)
+    direct_arguments = dict(captured)
+    direct_arguments["budget_snapshot"] = lambda: pre_gap_budget.model_copy(
+        update={
+            "model_calls_remaining": 0,
+            "tokens_remaining": 0,
+            "cost_remaining_usd": Decimal("0"),
+        }
+    )
+    direct = original_round_four(**direct_arguments)
+
+    assert not direct.governor_decision.authorized
+    assert len(search.requests) == search_calls_before_direct
+    assert model.search_agent_calls == search_agent_calls_before_direct
+
+
+def test_degraded_round_three_does_not_call_round_four(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    round_four_calls: list[object] = []
+
+    def record_round_four_call(**kwargs: object) -> object:
+        round_four_calls.append(kwargs)
+        raise AssertionError("degraded Round 3 must not call Round 4")
+
+    monkeypatch.setattr(v2_orchestrator, "run_v2_round_four_continuation", record_round_four_call)
+    model = _V2Model(completed_rounds=4)
+    result = _run(
+        tmp_path / "phase14-degraded-round-three.sqlite3",
+        model,
+        _FailsRoundThreeSearch(unique_results=True),
+        _Scraper(),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert round_four_calls == []
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 3
+    assert result.final_output.stopping.reason.value == "provider_eligibility_exhausted"
+
+
 def test_round_four_provider_failure_persists_terminal_outcome_without_rewriting_authorization(
     tmp_path: Path,
 ) -> None:
@@ -507,6 +950,106 @@ def test_round_four_provider_failure_persists_terminal_outcome_without_rewriting
     )
     assert '"reason_code":"authorized"' in authorization.payload_json
     assert terminal.reason_code.value == "terminal_failure"
+
+
+def test_degraded_round_four_preserves_successful_partial_survivors(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-partial-round-four.sqlite3"
+    run_id = uuid4()
+    result = _run(
+        db_path,
+        _V2Model(completed_rounds=4, round_four_query_count=2),
+        _FailsSecondRoundFourSearch(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 4
+    completion = V2RoundFourRunResult.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-completion-v1").payload_json
+    )
+    assert completion.continuation.rounds[-1].status is V2AdaptiveRoundStatus.DEGRADED
+    assert (
+        completion.continuation.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
+    )
+    round_four_sources = tuple(
+        source
+        for source in result.final_output.all_surviving_sources
+        if source.discovery_round == 4
+    )
+    assert round_four_sources
+    assert result.final_output.gap_reconciliation is not None
+    assert result.final_output.gap_reconciliation.round_four_attempted
+
+
+def test_degraded_round_four_with_all_failures_preserves_prior_work_only(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-all-failed-round-four.sqlite3"
+    run_id = uuid4()
+    result = _run(
+        db_path,
+        _V2Model(completed_rounds=4, round_four_query_count=2),
+        _FailsAllRoundFourSearch(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 4
+    completion = V2RoundFourRunResult.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-completion-v1").payload_json
+    )
+    assert completion.continuation.rounds[-1].status is V2AdaptiveRoundStatus.DEGRADED
+    assert (
+        completion.continuation.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
+    )
+    assert result.final_output.all_surviving_sources
+    assert all(source.discovery_round < 4 for source in result.final_output.all_surviving_sources)
+    assert result.final_output.gap_reconciliation is not None
+    assert result.final_output.gap_reconciliation.round_four_attempted
+
+
+def test_degraded_round_four_does_not_authorize_a_fifth_round(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-no-fifth-round.sqlite3"
+    model = _V2Model(completed_rounds=4, round_four_query_count=2)
+    result = _run(
+        db_path,
+        model,
+        _FailsSecondRoundFourSearch(unique_results=True),
+        _Scraper(),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 4
+    assert model.search_agent_calls == 3
+    assert all(
+        request.input_artifact.round_number <= 4
+        for request in model.requests
+        if request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+    )
 
 
 def test_completed_legacy_v2_result_bypasses_phase13_identity_validation(
@@ -958,6 +1501,34 @@ def test_cancellation_after_scout_stops_before_acquisition_requests(tmp_path: Pa
 
     assert result.state is V2ProductionState.CANCELLED
     assert result.current_stage is Stage.DISCOVERY
+    assert scraper.requests == []
+
+
+def test_cancellation_between_scout_retries_prevents_additional_provider_call(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase12-cancel-before-scout-retry.sqlite3"
+    run_id = uuid4()
+    model = _CancellingV2Model(
+        db_path=db_path,
+        run_id=run_id,
+        cancel_after_output_type="ScoutBatch",
+        fail_on_cancellation=True,
+    )
+    scraper = _Scraper()
+
+    result = _run(db_path, model, _Search(), scraper, run_id=run_id)
+
+    scout_requests = [
+        request
+        for request in model.requests
+        if request.requested_output_type.__name__ == "ScoutBatch"
+    ]
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.DISCOVERY
+    assert len(scout_requests) == 1
+    assert len(model.requests) == 2
+    assert result.budget.physical_calls_used == len(model.requests)
     assert scraper.requests == []
 
 

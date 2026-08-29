@@ -19,6 +19,9 @@ from models import (
     Stage,
     V2GapAnalysisInput,
     V2GapAnalysisModelOutput,
+    V2GapAnalysisOutput,
+    V2GapAnalysisResult,
+    V2GapAnalysisState,
     V2GapBudgetState,
     V2GapProbePassage,
     V2GapSearchDirection,
@@ -191,6 +194,39 @@ def test_gap_result_accepts_only_enabled_directions(directions: ResearchDirectio
             run_id=gap_input.run_id,
             directions=directions,
             analyzed_at=NOW,
+        )
+
+
+def test_gap_analysis_output_binds_nested_result_to_the_same_run() -> None:
+    gap_input = _input()
+    result = V2GapAnalysisResult(
+        **_stop().model_dump(),
+        run_id=gap_input.run_id,
+        directions=gap_input.directions,
+        analyzed_at=NOW,
+    )
+
+    output = V2GapAnalysisOutput(
+        run_id=gap_input.run_id,
+        input=gap_input,
+        state=V2GapAnalysisState.COMPLETED,
+        result=result,
+        attempts=(),
+        stop_adaptive_continuation=True,
+        completed_at=NOW,
+    )
+
+    assert output.result == result
+
+    with pytest.raises(ValidationError, match="result run_id must match output"):
+        V2GapAnalysisOutput(
+            run_id=gap_input.run_id,
+            input=gap_input,
+            state=V2GapAnalysisState.COMPLETED,
+            result=result.model_copy(update={"run_id": uuid4()}),
+            attempts=(),
+            stop_adaptive_continuation=True,
+            completed_at=NOW,
         )
 
 

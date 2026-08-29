@@ -665,17 +665,23 @@ def run_v2_adaptive_search_continuation(
             (3, discovery_three, acquisition_three),
         ),
     )
-    reason = (
-        "Research stopped at the fixed three-round maximum after the narrow Round 3."
-        if any(item.succeeded for item in search_three.outcomes)
-        else "Research stopped at the fixed three-round maximum after Round-3 provider degradation."
-    )
+    if summary_three.status is V2AdaptiveRoundStatus.CANCELLED:
+        stop_code = V2AdaptiveStopCode.CANCELLED
+        reason = "Research stopped at the Round-3 boundary because cancellation was requested."
+    elif summary_three.status is V2AdaptiveRoundStatus.DEGRADED:
+        stop_code = V2AdaptiveStopCode.PROVIDER_FAILURE
+        reason = (
+            "Research stopped after Round-3 provider degradation; completed work was preserved."
+        )
+    else:
+        stop_code = V2AdaptiveStopCode.ROUND_THREE_COMPLETE
+        reason = "Research stopped at the fixed three-round maximum after the narrow Round 3."
     return _finish(
         path,
         initial_plan.run_id,
         (summary_two, summary_three),
         pool_three,
-        V2AdaptiveStopCode.ROUND_THREE_COMPLETE,
+        stop_code,
         reason,
         3,
         now,

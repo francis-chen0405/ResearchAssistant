@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
+    V2AdaptiveRoundStatus,
     V2AdaptiveStopCode,
     normalize_query_text,
     queries_are_materially_new,
@@ -137,6 +138,17 @@ class FakeSearch:
             results=[SearchResult(original_url=url, title="Independent outcome study")],
             provider_name="fixture-search",
         )
+
+
+class RoundThreeFailureSearch(FakeSearch):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        if len(self.requests) == 1:
+            raise SearchProviderError(
+                SearchFailureCode.TRANSIENT_OUTAGE,
+                "fixture Round-3 provider degradation",
+                retryable=True,
+            )
+        return super().search(request)
 
 
 class FakeScraper:
@@ -563,6 +575,27 @@ def test_round_three_requires_governor_and_stops_at_hard_maximum(tmp_path: Path)
     assert len(result.rounds) == 2
     assert result.rounds[1].planned_query_count == 1
     assert all(item.round_number <= 3 for item in result.rounds)
+
+
+def test_degraded_round_three_emits_terminal_provider_failure(tmp_path: Path) -> None:
+    llm = FakeAdaptiveLLM(
+        search_outputs=[
+            _proposal("independent cohort outcome instrument evaluation"),
+            _proposal("distinct replication instrument longitudinal outcome"),
+        ],
+        gap_outputs=[_luna_continue()],
+    )
+    result = _run(
+        tmp_path,
+        initial_gap_continue=True,
+        llm=llm,
+        search=RoundThreeFailureSearch(),
+    )
+
+    assert result.rounds[-1].round_number == 3
+    assert result.rounds[-1].status is V2AdaptiveRoundStatus.DEGRADED
+    assert result.stopping_decision.completed_rounds == 3
+    assert result.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
 
 
 def test_round_three_rejects_a_trivial_query_rewrite(tmp_path: Path) -> None:

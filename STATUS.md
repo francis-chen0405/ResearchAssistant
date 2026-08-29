@@ -2,7 +2,7 @@
 
 ## 2026-08-28 - Phase 14 conditional Round Four and gap reconciliation
 
-Status: Complete and verified.
+Status: Complete and verified after post-completion audit remediation.
 
 - Focused post-completion correction: the post-Round-3 Gap contract now carries a deterministic
   claim-coverage map, asks Luna to assess every relevant claim dimension, and requires every
@@ -30,6 +30,10 @@ Status: Complete and verified.
   Terminal Round-4 outcomes are append-only artifacts and never overwrite the immutable
   authorization decision. Persisted Planner focus, coverage assessments, source-family rounds,
   and final coverage reconciliation are all exact-bound and regression-tested.
+- Post-audit hardening restores the documented macOS launcher, binds Gap Analysis and
+  reconciliation artifacts to one run, blocks degraded Round 3 from entering Round 4, requires
+  fresh post-Gap budgeting and persisted preauthorization, preserves valid degraded Round-4
+  survivors, and propagates typed cancellation through Scout retries.
 
 - Added a fresh-v2-only post-Round-3 cumulative Luna Gap Analysis and one conditional,
   application-governed Round 4. It requires a completed non-degraded Round 3, material gaps,
@@ -46,9 +50,11 @@ Status: Complete and verified.
   reconciliation marks a gap covered only with matching Round-4 provenance and analyzer-admitted
   evidence; all other post-Round-3 gaps remain explicitly disclosed.
 
-Verification: `pytest` passed (851 passed, 2 skipped; one existing FastAPI/httpx deprecation
-warning). `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live provider
-call, dependency, migration, or historical-artifact rewrite was made.
+Verification (2026-08-29): `env PYTHONPATH=. .venv/bin/pytest -q` passed (870 passed, 2 skipped;
+one existing FastAPI/httpx deprecation warning). `./.venv/bin/ruff check .`, `./.venv/bin/ruff
+format --check .` (118 files already formatted), and `git diff --check` passed. The bare `pytest`
+command was unavailable on PATH; no live provider call, dependency, migration, or
+historical-artifact rewrite was made.
 
 Next phase: Stop here until explicit user authorization for a new phase.
 

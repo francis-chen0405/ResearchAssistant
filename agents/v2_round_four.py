@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import TypeVar
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict
 
@@ -28,20 +28,30 @@ from agents.v2_adaptive_search import (
 from agents.v2_gap_analysis import run_v2_gap_analysis
 from evidence_portfolio import identify_source_family
 from models import (
+    V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
     V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
+    V2_SOURCE_SELECTION_POLICY_IDENTITY,
     CrossrefIdentityMetadata,
     DiscoveryProvider,
+    ResearchDirection,
     ResearchDirections,
     StrictModel,
     V2AcquisitionProbeOutput,
     V2AdaptiveRoundPlan,
     V2AdaptiveSearchModelOutput,
+    V2AdmissionMethod,
     V2ClaimCoverageDimension,
     V2ClaimCoverageFocus,
     V2ClaimCoverageKind,
     V2ClaimCoverageSpecification,
     V2DiscoveryScoutOutput,
+    V2EvidenceAdmissionBatchResult,
+    V2EvidenceAdmissionState,
+    V2EvidenceAnalystCandidateInput,
+    V2EvidenceAnalystSourceResult,
+    V2EvidenceAnalystState,
     V2GapAcquisitionFailure,
     V2GapAnalysisInput,
     V2GapAnalysisModelOutput,
@@ -57,11 +67,14 @@ from models import (
     V2GapSourceFamily,
     V2GapSurvivingSourceMetadata,
     V2InitialPlannerOutput,
+    V2LedgerProvenance,
+    V2MaterialGap,
     V2RoundFourDecisionCode,
     V2RoundFourGovernorDecision,
     V2RoundFourReservation,
     V2RoundFourTerminalOutcome,
     V2SearchAgentInput,
+    V2SourceSelectionCandidate,
 )
 from providers.llm import (
     V2_LLM_ROUTING,
@@ -94,6 +107,10 @@ class V2RoundFourBudgetError(LookupError):
     """The bounded fourth-round workload cannot preserve the downstream reserve."""
 
 
+class V2RoundFourAuthorizationError(LookupError):
+    """Round-4 Search Agent work requires a persisted application authorization."""
+
+
 class V2RoundFourRunResult(StrictModel):
     """Restart-safe post-Round-3 outcome, including the immutable Gap checkpoint."""
 
@@ -120,11 +137,11 @@ def run_v2_round_four_continuation(
     firecrawl_provider: ScraperProvider | None,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None,
     budget: V2AdaptiveBudgetState,
-    budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
+    budget_snapshot: Callable[[], V2AdaptiveBudgetState],
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2RoundFourRunResult:
-    """Run the only permitted fourth round from a successful, non-degraded Round 3."""
+    """Run Round 4 only after persisting its conservative preauthorization."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
     persisted = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_COMPLETION_KEY)
@@ -167,7 +184,7 @@ def run_v2_round_four_continuation(
         artifact_key=V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
         clock=now,
     )
-    post_gap_budget = budget_snapshot() if budget_snapshot is not None else budget
+    post_gap_budget = budget_snapshot()
     if _cancelled(cancellation_requested):
         return _finish(
             path,
@@ -217,6 +234,60 @@ def run_v2_round_four_continuation(
             ),
             now,
         )
+    persisted_decision = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
+    if persisted_decision is None:
+        request_input, _request, search_reservation = _build_round_four_search_agent_request(
+            path=path,
+            initial_plan=initial_plan,
+            gap=gap,
+            eligible=eligible,
+            routing_config=routing_config,
+        )
+        if request_input.maximum_queries == 0:
+            return _finish(
+                path,
+                continuation,
+                gap,
+                _governor_decision(
+                    run_id=initial_plan.run_id,
+                    clock=now,
+                    gap=gap,
+                    eligible_provider_exists=True,
+                    round_three_duplicate_rate=duplicate_rate,
+                    materially_new_queries=False,
+                ),
+                now,
+            )
+        reservation = _conservative_reservation(
+            budget=budget,
+            post_gap_budget=post_gap_budget,
+            gap=gap,
+            routing_config=routing_config,
+            maximum_queries=request_input.maximum_queries,
+            search_agent_tokens=search_reservation.reserved_tokens,
+            search_agent_cost=search_reservation.reserved_cost_usd,
+        )
+        # This is preauthorization of a bounded novel-query opportunity exposed by the
+        # persisted Gap result. The Search Agent can only validate and narrow this envelope;
+        # it cannot broaden the persisted reservation or authorize itself.
+        decision = _governor_decision(
+            run_id=initial_plan.run_id,
+            clock=now,
+            gap=gap,
+            eligible_provider_exists=True,
+            round_three_duplicate_rate=duplicate_rate,
+            materially_new_queries=True,
+            round_four_productive=True,
+            complete_workload_reservable=reservation is not None,
+            reservation=reservation,
+        )
+        insert_v2_artifact(path, V2_POST13_ROUND_FOUR_GOVERNOR_KEY, decision, decision.decided_at)
+    else:
+        decision = V2RoundFourGovernorDecision.model_validate_json(persisted_decision)
+        if decision.run_id != initial_plan.run_id:
+            raise ValueError("persisted Round-4 Governor decision does not match the initial plan")
+    if not decision.authorized:
+        return _finish(path, continuation, gap, decision, now)
     try:
         plan = _plan_round_four(
             path=path,
@@ -226,23 +297,7 @@ def run_v2_round_four_continuation(
             attempts=attempts,
             llm_provider=llm_provider,
             routing_config=routing_config,
-            budget=budget,
             clock=now,
-        )
-    except V2RoundFourBudgetError:
-        return _finish(
-            path,
-            continuation,
-            gap,
-            _governor_decision(
-                run_id=initial_plan.run_id,
-                clock=now,
-                gap=gap,
-                eligible_provider_exists=True,
-                round_three_duplicate_rate=duplicate_rate,
-                complete_workload_reservable=False,
-            ),
-            now,
         )
     except LLMProviderExecutionError:
         terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent", now)
@@ -254,48 +309,8 @@ def run_v2_round_four_continuation(
             now,
         )
     if plan is None:
-        return _finish(
-            path,
-            continuation,
-            gap,
-            _governor_decision(
-                run_id=initial_plan.run_id,
-                clock=now,
-                gap=gap,
-                eligible_provider_exists=True,
-                round_three_duplicate_rate=duplicate_rate,
-                materially_new_queries=False,
-            ),
-            now,
-        )
-    reservation = _reservation(budget, post_gap_budget, plan, gap, routing_config)
-    if reservation is None:
-        return _finish(
-            path,
-            continuation,
-            gap,
-            _governor_decision(
-                run_id=initial_plan.run_id,
-                clock=now,
-                gap=gap,
-                eligible_provider_exists=True,
-                round_three_duplicate_rate=duplicate_rate,
-                protected_downstream_budget_remains=False,
-                complete_workload_reservable=False,
-            ),
-            now,
-        )
-    decision = _governor_decision(
-        run_id=initial_plan.run_id,
-        clock=now,
-        gap=gap,
-        eligible_provider_exists=True,
-        round_three_duplicate_rate=duplicate_rate,
-        materially_new_queries=bool(plan.plan.searches),
-        round_four_productive=bool(plan.plan.searches),
-        reservation=reservation,
-    )
-    insert_v2_artifact(path, V2_POST13_ROUND_FOUR_GOVERNOR_KEY, decision, decision.decided_at)
+        terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent_plan", now)
+        return _finish(path, continuation, gap, terminal, now)
     search, discovery, acquisition, summary = _run_round_from_plan(
         path=path,
         planned=plan,
@@ -310,6 +325,14 @@ def run_v2_round_four_continuation(
         clock=now,
     )
     del search
+    rounds_with_round_four = tuple(
+        (
+            round_number,
+            discovery_outputs[round_number - 1],
+            acquisition_outputs[round_number - 1],
+        )
+        for round_number in range(1, 4)
+    ) + ((4, discovery, acquisition),)
     if summary.status is V2AdaptiveRoundStatus.CANCELLED:
         cancelled = continuation.model_copy(
             update={
@@ -325,11 +348,14 @@ def run_v2_round_four_continuation(
         )
         return _finish(path, cancelled, gap, decision, now)
     if summary.status is V2AdaptiveRoundStatus.DEGRADED:
+        merged = _merge_survivors(initial_plan.run_id, rounds_with_round_four)
         failed = continuation.model_copy(
             update={
                 "rounds": (*continuation.rounds, summary),
+                "merged_survivors": merged,
                 "stopping_decision": continuation.stopping_decision.model_copy(
                     update={
+                        "completed_rounds": 4,
                         "stop_code": V2AdaptiveStopCode.PROVIDER_FAILURE,
                         "stopping_reason": "Targeted Round 4 ended after a provider failure.",
                         "decided_at": now(),
@@ -346,18 +372,7 @@ def run_v2_round_four_continuation(
             terminal,
             now,
         )
-    merged = _merge_survivors(
-        initial_plan.run_id,
-        tuple(
-            (
-                round_number,
-                discovery_outputs[round_number - 1],
-                acquisition_outputs[round_number - 1],
-            )
-            for round_number in range(1, 4)
-        )
-        + ((4, discovery, acquisition),),
-    )
+    merged = _merge_survivors(initial_plan.run_id, rounds_with_round_four)
     updated = continuation.model_copy(
         update={
             "rounds": (*continuation.rounds, summary),
@@ -705,20 +720,263 @@ def _claim_coverage_specification(
     return V2ClaimCoverageSpecification(focus=tuple(focus))
 
 
+def _validate_reconciliation_admission(
+    *,
+    run_id: UUID,
+    gaps: tuple[V2MaterialGap, ...],
+    admission_result: V2EvidenceAdmissionBatchResult,
+) -> tuple[
+    dict[UUID, V2SourceSelectionCandidate],
+    dict[UUID, V2EvidenceAnalystSourceResult],
+]:
+    """Validate every typed identity used by post-Round-3 coverage claims."""
+    if admission_result.run_id != run_id:
+        raise ValueError("evidence admission batch run_id must match the Gap run")
+    if admission_result.policy_identity != V2_EVIDENCE_ADMISSION_POLICY_IDENTITY:
+        raise ValueError("evidence admission batch uses an unexpected policy identity")
+
+    analyst_result = admission_result.analyst_result
+    if analyst_result.run_id != run_id:
+        raise ValueError("nested Evidence Analyst batch run_id must match the Gap run")
+    if analyst_result.policy_identity != V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+        raise ValueError("nested Evidence Analyst batch uses an unexpected policy identity")
+    analyst_input = analyst_result.input
+    if analyst_input.run_id != run_id:
+        raise ValueError("nested Evidence Analyst input run_id must match the Gap run")
+    queue_result = analyst_input.queue_result
+    if queue_result.run_id != run_id or queue_result.input.run_id != run_id:
+        raise ValueError("nested source-selection run IDs must match the Gap run")
+    selection_input = queue_result.input
+    if selection_input.policy_identity != V2_SOURCE_SELECTION_POLICY_IDENTITY:
+        raise ValueError("nested source-selection input uses an unexpected policy identity")
+
+    gap_ids = tuple(gap.gap_id for gap in gaps)
+    if len(gap_ids) != len(set(gap_ids)):
+        raise ValueError("post-Round-3 Gap IDs must be unique during reconciliation")
+    history_by_id: dict[str, tuple[ResearchDirection, ...]] = {}
+    history_directions: dict[str, set[ResearchDirection]] = {}
+    round_three_gap_directions: dict[str, ResearchDirection] = {}
+    for history_gap in selection_input.gap_history:
+        history_directions.setdefault(history_gap.gap_id, set()).add(history_gap.direction)
+        if history_gap.assessed_after_round == 3:
+            round_three_gap_directions[history_gap.gap_id] = history_gap.direction
+    for gap in gaps:
+        if gap.gap_id not in history_directions:
+            raise ValueError(
+                f"post-Round-3 Gap ID {gap.gap_id!r} is absent from source-selection history"
+            )
+        if round_three_gap_directions.get(gap.gap_id) is not gap.direction:
+            raise ValueError(
+                f"post-Round-3 Gap ID {gap.gap_id!r} has mismatched Round-3 provenance"
+            )
+    for gap_id, directions in history_directions.items():
+        history_by_id[gap_id] = tuple(sorted(directions, key=lambda direction: direction.value))
+
+    survivor_ids = tuple(item.source_id for item in selection_input.survivors)
+    if len(survivor_ids) != len(set(survivor_ids)):
+        raise ValueError("source-selection survivors must have unique source IDs")
+    candidate_by_id = {item.source_id: item for item in selection_input.survivors}
+    status_ids = tuple(item.source_id for item in queue_result.source_statuses)
+    if status_ids != survivor_ids:
+        raise ValueError("source-selection statuses must retain every survivor in order")
+    status_by_id = {item.source_id: item for item in queue_result.source_statuses}
+    for survivor in selection_input.survivors:
+        status = status_by_id[survivor.source_id]
+        if status.direction is not survivor.direction:
+            raise ValueError("source-selection status direction cannot change")
+        for gap_id in status.gap_ids:
+            directions = history_by_id.get(gap_id)
+            if directions is None:
+                raise ValueError(f"source-selection status references unknown Gap ID {gap_id!r}")
+            if survivor.direction not in directions:
+                raise ValueError(
+                    f"source-selection status Gap ID {gap_id!r} has mismatched direction"
+                )
+
+        for provenance in survivor.search_provenance:
+            if provenance.round_number == 4 and survivor.research_round != 4:
+                raise ValueError("Round-4 query provenance requires a Round-4 survivor")
+            for gap_id in provenance.targeted_gap_ids:
+                directions = history_by_id.get(gap_id)
+                if directions is None:
+                    raise ValueError(f"search provenance references unknown Gap ID {gap_id!r}")
+                if survivor.direction not in directions:
+                    raise ValueError(
+                        f"search provenance Gap ID {gap_id!r} has mismatched direction"
+                    )
+
+    analyst_ids = tuple(item.source_id for item in analyst_result.source_results)
+    if analyst_ids != survivor_ids:
+        raise ValueError("Evidence Analyst results must retain every survivor in order")
+    admission_ids = tuple(item.source_id for item in admission_result.source_results)
+    if admission_ids != survivor_ids:
+        raise ValueError("Evidence admission results must retain every survivor in order")
+
+    candidate_inputs: dict[UUID, V2EvidenceAnalystCandidateInput] = {}
+    for candidate_input in analyst_input.queued_candidates:
+        if candidate_input.source_id in candidate_inputs:
+            raise ValueError("Evidence Analyst candidate inputs must have unique source IDs")
+        candidate_inputs[candidate_input.source_id] = candidate_input
+        survivor = candidate_by_id.get(candidate_input.source_id)
+        if survivor is None:
+            raise ValueError("Evidence Analyst candidate input references an unknown survivor")
+        if candidate_input.direction is not survivor.direction:
+            raise ValueError("Evidence Analyst candidate direction cannot change")
+        if candidate_input.candidate.run_id != run_id or candidate_input.snapshot.run_id != run_id:
+            raise ValueError(
+                "nested evidence candidate and snapshot run IDs must match the Gap run"
+            )
+        if candidate_input.candidate.source_url != survivor.source_url:
+            raise ValueError("Evidence Analyst candidate source URL does not match the survivor")
+        if candidate_input.snapshot.source_url != survivor.source_url:
+            raise ValueError("Evidence Analyst snapshot source URL does not match the survivor")
+        if not any(
+            item.query_id == candidate_input.candidate.query_id
+            and item.round_number == candidate_input.candidate.query_round
+            for item in survivor.search_provenance
+        ):
+            raise ValueError("Evidence Analyst candidate query ID is absent from search provenance")
+
+    for analyst_source in analyst_result.source_results:
+        if analyst_source.run_id != run_id:
+            raise ValueError("nested Evidence Analyst source run_id must match the Gap run")
+        survivor = candidate_by_id[analyst_source.source_id]
+        if analyst_source.direction is not survivor.direction:
+            raise ValueError("Evidence Analyst source direction cannot change")
+        if analyst_source.candidate is not None:
+            candidate_input = candidate_inputs.get(analyst_source.source_id)
+            if candidate_input is None or analyst_source.candidate != candidate_input.candidate:
+                raise ValueError("Evidence Analyst source must retain its exact candidate input")
+        if analyst_source.assessment is not None:
+            for gap_id in analyst_source.assessment.addressed_gap_ids:
+                directions = history_by_id.get(gap_id)
+                if directions is None:
+                    raise ValueError(f"Analyst assessment references unknown Gap ID {gap_id!r}")
+                if analyst_source.direction not in directions:
+                    raise ValueError(
+                        f"Analyst assessment Gap ID {gap_id!r} has mismatched direction"
+                    )
+
+    for admission_source in admission_result.source_results:
+        if admission_source.run_id != run_id:
+            raise ValueError("nested evidence admission source run_id must match the Gap run")
+        survivor = candidate_by_id[admission_source.source_id]
+        status = status_by_id[admission_source.source_id]
+        if admission_source.direction is not survivor.direction:
+            raise ValueError("evidence admission source direction cannot change")
+        expected_provenance = V2LedgerProvenance(
+            source_id=survivor.source_id,
+            research_direction=survivor.direction,
+            discovery_round=survivor.research_round,
+            source_family_id=survivor.source_family_id,
+            recommended=status.recommended,
+            relevant_gap_ids=status.gap_ids,
+        )
+        if admission_source.provenance != expected_provenance:
+            raise ValueError(
+                "evidence admission Round-4 provenance does not match source selection"
+            )
+        for gap_id in admission_source.provenance.relevant_gap_ids:
+            directions = history_by_id.get(gap_id)
+            if directions is None:
+                raise ValueError(
+                    f"evidence admission provenance references unknown Gap ID {gap_id!r}"
+                )
+            if admission_source.direction not in directions:
+                raise ValueError(
+                    f"evidence admission provenance Gap ID {gap_id!r} has mismatched direction"
+                )
+        analyst_source = analyst_result.source_results[survivor_ids.index(survivor.source_id)]
+        if admission_source.state is V2EvidenceAdmissionState.ANALYZER_ADMITTED:
+            if analyst_source.state is not V2EvidenceAnalystState.READY_FOR_ADMISSION:
+                raise ValueError(
+                    "analyzer-admitted evidence must come from an admission-ready Analyst result"
+                )
+            if analyst_source.assessment is None or analyst_source.score_decision is None:
+                raise ValueError("analyzer-admitted evidence requires complete Analyst scoring")
+            if analyst_source.statement_draft is None or analyst_source.candidate is None:
+                raise ValueError("analyzer-admitted evidence requires a complete Analyst candidate")
+            if not set(analyst_source.assessment.addressed_gap_ids).issubset(
+                admission_source.provenance.relevant_gap_ids
+            ):
+                raise ValueError("Analyst addressed Gap IDs do not match evidence provenance")
+            record = admission_source.evidence_record
+            candidate_input = candidate_inputs.get(survivor.source_id)
+            if record is None or candidate_input is None:
+                raise ValueError("analyzer-admitted evidence requires its exact candidate input")
+            candidate = candidate_input.candidate
+            if record.run_id != run_id:
+                raise ValueError("nested evidence record run_id must match the Gap run")
+            if record.admission_method is not V2AdmissionMethod.ANALYZER_ADMITTED:
+                raise ValueError("Round-4 reconciliation requires analyzer-admitted evidence")
+            if record.quote_block_id != candidate.quote_block_id:
+                raise ValueError(
+                    "evidence record quote_block_id does not match the Analyst candidate"
+                )
+            if record.source_url != candidate.source_url:
+                raise ValueError("evidence record source URL does not match the Analyst candidate")
+            if record.retrieval_attempt_id != candidate.retrieval_attempt_id:
+                raise ValueError(
+                    "evidence record retrieval ID does not match the Analyst candidate"
+                )
+            if record.snapshot_id != candidate.snapshot_id:
+                raise ValueError("evidence record snapshot ID does not match the Analyst candidate")
+            if record.snapshot_sha256 != candidate.snapshot_sha256:
+                raise ValueError(
+                    "evidence record snapshot hash does not match the Analyst candidate"
+                )
+            if tuple(record.segment_offsets) != tuple(candidate.segment_offsets):
+                raise ValueError(
+                    "evidence record segment offsets do not match the Analyst candidate"
+                )
+            if record.stance is not candidate.stance:
+                raise ValueError("evidence record stance does not match the Analyst candidate")
+            if record.approved_claim_text != candidate.extracted_quote_block:
+                raise ValueError("evidence record quote text does not match the Analyst candidate")
+            if record.approved_factual_statement != analyst_source.statement_draft.draft_statement:
+                raise ValueError("evidence record statement does not match the Analyst draft")
+            score = analyst_source.score_decision
+            if (
+                record.evidence_quality != score.evidence_quality
+                or record.claim_fit != score.claim_fit
+                or record.ledger_score != score.ledger_score
+                or record.placement is not score.placement
+            ):
+                raise ValueError("evidence record scoring does not match the Analyst decision")
+            expected_ledger_claim_id = uuid5(
+                NAMESPACE_URL,
+                f"{V2_EVIDENCE_ADMISSION_POLICY_IDENTITY}::{run_id}::"
+                f"{survivor.source_id}::{analyst_source.statement_draft.draft_statement}",
+            )
+            if record.ledger_claim_id != expected_ledger_claim_id:
+                raise ValueError("evidence record ledger_claim_id does not match its typed inputs")
+        elif admission_source.evidence_record is not None:
+            raise ValueError("non-admitted evidence cannot carry a nested evidence record")
+
+    return candidate_by_id, {item.source_id: item for item in analyst_result.source_results}
+
+
 def reconcile_post_round_three_gaps(
     *,
     db_path: str | Path,
     post_round_three_gap: V2GapAnalysisOutput,
-    admission_result: object,
+    admission_result: V2EvidenceAdmissionBatchResult,
     clock: Callable[[], datetime] | None = None,
 ) -> V2GapCoverageReconciliation:
     """Mark only Round-4 analyzer-admitted evidence with exact Gap provenance as coverage."""
+    if not isinstance(admission_result, V2EvidenceAdmissionBatchResult):
+        raise TypeError("reconciliation requires a V2EvidenceAdmissionBatchResult")
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
+    gaps = post_round_three_gap.result.material_gaps if post_round_three_gap.result else ()
+    candidates_by_id, analyst_sources_by_id = _validate_reconciliation_admission(
+        run_id=post_round_three_gap.run_id,
+        gaps=gaps,
+        admission_result=admission_result,
+    )
     persisted = _read(path, post_round_three_gap.run_id, V2_POST13_GAP_RECONCILIATION_KEY)
     if persisted is not None:
         return V2GapCoverageReconciliation.model_validate_json(persisted)
-    gaps = post_round_three_gap.result.material_gaps if post_round_three_gap.result else ()
     governor_payload = _read(path, post_round_three_gap.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
     governor = (
         V2RoundFourGovernorDecision.model_validate_json(governor_payload)
@@ -736,25 +994,18 @@ def reconcile_post_round_three_gaps(
         }
     )
     records: list[V2GapCoverageRecord] = []
-    source_results = getattr(admission_result, "source_results", ())
+    source_results = admission_result.source_results
     for gap in gaps:
         match = next(
             (
                 source
                 for source in source_results
-                if getattr(source, "evidence_record", None) is not None
+                if source.evidence_record is not None
                 and source.direction is gap.direction
-                and getattr(source.provenance, "discovery_round", 0) == 4
+                and source.provenance.discovery_round == 4
                 and gap.gap_id in source.provenance.relevant_gap_ids
                 and gap.gap_id
-                in next(
-                    (
-                        analyst.assessment.addressed_gap_ids
-                        for analyst in admission_result.analyst_result.source_results
-                        if analyst.source_id == source.source_id and analyst.assessment is not None
-                    ),
-                    (),
-                )
+                in analyst_sources_by_id[source.source_id].assessment.addressed_gap_ids
             ),
             None,
         )
@@ -777,7 +1028,7 @@ def reconcile_post_round_three_gaps(
         query_id = next(
             (
                 item.query_id
-                for candidate in admission_result.analyst_result.input.queue_result.input.survivors
+                for candidate in candidates_by_id.values()
                 if candidate.source_id == match.source_id
                 for item in candidate.search_provenance
                 if item.round_number == 4 and gap.gap_id in item.targeted_gap_ids
@@ -812,23 +1063,16 @@ def reconcile_post_round_three_gaps(
     return result
 
 
-def _plan_round_four(
+def _build_round_four_search_agent_request(
     *,
     path: str,
     initial_plan: V2InitialPlannerOutput,
     gap: V2GapAnalysisOutput,
     eligible: tuple[object, ...],
-    attempts: Mapping[DiscoveryProvider, int],
-    llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
-    budget: V2AdaptiveBudgetState,
-    clock: Callable[[], datetime],
-) -> V2AdaptivePlannedRound | None:
-    stored = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_PLAN_KEY)
-    if stored is not None:
-        return V2AdaptivePlannedRound.model_validate_json(stored)
+) -> tuple[V2SearchAgentInput, LLMRequest, V2ModelReservation]:
     if gap.result is None:
-        return None
+        raise ValueError("Round-4 Search Agent requires a usable Gap Analysis result")
     previous = tuple(query.query_text for query in initial_plan.searches)
     for round_number in (2, 3):
         payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
@@ -856,8 +1100,6 @@ def _plan_round_four(
         ),
         policy_identity=V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
     )
-    if request_input.maximum_queries == 0:
-        return None
     prompt = load_prompt(LLMStage.SEARCH_AGENT)
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
     request = LLMRequest(
@@ -874,27 +1116,49 @@ def _plan_round_four(
     search_reservation = routing_config.preflight().reserve(
         LLMStage.SEARCH_AGENT, conservative_token_estimate(request.rendered_prompt)
     )
-    max_scout_calls = ((request_input.maximum_queries * 5 + 29) // 30) * 2
-    scout_reservation = routing_config.preflight().reserve(LLMStage.SCOUT, 1)
-    if not _fits_reserve(
-        budget,
-        calls=2 + 1 + max_scout_calls,
-        tokens=(
-            2 * _gap_reservation(gap.input, routing_config).reserved_tokens
-            + search_reservation.reserved_tokens
-            + max_scout_calls * scout_reservation.reserved_tokens
-        ),
-        cost=(
-            2 * _gap_reservation(gap.input, routing_config).reserved_cost_usd
-            + search_reservation.reserved_cost_usd
-            + max_scout_calls * scout_reservation.reserved_cost_usd
-        ),
-    ):
-        raise V2RoundFourBudgetError("Round-4 Search Agent plan cannot fit the full reserve")
+    return request_input, request, search_reservation
+
+
+def _plan_round_four(
+    *,
+    path: str,
+    initial_plan: V2InitialPlannerOutput,
+    gap: V2GapAnalysisOutput,
+    eligible: tuple[object, ...],
+    attempts: Mapping[DiscoveryProvider, int],
+    llm_provider: LLMProvider,
+    routing_config: V2RoutingConfig,
+    clock: Callable[[], datetime],
+) -> V2AdaptivePlannedRound | None:
+    del attempts
+    persisted_decision = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
+    if persisted_decision is None:
+        raise V2RoundFourAuthorizationError(
+            "Round-4 Search Agent cannot execute without a persisted Governor authorization"
+        )
+    decision = V2RoundFourGovernorDecision.model_validate_json(persisted_decision)
+    if decision.run_id != initial_plan.run_id or not decision.authorized:
+        raise V2RoundFourAuthorizationError(
+            "Round-4 Search Agent cannot execute without an authorized Governor decision"
+        )
+    stored = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_PLAN_KEY)
+    if stored is not None:
+        return V2AdaptivePlannedRound.model_validate_json(stored)
+    request_input, request, search_reservation = _build_round_four_search_agent_request(
+        path=path,
+        initial_plan=initial_plan,
+        gap=gap,
+        eligible=eligible,
+        routing_config=routing_config,
+    )
+    if request_input.maximum_queries == 0:
+        return None
     response = invoke_llm(llm_provider, request, clock=clock).output_artifact
     if not isinstance(response, V2AdaptiveSearchModelOutput):
         return None
-    assembled = _validate_and_assemble_plan(request_input, response, prompt.version, clock())
+    assembled = _validate_and_assemble_plan(
+        request_input, response, request.prompt.version, clock()
+    )
     if not assembled.searches:
         return None
     plan = assembled.model_copy(
@@ -927,21 +1191,42 @@ def _reservation(
     gap: V2GapAnalysisOutput,
     routing_config: V2RoutingConfig,
 ) -> V2RoundFourReservation | None:
-    scout_calls = ((len(plan.plan.searches) * 5 + 29) // 30) * 2
+    return _conservative_reservation(
+        budget=budget,
+        post_gap_budget=post_gap_budget,
+        gap=gap,
+        routing_config=routing_config,
+        maximum_queries=len(plan.plan.searches),
+        search_agent_tokens=plan.reservation.reserved_tokens,
+        search_agent_cost=plan.reservation.reserved_cost_usd,
+    )
+
+
+def _conservative_reservation(
+    *,
+    budget: V2AdaptiveBudgetState,
+    post_gap_budget: V2AdaptiveBudgetState,
+    gap: V2GapAnalysisOutput,
+    routing_config: V2RoutingConfig,
+    maximum_queries: int,
+    search_agent_tokens: int,
+    search_agent_cost: Decimal,
+) -> V2RoundFourReservation | None:
+    scout_calls = ((maximum_queries * 5 + 29) // 30) * 2
     scout_reserve = routing_config.preflight().reserve(LLMStage.SCOUT, 1)
     gap_reserve = _gap_reservation(gap.input, routing_config)
     optional_tokens = (
         2 * gap_reserve.reserved_tokens
-        + plan.reservation.reserved_tokens
+        + search_agent_tokens
         + scout_calls * scout_reserve.reserved_tokens
     )
     optional_cost = (
         2 * gap_reserve.reserved_cost_usd
-        + plan.reservation.reserved_cost_usd
+        + search_agent_cost
         + scout_calls * scout_reserve.reserved_cost_usd
     )
-    future_tokens = plan.reservation.reserved_tokens + scout_calls * scout_reserve.reserved_tokens
-    future_cost = plan.reservation.reserved_cost_usd + scout_calls * scout_reserve.reserved_cost_usd
+    future_tokens = search_agent_tokens + scout_calls * scout_reserve.reserved_tokens
+    future_cost = search_agent_cost + scout_calls * scout_reserve.reserved_cost_usd
     try:
         return V2RoundFourReservation(
             protected_downstream_calls=budget.protected_downstream_model_calls,
@@ -950,8 +1235,8 @@ def _reservation(
             gap_attempt_calls=2,
             search_agent_calls=1,
             scout_calls=scout_calls,
-            provider_search_calls=len(plan.plan.searches),
-            acquisition_cluster_capacity=len(plan.plan.searches) * 5,
+            provider_search_calls=maximum_queries,
+            acquisition_cluster_capacity=maximum_queries * 5,
             optional_calls=3 + scout_calls,
             optional_tokens=optional_tokens,
             optional_cost_usd=optional_cost,

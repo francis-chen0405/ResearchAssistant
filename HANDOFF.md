@@ -39,9 +39,16 @@ explicit addressed-gap declaration. A search result, recommendation, quotation, 
 analysis alone never closes a gap. API, export, progress, and research-trail readers recognize the
 new version while preserving read-only Phase-13 and earlier artifacts unchanged.
 
-Verification for the focused correction: `pytest` passed (851 passed, 2 skipped; one existing
-FastAPI/httpx deprecation warning); `ruff check .`, `ruff format --check .`, and `git diff --check`
-passed. No live provider call, dependency, migration, or historical rewrite was made.
+Post-completion audit remediation restores the documented macOS launcher, binds Gap Analysis and
+reconciliation artifacts to one run, blocks degraded Round 3 from entering Round 4, requires a
+fresh post-Gap budget snapshot and persisted preauthorization, preserves valid degraded Round-4
+survivors, and propagates typed cancellation through Scout retries.
+
+Verification for the final accumulated checkout (2026-08-29): `env PYTHONPATH=. .venv/bin/pytest
+-q` passed (870 passed, 2 skipped; one existing FastAPI/httpx deprecation warning).
+`./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .` (118 files already formatted), and
+`git diff --check` passed. The bare `pytest` command was unavailable on PATH; no live provider
+call, dependency, migration, or historical rewrite was made.
 
 Do not begin another phase without explicit user direction.
 

@@ -33,6 +33,7 @@ from models import (
 from providers.crossref import CrossrefEnricher, CrossrefEnrichmentError
 from providers.llm import LLMProviderCapabilities
 from providers.search import SearchDiscoveryMetadata, SearchResult
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from store import init_db, insert_run, insert_v2_pipeline_identity
 
@@ -68,6 +69,19 @@ class RecallScout:
                 for index, candidate in enumerate(candidates)
             ),
         )
+
+
+class FailThenCancelScout(RecallScout):
+    def __init__(self, cancelled: list[bool]) -> None:
+        super().__init__()
+        self.cancelled = cancelled
+
+    def generate(self, request: object) -> ScoutBatch:
+        if not self.requests:
+            self.requests.append(request)
+            self.cancelled[0] = True
+            raise RuntimeError("test provider failure before retry")
+        return super().generate(request)
 
 
 def _routing() -> V2RoutingConfig:
@@ -130,6 +144,68 @@ def _response(
             ),
         ),
     )
+
+
+def _single_scout_run(
+    tmp_path: Path,
+) -> tuple[str, V2InitialPlannerOutput, V2DiscoveryResponse]:
+    run_id = uuid4()
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    queries = tuple(
+        V2RoundOneSearchQuery(
+            run_id=run_id,
+            query_id=uuid4(),
+            direction=ResearchDirection.SUPPORT,
+            provider=DiscoveryProvider.EXA,
+            strategy=strategy,
+            query_text=f"support exa {strategy}",
+            created_at=NOW,
+        )
+        for strategy in ("direct_evidence", "mechanism", "analysis")
+    )
+    plan = V2InitialPlannerOutput(
+        run_id=run_id,
+        raw_claim="A public claim.",
+        directions=directions,
+        discovery_providers=(DiscoveryProvider.EXA,),
+        searches=queries,
+        planner_prompt_version="test-v1",
+        planned_at=NOW,
+    )
+    response = V2DiscoveryResponse(
+        query=queries[0],
+        results=(
+            SearchResult(
+                original_url="https://example.org/study",
+                title="A useful study",
+                snippet="discovery snippet only",
+                rank=1,
+                metadata=SearchDiscoveryMetadata(
+                    engine=DiscoveryProvider.EXA.value,
+                    author="Ada Author",
+                    abstract="provider abstract only",
+                    published_at="2024-05-01",
+                    doi="10.1000/ABC",
+                    work_type="article",
+                ),
+            ),
+        ),
+    )
+    db_path = str(tmp_path / "phase4-cancellation.sqlite3")
+    init_db(db_path)
+    insert_run(
+        db_path,
+        RunManifest(
+            run_id=run_id,
+            status=RunStatus.PLANNED,
+            raw_claim="A public claim.",
+            current_stage=Stage.CLAIM_PLANNER,
+            created_at=NOW,
+            updated_at=NOW,
+        ),
+    )
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    return db_path, plan, response
 
 
 def test_multi_provider_normalization_preserves_provenance_and_crossref_failure() -> None:
@@ -344,6 +420,51 @@ def test_v2_scout_batches_thirty_items_retries_falls_back_and_persists(tmp_path:
         clock=lambda: NOW,
     )
     assert resumed.resumed and resumed.output == result.output
+
+
+def test_scout_cancellation_before_first_attempt_is_typed_and_makes_no_call(
+    tmp_path: Path,
+) -> None:
+    db_path, plan, response = _single_scout_run(tmp_path)
+    checks = [False, True]
+
+    def cancellation_requested() -> bool:
+        return checks.pop(0) if checks else True
+
+    scout = RecallScout()
+    with pytest.raises(V2CancellationRequested, match="before discovery work"):
+        run_v2_discovery_and_scout(
+            db_path=db_path,
+            planner_output=plan,
+            responses=(response,),
+            llm_provider=scout,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+            cancellation_requested=cancellation_requested,
+        )
+
+    assert scout.requests == []
+
+
+def test_scout_cancellation_between_attempts_prevents_retry(
+    tmp_path: Path,
+) -> None:
+    db_path, plan, response = _single_scout_run(tmp_path)
+    cancelled = [False]
+    scout = FailThenCancelScout(cancelled)
+
+    with pytest.raises(V2CancellationRequested, match="cancellation was observed"):
+        run_v2_discovery_and_scout(
+            db_path=db_path,
+            planner_output=plan,
+            responses=(response,),
+            llm_provider=scout,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+            cancellation_requested=lambda: cancelled[0],
+        )
+
+    assert len(scout.requests) == 1
 
 
 def test_direction_isolation_rejects_disabled_discovery_before_scout() -> None:
