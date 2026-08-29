@@ -15,6 +15,21 @@ Status: Complete and verified.
 - Reservation records now distinguish planned Gap attempts from consumed attempts and validate
   future work against a fresh post-Gap budget snapshot. Resume validation also compares the
   persisted final output's unresolved gaps with the same reconciliation used by a fresh run.
+- Follow-up claim-coverage correction: replaced keyword-based focus inference with an explicit
+  application-owned typed specification, including auditable limitations, replication, and an
+  unavailable counterevidence disclosure whenever the challenge direction is disabled. The
+  validated Planner may explicitly select asserted population/setting and mechanism/pathway
+  components; the post-Round-3 Gap input retains round provenance on all bounded context rows,
+  and the final output exposes the evaluated claim-coverage map alongside exact reconciliation
+  links.
+- Round-4 Governor calls now receive observed Gap, provider, novelty, duplicate, productivity,
+  reservation, cancellation, and terminal-failure facts. Search-Agent and post-authorization
+  provider failures persist typed terminal outcomes rather than deriving a result from a
+  preselected decision code.
+- Final rendering now reports no unresolved gaps only when the gap tuple is actually empty.
+  Terminal Round-4 outcomes are append-only artifacts and never overwrite the immutable
+  authorization decision. Persisted Planner focus, coverage assessments, source-family rounds,
+  and final coverage reconciliation are all exact-bound and regression-tested.
 
 - Added a fresh-v2-only post-Round-3 cumulative Luna Gap Analysis and one conditional,
   application-governed Round 4. It requires a completed non-degraded Round 3, material gaps,
@@ -31,7 +46,7 @@ Status: Complete and verified.
   reconciliation marks a gap covered only with matching Round-4 provenance and analyzer-admitted
   evidence; all other post-Round-3 gaps remain explicitly disclosed.
 
-Verification: `pytest` passed (846 passed, 2 skipped; one existing FastAPI/httpx deprecation
+Verification: `pytest` passed (851 passed, 2 skipped; one existing FastAPI/httpx deprecation
 warning). `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live provider
 call, dependency, migration, or historical-artifact rewrite was made.
 

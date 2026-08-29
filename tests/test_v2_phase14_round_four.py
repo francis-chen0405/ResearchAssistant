@@ -10,7 +10,11 @@ import pytest
 from pydantic import ValidationError
 
 from agents.v2_adaptive_search import _validate_and_assemble_plan, round_artifact_key
-from agents.v2_round_four import _claim_coverage_focus, _representative_round_rows
+from agents.v2_round_four import (
+    _claim_coverage_specification,
+    _representative_families,
+    _representative_round_rows,
+)
 from models import (
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
     DiscoveryProvider,
@@ -19,12 +23,22 @@ from models import (
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
     V2AdaptiveSearchQuery,
+    V2ClaimCoverageAssessment,
     V2ClaimCoverageDimension,
+    V2ClaimCoverageFocus,
+    V2ClaimCoverageKind,
+    V2ClaimCoverageState,
+    V2GapAnalysisInput,
+    V2GapAnalysisOutput,
+    V2GapAnalysisResult,
+    V2GapAnalysisState,
     V2GapAttemptedQuery,
+    V2GapBudgetState,
     V2GapCoverageReconciliation,
     V2GapCoverageRecord,
     V2GapCoverageState,
     V2GapSearchDirection,
+    V2GapSourceFamily,
     V2MaterialGap,
     V2ProviderSearchBudget,
     V2RoundFourReservation,
@@ -156,14 +170,13 @@ def test_governor_reaches_every_round_four_decision(
 
 
 def test_claim_coverage_focus_and_representative_quotas_keep_round_three_context() -> None:
-    focus = _claim_coverage_focus(
+    focus = _claim_coverage_specification(
         "Among adults in rural settings, the intervention causes outcome across regions.",
         ResearchDirections(support_enabled=True, challenge_enabled=True),
-    )
+    ).focus
     assert tuple(item.dimension for item in focus) == (
         V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
-        V2ClaimCoverageDimension.POPULATION_AND_SETTING,
-        V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
+        V2ClaimCoverageDimension.LIMITATIONS_AND_BOUNDARIES,
         V2ClaimCoverageDimension.COUNTEREVIDENCE_OR_ALTERNATIVES,
         V2ClaimCoverageDimension.REPLICATION_OR_GENERALIZABILITY,
     )
@@ -175,6 +188,7 @@ def test_claim_coverage_focus_and_representative_quotas_keep_round_three_context
                 provider=DiscoveryProvider.EXA,
                 strategy="coverage test",
                 query_text=f"round {round_number} support",
+                round_number=round_number,
             ),
             V2GapAttemptedQuery(
                 query_id=uuid4(),
@@ -182,6 +196,7 @@ def test_claim_coverage_focus_and_representative_quotas_keep_round_three_context
                 provider=DiscoveryProvider.EXA,
                 strategy="coverage test",
                 query_text=f"round {round_number} challenge",
+                round_number=round_number,
             ),
         ]
         for round_number in (1, 2, 3)
@@ -191,6 +206,133 @@ def test_claim_coverage_focus_and_representative_quotas_keep_round_three_context
 
     assert len(selected) == 3
     assert {item.query_text.split()[1] for item in selected} == {"1", "2", "3"}
+    assert {item.round_number for item in selected} == {1, 2, 3}
+
+
+def test_post_round_three_rejects_mismatched_claim_component() -> None:
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    specification = _claim_coverage_specification("The program improves outcomes.", directions)
+    gap_input = V2GapAnalysisInput(
+        run_id=uuid4(),
+        exact_claim="The program improves outcomes.",
+        directions=directions,
+        completed_round=3,
+        attempted_queries=(),
+        surviving_sources=(),
+        probe_passages=(),
+        source_families=(),
+        discovered_terms=(),
+        duplicate_patterns=(),
+        acquisition_failures=(),
+        previous_gaps=(),
+        claim_coverage_focus=specification.focus,
+        claim_coverage_specification=specification,
+        remaining_budget=V2GapBudgetState(model_calls_remaining=5),
+        policy_identity="researchassistant-v2-post-phase-13-gap-analysis-v1",
+    )
+    coverage = tuple(
+        V2ClaimCoverageAssessment(
+            dimension=item.dimension,
+            claim_component=item.claim_component,
+            coverage_state=(
+                V2ClaimCoverageState.UNAVAILABLE
+                if not item.searchable
+                else V2ClaimCoverageState.MISSING
+                if item.dimension is V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION
+                else V2ClaimCoverageState.COVERED
+            ),
+            evidence_summary="Fixture assessment.",
+            kind=item.kind,
+            searchable=item.searchable,
+            unavailable_reason=item.unavailable_reason,
+        )
+        for item in specification.focus
+    )
+    gap = V2MaterialGap(
+        gap_id="effect-gap",
+        direction=ResearchDirection.SUPPORT,
+        missing_evidence="Direct evidence remains missing.",
+        rationale="The effect component has not been covered.",
+        claim_dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+        unsupported_claim_component="a deliberately mismatched component",
+    )
+    result = V2GapAnalysisResult(
+        run_id=gap_input.run_id,
+        directions=directions,
+        coverage_summary="An effect gap remains.",
+        claim_coverage_map=coverage,
+        material_gaps=(gap,),
+        continue_research=True,
+        new_search_directions=(
+            V2GapSearchDirection(
+                gap_id=gap.gap_id,
+                direction=gap.direction,
+                missing_evidence=gap.missing_evidence,
+                search_focus="direct effect evidence",
+                claim_dimension=gap.claim_dimension,
+                resolving_evidence_kind="controlled comparative study",
+            ),
+        ),
+        discovered_terms=(),
+        analyzed_at=NOW,
+    )
+
+    with pytest.raises(ValidationError, match="unsupported claim component"):
+        V2GapAnalysisOutput(
+            run_id=gap_input.run_id,
+            input=gap_input,
+            state=V2GapAnalysisState.COMPLETED,
+            result=result,
+            attempts=(),
+            stop_adaptive_continuation=False,
+            completed_at=NOW,
+        )
+
+
+def test_planner_selected_population_and_mechanism_are_explicit_coverage_components() -> None:
+    specification = _claim_coverage_specification(
+        "The intervention causes improved outcomes among rural adults.",
+        ResearchDirections(support_enabled=True, challenge_enabled=False),
+        (
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+                claim_component="among rural adults",
+                kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+            ),
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
+                claim_component="causes improved outcomes",
+                kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+            ),
+        ),
+    )
+
+    by_dimension = {item.dimension: item for item in specification.focus}
+    assert by_dimension[V2ClaimCoverageDimension.POPULATION_AND_SETTING].claim_component == (
+        "among rural adults"
+    )
+    assert by_dimension[V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY].claim_component == (
+        "causes improved outcomes"
+    )
+    counterevidence = by_dimension[V2ClaimCoverageDimension.COUNTEREVIDENCE_OR_ALTERNATIVES]
+    assert not counterevidence.searchable
+    assert counterevidence.unavailable_reason is not None
+
+
+def test_source_family_retains_every_completed_round_in_its_provenance() -> None:
+    family = V2GapSourceFamily(
+        family_id="family-1",
+        direction=ResearchDirection.SUPPORT,
+        source_cluster_ids=(uuid4(), uuid4()),
+        discovery_providers=(DiscoveryProvider.EXA,),
+        round_number=1,
+        round_numbers=(1, 3),
+    )
+
+    selected = _representative_families({family.family_id: family}, {family.family_id: 1}, 3)
+
+    assert selected == (family,)
+    assert selected[0].round_numbers == (1, 3)
 
 
 def test_round_four_caps_provider_lanes_deterministically() -> None:

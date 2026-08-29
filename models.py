@@ -461,7 +461,21 @@ class V2InitialPlannerModelOutput(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     scope_interpretations: tuple[V2ScopeInterpretation, ...] = Field(default=(), max_length=4)
+    claim_coverage_focus: tuple[V2ClaimCoverageFocus, ...] = Field(default=(), max_length=3)
     searches: tuple[V2InitialPlannerSearchResponse, ...]
+
+    @field_validator("claim_coverage_focus")
+    @classmethod
+    def validate_claim_components(
+        cls, value: tuple[V2ClaimCoverageFocus, ...]
+    ) -> tuple[V2ClaimCoverageFocus, ...]:
+        if any(item.kind is not V2ClaimCoverageKind.CLAIM_COMPONENT for item in value):
+            raise ValueError(
+                "Planner may select claim components but not evidence-audit dimensions"
+            )
+        if len({item.dimension for item in value}) != len(value):
+            raise ValueError("Planner claim-coverage dimensions must be unique")
+        return value
 
 
 class V2RoundOneSearchQuery(StrictModel):
@@ -497,12 +511,35 @@ class V2InitialPlannerOutput(StrictModel):
         V2_INITIAL_PLANNER_POLICY_IDENTITY
     )
     scope_interpretations: tuple[V2ScopeInterpretation, ...] = Field(default=(), max_length=4)
+    claim_coverage_focus: tuple[V2ClaimCoverageFocus, ...] = Field(default=(), max_length=3)
     searches: tuple[V2RoundOneSearchQuery, ...]
     planner_prompt_version: NonEmptyStr
     planner_model_name: Literal["mimo-v2.5-pro"] = "mimo-v2.5-pro"
     planned_at: datetime
 
     _planned_at_is_aware = field_validator("planned_at")(_validate_aware_datetime)
+
+    @field_validator("claim_coverage_focus")
+    @classmethod
+    def validate_persisted_claim_components(
+        cls, value: tuple[V2ClaimCoverageFocus, ...]
+    ) -> tuple[V2ClaimCoverageFocus, ...]:
+        permitted = {
+            V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+            V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
+        }
+        if any(
+            item.dimension not in permitted
+            or item.kind is not V2ClaimCoverageKind.CLAIM_COMPONENT
+            or not item.searchable
+            or item.unavailable_reason is not None
+            for item in value
+        ):
+            raise ValueError("Planner coverage focus may contain only searchable claim components")
+        if len({item.dimension for item in value}) != len(value):
+            raise ValueError("Planner claim-coverage dimensions must be unique")
+        return value
 
     @field_validator("discovery_providers")
     @classmethod
@@ -1063,6 +1100,7 @@ class V2GapAttemptedQuery(StrictModel):
     provider: DiscoveryProvider
     strategy: NonEmptyStr
     query_text: NonEmptyStr
+    round_number: Literal[1, 2, 3] = 1
 
 
 class V2GapSurvivingSourceMetadata(StrictModel):
@@ -1077,6 +1115,7 @@ class V2GapSurvivingSourceMetadata(StrictModel):
     source_url: NonEmptyStr
     title: NonEmptyStr | None = None
     source_family_id: NonEmptyStr
+    round_number: Literal[1, 2, 3] = 1
 
 
 class V2GapProbePassage(StrictModel):
@@ -1089,6 +1128,7 @@ class V2GapProbePassage(StrictModel):
     direction: ResearchDirection
     text: NonEmptyStr = Field(max_length=1200)
     truncated_for_gap_analysis: bool = False
+    round_number: Literal[1, 2, 3] = 1
 
 
 class V2GapSourceFamily(StrictModel):
@@ -1100,6 +1140,16 @@ class V2GapSourceFamily(StrictModel):
     direction: ResearchDirection
     source_cluster_ids: tuple[UUID, ...] = Field(min_length=1, max_length=25)
     discovery_providers: tuple[DiscoveryProvider, ...] = Field(min_length=1, max_length=6)
+    round_number: Literal[1, 2, 3] = 1
+    round_numbers: tuple[Literal[1, 2, 3], ...] = Field(default=(), max_length=3)
+
+    @model_validator(mode="after")
+    def validate_round_provenance(self) -> V2GapSourceFamily:
+        if self.round_numbers and self.round_number not in self.round_numbers:
+            raise ValueError("source-family primary round must appear in its round provenance")
+        if len(self.round_numbers) != len(set(self.round_numbers)):
+            raise ValueError("source-family round provenance must be unique")
+        return self
 
 
 class V2GapDuplicatePattern(StrictModel):
@@ -1111,6 +1161,7 @@ class V2GapDuplicatePattern(StrictModel):
     direction: ResearchDirection
     duplicate_discovery_count: PositiveInt
     pattern: NonEmptyStr
+    round_number: Literal[1, 2, 3] = 1
 
 
 class V2GapAcquisitionFailure(StrictModel):
@@ -1122,6 +1173,7 @@ class V2GapAcquisitionFailure(StrictModel):
     direction: ResearchDirection
     provider: V2AcquisitionProvider
     failure_code: NonEmptyStr
+    round_number: Literal[1, 2, 3] = 1
 
 
 class V2GapSearchDirection(StrictModel):
@@ -1154,12 +1206,20 @@ class V2ClaimCoverageDimension(StrEnum):
     REPLICATION_OR_GENERALIZABILITY = "replication_or_generalizability"
 
 
+class V2ClaimCoverageKind(StrEnum):
+    """Whether a coverage dimension describes the claim or audits its evidence boundary."""
+
+    CLAIM_COMPONENT = "claim_component"
+    EVIDENCE_AUDIT = "evidence_audit"
+
+
 class V2ClaimCoverageState(StrEnum):
     COVERED = "covered"
     PARTIAL = "partial"
     MISSING = "missing"
     CONFLICTING = "conflicting"
     NOT_APPLICABLE = "not_applicable"
+    UNAVAILABLE = "unavailable"
 
 
 class V2ClaimCoverageFocus(StrictModel):
@@ -1169,6 +1229,44 @@ class V2ClaimCoverageFocus(StrictModel):
 
     dimension: V2ClaimCoverageDimension
     claim_component: NonEmptyStr = Field(max_length=500)
+    kind: V2ClaimCoverageKind | None = None
+    searchable: bool = True
+    unavailable_reason: NonEmptyStr | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> V2ClaimCoverageFocus:
+        expected_kind = (
+            V2ClaimCoverageKind.CLAIM_COMPONENT
+            if self.dimension
+            in {
+                V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+                V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
+            }
+            else V2ClaimCoverageKind.EVIDENCE_AUDIT
+        )
+        if self.kind is not None and self.kind is not expected_kind:
+            raise ValueError("claim-coverage dimension must use its defined kind")
+        if self.searchable == (self.unavailable_reason is not None):
+            raise ValueError("claim-coverage availability and unavailable reason must agree")
+        return self
+
+
+class V2ClaimCoverageSpecification(StrictModel):
+    """Application-owned, explicit dimensions for one post-Round-3 coverage audit."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    focus: tuple[V2ClaimCoverageFocus, ...] = Field(min_length=1, max_length=6)
+
+    @field_validator("focus")
+    @classmethod
+    def validate_unique_dimensions(
+        cls, value: tuple[V2ClaimCoverageFocus, ...]
+    ) -> tuple[V2ClaimCoverageFocus, ...]:
+        if len({item.dimension for item in value}) != len(value):
+            raise ValueError("claim-coverage specification dimensions must be unique")
+        return value
 
 
 class V2ClaimCoverageAssessment(V2ClaimCoverageFocus):
@@ -1261,6 +1359,7 @@ class V2GapAnalysisInput(StrictModel):
     acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=150)
     previous_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
     claim_coverage_focus: tuple[V2ClaimCoverageFocus, ...] = Field(default=(), max_length=6)
+    claim_coverage_specification: V2ClaimCoverageSpecification | None = None
     remaining_budget: V2GapBudgetState
     policy_identity: Literal[
         "researchassistant-v2-phase-6-gap-analysis-v1",
@@ -1286,11 +1385,12 @@ class V2GapAnalysisInput(StrictModel):
             self.claim_coverage_focus
         ):
             raise ValueError("claim-coverage dimensions must be unique")
-        if (
-            self.policy_identity == V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY
-            and not self.claim_coverage_focus
+        if self.policy_identity == V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY and (
+            not self.claim_coverage_focus
+            or self.claim_coverage_specification is None
+            or self.claim_coverage_focus != self.claim_coverage_specification.focus
         ):
-            raise ValueError("post-Round-3 Gap Analysis requires claim-coverage focus")
+            raise ValueError("post-Round-3 Gap Analysis requires one claim-coverage specification")
         return self
 
 
@@ -1431,13 +1531,36 @@ class V2GapAnalysisOutput(StrictModel):
                         "post-Round-3 coverage map must exactly cover application focus dimensions"
                     )
                 coverage_by_dimension = {
-                    item.dimension: item.coverage_state for item in self.result.claim_coverage_map
+                    item.dimension: item for item in self.result.claim_coverage_map
                 }
+                focus_by_dimension = {
+                    item.dimension: item for item in self.input.claim_coverage_focus
+                }
+                for assessment in self.result.claim_coverage_map:
+                    focus = focus_by_dimension[assessment.dimension]
+                    if (
+                        assessment.claim_component != focus.claim_component
+                        or assessment.kind != focus.kind
+                        or assessment.searchable != focus.searchable
+                        or assessment.unavailable_reason != focus.unavailable_reason
+                    ):
+                        raise ValueError(
+                            "post-Round-3 coverage assessments must exactly match the specification"
+                        )
+                    if (not focus.searchable) != (
+                        assessment.coverage_state is V2ClaimCoverageState.UNAVAILABLE
+                    ):
+                        raise ValueError(
+                            "unsearchable coverage dimensions must be disclosed as unavailable"
+                        )
                 for gap in self.result.material_gaps:
                     if (
                         gap.claim_dimension is None
                         or gap.unsupported_claim_component is None
-                        or coverage_by_dimension.get(gap.claim_dimension)
+                        or gap.claim_dimension not in focus_by_dimension
+                        or gap.unsupported_claim_component
+                        != focus_by_dimension[gap.claim_dimension].claim_component
+                        or coverage_by_dimension[gap.claim_dimension].coverage_state
                         not in {
                             V2ClaimCoverageState.PARTIAL,
                             V2ClaimCoverageState.MISSING,
@@ -1491,6 +1614,19 @@ class V2RoundFourDecisionCode(StrEnum):
     INSUFFICIENT_RESERVATION = "insufficient_reservation"
     CANCELLED = "cancelled"
     TERMINAL_FAILURE = "terminal_failure"
+
+
+class V2RoundFourTerminalOutcome(StrictModel):
+    """Append-only terminal outcome after an already persisted Round-4 authorization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    reason_code: Literal[V2RoundFourDecisionCode.TERMINAL_FAILURE]
+    failed_stage: NonEmptyStr
+    completed_at: datetime
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
 
 
 class V2RoundFourReservation(StrictModel):
@@ -1640,6 +1776,7 @@ class V2GapCoverageReconciliation(StrictModel):
     post_round_three_gap_artifact_key: NonEmptyStr
     round_four_attempted: bool
     records: tuple[V2GapCoverageRecord, ...]
+    claim_coverage_map: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
     completed_at: datetime
 
     _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
@@ -4039,6 +4176,7 @@ class V2FinalResearchOutput(StrictModel):
     recommended_sources: tuple[V2ResultSource, ...]
     all_surviving_sources: tuple[V2ResultSource, ...]
     unresolved_material_gaps: tuple[V2UnresolvedMaterialGap, ...]
+    claim_coverage_map: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
     gap_reconciliation: V2GapCoverageReconciliation | None = None
     stopping: V2ResearchStoppingDisclosure
     created_at: datetime
@@ -4069,6 +4207,8 @@ class V2FinalResearchOutput(StrictModel):
         if self.gap_reconciliation is not None:
             if self.gap_reconciliation.run_id != self.run_id:
                 raise ValueError("Gap reconciliation must match the final-output run")
+            if self.claim_coverage_map != self.gap_reconciliation.claim_coverage_map:
+                raise ValueError("final claim coverage must match the Gap reconciliation")
             unresolved_ids = tuple(item.gap_id for item in self.unresolved_material_gaps)
             expected_ids = tuple(
                 item.gap.gap_id

@@ -7,6 +7,10 @@ Assess the cumulative completed research context. For the post-Round-3 contract,
 the evidence does and does not establish about the exact claim across the application-supplied
 claim-coverage focus. This is research strategy only.
 
+The post-Round-3 context preserves `round_number` on every query, source, passage, family,
+duplicate pattern, and acquisition failure. Compare the three completed rounds explicitly; do
+not treat older Round-1 context as a substitute for targeted Round-3 work.
+
 # Non-negotiable boundaries
 
 - Preserve `exact_claim` exactly. Do not decide whether it is true and do not make factual
@@ -32,9 +36,10 @@ claim-coverage focus. This is research strategy only.
 - Assess every supplied `claim_coverage_focus` dimension exactly once in `claim_coverage_map`.
   Use only those application-derived dimensions; do not add dimensions or decide whether the
   claim is true.
-- Use `covered`, `partial`, `missing`, `conflicting`, or `not_applicable` to describe the current
+- Use `covered`, `partial`, `missing`, `conflicting`, `not_applicable`, or `unavailable` to describe the current
   evidence boundary. `not_applicable` is allowed only where the supplied claim component does not
-  assert that dimension.
+  assert that dimension. If a focus is marked `searchable=false`, return `unavailable` and do
+  not create a gap or search direction for it.
 - A material gap must identify one `claim_dimension` whose coverage is partial, missing, or
   conflicting, and repeat the precise unsupported claim component in
   `unsupported_claim_component`.

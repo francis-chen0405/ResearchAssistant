@@ -17,13 +17,29 @@ and separately validates only remaining future workload against an actual post-G
 Persisted final output resumes only when its unresolved-gap disclosure agrees with the same
 reconciliation passed to fresh final-output generation.
 
+The follow-up claim-coverage correction removes substring-driven claim decomposition. The
+application supplies typed evidence-audit dimensions while the validated Planner explicitly
+selects only asserted population/setting and mechanism/pathway components; disabled
+counterevidence is retained as an explicit unavailable assessment. Every cumulative Gap context
+record now identifies its completed round. Coverage-map components, material gaps, and search
+directions are exact-bound to the specification, while the final result retains the map and the
+gap-to-query/source/ledger reconciliation. The Governor receives observed facts only; terminal
+Search-Agent and Round-4 provider failures persist a typed terminal decision.
+
+The final renderer emits its no-unresolved-gaps disclosure only for an empty gap tuple. A separate
+append-only terminal-outcome artifact records post-authorization Search-Agent/provider failures,
+leaving the authorization artifact immutable. The persisted Planner boundary accepts only
+searchable claim components, coverage assessments reproduce the full specification, a source
+family retains all completed-round provenance, and final coverage cannot differ from its Gap
+reconciliation.
+
 The final output carries deterministic reconciliation of the original post-Round-3 gaps. Coverage
 requires matching Round-4 targeted-gap provenance, analyzer-admitted evidence, and the Analyst's
 explicit addressed-gap declaration. A search result, recommendation, quotation, or unadmitted
 analysis alone never closes a gap. API, export, progress, and research-trail readers recognize the
 new version while preserving read-only Phase-13 and earlier artifacts unchanged.
 
-Verification for the focused correction: `pytest` passed (846 passed, 2 skipped; one existing
+Verification for the focused correction: `pytest` passed (851 passed, 2 skipped; one existing
 FastAPI/httpx deprecation warning); `ruff check .`, `ruff format --check .`, and `git diff --check`
 passed. No live provider call, dependency, migration, or historical rewrite was made.
 

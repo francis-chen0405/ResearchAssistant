@@ -39,6 +39,8 @@ from models import (
     V2AdaptiveSearchModelOutput,
     V2ClaimCoverageDimension,
     V2ClaimCoverageFocus,
+    V2ClaimCoverageKind,
+    V2ClaimCoverageSpecification,
     V2DiscoveryScoutOutput,
     V2GapAcquisitionFailure,
     V2GapAnalysisInput,
@@ -58,11 +60,13 @@ from models import (
     V2RoundFourDecisionCode,
     V2RoundFourGovernorDecision,
     V2RoundFourReservation,
+    V2RoundFourTerminalOutcome,
     V2SearchAgentInput,
 )
 from providers.llm import (
     V2_LLM_ROUTING,
     LLMProvider,
+    LLMProviderExecutionError,
     LLMRequest,
     LLMStage,
     invoke_llm,
@@ -78,6 +82,7 @@ from store import insert_v2_artifact, read_v2_artifact
 
 V2_POST13_GAP_AFTER_ROUND_THREE_KEY = "post-phase-13-gap-analysis-after-round-3-v1"
 V2_POST13_ROUND_FOUR_GOVERNOR_KEY = "post-phase-13-round-4-governor-decision-v1"
+V2_POST13_ROUND_FOUR_TERMINAL_OUTCOME_KEY = "post-phase-13-round-4-terminal-outcome-v1"
 V2_POST13_ROUND_FOUR_PLAN_KEY = "post-phase-13-round-4-plan-v1"
 V2_POST13_ROUND_FOUR_COMPLETION_KEY = "post-phase-13-round-4-completion-v1"
 V2_POST13_GAP_RECONCILIATION_KEY = "post-phase-13-gap-coverage-reconciliation-v1"
@@ -145,13 +150,12 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             _unavailable_gap_output(gap_input, now),
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
-                "Round 4 was not started because two bounded post-Round-3 Gap Analysis "
-                "attempts and the protected downstream reserve do not fit.",
-                now,
+            _governor_decision(
+                run_id=initial_plan.run_id,
+                clock=now,
+                gap_attempted=False,
+                protected_downstream_budget_remains=False,
+                complete_workload_reservable=False,
             ),
             now,
         )
@@ -169,13 +173,7 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.CANCELLED,
-                "Round 4 was not started because cancellation was requested.",
-                now,
-            ),
+            _governor_decision(run_id=initial_plan.run_id, clock=now, gap=gap, cancelled=True),
             now,
         )
     if gap.result is None:
@@ -183,13 +181,7 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE,
-                "Round 4 was not started because post-Round-3 Gap Analysis was unusable.",
-                now,
-            ),
+            _governor_decision(run_id=initial_plan.run_id, clock=now, gap=gap),
             now,
         )
     if not gap.result.material_gaps or not gap.result.continue_research:
@@ -197,13 +189,7 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.NO_MATERIAL_GAPS,
-                "Round 4 was not started because no material post-Round-3 gaps remain.",
-                now,
-            ),
+            _governor_decision(run_id=initial_plan.run_id, clock=now, gap=gap),
             now,
         )
     attempts = _provider_attempts(initial_plan, path)
@@ -213,13 +199,7 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER,
-                "Round 4 was not started because no eligible provider capacity remains.",
-                now,
-            ),
+            _governor_decision(run_id=initial_plan.run_id, clock=now, gap=gap),
             now,
         )
     duplicate_rate = _duplicate_rate(round_three)
@@ -228,12 +208,12 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.DUPLICATE_HEAVY,
-                "Round 4 was not started because Round 3 was duplicate-heavy.",
-                now,
+            _governor_decision(
+                run_id=initial_plan.run_id,
+                clock=now,
+                gap=gap,
+                eligible_provider_exists=True,
+                round_three_duplicate_rate=duplicate_rate,
             ),
             now,
         )
@@ -254,14 +234,23 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
-                "Round 4 was not started because the maximum narrow workload and protected "
-                "downstream reserve do not fit.",
-                now,
+            _governor_decision(
+                run_id=initial_plan.run_id,
+                clock=now,
+                gap=gap,
+                eligible_provider_exists=True,
+                round_three_duplicate_rate=duplicate_rate,
+                complete_workload_reservable=False,
             ),
+            now,
+        )
+    except LLMProviderExecutionError:
+        terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent", now)
+        return _finish(
+            path,
+            continuation,
+            gap,
+            terminal,
             now,
         )
     if plan is None:
@@ -269,12 +258,13 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.NO_NOVEL_QUERY,
-                "Round 4 was not started because no non-trivial novel queries were accepted.",
-                now,
+            _governor_decision(
+                run_id=initial_plan.run_id,
+                clock=now,
+                gap=gap,
+                eligible_provider_exists=True,
+                round_three_duplicate_rate=duplicate_rate,
+                materially_new_queries=False,
             ),
             now,
         )
@@ -284,24 +274,26 @@ def run_v2_round_four_continuation(
             path,
             continuation,
             gap,
-            _decision(
-                initial_plan.run_id,
-                False,
-                V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
-                "Round 4 was not started because its full bounded workload and downstream "
-                "reserve do not fit.",
-                now,
+            _governor_decision(
+                run_id=initial_plan.run_id,
+                clock=now,
+                gap=gap,
+                eligible_provider_exists=True,
+                round_three_duplicate_rate=duplicate_rate,
+                protected_downstream_budget_remains=False,
+                complete_workload_reservable=False,
             ),
             now,
         )
-    decision = _decision(
-        initial_plan.run_id,
-        True,
-        V2RoundFourDecisionCode.AUTHORIZED,
-        "Round 4 was authorized as a narrow gap-directed continuation with protected "
-        "downstream capacity.",
-        now,
-        reservation,
+    decision = _governor_decision(
+        run_id=initial_plan.run_id,
+        clock=now,
+        gap=gap,
+        eligible_provider_exists=True,
+        round_three_duplicate_rate=duplicate_rate,
+        materially_new_queries=bool(plan.plan.searches),
+        round_four_productive=bool(plan.plan.searches),
+        reservation=reservation,
     )
     insert_v2_artifact(path, V2_POST13_ROUND_FOUR_GOVERNOR_KEY, decision, decision.decided_at)
     search, discovery, acquisition, summary = _run_round_from_plan(
@@ -332,6 +324,28 @@ def run_v2_round_four_continuation(
             }
         )
         return _finish(path, cancelled, gap, decision, now)
+    if summary.status is V2AdaptiveRoundStatus.DEGRADED:
+        failed = continuation.model_copy(
+            update={
+                "rounds": (*continuation.rounds, summary),
+                "stopping_decision": continuation.stopping_decision.model_copy(
+                    update={
+                        "stop_code": V2AdaptiveStopCode.PROVIDER_FAILURE,
+                        "stopping_reason": "Targeted Round 4 ended after a provider failure.",
+                        "decided_at": now(),
+                    }
+                ),
+                "completed_at": now(),
+            }
+        )
+        terminal = _persist_terminal_outcome(path, initial_plan.run_id, "provider", now)
+        return _finish(
+            path,
+            failed,
+            gap,
+            terminal,
+            now,
+        )
     merged = _merge_survivors(
         initial_plan.run_id,
         tuple(
@@ -411,6 +425,7 @@ def build_post_round_three_gap_input(
                     source_url=source.snapshot.source_url,
                     title=representative.title,
                     source_family_id=family_id,
+                    round_number=round_number,
                 )
             )
             existing_family = families_by_id.get(family_id)
@@ -421,6 +436,8 @@ def build_post_round_three_gap_input(
                 discovery_providers=tuple(
                     dict.fromkeys(reference.provider for reference in cluster.provider_references)
                 ),
+                round_number=round_number,
+                round_numbers=(round_number,),
             )
             if existing_family is None:
                 families_by_id[family_id] = family
@@ -446,6 +463,9 @@ def build_post_round_three_gap_input(
                                 )
                             )
                         ),
+                        "round_numbers": tuple(
+                            dict.fromkeys((*existing_family.round_numbers, round_number))
+                        ),
                     }
                 )
             probe = next(
@@ -462,6 +482,7 @@ def build_post_round_three_gap_input(
                         direction=survivor.direction,
                         text=text,
                         truncated_for_gap_analysis=len(text) < len(passage.text),
+                        round_number=round_number,
                     )
                 )
         for cluster in discovery.clusters:
@@ -476,6 +497,7 @@ def build_post_round_three_gap_input(
                         direction=direction,
                         duplicate_discovery_count=len(cluster.item_ids),
                         pattern="conservatively clustered same-source discovery records",
+                        round_number=round_number,
                     )
                 )
         for attempt in acquisition.attempts:
@@ -491,6 +513,7 @@ def build_post_round_three_gap_input(
                         direction=direction,
                         provider=attempt.provider,
                         failure_code=attempt.failure_code or "unspecified_acquisition_failure",
+                        round_number=round_number,
                     )
                 )
         for item in discovery.items:
@@ -504,6 +527,9 @@ def build_post_round_three_gap_input(
             output = V2GapAnalysisOutput.model_validate_json(payload)
             if output.result is not None:
                 previous_gaps.extend(output.result.material_gaps)
+    coverage_specification = _claim_coverage_specification(
+        initial_plan.raw_claim, initial_plan.directions, initial_plan.claim_coverage_focus
+    )
     return V2GapAnalysisInput(
         run_id=initial_plan.run_id,
         exact_claim=initial_plan.raw_claim,
@@ -517,7 +543,8 @@ def build_post_round_three_gap_input(
         duplicate_patterns=tuple(duplicates)[:25],
         acquisition_failures=tuple(failures)[:150],
         previous_gaps=tuple(previous_gaps)[:6],
-        claim_coverage_focus=_claim_coverage_focus(initial_plan.raw_claim, initial_plan.directions),
+        claim_coverage_focus=coverage_specification.focus,
+        claim_coverage_specification=coverage_specification,
         remaining_budget=V2GapBudgetState(
             model_calls_remaining=max(
                 0,
@@ -561,6 +588,7 @@ def _representative_queries(
                 provider=query.provider,
                 strategy=query.strategy,
                 query_text=query.query_text,
+                round_number=round_number,
             )
             for query in searches
         ]
@@ -623,46 +651,58 @@ def _representative_families(
     return _representative_round_rows(rows_by_round, cap)
 
 
-def _claim_coverage_focus(
-    exact_claim: str, directions: ResearchDirections
-) -> tuple[V2ClaimCoverageFocus, ...]:
-    """Derive only claim-relevant coverage dimensions without judging claim truth."""
-    normalized = exact_claim.casefold()
+def _claim_coverage_specification(
+    exact_claim: str,
+    directions: ResearchDirections,
+    planner_focus: tuple[V2ClaimCoverageFocus, ...] = (),
+) -> V2ClaimCoverageSpecification:
+    """Return the documented application-owned default without parsing claim wording.
+
+    Exact-claim semantics are intentionally not inferred from substrings.  The always-audited
+    effect and evidence-boundary dimensions are stable across empirical claims; a focused-mode
+    counterevidence audit is retained as explicitly unavailable rather than omitted.  Planner
+    The validated Planner may explicitly add only relevant population or mechanism components;
+    it cannot widen this bounded continuation implicitly.
+    """
+    component_focus = list(planner_focus)
+    if not any(
+        item.dimension is V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION for item in component_focus
+    ):
+        component_focus.insert(
+            0,
+            V2ClaimCoverageFocus(
+                dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                claim_component=exact_claim,
+                kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+            ),
+        )
     focus = [
+        *component_focus,
         V2ClaimCoverageFocus(
-            dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
-            claim_component=exact_claim,
-        )
+            dimension=V2ClaimCoverageDimension.LIMITATIONS_AND_BOUNDARIES,
+            claim_component=(
+                "limitations and boundaries of the available evidence for the exact claim"
+            ),
+            kind=V2ClaimCoverageKind.EVIDENCE_AUDIT,
+        ),
+        V2ClaimCoverageFocus(
+            dimension=V2ClaimCoverageDimension.COUNTEREVIDENCE_OR_ALTERNATIVES,
+            claim_component="counterevidence and alternative explanations for the exact claim",
+            kind=V2ClaimCoverageKind.EVIDENCE_AUDIT,
+            searchable=directions.challenge_enabled,
+            unavailable_reason=(
+                None
+                if directions.challenge_enabled
+                else "challenge research direction is disabled by the run controls"
+            ),
+        ),
+        V2ClaimCoverageFocus(
+            dimension=V2ClaimCoverageDimension.REPLICATION_OR_GENERALIZABILITY,
+            claim_component="replication and generalizability boundaries for the exact claim",
+            kind=V2ClaimCoverageKind.EVIDENCE_AUDIT,
+        ),
     ]
-    if any(marker in normalized for marker in ("among", "in ", "for ", "within", "across")):
-        focus.append(
-            V2ClaimCoverageFocus(
-                dimension=V2ClaimCoverageDimension.POPULATION_AND_SETTING,
-                claim_component="the population, setting, and conditions named in the exact claim",
-            )
-        )
-    if any(marker in normalized for marker in ("causes", "because", "mechanism", "pathway")):
-        focus.append(
-            V2ClaimCoverageFocus(
-                dimension=V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
-                claim_component="the causal mechanism or pathway asserted by the exact claim",
-            )
-        )
-    if directions.challenge_enabled:
-        focus.append(
-            V2ClaimCoverageFocus(
-                dimension=V2ClaimCoverageDimension.COUNTEREVIDENCE_OR_ALTERNATIVES,
-                claim_component="counterevidence or alternative explanations relevant to the claim",
-            )
-        )
-    if any(marker in normalized for marker in ("general", "across", "replicat", "all ")):
-        focus.append(
-            V2ClaimCoverageFocus(
-                dimension=V2ClaimCoverageDimension.REPLICATION_OR_GENERALIZABILITY,
-                claim_component="independent replication or generalizability required by the claim",
-            )
-        )
-    return tuple(focus)
+    return V2ClaimCoverageSpecification(focus=tuple(focus))
 
 
 def reconcile_post_round_three_gaps(
@@ -761,6 +801,11 @@ def reconcile_post_round_three_gaps(
         post_round_three_gap_artifact_key=V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
         round_four_attempted=round_four_attempted,
         records=tuple(records),
+        claim_coverage_map=(
+            post_round_three_gap.result.claim_coverage_map
+            if post_round_three_gap.result is not None
+            else ()
+        ),
         completed_at=now(),
     )
     insert_v2_artifact(path, V2_POST13_GAP_RECONCILIATION_KEY, result, result.completed_at)
@@ -1001,38 +1046,39 @@ def _duplicate_rate(summary: V2AdaptiveRoundExecution) -> float:
     return summary.duplicate_source_count / total if total else 0.0
 
 
-def _decision(
+def _governor_decision(
+    *,
     run_id: UUID,
-    authorized: bool,
-    code: V2RoundFourDecisionCode,
-    explanation: str,
     clock: Callable[[], datetime],
+    gap: V2GapAnalysisOutput | None = None,
+    gap_attempted: bool = True,
+    eligible_provider_exists: bool = False,
+    materially_new_queries: bool = False,
+    round_three_duplicate_rate: float = 0.0,
+    round_four_productive: bool = True,
+    protected_downstream_budget_remains: bool = True,
+    complete_workload_reservable: bool = True,
+    cancelled: bool = False,
+    terminal_provider_failure: bool = False,
     reservation: V2RoundFourReservation | None = None,
 ) -> V2RoundFourGovernorDecision:
-    if authorized != (code is V2RoundFourDecisionCode.AUTHORIZED):
-        raise ValueError("Round-4 decision authorization must agree with the Governor reason")
+    """Evaluate one typed set of observed Round-4 facts without selecting a result first."""
+    result = gap.result if gap is not None else None
     return evaluate_v2_round_four_authorization(
         V2RoundFourGovernorInput(
             run_id=run_id,
-            gap_analysis_usable=code is not V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE,
-            material_gap_remains=code
-            not in {
-                V2RoundFourDecisionCode.NO_MATERIAL_GAPS,
-                V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE,
-            },
-            luna_recommends_continue=code is not V2RoundFourDecisionCode.NO_MATERIAL_GAPS,
-            eligible_provider_exists=code is not V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER,
-            materially_new_queries=code is not V2RoundFourDecisionCode.NO_NOVEL_QUERY,
-            round_three_duplicate_rate=0.70
-            if code is V2RoundFourDecisionCode.DUPLICATE_HEAVY
-            else 0.0,
-            round_four_productive=code is not V2RoundFourDecisionCode.UNPRODUCTIVE,
-            protected_downstream_budget_remains=code
-            is not V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
-            complete_workload_reservable=code
-            is not V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION,
-            cancelled=code is V2RoundFourDecisionCode.CANCELLED,
-            terminal_provider_failure=code is V2RoundFourDecisionCode.TERMINAL_FAILURE,
+            gap_analysis_attempted=gap_attempted,
+            gap_analysis_usable=result is not None,
+            material_gap_remains=bool(result and result.material_gaps),
+            luna_recommends_continue=bool(result and result.continue_research),
+            eligible_provider_exists=eligible_provider_exists,
+            materially_new_queries=materially_new_queries,
+            round_three_duplicate_rate=round_three_duplicate_rate,
+            round_four_productive=round_four_productive,
+            protected_downstream_budget_remains=protected_downstream_budget_remains,
+            complete_workload_reservable=complete_workload_reservable,
+            cancelled=cancelled,
+            terminal_provider_failure=terminal_provider_failure,
             decided_at=clock(),
         ),
         reservation=reservation,
@@ -1068,6 +1114,31 @@ def _finish(
         )
     insert_v2_artifact(path, V2_POST13_ROUND_FOUR_COMPLETION_KEY, result, clock())
     return result
+
+
+def _persist_terminal_outcome(
+    path: str, run_id: UUID, failed_stage: str, clock: Callable[[], datetime]
+) -> V2RoundFourGovernorDecision:
+    """Persist a terminal lifecycle record without replacing immutable authorization."""
+    decision = _governor_decision(
+        run_id=run_id,
+        clock=clock,
+        terminal_provider_failure=True,
+    )
+    if _read(path, run_id, V2_POST13_ROUND_FOUR_TERMINAL_OUTCOME_KEY) is None:
+        outcome = V2RoundFourTerminalOutcome(
+            run_id=run_id,
+            reason_code=V2RoundFourDecisionCode.TERMINAL_FAILURE,
+            failed_stage=failed_stage,
+            completed_at=decision.decided_at,
+        )
+        insert_v2_artifact(
+            path,
+            V2_POST13_ROUND_FOUR_TERMINAL_OUTCOME_KEY,
+            outcome,
+            outcome.completed_at,
+        )
+    return decision
 
 
 def _read(path: str, run_id: UUID, key: str) -> str | None:

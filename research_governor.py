@@ -95,6 +95,7 @@ class V2RoundFourGovernorInput(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
+    gap_analysis_attempted: bool = True
     gap_analysis_usable: bool
     material_gap_remains: bool
     luna_recommends_continue: bool
@@ -141,6 +142,13 @@ def _v2_round_four_reason(evaluation: V2RoundFourGovernorInput) -> V2RoundFourDe
         return V2RoundFourDecisionCode.CANCELLED
     if evaluation.terminal_provider_failure:
         return V2RoundFourDecisionCode.TERMINAL_FAILURE
+    if not evaluation.gap_analysis_attempted:
+        if (
+            not evaluation.protected_downstream_budget_remains
+            or not evaluation.complete_workload_reservable
+        ):
+            return V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION
+        return V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE
     if not evaluation.gap_analysis_usable:
         return V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE
     if not evaluation.material_gap_remains or not evaluation.luna_recommends_continue:

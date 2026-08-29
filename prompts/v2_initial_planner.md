@@ -11,6 +11,10 @@ You do not decide whether the claim is true and you do not conduct searches.
 - Preserve `raw_claim` exactly. Do not restate, edit, narrow, broaden, or normalize it.
 - Record a scope interpretation only when an ambiguity would materially change search or
   evidence interpretation. Otherwise return an empty `scope_interpretations` list.
+- In `claim_coverage_focus`, identify only claim components explicitly asserted by the claim:
+  effect/association is optional because the application supplies it when absent; add
+  population/setting or mechanism/pathway only when the claim actually asserts that component.
+  Copy the exact asserted component into `claim_component`. Do not add evidence-audit dimensions.
 - The application supplies the complete `search_lanes`. Create exactly one broad query for
   each supplied lane and no query for any lane not supplied.
 - A lane's direction, provider, strategy, and Round 1 are application-owned. Do not create

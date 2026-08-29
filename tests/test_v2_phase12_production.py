@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import ValidationError
 
 import agents.v2_final_output as v2_final_output
 from frontend.live_service import LiveResearchController, ResearchProgress, _v2_progress_percent
@@ -27,6 +28,7 @@ from models import (
     V2ClaimCoverageState,
     V2EvidenceAnalystModelOutput,
     V2EvidenceRelationship,
+    V2FinalResearchOutput,
     V2GapAnalysisModelOutput,
     V2GapSearchDirection,
     V2InitialPlannerModelOutput,
@@ -34,6 +36,7 @@ from models import (
     V2MaterialGap,
     V2PipelineIdentity,
     V2ProviderRunDiagnostics,
+    V2RoundFourTerminalOutcome,
     V2RunDiagnostics,
     V2SourceSelectionModelOutput,
     V2SourceSelectionRecommendation,
@@ -103,6 +106,13 @@ class _Search:
             provider_version="v1",
             adapter_version="v1",
         )
+
+
+class _FailsRoundFourSearch(_Search):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        if len(self.requests) >= 5:
+            raise RuntimeError("fixture Round-4 provider failure")
+        return super().search(request)
 
 
 class _Scraper:
@@ -185,11 +195,16 @@ class _V2Model:
                     dimension=item.dimension,
                     claim_component=item.claim_component,
                     coverage_state=(
-                        V2ClaimCoverageState.MISSING
+                        V2ClaimCoverageState.UNAVAILABLE
+                        if not item.searchable
+                        else V2ClaimCoverageState.MISSING
                         if self.successful_gaps < self.completed_rounds
                         else V2ClaimCoverageState.COVERED
                     ),
                     evidence_summary="Fixture coverage assessment.",
+                    kind=item.kind,
+                    searchable=item.searchable,
+                    unavailable_reason=item.unavailable_reason,
                 )
                 for item in coverage_focus
             )
@@ -460,6 +475,38 @@ def test_post_phase13_round_four_is_bounded_and_uses_versioned_artifacts(
     assert model.search_agent_calls == 3
     assert read_v2_artifact(db_path, run_id, "post-phase-13-round-4-plan-v1")
     assert read_v2_artifact(db_path, run_id, "post-phase-13-gap-coverage-reconciliation-v1")
+    assert result.final_output.gap_reconciliation is not None
+    tampered = result.final_output.model_dump()
+    tampered["claim_coverage_map"] = ()
+    with pytest.raises(ValidationError, match="final claim coverage"):
+        V2FinalResearchOutput.model_validate(tampered)
+
+
+def test_round_four_provider_failure_persists_terminal_outcome_without_rewriting_authorization(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-terminal.sqlite3"
+    run_id = uuid4()
+    result = _run(
+        db_path,
+        _V2Model(completed_rounds=4),
+        _FailsRoundFourSearch(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    authorization = read_v2_artifact(db_path, run_id, "post-phase-13-round-4-governor-decision-v1")
+    terminal = V2RoundFourTerminalOutcome.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-terminal-outcome-v1").payload_json
+    )
+    assert '"reason_code":"authorized"' in authorization.payload_json
+    assert terminal.reason_code.value == "terminal_failure"
 
 
 def test_completed_legacy_v2_result_bypasses_phase13_identity_validation(

@@ -18,6 +18,7 @@ from models import (
     StrictModel,
     SynthesisOutput,
     V2AdmissionMethod,
+    V2ClaimCoverageAssessment,
     V2EvidenceAdmissionBatchResult,
     V2EvidenceAdmissionState,
     V2FinalResearchOutput,
@@ -263,6 +264,9 @@ def build_v2_final_research_output(
             )
         ),
         "gap_reconciliation": gap_reconciliation,
+        "claim_coverage_map": (
+            gap_reconciliation.claim_coverage_map if gap_reconciliation is not None else ()
+        ),
         "stopping": stopping,
         "created_at": _aware(created_at),
     }
@@ -313,6 +317,7 @@ def validate_v2_final_release(
         recommended_sources=output_fields["recommended_sources"],
         all_surviving_sources=output_fields["all_surviving_sources"],
         unresolved_material_gaps=output_fields["unresolved_material_gaps"],
+        claim_coverage_map=output_fields.get("claim_coverage_map", ()),
         stopping=output_fields["stopping"],
     )
     return V2ReleaseValidation(
@@ -336,6 +341,7 @@ def render_v2_final_output(output: V2FinalResearchOutput) -> str:
         recommended_sources=output.recommended_sources,
         all_surviving_sources=output.all_surviving_sources,
         unresolved_material_gaps=output.unresolved_material_gaps,
+        claim_coverage_map=output.claim_coverage_map,
         stopping=output.stopping,
     )
 
@@ -648,6 +654,9 @@ def _validate_persisted_output(
         raise ValueError("persisted v2 final output directions do not match the current inputs")
     if output.unresolved_material_gaps != expected.unresolved_material_gaps:
         raise ValueError("persisted v2 final output gap reconciliation does not match inputs")
+    expected_coverage = gap_reconciliation.claim_coverage_map if gap_reconciliation else ()
+    if output.claim_coverage_map != expected_coverage:
+        raise ValueError("persisted v2 final output coverage disclosure does not match inputs")
 
 
 def _render_v2_components(
@@ -658,6 +667,7 @@ def _render_v2_components(
     recommended_sources: object,
     all_surviving_sources: object,
     unresolved_material_gaps: object,
+    claim_coverage_map: object,
     stopping: object,
 ) -> str:
     if not isinstance(recommended_sources, tuple) or not isinstance(all_surviving_sources, tuple):
@@ -706,6 +716,17 @@ def _render_v2_components(
             )
         else:
             lines.append("- No unresolved material gaps were recorded.")
+    if claim_coverage_map:
+        if not isinstance(claim_coverage_map, tuple):
+            raise ValueError("v2 final output claim coverage is malformed")
+        lines.extend(("", "## Claim Coverage"))
+        for assessment in claim_coverage_map:
+            if not isinstance(assessment, V2ClaimCoverageAssessment):
+                raise ValueError("v2 final output claim coverage is malformed")
+            lines.append(
+                f"- {assessment.dimension.value}: {assessment.coverage_state.value} "
+                f"({assessment.claim_component})"
+            )
     lines.extend(("", "## Research Stopping Reason"))
     lines.append(f"- {stopping.reason.value}: {stopping.explanation}")
     return "\n".join(lines)

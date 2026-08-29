@@ -3,6 +3,12 @@
 Status: Complete and verified. Authorized and completed on 2026-08-28; a focused Round-Four
 correction was completed the same day.
 
+The claim-coverage correction is now explicit rather than keyword-derived: the application owns
+a typed coverage specification, preserves unavailable counterevidence when that direction is
+disabled, and binds Luna's completed coverage map, gaps, and search directions exactly to the
+specified dimensions and components. All cumulative Gap context rows retain Round 1/2/3
+provenance. The typed Governor evaluates observed facts rather than a preselected reason code.
+
 ## Scope
 
 - Add a fresh-v2-only post-Round-3 Luna Gap Analysis using cumulative Round 1–3 strategy

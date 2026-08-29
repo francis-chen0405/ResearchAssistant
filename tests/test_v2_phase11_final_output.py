@@ -32,8 +32,12 @@ from models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2ClaimCoverageAssessment,
+    V2ClaimCoverageDimension,
+    V2ClaimCoverageState,
     V2DeepAnalysisBudgetReason,
     V2ResultSourceStatus,
+    V2UnresolvedMaterialGap,
 )
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
 from store import insert_v2_artifact, read_v2_artifact
@@ -156,6 +160,40 @@ def test_support_only_result_discloses_scope_and_never_sends_raw_sources(tmp_pat
     rendered = render_v2_final_output(output)
     assert "Research direction: supporting evidence only" in rendered
     assert "## Challenging Evidence" not in rendered
+
+
+def test_renderer_does_not_claim_no_gaps_when_coverage_has_unresolved_gaps(tmp_path: Path) -> None:
+    _path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=_continuation(reviewer_result.run_id),
+        synthesis=_synthesis(reviewer_result),
+        created_at=NOW,
+    ).model_copy(
+        update={
+            "claim_coverage_map": (
+                V2ClaimCoverageAssessment(
+                    dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                    claim_component="the exact claim",
+                    coverage_state=V2ClaimCoverageState.PARTIAL,
+                    evidence_summary="Evidence is incomplete.",
+                ),
+            ),
+            "unresolved_material_gaps": (
+                V2UnresolvedMaterialGap(
+                    gap_id="gap-coverage",
+                    direction=ResearchDirection.SUPPORT,
+                    missing_evidence="A directly relevant study remains missing.",
+                    assessed_after_round=3,
+                ),
+            ),
+        }
+    )
+
+    rendered = render_v2_final_output(output)
+
+    assert "A directly relevant study remains missing." in rendered
+    assert "No unresolved material gaps were recorded." not in rendered
 
 
 def test_phase11_invokes_mimo_and_persists_restartable_output(tmp_path: Path) -> None:

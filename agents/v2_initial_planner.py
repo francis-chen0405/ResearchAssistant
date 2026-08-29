@@ -215,6 +215,7 @@ def _assemble_initial_plan(
         directions=planner_input.directions,
         discovery_providers=planner_input.discovery_providers,
         scope_interpretations=response.scope_interpretations,
+        claim_coverage_focus=response.claim_coverage_focus,
         searches=searches,
         planner_prompt_version=prompt_version,
         planned_at=planned_at,
