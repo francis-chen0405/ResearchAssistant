@@ -15,6 +15,7 @@ from pydantic import ConfigDict, Field, field_validator
 from agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
     V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+    V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
     render_v2_final_output,
 )
 from models import DEFAULT_RESEARCH_CONTROLS, ResearchControls, StrictModel, V2FinalResearchOutput
@@ -114,7 +115,11 @@ def _read_v2_final_output(db_path: str | Path, run_id: UUID) -> V2FinalResearchO
     if not Path(db_path).is_file():
         return None
     with open_read_only_store(db_path) as store:
-        for artifact_key in (V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY):
+        for artifact_key in (
+            V2_FINAL_OUTPUT_ARTIFACT_KEY,
+            V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
+            V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+        ):
             try:
                 artifact = read_v2_artifact(store.connection, run_id, artifact_key)
             except KeyError:

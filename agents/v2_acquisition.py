@@ -82,6 +82,8 @@ def run_v2_acquisition_probe(
     artifact_key = (
         V2_ACQUISITION_PROBE_ARTIFACT_KEY
         if round_number == 1
+        else "post-phase-13-round-4-acquisition-probe-v1"
+        if round_number == 4
         else f"phase-7-round-{round_number}-acquisition-probe"
     )
     try:
@@ -186,8 +188,8 @@ def _discovery_round(output: V2DiscoveryScoutOutput) -> int:
     if len(rounds) != 1:
         raise ValueError("v2 discovery output cannot mix research rounds")
     round_number = rounds.pop()
-    if round_number < 1 or round_number > 3:
-        raise ValueError("v2 acquisition permits only research rounds 1 through 3")
+    if round_number < 1 or round_number > 4:
+        raise ValueError("v2 acquisition permits only research rounds 1 through 4")
     return round_number
 
 

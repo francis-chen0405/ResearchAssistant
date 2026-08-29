@@ -52,10 +52,12 @@ from models import (
 from providers.llm import (
     DEFAULT_LLM_ROUTING,
     LLMProviderCapabilities,
+    LLMProviderExecutionError,
     LLMRequest,
     LLMStage,
     ModelAlias,
 )
+from providers.mimo import MimoFailureCode, MimoProviderError
 from providers.v2_routing import V2RoutingConfig
 from store import (
     init_db,
@@ -370,7 +372,7 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert source.statement_draft is not None
     assert all(request.model_alias is ModelAlias.GPT_5_6_LUNA_HIGH for request in provider.requests)
     assert all(
-        request.prompt.version == "phase13-luna-evidence-analyst-v7-analyzer-admission"
+        request.prompt.version == "post-phase13-luna-evidence-analyst-v8-round-four-reconciliation"
         for request in provider.requests
     )
     assert all(
@@ -634,6 +636,35 @@ def test_transient_analyst_failure_is_terminal_after_one_attempt(tmp_path: Path)
     attempts = read_model_route_attempts(db_path, run_id)
     assert [item.status for item in attempts].count(ModelAttemptStatus.FAILED) == 1
     assert [item.status for item in attempts].count(ModelAttemptStatus.COMPLETED) == 0
+
+
+def test_terminal_analyst_provider_failure_aborts_the_batch(tmp_path: Path) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    provider = FakeLunaAnalyst(
+        [
+            MimoProviderError(
+                MimoFailureCode.AUTHENTICATION,
+                "Luna authentication failed",
+                retryable=False,
+            )
+        ]
+    )
+    db_path = _prepare_db(tmp_path, run_id)
+
+    with pytest.raises(LLMProviderExecutionError, match="Luna authentication failed"):
+        run_v2_evidence_analyst(
+            db_path=db_path,
+            batch_input=batch,
+            llm_provider=provider,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+
+    assert len(provider.requests) == 1
+    attempts = read_model_route_attempts(db_path, run_id)
+    assert len(attempts) == 1
+    assert attempts[0].status is ModelAttemptStatus.FAILED
 
 
 def test_fresh_analyzer_result_does_not_trigger_reviewer_revision(

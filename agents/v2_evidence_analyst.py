@@ -46,6 +46,7 @@ from providers.llm import (
     ModelAlias,
     RetryMetadata,
     invoke_llm,
+    is_non_retryable_provider_error,
     load_prompt_file,
     render_stage_prompt,
 )
@@ -299,6 +300,16 @@ def _analyze_source(
                     candidate.extracted_quote_block
                 ).following_context,
             ),
+            targeted_gap_ids=tuple(
+                dict.fromkeys(
+                    gap_id
+                    for survivor in batch_input.queue_result.input.survivors
+                    if survivor.source_id == source_input.source_id
+                    for provenance in survivor.search_provenance
+                    if provenance.round_number == 4
+                    for gap_id in provenance.targeted_gap_ids
+                )
+            )[:3],
         )
         assessment, score_attempts = _invoke_bounded_analyst(
             db_path=db_path,
@@ -310,8 +321,8 @@ def _analyze_source(
             llm_provider=llm_provider,
             routing_config=routing_config,
             clock=clock,
-            objective_validator=lambda output: _validate_assessment_direction(
-                output, source_input.direction
+            objective_validator=lambda output: _validate_assessment(
+                output, source_input.direction, semantic_input.targeted_gap_ids
             ),
             retry_guidance=None,
         )
@@ -366,6 +377,8 @@ def _analyze_source(
     except V2CancellationRequested:
         raise
     except (V2EvidenceAnalystFailure, ValueError, TypeError, RuntimeError) as exc:
+        if isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc):
+            raise
         attempt_ids = list(_source_attempt_ids(db_path, batch_input.run_id, source_input.source_id))
         return V2EvidenceAnalystSourceResult(
             run_id=batch_input.run_id,
@@ -535,6 +548,8 @@ def _invoke_bounded_analyst(
                 }
             )
             finish_model_route_attempt(db_path, failed)
+            if isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc):
+                raise
     raise V2EvidenceAnalystFailure(
         f"{operation} exhausted bounded Analyst retry: {'; '.join(failures)}"
     )
@@ -553,6 +568,17 @@ def _validate_assessment_direction(
     )
     if assessment.relationship_to_claim is forbidden:
         raise ValueError("Analyst relationship cannot cross the queued evidence direction")
+
+
+def _validate_assessment(
+    assessment: V2EvidenceAnalystModelOutput,
+    direction: ResearchDirection,
+    targeted_gap_ids: tuple[str, ...],
+) -> None:
+    """Validate direction and restrict claimed coverage to the source's Round-4 Gap links."""
+    _validate_assessment_direction(assessment, direction)
+    if not set(assessment.addressed_gap_ids).issubset(targeted_gap_ids):
+        raise ValueError("Analyst cannot claim coverage for an unrelated Gap")
 
 
 def _validate_statement_output(

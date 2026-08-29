@@ -21,6 +21,8 @@ from models import (
     V2EvidenceAdmissionBatchResult,
     V2EvidenceAdmissionState,
     V2FinalResearchOutput,
+    V2GapCoverageReconciliation,
+    V2GapCoverageState,
     V2ReleaseValidation,
     V2ResearchStoppingDisclosure,
     V2ResearchStoppingReason,
@@ -50,9 +52,12 @@ from research_governor import V2RoundThreeReasonCode
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY = "phase-11-final-research-output"
-V2_FINAL_OUTPUT_ARTIFACT_KEY = "phase-13-final-research-output-analyzer-admission"
-V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-phase-13-final-output-analyzer-admission-v1"
-V2_FINAL_VALIDATOR_CONFIG_VERSION = "researchassistant-v2-phase-13-release-validator-v1"
+V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY = "phase-13-final-research-output-analyzer-admission"
+V2_FINAL_OUTPUT_ARTIFACT_KEY = "post-phase-13-round-four-final-output-v1"
+V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-final-output-v1"
+V2_FINAL_VALIDATOR_CONFIG_VERSION = (
+    "researchassistant-v2-post-phase-13-round-four-release-validator-v1"
+)
 
 V2EvidenceInputResult = V2EvidenceAdmissionBatchResult | V2ReviewerLedgerBatchResult
 
@@ -91,6 +96,7 @@ def run_v2_final_research_output(
     admission_result: V2EvidenceAdmissionBatchResult | None = None,
     reviewer_result: V2ReviewerLedgerBatchResult | None = None,
     continuation: V2AdaptiveContinuationResult,
+    gap_reconciliation: V2GapCoverageReconciliation | None = None,
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime] | None = None,
@@ -103,7 +109,11 @@ def run_v2_final_research_output(
     stored = None
     output_keys = (V2_FINAL_OUTPUT_ARTIFACT_KEY,)
     if isinstance(evidence_result, V2ReviewerLedgerBatchResult):
-        output_keys = (V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY)
+        output_keys = (
+            V2_FINAL_OUTPUT_ARTIFACT_KEY,
+            V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
+            V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+        )
     for output_key in output_keys:
         try:
             stored = read_v2_artifact(path, evidence_result.run_id, output_key)
@@ -115,7 +125,9 @@ def run_v2_final_research_output(
         _validate_persisted_output(output, evidence_result, continuation)
         return V2FinalOutputRunResult(final_output=output, resumed=True)
 
-    synthesis_input = build_v2_synthesizer_input(evidence_result, continuation)
+    synthesis_input = build_v2_synthesizer_input(
+        evidence_result, continuation, gap_reconciliation=gap_reconciliation
+    )
     if isinstance(evidence_result, V2EvidenceAdmissionBatchResult):
         synthesis = build_v2_synthesis_output(
             synthesis_input=synthesis_input,
@@ -152,6 +164,7 @@ def run_v2_final_research_output(
     output = build_v2_final_research_output(
         admission_result=evidence_result,
         continuation=continuation,
+        gap_reconciliation=gap_reconciliation,
         synthesis=synthesis,
         created_at=_aware(now()),
     )
@@ -162,6 +175,8 @@ def run_v2_final_research_output(
 def build_v2_synthesizer_input(
     evidence_result: V2EvidenceInputResult,
     continuation: V2AdaptiveContinuationResult,
+    *,
+    gap_reconciliation: V2GapCoverageReconciliation | None = None,
 ) -> V2SynthesizerInput:
     """Project only validated evidence and typed research disclosures for synthesis."""
     _validate_chain(evidence_result, continuation)
@@ -173,7 +188,9 @@ def build_v2_synthesizer_input(
     )
     if not statements:
         raise ValueError("v2 synthesis requires at least one analyzer-admitted evidence record")
-    unresolved = _unresolved_gaps(selection.input.gap_history, evidence_result)
+    unresolved = _unresolved_gaps(
+        selection.input.gap_history, evidence_result, gap_reconciliation=gap_reconciliation
+    )
     source_by_id = {item.source_id: item for item in selection.input.survivors}
     metadata = tuple(
         V2SynthesizerRecommendationMetadata(
@@ -207,6 +224,7 @@ def build_v2_final_research_output(
     continuation: V2AdaptiveContinuationResult,
     synthesis: SynthesisOutput,
     created_at: datetime,
+    gap_reconciliation: V2GapCoverageReconciliation | None = None,
 ) -> V2FinalResearchOutput:
     """Build the complete deterministic disclosure envelope around a typed synthesis."""
     evidence_result = _choose_evidence_result(admission_result, reviewer_result)
@@ -236,8 +254,13 @@ def build_v2_final_research_output(
                 missing_evidence=gap.missing_evidence,
                 assessed_after_round=gap.assessed_after_round,
             )
-            for gap in _unresolved_gaps(selection.input.gap_history, evidence_result)
+            for gap in _unresolved_gaps(
+                selection.input.gap_history,
+                evidence_result,
+                gap_reconciliation=gap_reconciliation,
+            )
         ),
+        "gap_reconciliation": gap_reconciliation,
         "stopping": stopping,
         "created_at": _aware(created_at),
     }
@@ -501,8 +524,22 @@ def _ledger_item(
 
 
 def _unresolved_gaps(
-    gaps: tuple[V2SourceSelectionGap, ...], evidence_result: V2EvidenceInputResult
+    gaps: tuple[V2SourceSelectionGap, ...],
+    evidence_result: V2EvidenceInputResult,
+    *,
+    gap_reconciliation: V2GapCoverageReconciliation | None = None,
 ) -> tuple[V2SourceSelectionGap, ...]:
+    if gap_reconciliation is not None:
+        return tuple(
+            V2SourceSelectionGap(
+                gap_id=item.gap.gap_id,
+                direction=item.gap.direction,
+                missing_evidence=item.gap.missing_evidence,
+                assessed_after_round=3,
+            )
+            for item in gap_reconciliation.records
+            if item.state is not V2GapCoverageState.COVERED
+        )
     covered = {
         gap_id
         for source in evidence_result.source_results
@@ -520,6 +557,7 @@ def _stopping_disclosure(
         V2AdaptiveStopCode.ROUND_ONE_COMPLETE: V2ResearchStoppingReason.SUFFICIENT_SOURCE_POOL,
         V2AdaptiveStopCode.ROUND_TWO_COMPLETE: V2ResearchStoppingReason.SUFFICIENT_SOURCE_POOL,
         V2AdaptiveStopCode.ROUND_THREE_COMPLETE: V2ResearchStoppingReason.HARD_ROUND_LIMIT,
+        V2AdaptiveStopCode.ROUND_FOUR_COMPLETE: V2ResearchStoppingReason.HARD_ROUND_LIMIT,
         V2AdaptiveStopCode.NO_ELIGIBLE_PROVIDER: (
             V2ResearchStoppingReason.PROVIDER_ELIGIBILITY_EXHAUSTED
         ),
@@ -653,7 +691,13 @@ def _render_v2_components(
             raise ValueError("v2 final output gap is malformed")
         lines.append(f"- {gap.direction.value}: {gap.missing_evidence}")
     if not unresolved_material_gaps:
-        lines.append("- No unresolved material gaps were recorded.")
+        if stopping.completed_rounds == 4:
+            lines.append(
+                "- No unresolved research gaps identified after the targeted fourth-round search; "
+                "this addresses only gaps identified after Round 3."
+            )
+        else:
+            lines.append("- No unresolved material gaps were recorded.")
     lines.extend(("", "## Research Stopping Reason"))
     lines.append(f"- {stopping.reason.value}: {stopping.explanation}")
     return "\n".join(lines)

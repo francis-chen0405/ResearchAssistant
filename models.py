@@ -176,6 +176,8 @@ V2_DISCOVERY_POLICY_IDENTITY = "researchassistant-v2-phase-4-discovery-scout-v1"
 V2_ACQUISITION_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v1"
 V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
 V2_ADAPTIVE_SEARCH_POLICY_IDENTITY = "researchassistant-v2-phase-7-adaptive-search-v1"
+V2_POST13_ROUND_FOUR_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-v1"
+V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-gap-analysis-v1"
 V2_SOURCE_SELECTION_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v1"
 V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = (
     "researchassistant-v2-phase-13-deep-analysis-queue-analyzer-admission-v1"
@@ -576,18 +578,27 @@ class V2AdaptiveSearchQuery(StrictModel):
 
     run_id: UUID
     query_id: UUID
-    round_number: Literal[2, 3]
+    round_number: Literal[2, 3, 4]
     direction: ResearchDirection
     provider: DiscoveryProvider
     targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
     strategy: NonEmptyStr
     query_text: NonEmptyStr
-    policy_identity: Literal["researchassistant-v2-phase-7-adaptive-search-v1"] = (
-        V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
-    )
+    policy_identity: Literal[
+        "researchassistant-v2-phase-7-adaptive-search-v1",
+        "researchassistant-v2-post-phase-13-round-four-v1",
+    ] = V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
     created_at: datetime
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_round_policy(self) -> V2AdaptiveSearchQuery:
+        if self.round_number == 4 and self.policy_identity != V2_POST13_ROUND_FOUR_POLICY_IDENTITY:
+            raise ValueError("Phase-7 adaptive queries permit only rounds 2 or 3")
+        if self.round_number < 4 and self.policy_identity != V2_ADAPTIVE_SEARCH_POLICY_IDENTITY:
+            raise ValueError("Rounds 2 and 3 require the Phase-7 policy")
+        return self
 
 
 class V2AdaptiveRoundPlan(StrictModel):
@@ -596,7 +607,7 @@ class V2AdaptiveRoundPlan(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    round_number: Literal[2, 3]
+    round_number: Literal[2, 3, 4]
     directions: ResearchDirections
     enabled_providers: tuple[DiscoveryProvider, ...]
     targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=6)
@@ -604,15 +615,20 @@ class V2AdaptiveRoundPlan(StrictModel):
     searches: tuple[V2AdaptiveSearchQuery, ...] = Field(min_length=1, max_length=12)
     search_agent_prompt_version: NonEmptyStr
     search_agent_model_name: Literal["mimo-v2.5-pro"] = "mimo-v2.5-pro"
-    policy_identity: Literal["researchassistant-v2-phase-7-adaptive-search-v1"] = (
-        V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
-    )
+    policy_identity: Literal[
+        "researchassistant-v2-phase-7-adaptive-search-v1",
+        "researchassistant-v2-post-phase-13-round-four-v1",
+    ] = V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
     planned_at: datetime
 
     _planned_at_is_aware = field_validator("planned_at")(_validate_aware_datetime)
 
     @model_validator(mode="after")
     def validate_adaptive_round(self) -> V2AdaptiveRoundPlan:
+        if self.round_number == 4 and self.policy_identity != V2_POST13_ROUND_FOUR_POLICY_IDENTITY:
+            raise ValueError("Round 4 plans require the post-Phase-13 policy")
+        if self.round_number < 4 and self.policy_identity != V2_ADAPTIVE_SEARCH_POLICY_IDENTITY:
+            raise ValueError("Rounds 2 and 3 require the Phase-7 policy")
         if len(set(self.targeted_gap_ids)) != len(self.targeted_gap_ids):
             raise ValueError("adaptive round targeted Gap IDs must be unique")
         if len({query.query_id for query in self.searches}) != len(self.searches):
@@ -1137,7 +1153,7 @@ class V2SearchAgentInput(StrictModel):
 
     run_id: UUID
     exact_claim: NonEmptyStr
-    round_number: Literal[2, 3]
+    round_number: Literal[2, 3, 4]
     directions: ResearchDirections
     eligible_providers: tuple[DiscoveryProvider, ...]
     material_gaps: tuple[V2MaterialGap, ...] = Field(min_length=1, max_length=6)
@@ -1146,12 +1162,17 @@ class V2SearchAgentInput(StrictModel):
     previous_queries: tuple[NonEmptyStr, ...] = Field(max_length=48)
     provider_budgets: tuple[V2ProviderSearchBudget, ...]
     maximum_queries: PositiveInt
-    policy_identity: Literal["researchassistant-v2-phase-7-adaptive-search-v1"] = (
-        V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
-    )
+    policy_identity: Literal[
+        "researchassistant-v2-phase-7-adaptive-search-v1",
+        "researchassistant-v2-post-phase-13-round-four-v1",
+    ] = V2_ADAPTIVE_SEARCH_POLICY_IDENTITY
 
     @model_validator(mode="after")
     def validate_search_context(self) -> V2SearchAgentInput:
+        if self.round_number == 4 and self.policy_identity != V2_POST13_ROUND_FOUR_POLICY_IDENTITY:
+            raise ValueError("Round 4 Search Agent input requires the post-Phase-13 policy")
+        if self.round_number < 4 and self.policy_identity != V2_ADAPTIVE_SEARCH_POLICY_IDENTITY:
+            raise ValueError("Rounds 2 and 3 Search Agent input requires the Phase-7 policy")
         if not self.eligible_providers:
             raise ValueError("adaptive Search Agent requires an eligible provider")
         if len(set(self.eligible_providers)) != len(self.eligible_providers):
@@ -1179,7 +1200,7 @@ class V2GapAnalysisInput(StrictModel):
     run_id: UUID
     exact_claim: NonEmptyStr
     directions: ResearchDirections
-    completed_round: Literal[1, 2] = 1
+    completed_round: Literal[1, 2, 3] = 1
     attempted_queries: tuple[V2GapAttemptedQuery, ...] = Field(max_length=48)
     surviving_sources: tuple[V2GapSurvivingSourceMetadata, ...] = Field(max_length=75)
     probe_passages: tuple[V2GapProbePassage, ...] = Field(max_length=40)
@@ -1189,9 +1210,10 @@ class V2GapAnalysisInput(StrictModel):
     acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=150)
     previous_gaps: tuple[V2MaterialGap, ...] = Field(max_length=6)
     remaining_budget: V2GapBudgetState
-    policy_identity: Literal["researchassistant-v2-phase-6-gap-analysis-v1"] = (
-        V2_GAP_ANALYSIS_POLICY_IDENTITY
-    )
+    policy_identity: Literal[
+        "researchassistant-v2-phase-6-gap-analysis-v1",
+        "researchassistant-v2-post-phase-13-gap-analysis-v1",
+    ] = V2_GAP_ANALYSIS_POLICY_IDENTITY
 
     @model_validator(mode="after")
     def validate_strategy_scope(self) -> V2GapAnalysisInput:
@@ -1344,6 +1366,143 @@ class V2GapAnalysisOutput(StrictModel):
         return self
 
 
+class V2RoundFourDecisionCode(StrEnum):
+    """Stable fail-closed outcomes for the one permitted post-Round-3 continuation."""
+
+    AUTHORIZED = "authorized"
+    NO_MATERIAL_GAPS = "no_material_gaps"
+    GAP_ANALYSIS_UNUSABLE = "gap_analysis_unusable"
+    NO_NOVEL_QUERY = "no_novel_query"
+    NO_ELIGIBLE_PROVIDER = "no_eligible_provider"
+    DUPLICATE_HEAVY = "duplicate_heavy"
+    UNPRODUCTIVE = "unproductive"
+    INSUFFICIENT_RESERVATION = "insufficient_reservation"
+    CANCELLED = "cancelled"
+    TERMINAL_FAILURE = "terminal_failure"
+
+
+class V2RoundFourReservation(StrictModel):
+    """Auditable conservative envelope that keeps optional work out of downstream reserve."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    protected_downstream_calls: NonNegativeInt
+    protected_downstream_tokens: NonNegativeInt
+    protected_downstream_cost_usd: ExactUSD
+    gap_attempt_calls: NonNegativeInt
+    search_agent_calls: NonNegativeInt
+    scout_calls: NonNegativeInt
+    provider_search_calls: NonNegativeInt
+    acquisition_cluster_capacity: NonNegativeInt
+    optional_calls: NonNegativeInt
+    optional_tokens: NonNegativeInt
+    optional_cost_usd: ExactUSD
+    available_calls: NonNegativeInt
+    available_tokens: NonNegativeInt | None = None
+    available_cost_usd: ExactUSD | None = None
+
+    @model_validator(mode="after")
+    def validate_reservation(self) -> V2RoundFourReservation:
+        if self.optional_calls != (
+            self.gap_attempt_calls + self.search_agent_calls + self.scout_calls
+        ):
+            raise ValueError("Round-4 optional calls must equal its LLM workload components")
+        if self.available_calls < self.protected_downstream_calls + self.optional_calls:
+            raise ValueError("Round-4 reservation exceeds available physical-call capacity")
+        if (
+            self.available_tokens is not None
+            and self.available_tokens < self.protected_downstream_tokens + self.optional_tokens
+        ):
+            raise ValueError("Round-4 reservation exceeds available token capacity")
+        if (
+            self.available_cost_usd is not None
+            and self.available_cost_usd
+            < self.protected_downstream_cost_usd + self.optional_cost_usd
+        ):
+            raise ValueError("Round-4 reservation exceeds available cost capacity")
+        return self
+
+
+class V2RoundFourGovernorDecision(StrictModel):
+    """Application-owned authorization for the one bounded fourth research round."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    authorized: bool
+    reason_code: V2RoundFourDecisionCode
+    explanation: NonEmptyStr
+    reservation: V2RoundFourReservation | None = None
+    policy_identity: Literal["researchassistant-v2-post-phase-13-round-four-v1"] = (
+        V2_POST13_ROUND_FOUR_POLICY_IDENTITY
+    )
+    decided_at: datetime
+
+    _decided_at_is_aware = field_validator("decided_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> V2RoundFourGovernorDecision:
+        if self.authorized != (self.reason_code is V2RoundFourDecisionCode.AUTHORIZED):
+            raise ValueError("Round-4 authorization must agree with its reason code")
+        if self.authorized != (self.reservation is not None):
+            raise ValueError("only an authorized Round 4 may carry a reservation")
+        return self
+
+
+class V2GapCoverageState(StrEnum):
+    NOT_ATTEMPTED = "not_attempted"
+    COVERED = "covered"
+    UNRESOLVED = "unresolved"
+    UNAVAILABLE = "unavailable"
+
+
+class V2GapCoverageRecord(StrictModel):
+    """One post-Round-3 gap and the exact analyzer-admitted evidence that can cover it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    gap: V2MaterialGap
+    state: V2GapCoverageState
+    source_id: UUID | None = None
+    query_id: UUID | None = None
+    ledger_claim_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_coverage(self) -> V2GapCoverageRecord:
+        evidence_ids = (self.source_id, self.query_id, self.ledger_claim_id)
+        if self.state is V2GapCoverageState.COVERED:
+            if any(value is None for value in evidence_ids):
+                raise ValueError("covered gaps require source, query, and admitted evidence IDs")
+        elif any(value is not None for value in evidence_ids):
+            raise ValueError("only covered gaps may carry evidence linkage")
+        return self
+
+
+class V2GapCoverageReconciliation(StrictModel):
+    """Deterministic post-admission reconciliation; it never makes another model call."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    post_round_three_gap_artifact_key: NonEmptyStr
+    round_four_attempted: bool
+    records: tuple[V2GapCoverageRecord, ...]
+    completed_at: datetime
+
+    _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_records(self) -> V2GapCoverageReconciliation:
+        gap_ids = tuple(item.gap.gap_id for item in self.records)
+        if len(gap_ids) != len(set(gap_ids)):
+            raise ValueError("Gap reconciliation must retain each post-Round-3 gap once")
+        if not self.round_four_attempted and any(
+            item.state is V2GapCoverageState.COVERED for item in self.records
+        ):
+            raise ValueError("unattempted Round 4 cannot cover a Gap")
+        return self
+
+
 class V2SourceSelectionProbePassage(StrictModel):
     """Exact Probe text supplied for prioritization, not approved evidence."""
 
@@ -1361,7 +1520,7 @@ class V2SourceSelectionSearchProvenance(StrictModel):
 
     query_id: UUID
     provider: DiscoveryProvider
-    round_number: Annotated[int, Field(ge=1, le=3)]
+    round_number: Annotated[int, Field(ge=1, le=4)]
     query_text: NonEmptyStr
     targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(max_length=6)
 
@@ -1374,7 +1533,7 @@ class V2SourceSelectionGap(StrictModel):
     gap_id: NonEmptyStr
     direction: ResearchDirection
     missing_evidence: NonEmptyStr
-    assessed_after_round: Annotated[int, Field(ge=1, le=2)] = 1
+    assessed_after_round: Annotated[int, Field(ge=1, le=3)] = 1
 
 
 class V2SourceSelectionCandidate(StrictModel):
@@ -1385,7 +1544,7 @@ class V2SourceSelectionCandidate(StrictModel):
     source_id: UUID
     direction: ResearchDirection
     source_family_id: NonEmptyStr
-    research_round: Annotated[int, Field(ge=1, le=3)]
+    research_round: Annotated[int, Field(ge=1, le=4)]
     source_url: NonEmptyStr
     title: NonEmptyStr | None = None
     source_type: NonEmptyStr | None = None
@@ -1842,6 +2001,7 @@ class Stage(StrEnum):
     OPPOSING_RESEARCHER = "opposing_researcher"
     EVIDENCE_ANALYST = "evidence_analyst"
     EVIDENCE_ADMISSION = "evidence_admission"
+    GAP_RECONCILIATION = "gap_reconciliation"
     STATEMENT_REVIEWER = "statement_reviewer"
     CLAIM_LEDGER = "claim_ledger"
     DEBATE_SYNTHESIZER = "debate_synthesizer"
@@ -2042,7 +2202,7 @@ class SearchQuery(StrictModel):
     stance: Stance
     provider: DiscoveryProvider = DiscoveryProvider.EXA
     intent: SearchIntent = SearchIntent.BROAD_WEB
-    query_round: Annotated[int, Field(ge=1, le=3)]
+    query_round: Annotated[int, Field(ge=1, le=4)]
     strategy: NonEmptyStr
     query_text: NonEmptyStr
     exclusion_parameters: str
@@ -2161,7 +2321,7 @@ class RetrievalRecord(StrictModel):
     run_id: UUID
     retrieval_attempt_id: UUID
     query_id: UUID
-    query_round: Annotated[int, Field(ge=1, le=3)]
+    query_round: Annotated[int, Field(ge=1, le=4)]
     query_text: NonEmptyStr
     search_rank: Annotated[int, Field(ge=1, le=25)]
     source_url: NonEmptyStr
@@ -2281,7 +2441,7 @@ class ProvisionalCandidate(StrictModel):
     source_url: NonEmptyStr
     retrieval_attempt_id: UUID
     query_id: UUID
-    query_round: Annotated[int, Field(ge=1, le=3)]
+    query_round: Annotated[int, Field(ge=1, le=4)]
     search_rank: Annotated[int, Field(ge=1, le=25)]
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -2300,7 +2460,7 @@ class CandidateQuoteBlock(StrictModel):
     source_url: NonEmptyStr
     retrieval_attempt_id: UUID
     query_id: UUID
-    query_round: Annotated[int, Field(ge=1, le=3)]
+    query_round: Annotated[int, Field(ge=1, le=4)]
     search_rank: Annotated[int, Field(ge=1, le=25)]
     retrieved_at: datetime
     snapshot_id: UUID
@@ -2422,11 +2582,14 @@ class V2EvidenceAnalystModelOutput(StrictModel):
     evidence_quality: Score
     claim_fit: Score
     reasoning: NonEmptyStr = Field(max_length=3000)
+    addressed_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=3)
 
     @model_validator(mode="after")
     def validate_relationship_score(self) -> V2EvidenceAnalystModelOutput:
         if self.relationship_to_claim is V2EvidenceRelationship.UNRELATED and self.claim_fit > 2:
             raise ValueError("unrelated evidence cannot receive Claim Fit above 2")
+        if len(self.addressed_gap_ids) != len(set(self.addressed_gap_ids)):
+            raise ValueError("Analyst addressed Gap IDs must be unique")
         return self
 
 
@@ -2543,6 +2706,7 @@ class V2EvidenceAnalystLLMInput(StrictModel):
     direction: ResearchDirection
     candidate: CandidateQuoteBlock
     snapshot_context: V2EvidenceAnalystSnapshotContext
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=3)
 
 
 class V2CanonicalStatementLLMInput(StrictModel):
@@ -2681,7 +2845,7 @@ class V2LedgerProvenance(StrictModel):
 
     source_id: UUID
     research_direction: ResearchDirection
-    discovery_round: Annotated[int, Field(ge=1, le=3)]
+    discovery_round: Annotated[int, Field(ge=1, le=4)]
     source_family_id: NonEmptyStr
     recommended: bool
     relevant_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=18)
@@ -3599,7 +3763,7 @@ class V2ResultSource(StrictModel):
     source_type: NonEmptyStr | None = None
     publication_date: NonEmptyStr | None = None
     discovery_providers: tuple[DiscoveryProvider, ...]
-    discovery_round: Annotated[int, Field(ge=1, le=3)]
+    discovery_round: Annotated[int, Field(ge=1, le=4)]
     recommended: bool
     recommendation_rank: PositiveInt | None = None
     queue_rank: PositiveInt | None = None
@@ -3661,7 +3825,7 @@ class V2UnresolvedMaterialGap(StrictModel):
     gap_id: NonEmptyStr
     direction: ResearchDirection
     missing_evidence: NonEmptyStr
-    assessed_after_round: Annotated[int, Field(ge=1, le=2)]
+    assessed_after_round: Annotated[int, Field(ge=1, le=3)]
 
 
 class V2ResearchStoppingReason(StrEnum):
@@ -3680,7 +3844,7 @@ class V2ResearchStoppingDisclosure(StrictModel):
 
     reason: V2ResearchStoppingReason
     explanation: NonEmptyStr
-    completed_rounds: Annotated[int, Field(ge=1, le=3)]
+    completed_rounds: Annotated[int, Field(ge=1, le=4)]
 
 
 class V2ReleaseValidation(StrictModel):
@@ -3722,6 +3886,7 @@ class V2FinalResearchOutput(StrictModel):
     recommended_sources: tuple[V2ResultSource, ...]
     all_surviving_sources: tuple[V2ResultSource, ...]
     unresolved_material_gaps: tuple[V2UnresolvedMaterialGap, ...]
+    gap_reconciliation: V2GapCoverageReconciliation | None = None
     stopping: V2ResearchStoppingDisclosure
     created_at: datetime
     release_validation: V2ReleaseValidation
@@ -3748,6 +3913,19 @@ class V2FinalResearchOutput(StrictModel):
             raise ValueError("recommended source list may contain only recommended sources")
         if set(recommended_ids) - set(all_ids):
             raise ValueError("recommended source IDs must exist in surviving source list")
+        if self.gap_reconciliation is not None:
+            if self.gap_reconciliation.run_id != self.run_id:
+                raise ValueError("Gap reconciliation must match the final-output run")
+            unresolved_ids = tuple(item.gap_id for item in self.unresolved_material_gaps)
+            expected_ids = tuple(
+                item.gap.gap_id
+                for item in self.gap_reconciliation.records
+                if item.state is not V2GapCoverageState.COVERED
+            )
+            if unresolved_ids != expected_ids:
+                raise ValueError(
+                    "final unresolved gaps must exactly reproduce non-covered reconciliation gaps"
+                )
         return self
 
 

@@ -1,4 +1,4 @@
-"""Direct Xiaomi MiMo JSON-mode adapter for the authorized MVP-3B route."""
+"""OpenAI-compatible JSON-mode adapters for MiMo and the Luna route."""
 
 from __future__ import annotations
 
@@ -152,7 +152,7 @@ class MimoSynthesisResponse(StrictModel):
 
 
 class XiaomiMimoAdapter:
-    """One direct physical MiMo call; orchestration owns the one allowed retry."""
+    """One physical OpenAI-compatible call; orchestration owns bounded retries."""
 
     capabilities = LLMProviderCapabilities(
         supports_temperature=True,
@@ -169,13 +169,15 @@ class XiaomiMimoAdapter:
         max_call_tokens: int = 1_000_000,
         expected_model_alias: ModelAlias = ModelAlias.MIMO_V25_PRO,
     ) -> None:
+        provider_label = _provider_label(config)
         if price_cap.model != config.model:
             raise MimoProviderError(
                 MimoFailureCode.UNKNOWN_PRICING,
-                "direct MiMo pricing does not cover the configured model",
+                f"{provider_label} pricing does not cover the configured model",
                 retryable=False,
             )
         self._config = config
+        self._provider_label = provider_label
         self._client = client or httpx.Client(
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.synthesizer_seconds),
@@ -193,7 +195,7 @@ class XiaomiMimoAdapter:
         if request.model_alias is not self._expected_model_alias:
             raise MimoProviderError(
                 MimoFailureCode.CAPABILITY,
-                "direct Xiaomi MiMo request does not match its configured logical route",
+                f"{self._provider_label} request does not match its configured logical route",
                 retryable=False,
             )
         input_estimate = conservative_token_estimate(_direct_mimo_prompt(request))
@@ -219,53 +221,53 @@ class XiaomiMimoAdapter:
         except httpx.TimeoutException as exc:
             raise MimoProviderError(
                 MimoFailureCode.TIMEOUT,
-                "Xiaomi MiMo request timed out",
+                f"{self._provider_label} request timed out",
                 retryable=True,
             ) from exc
         except httpx.HTTPError as exc:
             raise MimoProviderError(
                 MimoFailureCode.TRANSIENT_OUTAGE,
-                "Xiaomi MiMo connection failed",
+                f"{self._provider_label} connection failed",
                 retryable=True,
             ) from exc
         elapsed = time.monotonic() - started
         self._record_failure_usage(response)
         if response.status_code != 200:
-            raise _http_error(response)
-        body = _json_object(response)
+            raise _http_error(response, provider_label=self._provider_label)
+        body = _json_object(response, provider_label=self._provider_label)
         if body.get("error"):
             raise MimoProviderError(
                 MimoFailureCode.PERMANENT_FAILURE,
-                "Xiaomi MiMo returned an error payload",
+                f"{self._provider_label} returned an error payload",
                 retryable=False,
             )
         returned_model = body.get("model")
         if returned_model != self._config.model:
             raise MimoProviderError(
                 MimoFailureCode.MODEL_MISMATCH,
-                "Xiaomi MiMo returned a different model identity",
+                f"{self._provider_label} returned a different model identity",
                 retryable=False,
             )
-        choice = _single_choice(body)
+        choice = _single_choice(body, provider_label=self._provider_label)
         finish_reason = choice.get("finish_reason")
         if finish_reason == "length":
             raise MimoProviderError(
                 MimoFailureCode.TRUNCATED,
-                "Xiaomi MiMo output was truncated",
+                f"{self._provider_label} output was truncated",
                 retryable=True,
             )
         message = choice.get("message")
         if not isinstance(message, dict):
-            raise _malformed("Xiaomi MiMo choice did not contain a message")
+            raise _malformed(f"{self._provider_label} choice did not contain a message")
         if message.get("refusal") or finish_reason == "content_filter":
             raise MimoProviderError(
                 MimoFailureCode.REFUSAL,
-                "Xiaomi MiMo refused the request",
+                f"{self._provider_label} refused the request",
                 retryable=False,
             )
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise _malformed("Xiaomi MiMo message content was missing")
+            raise _malformed(f"{self._provider_label} message content was missing")
         if content.lstrip().startswith("```"):
             raise MimoProviderError(
                 MimoFailureCode.MALFORMED_JSON,
@@ -277,7 +279,7 @@ class XiaomiMimoAdapter:
         except json.JSONDecodeError as exc:
             raise MimoProviderError(
                 MimoFailureCode.MALFORMED_JSON,
-                "Xiaomi MiMo content was not one complete JSON value",
+                f"{self._provider_label} content was not one complete JSON value",
                 retryable=True,
             ) from exc
         try:
@@ -297,12 +299,12 @@ class XiaomiMimoAdapter:
             raise MimoProviderError(
                 MimoFailureCode.SCHEMA,
                 (
-                    "Xiaomi MiMo content failed the semantic response contract "
+                    f"{self._provider_label} content failed the semantic response contract "
                     f"(schema diagnostics: {diagnostics})"
                 ),
                 retryable=True,
             ) from exc
-        usage = _usage(body.get("usage"), self._price_cap)
+        usage = _usage(body.get("usage"), self._price_cap, self._provider_label)
         if usage.total_tokens is None or usage.total_tokens > self._max_call_tokens:
             raise MimoProviderError(
                 MimoFailureCode.BUDGET,
@@ -342,7 +344,7 @@ class XiaomiMimoAdapter:
         if not isinstance(metadata, MimoCallMetadata):
             raise MimoProviderError(
                 MimoFailureCode.MALFORMED_USAGE,
-                "no completed Xiaomi MiMo call metadata is available",
+                f"no completed {self._provider_label} call metadata is available",
                 retryable=False,
             )
         return metadata
@@ -356,7 +358,7 @@ class XiaomiMimoAdapter:
             body = response.json()
             if not isinstance(body, dict) or body.get("usage") is None:
                 return
-            usage = _usage(body["usage"], self._price_cap)
+            usage = _usage(body["usage"], self._price_cap, self._provider_label)
         except Exception:
             return
         self._thread_state.last_failure_usage = usage
@@ -663,28 +665,32 @@ def _deadline_for(
     return getattr(config.deadlines, f"{stage.value}_seconds")
 
 
-def _json_object(response: httpx.Response) -> dict[str, Any]:
+def _json_object(response: httpx.Response, *, provider_label: str) -> dict[str, Any]:
     try:
         body = response.json()
     except ValueError as exc:
-        raise _malformed("Xiaomi MiMo success response was not valid JSON") from exc
+        raise _malformed(f"{provider_label} success response was not valid JSON") from exc
     if not isinstance(body, dict):
-        raise _malformed("Xiaomi MiMo success response was not an object")
+        raise _malformed(f"{provider_label} success response was not an object")
     return body
 
 
-def _single_choice(body: dict[str, Any]) -> dict[str, Any]:
+def _single_choice(body: dict[str, Any], *, provider_label: str) -> dict[str, Any]:
     choices = body.get("choices")
     if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
-        raise _malformed("Xiaomi MiMo response must contain exactly one choice")
+        raise _malformed(f"{provider_label} response must contain exactly one choice")
     return choices[0]
 
 
-def _usage(raw: Any, cap: ModelPriceCap) -> ModelUsageMetadata:
+def _usage(
+    raw: Any,
+    cap: ModelPriceCap,
+    provider_label: str = "Xiaomi MiMo",
+) -> ModelUsageMetadata:
     if not isinstance(raw, dict):
         raise MimoProviderError(
             MimoFailureCode.MALFORMED_USAGE,
-            "Xiaomi MiMo usage metadata was missing or malformed",
+            f"{provider_label} usage metadata was missing or malformed",
             retryable=False,
         )
     prompt = raw.get("prompt_tokens")
@@ -696,13 +702,13 @@ def _usage(raw: Any, cap: ModelPriceCap) -> ModelUsageMetadata:
     ):
         raise MimoProviderError(
             MimoFailureCode.MALFORMED_USAGE,
-            "Xiaomi MiMo token usage fields were malformed",
+            f"{provider_label} token usage fields were malformed",
             retryable=False,
         )
     if total != prompt + completion:
         raise MimoProviderError(
             MimoFailureCode.MALFORMED_USAGE,
-            "Xiaomi MiMo total token usage was inconsistent",
+            f"{provider_label} total token usage was inconsistent",
             retryable=False,
         )
     cached = _cached_prompt_tokens(raw, prompt)
@@ -741,7 +747,7 @@ def _cache_aware_cost(*, cached: int, uncached: int, output: int) -> Decimal:
     return value.quantize(Decimal("0.000000001"), rounding=ROUND_UP)
 
 
-def _http_error(response: httpx.Response) -> MimoProviderError:
+def _http_error(response: httpx.Response, *, provider_label: str) -> MimoProviderError:
     status = response.status_code
     request_id = _safe_request_id(response.headers.get("x-request-id"))
     diagnostic = f"HTTP {status}"
@@ -750,7 +756,7 @@ def _http_error(response: httpx.Response) -> MimoProviderError:
     if status == 401:
         return MimoProviderError(
             MimoFailureCode.AUTHENTICATION,
-            f"Xiaomi MiMo authentication failed ({diagnostic})",
+            f"{provider_label} authentication failed ({diagnostic})",
             retryable=False,
             http_status=status,
             request_id=request_id,
@@ -758,7 +764,7 @@ def _http_error(response: httpx.Response) -> MimoProviderError:
     if status == 403:
         return MimoProviderError(
             MimoFailureCode.AUTHENTICATION,
-            f"Xiaomi MiMo request was forbidden ({diagnostic})",
+            f"{provider_label} request was forbidden ({diagnostic})",
             retryable=False,
             http_status=status,
             request_id=request_id,
@@ -766,26 +772,30 @@ def _http_error(response: httpx.Response) -> MimoProviderError:
     if status == 408:
         return MimoProviderError(
             MimoFailureCode.TIMEOUT,
-            "Xiaomi MiMo request timed out",
+            f"{provider_label} request timed out",
             retryable=True,
         )
     if status == 429:
         return MimoProviderError(
             MimoFailureCode.RATE_LIMIT,
-            "Xiaomi MiMo rate limit was reached",
+            f"{provider_label} rate limit was reached",
             retryable=True,
         )
     if 500 <= status < 600:
         return MimoProviderError(
             MimoFailureCode.TRANSIENT_OUTAGE,
-            "Xiaomi MiMo transient outage",
+            f"{provider_label} transient outage",
             retryable=True,
         )
     return MimoProviderError(
         MimoFailureCode.PERMANENT_FAILURE,
-        "Xiaomi MiMo request failed permanently",
+        f"{provider_label} request failed permanently",
         retryable=False,
     )
+
+
+def _provider_label(config: MimoConfig | MimoRouteConfig | LunaConfig) -> str:
+    return "Luna" if isinstance(config, LunaConfig) else "Xiaomi MiMo"
 
 
 def _malformed(message: str) -> MimoProviderError:

@@ -35,12 +35,17 @@ from agents.v2_extraction import V2_EXTRACTION_ARTIFACT_KEY, V2_EXTRACTION_POLIC
 from agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
     V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+    V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
     V2_FINAL_OUTPUT_POLICY_IDENTITY,
     V2_FINAL_VALIDATOR_CONFIG_VERSION,
     run_v2_final_research_output,
 )
 from agents.v2_gap_analysis import build_v2_gap_analysis_input, run_v2_gap_analysis
 from agents.v2_initial_planner import run_v2_initial_planner
+from agents.v2_round_four import (
+    reconcile_post_round_three_gaps,
+    run_v2_round_four_continuation,
+)
 from agents.v2_source_selection import (
     V2_SOURCE_SELECTION_COMPLETION_KEY,
     V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
@@ -85,7 +90,7 @@ from models import (
     V2SynthesizerInput,
     V2VerbatimQuoteSelection,
 )
-from providers.llm import LLMProvider
+from providers.llm import LLMProvider, LLMStage
 from providers.scraper import ScraperProvider
 from providers.search import (
     SearchFailureCode,
@@ -120,13 +125,13 @@ from store import (
 
 V2_PRODUCTION_LEGACY_ARTIFACT_KEY = "phase-12-production-result"
 V2_PRODUCTION_LEGACY_FINGERPRINT_KEY = "phase-12-production-fingerprint"
-V2_PRODUCTION_ARTIFACT_KEY = "phase-13-production-result-analyzer-admission"
-V2_PRODUCTION_FINGERPRINT_KEY = "phase-13-production-fingerprint-analyzer-admission"
+V2_PRODUCTION_PHASE13_ARTIFACT_KEY = "phase-13-production-result-analyzer-admission"
+V2_PRODUCTION_PHASE13_FINGERPRINT_KEY = "phase-13-production-fingerprint-analyzer-admission"
+V2_PRODUCTION_ARTIFACT_KEY = "post-phase-13-round-four-production-result-v1"
+V2_PRODUCTION_FINGERPRINT_KEY = "post-phase-13-round-four-production-fingerprint-v1"
 V2_ROUND_ONE_LEGACY_SEARCH_KEY = "phase-12-round-1-search"
 V2_ROUND_ONE_SEARCH_KEY = "phase-13-round-1-search"
-V2_PRODUCTION_POLICY_IDENTITY = (
-    "researchassistant-v2-phase-13-production-cutover-analyzer-admission-v1"
-)
+V2_PRODUCTION_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-production-v1"
 V2_DEEP_ANALYSIS_BACKFILL_LEGACY_ARTIFACT_KEY = "phase-12-deep-analysis-backfill-v1"
 V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 8
 V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE = 8
@@ -160,6 +165,8 @@ def _empty_v2_run_diagnostics(
 def configured_v2_providers(path: str | Path, run_id: UUID) -> tuple[DiscoveryProvider, ...]:
     """Read the configured discovery lanes from the immutable v2 fingerprint."""
     payload = _read_v2_payload(path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+    if payload is None:
+        payload = _read_v2_payload(path, run_id, V2_PRODUCTION_PHASE13_FINGERPRINT_KEY)
     if payload is None:
         payload = _read_v2_payload(path, run_id, V2_PRODUCTION_LEGACY_FINGERPRINT_KEY)
     if payload is None:
@@ -230,9 +237,15 @@ def build_v2_run_diagnostics(
                 len(outcome.results),
                 outcome.failure_code,
             )
-    for round_number in (2, 3):
+    for round_number in (2, 3, 4):
         search_payload = _read_v2_payload(
-            path, run_id, f"phase-7-round-{round_number}-search-results"
+            path,
+            run_id,
+            (
+                "post-phase-13-round-4-search-results-v1"
+                if round_number == 4
+                else f"phase-7-round-{round_number}-search-results"
+            ),
         )
         if search_payload is None:
             continue
@@ -246,10 +259,12 @@ def build_v2_run_diagnostics(
             )
 
     cluster_providers: dict[UUID, tuple[DiscoveryProvider, ...]] = {}
-    for round_number in (1, 2, 3):
+    for round_number in (1, 2, 3, 4):
         discovery_key = (
             V2_SCOUT_ARTIFACT_KEY
             if round_number == 1
+            else "post-phase-13-round-4-discovery-scout-v1"
+            if round_number == 4
             else f"phase-7-round-{round_number}-discovery-scout"
         )
         discovery_payload = _read_v2_payload(path, run_id, discovery_key)
@@ -267,10 +282,12 @@ def build_v2_run_diagnostics(
     surviving_by_provider: dict[DiscoveryProvider, set[UUID]] = {
         provider: set() for provider in providers
     }
-    for round_number in (1, 2, 3):
+    for round_number in (1, 2, 3, 4):
         acquisition_key = (
             V2_ACQUISITION_PROBE_ARTIFACT_KEY
             if round_number == 1
+            else "post-phase-13-round-4-acquisition-probe-v1"
+            if round_number == 4
             else f"phase-7-round-{round_number}-acquisition-probe"
         )
         acquisition_payload = _read_v2_payload(path, run_id, acquisition_key)
@@ -421,7 +438,11 @@ def infer_v2_stage(
         return current_stage
     if final_output_present or any(
         _read_v2_payload(path, run_id, artifact_key) is not None
-        for artifact_key in (V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY)
+        for artifact_key in (
+            V2_FINAL_OUTPUT_ARTIFACT_KEY,
+            V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
+            V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+        )
     ):
         return Stage.FINAL_RENDERER_VALIDATOR
     for artifact_key, stage in (
@@ -601,9 +622,8 @@ def run_v2_production_pipeline(
     resolved_run_id = run_id or uuid4()
     path = str(Path(db_path).resolve())
 
-    # A completed Phase-12 run is an immutable historical result. Read it before
-    # creating or validating the Phase-13 identity, whose route fingerprint is
-    # intentionally different after the Analyzer Admission cutover.
+    # Completed prior-policy runs are immutable historical results. Read them before
+    # creating or validating the post-Phase-13 identity.
     init_db(path)
     try:
         legacy_terminal = read_v2_artifact(path, resolved_run_id, V2_PRODUCTION_LEGACY_ARTIFACT_KEY)
@@ -611,6 +631,14 @@ def run_v2_production_pipeline(
         legacy_terminal = None
     if legacy_terminal is not None:
         return V2ProductionPipelineResult.model_validate_json(legacy_terminal.payload_json)
+    try:
+        phase13_terminal = read_v2_artifact(
+            path, resolved_run_id, V2_PRODUCTION_PHASE13_ARTIFACT_KEY
+        )
+    except KeyError:
+        phase13_terminal = None
+    if phase13_terminal is not None:
+        return V2ProductionPipelineResult.model_validate_json(phase13_terminal.payload_json)
 
     def effective_cancellation_requested() -> bool:
         return _cancelled(cancellation_requested) or v2_cancellation_requested(
@@ -719,7 +747,7 @@ def run_v2_production_pipeline(
         _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.ADAPTIVE_SEARCH
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
-        adaptive_budget = _adaptive_budget(budgeted_llm.snapshot())
+        adaptive_budget = _adaptive_budget(budgeted_llm.snapshot(), routing_config)
         continuation = run_v2_adaptive_search_continuation(
             db_path=path,
             initial_plan=planner,
@@ -747,6 +775,50 @@ def run_v2_production_pipeline(
                 now,
             )
         _raise_if_v2_cancelled(effective_cancellation_requested)
+        round_four_gap = None
+        if continuation.stopping_decision.completed_rounds == 3:
+            round_three_discoveries, round_three_acquisitions, _round_three_gaps = (
+                _completed_round_artifacts(
+                    path,
+                    resolved_run_id,
+                    continuation,
+                    discovery_one,
+                    acquisition_one,
+                    gap_one,
+                )
+            )
+            round_four = run_v2_round_four_continuation(
+                db_path=path,
+                initial_plan=planner,
+                continuation=continuation,
+                discovery_outputs=round_three_discoveries,
+                acquisition_outputs=round_three_acquisitions,
+                search_providers=search_providers,
+                llm_provider=budgeted_llm,
+                routing_config=routing_config,
+                wigolo_provider=wigolo_provider,
+                firecrawl_provider=firecrawl_provider,
+                crossref_resolver=crossref_resolver,
+                budget=_adaptive_budget(budgeted_llm.snapshot(), routing_config),
+                cancellation_requested=effective_cancellation_requested,
+                clock=now,
+            )
+            if (
+                round_four.governor_decision.reason_code.value == "cancelled"
+                or round_four.continuation.stopping_decision.stop_code
+                is V2AdaptiveStopCode.CANCELLED
+            ):
+                return _cancel(
+                    path,
+                    resolved_run_id,
+                    raw_claim,
+                    budgeted_llm,
+                    current_stage,
+                    discovery_providers,
+                    now,
+                )
+            continuation = round_four.continuation
+            round_four_gap = round_four.post_round_three_gap
         if budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE:
             raise V2BudgetExceededError(
                 "v2 downstream reserve cannot cover selection, extraction, analysis, and admission"
@@ -759,6 +831,8 @@ def run_v2_production_pipeline(
             acquisition_one,
             gap_one,
         )
+        if round_four_gap is not None:
+            gaps = (*gaps, round_four_gap)
         if not continuation.merged_survivors.sources:
             raise ValueError("no source survived acquisition and deterministic Probe")
         current_stage = Stage.SOURCE_SELECTION
@@ -822,10 +896,21 @@ def run_v2_production_pipeline(
         current_stage = Stage.SYNTHESIS
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         _raise_if_v2_cancelled(effective_cancellation_requested)
+        reconciliation = (
+            reconcile_post_round_three_gaps(
+                db_path=path,
+                post_round_three_gap=round_four_gap,
+                admission_result=admission,
+                clock=now,
+            )
+            if round_four_gap is not None
+            else None
+        )
         final = run_v2_final_research_output(
             db_path=path,
             admission_result=admission,
             continuation=continuation,
+            gap_reconciliation=reconciliation,
             llm_provider=budgeted_llm,
             routing_config=routing_config,
             clock=now,
@@ -939,8 +1024,9 @@ def _production_fingerprint(
         "routing_contract": routing.fingerprint_payload(),
         "provider_policy_fingerprint": provider_policy_fingerprint,
         "semantic_policy": _semantic_policy_payload(),
-        "round_limit": 3,
-        "final_output_contract": "researchassistant-v2-phase-13-final-output-analyzer-admission-v1",
+        "round_limit": 4,
+        "round_four_policy": "researchassistant-v2-post-phase-13-round-four-v1",
+        "final_output_contract": "researchassistant-v2-post-phase-13-round-four-final-output-v1",
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return V2ProductionFingerprint(
@@ -954,7 +1040,13 @@ def _production_fingerprint(
 def _semantic_policy_payload() -> dict[str, object]:
     prompt_hashes = {
         name: hashlib.sha256((Path(__file__).parent / "prompts" / name).read_bytes()).hexdigest()
-        for name in ("v2_initial_planner.md", "v2_scout.md", "v2_evidence_analyst.md")
+        for name in (
+            "v2_initial_planner.md",
+            "v2_scout.md",
+            "v2_evidence_analyst.md",
+            "gap_analysis.md",
+            "search_agent.md",
+        )
     }
     schema_types = (
         V2InitialPlannerModelOutput,
@@ -1099,7 +1191,18 @@ def _run_round_one_search(
     return result
 
 
-def _adaptive_budget(snapshot: V2BudgetSnapshot) -> V2AdaptiveBudgetState:
+def _adaptive_budget(
+    snapshot: V2BudgetSnapshot, routing_config: V2RoutingConfig
+) -> V2AdaptiveBudgetState:
+    downstream_reservations = tuple(
+        routing_config.preflight().reserve(stage, 1) for stage in LLMStage
+    )
+    protected_tokens = V2_MANDATORY_DOWNSTREAM_CALL_RESERVE * max(
+        item.reserved_tokens for item in downstream_reservations
+    )
+    protected_cost = V2_MANDATORY_DOWNSTREAM_CALL_RESERVE * max(
+        (item.reserved_cost_usd for item in downstream_reservations), default=0
+    )
     downstream_fits = (
         snapshot.physical_calls_remaining
         > V2_MANDATORY_DOWNSTREAM_CALL_RESERVE + V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE
@@ -1109,6 +1212,8 @@ def _adaptive_budget(snapshot: V2BudgetSnapshot) -> V2AdaptiveBudgetState:
         tokens_remaining=snapshot.tokens_remaining,
         cost_remaining_usd=snapshot.cost_remaining_usd,
         protected_downstream_model_calls=V2_MANDATORY_DOWNSTREAM_CALL_RESERVE,
+        protected_downstream_tokens=protected_tokens,
+        protected_downstream_cost_usd=protected_cost,
         round_three_complete_workload_reservable=downstream_fits,
     )
 
@@ -1129,9 +1234,20 @@ def _completed_round_artifacts(
     acquisitions = [acquisition_one]
     gaps = [gap_one]
     for round_number in range(2, continuation.stopping_decision.completed_rounds + 1):
-        discovery = read_v2_artifact(path, run_id, f"phase-7-round-{round_number}-discovery-scout")
+        suffix = (
+            "post-phase-13-round-4-discovery-scout-v1"
+            if round_number == 4
+            else f"phase-7-round-{round_number}-discovery-scout"
+        )
+        discovery = read_v2_artifact(path, run_id, suffix)
         acquisition = read_v2_artifact(
-            path, run_id, f"phase-7-round-{round_number}-acquisition-probe"
+            path,
+            run_id,
+            (
+                "post-phase-13-round-4-acquisition-probe-v1"
+                if round_number == 4
+                else f"phase-7-round-{round_number}-acquisition-probe"
+            ),
         )
         discoveries.append(V2DiscoveryScoutOutput.model_validate_json(discovery.payload_json))
         acquisitions.append(V2AcquisitionProbeOutput.model_validate_json(acquisition.payload_json))

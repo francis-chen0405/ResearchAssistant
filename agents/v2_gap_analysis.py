@@ -40,6 +40,7 @@ from providers.llm import (
     LLMRequest,
     LLMStage,
     invoke_llm,
+    is_non_retryable_provider_error,
     load_prompt,
     render_stage_prompt,
 )
@@ -206,19 +207,20 @@ def run_v2_gap_analysis(
     gap_input: V2GapAnalysisInput,
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
+    artifact_key: str | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2GapAnalysisRunResult:
     """Run at most two Luna attempts, persist a completed or degraded strategy state."""
     now = clock or _utc_now
     completed_at = _aware_now(now)
     path = str(Path(db_path).resolve())
-    artifact_key = (
+    resolved_artifact_key = artifact_key or (
         V2_GAP_ANALYSIS_ARTIFACT_KEY
         if gap_input.completed_round == 1
         else f"phase-7-gap-analysis-after-round-{gap_input.completed_round}"
     )
     try:
-        stored = read_v2_artifact(path, gap_input.run_id, artifact_key)
+        stored = read_v2_artifact(path, gap_input.run_id, resolved_artifact_key)
     except KeyError:
         stored = None
     if stored is not None:
@@ -286,7 +288,7 @@ def run_v2_gap_analysis(
                 stop_adaptive_continuation=not result.continue_research,
                 completed_at=completed_at,
             )
-            insert_v2_artifact(path, artifact_key, output, completed_at)
+            insert_v2_artifact(path, resolved_artifact_key, output, completed_at)
             return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
         except (LLMInvocationError, TypeError, ValueError) as exc:
             attempts.append(
@@ -297,6 +299,8 @@ def run_v2_gap_analysis(
                     failure=f"{type(exc).__name__}: {exc}"[:500],
                 )
             )
+            if isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc):
+                raise
     output = V2GapAnalysisOutput(
         run_id=gap_input.run_id,
         input=gap_input,
@@ -305,7 +309,7 @@ def run_v2_gap_analysis(
         stop_adaptive_continuation=True,
         completed_at=completed_at,
     )
-    insert_v2_artifact(path, artifact_key, output, completed_at)
+    insert_v2_artifact(path, resolved_artifact_key, output, completed_at)
     return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
 
 

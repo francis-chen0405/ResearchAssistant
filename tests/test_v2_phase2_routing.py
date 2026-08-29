@@ -10,7 +10,7 @@ from pydantic import SecretStr
 
 from agents.planner import PlannerLLMInput
 from models import PlannerOutput
-from providers.config import MimoRouteConfig, ProviderConfigurationError
+from providers.config import LunaConfig, MimoRouteConfig, ProviderConfigurationError
 from providers.llm import (
     DIRECT_MIMO_ROUTING,
     V2_LLM_ROUTING,
@@ -161,6 +161,49 @@ def test_mimo_normal_route_rejects_returned_model_mismatch() -> None:
     with pytest.raises(MimoProviderError) as exc_info:
         adapter.generate(request)
     assert exc_info.value.code is MimoFailureCode.MODEL_MISMATCH
+
+
+def test_luna_route_uses_luna_identity_for_auth_errors() -> None:
+    config = LunaConfig(api_key=SecretStr("secret"))
+    run_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, headers={"x-request-id": "req-luna"}, request=request)
+
+    adapter = XiaomiMimoAdapter(
+        config,
+        client=httpx.Client(
+            base_url=config.base_url,
+            transport=httpx.MockTransport(handler),
+        ),
+        price_cap=ModelPriceCap(
+            model=config.model,
+            input_usd_per_token=Decimal("0.000001"),
+            output_usd_per_token=Decimal("0.000002"),
+        ),
+        expected_model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+    )
+    request = LLMRequest(
+        run_id=run_id,
+        stage=LLMStage.PLANNER,
+        prompt=PromptTemplate(
+            stage=LLMStage.PLANNER,
+            version="v2-test",
+            sha256="0" * 64,
+            text="test prompt",
+        ),
+        rendered_prompt="test prompt",
+        input_artifact=PlannerLLMInput(run_id=run_id, raw_claim="Public claim."),
+        input_artifact_ids=(uuid4(),),
+        requested_output_type=PlannerOutput,
+        model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+        generation=V2_LLM_ROUTING.for_stage(LLMStage.PLANNER).generation,
+    )
+
+    with pytest.raises(MimoProviderError) as exc_info:
+        adapter.generate(request)
+
+    assert str(exc_info.value) == "Luna authentication failed (HTTP 401, request_id=req-luna)"
 
 
 def test_v2_route_configuration_and_contract_redact_credentials() -> None:

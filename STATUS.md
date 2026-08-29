@@ -1,5 +1,43 @@
 # Status
 
+## 2026-08-28 - Phase 14 conditional Round Four and gap reconciliation
+
+Status: Complete and verified.
+
+- Added a fresh-v2-only post-Round-3 cumulative Luna Gap Analysis and one conditional,
+  application-governed Round 4. It requires a completed non-degraded Round 3, material gaps,
+  eligible capacity, novelty, duplicate/productivity checks, and a full conservative reserve.
+- The persisted reserve protects two possible Gap attempts, Search Agent and worst-case Scout
+  work, provider search/acquisition capacity, and the existing downstream calls, tokens, and
+  cost. Round 4 is capped at two provider lanes and two queries per lane per enabled direction,
+  with at most four queries per enabled direction; Round 5 and post-Round-4 Gap Analysis are
+  impossible.
+- Added typed Governor, reservation, coverage-reconciliation, and post-Phase-13 policy
+  artifacts; new fingerprints, final-output keys, API/export readers, UI progress, and trail
+  support preserve immutable Phase-13 and earlier compatibility reads.
+- Analyzer output now explicitly records addressed Round-4 Gap IDs. Deterministic final
+  reconciliation marks a gap covered only with matching Round-4 provenance and analyzer-admitted
+  evidence; all other post-Round-3 gaps remain explicitly disclosed.
+
+Verification: `pytest` passed (834 passed, 2 skipped; one existing FastAPI/httpx deprecation
+warning). `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live provider
+call, dependency, migration, or historical-artifact rewrite was made.
+
+Next phase: Stop here until explicit user authorization for a new phase.
+
+## 2026-08-28 - Luna authentication failure handling
+
+Status: Implemented and verified offline.
+
+- Shared OpenAI-compatible adapter errors now identify Luna separately from Xiaomi MiMo.
+- Provider-declared non-retryable failures are preserved through invocation records; fresh-v2
+  Gap Analysis and Evidence Analyst authentication failures now terminate the run immediately
+  instead of retrying or sweeping every queued source.
+- Provider setup wording now distinguishes configured credentials from live authentication.
+
+Verification: focused provider, routing, Gap Analysis, Evidence Analyst, API, and production
+tests passed (130 passed, 1 expected skip). No live provider call was made.
+
 ## 2026-08-26 - Phase 13 analyzer-admission cutover
 
 Status: Complete and verified.

@@ -20,7 +20,11 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
-from agents.v2_final_output import V2_FINAL_OUTPUT_ARTIFACT_KEY, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
+from agents.v2_final_output import (
+    V2_FINAL_OUTPUT_ARTIFACT_KEY,
+    V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+    V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
+)
 from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_ARTIFACT_KEY
 from credential_store import (
     KeychainUnavailableError,
@@ -438,7 +442,11 @@ def create_app(
         )
         return ConfigurationResponse(
             configured=config_message is None,
-            message=config_message or "MiMo and your selected research sources are connected.",
+            message=(
+                config_message
+                or "MiMo and your selected research sources are configured; credentials are "
+                "checked when research starts."
+            ),
             default_db_path=str(prepare_default_database()),
             firecrawl_enabled=bool(runtime.environment.get("FIRECRAWL_API_KEY", "").strip()),
             saved_credentials=_saved_credential_names(runtime.environment),
@@ -628,9 +636,14 @@ def create_app(
                         store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY
                     )
                 except KeyError:
-                    artifact = read_v2_artifact(
-                        store.connection, run_id, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
-                    )
+                    try:
+                        artifact = read_v2_artifact(
+                            store.connection, run_id, V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY
+                        )
+                    except KeyError:
+                        artifact = read_v2_artifact(
+                            store.connection, run_id, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
+                        )
             if artifact.artifact_type != V2FinalResearchOutput.__name__:
                 raise ValueError("v2 final-output artifact has an unexpected type")
             return V2FinalResearchOutput.model_validate_json(artifact.payload_json)
@@ -651,9 +664,14 @@ def create_app(
                         store.connection, run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY
                     )
                 except KeyError:
-                    final_artifact = read_v2_artifact(
-                        store.connection, run_id, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
-                    )
+                    try:
+                        final_artifact = read_v2_artifact(
+                            store.connection, run_id, V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY
+                        )
+                    except KeyError:
+                        final_artifact = read_v2_artifact(
+                            store.connection, run_id, V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY
+                        )
                 try:
                     evidence_artifact = read_v2_artifact(
                         store.connection, run_id, V2_EVIDENCE_ADMISSION_ARTIFACT_KEY

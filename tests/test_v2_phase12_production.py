@@ -378,6 +378,7 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
     assert first.final_output is not None and first.final_output.release_validation.valid
     assert first.current_stage is Stage.FINAL_RENDERER_VALIDATOR
     assert first.diagnostics is not None
+
     assert first.diagnostics.configured_providers == (DiscoveryProvider.EXA,)
     assert first.diagnostics.search_attempts >= 1
     assert first.diagnostics.sources_acquired >= 1
@@ -404,6 +405,34 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
 
     resumed = _run(db_path, _V2Model(), _Search(), _Scraper(), run_id=run_id)
     assert resumed == first
+
+
+def test_post_phase13_round_four_is_bounded_and_uses_versioned_artifacts(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-round-four.sqlite3"
+    run_id = uuid4()
+    model = _V2Model(completed_rounds=4)
+
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 4
+    assert model.search_agent_calls == 3
+    assert read_v2_artifact(db_path, run_id, "post-phase-13-round-4-plan-v1")
+    assert read_v2_artifact(db_path, run_id, "post-phase-13-gap-coverage-reconciliation-v1")
 
 
 def test_completed_legacy_v2_result_bypasses_phase13_identity_validation(

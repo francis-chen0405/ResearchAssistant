@@ -1,5 +1,41 @@
 # Handoff
 
+## Phase 14 conditional Round Four and gap reconciliation — 2026-08-28
+
+Fresh v2 can now execute one post-Round-3 cumulative Luna Gap Analysis and, only when the typed
+Governor reserves its entire workload plus protected downstream calls/tokens/cost, one narrow
+Round 4. The new path has distinct post-Phase-13 artifact and fingerprint identities; it permits
+at most two provider lanes and two queries per lane per enabled direction, with a maximum of four
+queries per enabled direction. It cannot create Round 5 or run Gap Analysis after Round 4.
+
+The final output carries deterministic reconciliation of the original post-Round-3 gaps. Coverage
+requires matching Round-4 targeted-gap provenance, analyzer-admitted evidence, and the Analyst's
+explicit addressed-gap declaration. A search result, recommendation, quotation, or unadmitted
+analysis alone never closes a gap. API, export, progress, and research-trail readers recognize the
+new version while preserving read-only Phase-13 and earlier artifacts unchanged.
+
+Verification: `pytest` passed (834 passed, 2 skipped; one existing FastAPI/httpx deprecation
+warning); `ruff check .`, `ruff format --check .`, and `git diff --check` passed. No live provider
+call, dependency, migration, or historical rewrite was made.
+
+Do not begin another phase without explicit user direction.
+
+## Luna authentication failure handling — 2026-08-28
+
+The shared OpenAI-compatible adapter now labels Luna failures as Luna rather than Xiaomi MiMo.
+`invoke_llm()` preserves an adapter's explicit non-retryable flag, and fresh-v2 Gap Analysis and
+Evidence Analyst stages propagate terminal provider failures after persisting the failed physical
+attempt. A bad Luna credential therefore stops the run at the first Luna call instead of causing
+retries or one failure per source.
+
+The provider setup display now says credentials are configured, not authenticated; authentication
+is checked when research starts. After this code change, restart the local API/site and start a
+new run with the corrected Luna key and `https://api.openai.com/v1`; leave Run ID blank because
+the executable fingerprint changed.
+
+Verification: focused provider, routing, Gap Analysis, Evidence Analyst, API, and production
+tests passed (130 passed, 1 expected skip). No live provider call was made.
+
 ## Phase 13 analyzer-admission cutover — 2026-08-26
 
 Fresh v2 now uses Luna Evidence Analyst as its sole semantic judge. Assessment and final factual

@@ -85,6 +85,8 @@ from v2_orchestrator import (
     V2_PRODUCTION_FINGERPRINT_KEY,
     V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
     V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
+    V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+    V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
     V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
@@ -189,7 +191,7 @@ class LiveRunSnapshot(StrictModel):
     latest_checkpoint: str | None = None
     completed_checkpoints: int = Field(default=0, ge=0)
     total_checkpoints: int = Field(default=5, ge=1)
-    current_research_round: int = Field(default=1, ge=1, le=3)
+    current_research_round: int = Field(default=1, ge=1, le=4)
     progress_percent: int = Field(default=0, ge=0, le=100)
     message: str = Field(min_length=1)
     diagnostic_component: str = Field(min_length=1)
@@ -243,7 +245,7 @@ class AcquiredSourceScoreBreakdown(StrictModel):
 
 
 class ResearchTrailItem(StrictModel):
-    research_round: int = Field(ge=1, le=3)
+    research_round: int = Field(ge=1, le=4)
     stance: Literal["supporting", "opposing"]
     provider: DiscoveryProvider
     intent: str = Field(min_length=1)
@@ -466,7 +468,11 @@ class LiveResearchController:
                 artifact = _read_first_v2_artifact(
                     resolved,
                     run_id,
-                    (V2_PRODUCTION_ARTIFACT_KEY, V2_PRODUCTION_LEGACY_ARTIFACT_KEY),
+                    (
+                        V2_PRODUCTION_ARTIFACT_KEY,
+                        V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+                        V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+                    ),
                 )
                 return self._snapshot_from_v2_result(
                     V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
@@ -559,7 +565,11 @@ class LiveResearchController:
                     artifact = _read_first_v2_artifact(
                         store.connection,
                         manifest.run_id,
-                        (V2_PRODUCTION_ARTIFACT_KEY, V2_PRODUCTION_LEGACY_ARTIFACT_KEY),
+                        (
+                            V2_PRODUCTION_ARTIFACT_KEY,
+                            V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+                            V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+                        ),
                     )
                     result = V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
                 except (KeyError, ValueError):
@@ -704,16 +714,24 @@ class LiveResearchController:
             "maybe": "deferred",
             "skip": "discarded",
         }
-        for research_round in (1, 2, 3):
+        for research_round in (1, 2, 3, 4):
             discovery_key = (
                 V2_SCOUT_ARTIFACT_KEY
                 if research_round == 1
-                else f"phase-7-round-{research_round}-discovery-scout"
+                else (
+                    "post-phase-13-round-4-discovery-scout-v1"
+                    if research_round == 4
+                    else f"phase-7-round-{research_round}-discovery-scout"
+                )
             )
             acquisition_key = (
                 V2_ACQUISITION_PROBE_ARTIFACT_KEY
                 if research_round == 1
-                else f"phase-7-round-{research_round}-acquisition-probe"
+                else (
+                    "post-phase-13-round-4-acquisition-probe-v1"
+                    if research_round == 4
+                    else f"phase-7-round-{research_round}-acquisition-probe"
+                )
             )
             try:
                 artifact = read_v2_artifact(connection, run_id, discovery_key)
@@ -1261,7 +1279,11 @@ def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
         artifact = _read_first_v2_artifact(
             db_path,
             run_id,
-            (V2_PRODUCTION_FINGERPRINT_KEY, V2_PRODUCTION_LEGACY_FINGERPRINT_KEY),
+            (
+                V2_PRODUCTION_FINGERPRINT_KEY,
+                V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
+                V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
+            ),
         )
         fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
         payload = json.loads(fingerprint.canonical_payload_json)
@@ -1276,7 +1298,11 @@ def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
         artifact = _read_first_v2_artifact(
             db_path,
             run_id,
-            (V2_PRODUCTION_FINGERPRINT_KEY, V2_PRODUCTION_LEGACY_FINGERPRINT_KEY),
+            (
+                V2_PRODUCTION_FINGERPRINT_KEY,
+                V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
+                V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
+            ),
         )
         fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
         payload = json.loads(fingerprint.canonical_payload_json)
@@ -1343,13 +1369,17 @@ def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
 
 
 def _v2_current_round(db_path: str, run_id: UUID) -> int:
-    for round_number in (3, 2):
+    for round_number in (4, 3, 2):
         for suffix in ("search-results", "discovery-scout", "acquisition-probe"):
             try:
                 read_v2_artifact(
                     db_path,
                     run_id,
-                    f"phase-7-round-{round_number}-{suffix}",
+                    (
+                        f"post-phase-13-round-4-{suffix}-v1"
+                        if round_number == 4
+                        else f"phase-7-round-{round_number}-{suffix}"
+                    ),
                 )
             except KeyError:
                 continue
@@ -1371,10 +1401,12 @@ def _read_v2_directional_progress(
         ResearchDirection.SUPPORT: set(),
         ResearchDirection.CHALLENGE: set(),
     }
-    for round_number in (1, 2, 3):
+    for round_number in (1, 2, 3, 4):
         artifact_key = (
             V2_ACQUISITION_PROBE_ARTIFACT_KEY
             if round_number == 1
+            else "post-phase-13-round-4-acquisition-probe-v1"
+            if round_number == 4
             else f"phase-7-round-{round_number}-acquisition-probe"
         )
         try:

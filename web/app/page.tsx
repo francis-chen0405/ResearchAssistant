@@ -348,7 +348,7 @@ function Header({ view, providerState, onView, onSetup, onAdvanced }: { view: Ma
   return <header className="topbar">
     <button className="wordmark" type="button" onClick={() => onView("research")} aria-label="ResearchAssistant home"><span className="mark" aria-hidden="true">R</span><span>ResearchAssistant</span></button>
     <nav aria-label="Primary navigation">{(["research", "history"] as const).map((item) => <button className={`nav-link ${view === item ? "active" : ""}`} type="button" onClick={() => onView(item)} key={item}>{item === "research" ? "Research" : "History"}{view === item && <motion.span className="nav-indicator" layoutId="nav-indicator" />}</button>)}</nav>
-    <div className="header-actions"><button className="advanced-link" type="button" onClick={onAdvanced}>Advanced</button><button className="setup-link" type="button" onClick={onSetup}><span className={`status-dot ${providerState}`} aria-hidden="true" />{providerState === "ready" ? "Providers ready" : providerState === "saved" ? "Provider setup incomplete" : providerState === "offline" ? "Local API offline" : "Provider setup"}</button></div>
+    <div className="header-actions"><button className="advanced-link" type="button" onClick={onAdvanced}>Advanced</button><button className="setup-link" type="button" onClick={onSetup}><span className={`status-dot ${providerState}`} aria-hidden="true" />{providerState === "ready" ? "Providers configured" : providerState === "saved" ? "Provider setup incomplete" : providerState === "offline" ? "Local API offline" : "Provider setup"}</button></div>
   </header>;
 }
 

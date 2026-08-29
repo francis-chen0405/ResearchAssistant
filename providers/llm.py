@@ -456,6 +456,15 @@ class LLMProviderExecutionError(LLMInvocationError):
     """Raised when the provider adapter itself fails."""
 
 
+def is_non_retryable_provider_error(error: LLMInvocationError) -> bool:
+    """Return whether a provider explicitly marked its failure as terminal."""
+    return (
+        isinstance(error, LLMProviderExecutionError)
+        and error.record.failure is not None
+        and not error.record.failure.retryable
+    )
+
+
 class _InvocationProblem(RuntimeError):
     def __init__(
         self,
@@ -638,10 +647,11 @@ def invoke_llm(
         try:
             response = provider.generate(request)
         except Exception as exc:
+            provider_retryable = getattr(exc, "retryable", None)
             raise _InvocationProblem(
                 InvocationFailureCode.PROVIDER_ERROR,
                 f"LLM provider failed: {exc}",
-                retryable=True,
+                retryable=(provider_retryable if isinstance(provider_retryable, bool) else True),
                 cause=exc,
             ) from exc
 

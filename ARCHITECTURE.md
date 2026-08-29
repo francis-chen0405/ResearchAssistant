@@ -1,6 +1,6 @@
 # Debate Research Agent System
 
-## Fresh v2 Production Architecture — Phase 13
+## Fresh v2 Production Architecture — Post-Phase-13 Conditional Round Four
 
 `v2_orchestrator.py` is the only fresh website/CLI research coordinator. It joins the
 completed Phase 3–12 boundaries without replacing their append-only artifacts:
@@ -9,6 +9,7 @@ completed Phase 3–12 boundaries without replacing their append-only artifacts:
 claim + direction controls -> broad Round 1 -> normalize/cluster -> Scout
 -> acquisition -> deterministic Probe -> Luna Gap Analysis
 -> optional Round 2 -> optional Governor-authorized Round 3
+-> post-Round-3 Luna Gap Analysis -> optional Governor-authorized Round 4
 -> complete survivor pool -> recommendation -> budget-derived queue
 -> exact extraction -> Luna Evidence Analyst (assessment + statement)
 -> deterministic Analyzer Admission -> Claim Ledger projection
@@ -33,8 +34,8 @@ eligibility, exact quote assembly, score/placement derivation, Analyzer Admissio
 release decisions remain application-owned. The production
 fingerprint covers routes/models/prices, custom prompt hashes, key schemas, direction/provider
 controls, provider adapter policies, evidence/admission and release policies,
-research-governor settings, downstream reserve, ceilings, and the Phase 13 final-output
-contract.
+research-governor settings, downstream reserve, ceilings, the post-Round-3 Gap and Round-4
+policies, and the post-Phase-13 final-output contract.
 
 Every stage is restart-safe. Compatible completed artifacts are reused; incomplete physical
 attempts remain charged conservatively. Cross-claim, cross-route, cross-provider-policy, or
@@ -109,7 +110,9 @@ Retrieval, semantic assessment, deterministic admission, and deterministic relea
 MVP-10 adds an auditable Evidence Portfolio before synthesis. MVP-11 replaces its
 single targeted-expansion limit with a deterministic Research Governor: Round 1 proceeds
 normally, an incomplete portfolio completes Round 2, and only a typed post-Round-2
-application decision may authorize Round 3. No run may contain a Round 4. Duplicates
+application decision may authorize Round 3. Historical MVP-11 runs may not contain a Round 4.
+The separately versioned fresh-v2 post-Phase-13 contract may authorize one conditional Round 4
+only after a completed, non-degraded Round 3. Duplicates
 remain immutable audit records rather than independent portfolio evidence, and all
 provider budgets remain cumulative across every permitted round.
 
@@ -1029,8 +1032,8 @@ merge. Luna runs again after Round 2. A deterministic Governor—not the model�
 narrow Round 3 only when a material gap, continued Luna recommendation, new direction,
 eligible provider, materially new query, provider capacity, and protected downstream
 budget all remain. Duplicate saturation of at least 70% stops continuation. Round 3 has at
-most three queries and one query per provider/direction lane. No Round 4, recursive
-continuation, automatic citation tree, or disabled-direction search is possible.
+most three queries and one query per provider/direction lane. The historical Phase-7 contract
+has no Round 4, recursive continuation, automatic citation tree, or disabled-direction search.
 
 ## Historical ResearchAssistant v2 Phase 8 Source Selection and Deep-Analysis Queue
 
@@ -1145,3 +1148,26 @@ extraction, budget, and final-output artifacts remain readable with their origin
 Fresh synthesis is deterministic Python assembly of the typed analyzer-admitted projection and
 makes no Synthesizer model call; direct MiMo synthesis remains compatibility-only for historical
 Reviewer-backed artifacts.
+
+## ResearchAssistant v2 Post-Phase-13 Conditional Round Four
+
+Only a completed, non-degraded fresh-v2 Round 3 may enter one post-Round-3 Luna Gap Analysis.
+The Gap input is cumulative across Rounds 1–3 and remains bounded to persisted metadata, Probe
+passages, families, duplicate/acquisition outcomes, strategy history, and remaining budget. The
+application first proves that two possible Gap attempts and the complete protected downstream
+workload fit. The Gap result is immutable even when unavailable or degraded.
+
+Round 4 is a one-shot, application-owned Governor decision, never a recursive continuation. It
+requires material enabled-direction gaps, continued research, an eligible provider, a
+non-duplicate Round 3, novel queries, and a conservative reservation before the Search Agent
+call. It allows at most two provider lanes and two queries per provider/direction lane, with at
+most four queries per enabled direction. Its reservation includes two Gap attempts, one Search
+Agent attempt, worst-case Scout attempts, provider search/acquisition capacity, and protected
+downstream physical-call, token, and cost capacity. It uses distinct post-Phase-13 artifact keys
+and policy/fingerprint identities; it does not reinterpret Phase-13 artifacts.
+
+After Round 4, no model may run Gap Analysis or authorize further research. Deterministic
+reconciliation starts from the original post-Round-3 gaps and marks one covered only when an
+enabled-direction Round-4 source has matching targeted-gap provenance, Analyzer Admission, and
+an explicit Analyst `addressed_gap_ids` declaration. All other gaps remain not attempted,
+unavailable, or unresolved in the final disclosure.

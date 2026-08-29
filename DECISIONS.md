@@ -1,5 +1,36 @@
 # Decisions
 
+## 2026-08-28 - ResearchAssistant v2 Phase 14 conditional Round Four
+
+- Authorize exactly one fresh-v2 post-Round-3 Gap Analysis and, only after a typed application
+  Governor decision, one conditional Round 4. Keep Phase-7 Round 2/3 and all historical runs
+  under their original policies and artifact keys.
+- Require a completed non-degraded Round 3, enabled-direction material gaps, continued Gap
+  recommendation, eligible providers, novelty, duplicate/productivity checks, and a
+  conservative reservation before the Round-4 Search Agent call. Reserve two Gap attempts,
+  Search Agent, worst-case Scout, provider search/acquisition capacity, and protected
+  downstream physical-call/token/cost capacity.
+- Cap Round 4 at two provider lanes and two queries per lane per enabled direction, with at most
+  four queries per enabled direction. Do not add Round 5, post-Round-4 Gap Analysis, a Reviewer
+  call, dependency, migration, or live provider execution.
+- Reconcile only the original post-Round-3 gaps after Analyzer Admission. Count a gap as covered
+  only with matching Round-4 query provenance, analyzer-admitted evidence, and explicit Analyst
+  addressed-gap output; retain all other gaps as not attempted, unavailable, or unresolved.
+- Version the new policy, prompts, artifact keys, production fingerprint, final-output envelope,
+  API/export readers, and UI round/trail display. Preserve Phase-13 and earlier artifacts as
+  immutable compatibility contracts without migration or reinterpretation.
+
+## 2026-08-28 - Provider diagnostics and terminal authentication failures
+
+- Keep the shared OpenAI-compatible adapter, but derive user-facing failure labels from the
+  configured route so Luna errors cannot be reported as Xiaomi MiMo errors.
+- Preserve provider-declared retryability through the generic invocation boundary. Fresh-v2
+  Gap Analysis and Evidence Analyst work must propagate non-retryable provider failures after
+  persisting the physical attempt, stopping the run before unnecessary retries or source work.
+- Treat configuration presence as distinct from live credential validity in the local setup
+  display; the first research call remains the authentication check.
+- Add no dependency, migration, live verification call, or new phase.
+
 ## 2026-08-26 - ResearchAssistant v2 Phase 13 Analyzer Admission Cutover
 
 - Remove all fresh-v2 `ReviewerDecision` and `LLMStage.REVIEWER` calls. Luna Evidence Analyst

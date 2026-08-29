@@ -26,7 +26,8 @@ from models import (
     V2MaterialGap,
     V2PipelineIdentity,
 )
-from providers.llm import LLMProviderCapabilities, ModelAlias
+from providers.llm import LLMProviderCapabilities, LLMProviderExecutionError, ModelAlias
+from providers.mimo import MimoFailureCode, MimoProviderError
 from providers.v2_routing import V2RoutingConfig
 from store import init_db, insert_run, insert_v2_pipeline_identity, read_v2_artifact
 
@@ -243,6 +244,34 @@ def test_gap_analysis_retries_once_degrades_and_restart_reuses_state(tmp_path: P
     assert first.result is None and first.stop_adaptive_continuation is True
     assert len(first.attempts) == len(provider.requests) == 2
     assert resumed.resumed and len(provider.requests) == 2
+
+
+def test_gap_analysis_does_not_retry_terminal_provider_authentication(
+    tmp_path: Path,
+) -> None:
+    gap_input = _input()
+    db_path = tmp_path / "auth.sqlite3"
+    _prepare_db(db_path, gap_input.run_id)
+    provider = FakeLuna(
+        [
+            MimoProviderError(
+                MimoFailureCode.AUTHENTICATION,
+                "Luna authentication failed",
+                retryable=False,
+            )
+        ]
+    )
+
+    with pytest.raises(LLMProviderExecutionError, match="Luna authentication failed"):
+        run_v2_gap_analysis(
+            db_path=db_path,
+            gap_input=gap_input,
+            llm_provider=provider,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+
+    assert len(provider.requests) == 1
 
 
 def test_gap_input_limits_probe_data_and_requires_specific_typed_search_direction() -> None:

@@ -60,6 +60,13 @@ Fresh v2 Phase 13 uses a separate typed flow:
   synthesis assembly (`SynthesisOutput`) → Renderer. Analyzer-admitted records omit Reviewer
   metadata and are labeled as not independently reviewer-approved.
 
+Fresh post-Phase-13 work may add only the separately versioned conditional Round-4 flow:
+completed non-degraded Round 3 -> cumulative bounded Gap Analysis -> application Governor ->
+bounded Round 4 -> deterministic Analyzer-Admission reconciliation. Gap, Governor,
+reservation, and reconciliation handoffs are strict Pydantic artifacts; no raw result mapping
+may authorize or claim coverage. Round-4 coverage requires the original Gap ID, Round-4 query
+provenance, Analyzer Admission, and an explicit Analyst `addressed_gap_ids` value.
+
 Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, admission method, optional historical `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the admitted evidence record.
 
 Deliberately narrow model-facing schemas may keep forbidden contextual provenance outside
@@ -264,6 +271,24 @@ The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may 
 - Fresh Phase-13 artifact keys, policy identities, fingerprints, and budget constants are
   versioned. Legacy Phase-12 budget, extraction, Reviewer, Ledger, and final-output artifacts
   remain readable without relabeling or migration.
+
+## ResearchAssistant v2 Post-Phase-13 Conditional Round Four Conventions
+
+- Run post-Round-3 Gap Analysis only after a completed, non-degraded fresh-v2 Round 3. Its
+  immutable input is cumulative across Rounds 1–3 and it makes no retrieval or evidence claim.
+- Persist a typed Governor decision for every outcome. Only an authorized decision carries the
+  full conservative reservation: two Gap attempts, Search Agent, worst-case Scout, provider
+  search/acquisition capacity, and protected downstream calls/tokens/cost.
+- A Round-4 Search Agent may use at most two provider lanes and two queries per lane per enabled
+  direction, with a maximum of four queries per enabled direction. There is no Round 5 and no
+  post-Round-4 Gap call.
+- Reconciliation is deterministic and may mark a post-Round-3 gap covered only with matching
+  Round-4 targeted-gap provenance, analyzer-admitted evidence, and the Analyst's explicit
+  addressed-gap declaration. It never treats a successful search, recommendation, or raw
+  quotation as coverage.
+- Fresh post-Phase-13 artifact keys, output envelope, API readers, UI progress/trail, and
+  fingerprint are versioned. Historical Phase-13 and earlier runs stay readable under their
+  original contracts without migration.
 
 ## Historical ResearchAssistant v2 Phase 11 Final Output Conventions
 

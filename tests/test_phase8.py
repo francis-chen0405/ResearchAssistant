@@ -75,6 +75,10 @@ class FakeLLMProvider:
         return response
 
 
+class TerminalProviderError(RuntimeError):
+    retryable = False
+
+
 class WrongSchemaOutput(StrictModel):
     wrong_field: str
 
@@ -586,3 +590,17 @@ def test_phase8_does_not_execute_runtime_failover() -> None:
     assert len(provider.requests) == 1
     assert request.configured_fallbacks == (ModelAlias.MINIMAX_M3,)
     assert exc_info.value.record.fallback_executed is False
+
+
+def test_provider_retryability_is_preserved_in_invocation_record() -> None:
+    clock_values = _clock()
+
+    with pytest.raises(LLMInvocationError) as exc_info:
+        invoke_llm(
+            FakeLLMProvider([TerminalProviderError("credentials rejected")]),
+            _request(LLMStage.PLANNER, PlannerOutput),
+            clock=lambda: next(clock_values),
+        )
+
+    assert exc_info.value.record.failure is not None
+    assert exc_info.value.record.failure.retryable is False

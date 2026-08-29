@@ -125,6 +125,7 @@ class V2AdaptiveStopCode(StrEnum):
     ROUND_ONE_COMPLETE = "round_one_complete"
     ROUND_TWO_COMPLETE = "round_two_complete"
     ROUND_THREE_COMPLETE = "round_three_complete"
+    ROUND_FOUR_COMPLETE = "round_four_complete"
     NO_ELIGIBLE_PROVIDER = "no_eligible_provider"
     NO_NEW_QUERY = "no_materially_new_query"
     BUDGET = "insufficient_budget"
@@ -142,6 +143,8 @@ class V2AdaptiveBudgetState(StrictModel):
     tokens_remaining: int | None = Field(default=None, ge=0)
     cost_remaining_usd: Decimal | None = Field(default=None, ge=0)
     protected_downstream_model_calls: int = Field(default=1, ge=0)
+    protected_downstream_tokens: int = Field(default=0, ge=0)
+    protected_downstream_cost_usd: Decimal = Field(default=Decimal("0"), ge=0)
     round_three_complete_workload_reservable: bool = True
 
 
@@ -195,7 +198,7 @@ class V2AdaptiveSearchResults(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    round_number: int = Field(ge=2, le=3)
+    round_number: int = Field(ge=2, le=4)
     outcomes: tuple[V2AdaptiveSearchOutcome, ...]
     completed_at: datetime
 
@@ -205,7 +208,7 @@ class V2AdaptiveSearchResults(StrictModel):
 class V2MergedSurvivor(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    research_round: int = Field(ge=1, le=3)
+    research_round: int = Field(ge=1, le=4)
     source_url: str = Field(min_length=1)
     survivor: V2SurvivingSource
 
@@ -221,7 +224,7 @@ class V2AdaptiveRoundExecution(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    round_number: int = Field(ge=2, le=3)
+    round_number: int = Field(ge=2, le=4)
     targeted_gap_ids: tuple[str, ...]
     status: V2AdaptiveRoundStatus
     planned_query_count: int = Field(ge=0)
@@ -239,7 +242,7 @@ class V2AdaptiveStoppingDecision(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    completed_rounds: int = Field(ge=1, le=3)
+    completed_rounds: int = Field(ge=1, le=4)
     stop_code: V2AdaptiveStopCode
     stopping_reason: str = Field(min_length=1)
     decided_at: datetime
@@ -263,6 +266,13 @@ class V2AdaptiveContinuationResult(StrictModel):
 def normalize_query_text(value: str) -> str:
     """Cheap canonical query form used for exact history rejection."""
     return " ".join(_TOKEN_RE.findall(value.casefold()))
+
+
+def round_artifact_key(round_number: int, suffix: str) -> str:
+    """Return the versioned immutable key for one adaptive round artifact."""
+    if round_number == 4:
+        return f"post-phase-13-round-4-{suffix}-v1"
+    return f"phase-7-round-{round_number}-{suffix}"
 
 
 def queries_are_materially_new(candidate: str, previous_queries: tuple[str, ...]) -> bool:
@@ -943,7 +953,13 @@ def _validate_and_assemble_plan(
                 "Search Agent query repeats or trivially rewrites query history"
             )
         history.append(item.query_text)
-        cap = 1 if request.round_number == 3 else _ROUND_TWO_PER_DIRECTION_CAPS[item.provider]
+        cap = (
+            1
+            if request.round_number == 3
+            else 2
+            if request.round_number == 4
+            else _ROUND_TWO_PER_DIRECTION_CAPS[item.provider]
+        )
         lane = (item.direction, item.provider)
         if len(accepted) >= total_cap or counts[lane] >= cap:
             continue
@@ -961,6 +977,7 @@ def _validate_and_assemble_plan(
                 targeted_gap_ids=item.targeted_gap_ids,
                 strategy=item.strategy,
                 query_text=item.query_text,
+                policy_identity=request.policy_identity,
                 created_at=planned_at,
             )
         )
@@ -975,6 +992,7 @@ def _validate_and_assemble_plan(
         discovered_terms=request.discovered_terms,
         searches=tuple(accepted),
         search_agent_prompt_version=prompt_version,
+        policy_identity=request.policy_identity,
         planned_at=planned_at,
     )
 
@@ -1029,7 +1047,7 @@ def _run_round_from_plan(
         )
         insert_v2_artifact(
             path,
-            f"phase-7-round-{plan.round_number}-discovery-scout",
+            round_artifact_key(plan.round_number, "discovery-scout"),
             discovery,
             discovery.completed_at,
         )
@@ -1059,7 +1077,7 @@ def _run_round_from_plan(
         )
         insert_v2_artifact(
             path,
-            f"phase-7-round-{plan.round_number}-acquisition-probe",
+            round_artifact_key(plan.round_number, "acquisition-probe"),
             acquisition,
             acquisition.completed_at,
         )
@@ -1086,7 +1104,7 @@ def _run_round_from_plan(
         completed_at=clock(),
     )
     insert_v2_artifact(
-        path, f"phase-7-round-{plan.round_number}-execution", summary, summary.completed_at
+        path, round_artifact_key(plan.round_number, "execution"), summary, summary.completed_at
     )
     return search, discovery, acquisition, summary
 
@@ -1098,7 +1116,7 @@ def _execute_searches(
     cancellation_requested: Callable[[], bool] | None,
     clock: Callable[[], datetime],
 ) -> V2AdaptiveSearchResults:
-    key = f"phase-7-round-{plan.round_number}-search-results"
+    key = round_artifact_key(plan.round_number, "search-results")
     try:
         stored = read_v2_artifact(path, plan.run_id, key)
     except KeyError:
@@ -1298,6 +1316,11 @@ def _maximum_queries(
 ) -> int:
     if round_number == 3:
         return min(3, sum(min(1, item.remaining_calls) for item in budgets))
+    if round_number == 4:
+        return min(
+            4 * len(plan.directions.enabled_directions),
+            sum(min(2, item.remaining_calls) for item in budgets),
+        )
     return min(
         12,
         sum(

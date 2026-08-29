@@ -424,6 +424,8 @@ def _artifact_key(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) 
     return (
         V2_SCOUT_ARTIFACT_KEY
         if round_number == 1
+        else "post-phase-13-round-4-discovery-scout-v1"
+        if round_number == 4
         else f"phase-7-round-{round_number}-discovery-scout"
     )
 
