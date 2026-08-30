@@ -254,9 +254,14 @@ def canonical_v2_artifact_json(artifact: StrictModel) -> str:
     return json.dumps(artifact.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
 
+def v2_payload_fingerprint(payload_json: str) -> str:
+    """Return the SHA-256 identity of canonical v2 payload JSON bytes."""
+    return sha256(payload_json.encode("utf-8")).hexdigest()
+
+
 def v2_artifact_fingerprint(artifact: StrictModel) -> str:
     """Return the SHA-256 identity of a canonical v2 artifact."""
-    return sha256(canonical_v2_artifact_json(artifact).encode("utf-8")).hexdigest()
+    return v2_payload_fingerprint(canonical_v2_artifact_json(artifact))
 
 
 class SearchDirectionGapReference(StrictModel):
@@ -702,6 +707,7 @@ class DiscoveryProvenance(StrictModel):
     round_number: PositiveInt
     provider_rank: PositiveInt
     original_url: NonEmptyStr
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=3)
 
 
 class CrossrefIdentityMetadata(StrictModel):
@@ -1252,6 +1258,23 @@ class V2ClaimCoverageFocus(StrictModel):
         return self
 
 
+class V2GapIdentity(StrictModel):
+    """Typed identity fields used to validate Gap continuity across rounds."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    gap_id: NonEmptyStr
+    direction: ResearchDirection
+    claim_dimension: V2ClaimCoverageDimension | None = None
+    unsupported_claim_component: NonEmptyStr | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_claim_component(self) -> V2GapIdentity:
+        if (self.claim_dimension is None) != (self.unsupported_claim_component is None):
+            raise ValueError("Gap identities require a dimension and component together")
+        return self
+
+
 class V2ClaimCoverageSpecification(StrictModel):
     """Application-owned, explicit dimensions for one post-Round-3 coverage audit."""
 
@@ -1293,6 +1316,15 @@ class V2MaterialGap(StrictModel):
         if (self.claim_dimension is None) != (self.unsupported_claim_component is None):
             raise ValueError("claim-linked material gaps require a dimension and exact component")
         return self
+
+    @property
+    def continuity_identity(self) -> V2GapIdentity:
+        return V2GapIdentity(
+            gap_id=self.gap_id,
+            direction=self.direction,
+            claim_dimension=self.claim_dimension,
+            unsupported_claim_component=self.unsupported_claim_component,
+        )
 
 
 class V2SearchAgentInput(StrictModel):
@@ -1518,6 +1550,11 @@ class V2GapAnalysisOutput(StrictModel):
             raise ValueError("Gap Analysis input run_id must match output")
         if self.result is not None and self.result.run_id != self.run_id:
             raise ValueError("Gap Analysis result run_id must match output")
+        if self.result is not None:
+            validate_v2_gap_identity_continuity(
+                self.input.previous_gaps,
+                self.result.material_gaps,
+            )
         if self.state is V2GapAnalysisState.COMPLETED:
             if self.result is None or self.stop_adaptive_continuation != (
                 not self.result.continue_research
@@ -1721,6 +1758,7 @@ class V2RoundFourGovernorDecision(StrictModel):
 
     run_id: UUID
     authorized: bool
+    authorization_kind: Literal["preauthorization"] = "preauthorization"
     reason_code: V2RoundFourDecisionCode
     explanation: NonEmptyStr
     reservation: V2RoundFourReservation | None = None
@@ -1825,7 +1863,124 @@ class V2SourceSelectionGap(StrictModel):
     gap_id: NonEmptyStr
     direction: ResearchDirection
     missing_evidence: NonEmptyStr
+    claim_dimension: V2ClaimCoverageDimension | None = None
+    unsupported_claim_component: NonEmptyStr | None = Field(default=None, max_length=500)
     assessed_after_round: Annotated[int, Field(ge=1, le=3)] = 1
+
+    @model_validator(mode="after")
+    def validate_claim_component(self) -> V2SourceSelectionGap:
+        if (self.claim_dimension is None) != (self.unsupported_claim_component is None):
+            raise ValueError("claim-linked source-selection Gaps require a dimension and component")
+        return self
+
+    @property
+    def continuity_identity(self) -> V2GapIdentity:
+        return V2GapIdentity(
+            gap_id=self.gap_id,
+            direction=self.direction,
+            claim_dimension=self.claim_dimension,
+            unsupported_claim_component=self.unsupported_claim_component,
+        )
+
+
+class V2GapIdentityCollisionError(ValueError):
+    """Gap identity fields conflict or duplicate one semantic gap under another ID."""
+
+
+def _record_v2_gap_identity(
+    identities: dict[str, V2GapIdentity],
+    semantic_identities: dict[tuple[ResearchDirection, V2ClaimCoverageDimension, str], str],
+    identity: V2GapIdentity,
+    *,
+    scope: str,
+) -> None:
+    existing = identities.get(identity.gap_id)
+    if existing is not None and (
+        existing.direction is not identity.direction
+        or (
+            existing.claim_dimension is not None
+            and identity.claim_dimension is not None
+            and (
+                existing.claim_dimension is not identity.claim_dimension
+                or existing.unsupported_claim_component != identity.unsupported_claim_component
+            )
+        )
+    ):
+        raise V2GapIdentityCollisionError(
+            f"{scope} Gap ID {identity.gap_id!r} has conflicting semantic identity"
+        )
+    if identity.claim_dimension is not None:
+        semantic_key = (
+            identity.direction,
+            identity.claim_dimension,
+            identity.unsupported_claim_component,
+        )
+        existing_gap_id = semantic_identities.get(semantic_key)
+        if existing_gap_id is not None and existing_gap_id != identity.gap_id:
+            raise V2GapIdentityCollisionError(
+                f"{scope} semantic Gap identity is assigned to both "
+                f"{existing_gap_id!r} and {identity.gap_id!r}"
+            )
+        semantic_identities[semantic_key] = identity.gap_id
+    if existing is None:
+        identities[identity.gap_id] = identity
+        return
+    if existing.claim_dimension is None and identity.claim_dimension is not None:
+        identities[identity.gap_id] = identity
+
+
+def validate_v2_gap_identity_continuity(
+    previous_gaps: tuple[V2MaterialGap, ...],
+    current_gaps: tuple[V2MaterialGap, ...],
+) -> None:
+    """Reject incompatible reused IDs while allowing legacy unknown claim identity."""
+    identities: dict[str, V2GapIdentity] = {}
+    semantic_identities: dict[tuple[ResearchDirection, V2ClaimCoverageDimension, str], str] = {}
+    for gap in (*previous_gaps, *current_gaps):
+        _record_v2_gap_identity(
+            identities,
+            semantic_identities,
+            gap.continuity_identity,
+            scope="Gap Analysis",
+        )
+
+
+def validate_v2_source_selection_gap_history(
+    gap_history: tuple[V2SourceSelectionGap, ...],
+) -> None:
+    """Reject incompatible repeated IDs in cross-round source-selection history."""
+    identities: dict[str, V2GapIdentity] = {}
+    semantic_identities: dict[tuple[ResearchDirection, V2ClaimCoverageDimension, str], str] = {}
+    for gap in gap_history:
+        _record_v2_gap_identity(
+            identities,
+            semantic_identities,
+            gap.continuity_identity,
+            scope="source-selection history",
+        )
+
+
+def validate_v2_gap_history_against_material_gaps(
+    material_gaps: tuple[V2MaterialGap, ...],
+    gap_history: tuple[V2SourceSelectionGap, ...],
+) -> None:
+    """Ensure current reconciliation gaps retain the history's explicit identity fields."""
+    identities: dict[str, V2GapIdentity] = {}
+    semantic_identities: dict[tuple[ResearchDirection, V2ClaimCoverageDimension, str], str] = {}
+    for history_gap in gap_history:
+        _record_v2_gap_identity(
+            identities,
+            semantic_identities,
+            history_gap.continuity_identity,
+            scope="source-selection history",
+        )
+    for gap in material_gaps:
+        _record_v2_gap_identity(
+            identities,
+            semantic_identities,
+            gap.continuity_identity,
+            scope="reconciliation",
+        )
 
 
 class V2SourceSelectionCandidate(StrictModel):
@@ -1882,6 +2037,7 @@ class V2SourceSelectionInput(StrictModel):
         gap_keys = tuple((item.assessed_after_round, item.gap_id) for item in self.gap_history)
         if len(gap_keys) != len(set(gap_keys)):
             raise ValueError("source-selection Gap history entries must be unique per round")
+        validate_v2_source_selection_gap_history(self.gap_history)
         for item in (*self.survivors, *self.gap_history):
             self.directions.require_permitted(item.direction)
         return self

@@ -7,7 +7,17 @@ The claim-coverage correction is now explicit rather than keyword-derived: the a
 a typed coverage specification, preserves unavailable counterevidence when that direction is
 disabled, and binds Luna's completed coverage map, gaps, and search directions exactly to the
 specified dimensions and components. All cumulative Gap context rows retain Round 1/2/3
-provenance. The typed Governor evaluates observed facts rather than a preselected reason code.
+provenance. The typed Governor evaluates observed authorization inputs, while novelty and
+productivity are explicit preauthorization opportunities. Accepted novel-query IDs and actual
+execution productivity are persisted only in the typed post-plan facts artifact after plan
+validation and execution.
+
+Gap IDs are stable semantic identities across rounds. Reuse requires the same enabled direction
+and explicit claim dimension/unsupported claim component; rationale and explanatory wording may
+evolve. Genuinely new gaps receive new IDs, while a semantically duplicate gap cannot receive a
+second ID. Conflicting reused IDs are rejected rather than merged at Gap Analysis, source-selection
+history, and reconciliation boundaries. Historical artifacts that lack claim-linked fields remain
+readable as legacy unknown identity without heuristic matching.
 
 ## Scope
 
@@ -21,6 +31,8 @@ provenance. The typed Governor evaluates observed facts rather than a preselecte
 - Preserve direction isolation, provider ceilings, duplicate/productivity stopping rules,
   cancellation, terminal-failure handling, and conservative physical-call/token/cost
   accounting.
+- Serialize independent direct fresh-v2 callers with the existing database-scoped `.mvp5.lock`
+  for the complete pipeline; the live controller's existing ownership remains compatible.
 - Require each Round-4 search direction to resolve a named unsupported claim component with a
   specified evidence kind. A maximum of two provider lanes and four queries per enabled
   direction is enforced deterministically even if the Search Agent proposes more.
@@ -53,3 +65,9 @@ provenance. The typed Governor evaluates observed facts rather than a preselecte
   deprecation warning), `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .` (118 files
   already formatted), and `git diff --check` all passed. The bare `pytest` command was unavailable
   on PATH. No live provider call, dependency, migration, or historical-artifact rewrite was made.
+
+Post-completion audit remediation verification for AUDIT-009 completed on 2026-08-29 with the
+accumulated checkout: 896 tests passed, 2 skipped; focused Phase 12/14 regressions passed (81
+tests); Ruff check, Ruff format check, and `git diff --check` passed. The existing Starlette/httpx
+deprecation warning remains. No live provider call, dependency, migration, historical-artifact
+rewrite, SQLite constraint change, or commit was made.

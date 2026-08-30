@@ -34,6 +34,7 @@ from models import (
     V2SourceSelectionQueueResult,
     V2SourceSelectionRecommendation,
     V2SourceSelectionSearchProvenance,
+    validate_v2_source_selection_gap_history,
 )
 from money import add_usd
 from providers.llm import (
@@ -100,6 +101,8 @@ def build_v2_source_selection_input(
             gap_id=gap.gap_id,
             direction=gap.direction,
             missing_evidence=gap.missing_evidence,
+            claim_dimension=gap.claim_dimension,
+            unsupported_claim_component=gap.unsupported_claim_component,
             assessed_after_round=output.input.completed_round,
         )
         for output in gap_outputs
@@ -150,21 +153,13 @@ def build_v2_source_selection_input(
             )
             for passage_id in survivor.passage_ids
         )
-        prior_gap_ids = tuple(
-            dict.fromkeys(
-                gap.gap_id
-                for gap in gap_rows
-                if gap.direction is survivor.direction
-                and gap.assessed_after_round < merged.research_round
-            )
-        )
         search_provenance = tuple(
             V2SourceSelectionSearchProvenance(
                 query_id=item.query_id,
                 provider=item.provider,
                 round_number=item.round_number,
                 query_text=item.query_text,
-                targeted_gap_ids=(prior_gap_ids if item.round_number > 1 else ()),
+                targeted_gap_ids=item.targeted_gap_ids,
             )
             for item in cluster.metadata_provenance
         )
@@ -212,6 +207,7 @@ def run_v2_source_selection_and_queue(
     clock: Callable[[], datetime] | None = None,
 ) -> V2SourceSelectionRunResult:
     """Recommend only known survivors, fall back safely, and persist a bounded queue."""
+    validate_v2_source_selection_gap_history(selection_input.gap_history)
     now = clock or _utc_now
     completed_at = now()
     _require_aware(completed_at)

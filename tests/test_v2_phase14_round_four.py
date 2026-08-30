@@ -4,14 +4,22 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import get_type_hints
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
-from agents.v2_adaptive_search import _validate_and_assemble_plan, round_artifact_key
+from agents.v2_adaptive_search import (
+    V2AdaptivePlannedRound,
+    V2SearchAgentReservation,
+    _validate_and_assemble_plan,
+    round_artifact_key,
+)
 from agents.v2_round_four import (
+    _build_round_four_search_agent_request,
     _claim_coverage_specification,
+    _plan_round_four,
     _representative_families,
     _representative_round_rows,
 )
@@ -20,6 +28,7 @@ from models import (
     DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
+    V2AdaptiveRoundPlan,
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
     V2AdaptiveSearchQuery,
@@ -43,6 +52,10 @@ from models import (
     V2ProviderSearchBudget,
     V2RoundFourReservation,
     V2SearchAgentInput,
+    V2SourceSelectionCandidate,
+    V2SourceSelectionInput,
+    V2SourceSelectionProbePassage,
+    V2SourceSelectionSearchProvenance,
 )
 from research_governor import V2RoundFourGovernorInput, evaluate_v2_round_four_authorization
 
@@ -56,6 +69,318 @@ def _gap() -> V2MaterialGap:
         missing_evidence="A directly relevant longitudinal study is still missing.",
         rationale="Existing sources are cross-sectional.",
     )
+
+
+def _identity_gap(
+    *,
+    gap_id: str = "stable-gap",
+    direction: ResearchDirection = ResearchDirection.SUPPORT,
+    dimension: V2ClaimCoverageDimension = V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+    component: str = "the intervention effect",
+    rationale: str = "The direct effect remains unresolved.",
+) -> V2MaterialGap:
+    return V2MaterialGap(
+        gap_id=gap_id,
+        direction=direction,
+        missing_evidence="Direct evidence remains missing.",
+        rationale=rationale,
+        claim_dimension=dimension,
+        unsupported_claim_component=component,
+    )
+
+
+def _continuity_output(
+    previous_gaps: tuple[V2MaterialGap, ...],
+    current_gap: V2MaterialGap,
+) -> V2GapAnalysisOutput:
+    run_id = uuid4()
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=True)
+    gap_input = V2GapAnalysisInput(
+        run_id=run_id,
+        exact_claim="The intervention improves the outcome.",
+        directions=directions,
+        completed_round=2,
+        attempted_queries=(),
+        surviving_sources=(),
+        probe_passages=(),
+        source_families=(),
+        discovered_terms=(),
+        duplicate_patterns=(),
+        acquisition_failures=(),
+        previous_gaps=previous_gaps,
+        remaining_budget=V2GapBudgetState(model_calls_remaining=5),
+    )
+    search_direction = V2GapSearchDirection(
+        gap_id=current_gap.gap_id,
+        direction=current_gap.direction,
+        missing_evidence=current_gap.missing_evidence,
+        search_focus="direct evidence",
+        claim_dimension=current_gap.claim_dimension,
+        resolving_evidence_kind=(
+            "direct comparative evidence" if current_gap.claim_dimension is not None else None
+        ),
+    )
+    result = V2GapAnalysisResult(
+        run_id=run_id,
+        directions=directions,
+        coverage_summary="A material gap remains.",
+        material_gaps=(current_gap,),
+        continue_research=True,
+        new_search_directions=(search_direction,),
+        discovered_terms=(),
+        analyzed_at=NOW,
+    )
+    return V2GapAnalysisOutput(
+        run_id=run_id,
+        input=gap_input,
+        state=V2GapAnalysisState.COMPLETED,
+        result=result,
+        attempts=(),
+        stop_adaptive_continuation=False,
+        completed_at=NOW,
+    )
+
+
+def test_gap_identity_persists_across_rounds_while_rationale_evolves() -> None:
+    prior = _identity_gap(rationale="Initial analysis identified an unresolved effect.")
+    current = prior.model_copy(
+        update={
+            "missing_evidence": "A larger direct comparison remains missing.",
+            "rationale": "Additional evidence narrowed the unresolved effect boundary.",
+        }
+    )
+
+    output = _continuity_output((prior,), current)
+
+    assert output.result is not None
+    assert output.result.material_gaps[0].gap_id == prior.gap_id
+
+
+def test_genuinely_new_gap_uses_a_new_id() -> None:
+    output = _continuity_output(
+        (_identity_gap(),),
+        _identity_gap(gap_id="new-gap", component="the population boundary"),
+    )
+
+    assert output.result is not None
+    assert output.result.material_gaps[0].gap_id == "new-gap"
+
+
+def test_semantically_duplicate_gap_cannot_use_a_new_id() -> None:
+    prior = _identity_gap()
+    current = _identity_gap(gap_id="new-gap")
+
+    with pytest.raises(ValidationError, match="semantic Gap identity"):
+        _continuity_output((prior,), current)
+
+
+def test_reusing_gap_id_with_different_direction_is_rejected() -> None:
+    prior = _identity_gap()
+    current = _identity_gap(direction=ResearchDirection.CHALLENGE)
+
+    with pytest.raises(ValidationError, match="conflicting semantic identity"):
+        _continuity_output((prior,), current)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("dimension", V2ClaimCoverageDimension.POPULATION_AND_SETTING),
+        ("component", "a different unsupported effect component"),
+    ],
+)
+def test_reusing_gap_id_with_different_claim_identity_is_rejected(
+    field: str, value: object
+) -> None:
+    prior = _identity_gap()
+    current = _identity_gap(**{field: value})
+
+    with pytest.raises(ValidationError, match="conflicting semantic identity"):
+        _continuity_output((prior,), current)
+
+
+def test_legacy_gap_without_claim_identity_remains_readable() -> None:
+    prior = _gap()
+    current = _identity_gap(gap_id=prior.gap_id)
+
+    output = _continuity_output((prior,), current)
+
+    assert output.result is not None
+    assert output.result.material_gaps[0].gap_id == prior.gap_id
+
+
+def test_source_selection_history_rejects_semantic_gap_collision() -> None:
+    history = (
+        {
+            "gap_id": "stable-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "The effect remains unresolved.",
+            "claim_dimension": V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            "unsupported_claim_component": "the intervention effect",
+            "assessed_after_round": 2,
+        },
+        {
+            "gap_id": "stable-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "The effect remains unresolved.",
+            "claim_dimension": V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+            "unsupported_claim_component": "the population boundary",
+            "assessed_after_round": 3,
+        },
+    )
+    candidate = V2SourceSelectionCandidate(
+        source_id=uuid4(),
+        direction=ResearchDirection.SUPPORT,
+        source_family_id="family-1",
+        research_round=1,
+        source_url="https://example.test/source",
+        discovery_providers=(DiscoveryProvider.EXA,),
+        probe_passages=(
+            V2SourceSelectionProbePassage(
+                passage_id="passage-1",
+                text="A bounded source passage.",
+                score=1,
+            ),
+        ),
+        search_provenance=(
+            V2SourceSelectionSearchProvenance(
+                query_id=uuid4(),
+                provider=DiscoveryProvider.EXA,
+                round_number=1,
+                query_text="bounded source query",
+                targeted_gap_ids=(),
+            ),
+        ),
+        snapshot_word_count=1,
+        deep_analysis_input_tokens=1,
+    )
+
+    with pytest.raises(ValidationError, match="conflicting semantic identity"):
+        V2SourceSelectionInput(
+            run_id=uuid4(),
+            exact_claim="The intervention improves the outcome.",
+            directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+            survivors=(candidate,),
+            gap_history=history,
+        )
+
+
+def test_source_selection_history_rejects_duplicate_semantic_gap_under_new_id() -> None:
+    history = (
+        {
+            "gap_id": "stable-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "The effect remains unresolved.",
+            "claim_dimension": V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            "unsupported_claim_component": "the intervention effect",
+            "assessed_after_round": 2,
+        },
+        {
+            "gap_id": "renamed-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "The effect remains unresolved with new wording.",
+            "claim_dimension": V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            "unsupported_claim_component": "the intervention effect",
+            "assessed_after_round": 3,
+        },
+    )
+    candidate = V2SourceSelectionCandidate(
+        source_id=uuid4(),
+        direction=ResearchDirection.SUPPORT,
+        source_family_id="family-1",
+        research_round=1,
+        source_url="https://example.test/source",
+        discovery_providers=(DiscoveryProvider.EXA,),
+        probe_passages=(
+            V2SourceSelectionProbePassage(
+                passage_id="passage-1",
+                text="A bounded source passage.",
+                score=1,
+            ),
+        ),
+        search_provenance=(
+            V2SourceSelectionSearchProvenance(
+                query_id=uuid4(),
+                provider=DiscoveryProvider.EXA,
+                round_number=1,
+                query_text="bounded source query",
+                targeted_gap_ids=(),
+            ),
+        ),
+        snapshot_word_count=1,
+        deep_analysis_input_tokens=1,
+    )
+
+    with pytest.raises(ValidationError, match="semantic Gap identity"):
+        V2SourceSelectionInput(
+            run_id=uuid4(),
+            exact_claim="The intervention improves the outcome.",
+            directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+            survivors=(candidate,),
+            gap_history=history,
+        )
+
+
+def test_legacy_unknown_history_cannot_erase_known_gap_identity() -> None:
+    history = (
+        {
+            "gap_id": "stable-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "The effect remains unresolved.",
+            "claim_dimension": V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            "unsupported_claim_component": "the intervention effect",
+            "assessed_after_round": 1,
+        },
+        {
+            "gap_id": "stable-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "Legacy wording omitted the claim link.",
+            "assessed_after_round": 2,
+        },
+        {
+            "gap_id": "stable-gap",
+            "direction": ResearchDirection.SUPPORT,
+            "missing_evidence": "A different component is now claimed missing.",
+            "claim_dimension": V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+            "unsupported_claim_component": "the population boundary",
+            "assessed_after_round": 3,
+        },
+    )
+    candidate = V2SourceSelectionCandidate(
+        source_id=uuid4(),
+        direction=ResearchDirection.SUPPORT,
+        source_family_id="family-1",
+        research_round=1,
+        source_url="https://example.test/source",
+        discovery_providers=(DiscoveryProvider.EXA,),
+        probe_passages=(
+            V2SourceSelectionProbePassage(
+                passage_id="passage-1",
+                text="A bounded source passage.",
+                score=1,
+            ),
+        ),
+        search_provenance=(
+            V2SourceSelectionSearchProvenance(
+                query_id=uuid4(),
+                provider=DiscoveryProvider.EXA,
+                round_number=1,
+                query_text="bounded source query",
+                targeted_gap_ids=(),
+            ),
+        ),
+        snapshot_word_count=1,
+        deep_analysis_input_tokens=1,
+    )
+
+    with pytest.raises(ValidationError, match="conflicting semantic identity"):
+        V2SourceSelectionInput(
+            run_id=uuid4(),
+            exact_claim="The intervention improves the outcome.",
+            directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+            survivors=(candidate,),
+            gap_history=history,
+        )
 
 
 def test_round_four_query_requires_the_new_policy_and_uses_new_artifact_keys() -> None:
@@ -94,6 +419,66 @@ def test_round_four_reservation_cannot_consume_the_protected_downstream_capacity
             available_calls=12,
             available_tokens=200,
             available_cost_usd=Decimal("0.20"),
+        )
+
+
+def test_round_four_helpers_use_concrete_provider_budget_annotations() -> None:
+    expected = tuple[V2ProviderSearchBudget, ...]
+
+    assert get_type_hints(_build_round_four_search_agent_request)["eligible"] == expected
+    assert get_type_hints(_plan_round_four)["eligible"] == expected
+
+
+def test_round_four_planned_round_keeps_typed_reservation_and_strict_rejection() -> None:
+    run_id = uuid4()
+    query = V2AdaptiveSearchQuery(
+        run_id=run_id,
+        query_id=uuid4(),
+        round_number=4,
+        direction=ResearchDirection.SUPPORT,
+        provider=DiscoveryProvider.EXA,
+        targeted_gap_ids=("gap-round-four",),
+        strategy="narrow evidence",
+        query_text="longitudinal evidence on the claim",
+        policy_identity=V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
+        created_at=NOW,
+    )
+    plan = V2AdaptiveRoundPlan(
+        run_id=run_id,
+        round_number=4,
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+        enabled_providers=(DiscoveryProvider.EXA,),
+        targeted_gap_ids=("gap-round-four",),
+        discovered_terms=(),
+        searches=(query,),
+        search_agent_prompt_version="test-round-four",
+        policy_identity=V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
+        planned_at=NOW,
+    )
+    reservation = V2SearchAgentReservation(
+        input_tokens=100,
+        output_tokens=50,
+        reserved_tokens=150,
+        reserved_cost_usd=Decimal("0.01"),
+    )
+    planned = V2AdaptivePlannedRound(run_id=run_id, plan=plan, reservation=reservation)
+
+    assert planned.reservation is reservation
+    restored = V2AdaptivePlannedRound.model_validate_json(planned.model_dump_json())
+    assert isinstance(restored.reservation, V2SearchAgentReservation)
+
+    with pytest.raises(ValidationError, match="internally consistent"):
+        V2AdaptivePlannedRound.model_validate(
+            {
+                "run_id": run_id,
+                "plan": plan,
+                "reservation": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "reserved_tokens": 149,
+                    "reserved_cost_usd": "0.01",
+                },
+            }
         )
 
 
@@ -142,8 +527,8 @@ def _reservation() -> V2RoundFourReservation:
         ({"material_gap_remains": False}, "no_material_gaps"),
         ({"eligible_provider_exists": False}, "no_eligible_provider"),
         ({"round_three_duplicate_rate": 0.70}, "duplicate_heavy"),
-        ({"round_four_productive": False}, "unproductive"),
-        ({"materially_new_queries": False}, "no_novel_query"),
+        ({"productive_opportunity": False}, "unproductive"),
+        ({"novel_query_opportunity": False}, "no_novel_query"),
         ({"complete_workload_reservable": False}, "insufficient_reservation"),
         ({"cancelled": True}, "cancelled"),
         ({"terminal_provider_failure": True}, "terminal_failure"),
@@ -158,7 +543,7 @@ def test_governor_reaches_every_round_four_decision(
         material_gap_remains=True,
         luna_recommends_continue=True,
         eligible_provider_exists=True,
-        materially_new_queries=True,
+        novel_query_opportunity=True,
         round_three_duplicate_rate=0.0,
         decided_at=NOW,
     ).model_copy(update=updates)

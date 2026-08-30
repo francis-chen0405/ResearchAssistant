@@ -1,5 +1,41 @@
 # Handoff
 
+## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
+
+Gap IDs are now persistent semantic identities rather than round-local labels. Reuse requires the
+same enabled direction and explicit `claim_dimension`/`unsupported_claim_component` identity;
+rationale and explanatory missing-evidence wording may evolve, while a genuinely new gap receives
+a new ID and a semantically duplicate gap cannot receive a second ID. Typed Gap Analysis output,
+source-selection history, and post-Round-3 reconciliation reject conflicting or duplicate semantic
+identities instead of merging them. Persistent IDs remain unnamespaced by round. Historical
+artifacts without claim-linked fields remain readable as legacy unknown identity and are not
+heuristically matched.
+
+Verification: 896 passed, 2 skipped; focused Phase 12/14 regressions passed (81 tests); Ruff
+check, Ruff format check, and `git diff --check` passed. The existing Starlette/httpx deprecation
+warning remains. No live provider call, dependency, migration, SQLite constraint, unrelated audit
+fix, or commit was added.
+
+Do not begin another phase without explicit user direction.
+
+## 2026-08-29 - AUDIT-007 direct v2 concurrency boundary
+
+The direct `run_v2_production_pipeline()` entry now holds the existing database-scoped
+`.mvp5.lock` for the complete fresh-v2 run. Independent callers for the same database therefore
+serialize before budget reservation and provider work; a second caller can reuse the first
+caller's persisted terminal result without duplicating external work. `LiveResearchController`
+continues to acquire the same lock and passes explicit ownership to avoid a self-deadlock.
+
+Reservation persistence failures remain fail-closed. When a start row was committed before an
+error was reported, the budget provider refreshes its immutable audit view before propagating so
+the uncertain reservation remains conservatively accounted and no provider call begins.
+
+Verification: 883 passed, 2 skipped; Ruff check, Ruff format check, and `git diff --check` passed.
+The existing FastAPI/httpx deprecation warning remains. No live provider call, dependency,
+migration, unrelated SQLite constraint, or commit was added.
+
+Do not begin another phase without explicit user direction.
+
 ## Phase 14 conditional Round Four and gap reconciliation — 2026-08-28
 
 Fresh v2 can now execute one post-Round-3 cumulative Luna Gap Analysis and, only when the typed
@@ -23,8 +59,12 @@ selects only asserted population/setting and mechanism/pathway components; disab
 counterevidence is retained as an explicit unavailable assessment. Every cumulative Gap context
 record now identifies its completed round. Coverage-map components, material gaps, and search
 directions are exact-bound to the specification, while the final result retains the map and the
-gap-to-query/source/ledger reconciliation. The Governor receives observed facts only; terminal
-Search-Agent and Round-4 provider failures persist a typed terminal decision.
+gap-to-query/source/ledger reconciliation. The Governor receives observed authorization inputs;
+novelty and productivity are explicit preauthorization opportunities, not observations of an
+unexecuted plan. A separate typed post-plan artifact records accepted novel-query IDs and actual
+execution productivity only after deterministic plan validation and execution. Search-Agent
+planning failures persist a typed terminal decision without post-plan facts; provider failures
+after an accepted plan retain the actual partial execution facts.
 
 The final renderer emits its no-unresolved-gaps disclosure only for an empty gap tuple. A separate
 append-only terminal-outcome artifact records post-authorization Search-Agent/provider failures,
@@ -44,8 +84,9 @@ reconciliation artifacts to one run, blocks degraded Round 3 from entering Round
 fresh post-Gap budget snapshot and persisted preauthorization, preserves valid degraded Round-4
 survivors, and propagates typed cancellation through Scout retries.
 
-Verification for the final accumulated checkout (2026-08-29): `env PYTHONPATH=. .venv/bin/pytest
--q` passed (870 passed, 2 skipped; one existing FastAPI/httpx deprecation warning).
+Verification for the final accumulated checkout (2026-08-29):
+`env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. .venv/bin/pytest -q -p no:cacheprovider` passed
+(878 passed, 2 skipped; one existing FastAPI/httpx deprecation warning).
 `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .` (118 files already formatted), and
 `git diff --check` passed. The bare `pytest` command was unavailable on PATH; no live provider
 call, dependency, migration, or historical rewrite was made.

@@ -177,6 +177,89 @@ def test_v2_migration_is_additive_idempotent_and_persists_canonical_artifacts(
     assert read_v2_artifact(db_path, run_id, "initial-plan") == persisted
 
 
+def test_v2_artifact_read_rejects_payload_hash_mismatch(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "tampered.sqlite3")
+    init_db(db_path)
+    run_id = uuid4()
+    _insert_planned_run(db_path, run_id)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    plan = V2InitialResearchPlan(
+        run_id=run_id,
+        directions=ResearchDirections(support_enabled=False, challenge_enabled=True),
+        searches=(
+            V2PlannedSearch(
+                search_id="challenge-1",
+                direction=ResearchDirection.CHALLENGE,
+                query_text="challenge the claim",
+            ),
+        ),
+        created_at=NOW,
+    )
+    persisted = insert_v2_artifact(db_path, "tampered-plan", plan, NOW)
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("DROP TRIGGER v2_artifacts_immutable_update")
+        connection.execute(
+            "UPDATE v2_artifacts SET payload_json = ? WHERE run_id = ? AND artifact_key = ?",
+            (
+                persisted.payload_json.replace("challenge the claim", "changed payload"),
+                str(run_id),
+                "tampered-plan",
+            ),
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="payload SHA-256 mismatch"):
+        read_v2_artifact(db_path, run_id, "tampered-plan")
+
+
+def test_v2_current_artifact_read_recomputes_and_accepts_valid_hash(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "current.sqlite3")
+    init_db(db_path)
+    run_id = uuid4()
+    _insert_planned_run(db_path, run_id)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    plan = V2InitialResearchPlan(
+        run_id=run_id,
+        directions=ResearchDirections(support_enabled=False, challenge_enabled=True),
+        searches=(
+            V2PlannedSearch(
+                search_id="challenge-1",
+                direction=ResearchDirection.CHALLENGE,
+                query_text="challenge the claim",
+            ),
+        ),
+        created_at=NOW,
+    )
+
+    persisted = insert_v2_artifact(db_path, "current-plan", plan, NOW)
+
+    assert read_v2_artifact(db_path, run_id, "current-plan") == persisted
+
+
+def test_v2_historical_compatible_artifact_remains_readable(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "historical-artifact.sqlite3")
+    init_db(db_path)
+    run_id = uuid4()
+    _insert_planned_run(db_path, run_id)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    historical_plan = V2InitialResearchPlan(
+        run_id=run_id,
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+        searches=(
+            V2PlannedSearch(
+                search_id="support-1",
+                direction=ResearchDirection.SUPPORT,
+                query_text="support the claim",
+            ),
+        ),
+        created_at=NOW,
+    )
+
+    persisted = insert_v2_artifact(db_path, "historical-phase-1-plan", historical_plan, NOW)
+
+    assert read_v2_artifact(db_path, run_id, "historical-phase-1-plan") == persisted
+
+
 def test_historical_schema_ten_stays_readable_for_inspection(tmp_path: Path) -> None:
     db_path = tmp_path / "historical.sqlite3"
     init_db(str(db_path))

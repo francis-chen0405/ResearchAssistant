@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from threading import Event, Lock, Thread
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -11,16 +13,22 @@ import pytest
 from pydantic import ValidationError
 
 import agents.v2_final_output as v2_final_output
+import agents.v2_round_four as v2_round_four
+import providers.v2_budget as v2_budget
 import v2_orchestrator
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
+    V2AdaptivePlannedRound,
     V2AdaptiveRoundStatus,
     V2AdaptiveStopCode,
+    V2SearchAgentReservation,
 )
 from agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
 from agents.v2_round_four import (
     V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
     V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
+    V2_POST13_ROUND_FOUR_POST_PLAN_FACTS_KEY,
+    V2RoundFourPostPlanFacts,
     V2RoundFourRunResult,
     reconcile_post_round_three_gaps,
 )
@@ -36,10 +44,12 @@ from models import (
     ScoutItem,
     SelectedSentenceRange,
     Stage,
+    V2AdaptiveRoundPlan,
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
     V2AdmissionMethod,
     V2ClaimCoverageAssessment,
+    V2ClaimCoverageDimension,
     V2ClaimCoverageState,
     V2EvidenceAdmissionBatchResult,
     V2EvidenceAnalystModelOutput,
@@ -64,13 +74,19 @@ from orchestrator import request_run_cancellation
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
 from providers.scraper import ScrapeRequest, ScrapeResponse
 from providers.search import SearchRequest, SearchResponse, SearchResult
-from providers.v2_budget import V2BudgetSnapshot, V2PhysicalCallStart, V2RunCeilings
+from providers.v2_budget import (
+    V2BudgetSnapshot,
+    V2CancellationRequested,
+    V2PhysicalCallStart,
+    V2RunCeilings,
+)
 from providers.v2_routing import V2RoutingConfig
 from store import (
     init_db,
     insert_run,
     insert_v2_artifact,
     insert_v2_pipeline_identity,
+    read_run,
     read_v2_artifact,
 )
 from v2_orchestrator import (
@@ -369,6 +385,162 @@ class _V2Model:
         )
 
 
+class _ConcurrentFailureV2Model:
+    capabilities = LLMProviderCapabilities(
+        supports_temperature=True,
+        supports_structured_output_control=True,
+    )
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self._lock = Lock()
+        self.first_call_started = Event()
+        self.release_first_call = Event()
+
+    def generate(self, request: LLMRequest) -> object:
+        del request
+        with self._lock:
+            self.calls += 1
+            call_number = self.calls
+        if call_number == 1:
+            self.first_call_started.set()
+            assert self.release_first_call.wait(timeout=5)
+        raise RuntimeError("controlled concurrent provider failure")
+
+
+class _TwoSameDirectionRoundFourGapModel(_V2Model):
+    def generate(self, request: LLMRequest) -> object:
+        output = super().generate(request)
+        output_name = request.requested_output_type.__name__
+        if output_name == "V2GapAnalysisModelOutput":
+            assert isinstance(output, V2GapAnalysisModelOutput)
+            assert len(output.material_gaps) == 1
+            first_gap = output.material_gaps[0]
+            if request.input_artifact.completed_round < 3:
+                first_gap = first_gap.model_copy(update={"direction": ResearchDirection.CHALLENGE})
+                assert len(output.new_search_directions) == 1
+                output = output.model_copy(
+                    update={
+                        "material_gaps": (first_gap,),
+                        "new_search_directions": (
+                            output.new_search_directions[0].model_copy(
+                                update={"direction": ResearchDirection.CHALLENGE}
+                            ),
+                        ),
+                    }
+                )
+            if request.input_artifact.completed_round != 3:
+                return output
+            second_focus = request.input_artifact.claim_coverage_focus[1]
+            second_gap = first_gap.model_copy(
+                update={
+                    "gap_id": "gap-round-four-untargeted",
+                    "missing_evidence": "A second same-direction gap remains unresolved.",
+                    "rationale": "The second gap was not targeted by the Round-4 query.",
+                    "claim_dimension": second_focus.dimension,
+                    "unsupported_claim_component": second_focus.claim_component,
+                }
+            )
+            assert len(output.new_search_directions) == 1
+            second_search_direction = output.new_search_directions[0].model_copy(
+                update={
+                    "gap_id": second_gap.gap_id,
+                    "missing_evidence": second_gap.missing_evidence,
+                    "claim_dimension": second_gap.claim_dimension,
+                    "resolving_evidence_kind": "population-specific replication",
+                }
+            )
+            return output.model_copy(
+                update={
+                    "material_gaps": (first_gap, second_gap),
+                    "new_search_directions": (
+                        *output.new_search_directions,
+                        second_search_direction,
+                    ),
+                }
+            )
+        if output_name == "V2SourceSelectionModelOutput":
+            assert isinstance(output, V2SourceSelectionModelOutput)
+            round_four_source = next(
+                item for item in request.input_artifact.survivors if item.research_round == 4
+            )
+            challenge_source = next(
+                item
+                for item in request.input_artifact.survivors
+                if item.direction is ResearchDirection.CHALLENGE
+            )
+            targeted_gap_ids = tuple(
+                dict.fromkeys(
+                    gap_id
+                    for provenance in round_four_source.search_provenance
+                    if provenance.round_number == 4
+                    for gap_id in provenance.targeted_gap_ids
+                )
+            )
+            return V2SourceSelectionModelOutput(
+                recommendations=(
+                    V2SourceSelectionRecommendation(
+                        source_id=round_four_source.source_id,
+                        rationale="Direct Round-4 coverage for the selected gap.",
+                        gap_ids=targeted_gap_ids,
+                    ),
+                    V2SourceSelectionRecommendation(
+                        source_id=challenge_source.source_id,
+                        rationale="Independent challenge-direction coverage.",
+                    ),
+                )
+            )
+        if output_name == "V2EvidenceAnalystModelOutput":
+            assert isinstance(output, V2EvidenceAnalystModelOutput)
+            return output.model_copy(
+                update={"addressed_gap_ids": request.input_artifact.targeted_gap_ids}
+            )
+        return output
+
+
+class _MalformedRoundFourSearchAgentModel(_V2Model):
+    def generate(self, request: LLMRequest) -> object:
+        if (
+            request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+            and request.input_artifact.round_number == 4
+        ):
+            self.requests.append(request)
+            self.search_agent_calls += 1
+            return {"malformed": "Search-Agent response"}
+        return super().generate(request)
+
+
+class _InvalidRoundFourPlanModel(_V2Model):
+    def generate(self, request: LLMRequest) -> object:
+        output = super().generate(request)
+        if (
+            request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+            and request.input_artifact.round_number == 4
+        ):
+            assert isinstance(output, V2AdaptiveSearchModelOutput)
+            invalid_proposal = output.searches[0].model_copy(
+                update={"targeted_gap_ids": ("unknown-round-four-gap",)}
+            )
+            return output.model_copy(update={"searches": (invalid_proposal,)})
+        return output
+
+
+class _RepeatedRoundFourPlanModel(_V2Model):
+    def generate(self, request: LLMRequest) -> object:
+        output = super().generate(request)
+        if (
+            request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+            and request.input_artifact.round_number == 4
+        ):
+            assert isinstance(output, V2AdaptiveSearchModelOutput)
+            assert request.input_artifact.previous_queries
+            repeated_proposal = output.searches[0].model_copy(
+                update={"query_text": request.input_artifact.previous_queries[0]}
+            )
+            return output.model_copy(update={"searches": (repeated_proposal,)})
+        return output
+
+
 class _AuthorizationObservingV2Model(_V2Model):
     def __init__(self, *, db_path: Path) -> None:
         super().__init__(completed_rounds=4)
@@ -432,6 +604,28 @@ class _CancellingV2Model(_V2Model):
         return output
 
 
+class _CancellingRoundFourPlanningModel(_V2Model):
+    def __init__(self, *, db_path: Path, run_id: UUID) -> None:
+        super().__init__(completed_rounds=4)
+        self._db_path = db_path
+        self._run_id = run_id
+
+    def generate(self, request: LLMRequest) -> object:
+        if (
+            request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+            and request.input_artifact.round_number == 4
+        ):
+            self.requests.append(request)
+            self.search_agent_calls += 1
+            request_run_cancellation(
+                self._db_path,
+                self._run_id,
+                reason="test planning cancellation",
+            )
+            raise V2CancellationRequested("budget cancellation during Round-4 planning")
+        return super().generate(request)
+
+
 def _routing() -> V2RoutingConfig:
     return V2RoutingConfig.from_environment(
         {
@@ -458,6 +652,7 @@ def _run(
     run_id: UUID | None = None,
     directions: ResearchDirections | None = None,
     ceilings: V2RunCeilings | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
 ) -> V2ProductionPipelineResult:
     return run_v2_production_pipeline(
         "The regional program increases course completion.",
@@ -475,6 +670,7 @@ def _run(
             max_total_cost_usd=Decimal("1"),
         ),
         run_id=run_id,
+        cancellation_requested=cancellation_requested,
         clock=lambda: NOW,
     )
 
@@ -590,7 +786,7 @@ def test_reconciliation_rejects_mismatched_gap_and_round_four_provenance_ids(
     tampered_post_gap = post_gap.model_copy(
         update={"result": post_gap.result.model_copy(update={"material_gaps": (foreign_gap,)})}
     )
-    with pytest.raises(ValueError, match="absent from source-selection history"):
+    with pytest.raises(ValueError, match="semantic Gap identity"):
         reconcile_post_round_three_gaps(
             db_path=db_path,
             post_round_three_gap=tampered_post_gap,
@@ -620,6 +816,45 @@ def test_reconciliation_rejects_mismatched_gap_and_round_four_provenance_ids(
             admission_result=admission.model_copy(
                 update={"source_results": tuple(tampered_sources)}
             ),
+            clock=lambda: NOW,
+        )
+
+
+def test_reconciliation_rejects_semantic_gap_identity_collision(
+    _reconciliation_inputs: tuple[Path, V2GapAnalysisOutput, V2EvidenceAdmissionBatchResult],
+) -> None:
+    db_path, post_gap, admission = _reconciliation_inputs
+    selection_input = admission.analyst_result.input.queue_result.input
+    history_gap = next(
+        (item for item in selection_input.gap_history if item.claim_dimension is not None),
+        None,
+    )
+    assert history_gap is not None
+    alternate_dimension = (
+        V2ClaimCoverageDimension.POPULATION_AND_SETTING
+        if history_gap.claim_dimension is not V2ClaimCoverageDimension.POPULATION_AND_SETTING
+        else V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION
+    )
+    tampered_gap = history_gap.model_copy(
+        update={
+            "claim_dimension": alternate_dimension,
+            "unsupported_claim_component": "a semantically different component",
+        }
+    )
+    tampered_selection = selection_input.model_copy(
+        update={"gap_history": (*selection_input.gap_history, tampered_gap)}
+    )
+    queue_result = admission.analyst_result.input.queue_result
+    tampered_queue = queue_result.model_copy(update={"input": tampered_selection})
+    analyst_input = admission.analyst_result.input
+    tampered_analyst_input = analyst_input.model_copy(update={"queue_result": tampered_queue})
+    tampered_analyst = admission.analyst_result.model_copy(update={"input": tampered_analyst_input})
+
+    with pytest.raises(ValueError, match="conflicting semantic identity"):
+        reconcile_post_round_three_gaps(
+            db_path=db_path,
+            post_round_three_gap=post_gap,
+            admission_result=admission.model_copy(update={"analyst_result": tampered_analyst}),
             clock=lambda: NOW,
         )
 
@@ -694,11 +929,69 @@ def test_post_phase13_round_four_is_bounded_and_uses_versioned_artifacts(
     assert model.search_agent_calls == 3
     assert read_v2_artifact(db_path, run_id, "post-phase-13-round-4-plan-v1")
     assert read_v2_artifact(db_path, run_id, "post-phase-13-gap-coverage-reconciliation-v1")
+    authorization = V2RoundFourGovernorDecision.model_validate_json(
+        read_v2_artifact(db_path, run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY).payload_json
+    )
+    assert authorization.authorization_kind == "preauthorization"
+    post_plan_facts = V2RoundFourPostPlanFacts.model_validate_json(
+        read_v2_artifact(db_path, run_id, V2_POST13_ROUND_FOUR_POST_PLAN_FACTS_KEY).payload_json
+    )
+    plan = V2AdaptivePlannedRound.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-plan-v1").payload_json
+    )
+    assert isinstance(plan.reservation, V2SearchAgentReservation)
+    assert post_plan_facts.accepted_novel_query_ids == tuple(
+        query.query_id for query in plan.plan.searches
+    )
+    assert post_plan_facts.accepted_query_count == len(plan.plan.searches) > 0
+    assert post_plan_facts.productive_execution is (post_plan_facts.survivor_additions > 0)
+    completion = V2RoundFourRunResult.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-completion-v1").payload_json
+    )
+    assert completion.governor_decision.authorization_kind == "preauthorization"
+    assert completion.post_plan_facts == post_plan_facts
     assert result.final_output.gap_reconciliation is not None
     tampered = result.final_output.model_dump()
     tampered["claim_coverage_map"] = ()
     with pytest.raises(ValidationError, match="final claim coverage"):
         V2FinalResearchOutput.model_validate(tampered)
+
+
+def test_round_four_reconciliation_preserves_exact_targeted_gap_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agents.v2_evidence_admission.insert_v2_evidence_admission",
+        lambda *args, **kwargs: None,
+    )
+    db_path = tmp_path / "phase14-exact-gap-provenance.sqlite3"
+    model = _TwoSameDirectionRoundFourGapModel(completed_rounds=4)
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=uuid4(),
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=True),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    reconciliation = result.final_output.gap_reconciliation
+    assert reconciliation is not None
+    records = {item.gap.gap_id: item for item in reconciliation.records}
+    assert records["gap-round-3"].state.value == "covered"
+    untargeted = records["gap-round-four-untargeted"]
+    assert untargeted.state.value == "unresolved"
+    assert untargeted.source_id is None
+    assert untargeted.query_id is None
+    assert untargeted.ledger_claim_id is None
 
 
 def test_round_four_authorization_is_persisted_before_search_agent_execution(
@@ -949,7 +1242,193 @@ def test_round_four_provider_failure_persists_terminal_outcome_without_rewriting
         read_v2_artifact(db_path, run_id, "post-phase-13-round-4-terminal-outcome-v1").payload_json
     )
     assert '"reason_code":"authorized"' in authorization.payload_json
+    completion = V2RoundFourRunResult.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-completion-v1").payload_json
+    )
+    persisted_decision = V2RoundFourGovernorDecision.model_validate_json(authorization.payload_json)
+    assert completion.governor_decision == persisted_decision
+    assert completion.governor_decision.reason_code.value == "authorized"
     assert terminal.reason_code.value == "terminal_failure"
+
+
+def _assert_round_four_planning_terminal_result(
+    db_path: Path,
+    run_id: UUID,
+    result: V2ProductionPipelineResult,
+    model: _V2Model,
+    ceilings: V2RunCeilings,
+    failed_stage: str,
+) -> None:
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 3
+    assert result.final_output.all_surviving_sources
+    assert all(source.discovery_round < 4 for source in result.final_output.all_surviving_sources)
+    assert read_run(db_path, run_id).status is RunStatus.COMPLETED
+    authorization = read_v2_artifact(db_path, run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
+    decision = V2RoundFourGovernorDecision.model_validate_json(authorization.payload_json)
+    assert decision.authorized
+    assert decision.authorization_kind == "preauthorization"
+    assert decision.reservation is not None
+    completion = V2RoundFourRunResult.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-completion-v1").payload_json
+    )
+    assert completion.governor_decision == decision
+    assert completion.governor_decision.reason_code.value == "authorized"
+    assert completion.post_plan_facts is None
+    terminal = V2RoundFourTerminalOutcome.model_validate_json(
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-terminal-outcome-v1").payload_json
+    )
+    assert terminal.failed_stage == failed_stage
+    assert terminal.reason_code.value == "terminal_failure"
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-plan-v1")
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, V2_POST13_ROUND_FOUR_POST_PLAN_FACTS_KEY)
+    round_four_requests = tuple(
+        request
+        for request in model.requests
+        if request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+        and request.input_artifact.round_number == 4
+    )
+    assert len(round_four_requests) == 1
+    assert all(
+        request.input_artifact.round_number <= 4
+        for request in model.requests
+        if request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+    )
+    authorization_payload = authorization.payload_json
+
+    restarted_model = _V2Model()
+    resumed = _run(
+        db_path,
+        restarted_model,
+        _Search(),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=ceilings,
+    )
+    assert resumed == result
+    assert restarted_model.requests == []
+    assert (
+        read_v2_artifact(db_path, run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY).payload_json
+        == authorization_payload
+    )
+
+
+def test_round_four_malformed_search_agent_response_releases_prior_work(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-malformed-search-agent.sqlite3"
+    run_id = uuid4()
+    ceilings = V2RunCeilings(
+        max_physical_calls=80,
+        max_total_tokens=500_000,
+        max_total_cost_usd=Decimal("5"),
+    )
+    model = _MalformedRoundFourSearchAgentModel(completed_rounds=4)
+
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=ceilings,
+    )
+
+    _assert_round_four_planning_terminal_result(
+        db_path, run_id, result, model, ceilings, "search_agent"
+    )
+
+
+def test_round_four_deterministic_invalid_search_agent_plan_releases_prior_work(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-invalid-search-agent-plan.sqlite3"
+    run_id = uuid4()
+    ceilings = V2RunCeilings(
+        max_physical_calls=80,
+        max_total_tokens=500_000,
+        max_total_cost_usd=Decimal("5"),
+    )
+    model = _InvalidRoundFourPlanModel(completed_rounds=4)
+
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=ceilings,
+    )
+
+    _assert_round_four_planning_terminal_result(
+        db_path, run_id, result, model, ceilings, "search_agent_plan"
+    )
+
+
+def test_round_four_repeated_search_agent_query_releases_prior_work_without_execution_facts(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-repeated-search-agent-query.sqlite3"
+    run_id = uuid4()
+    ceilings = V2RunCeilings(
+        max_physical_calls=80,
+        max_total_tokens=500_000,
+        max_total_cost_usd=Decimal("5"),
+    )
+    model = _RepeatedRoundFourPlanModel(completed_rounds=4)
+
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=ceilings,
+    )
+
+    _assert_round_four_planning_terminal_result(
+        db_path, run_id, result, model, ceilings, "search_agent_plan"
+    )
+
+
+def test_round_four_empty_accepted_plan_releases_prior_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def empty_accepted_plan(
+        request: object,
+        response: object,
+        prompt_version: str,
+        planned_at: datetime,
+    ) -> V2AdaptiveRoundPlan:
+        del request, response, prompt_version, planned_at
+        return V2AdaptiveRoundPlan.model_construct(searches=())
+
+    monkeypatch.setattr("agents.v2_round_four._validate_and_assemble_plan", empty_accepted_plan)
+    db_path = tmp_path / "phase14-empty-accepted-plan.sqlite3"
+    run_id = uuid4()
+    ceilings = V2RunCeilings(
+        max_physical_calls=80,
+        max_total_tokens=500_000,
+        max_total_cost_usd=Decimal("5"),
+    )
+    model = _V2Model(completed_rounds=4)
+
+    result = _run(
+        db_path,
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=ceilings,
+    )
+
+    _assert_round_four_planning_terminal_result(
+        db_path, run_id, result, model, ceilings, "search_agent_plan"
+    )
 
 
 def test_degraded_round_four_preserves_successful_partial_survivors(
@@ -1436,6 +1915,168 @@ def test_run_h_release_integrity_violation_blocks_final_output(
     assert result.final_output.release_validation.rendered_output_hash is None
 
 
+def test_cancellation_immediately_before_round_four_planning_stops_without_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "phase14-cancel-before-round-four-planning.sqlite3"
+    run_id = uuid4()
+    model = _V2Model(completed_rounds=4)
+    search = _Search(unique_results=True)
+    scraper = _Scraper()
+    cancellation = False
+    counts_at_cancellation: dict[str, int] = {}
+    original_builder = v2_round_four._build_round_four_search_agent_request
+
+    def cancel_after_authorization_request(**kwargs: object) -> object:
+        nonlocal cancellation
+        built = original_builder(**kwargs)
+        cancellation = True
+        counts_at_cancellation.update(
+            model=len(model.requests), search=len(search.requests), scrape=len(scraper.requests)
+        )
+        return built
+
+    monkeypatch.setattr(
+        v2_round_four,
+        "_build_round_four_search_agent_request",
+        cancel_after_authorization_request,
+    )
+    result = _run(
+        db_path,
+        model,
+        search,
+        scraper,
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+        cancellation_requested=lambda: cancellation,
+    )
+
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.ADAPTIVE_SEARCH
+    assert result.final_output is None
+    assert read_run(db_path, run_id).status is RunStatus.CANCELLED
+    assert model.search_agent_calls == 2
+    assert not any(
+        request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+        and request.input_artifact.round_number == 4
+        for request in model.requests
+    )
+    assert len(model.requests) == counts_at_cancellation["model"]
+    assert len(search.requests) == counts_at_cancellation["search"]
+    assert len(scraper.requests) == counts_at_cancellation["scrape"]
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, v2_final_output.V2_FINAL_OUTPUT_ARTIFACT_KEY)
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-terminal-outcome-v1")
+
+
+def test_cancellation_during_round_four_search_agent_planning_stops_without_downstream_work(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "phase14-cancel-during-round-four-planning.sqlite3"
+    run_id = uuid4()
+    model = _CancellingRoundFourPlanningModel(db_path=db_path, run_id=run_id)
+    search = _Search(unique_results=True)
+    scraper = _Scraper()
+
+    result = _run(
+        db_path,
+        model,
+        search,
+        scraper,
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.ADAPTIVE_SEARCH
+    assert result.final_output is None
+    assert read_run(db_path, run_id).status is RunStatus.CANCELLED
+    round_four_planning_requests = tuple(
+        request
+        for request in model.requests
+        if request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+        and request.input_artifact.round_number == 4
+    )
+    assert len(round_four_planning_requests) == 1
+    assert model.search_agent_calls == 3
+    assert all("round 4" not in request.query_text for request in search.requests)
+    assert all(
+        request.stage not in {LLMStage.SOURCE_SELECTION, LLMStage.EXTRACTOR, LLMStage.ANALYST}
+        for request in model.requests
+    )
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, v2_final_output.V2_FINAL_OUTPUT_ARTIFACT_KEY)
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-terminal-outcome-v1")
+
+
+def test_budget_cancellation_wrapped_by_invoke_llm_remains_cancelled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "phase14-cancel-wrapped-round-four-planning.sqlite3"
+    run_id = uuid4()
+    model = _V2Model(completed_rounds=4)
+    search = _Search(unique_results=True)
+    scraper = _Scraper()
+    cancellation = False
+    build_calls = 0
+    original_builder = v2_round_four._build_round_four_search_agent_request
+
+    def cancel_during_planning(**kwargs: object) -> object:
+        nonlocal build_calls, cancellation
+        built = original_builder(**kwargs)
+        build_calls += 1
+        if build_calls == 2:
+            cancellation = True
+        return built
+
+    monkeypatch.setattr(
+        v2_round_four,
+        "_build_round_four_search_agent_request",
+        cancel_during_planning,
+    )
+    result = _run(
+        db_path,
+        model,
+        search,
+        scraper,
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+        cancellation_requested=lambda: cancellation,
+    )
+
+    assert result.state is V2ProductionState.CANCELLED
+    assert result.current_stage is Stage.ADAPTIVE_SEARCH
+    assert result.final_output is None
+    assert read_run(db_path, run_id).status is RunStatus.CANCELLED
+    assert model.search_agent_calls == 2
+    assert not any(
+        request.requested_output_type.__name__ == "V2AdaptiveSearchModelOutput"
+        and request.input_artifact.round_number == 4
+        for request in model.requests
+    )
+    assert all("round 4" not in request.query_text for request in search.requests)
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, v2_final_output.V2_FINAL_OUTPUT_ARTIFACT_KEY)
+    with pytest.raises(KeyError):
+        read_v2_artifact(db_path, run_id, "post-phase-13-round-4-terminal-outcome-v1")
+
+
 def test_persisted_cancellation_before_first_model_call_stops_v2_run(tmp_path: Path) -> None:
     db_path = tmp_path / "phase12-cancel-before-planner.sqlite3"
     run_id = uuid4()
@@ -1554,3 +2195,72 @@ def test_cancellation_between_selection_retries_prevents_a_second_model_call(
     assert result.state is V2ProductionState.CANCELLED
     assert result.current_stage is Stage.SOURCE_SELECTION
     assert len(selection_requests) == 1
+
+
+def test_concurrent_direct_v2_callers_share_one_database_boundary(tmp_path: Path) -> None:
+    db_path = tmp_path / "concurrent-direct-v2.sqlite3"
+    run_id = uuid4()
+    model = _ConcurrentFailureV2Model()
+    results: list[V2ProductionPipelineResult] = []
+    errors: list[Exception] = []
+
+    def call_pipeline() -> None:
+        try:
+            results.append(_run(db_path, model, _Search(), _Scraper(), run_id=run_id))
+        except Exception as exc:
+            errors.append(exc)
+
+    first_thread = Thread(target=call_pipeline)
+    first_thread.start()
+    assert model.first_call_started.wait(timeout=5)
+    second_thread = Thread(target=call_pipeline)
+    second_thread.start()
+    model.release_first_call.set()
+    first_thread.join(timeout=5)
+    second_thread.join(timeout=5)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+    assert len(results) == 2
+    assert model.calls == 1
+    assert results[0] == results[1]
+    assert results[0].state is V2ProductionState.FAILED
+    assert results[0].budget.physical_calls_used == 1
+    assert read_v2_artifact(str(db_path), run_id, V2_PRODUCTION_ARTIFACT_KEY)
+
+
+def test_partial_v2_reservation_failure_preserves_committed_audit_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "partial-reservation.sqlite3"
+    model = _V2Model()
+    original_insert = v2_budget.insert_v2_artifact
+
+    def insert_then_fail(
+        path: str,
+        artifact_key: str,
+        artifact: object,
+        created_at: datetime,
+    ) -> object:
+        persisted = original_insert(path, artifact_key, artifact, created_at)
+        if artifact_key.startswith("phase-13-physical-call-") and artifact_key.endswith("-start"):
+            raise sqlite3.OperationalError("simulated post-commit reservation failure")
+        return persisted
+
+    monkeypatch.setattr(v2_budget, "insert_v2_artifact", insert_then_fail)
+
+    result = _run(db_path, model, _Search(), _Scraper())
+
+    assert result.state is V2ProductionState.FAILED
+    assert model.requests == []
+    assert result.budget.physical_calls_used == 1
+    start = read_v2_artifact(str(db_path), result.run_id, "phase-13-physical-call-001-start")
+    assert V2PhysicalCallStart.model_validate_json(start.payload_json).sequence == 1
+    with pytest.raises(KeyError):
+        read_v2_artifact(str(db_path), result.run_id, "phase-13-physical-call-001-completion")
+    persisted = V2ProductionPipelineResult.model_validate_json(
+        read_v2_artifact(str(db_path), result.run_id, V2_PRODUCTION_ARTIFACT_KEY).payload_json
+    )
+    assert persisted == result

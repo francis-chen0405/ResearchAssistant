@@ -237,12 +237,23 @@ class BudgetedV2LLMProvider:
                 ),
                 started_at=_aware(self._clock()),
             )
-            insert_v2_artifact(
-                self._path,
-                _start_key(sequence),
-                started,
-                started.started_at,
-            )
+            try:
+                insert_v2_artifact(
+                    self._path,
+                    _start_key(sequence),
+                    started,
+                    started.started_at,
+                )
+            except Exception:
+                # A persistence error may occur after SQLite has committed the
+                # immutable start row.  Refresh before propagating so the caller
+                # fails closed with conservative exposure rather than losing a
+                # reservation from its audit view.
+                try:
+                    self._starts, self._completions = _read_audit(self._path, self._run_id)
+                except Exception:
+                    pass
+                raise
             self._starts.append(started)
         try:
             output = self._provider.generate(request)

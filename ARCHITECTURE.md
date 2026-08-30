@@ -25,6 +25,14 @@ Optional research receives budget only after the downstream reserve; the version
 policy derives queue capacity from the remaining call/token/cost budget and retains a status for
 every survivor.
 
+The direct `run_v2_production_pipeline()` boundary acquires the same database-scoped
+`.mvp5.lock` used by the live controller for the complete run. This serializes independent
+callers before they can reserve budget or perform provider work. The live controller retains
+ownership of that lock and explicitly transfers ownership to the direct coordinator, so it does
+not acquire the same lock twice. A reservation persistence error is fail-closed; if the immutable
+start row was committed before the error, the provider refreshes its audit view and retains that
+conservative exposure.
+
 Fresh routing is MiMo-v2.5 for Scout; MiMo-v2.5-Pro for Planner, Search Agent, Source
 Selection, and exact Extractor; and GPT-5.6 Luna High for Gap Analysis and Evidence Analyst.
 Fresh v2 synthesis is deterministic Python assembly and makes no Synthesizer model call;
@@ -1157,14 +1165,29 @@ passages, families, duplicate/acquisition outcomes, strategy history, and remain
 application first proves that two possible Gap attempts and the complete protected downstream
 workload fit. The Gap result is immutable even when unavailable or degraded.
 
+A `Gap ID` is the stable identity of one unresolved evidence gap across rounds. Reusing an ID
+requires the same enabled research direction and the same explicit claim-linked identity:
+`claim_dimension` plus `unsupported_claim_component`. Rationale and explanatory missing-evidence
+wording may evolve as evidence is analyzed, but a genuinely new evidence gap receives a new ID and
+a semantically duplicate gap cannot receive a second ID. Gap Analysis, source-selection history,
+and reconciliation reject conflicting or duplicate semantic identities instead of merging them.
+Historical artifacts without claim-linked fields remain readable as legacy unknown identity and are
+never heuristically reinterpreted.
+
 Round 4 is a one-shot, application-owned Governor decision, never a recursive continuation. It
 requires material enabled-direction gaps, continued research, an eligible provider, a
-non-duplicate Round 3, novel queries, and a conservative reservation before the Search Agent
-call. It allows at most two provider lanes and two queries per provider/direction lane, with at
-most four queries per enabled direction. Its reservation includes two Gap attempts, one Search
-Agent attempt, worst-case Scout attempts, provider search/acquisition capacity, and protected
-downstream physical-call, token, and cost capacity. It uses distinct post-Phase-13 artifact keys
-and policy/fingerprint identities; it does not reinterpret Phase-13 artifacts.
+non-duplicate Round 3, a bounded novel-query opportunity, a bounded productivity opportunity,
+and a conservative reservation before the Search Agent call. These two opportunities are
+preauthorization checks, not observations of an unexecuted plan. It allows at most two provider
+lanes and two queries per provider/direction lane, with at most four queries per enabled
+direction. Its reservation includes two Gap attempts, one Search Agent attempt, worst-case Scout
+attempts, provider search/acquisition capacity, and protected downstream physical-call, token,
+and cost capacity. It uses distinct post-Phase-13 artifact keys and policy/fingerprint identities;
+it does not reinterpret Phase-13 artifacts.
+
+Only after deterministic plan validation may the accepted novel-query IDs and actual execution
+productivity be recorded in the typed post-plan facts artifact. Empty, repeated, invalid, or
+fully rejected plans produce no post-plan facts.
 
 After Round 4, no model may run Gap Analysis or authorize further research. Deterministic
 reconciliation starts from the original post-Round-3 gaps and marks one covered only when an

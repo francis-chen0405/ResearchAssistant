@@ -90,7 +90,7 @@ class V2RoundThreeGovernorDecision(StrictModel):
 
 
 class V2RoundFourGovernorInput(StrictModel):
-    """Typed post-Round-3 facts evaluated by the shared deterministic Governor."""
+    """Typed authorization inputs; novelty and productivity are preauthorization opportunities."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -100,9 +100,9 @@ class V2RoundFourGovernorInput(StrictModel):
     material_gap_remains: bool
     luna_recommends_continue: bool
     eligible_provider_exists: bool
-    materially_new_queries: bool
+    novel_query_opportunity: bool
     round_three_duplicate_rate: float = Field(ge=0, le=1)
-    round_four_productive: bool = True
+    productive_opportunity: bool = True
     protected_downstream_budget_remains: bool = True
     complete_workload_reservable: bool = True
     cancelled: bool = False
@@ -157,9 +157,9 @@ def _v2_round_four_reason(evaluation: V2RoundFourGovernorInput) -> V2RoundFourDe
         return V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER
     if evaluation.round_three_duplicate_rate >= 0.70:
         return V2RoundFourDecisionCode.DUPLICATE_HEAVY
-    if not evaluation.round_four_productive:
+    if not evaluation.productive_opportunity:
         return V2RoundFourDecisionCode.UNPRODUCTIVE
-    if not evaluation.materially_new_queries:
+    if not evaluation.novel_query_opportunity:
         return V2RoundFourDecisionCode.NO_NOVEL_QUERY
     if (
         not evaluation.protected_downstream_budget_remains

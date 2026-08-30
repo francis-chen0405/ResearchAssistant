@@ -66,6 +66,7 @@ from models import (
     ValidationResult,
     canonical_v2_artifact_json,
     v2_artifact_fingerprint,
+    v2_payload_fingerprint,
 )
 from money import add_usd, canonical_usd, parse_canonical_usd, parse_exact_usd
 from provider_contract import parse_provider_contract_payload
@@ -3624,12 +3625,19 @@ def read_v2_initial_planner_output(
 
 
 def _row_to_v2_artifact(row: sqlite3.Row) -> V2PersistedArtifact:
+    payload_json = row["payload_json"]
+    payload_sha256 = row["payload_sha256"]
+    if not isinstance(payload_json, str) or not isinstance(payload_sha256, str):
+        raise sqlite3.IntegrityError("v2 artifact payload integrity data is not valid text")
+    expected_sha256 = v2_payload_fingerprint(payload_json)
+    if payload_sha256 != expected_sha256:
+        raise sqlite3.IntegrityError(f"v2 artifact {row['artifact_key']} payload SHA-256 mismatch")
     return V2PersistedArtifact(
         run_id=UUID(row["run_id"]),
         artifact_key=row["artifact_key"],
         artifact_type=row["artifact_type"],
-        payload_json=row["payload_json"],
-        payload_sha256=row["payload_sha256"],
+        payload_json=payload_json,
+        payload_sha256=payload_sha256,
         created_at=_iso_to_dt(row["created_at"]),
     )
 

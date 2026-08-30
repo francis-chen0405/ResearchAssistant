@@ -25,12 +25,14 @@ from models import (
     V2GapAttemptedQuery,
     V2GapBudgetState,
     V2GapDuplicatePattern,
+    V2GapIdentityCollisionError,
     V2GapProbePassage,
     V2GapReservation,
     V2GapSourceFamily,
     V2GapSurvivingSourceMetadata,
     V2InitialPlannerOutput,
     V2MaterialGap,
+    validate_v2_gap_identity_continuity,
 )
 from providers.llm import (
     V2_LLM_ROUTING,
@@ -270,6 +272,10 @@ def run_v2_gap_analysis(
                 directions=gap_input.directions,
                 analyzed_at=completed_at,
             )
+            validate_v2_gap_identity_continuity(
+                gap_input.previous_gaps,
+                result.material_gaps,
+            )
             output = V2GapAnalysisOutput(
                 run_id=gap_input.run_id,
                 input=gap_input,
@@ -290,6 +296,8 @@ def run_v2_gap_analysis(
             )
             insert_v2_artifact(path, resolved_artifact_key, output, completed_at)
             return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
+        except V2GapIdentityCollisionError:
+            raise
         except (LLMInvocationError, TypeError, ValueError) as exc:
             attempts.append(
                 V2GapAnalysisAttempt(

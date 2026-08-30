@@ -1,5 +1,40 @@
 # Status
 
+## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
+
+Status: Implemented within Phase 14 only.
+
+- Added the typed `V2GapIdentity` projection over direction and explicit claim-linked fields.
+  Gap Analysis permits stable IDs with evolving rationale or explanatory wording, accepts new IDs
+  only for genuinely new gaps, and rejects duplicate semantic identities or reused IDs with
+  conflicting direction, claim dimension, or unsupported component.
+- Source-selection history now carries the claim-linked fields and validates repeated IDs without
+  namespacing persistent identity by round. Reconciliation repeats the check over copied or nested
+  typed artifacts before any coverage decision, so semantically distinct gaps cannot be combined.
+- Historical artifacts lacking claim-linked fields remain readable as legacy-unknown identity; no
+  heuristic matching, migration, dependency, SQLite constraint, or unrelated audit fix was added.
+
+Verification: 896 passed, 2 expected skips; focused Phase 12/14 regressions passed (81 tests);
+Ruff check, Ruff format check, and `git diff --check` passed. The existing Starlette/httpx
+deprecation warning remains. No live provider call or commit was made.
+
+## 2026-08-29 - AUDIT-007 direct v2 concurrency boundary
+
+Status: Implemented within Phase 14 only.
+
+- The direct fresh-v2 pipeline now holds the existing per-database `.mvp5.lock` across the
+  complete run, making budget reservation and provider work single-owner for independent
+  callers. `LiveResearchController` retains its existing lock and transfers ownership without
+  reacquiring it.
+- Reservation persistence errors refresh committed immutable starts before failing closed, so a
+  post-commit error cannot undercount conservative exposure or start provider work.
+- Added deterministic regressions for two concurrent direct callers and a partial reservation
+  persistence failure. Existing AUDIT-001–005 and AUDIT-008 changes remain preserved.
+
+Verification: the complete suite passed with 883 tests and 2 expected skips; Ruff lint,
+format, and `git diff --check` passed. The existing FastAPI/httpx deprecation warning remains.
+No live provider call, dependency, migration, unrelated SQLite constraint, or commit was added.
+
 ## 2026-08-28 - Phase 14 conditional Round Four and gap reconciliation
 
 Status: Complete and verified after post-completion audit remediation.
@@ -22,10 +57,11 @@ Status: Complete and verified after post-completion audit remediation.
   components; the post-Round-3 Gap input retains round provenance on all bounded context rows,
   and the final output exposes the evaluated claim-coverage map alongside exact reconciliation
   links.
-- Round-4 Governor calls now receive observed Gap, provider, novelty, duplicate, productivity,
-  reservation, cancellation, and terminal-failure facts. Search-Agent and post-authorization
-  provider failures persist typed terminal outcomes rather than deriving a result from a
-  preselected decision code.
+- Round-4 Governor calls now receive observed Gap, provider, duplicate, reservation, cancellation,
+  and terminal-failure inputs plus explicit preauthorization novelty/productivity opportunities.
+  After deterministic plan validation and execution, a separate typed artifact records accepted
+  novel-query IDs and actual productivity. Search-Agent and post-authorization provider failures
+  persist typed terminal outcomes rather than deriving a result from a preselected decision code.
 - Final rendering now reports no unresolved gaps only when the gap tuple is actually empty.
   Terminal Round-4 outcomes are append-only artifacts and never overwrite the immutable
   authorization decision. Persisted Planner focus, coverage assessments, source-family rounds,
@@ -37,7 +73,8 @@ Status: Complete and verified after post-completion audit remediation.
 
 - Added a fresh-v2-only post-Round-3 cumulative Luna Gap Analysis and one conditional,
   application-governed Round 4. It requires a completed non-degraded Round 3, material gaps,
-  eligible capacity, novelty, duplicate/productivity checks, and a full conservative reserve.
+  eligible capacity, explicit preauthorization novelty/productivity opportunities, duplicate
+  checks, and a full conservative reserve.
 - The persisted reserve protects two possible Gap attempts, Search Agent and worst-case Scout
   work, provider search/acquisition capacity, and the existing downstream calls, tokens, and
   cost. Round 4 is capped at two provider lanes and two queries per lane per enabled direction,
@@ -50,10 +87,11 @@ Status: Complete and verified after post-completion audit remediation.
   reconciliation marks a gap covered only with matching Round-4 provenance and analyzer-admitted
   evidence; all other post-Round-3 gaps remain explicitly disclosed.
 
-Verification (2026-08-29): `env PYTHONPATH=. .venv/bin/pytest -q` passed (870 passed, 2 skipped;
-one existing FastAPI/httpx deprecation warning). `./.venv/bin/ruff check .`, `./.venv/bin/ruff
-format --check .` (118 files already formatted), and `git diff --check` passed. The bare `pytest`
-command was unavailable on PATH; no live provider call, dependency, migration, or
+Verification (2026-08-29):
+`env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. .venv/bin/pytest -q -p no:cacheprovider` passed
+(878 passed, 2 skipped; one existing FastAPI/httpx deprecation warning). `./.venv/bin/ruff check .`,
+`./.venv/bin/ruff format --check .` (118 files already formatted), and `git diff --check` passed.
+The bare `pytest` command was unavailable on PATH; no live provider call, dependency, migration, or
 historical-artifact rewrite was made.
 
 Next phase: Stop here until explicit user authorization for a new phase.

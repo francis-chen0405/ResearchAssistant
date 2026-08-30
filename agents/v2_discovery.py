@@ -146,6 +146,11 @@ def normalize_discovery_responses(
                         round_number=query.round_number,
                         provider_rank=result.rank,
                         original_url=result.original_url,
+                        targeted_gap_ids=(
+                            query.targeted_gap_ids
+                            if isinstance(query, V2AdaptiveSearchQuery)
+                            else ()
+                        ),
                     ),
                 ),
                 crossref=crossref,

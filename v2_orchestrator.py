@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -593,7 +595,78 @@ def _raise_if_v2_cancelled(callback: Callable[[], bool] | None) -> None:
         raise V2CancellationRequested("v2 cancellation was observed at an orchestration boundary")
 
 
+@contextmanager
+def _v2_database_lock(db_path: str | Path) -> Iterator[None]:
+    """Serialize direct v2 callers with the live controller's database lock."""
+    resolved_path = Path(db_path).resolve()
+    lock_path = resolved_path.with_name(f"{resolved_path.name}.mvp5.lock")
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def run_v2_production_pipeline(
+    raw_claim: str,
+    *,
+    db_path: str | Path,
+    directions: ResearchDirections,
+    discovery_providers: tuple[DiscoveryProvider, ...],
+    search_providers: Mapping[DiscoveryProvider, SearchProvider],
+    wigolo_provider: ScraperProvider | None,
+    llm_provider: LLMProvider,
+    routing_config: V2RoutingConfig,
+    ceilings: V2RunCeilings | None = None,
+    firecrawl_provider: ScraperProvider | None = None,
+    crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
+    run_id: UUID | None = None,
+    provider_policy_fingerprint: str = "injected-provider-policy-v1",
+    cancellation_requested: Callable[[], bool] | None = None,
+    clock: Callable[[], datetime] | None = None,
+    _database_lock_owned: bool = False,
+) -> V2ProductionPipelineResult:
+    """Run v2 under one database-scoped lock, unless the live controller owns it."""
+    if _database_lock_owned:
+        return _run_v2_production_pipeline(
+            raw_claim,
+            db_path=db_path,
+            directions=directions,
+            discovery_providers=discovery_providers,
+            search_providers=search_providers,
+            wigolo_provider=wigolo_provider,
+            llm_provider=llm_provider,
+            routing_config=routing_config,
+            ceilings=ceilings,
+            firecrawl_provider=firecrawl_provider,
+            crossref_resolver=crossref_resolver,
+            run_id=run_id,
+            provider_policy_fingerprint=provider_policy_fingerprint,
+            cancellation_requested=cancellation_requested,
+            clock=clock,
+        )
+    with _v2_database_lock(db_path):
+        return _run_v2_production_pipeline(
+            raw_claim,
+            db_path=db_path,
+            directions=directions,
+            discovery_providers=discovery_providers,
+            search_providers=search_providers,
+            wigolo_provider=wigolo_provider,
+            llm_provider=llm_provider,
+            routing_config=routing_config,
+            ceilings=ceilings,
+            firecrawl_provider=firecrawl_provider,
+            crossref_resolver=crossref_resolver,
+            run_id=run_id,
+            provider_policy_fingerprint=provider_policy_fingerprint,
+            cancellation_requested=cancellation_requested,
+            clock=clock,
+        )
+
+
+def _run_v2_production_pipeline(
     raw_claim: str,
     *,
     db_path: str | Path,

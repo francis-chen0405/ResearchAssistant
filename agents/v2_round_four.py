@@ -10,15 +10,17 @@ from pathlib import Path
 from typing import TypeVar
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
     V2AdaptiveContinuationResult,
     V2AdaptivePlannedRound,
+    V2AdaptivePlanValidationError,
     V2AdaptiveRoundExecution,
     V2AdaptiveRoundStatus,
     V2AdaptiveStopCode,
+    V2SearchAgentReservation,
     _eligible_budgets,
     _known_urls,
     _merge_survivors,
@@ -69,18 +71,21 @@ from models import (
     V2InitialPlannerOutput,
     V2LedgerProvenance,
     V2MaterialGap,
+    V2ProviderSearchBudget,
     V2RoundFourDecisionCode,
     V2RoundFourGovernorDecision,
     V2RoundFourReservation,
     V2RoundFourTerminalOutcome,
     V2SearchAgentInput,
     V2SourceSelectionCandidate,
+    validate_v2_gap_history_against_material_gaps,
 )
 from providers.llm import (
     V2_LLM_ROUTING,
     LLMProvider,
     LLMProviderExecutionError,
     LLMRequest,
+    LLMResponseValidationError,
     LLMStage,
     invoke_llm,
     load_prompt,
@@ -89,6 +94,7 @@ from providers.llm import (
 from providers.pricing import conservative_token_estimate
 from providers.scraper import ScraperProvider
 from providers.search import SearchProvider
+from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
 from research_governor import V2RoundFourGovernorInput, evaluate_v2_round_four_authorization
 from store import insert_v2_artifact, read_v2_artifact
@@ -97,10 +103,17 @@ V2_POST13_GAP_AFTER_ROUND_THREE_KEY = "post-phase-13-gap-analysis-after-round-3-
 V2_POST13_ROUND_FOUR_GOVERNOR_KEY = "post-phase-13-round-4-governor-decision-v1"
 V2_POST13_ROUND_FOUR_TERMINAL_OUTCOME_KEY = "post-phase-13-round-4-terminal-outcome-v1"
 V2_POST13_ROUND_FOUR_PLAN_KEY = "post-phase-13-round-4-plan-v1"
+V2_POST13_ROUND_FOUR_POST_PLAN_FACTS_KEY = "post-phase-13-round-4-post-plan-facts-v1"
 V2_POST13_ROUND_FOUR_COMPLETION_KEY = "post-phase-13-round-4-completion-v1"
 V2_POST13_GAP_RECONCILIATION_KEY = "post-phase-13-gap-coverage-reconciliation-v1"
 
 _RowT = TypeVar("_RowT")
+
+
+def _aware_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("Round-4 post-plan timestamps must be timezone-aware")
+    return value
 
 
 class V2RoundFourBudgetError(LookupError):
@@ -109,6 +122,39 @@ class V2RoundFourBudgetError(LookupError):
 
 class V2RoundFourAuthorizationError(LookupError):
     """Round-4 Search Agent work requires a persisted application authorization."""
+
+
+class V2RoundFourPostPlanFacts(StrictModel):
+    """Actual accepted-query and execution facts recorded after Round-4 planning."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    accepted_novel_query_ids: tuple[UUID, ...] = Field(min_length=1, max_length=8)
+    accepted_query_count: int = Field(ge=1, le=8)
+    executed_query_count: int = Field(ge=0)
+    successful_query_count: int = Field(ge=0)
+    new_source_count: int = Field(ge=0)
+    survivor_additions: int = Field(ge=0)
+    productive_execution: bool
+    round_status: V2AdaptiveRoundStatus
+    completed_at: datetime
+
+    _completed_at_is_aware = field_validator("completed_at")(_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_execution_facts(self) -> V2RoundFourPostPlanFacts:
+        if self.accepted_query_count != len(self.accepted_novel_query_ids):
+            raise ValueError("post-plan accepted query count must match its query IDs")
+        if len(set(self.accepted_novel_query_ids)) != self.accepted_query_count:
+            raise ValueError("post-plan accepted query IDs must be unique")
+        if self.executed_query_count > self.accepted_query_count:
+            raise ValueError("executed queries cannot exceed accepted queries")
+        if self.successful_query_count > self.executed_query_count:
+            raise ValueError("successful queries cannot exceed executed queries")
+        if self.productive_execution != (self.survivor_additions > 0):
+            raise ValueError("post-plan productivity must reflect survivor additions")
+        return self
 
 
 class V2RoundFourRunResult(StrictModel):
@@ -120,6 +166,7 @@ class V2RoundFourRunResult(StrictModel):
     continuation: V2AdaptiveContinuationResult
     post_round_three_gap: V2GapAnalysisOutput
     governor_decision: V2RoundFourGovernorDecision
+    post_plan_facts: V2RoundFourPostPlanFacts | None = None
     resumed: bool = False
 
 
@@ -254,7 +301,7 @@ def run_v2_round_four_continuation(
                     gap=gap,
                     eligible_provider_exists=True,
                     round_three_duplicate_rate=duplicate_rate,
-                    materially_new_queries=False,
+                    novel_query_opportunity=False,
                 ),
                 now,
             )
@@ -276,8 +323,8 @@ def run_v2_round_four_continuation(
             gap=gap,
             eligible_provider_exists=True,
             round_three_duplicate_rate=duplicate_rate,
-            materially_new_queries=True,
-            round_four_productive=True,
+            novel_query_opportunity=True,
+            productive_opportunity=True,
             complete_workload_reservable=reservation is not None,
             reservation=reservation,
         )
@@ -288,6 +335,26 @@ def run_v2_round_four_continuation(
             raise ValueError("persisted Round-4 Governor decision does not match the initial plan")
     if not decision.authorized:
         return _finish(path, continuation, gap, decision, now)
+    if _cancelled(cancellation_requested):
+        cancelled = continuation.model_copy(
+            update={
+                "stopping_decision": continuation.stopping_decision.model_copy(
+                    update={
+                        "stop_code": V2AdaptiveStopCode.CANCELLED,
+                        "stopping_reason": "Cancellation was observed before Round-4 planning.",
+                        "decided_at": now(),
+                    }
+                ),
+                "completed_at": now(),
+            }
+        )
+        return _finish(
+            path,
+            cancelled,
+            gap,
+            _governor_decision(run_id=initial_plan.run_id, clock=now, gap=gap, cancelled=True),
+            now,
+        )
     try:
         plan = _plan_round_four(
             path=path,
@@ -299,7 +366,10 @@ def run_v2_round_four_continuation(
             routing_config=routing_config,
             clock=now,
         )
-    except LLMProviderExecutionError:
+    except LLMProviderExecutionError as exc:
+        cancellation = _cancellation_from_error(exc)
+        if cancellation is not None:
+            raise cancellation from None
         terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent", now)
         return _finish(
             path,
@@ -308,6 +378,12 @@ def run_v2_round_four_continuation(
             terminal,
             now,
         )
+    except LLMResponseValidationError:
+        terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent", now)
+        return _finish(path, continuation, gap, terminal, now)
+    except V2AdaptivePlanValidationError:
+        terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent_plan", now)
+        return _finish(path, continuation, gap, terminal, now)
     if plan is None:
         terminal = _persist_terminal_outcome(path, initial_plan.run_id, "search_agent_plan", now)
         return _finish(path, continuation, gap, terminal, now)
@@ -325,6 +401,7 @@ def run_v2_round_four_continuation(
         clock=now,
     )
     del search
+    post_plan_facts = _build_post_plan_facts(plan, summary, now)
     rounds_with_round_four = tuple(
         (
             round_number,
@@ -346,7 +423,7 @@ def run_v2_round_four_continuation(
                 "completed_at": now(),
             }
         )
-        return _finish(path, cancelled, gap, decision, now)
+        return _finish(path, cancelled, gap, decision, now, post_plan_facts)
     if summary.status is V2AdaptiveRoundStatus.DEGRADED:
         merged = _merge_survivors(initial_plan.run_id, rounds_with_round_four)
         failed = continuation.model_copy(
@@ -371,6 +448,7 @@ def run_v2_round_four_continuation(
             gap,
             terminal,
             now,
+            post_plan_facts,
         )
     merged = _merge_survivors(initial_plan.run_id, rounds_with_round_four)
     updated = continuation.model_copy(
@@ -390,7 +468,7 @@ def run_v2_round_four_continuation(
             "completed_at": now(),
         }
     )
-    return _finish(path, updated, gap, decision, now)
+    return _finish(path, updated, gap, decision, now, post_plan_facts)
 
 
 def build_post_round_three_gap_input(
@@ -753,6 +831,7 @@ def _validate_reconciliation_admission(
     gap_ids = tuple(gap.gap_id for gap in gaps)
     if len(gap_ids) != len(set(gap_ids)):
         raise ValueError("post-Round-3 Gap IDs must be unique during reconciliation")
+    validate_v2_gap_history_against_material_gaps(gaps, selection_input.gap_history)
     history_by_id: dict[str, tuple[ResearchDirection, ...]] = {}
     history_directions: dict[str, set[ResearchDirection]] = {}
     round_three_gap_directions: dict[str, ResearchDirection] = {}
@@ -1068,7 +1147,7 @@ def _build_round_four_search_agent_request(
     path: str,
     initial_plan: V2InitialPlannerOutput,
     gap: V2GapAnalysisOutput,
-    eligible: tuple[object, ...],
+    eligible: tuple[V2ProviderSearchBudget, ...],
     routing_config: V2RoutingConfig,
 ) -> tuple[V2SearchAgentInput, LLMRequest, V2ModelReservation]:
     if gap.result is None:
@@ -1124,7 +1203,7 @@ def _plan_round_four(
     path: str,
     initial_plan: V2InitialPlannerOutput,
     gap: V2GapAnalysisOutput,
-    eligible: tuple[object, ...],
+    eligible: tuple[V2ProviderSearchBudget, ...],
     attempts: Mapping[DiscoveryProvider, int],
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
@@ -1155,12 +1234,12 @@ def _plan_round_four(
         return None
     response = invoke_llm(llm_provider, request, clock=clock).output_artifact
     if not isinstance(response, V2AdaptiveSearchModelOutput):
-        return None
+        raise V2AdaptivePlanValidationError("Search Agent returned an unexpected typed artifact")
     assembled = _validate_and_assemble_plan(
         request_input, response, request.prompt.version, clock()
     )
     if not assembled.searches:
-        return None
+        raise V2AdaptivePlanValidationError("Search Agent plan contained no accepted queries")
     plan = assembled.model_copy(
         update={
             "policy_identity": V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
@@ -1173,12 +1252,12 @@ def _plan_round_four(
     result = V2AdaptivePlannedRound(
         run_id=initial_plan.run_id,
         plan=plan,
-        reservation={
-            "input_tokens": search_reservation.input_tokens,
-            "output_tokens": search_reservation.output_tokens,
-            "reserved_tokens": search_reservation.reserved_tokens,
-            "reserved_cost_usd": search_reservation.reserved_cost_usd,
-        },
+        reservation=V2SearchAgentReservation(
+            input_tokens=search_reservation.input_tokens,
+            output_tokens=search_reservation.output_tokens,
+            reserved_tokens=search_reservation.reserved_tokens,
+            reserved_cost_usd=search_reservation.reserved_cost_usd,
+        ),
     )
     insert_v2_artifact(path, V2_POST13_ROUND_FOUR_PLAN_KEY, result, plan.planned_at)
     return result
@@ -1331,6 +1410,26 @@ def _duplicate_rate(summary: V2AdaptiveRoundExecution) -> float:
     return summary.duplicate_source_count / total if total else 0.0
 
 
+def _build_post_plan_facts(
+    planned: V2AdaptivePlannedRound,
+    summary: V2AdaptiveRoundExecution,
+    clock: Callable[[], datetime],
+) -> V2RoundFourPostPlanFacts:
+    """Build actual facts only after an accepted Round-4 plan has executed."""
+    return V2RoundFourPostPlanFacts(
+        run_id=planned.run_id,
+        accepted_novel_query_ids=tuple(query.query_id for query in planned.plan.searches),
+        accepted_query_count=len(planned.plan.searches),
+        executed_query_count=summary.completed_query_count + summary.failed_query_count,
+        successful_query_count=summary.completed_query_count,
+        new_source_count=summary.new_source_count,
+        survivor_additions=summary.survivor_additions,
+        productive_execution=summary.survivor_additions > 0,
+        round_status=summary.status,
+        completed_at=clock(),
+    )
+
+
 def _governor_decision(
     *,
     run_id: UUID,
@@ -1338,16 +1437,16 @@ def _governor_decision(
     gap: V2GapAnalysisOutput | None = None,
     gap_attempted: bool = True,
     eligible_provider_exists: bool = False,
-    materially_new_queries: bool = False,
+    novel_query_opportunity: bool = False,
     round_three_duplicate_rate: float = 0.0,
-    round_four_productive: bool = True,
+    productive_opportunity: bool = True,
     protected_downstream_budget_remains: bool = True,
     complete_workload_reservable: bool = True,
     cancelled: bool = False,
     terminal_provider_failure: bool = False,
     reservation: V2RoundFourReservation | None = None,
 ) -> V2RoundFourGovernorDecision:
-    """Evaluate one typed set of observed Round-4 facts without selecting a result first."""
+    """Evaluate typed Round-4 inputs, including explicit preauthorization opportunities."""
     result = gap.result if gap is not None else None
     return evaluate_v2_round_four_authorization(
         V2RoundFourGovernorInput(
@@ -1357,9 +1456,9 @@ def _governor_decision(
             material_gap_remains=bool(result and result.material_gaps),
             luna_recommends_continue=bool(result and result.continue_research),
             eligible_provider_exists=eligible_provider_exists,
-            materially_new_queries=materially_new_queries,
+            novel_query_opportunity=novel_query_opportunity,
             round_three_duplicate_rate=round_three_duplicate_rate,
-            round_four_productive=round_four_productive,
+            productive_opportunity=productive_opportunity,
             protected_downstream_budget_remains=protected_downstream_budget_remains,
             complete_workload_reservable=complete_workload_reservable,
             cancelled=cancelled,
@@ -1376,20 +1475,28 @@ def _finish(
     gap: V2GapAnalysisOutput,
     decision: V2RoundFourGovernorDecision,
     clock: Callable[[], datetime],
+    post_plan_facts: V2RoundFourPostPlanFacts | None = None,
 ) -> V2RoundFourRunResult:
-    result = V2RoundFourRunResult(
-        run_id=continuation.run_id,
-        continuation=continuation,
-        post_round_three_gap=gap,
-        governor_decision=decision,
-    )
-    if _read(path, continuation.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY) is None:
+    persisted_decision = _read(path, continuation.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
+    if persisted_decision is None:
         insert_v2_artifact(
             path,
             V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
             decision,
             decision.decided_at,
         )
+        authorization = decision
+    else:
+        authorization = V2RoundFourGovernorDecision.model_validate_json(persisted_decision)
+        if authorization.run_id != continuation.run_id:
+            raise ValueError("persisted Round-4 Governor decision does not match the continuation")
+    result = V2RoundFourRunResult(
+        run_id=continuation.run_id,
+        continuation=continuation,
+        post_round_three_gap=gap,
+        governor_decision=authorization,
+        post_plan_facts=post_plan_facts,
+    )
     if _read(path, continuation.run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY) is None:
         insert_v2_artifact(
             path,
@@ -1397,6 +1504,19 @@ def _finish(
             gap,
             gap.completed_at,
         )
+    if post_plan_facts is not None:
+        if post_plan_facts.run_id != continuation.run_id:
+            raise ValueError("post-plan facts do not match the continuation")
+        persisted_facts = _read(path, continuation.run_id, V2_POST13_ROUND_FOUR_POST_PLAN_FACTS_KEY)
+        if persisted_facts is None:
+            insert_v2_artifact(
+                path,
+                V2_POST13_ROUND_FOUR_POST_PLAN_FACTS_KEY,
+                post_plan_facts,
+                post_plan_facts.completed_at,
+            )
+        elif V2RoundFourPostPlanFacts.model_validate_json(persisted_facts) != post_plan_facts:
+            raise ValueError("persisted Round-4 post-plan facts do not match the execution")
     insert_v2_artifact(path, V2_POST13_ROUND_FOUR_COMPLETION_KEY, result, clock())
     return result
 
@@ -1435,6 +1555,17 @@ def _read(path: str, run_id: UUID, key: str) -> str | None:
 
 def _cancelled(callback: Callable[[], bool] | None) -> bool:
     return callback is not None and callback()
+
+
+def _cancellation_from_error(error: BaseException) -> V2CancellationRequested | None:
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        if isinstance(current, V2CancellationRequested):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def _utc_now() -> datetime:

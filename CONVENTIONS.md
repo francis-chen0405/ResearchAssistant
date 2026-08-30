@@ -67,6 +67,13 @@ reservation, and reconciliation handoffs are strict Pydantic artifacts; no raw r
 may authorize or claim coverage. Round-4 coverage requires the original Gap ID, Round-4 query
 provenance, Analyzer Admission, and an explicit Analyst `addressed_gap_ids` value.
 
+Gap IDs are stable semantic identities across rounds. A reused ID must retain its enabled research
+direction and explicit `claim_dimension`/`unsupported_claim_component` pair; rationale and
+explanatory missing-evidence wording may change. New evidence gaps use new IDs. Gap Analysis,
+source-selection history, and reconciliation reject conflicting reused identities. Older artifacts
+that lack claim-linked fields remain readable as unknown legacy identity and are not heuristically
+matched.
+
 Never pass raw dicts between agents. Always use the typed Pydantic models from models.py. JSON serialization is allowed only at persistence, API, logging, or export boundaries. `SynthesisOutput` must carry Ledger IDs, admission method, optional historical `reviewer_approval_id`, stance, placement, entailment, exact approved statements, and required provenance so the final validator can compare it against the admitted evidence record.
 
 Deliberately narrow model-facing schemas may keep forbidden contextual provenance outside
@@ -123,6 +130,7 @@ SDK or dependency.
   - All schema definitions live in store.py in a single init_db() function
   - Concurrent supporting/opposing researchers must not share SQLite connections, cursors, or transactions
   - Prefer coordinator-owned serialized writes after both sync researchers finish; if a worker must touch SQLite, it opens and closes its own connection
+  - The fresh-v2 direct pipeline boundary holds the database-scoped `.mvp5.lock` for the complete run; the live controller acquires the same lock and transfers ownership explicitly
   - Persistence records that affect release must include run IDs, prompt/model versions when applicable, retrieval attempts, and timestamps
   - `runs.raw_claim` is immutable after insertion at both the application and SQLite trigger boundaries
   - Schema migration 4 contains same-run provenance triggers; migration 5 contains the raw-claim immutability trigger
@@ -279,6 +287,9 @@ The canonical phase-plan path is `.agent/plans/`. The `.agents/PLANS/` path may 
 - Persist a typed Governor decision for every outcome. Only an authorized decision carries the
   full conservative reservation: two Gap attempts, Search Agent, worst-case Scout, provider
   search/acquisition capacity, and protected downstream calls/tokens/cost.
+- Novelty and productivity values used by preauthorization are explicit opportunity flags, not
+  observed execution facts. Persist accepted novel-query IDs and productivity only in the typed
+  post-plan facts artifact after deterministic plan validation and Round-4 execution.
 - A Round-4 Search Agent may use at most two provider lanes and two queries per lane per enabled
   direction, with a maximum of four queries per enabled direction. There is no Round 5 and no
   post-Round-4 Gap call.

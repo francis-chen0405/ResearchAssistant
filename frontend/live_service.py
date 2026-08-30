@@ -828,6 +828,7 @@ class LiveResearchController:
                     cancellation_requested=lambda: v2_cancellation_requested(
                         request.db_path, run_id
                     ),
+                    _database_lock_owned=True,
                 )
                 return self._snapshot_from_v2_result(result)
             if self._legacy_runner is None:

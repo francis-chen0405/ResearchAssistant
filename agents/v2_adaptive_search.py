@@ -1001,6 +1001,8 @@ def _validate_and_assemble_plan(
                 created_at=planned_at,
             )
         )
+    if not accepted:
+        raise V2AdaptivePlanValidationError("Search Agent plan contained no accepted queries")
     return V2AdaptiveRoundPlan(
         run_id=request.run_id,
         round_number=request.round_number,

@@ -1,15 +1,42 @@
 # Decisions
 
+## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
+
+- Treat each Gap ID as the stable identity of one unresolved evidence gap across research rounds.
+  Reuse is valid only when direction, claim dimension, and unsupported claim component remain the
+  same; rationale and explanatory missing-evidence wording may evolve. A semantically duplicate gap
+  cannot be assigned a second ID.
+- Assign a new ID to a genuinely new gap and reject, rather than merge, any reused ID whose
+  explicit direction or claim-linked identity conflicts, or any second ID for the same explicit
+  semantic identity, at Gap Analysis, source-selection history, or reconciliation boundaries.
+- Keep persistent Gap IDs unnamespaced by round. Historical artifacts without claim-linked fields
+  remain readable as legacy unknown identity and are not heuristically reinterpreted.
+- Add no dependency, migration, new phase, or unrelated schema change.
+
+## 2026-08-29 - AUDIT-007 direct fresh-v2 concurrency boundary
+
+- Make `run_v2_production_pipeline()` the authoritative direct-entry boundary by holding the
+  existing database-scoped `.mvp5.lock` across the complete run. This prevents independent
+  callers for one database from duplicating provider work or racing the run-wide budget.
+- Preserve `LiveResearchController` locking by letting its existing lock owner transfer
+  ownership explicitly to the direct coordinator instead of acquiring the same lock twice.
+- If reservation persistence reports an error after an immutable start row was committed,
+  refresh the provider audit view before propagating the failure so uncertain exposure remains
+  conservatively accounted and no external call begins.
+- Add no dependency, migration, new phase, or unrelated schema change.
+
 ## 2026-08-28 - ResearchAssistant v2 Phase 14 conditional Round Four
 
 - Authorize exactly one fresh-v2 post-Round-3 Gap Analysis and, only after a typed application
   Governor decision, one conditional Round 4. Keep Phase-7 Round 2/3 and all historical runs
   under their original policies and artifact keys.
 - Require a completed non-degraded Round 3, enabled-direction material gaps, continued Gap
-  recommendation, eligible providers, novelty, duplicate/productivity checks, and a
-  conservative reservation before the Round-4 Search Agent call. Reserve two Gap attempts,
-  Search Agent, worst-case Scout, provider search/acquisition capacity, and protected
-  downstream physical-call/token/cost capacity.
+  recommendation, eligible providers, bounded novel-query and productivity opportunities,
+  duplicate checks, and a conservative reservation before the Round-4 Search Agent call. These
+  opportunities are preauthorization inputs; actual accepted-query and productivity facts are
+  recorded only after the plan is validated and executed. Reserve two Gap attempts, Search
+  Agent, worst-case Scout, provider search/acquisition capacity, and protected downstream
+  physical-call/token/cost capacity.
 - Cap Round 4 at two provider lanes and two queries per lane per enabled direction, with at most
   four queries per enabled direction. Do not add Round 5, post-Round-4 Gap Analysis, a Reviewer
   call, dependency, migration, or live provider execution.

@@ -9,7 +9,9 @@ post-completion correction. Fresh v2 may run one post-Round-3 cumulative, claim-
 Analysis and, only after the typed Governor proves the complete bounded surplus workload fits,
 one narrow Round 4. It has no Round 5 or post-Round-4 Gap call.
 Final disclosures use deterministic Analyzer-Admission reconciliation against the original
-post-Round-3 gaps. Phase-13 and earlier artifacts remain immutable compatibility readers.
+post-Round-3 gaps. Gap IDs are stable across rounds; conflicting or duplicate explicit semantic
+identity is rejected at Gap Analysis, source-selection, and reconciliation boundaries. Phase-13 and
+earlier artifacts remain immutable compatibility readers.
 
 Canonical plan:
 
