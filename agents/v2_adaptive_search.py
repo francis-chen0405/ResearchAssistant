@@ -183,12 +183,8 @@ class V2AdaptiveSearchOutcome(StrictModel):
     @model_validator(mode="after")
     def validate_outcome(self) -> V2AdaptiveSearchOutcome:
         if self.succeeded:
-            if (
-                not self.results
-                or self.failure_code is not None
-                or self.failure_message is not None
-            ):
-                raise ValueError("successful adaptive searches require results and no failure")
+            if self.failure_code is not None or self.failure_message is not None:
+                raise ValueError("successful adaptive searches cannot carry a failure")
         elif self.results or self.failure_code is None or self.failure_message is None:
             raise ValueError("failed adaptive searches require paired failure fields")
         return self
@@ -1309,6 +1305,7 @@ def _round_two_gap_input(
         duplicate_patterns=tuple((*prior.duplicate_patterns, *duplicates))[:25],
         acquisition_failures=tuple((*prior.acquisition_failures, *failures))[:150],
         previous_gaps=round_one_gap.result.material_gaps if round_one_gap.result else (),
+        claim_coverage_focus=prior.claim_coverage_focus,
         remaining_budget=V2GapBudgetState(
             model_calls_remaining=max(0, budget.model_calls_remaining - 1),
             tokens_remaining=budget.tokens_remaining,

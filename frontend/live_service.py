@@ -1092,7 +1092,11 @@ class LiveResearchController:
                 if output is not None
                 else ()
             ),
-            final_brief=(render_v2_final_output(output) if output is not None else None),
+            final_brief=(
+                render_v2_final_output(output)
+                if output is not None and output.release_validation.valid
+                else None
+            ),
             rendered_brief_hash=(
                 output.release_validation.rendered_output_hash if output is not None else None
             ),

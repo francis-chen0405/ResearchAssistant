@@ -1,5 +1,51 @@
 # Handoff
 
+## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
+
+Three additional low-risk bugs were fixed within the current Phase 14 boundary. Adaptive
+Round-2 Gap Analysis now preserves the initial Planner's typed `claim_coverage_focus`; adaptive
+search now treats a successful empty provider response as a valid outcome, matching the
+OpenAlex degraded-pool fallback; and live/API result presentation no longer attempts to render
+an invalid final output from a blocked run. Invalid outputs remain diagnostic-only, with their
+validation errors exposed to the existing blocked-run view.
+
+Regression coverage was added at each boundary. No Round-4 policy, model schema, database
+migration, provider, dependency, or historical artifact changed, and no user decision was
+needed because these are contract-preserving failure-handling fixes.
+
+Verification: focused Phase 6/7/12/14 tests passed (122); complete offline pytest passed (899
+passed, 2 skipped; one existing FastAPI/httpx deprecation warning); Ruff lint and format checks,
+`git diff --check`, frontend ESLint, and the production Next.js build passed. No live provider
+call or commit was made.
+
+Operator handoff: restart the local API/site and start a new run with Run ID blank. The
+executable fingerprint changes with these fixes, so do not resume the displayed historical
+run; old artifacts remain readable and immutable.
+
+Do not begin another phase without explicit user direction.
+
+## 2026-08-29 - AUDIT-010 preserve Round-1 Planner coverage focus
+
+The Phase-3-to-Phase-6 typed handoff now carries the validated initial Planner
+`claim_coverage_focus` into `V2GapAnalysisInput`. Previously, the builder omitted that field,
+so Round-1 Gap Analysis received an empty focus even when the Planner had selected a claim
+component. The resulting “no claim_coverage_focus dimensions were supplied” message was
+therefore an application handoff bug, not evidence that the claim lacked a coverage model.
+
+A regression test covers the exact builder boundary. No Round-4 policy, model schema,
+database migration, provider, dependency, or historical artifact changed; the fix remains
+within Phase 14 and uses the existing typed contracts.
+
+Verification: focused Phase 6/12/14 tests passed (90); complete offline pytest passed (897
+passed, 2 skipped; one existing FastAPI/httpx deprecation warning); Ruff check, Ruff format
+check, and `git diff --check` passed. No live provider call or commit was made.
+
+Operator handoff: restart the local API/site and start a new run with Run ID blank. The
+executable fingerprint changes with this fix, so do not resume the displayed historical run;
+old artifacts remain readable and immutable.
+
+Do not begin another phase without explicit user direction.
+
 ## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
 
 Gap IDs are now persistent semantic identities rather than round-local labels. Reuse requires the

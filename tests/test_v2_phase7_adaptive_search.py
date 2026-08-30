@@ -11,6 +11,8 @@ from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
     V2AdaptiveRoundStatus,
     V2AdaptiveStopCode,
+    _execute_searches,
+    _round_two_gap_input,
     normalize_query_text,
     queries_are_materially_new,
     run_v2_adaptive_search_continuation,
@@ -31,9 +33,13 @@ from models import (
     ScoutItem,
     Stage,
     V2AcquisitionProbeOutput,
+    V2AdaptiveRoundPlan,
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
     V2AdaptiveSearchQuery,
+    V2ClaimCoverageDimension,
+    V2ClaimCoverageFocus,
+    V2ClaimCoverageKind,
     V2DiscoveryScoutOutput,
     V2GapAnalysisInput,
     V2GapAnalysisOutput,
@@ -138,6 +144,12 @@ class FakeSearch:
             results=[SearchResult(original_url=url, title="Independent outcome study")],
             provider_name="fixture-search",
         )
+
+
+class EmptySearch(FakeSearch):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        self.requests.append(request)
+        return SearchResponse(results=[], provider_name="fixture-search")
 
 
 class RoundThreeFailureSearch(FakeSearch):
@@ -352,6 +364,92 @@ def _gap(plan: V2InitialPlannerOutput, *, continue_research: bool) -> V2GapAnaly
         stop_adaptive_continuation=not continue_research,
         completed_at=NOW,
     )
+
+
+def test_round_two_gap_input_preserves_initial_planner_claim_coverage_focus() -> None:
+    run_id = uuid4()
+    initial_plan = _initial_plan(run_id)
+    round_one_gap = _gap(initial_plan, continue_research=True)
+    focus = V2ClaimCoverageFocus(
+        dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+        claim_component="the stated effect",
+        kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+    )
+    round_one_gap = round_one_gap.model_copy(
+        update={"input": round_one_gap.input.model_copy(update={"claim_coverage_focus": (focus,)})}
+    )
+    round_two_plan = V2AdaptiveRoundPlan(
+        run_id=run_id,
+        round_number=2,
+        directions=initial_plan.directions,
+        enabled_providers=(DiscoveryProvider.EXA,),
+        targeted_gap_ids=("gap-outcome",),
+        discovered_terms=(),
+        searches=(
+            V2AdaptiveSearchQuery(
+                run_id=run_id,
+                query_id=uuid4(),
+                round_number=2,
+                direction=ResearchDirection.SUPPORT,
+                provider=DiscoveryProvider.EXA,
+                targeted_gap_ids=("gap-outcome",),
+                strategy="independent_outcome",
+                query_text="independent outcome evidence for the population",
+                created_at=NOW,
+            ),
+        ),
+        search_agent_prompt_version="test-v1",
+        planned_at=NOW,
+    )
+    discovery, acquisition = _round_one_outputs(initial_plan)
+
+    gap_input = _round_two_gap_input(
+        round_one_gap,
+        round_two_plan,
+        discovery,
+        acquisition,
+        V2AdaptiveBudgetState(model_calls_remaining=10),
+    )
+
+    assert gap_input.claim_coverage_focus == (focus,)
+
+
+def test_adaptive_search_preserves_successful_empty_provider_results(tmp_path: Path) -> None:
+    run_id = uuid4()
+    query = V2AdaptiveSearchQuery(
+        run_id=run_id,
+        query_id=uuid4(),
+        round_number=2,
+        direction=ResearchDirection.SUPPORT,
+        provider=DiscoveryProvider.EXA,
+        targeted_gap_ids=("gap-outcome",),
+        strategy="independent_outcome",
+        query_text="independent outcome evidence for the population",
+        created_at=NOW,
+    )
+    plan = V2AdaptiveRoundPlan(
+        run_id=run_id,
+        round_number=2,
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+        enabled_providers=(DiscoveryProvider.EXA,),
+        targeted_gap_ids=("gap-outcome",),
+        discovered_terms=(),
+        searches=(query,),
+        search_agent_prompt_version="test-v1",
+        planned_at=NOW,
+    )
+    search = EmptySearch()
+
+    result = _execute_searches(
+        _db(tmp_path, run_id),
+        plan,
+        {DiscoveryProvider.EXA: search},
+        None,
+        lambda: NOW,
+    )
+
+    assert result.outcomes[0].succeeded
+    assert result.outcomes[0].results == ()
 
 
 def _proposal(

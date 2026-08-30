@@ -9,14 +9,21 @@ from pydantic import ValidationError
 
 from agents.v2_gap_analysis import (
     V2_GAP_ANALYSIS_ARTIFACT_KEY,
+    build_v2_gap_analysis_input,
     run_v2_gap_analysis,
 )
 from models import (
+    DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
     RunManifest,
     RunStatus,
     Stage,
+    V2AcquisitionProbeOutput,
+    V2ClaimCoverageDimension,
+    V2ClaimCoverageFocus,
+    V2ClaimCoverageKind,
+    V2DiscoveryScoutOutput,
     V2GapAnalysisInput,
     V2GapAnalysisModelOutput,
     V2GapAnalysisOutput,
@@ -26,8 +33,10 @@ from models import (
     V2GapProbePassage,
     V2GapSearchDirection,
     V2GapSurvivingSourceMetadata,
+    V2InitialPlannerOutput,
     V2MaterialGap,
     V2PipelineIdentity,
+    V2RoundOneSearchQuery,
 )
 from providers.llm import LLMProviderCapabilities, LLMProviderExecutionError, ModelAlias
 from providers.mimo import MimoFailureCode, MimoProviderError
@@ -107,6 +116,66 @@ def _input(directions: ResearchDirections | None = None) -> V2GapAnalysisInput:
         previous_gaps=(),
         remaining_budget=V2GapBudgetState(model_calls_remaining=2),
     )
+
+
+def test_gap_input_preserves_initial_planner_claim_coverage_focus() -> None:
+    run_id = uuid4()
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    focus = (
+        V2ClaimCoverageFocus(
+            dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+            claim_component="the stated effect",
+            kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+        ),
+    )
+    planner_output = V2InitialPlannerOutput(
+        run_id=run_id,
+        raw_claim="A public claim.",
+        directions=directions,
+        discovery_providers=(DiscoveryProvider.EXA,),
+        claim_coverage_focus=focus,
+        searches=tuple(
+            V2RoundOneSearchQuery(
+                run_id=run_id,
+                query_id=uuid4(),
+                direction=ResearchDirection.SUPPORT,
+                provider=DiscoveryProvider.EXA,
+                strategy=strategy,
+                query_text=f"support exa {strategy}",
+                created_at=NOW,
+            )
+            for strategy in ("direct_evidence", "mechanism", "analysis")
+        ),
+        planner_prompt_version="test-v1",
+        planned_at=NOW,
+    )
+    discovery_output = V2DiscoveryScoutOutput(
+        run_id=run_id,
+        directions=directions,
+        items=(),
+        clusters=(),
+        scout_batches=(),
+        scout_audits=(),
+        completed_at=NOW,
+    )
+    acquisition_output = V2AcquisitionProbeOutput(
+        run_id=run_id,
+        directions=directions,
+        acquisitions=(),
+        attempts=(),
+        probes=(),
+        survivors=(),
+        completed_at=NOW,
+    )
+
+    gap_input = build_v2_gap_analysis_input(
+        planner_output=planner_output,
+        discovery_output=discovery_output,
+        acquisition_output=acquisition_output,
+        remaining_budget=V2GapBudgetState(model_calls_remaining=2),
+    )
+
+    assert gap_input.claim_coverage_focus == focus
 
 
 def _continue(direction: ResearchDirection) -> V2GapAnalysisModelOutput:

@@ -1,5 +1,49 @@
 # Status
 
+## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
+
+Status: Implemented within Phase 14 only.
+
+- Fixed the Round-1-to-Round-2 Gap Analysis handoff so the Planner's validated
+  `claim_coverage_focus` survives adaptive continuation instead of being silently dropped.
+- Fixed adaptive search outcome validation to accept an explicitly successful provider response
+  with zero results, which is required by the OpenAlex degraded-pool fallback, while retaining
+  paired failure-field requirements for unsuccessful outcomes.
+- Fixed live snapshot and browser result loading so an invalid final output from a blocked run is
+  never rendered as a released brief; its validation errors remain available as diagnostics.
+- Added focused regressions for all three boundaries. No Phase-14 policy, schema, provider,
+  migration, dependency, or historical artifact was changed.
+
+Verification: focused Phase 6/7/12/14 suites passed (122 tests); complete offline suite passed
+(899 passed, 2 expected skips; one existing FastAPI/httpx deprecation warning); Ruff check,
+Ruff format check, `git diff --check`, frontend ESLint, and the production Next.js build passed.
+No live provider call or dependency change was made.
+
+Operator action: restart the local API/site and start a fresh run with Run ID blank. Existing
+run artifacts remain immutable and should not be resumed under the changed executable
+fingerprint.
+
+## 2026-08-29 - AUDIT-010 preserve Round-1 Planner coverage focus
+
+Status: Implemented within Phase 14 only.
+
+- Fixed the Phase-3-to-Phase-6 typed handoff so `build_v2_gap_analysis_input()` preserves
+  the validated Planner `claim_coverage_focus` instead of silently replacing it with an
+  empty tuple. Round-1 Gap Analysis can now assess the claim component the Planner selected,
+  allowing the adaptive governor to make its intended coverage decision.
+- Added a regression test that constructs a non-empty Planner focus and verifies the exact
+  generated Gap Analysis input retains it. No Phase-14 Round-4 policy, schema, provider,
+  migration, or historical artifact was changed.
+
+Verification: focused Phase 6/12/14 suites passed (90 tests); complete offline suite passed
+(897 passed, 2 expected skips; one existing FastAPI/httpx deprecation warning); Ruff check,
+Ruff format check, and `git diff --check` passed. No live provider call or dependency change
+was made.
+
+Operator action: restart the local API/site and start a fresh run with Run ID blank. Existing
+run artifacts remain immutable and should not be resumed under the changed executable
+fingerprint.
+
 ## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
 
 Status: Implemented within Phase 14 only.

@@ -409,7 +409,7 @@ function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => v
   useEffect(() => {
     let disposed = false;
     void researchApi.v2Result(snapshot.run_id, snapshot.db_path)
-      .then((result) => { if (!disposed) setV2Result(result); })
+      .then((result) => { if (!disposed) setV2Result(result.release_validation.valid ? result : null); })
       .catch(() => { if (!disposed) setV2Result(null); });
     void researchApi.v2Evidence(snapshot.run_id, snapshot.db_path)
       .then((result) => { if (!disposed) setV2Evidence(result); })

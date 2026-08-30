@@ -199,6 +199,7 @@ def build_v2_gap_analysis_input(
         duplicate_patterns=duplicate_patterns,
         acquisition_failures=failures,
         previous_gaps=previous_gaps,
+        claim_coverage_focus=planner_output.claim_coverage_focus,
         remaining_budget=remaining_budget,
     )
 

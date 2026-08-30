@@ -1913,6 +1913,9 @@ def test_run_h_release_integrity_violation_blocks_final_output(
     assert result.final_output is not None
     assert not result.final_output.release_validation.valid
     assert result.final_output.release_validation.rendered_output_hash is None
+    snapshot = LiveResearchController(environment={})._snapshot_from_v2_result(result)
+    assert snapshot.final_brief is None
+    assert snapshot.validation_errors
 
 
 def test_cancellation_immediately_before_round_four_planning_stops_without_release(
