@@ -4,14 +4,18 @@
 
 ## Hosted product boundary — authorized 2026-08-30
 
-The hosted product runs as three Render services: a public Next.js web service, a private
-FastAPI API service, and a persistent worker. The browser calls same-origin Next server
-routes; those routes carry the HttpOnly Supabase session cookie to the private API. The API
+The hosted staging profile runs as two Render Free web services: a public Next.js web
+service and a public-but-JWT-protected FastAPI API service. The API service embeds the
+durable queue worker in its single Render instance because Render Free does not provide
+private services or background workers. The browser calls same-origin Next server routes;
+those routes carry the HttpOnly Supabase session cookie to the public API URL. The API
 accepts identity only from a verified Supabase JWT and applies account ownership to every
 run, event, artifact, setting, credential, and migration read/write. Supabase Postgres is
 the hosted source of truth, RLS protects account-owned tables, and Vault RPCs store provider
-credential values. Render Cron, Render Postgres, Render Key Value, and Render Workflows are
-not part of v1.
+credential values. This is a staging-only topology: Free web services can restart or spin
+down after inactivity, so the durable queue remains restart-safe but production should use
+separate private API and persistent-worker services. Render Cron, Render Postgres, Render
+Key Value, and Render Workflows are not part of v1.
 
 Hosted run IDs are server-generated opaque UUIDs. A durable Postgres queue tracks queued,
 running, retry, cancellation, lease, checkpoint, and terminal state. Immutable evidence and

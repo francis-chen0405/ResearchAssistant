@@ -1,7 +1,8 @@
 """Authenticated private FastAPI boundary for the hosted product."""
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from contextlib import AbstractAsyncContextManager
 from typing import Annotated
 from uuid import UUID
 
@@ -66,11 +67,12 @@ def create_hosted_app(
     repository: HostedRepository | None = None,
     verifier: SupabaseJWTVerifier | None = None,
     allowed_origins: tuple[str, ...] = (),
+    lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]] | None = None,
 ) -> FastAPI:
     """Create the private API with injectable typed boundaries for tests."""
     selected_repository = repository or build_repository_from_environment()
     selected_verifier = verifier or build_auth_verifier_from_environment()
-    app = FastAPI(title="ResearchAssistant hosted API", version="hosted-v1")
+    app = FastAPI(title="ResearchAssistant hosted API", version="hosted-v1", lifespan=lifespan)
     if allowed_origins:
         app.add_middleware(
             CORSMiddleware,

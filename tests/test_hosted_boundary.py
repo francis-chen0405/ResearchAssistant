@@ -376,16 +376,27 @@ def test_expired_access_token_is_rejected() -> None:
         verifier.verify(token)
 
 
-def test_staging_blueprint_has_only_public_web_private_api_and_persistent_worker() -> None:
+def test_staging_blueprint_is_free_compatible_and_embeds_the_worker() -> None:
     blueprint = (ROOT / "render.yaml").read_text(encoding="utf-8")
-    assert blueprint.count("\n    name: researchassistant-staging-") == 3
-    assert "type: web" in blueprint
-    assert blueprint.count("\n  - type: pserv") == 1
-    assert "type: worker" in blueprint
+    assert blueprint.count("\n    name: researchassistant-staging-") == 2
+    assert blueprint.count("type: web") == 2
+    assert "type: pserv" not in blueprint
+    assert "type: worker" not in blueprint
+    assert "plan: free" in blueprint
+    assert "HOSTED_EMBEDDED_WORKER" in blueprint
+    assert "HOSTED_API_URL" in blueprint
     assert "healthCheckPath: /v1/health" in blueprint
     assert "cron" not in blueprint.casefold()
     assert "keyvalue" not in blueprint.casefold()
     assert "databases:" not in blueprint
+
+
+def test_render_api_embeds_the_worker_only_when_explicitly_enabled() -> None:
+    source = (ROOT / "render_api.py").read_text(encoding="utf-8")
+    assert "embedded_worker_lifespan" in source
+    assert "HOSTED_EMBEDDED_WORKER" in source
+    assert 'casefold() != "true"' in source
+    assert "worker_thread.join(timeout=15)" in source
 
 
 def test_supabase_schema_protects_every_account_table_and_vault_values() -> None:

@@ -2,8 +2,8 @@
 
 ## 2026-08-30 - Hosted Render + Supabase product phase
 
-The user explicitly authorized the hosted product phase. The implementation adds a private
-FastAPI boundary in `frontend/hosted_api.py`, typed contracts and Supabase adapter in
+The user explicitly authorized the hosted product phase. The implementation adds an
+authenticated FastAPI boundary in `frontend/hosted_api.py`, typed contracts and Supabase adapter in
 `hosted.py`, the persistent worker and `CanonicalHostedPipelineExecutor` in `hosted_worker.py`,
 the concrete `hosted_canonical.py` adapter, Render entrypoint/configuration, Supabase migration SQL,
 and `migrate_local_history.py`. The Next.js page now uses same-origin
@@ -19,13 +19,12 @@ through the private repository/Vault boundary, invokes canonical v2 with run-sco
 execution scratch, validates the canonical result identity, and persists a hosted immutable
 result artifact without the scratch path.
 
-Verification: full pytest passes (910 passed, 2 skipped, one existing Starlette/httpx
-deprecation warning); Ruff lint and format checks pass; frontend ESLint, TypeScript, the
-production Next build, Render YAML validation, and `git diff --check` pass. The Render
-blueprint uses `type: worker` for the persistent worker and keeps
-the private API as `type: pserv`. Supabase migration application, staging Auth/RLS/Vault,
-private-network, worker/provider/reconnect/cancellation/migration smoke tests, and production
-cutover remain pending; no migration or deployment was run.
+Verification: the focused hosted suite and Ruff checks pass after the free-topology adjustment.
+The Render Blueprint now contains two Free web services; the API embeds the leased worker,
+and no private service or standalone worker is declared. Full pytest, frontend checks, the
+production Next build, Render YAML validation, Supabase staging Auth/RLS/Vault, provider/
+reconnect/cancellation/migration smoke tests, and production cutover remain pending; no
+Render service was created or deployed.
 
 ## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
 

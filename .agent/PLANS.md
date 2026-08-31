@@ -4,13 +4,15 @@ Canonical phase plans live in `.agent/plans/`.
 
 ## Hosted Render + Supabase Product Phase — authorized 2026-08-30
 
-This phase supersedes the former local-only product boundary for the hosted product while
-preserving local SQLite/Keychain compatibility readers and all existing research artifacts.
-It delivers a public Next.js service, private FastAPI service, persistent leased worker,
-Supabase Auth/Postgres/RLS/Vault boundaries, read-only local-history migration, and the
-viewport-first account-aware workspace. Render Cron, Render Postgres, Render Key Value,
-and Render Workflows are excluded. No production cutover or real-data migration occurs
-until staging smoke verification passes.
+This phase supersedes the former local-only product boundary for the hosted staging product
+while preserving local SQLite/Keychain compatibility readers and all existing research
+artifacts. It delivers a public Next.js service, a public-but-JWT-protected FastAPI service
+with an embedded leased worker, Supabase Auth/Postgres/RLS/Vault boundaries, read-only
+local-history migration, and the viewport-first account-aware workspace. The two Render
+services use Free web plans; private services and standalone workers are deferred because
+they require payment. Render Cron, Render Postgres, Render Key Value, and Render Workflows
+are excluded. No production cutover or real-data migration occurs until staging smoke
+verification passes.
 
 Canonical plan:
 

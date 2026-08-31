@@ -15,23 +15,24 @@ Status: Implementation in progress; staging verification is not yet complete.
   remains in Supabase and no scratch path is persisted in the hosted artifact.
 - Added Supabase foundation SQL with account tables, RLS policies using `auth.uid()`,
   insert-only artifacts, queue/lease/checkpoint/cancellation RPCs, migration idempotency,
-  and Vault credential routines. Added staging-only Render service configuration for web,
-  private API, and persistent worker; no Render managed database/cron/key-value/workflow.
+  and Vault credential routines. Added a no-payment staging Render configuration with two
+  Free web services: the Next.js web service and the JWT-protected API service with its
+  embedded worker; no Render managed database/cron/key-value/workflow.
 - Rebuilt the Next surface around immediate viewport-first research, same-origin auth/proxy
   routes, progress reconnect, results/archive, account/provider, advanced controls, and
   migration panels. The existing local API/controller and protected SERP Search provider
   compatibility files remain unchanged.
 - Added hosted boundary regressions for JWT/auth ownership isolation, write-only credentials,
   canonical executor projection, lease/checkpoint/completion, immutable artifacts, bounded
-  retry, and migration idempotency. The Render worker is declared as a background `worker`;
-  the private API remains a `pserv`.
+  retry, migration idempotency, and the free-compatible embedded-worker topology.
 
-Verification after the hosted adapter: full `pytest` passes (910 passed, 2 skipped, one existing Starlette/httpx
-deprecation warning); `ruff check .`, `ruff format --check .`, frontend ESLint, frontend TypeScript,
-the production Next build, Render YAML validation, and `git diff --check` pass. No dependency manifest
-changed. The adapter wiring is covered by the hosted boundary regression; its temporary SQLite file is
-execution scratch only. Supabase migration application, staging Auth/RLS/Vault/private-network/provider
-smoke tests, and production cutover remain unresolved and were not run.
+Verification after the free-topology adjustment: full `pytest` passes (911 passed, 2 skipped,
+one existing Starlette/httpx deprecation warning); Ruff checks and Render YAML validation pass.
+The frontend files were not changed by this adjustment; the prior hosted commit's frontend
+lint, TypeScript, and production Next build remain the latest frontend verification. No
+dependency manifest changed. The adapter wiring is covered by the hosted boundary regression;
+its temporary SQLite file is execution scratch only. Supabase migration application, staging
+Auth/RLS/Vault/provider smoke tests, and production cutover remain unresolved and were not run.
 
 ## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
 
