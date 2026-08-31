@@ -6,6 +6,7 @@
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
+    "start:render": "next start --hostname 0.0.0.0",
     "lint": "eslint ."
   },
   "dependencies": {

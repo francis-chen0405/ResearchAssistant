@@ -2,6 +2,20 @@
 
 Canonical phase plans live in `.agent/plans/`.
 
+## Hosted Render + Supabase Product Phase — authorized 2026-08-30
+
+This phase supersedes the former local-only product boundary for the hosted product while
+preserving local SQLite/Keychain compatibility readers and all existing research artifacts.
+It delivers a public Next.js service, private FastAPI service, persistent leased worker,
+Supabase Auth/Postgres/RLS/Vault boundaries, read-only local-history migration, and the
+viewport-first account-aware workspace. Render Cron, Render Postgres, Render Key Value,
+and Render Workflows are excluded. No production cutover or real-data migration occurs
+until staging smoke verification passes.
+
+Canonical plan:
+
+- `.agent/plans/phase-hosted-render-supabase.md`
+
 ## ResearchAssistant v2 — Phase 14: Conditional Round Four and Gap Reconciliation
 
 The user explicitly authorized and completed v2 Phase 14 on 2026-08-28, including a focused

@@ -1,5 +1,23 @@
 # CONVENTIONS.md
 
+## Hosted boundary conventions (authorized 2026-08-30)
+
+Hosted browser requests use same-origin Next server routes and an HttpOnly session cookie;
+the browser never receives private API, service-role, database, or provider-secret values.
+The private API derives the account subject only from a verified Supabase JWT and never
+accepts `owner_id`/`user_id` as a client-controlled research field. Every repository method
+requires an explicit owner subject for account reads and writes.
+
+Hosted persistence uses typed Pydantic contracts. JSON is allowed only at the HTTP, Supabase,
+migration, logging, or export boundaries. Run IDs are generated server-side; job state is
+advanced only through lease/checkpoint/complete/fail/cancel operations. Artifacts are
+insert-only and fingerprinted. Provider credential writes are write-only and return metadata
+only; values are stored through Supabase Vault RPCs.
+
+The local-history migration opens SQLite with `mode=ro`, fingerprints before and after
+inspection, sends metadata over authenticated HTTPS, and is idempotent by source fingerprint.
+It never resumes incomplete local work; those records are history-only.
+
 ## 1. Folder Structure
 
 ```

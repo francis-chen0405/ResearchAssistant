@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-08-30 - Hosted Render + Supabase product boundary
+
+- Authorize a public Next.js web service, private FastAPI API, and persistent worker on
+  Render, with Supabase Auth magic links, Postgres source of truth, RLS, and Vault-backed
+  provider credentials. Exclude Render Cron, Render Postgres, Render Key Value, and Render
+  Workflows from v1.
+- Require same-origin browser proxying, verified JWT identity, server-generated run IDs,
+  durable queue/leases/checkpoints/retries/cancellation, account isolation, and immutable
+  hosted artifacts. Keep local SQLite/Keychain compatibility and migration read-only.
+- Authorize the viewport-first hosted workspace redesign and split frontend surfaces. Do not
+  cut over production or migrate real data until staging smoke verification is complete.
+- Add no dependency in this implementation; use the repository's existing Python/Next stack.
+
 ## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
 
 - Treat each Gap ID as the stable identity of one unresolved evidence gap across research rounds.

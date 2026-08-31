@@ -6,8 +6,9 @@ MVP-8, MVP-8.1, MVP-8.2, MVP-9, MVP-10, and MVP-11 for the Debate Research Agent
 System. MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is the
 latest completed research-pipeline phase. MLP-1 Simplified Live Experience, MLP-2 Local
 Product Experience, MLP-3 Next.js Product Rebuild, MLP-4 Research Quality & OpenAlex
-Integration, and MLP-5 Provider Selection & SERP Search are complete. The broader visual
-redesign was not part of MLP-5 and is not authorized. Before
+Integration, and MLP-5 Provider Selection & SERP Search are complete. The user explicitly
+authorized the current hosted Render + Supabase product phase on 2026-08-30, including
+the hosted visual redesign. Before
 editing any file, read `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`,
 `HANDOFF.md`, `.agent/PLANS.md`, and the relevant current phase plan completely.
 
