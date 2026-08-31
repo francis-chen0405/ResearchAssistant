@@ -10,7 +10,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/otp`, {
     method: "POST",
     headers: { apikey: key, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, create_user: true, email_redirect_to: new URL("/auth/callback", request.url).toString() }),
+    body: JSON.stringify({ email, create_user: true, redirect_to: new URL("/auth/callback", request.url).toString() }),
     cache: "no-store",
   });
   if (!response.ok) return NextResponse.json({ detail: "The sign-in link could not be sent." }, { status: 502 });

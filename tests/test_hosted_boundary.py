@@ -391,6 +391,14 @@ def test_staging_blueprint_is_free_compatible_and_embeds_the_worker() -> None:
     assert "databases:" not in blueprint
 
 
+def test_magic_link_uses_supabase_redirect_parameter() -> None:
+    source = (ROOT / "web" / "app" / "api" / "auth" / "magic-link" / "route.ts").read_text(
+        encoding="utf-8"
+    )
+    assert 'redirect_to: new URL("/auth/callback", request.url).toString()' in source
+    assert "email_redirect_to" not in source
+
+
 def test_render_api_embeds_the_worker_only_when_explicitly_enabled() -> None:
     source = (ROOT / "render_api.py").read_text(encoding="utf-8")
     assert "embedded_worker_lifespan" in source
