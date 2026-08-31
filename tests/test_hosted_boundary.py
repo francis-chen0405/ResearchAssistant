@@ -399,6 +399,14 @@ def test_magic_link_uses_supabase_redirect_parameter() -> None:
     assert "email_redirect_to" not in source
 
 
+def test_homepage_consumes_auth_fragment_and_surfaces_expired_links() -> None:
+    source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
+    assert "window.location.hash" in source
+    assert 'fetch("/api/auth/session"' in source
+    assert 'fragment.get("error_code")' in source
+    assert "This sign-in link has expired." in source
+
+
 def test_render_api_embeds_the_worker_only_when_explicitly_enabled() -> None:
     source = (ROOT / "render_api.py").read_text(encoding="utf-8")
     assert "embedded_worker_lifespan" in source

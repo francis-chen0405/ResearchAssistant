@@ -74,7 +74,24 @@ export default function Home(): React.ReactElement {
   }, [user]);
 
   useEffect(() => {
-    void hostedApi.me().then((result) => setUser(result.user)).catch(() => setUser(null)).finally(() => setAuthReady(true));
+    const clearAuthFragment = (): void => {
+      window.history.replaceState(null, document.title, `${window.location.pathname}${window.location.search}`);
+    };
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = fragment.get("access_token");
+    const authError = fragment.get("error_code") ?? fragment.get("error");
+    if (accessToken || authError) clearAuthFragment();
+    if (authError) setNotice(authError === "otp_expired" ? "This sign-in link has expired. Request a new one." : "This sign-in link could not be used. Request a new one.");
+
+    const establishSession = async (): Promise<void> => {
+      if (accessToken) {
+        const response = await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken }) });
+        if (!response.ok) throw new Error("session failed");
+      }
+      const result = await hostedApi.me();
+      setUser(result.user);
+    };
+    void establishSession().catch(() => setUser(null)).finally(() => setAuthReady(true));
   }, []);
   useEffect(() => {
     if (!user) return;
