@@ -6,6 +6,24 @@ Its core philosophy is simple: **search broadly, inspect evidence, identify gaps
 
 Fresh website and CLI runs use the production ResearchAssistant v2 pipeline. Historical runs remain readable under the pipeline version that produced them.
 
+## Hosted staging
+
+The authorized hosted product is described by `render.yaml`: a public Next.js web service,
+private FastAPI API, and persistent worker. Supabase Auth provides magic-link accounts;
+Postgres stores hosted run state and immutable artifacts; RLS protects account-owned tables;
+Vault stores provider credentials. Copy `.env.hosted.example` into the staging secret plan,
+apply `supabase/migrations/001_hosted_foundation.sql`, and configure the allowed magic-link
+redirect URL in Supabase Auth before deployment.
+
+`migrate_local_history.py` inspects compatible local SQLite history read-only, fingerprints it,
+and sends only typed history metadata over authenticated HTTPS. Incomplete local runs are not
+resumed. Do not perform a production cutover or real-data migration until staging authentication,
+RLS, Vault, private networking, worker, reconnect, cancellation, provider, and migration smoke
+tests pass. The worker uses `CanonicalHostedPipelineExecutor`, loading the concrete deployment-owned
+`hosted_canonical:run_canonical_hosted_pipeline` adapter through `HOSTED_CANONICAL_RUNNER`.
+The adapter uses only run-scoped execution scratch; Supabase remains the hosted source of truth
+and no scratch path is exposed in the hosted artifact.
+
 ## Features
 
 - **Research directions:** choose Support, Challenge, or both. A disabled direction is not researched or implied by the result.

@@ -1,5 +1,39 @@
 # Status
 
+## 2026-08-30 - Hosted Render + Supabase product phase
+
+Status: Implementation in progress; staging verification is not yet complete.
+
+- Added typed hosted contracts, HS256 Supabase JWT verification, account-scoped FastAPI
+  routes, an in-memory regression repository, Supabase REST/RPC adapter, durable lease/retry
+  worker, and read-only fingerprinted local-history migration utility. The worker now uses
+  `CanonicalHostedPipelineExecutor`, reads provider values only through the private
+  repository/Vault boundary, validates canonical run identity, and projects the typed v2
+  result into an immutable hosted artifact without a SQLite source-of-truth fallback. The
+  concrete `hosted_canonical:run_canonical_hosted_pipeline` adapter now invokes the canonical
+  v2 coordinator with a run-scoped ephemeral scratch database, while durable hosted state
+  remains in Supabase and no scratch path is persisted in the hosted artifact.
+- Added Supabase foundation SQL with account tables, RLS policies using `auth.uid()`,
+  insert-only artifacts, queue/lease/checkpoint/cancellation RPCs, migration idempotency,
+  and Vault credential routines. Added a no-payment staging Render configuration with two
+  Free web services: the Next.js web service and the JWT-protected API service with its
+  embedded worker; no Render managed database/cron/key-value/workflow.
+- Rebuilt the Next surface around immediate viewport-first research, same-origin auth/proxy
+  routes, progress reconnect, results/archive, account/provider, advanced controls, and
+  migration panels. The existing local API/controller and protected SERP Search provider
+  compatibility files remain unchanged.
+- Added hosted boundary regressions for JWT/auth ownership isolation, write-only credentials,
+  canonical executor projection, lease/checkpoint/completion, immutable artifacts, bounded
+  retry, migration idempotency, and the free-compatible embedded-worker topology.
+
+Verification after the free-topology adjustment: full `pytest` passes (911 passed, 2 skipped,
+one existing Starlette/httpx deprecation warning); Ruff checks and Render YAML validation pass.
+The frontend files were not changed by this adjustment; the prior hosted commit's frontend
+lint, TypeScript, and production Next build remain the latest frontend verification. No
+dependency manifest changed. The adapter wiring is covered by the hosted boundary regression;
+its temporary SQLite file is execution scratch only. Supabase migration application, staging
+Auth/RLS/Vault/provider smoke tests, and production cutover remain unresolved and were not run.
+
 ## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
 
 Status: Implemented within Phase 14 only.

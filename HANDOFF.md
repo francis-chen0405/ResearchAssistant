@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-30 - Hosted Render + Supabase product phase
+
+The user explicitly authorized the hosted product phase. The implementation adds an
+authenticated FastAPI boundary in `frontend/hosted_api.py`, typed contracts and Supabase adapter in
+`hosted.py`, the persistent worker and `CanonicalHostedPipelineExecutor` in `hosted_worker.py`,
+the concrete `hosted_canonical.py` adapter, Render entrypoint/configuration, Supabase migration SQL,
+and `migrate_local_history.py`. The Next.js page now uses same-origin
+auth/proxy routes and split hosted workspace panels for research, progress, results, archive,
+account/provider settings, advanced controls, and history migration.
+
+The local `frontend/api.py`, `frontend/live_service.py`, `credential_store.py`,
+`providers/serpsearch.py`, and existing provider-selection regressions were preserved. No
+dependency was added. Incomplete local runs are not resumed; the migration path is read-only,
+fingerprinted, idempotent, and history-only. The worker has no SQLite source-of-truth fallback:
+it loads `hosted_canonical:run_canonical_hosted_pipeline`, fetches account credentials only
+through the private repository/Vault boundary, invokes canonical v2 with run-scoped ephemeral
+execution scratch, validates the canonical result identity, and persists a hosted immutable
+result artifact without the scratch path.
+
+Verification: the focused hosted suite and Ruff checks pass after the free-topology adjustment.
+The Render Blueprint now contains two Free web services; the API embeds the leased worker,
+and no private service or standalone worker is declared. Full pytest, frontend checks, the
+production Next build, Render YAML validation, Supabase staging Auth/RLS/Vault, provider/
+reconnect/cancellation/migration smoke tests, and production cutover remain pending; no
+Render service was created or deployed.
+
 ## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
 
 Three additional low-risk bugs were fixed within the current Phase 14 boundary. Adaptive
