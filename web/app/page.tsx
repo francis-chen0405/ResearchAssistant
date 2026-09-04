@@ -81,17 +81,34 @@ export default function Home(): React.ReactElement {
     const accessToken = fragment.get("access_token");
     const authError = fragment.get("error_code") ?? fragment.get("error");
     if (accessToken || authError) clearAuthFragment();
-    if (authError) setNotice(authError === "otp_expired" ? "This sign-in link has expired. Request a new one." : "This sign-in link could not be used. Request a new one.");
+    if (authError) {
+      const message = authError === "otp_expired" ? "This sign-in link has expired. Request a new one." : "This sign-in link could not be used. Request a new one.";
+      window.setTimeout(() => setNotice(message), 0);
+    }
 
     const establishSession = async (): Promise<void> => {
       if (accessToken) {
         const response = await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken }) });
         if (!response.ok) throw new Error("session failed");
       }
-      const result = await hostedApi.me();
-      setUser(result.user);
+      let lastError: unknown = null;
+      const attempts = accessToken ? 3 : 1;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          const result = await hostedApi.me();
+          setUser(result.user);
+          return;
+        } catch (error) {
+          lastError = error;
+          if (attempt + 1 < attempts) await new Promise((resolve) => window.setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error("The hosted service could not finish sign-in.");
     };
-    void establishSession().catch(() => setUser(null)).finally(() => setAuthReady(true));
+    void establishSession().catch((error: unknown) => {
+      setUser(null);
+      if (accessToken) setNotice(error instanceof Error ? error.message : "The hosted service could not finish sign-in.");
+    }).finally(() => setAuthReady(true));
   }, []);
   useEffect(() => {
     if (!user) return;
