@@ -1,5 +1,25 @@
 # Status
 
+## Windows CI path-fixture correction — 2026-09-06
+
+The first Desktop Phase 1 workflow passed macOS (job 101520646091) and failed
+Windows during Python regressions (job 101520645876), before packaging. Windows
+reported 907 passed / 2 failed / 2 existing skips. Both failures were invalid test
+inputs: a filename containing Windows-forbidden `?`, and a Unix `/tmp` output path.
+
+The database fixture retains spaces, `#` and `%` on every platform and additionally
+retains `?` on POSIX. All read-only/foreign-key/query-only assertions remain intact.
+The environment example now leaves the smoke output blank with OS-specific absolute
+path examples; the offline test explicitly supplies its platform-native temporary
+output path, just as it explicitly supplies the credential and approval gates.
+The absolute-path validator and execution gates remain unchanged.
+
+Validation: 43 targeted tests passed; full pytest passed 909 tests with 2 existing skips.
+Ruff lint/format and Git whitespace checks passed. A fresh Windows workflow run after committing
+and pushing this correction is still required; Windows packaging/install validation
+and signing gates remain open. Existing macOS runtime artifacts are unaffected.
+
+
 ## Phase 1 desktop implementation — 2026-09-05
 
 Implemented on master in the relocated OneDrive checkout. The research pipeline,

@@ -386,11 +386,13 @@ def _parse_environment_example(path: Path) -> dict[str, str]:
     return values
 
 
-def test_environment_example_constructs_supported_legacy_smoke_offline() -> None:
+def test_environment_example_constructs_supported_legacy_smoke_offline(tmp_path: Path) -> None:
     environment = _parse_environment_example(Path(".env.example"))
     assert environment["MIMO_API_KEY"] == ""
+    assert environment["RESEARCH_ASSISTANT_SMOKE_OUTPUT"] == ""
     environment |= {
         "MIMO_API_KEY": "offline-placeholder",
+        "RESEARCH_ASSISTANT_SMOKE_OUTPUT": str(tmp_path / "researchassistant-smoke-output.json"),
         "RESEARCH_ASSISTANT_LIVE_SMOKE": "1",
         "RESEARCH_ASSISTANT_LIVE_APPROVED": "I_APPROVE_ONE_MIMO_LIVE_SMOKE",
     }
@@ -408,6 +410,8 @@ def test_environment_example_constructs_supported_legacy_smoke_offline() -> None
         output_path=Path(environment["RESEARCH_ASSISTANT_SMOKE_OUTPUT"]),
     )
     smoke.require_enabled()
+    assert smoke.output_path.is_absolute()
+    assert not smoke.output_path.exists()
     assert smoke.max_tokens <= 25_000
     assert MimoConfig.from_environment(environment).api_key.get_secret_value() == (
         "offline-placeholder"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -245,7 +246,11 @@ def test_inspection_reconstructs_partial_running_state(tmp_path: Path) -> None:
 
 
 def test_read_only_open_handles_spaces_and_url_sensitive_characters(tmp_path: Path) -> None:
-    path = tmp_path / "space # percent % question ?.sqlite3"
+    # Windows forbids '?' in filenames; retain its URI-escaping coverage on POSIX.
+    filename = (
+        "space # percent %.sqlite3" if os.name == "nt" else "space # percent % question ?.sqlite3"
+    )
+    path = tmp_path / filename
     init_db(str(path))
     manifest = _manifest()
     insert_run(str(path), manifest)
