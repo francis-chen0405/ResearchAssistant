@@ -49,7 +49,7 @@ The existing convention requiring all schemas in `store.py:init_db()` and all
 models in `models.py` is replaced for this phase by coherent implementation modules
 behind those preserved public imports. This changes source organization only.
 Historical architecture/convention/decision/status/handoff/index text is retained
-verbatim in `docs/archive/pre-phase-2/`; current replacements state active contracts
+without content changes in `docs/archive/pre-phase-2/`; current replacements state active contracts
 and link the originals. No research-policy replacement is authorized.
 
 ## Compatibility and completion

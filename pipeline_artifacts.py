@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 from models import (
     PlannerOutput,
     StrictModel,
 )
-
-if TYPE_CHECKING:
-    pass
-
 
 _ModelT = TypeVar("_ModelT", bound=StrictModel)
 

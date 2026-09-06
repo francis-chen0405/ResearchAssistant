@@ -1,4 +1,4 @@
-"""Typed application service for the persisted MVP-4 live pipeline."""
+"""Application controller for configuration, run workers, locking, and cancellation."""
 
 from __future__ import annotations
 

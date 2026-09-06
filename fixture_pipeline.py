@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import Literal, TypeVar
 from uuid import UUID, uuid5
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
@@ -47,6 +47,18 @@ from models import (
     SynthesisOutput,
     ValidationResult,
 )
+from pipeline_artifacts import (
+    FixturePipelineError as FixturePipelineError,
+)
+from pipeline_artifacts import (
+    _assert_same_model as _assert_same_model,
+)
+from pipeline_artifacts import (
+    _claim_keywords_from_planner as _claim_keywords_from_planner,
+)
+from pipeline_artifacts import (
+    _persist_model as _persist_model,
+)
 from store import (
     init_db,
     insert_analyst_decision,
@@ -76,22 +88,6 @@ from store import (
     update_run,
 )
 from utils import URL_NAMESPACE, compute_sha256
-
-if TYPE_CHECKING:
-    pass
-
-from pipeline_artifacts import (
-    FixturePipelineError as FixturePipelineError,
-)
-from pipeline_artifacts import (
-    _assert_same_model as _assert_same_model,
-)
-from pipeline_artifacts import (
-    _claim_keywords_from_planner as _claim_keywords_from_planner,
-)
-from pipeline_artifacts import (
-    _persist_model as _persist_model,
-)
 
 DEFAULT_OUTPUT_DIR_NAME = ".phase6_output"
 FIXTURE_DB_NAME = "fixture_pipeline.sqlite3"
