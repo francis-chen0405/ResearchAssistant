@@ -1,9 +1,10 @@
 # Historical documentation archive
 
-`pre-phase-2/` preserves the following files byte-for-byte from Phase 1 commit
+`pre-phase-2/` preserves the following files without content changes from Phase 1 commit
 `6499f1d`. Each current file at the same repository path is its exact replacement,
 with the responsibility below. This archive is a historical record, not current
-implementation authority. Original relative links inside verbatim archived files were
+implementation authority. Three pre-existing whitespace-only lines in archived
+CONVENTIONS.md were trimmed to satisfy the unchanged Git whitespace check. Original relative links inside verbatim archived files were
 written relative to their original repository location; use the current file or stable
 plan path when navigating those references.
 

@@ -18,7 +18,8 @@ No paid provider calls were used. Existing opt-in integration skips remain uncha
 
 - All 160 JSON schemas and all original model class/function ASTs are identical.
 - Complete initialized SQLite SQL and migration rows are identical.
-- Archived documentation is byte-identical to the original commit.
+- Archived documentation is identical to the original commit except three pre-existing whitespace-only lines
+  in archived CONVENTIONS.md, trimmed so the complete branch diff passes whitespace checks.
 - Existing full suite after extraction: 909 passed, 2 skipped.
 - New focused import-order, compatibility and source-fingerprint regressions plus
   repository annotation check: 15 passed.

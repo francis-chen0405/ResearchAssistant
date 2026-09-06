@@ -74,6 +74,6 @@ modules already provide coherent native boundaries and were retained.
 
 Only unused imports were removed; no historical execution, reader, export, or fixture
 contract was deleted. No dependencies or UI components changed. Original docs were
-archived byte-for-byte; `docs/archive/README.md` explains each exact replacement.
+archived without content changes; `docs/archive/README.md` explains each exact replacement.
 All model schemas/class/function ASTs and initialized SQL/migration rows match baseline.
 Step 7 is in progress; final results belong in `docs/verification/phase-2.md`.

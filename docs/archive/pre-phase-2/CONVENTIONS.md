@@ -31,13 +31,13 @@ debate_agent/
   .agents/
     PLANS/
       phase-00-foundation.md  # compatibility mirror; .agent/plans is canonical
-  
+
   models.py             # all Pydantic models
   store.py              # all SQLite read/write functions
   utils.py              # sha256, uuid5, shared helpers
   providers/
   prompts/
-  
+
   agents/
     planner.py
     supportingresearcher.py
@@ -46,7 +46,7 @@ debate_agent/
     reviewer.py
     synthesizer.py
     renderer.py
-  
+
   tests/
     fixtures/
     ...
