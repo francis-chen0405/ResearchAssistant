@@ -1,3 +1,54 @@
+# Current Codex workspace placement
+
+## Phase 1 desktop implementation — 2026-09-05
+
+Implemented on master in the relocated OneDrive checkout. The research pipeline,
+model routing, evidence policies and conservative budget rules remain unchanged.
+Current authority: `.agent/plans/phase-1-desktop.md` and `desktop/README.md`.
+
+- Electron 44.2.0 shell, static Next.js UI, PyInstaller 6.22.2 backend; standalone
+  Node 24.18.0, locked Wigolo 0.2.1 and its matching Playwright Chromium are bundled.
+- Native macOS Keychain and Windows Credential Manager; save/replace/remove, safe
+  validation errors, explicit vault failure status and password clearing.
+- Strict non-secret preferences in platform user data, shared portable process locks,
+  read-only-source verified history import, cancellation-aware shutdown, Windows jobs
+  and macOS owned process groups. Packaged source/prompt/executable identity remains exact.
+- Session-authenticated local API, sandboxed renderer, no renderer Node access, no
+  browser credential/preferences storage, duplicate desktop instance exclusion.
+- Native macOS/Windows CI, lockfiles, build constraints and installer workflows added.
+  No remote publication, Git push, branch creation or paid provider calls performed.
+
+Verification: full pytest **909 passed, 2 existing skips**; Ruff check and format check,
+Git whitespace check, frontend lint/type/static build and JavaScript syntax checks passed.
+Frozen macOS smoke passed with an empty developer-tool PATH and unrelated temporary cwd:
+UI/backend health, rejected unauthorized requests/origins, isolated native-vault round-trip
+and restart persistence/cleanup, durable settings, exact identity, owned acquisition health
+and shutdown. Actual Electron window tests passed: page/credential controls, renderer
+isolation, duplicate instance exclusion and normal shutdown. The packaged .app was copied
+to `/private/tmp/ResearchAssistant Install Check/ResearchAssistant.app` and both window
+and frozen-runtime smokes passed from that independent installation-like location.
+
+Artifacts: `desktop/dist/ResearchAssistant-0.1.0-arm64.dmg`,
+`desktop/dist/ResearchAssistant-0.1.0-arm64-mac.zip`, and
+`desktop/dist/mac-arm64/ResearchAssistant.app`. These are local Apple Silicon test builds;
+DMG and ZIP integrity checks passed, and both smoke suites also passed directly from
+the read-only DMG. Checksums are recorded in the phase plan and `desktop/dist/SHA256SUMS.txt`. Runtime/build artifacts are ignored.
+
+**Outstanding delivery gates:** no Windows host was available here, so the Windows
+installer/workflow has not been executed and no Windows artifact is claimed. No Developer ID
+signing identity was available; these macOS builds are unsigned/not notarized. Clean-machine
+installation, minimum OS versions, Windows vault/process behavior and signed update behavior
+still require target-platform validation. Do not call Phase 1 fully release-verified or start
+Phase 2 on the basis of the macOS results. Phase 2 must preserve data-directory/vault
+identities, explicit compatible resume and all existing research boundaries.
+
+
+The active checkout is
+`/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant`.
+It is the same ResearchAssistant repository currently on `master`; the move from the
+older `Documents/GitHub` placement is a local workspace change only. Do not encode this
+absolute path in application code or packaged runtime data paths.
+
 # Handoff
 
 ## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards

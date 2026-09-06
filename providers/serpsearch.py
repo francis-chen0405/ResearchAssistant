@@ -71,22 +71,32 @@ class SerpSearchAdapter:
         results: list[SearchResult] = []
         seen: set[str] = set()
         for item in body["organic_results"]:
-            if not isinstance(item, dict) or not isinstance(item.get("link"), str):
+            if not isinstance(item, dict) or not isinstance(item.get("url"), str):
                 continue
-            url = item["link"]
+            url = item["url"]
             if url in seen:
                 continue
+            position = item.get("position")
+            rank = (
+                position
+                if isinstance(position, int) and not isinstance(position, bool) and position >= 1
+                else len(results) + 1
+            )
             try:
                 result = SearchResult(
                     original_url=url,
                     title=item.get("title") if isinstance(item.get("title"), str) else "",
-                    snippet=item.get("snippet") if isinstance(item.get("snippet"), str) else None,
-                    rank=len(results) + 1,
+                    snippet=(
+                        item.get("description")
+                        if isinstance(item.get("description"), str)
+                        else None
+                    ),
+                    rank=rank,
                     metadata=SearchDiscoveryMetadata(
                         engine="serpsearch",
                         display_url=(
-                            item.get("displayed_link")
-                            if isinstance(item.get("displayed_link"), str)
+                            item.get("visible_url")
+                            if isinstance(item.get("visible_url"), str)
                             else None
                         ),
                         category="general_web",

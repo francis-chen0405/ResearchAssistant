@@ -33,8 +33,14 @@ def test_serpsearch_uses_bearer_auth_and_keeps_only_organic_http_results() -> No
             200,
             json={
                 "organic_results": [
-                    {"position": 1, "title": "Study", "link": "https://example.org/study"},
-                    {"position": 2, "title": "Unsafe", "link": "ftp://example.org/file"},
+                    {
+                        "position": 1,
+                        "title": "Study",
+                        "url": "https://example.org/study",
+                        "description": "A useful snippet",
+                        "visible_url": "example.org/study",
+                    },
+                    {"position": 2, "title": "Unsafe", "url": "ftp://example.org/file"},
                 ]
             },
         )
@@ -57,6 +63,8 @@ def test_serpsearch_uses_bearer_auth_and_keeps_only_organic_http_results() -> No
 
     assert captured["authorization"] == "Bearer serp-secret"
     assert [result.original_url for result in response.results] == ["https://example.org/study"]
+    assert response.results[0].snippet == "A useful snippet"
+    assert response.results[0].metadata.display_url == "example.org/study"
     assert response.results[0].metadata.engine == "serpsearch"
 
 
@@ -68,7 +76,9 @@ def test_serpsearch_counts_attempts_against_the_twelve_call_ceiling() -> None:
             transport=httpx.MockTransport(
                 lambda _: httpx.Response(
                     200,
-                    json={"organic_results": [{"link": "https://example.org/result"}]},
+                    json={
+                        "organic_results": [{"position": 1, "url": "https://example.org/result"}]
+                    },
                 )
             ),
         ),

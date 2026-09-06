@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 from collections.abc import Callable, Mapping
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from decimal import Decimal
 from pathlib import Path
 from sqlite3 import Connection
-from threading import Lock
-from typing import IO, Literal
+from threading import Event, Lock
+from typing import Literal
 from uuid import UUID, uuid4
 
 from pydantic import Field, field_validator
@@ -28,6 +27,8 @@ from agents.v2_source_selection import (
     V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
 )
 from cli import CLIExitCode, repository_identity
+from desktop_paths import application_data_dir
+from file_lock import FileLock
 from frontend.security import redact_text
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
@@ -98,7 +99,7 @@ from v2_orchestrator import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LIVE_DB = PROJECT_ROOT / ".researchassistant" / "live-runs.sqlite3"
+DEFAULT_LIVE_DB = application_data_dir() / "live-runs.sqlite3"
 LEGACY_LIVE_RESEARCH_CONTROLS = ResearchControls(
     discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)
 )
@@ -274,27 +275,9 @@ class LiveStartResult(StrictModel):
     message: str = Field(min_length=1)
 
 
-class _DatabaseLock:
+class _DatabaseLock(FileLock):
     def __init__(self, db_path: Path) -> None:
-        self.path = db_path.with_name(f"{db_path.name}.mvp5.lock")
-        self.handle: IO[str] | None = None
-
-    def acquire(self) -> bool:
-        self.handle = self.path.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            self.handle.close()
-            self.handle = None
-            return False
-        return True
-
-    def release(self) -> None:
-        if self.handle is None:
-            return
-        fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
-        self.handle.close()
-        self.handle = None
+        super().__init__(db_path.with_name(f"{db_path.name}.mvp5.lock"))
 
 
 class _ActiveRun:
@@ -314,6 +297,7 @@ class LiveResearchController:
         inspector: Callable[..., ProviderPipelineResult] = inspect_provider_run,
         max_workers: int = 2,
     ) -> None:
+        self._shutdown_requested = Event()
         self._environment = environment
         self._legacy_runner = runner
         self._inspector = inspector
@@ -349,6 +333,8 @@ class LiveResearchController:
         return None
 
     def start(self, request: LiveRunRequest) -> LiveStartResult:
+        if self._shutdown_requested.is_set():
+            raise ValueError("Application is shutting down")
         run_id = request.run_id or uuid4()
         db_path = Path(request.db_path).resolve()
         key = (str(db_path), run_id)
@@ -437,14 +423,21 @@ class LiveResearchController:
                     "Use inspection to reconnect; no duplicate worker was started."
                 ),
             )
-        future = self._executor.submit(
-            self._run,
-            request,
-            run_id,
-            factory_config,
-            database_lock,
-        )
         with self._lock:
+            if self._shutdown_requested.is_set():
+                database_lock.release()
+                raise ValueError("Application is shutting down")
+            try:
+                future = self._executor.submit(
+                    self._run,
+                    request,
+                    run_id,
+                    factory_config,
+                    database_lock,
+                )
+            except BaseException:
+                database_lock.release()
+                raise
             self._active[key] = _ActiveRun(future, database_lock)
             self._early_results.pop(key, None)
         future.add_done_callback(
@@ -797,6 +790,23 @@ class LiveResearchController:
                 )
         return tuple(items)
 
+    def shutdown(self, *, timeout: float = 90) -> bool:
+        """Cancel at existing boundaries, preserving reservations for unknown outcomes."""
+        self._shutdown_requested.set()
+        with self._lock:
+            active = tuple(self._active.items())
+        for (db_path, run_id), worker in active:
+            if worker.future.done():
+                continue
+            try:
+                request_run_cancellation(db_path, run_id, reason="desktop application closing")
+            except (KeyError, ValueError):
+                # A worker not yet persisted still observes the in-memory cancellation flag.
+                continue
+        _, unfinished = wait([worker.future for _, worker in active], timeout=timeout)
+        self._executor.shutdown(wait=False)
+        return not unfinished
+
     def has_active_runs(self) -> bool:
         with self._lock:
             return any(not active.future.done() for active in self._active.values())
@@ -825,8 +835,9 @@ class LiveResearchController:
                     ceilings=factory_config.ceilings,
                     run_id=run_id,
                     provider_policy_fingerprint=(factory_config.semantic_fingerprint_sha256()),
-                    cancellation_requested=lambda: v2_cancellation_requested(
-                        request.db_path, run_id
+                    cancellation_requested=lambda: (
+                        self._shutdown_requested.is_set()
+                        or v2_cancellation_requested(request.db_path, run_id)
                     ),
                     _database_lock_owned=True,
                 )
@@ -1179,6 +1190,7 @@ class LiveResearchController:
                     "OPENALEX_API_KEY",
                     "SERPSEARCH_API_KEY",
                     "FIRECRAWL_API_KEY",
+                    "PUBMED_API_KEY",
                 )
             ),
         )

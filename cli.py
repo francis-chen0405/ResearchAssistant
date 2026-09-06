@@ -298,17 +298,17 @@ def _parse_run_ceilings(
 def repository_identity() -> str:
     """Hash the executable repository surface without runtime databases or secrets."""
     root = Path(__file__).resolve().parent
-    candidates = [
-        root / "cli.py",
-        root / "models.py",
-        root / "orchestrator.py",
-        root / "provider_contract.py",
-        root / "store.py",
-        root / "utils.py",
-        root / "pyproject.toml",
-    ]
-    for directory, pattern in (("agents", "*.py"), ("providers", "*.py"), ("prompts", "*.md")):
-        candidates.extend(sorted((root / directory).glob(pattern)))
+    candidates = list(root.glob("*.py")) + [root / "pyproject.toml"]
+    for directory, pattern in (
+        ("agents", "*.py"),
+        ("providers", "*.py"),
+        ("frontend", "*.py"),
+        ("prompts", "*.md"),
+    ):
+        candidates.extend(sorted((root / directory).rglob(pattern)))
+    if getattr(sys, "frozen", False):
+        if not (root / "v2_orchestrator.py").is_file() or not (root / "prompts").is_dir():
+            raise ProviderConfigurationError("packaged source identity surface is incomplete")
     digest = sha256()
     found = False
     for path in sorted(set(candidates)):
@@ -323,6 +323,8 @@ def repository_identity() -> str:
         digest.update(payload)
     if not found:
         raise ProviderConfigurationError("repository identity surface is unavailable")
+    if getattr(sys, "frozen", False):
+        digest.update(Path(sys.executable).read_bytes())
     return f"source-sha256:{digest.hexdigest()}"
 
 

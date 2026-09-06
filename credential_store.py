@@ -1,4 +1,4 @@
-"""Secret-safe macOS Keychain storage for local provider credentials."""
+"""Secret-safe native OS vault storage for local provider credentials."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ from collections.abc import MutableMapping
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import ConfigDict, SecretStr, field_validator
+from pydantic import ConfigDict, SecretStr, ValidationError, field_validator
 
+from desktop_settings import SETTING_NAMES, read_preferences, update_preferences
 from models import StrictModel
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -118,33 +119,54 @@ class ProviderCredentials(StrictModel):
 def save_credentials(credentials: ProviderCredentials) -> None:
     """Store credentials through the in-process macOS Security framework."""
     _require_keychain()
+    settings: dict[str, str] = {}
     for environment_name, secret in credentials.environment_items():
-        _write_keychain_secret(environment_name, secret)
+        if environment_name in SETTING_NAMES:
+            settings[environment_name] = secret
+        else:
+            _write_keychain_secret(environment_name, secret)
+    if settings:
+        update_preferences(provider_settings=settings)
 
 
 def load_saved_credentials() -> ProviderCredentials | None:
     """Read every saved key so optional discovery choices survive API restart."""
     if not _keychain_available():
         return None
+    mimo = _read_secret("MIMO_API_KEY")
+    settings = read_preferences().provider_settings
+
+    def setting(name: str) -> str | None:
+        # Preserve legacy non-secret Keychain settings on first desktop launch.
+        return settings.get(name) or _read_optional_secret(name)
+
     try:
-        mimo = _read_secret("MIMO_API_KEY")
-    except KeychainUnavailableError:
-        return None
-    credentials = ProviderCredentials(
-        mimo_api_key=mimo,
-        luna_api_key=_read_optional_secret("LUNA_API_KEY"),
-        luna_base_url=_read_optional_secret("LUNA_BASE_URL"),
-        luna_model=_read_optional_secret("LUNA_MODEL"),
-        mimo_v25_input_usd_per_token=_read_optional_secret("MIMO_V25_INPUT_USD_PER_TOKEN"),
-        mimo_v25_output_usd_per_token=_read_optional_secret("MIMO_V25_OUTPUT_USD_PER_TOKEN"),
-        luna_input_usd_per_token=_read_optional_secret("LUNA_INPUT_USD_PER_TOKEN"),
-        luna_output_usd_per_token=_read_optional_secret("LUNA_OUTPUT_USD_PER_TOKEN"),
-        exa_api_key=_read_optional_secret("EXA_API_KEY"),
-        openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
-        serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),
-        pubmed_api_key=_read_optional_secret("PUBMED_API_KEY"),
-        firecrawl_api_key=_read_optional_secret(),
-    )
+        credentials = ProviderCredentials(
+            mimo_api_key=mimo,
+            luna_api_key=_read_optional_secret("LUNA_API_KEY"),
+            luna_base_url=setting("LUNA_BASE_URL"),
+            luna_model=setting("LUNA_MODEL"),
+            mimo_v25_input_usd_per_token=setting("MIMO_V25_INPUT_USD_PER_TOKEN"),
+            mimo_v25_output_usd_per_token=setting("MIMO_V25_OUTPUT_USD_PER_TOKEN"),
+            luna_input_usd_per_token=setting("LUNA_INPUT_USD_PER_TOKEN"),
+            luna_output_usd_per_token=setting("LUNA_OUTPUT_USD_PER_TOKEN"),
+            exa_api_key=_read_optional_secret("EXA_API_KEY"),
+            openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
+            serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),
+            pubmed_api_key=_read_optional_secret("PUBMED_API_KEY"),
+            firecrawl_api_key=_read_optional_secret(),
+        )
+    except ValidationError:
+        raise KeychainUnavailableError(
+            "Saved provider configuration is invalid; replace it in Provider setup"
+        ) from None
+    migrated = {
+        name: value
+        for name, value in credentials.environment_items()
+        if name in SETTING_NAMES and name not in settings
+    }
+    if migrated:
+        update_preferences(provider_settings=migrated)
     if not credentials.environment_items():
         return None
     return credentials
@@ -172,6 +194,13 @@ def load_saved_credentials_into_environment(
 
 
 def _read_secret(environment_name: str) -> str | None:
+    if sys.platform == "win32":
+        import windows_credentials
+
+        try:
+            return windows_credentials.read(_service_name(environment_name))
+        except (OSError, ValueError) as exc:
+            raise KeychainUnavailableError("Windows credential vault read failed") from exc
     security = _load_security_framework()
     keychain_ref = _copy_default_keychain(security)
     account = KEYCHAIN_ACCOUNT.encode("utf-8")
@@ -215,11 +244,19 @@ def _read_secret(environment_name: str) -> str | None:
 def _read_optional_secret(environment_name: str = "FIRECRAWL_API_KEY") -> str | None:
     try:
         return _read_secret(environment_name)
-    except (KeychainUnavailableError, KeyError):
+    except KeyError:
         return None
 
 
 def _write_keychain_secret(environment_name: str, secret: str) -> None:
+    if sys.platform == "win32":
+        import windows_credentials
+
+        try:
+            windows_credentials.write(_service_name(environment_name), secret)
+            return
+        except (OSError, ValueError) as exc:
+            raise KeychainUnavailableError("Windows credential vault save failed") from exc
     security = _load_security_framework()
     keychain_ref = _copy_default_keychain(security)
     account = KEYCHAIN_ACCOUNT.encode("utf-8")
@@ -269,7 +306,9 @@ def _load_security_framework() -> ctypes.CDLL:
     try:
         security = ctypes.CDLL(SECURITY_FRAMEWORK)
     except OSError as exc:
-        raise KeychainUnavailableError("Secure provider setup requires macOS Keychain") from exc
+        raise KeychainUnavailableError(
+            "Secure provider setup requires an available native OS credential vault"
+        ) from exc
     security.SecKeychainFindGenericPassword.argtypes = (
         ctypes.c_void_p,
         ctypes.c_uint32,
@@ -331,9 +370,68 @@ def _service_name(environment_name: str) -> str:
 
 
 def _keychain_available() -> bool:
-    return sys.platform == "darwin" and os.path.lexists(SECURITY_FRAMEWORK)
+    return sys.platform == "win32" or (
+        sys.platform == "darwin" and os.path.lexists(SECURITY_FRAMEWORK)
+    )
 
 
 def _require_keychain() -> None:
     if not _keychain_available():
-        raise KeychainUnavailableError("Secure provider setup requires macOS Keychain")
+        raise KeychainUnavailableError(
+            "Secure provider setup requires an available native OS credential vault"
+        )
+
+
+SECRET_NAMES = frozenset(
+    {
+        "MIMO_API_KEY",
+        "LUNA_API_KEY",
+        "SERPSEARCH_API_KEY",
+        "EXA_API_KEY",
+        "OPENALEX_API_KEY",
+        "PUBMED_API_KEY",
+        "FIRECRAWL_API_KEY",
+    }
+)
+
+
+def remove_credential(environment_name: str) -> None:
+    """Remove one allowlisted secret without exposing its previous value."""
+    if environment_name not in SECRET_NAMES:
+        raise ValueError("Unknown provider credential")
+    _require_keychain()
+    if sys.platform == "win32":
+        import windows_credentials
+
+        try:
+            windows_credentials.delete(_service_name(environment_name))
+            return
+        except OSError as exc:
+            raise KeychainUnavailableError("Windows credential removal failed") from exc
+    security = _load_security_framework()
+    security.SecKeychainItemDelete.argtypes = (ctypes.c_void_p,)
+    security.SecKeychainItemDelete.restype = ctypes.c_int32
+    keychain_ref = _copy_default_keychain(security)
+    item = ctypes.c_void_p()
+    service = _service_name(environment_name).encode("utf-8")
+    account = KEYCHAIN_ACCOUNT.encode("utf-8")
+    try:
+        status = security.SecKeychainFindGenericPassword(
+            keychain_ref,
+            len(service),
+            service,
+            len(account),
+            account,
+            None,
+            None,
+            ctypes.byref(item),
+        )
+        if status == ERR_SEC_ITEM_NOT_FOUND:
+            return
+        if status == ERR_SEC_SUCCESS:
+            status = security.SecKeychainItemDelete(item)
+        if status != ERR_SEC_SUCCESS:
+            raise KeychainUnavailableError(f"Credential removal failed (status {status})")
+    finally:
+        _release_item(item)
+        _release_item(keychain_ref)

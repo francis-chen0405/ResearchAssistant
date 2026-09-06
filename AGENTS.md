@@ -1,5 +1,17 @@
 # AI Assistant Instructions
 
+## Active Codex checkout
+
+The active local checkout for this project is currently located at
+`/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant`.
+Use the repository root supplied by the task when working; do not assume the older
+`/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
+location is a workspace detail only and must not be embedded in application runtime paths.
+
+Current desktop authority: `.agent/plans/phase-1-desktop.md` and `desktop/README.md`.
+Phase 1 desktop implementation is authorized; release verification remains tracked there.
+This supersedes historical local-launcher assumptions without changing research policies.
+
 This repository has completed Phases 0-10, MVP-1 through MVP-6, MVP-6.1, MVP-6.2
 Batch A, MVP-6.3, MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, MVP-6.9, MVP-7.1,
 MVP-8, MVP-8.1, MVP-8.2, MVP-9, MVP-10, and MVP-11 for the Debate Research Agent

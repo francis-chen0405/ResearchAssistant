@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 from collections import deque
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -15,11 +16,13 @@ from typing import Literal, TextIO
 import httpx
 from pydantic import Field
 
+from desktop_paths import application_data_dir
 from frontend.security import redact_text
 from models import StrictModel
 from providers.config import WigoloConfig
 from providers.search import SearchProviderError
 from providers.wigolo import WigoloSearchAdapter
+from windows_job import WindowsJob
 
 ServiceState = Literal[
     "healthy",
@@ -46,13 +49,17 @@ class ServiceDiagnostic(StrictModel):
 class WigoloLaunchConfig(StrictModel):
     command: tuple[str, ...] = ("npx", "-y", "wigolo@0.2.1", "serve")
     host: Literal["127.0.0.1"] = "127.0.0.1"
-    port: Literal[8000] = 8000
+    port: int = Field(default=8000, ge=1, le=65535)
+    require_ownership: bool = False
+    data_dir: Path | None = None
+    browser_dir: Path | None = None
 
 
 class _OwnedProcess:
     def __init__(self, process: subprocess.Popen[str], started_at: float) -> None:
         self.process = process
         self.started_at = started_at
+        self.job: WindowsJob | None = None
 
 
 class WigoloServiceManager:
@@ -65,11 +72,13 @@ class WigoloServiceManager:
         launch: WigoloLaunchConfig | None = None,
         popen: Callable[..., subprocess.Popen[str]] = subprocess.Popen,
         base_environment: Mapping[str, str] | None = None,
+        ownership_changed: Callable[[int, bool], None] | None = None,
     ) -> None:
+        self._ownership_changed = ownership_changed
         self._config = config or WigoloConfig()
         self._launch = launch or WigoloLaunchConfig()
         self._popen = popen
-        self._base_environment = base_environment or os.environ
+        self._base_environment = os.environ if base_environment is None else base_environment
         self._lock = Lock()
         self._owned: _OwnedProcess | None = None
         self._output: deque[str] = deque(maxlen=40)
@@ -136,6 +145,16 @@ class WigoloServiceManager:
                 started_at_monotonic=owned.started_at if owned is not None else None,
                 recent_output=recent,
             )
+        if self._launch.require_ownership and owned is None:
+            return ServiceDiagnostic(
+                state="wrong_service",
+                wigolo_ready=False,
+                searxng_readiness="unavailable",
+                message=(
+                    "The desktop acquisition port is occupied by an unowned service. "
+                    "Restart the app."
+                ),
+            )
         return ServiceDiagnostic(
             state="healthy",
             wigolo_ready=True,
@@ -157,16 +176,18 @@ class WigoloServiceManager:
                 return self._starting_diagnostic(self._owned)
             self._launch_error = None
             environment = self._child_environment()
+            working = self._launch.data_dir or application_data_dir() / "acquisition"
+            working.mkdir(mode=0o700, parents=True, exist_ok=True)
             try:
                 process = self._popen(
                     list(self._launch.command),
-                    cwd=str(Path(__file__).resolve().parents[1]),
+                    cwd=str(working),
                     env=environment,
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    start_new_session=True,
+                    start_new_session=sys.platform != "win32",
                 )
             except (OSError, ValueError) as exc:
                 self._launch_error = redact_text(exc)
@@ -177,7 +198,19 @@ class WigoloServiceManager:
                     message=f"Could not launch pinned Wigolo: {self._launch_error}",
                 )
             owned = _OwnedProcess(process, monotonic())
+            if sys.platform == "win32":
+                try:
+                    owned.job = WindowsJob()
+                    owned.job.attach(int(process._handle))
+                except OSError:
+                    process.kill()
+                    process.wait(timeout=5)
+                    if owned.job is not None:
+                        owned.job.close()
+                    raise
             self._owned = owned
+            if self._ownership_changed is not None:
+                self._ownership_changed(process.pid, True)
             self._start_output_reader(process.stdout)
             self._start_output_reader(process.stderr)
             return self._starting_diagnostic(owned)
@@ -194,7 +227,10 @@ class WigoloServiceManager:
                 message="No application-owned Wigolo process is running; nothing was stopped.",
             )
         process = owned.process
-        if process.poll() is None:
+        if owned.job is not None:
+            owned.job.close()
+            process.wait(timeout=5)
+        elif process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
                 process.wait(timeout=5)
@@ -203,6 +239,8 @@ class WigoloServiceManager:
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=5)
+        if self._ownership_changed is not None:
+            self._ownership_changed(process.pid, False)
         with self._lock:
             if self._owned is owned:
                 self._owned = None
@@ -223,7 +261,20 @@ class WigoloServiceManager:
 
     def _child_environment(self) -> dict[str, str]:
         environment: dict[str, str] = {}
-        for name in ("PATH", "HOME", "TMPDIR", "LANG", "LC_ALL"):
+        for name in (
+            "PATH",
+            "HOME",
+            "TMPDIR",
+            "LANG",
+            "LC_ALL",
+            "SystemRoot",
+            "WINDIR",
+            "TEMP",
+            "TMP",
+            "USERPROFILE",
+            "LOCALAPPDATA",
+            "APPDATA",
+        ):
             value = self._base_environment.get(name)
             if value:
                 environment[name] = value
@@ -232,8 +283,14 @@ class WigoloServiceManager:
                 "WIGOLO_DAEMON_HOST": self._launch.host,
                 "WIGOLO_DAEMON_PORT": str(self._launch.port),
                 "LOG_FORMAT": "text",
+                "WIGOLO_DATA_DIR": str(
+                    self._launch.data_dir or application_data_dir() / "acquisition"
+                ),
+                "WIGOLO_BROWSER_TYPES": "chromium",
             }
         )
+        if self._launch.browser_dir is not None:
+            environment["PLAYWRIGHT_BROWSERS_PATH"] = str(self._launch.browser_dir)
         return environment
 
     def _start_output_reader(self, stream: TextIO | None) -> None:

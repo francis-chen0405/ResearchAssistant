@@ -9,3 +9,9 @@ live-smoke-output/
 web/.next/
 web/node_modules/
 web/next-env.d.ts
+
+web/out/
+desktop/node_modules/
+desktop/dist/
+desktop/build/
+desktop/acquisition/node_modules/

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 from collections.abc import Callable, Iterator, Mapping
@@ -55,6 +54,7 @@ from agents.v2_source_selection import (
     build_v2_source_selection_input,
     run_v2_source_selection_and_queue,
 )
+from file_lock import FileLock
 from models import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
@@ -600,12 +600,13 @@ def _v2_database_lock(db_path: str | Path) -> Iterator[None]:
     """Serialize direct v2 callers with the live controller's database lock."""
     resolved_path = Path(db_path).resolve()
     lock_path = resolved_path.with_name(f"{resolved_path.name}.mvp5.lock")
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    lock = FileLock(lock_path)
+    if not lock.acquire(blocking=True):
+        raise RuntimeError("Research database is busy in another process")
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def run_v2_production_pipeline(

@@ -1,5 +1,14 @@
 # CONVENTIONS.md
 
+## Current desktop portability conventions (2026-09-05)
+
+Desktop runtime writes use `desktop_paths.application_data_dir()`, never the checkout or
+bundle. Use `file_lock.FileLock` for shared process exclusion. Secrets belong only in native
+OS credential storage and transient backend memory; ordinary preferences use the strict
+`desktop_settings` boundary. Packaging sources/prompts must preserve exact identity checks.
+See `desktop/README.md`. Historical development conventions below remain historical.
+
+
 ## 1. Folder Structure
 
 ```

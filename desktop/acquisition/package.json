@@ -1,0 +1,6 @@
+{
+  "name": "researchassistant-acquisition",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": { "wigolo": "0.2.1" }
+}

@@ -389,6 +389,7 @@ def test_service_probe_requires_exact_wigolo_identity(monkeypatch: pytest.Monkey
 def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(service_manager_module.sys, "platform", "darwin")
     captured: dict[str, object] = {}
 
     class FakeProcess:
@@ -425,7 +426,10 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(service_manager_module, "WigoloSearchAdapter", UnhealthyAdapter)
     monkeypatch.setattr(
-        service_manager_module.os, "killpg", lambda pid, sig: killed.append((pid, sig))
+        service_manager_module.os,
+        "killpg",
+        lambda pid, sig: killed.append((pid, sig)),
+        raising=False,
     )
     manager = WigoloServiceManager(
         popen=popen,
@@ -452,7 +456,10 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
 def test_stop_never_kills_unowned_listener(monkeypatch: pytest.MonkeyPatch) -> None:
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        service_manager_module.os, "killpg", lambda pid, sig: killed.append((pid, sig))
+        service_manager_module.os,
+        "killpg",
+        lambda pid, sig: killed.append((pid, sig)),
+        raising=False,
     )
     stopped = WigoloServiceManager(base_environment={}).stop()
     assert stopped.message.startswith("No application-owned")

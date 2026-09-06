@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from collections.abc import AsyncIterator, Callable, MutableMapping
 from contextlib import asynccontextmanager
 from decimal import Decimal
@@ -12,6 +13,7 @@ from uuid import UUID
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -31,8 +33,10 @@ from credential_store import (
     ProviderCredentials,
     apply_credentials_to_environment,
     load_saved_credentials_into_environment,
+    remove_credential,
     save_credentials,
 )
+from desktop_settings import InterfaceSettings, read_preferences, update_preferences
 from frontend.live_service import (
     DEFAULT_LIVE_DB,
     LiveHistoryItem,
@@ -45,6 +49,7 @@ from frontend.live_service import (
 )
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
+from history_import import HistoryImportResult, import_history
 from models import (
     DiscoveryProvider,
     ResearchControls,
@@ -112,6 +117,7 @@ class ApiRuntime:
             load_saved_credentials_into_environment
         ),
     ) -> None:
+        self.credential_error: str | None = None
         self.controller = controller
         self.services = services
         self.environment = environment
@@ -129,8 +135,10 @@ class LoopbackGuardMiddleware(BaseHTTPMiddleware):
         *,
         allowed_hosts: tuple[str, ...],
         allowed_origins: tuple[str, ...],
+        session_token: str | None = None,
     ) -> None:
         super().__init__(app)
+        self._session_token = session_token
         self._allowed_hosts = frozenset(allowed_hosts)
         self._allowed_origins = frozenset(allowed_origins)
 
@@ -139,6 +147,10 @@ class LoopbackGuardMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
+        if self._session_token is not None and not secrets.compare_digest(
+            request.headers.get("authorization", ""), f"Bearer {self._session_token}"
+        ):
+            return JSONResponse(status_code=401, content={"detail": "Desktop session required."})
         if request.url.hostname not in self._allowed_hosts:
             return JSONResponse(status_code=403, content={"detail": "Loopback host required."})
         origin = request.headers.get("origin")
@@ -200,6 +212,21 @@ class CredentialSetupRequest(StrictModel):
     pubmed_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
+    @field_validator(
+        "mimo_api_key",
+        "luna_api_key",
+        "exa_api_key",
+        "openalex_api_key",
+        "serpsearch_api_key",
+        "pubmed_api_key",
+        "firecrawl_api_key",
+        "luna_model",
+        mode="before",
+    )
+    @classmethod
+    def validate_single_line_value(cls, value: object) -> object:
+        return ProviderCredentials.validate_provider_value(value)
+
     @field_validator("luna_base_url")
     @classmethod
     def validate_luna_base_url(cls, value: str | None) -> str | None:
@@ -208,7 +235,7 @@ class CredentialSetupRequest(StrictModel):
                 "Use the OpenAI API endpoint https://api.openai.com/v1, not the OpenAI "
                 "dashboard URL."
             )
-        return value
+        return ProviderCredentials.validate_luna_base_url(value)
 
 
 class CredentialSetupResponse(StrictModel):
@@ -388,11 +415,18 @@ def create_app(
     load_keychain_on_start: bool,
     allowed_hosts: tuple[str, ...] = LOOPBACK_HOSTS,
     allowed_origins: tuple[str, ...] = WEB_ORIGINS,
+    session_token: str | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if load_keychain_on_start:
-            runtime.credential_loader(runtime.environment)
+            try:
+                runtime.credential_loader(runtime.environment)
+            except KeychainUnavailableError:
+                runtime.credential_error = (
+                    "The operating system credential vault is unavailable or contains invalid "
+                    "provider settings. Unlock it or replace the saved keys in Provider setup."
+                )
         prepare_default_database()
         yield
         if runtime.services.owns_running_process() and not runtime.controller.has_active_runs():
@@ -417,7 +451,46 @@ def create_app(
         LoopbackGuardMiddleware,
         allowed_hosts=allowed_hosts,
         allowed_origins=allowed_origins,
+        session_token=session_token,
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_: Request, exc: RequestValidationError) -> JSONResponse:
+        # Pydantic's default response includes raw input, including password fields.
+        return JSONResponse(status_code=422, content={"detail": "Invalid request fields."})
+
+    @app.post("/api/credentials/{name}/remove")
+    def delete_credential(name: str) -> dict[str, bool]:
+        if runtime.controller.has_active_runs():
+            raise HTTPException(status_code=409, detail="Wait for active research to finish.")
+        try:
+            remove_credential(name)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unknown provider credential.") from exc
+        except KeychainUnavailableError as exc:
+            raise HTTPException(status_code=503, detail="Credential vault is unavailable.") from exc
+        runtime.environment.pop(name, None)
+        return {"removed": True}
+
+    @app.post("/api/history/import", response_model=HistoryImportResult)
+    def copy_history(source: str = Query(min_length=1)) -> HistoryImportResult:
+        if runtime.controller.has_active_runs():
+            raise HTTPException(status_code=409, detail="Wait for active research to finish.")
+        try:
+            return import_history(Path(source))
+        except (OSError, ValueError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="History import failed; check the source database and ensure it is idle.",
+            ) from exc
+
+    @app.get("/api/preferences", response_model=InterfaceSettings)
+    def preferences() -> InterfaceSettings:
+        return read_preferences().interface
+
+    @app.post("/api/preferences", response_model=InterfaceSettings)
+    def save_preferences(payload: InterfaceSettings) -> InterfaceSettings:
+        return update_preferences(interface=payload).interface
 
     @app.get("/api/health", response_model=ApiHealth)
     def health() -> ApiHealth:
@@ -441,9 +514,10 @@ def create_app(
             )
         )
         return ConfigurationResponse(
-            configured=config_message is None,
+            configured=config_message is None and runtime.credential_error is None,
             message=(
-                config_message
+                runtime.credential_error
+                or config_message
                 or "MiMo and your selected research sources are configured; credentials are "
                 "checked when research starts."
             ),
@@ -525,6 +599,7 @@ def create_app(
         try:
             runtime.credential_saver(credentials)
             runtime.credential_applier(credentials, runtime.environment)
+            runtime.credential_error = None
         except KeychainUnavailableError as exc:
             raise HTTPException(status_code=503, detail=redact_text(exc)) from exc
         config_message = runtime.controller.configuration_message(
@@ -540,9 +615,9 @@ def create_app(
             saved=True,
             configured=config_message is None,
             message=(
-                "Provider keys saved securely in macOS Keychain."
+                "Provider keys saved securely in the operating system credential vault."
                 if config_message is None
-                else "Provider keys saved securely in macOS Keychain. "
+                else "Provider keys saved securely in the operating system credential vault. "
                 + redact_text(config_message)
             ),
             saved_settings=_saved_setting_names(runtime.environment),

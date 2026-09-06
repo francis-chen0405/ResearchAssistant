@@ -256,6 +256,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const researchApi = {
+  importHistory: (source: string) => request<{ db_path: string; run_count: number }>(`/api/history/import?source=${encodeURIComponent(source)}`, { method: "POST" }),
+  preferences: () => request<InterfaceSettings>("/api/preferences"),
+  savePreferences: (settings: InterfaceSettings) => request<InterfaceSettings>("/api/preferences", { method: "POST", body: JSON.stringify(settings) }),
+  removeCredential: (name: string) => request<{ removed: boolean }>(`/api/credentials/${encodeURIComponent(name)}/remove`, { method: "POST" }),
   configuration: (selection: ProviderSelection) =>
     request<Configuration>(`/api/configuration?${new URLSearchParams({
       use_serpsearch: String(selection.use_serpsearch),
@@ -298,4 +302,11 @@ export const researchApi = {
   service: () => request<ServiceDiagnostic>("/api/service"),
   startService: () => request<ServiceDiagnostic>("/api/service/start", { method: "POST" }),
   stopService: () => request<ServiceDiagnostic>("/api/service/stop", { method: "POST" }),
+};
+
+export type InterfaceSettings = {
+  dbPath: string; maxTokens: number; maxCost: string; maxCalls: number;
+  supportEnabled: boolean; challengeEnabled: boolean; sourceTarget: 5 | 10 | 15 | 20;
+  useSerpSearch: boolean; useExa: boolean; useOpenAlex: boolean; useArxiv: boolean;
+  usePubmed: boolean; useCrossref: boolean;
 };

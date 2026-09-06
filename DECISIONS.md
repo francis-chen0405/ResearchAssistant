@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-09-05 — Phase 1 local desktop packaging
+
+Use Electron 44.2.0 / electron-builder 26.15.3, PyInstaller 6.22.2 and a static Next.js export.
+Tauri external binaries were evaluated: they still require the separate Node/native-library/
+Playwright distribution needed by Wigolo. Electron keeps installer orchestration in the
+existing JavaScript ecosystem at the cost of a larger Chromium footprint. Standalone Node
+24.18.0 runs locked Wigolo 0.2.1 to avoid Electron native-addon ABI incompatibility.
+
+Use the existing in-process macOS Security framework plus direct Windows Credential Manager
+APIs; no new keyring dependency or fallback. Use application data directories, strict ordinary
+preferences, explicit SQLite history import and shared portable file locks. Keep model routing,
+research stages, evidence admission, synthesis and conservative budget accounting unchanged.
+The user explicitly superseded the original branch instruction: this work stays on master.
+
+
 ## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
 
 - Treat each Gap ID as the stable identity of one unresolved evidence gap across research rounds.

@@ -1,5 +1,13 @@
 # Debate Research Agent System
 
+## Phase 1 desktop architecture (2026-09-05, implementation)
+
+The local product now has an Electron shell, static Next.js export and frozen Python
+backend. `desktop/README.md` describes packaging, authentication, native credential vaults,
+portable data paths, owned acquisition and recovery. This supersedes historical macOS-only
+launcher/runtime assumptions below; the research architecture and stage policies are unchanged.
+
+
 ## Fresh v2 Production Architecture — Post-Phase-13 Conditional Round Four
 
 `v2_orchestrator.py` is the only fresh website/CLI research coordinator. It joins the

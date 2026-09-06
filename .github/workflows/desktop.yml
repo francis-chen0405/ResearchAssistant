@@ -1,0 +1,75 @@
+name: Desktop Phase 1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    defaults:
+      run:
+        shell: bash
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.19.0"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt pytest ruff
+      - name: Install locked frontend and desktop dependencies
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          npm ci --prefix desktop --no-audit --no-fund
+          node desktop/node_modules/electron/install.js
+      - name: Python regressions and quality
+        run: |
+          python -m pytest
+          python -m ruff check .
+          python -m ruff format --check .
+          git diff --check
+      - name: Frontend lint and type check
+        working-directory: web
+        run: |
+          pnpm lint
+          pnpm exec tsc --noEmit
+      - name: Build bundled runtimes and static frontend
+        run: python desktop/build.py
+      - name: Exercise frozen bundle without developer tools
+        run: python desktop/smoke.py desktop/build/resources
+      - name: Exercise desktop window
+        run: node desktop/ui-smoke.cjs
+      - name: Build unsigned test installers
+        working-directory: desktop
+        run: npm run package
+      - name: Upload test installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResearchAssistant-${{ matrix.os }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.exe
+          if-no-files-found: error

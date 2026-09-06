@@ -6,6 +6,19 @@ Its core philosophy is simple: **search broadly, inspect evidence, identify gaps
 
 Fresh website and CLI runs use the production ResearchAssistant v2 pipeline. Historical runs remain readable under the pipeline version that produced them.
 
+## Working copy
+
+The current Codex checkout is under the synced OneDrive `GitHub/ResearchAssistant`
+folder. Work from the repository root provided by the task; application data and runtime
+paths must remain platform-appropriate and must not depend on this local checkout path.
+
+## Desktop application
+
+Phase 1 adds a packaged local macOS/Windows application using the existing research UI
+and Python engine. See [desktop installation, data and build notes](desktop/README.md)
+for artifacts, supported targets, history import and outstanding release checks. The
+source-based launcher instructions below remain useful for development.
+
 ## Features
 
 - **Research directions:** choose Support, Challenge, or both. A disabled direction is not researched or implied by the result.
