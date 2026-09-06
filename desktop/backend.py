@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import Field, SecretStr
 
 import credential_store
-from cli import repository_identity
+from application_runtime import repository_identity
 from desktop_paths import application_data_dir
 from frontend.api import create_app, create_default_runtime
 from frontend.service_manager import WigoloLaunchConfig, WigoloServiceManager

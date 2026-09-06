@@ -8,15 +8,20 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current authority: `.agent/plans/phase-2-cleanup.md`, `ARCHITECTURE.md`, and
-`desktop/README.md`. Phase 2 maintainability refactoring and documentation consolidation
-is authorized on a new `codex/` branch. Phase 3 frontend redesign is not authorized.
-Phase 1 desktop implementation exists; native Windows and public-release verification
-remain explicit gates. The current research pipeline is completed v2 Phase 14.
-Before editing, completely read architecture, conventions, decisions, status, handoff,
-`.agent/PLANS.md`, relevant current plans and applicable nested instructions.
-The original chronological preamble is preserved in
-`docs/archive/pre-phase-2/AGENTS.md`; this paragraph replaces its stale phase authority.
+Current desktop authority: `.agent/plans/phase-1-desktop.md` and `desktop/README.md`.
+Phase 1 desktop implementation is authorized; release verification remains tracked there.
+This supersedes historical local-launcher assumptions without changing research policies.
+
+This repository has completed Phases 0-10, MVP-1 through MVP-6, MVP-6.1, MVP-6.2
+Batch A, MVP-6.3, MVP-6.4, MVP-6.5, MVP-6.6, MVP-6.7, MVP-6.8, MVP-6.9, MVP-7.1,
+MVP-8, MVP-8.1, MVP-8.2, MVP-9, MVP-10, and MVP-11 for the Debate Research Agent
+System. MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is the
+latest completed research-pipeline phase. MLP-1 Simplified Live Experience, MLP-2 Local
+Product Experience, MLP-3 Next.js Product Rebuild, MLP-4 Research Quality & OpenAlex
+Integration, and MLP-5 Provider Selection & SERP Search are complete. The broader visual
+redesign was not part of MLP-5 and is not authorized. Before
+editing any file, read `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `STATUS.md`,
+`HANDOFF.md`, `.agent/PLANS.md`, and the relevant current phase plan completely.
 
 Required rules for every future assistant:
 

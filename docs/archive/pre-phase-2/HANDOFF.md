@@ -1,0 +1,3122 @@
+# Current Codex workspace placement
+
+## Windows CI line-ending correction — 2026-09-06
+
+The second Windows workflow (job 101523018809, commit 8eb5172) reached Ruff
+formatting, which rejected all 128 Python files. The repository lacked a checkout
+line-ending policy while Ruff required LF. Added `.gitattributes` with
+`* text=auto eol=lf` to preserve consistent text bytes across platforms.
+
+Validation: an isolated Git checkout with `core.autocrlf=true` reproduced all 128
+format failures without the rule. With the rule, the same checkout had zero CRLF
+Python files, all 128 passed Ruff formatting, and source bytes matched the original
+checkout. No application code or formatter requirements changed. A new pushed
+workflow must still verify Windows packaging; install and signing gates remain open.
+
+## Windows CI path-fixture correction — 2026-09-06
+
+The first Desktop Phase 1 workflow passed macOS (job 101520646091) and failed
+Windows during Python regressions (job 101520645876), before packaging. Windows
+reported 907 passed / 2 failed / 2 existing skips. Both failures were invalid test
+inputs: a filename containing Windows-forbidden `?`, and a Unix `/tmp` output path.
+
+The database fixture retains spaces, `#` and `%` on every platform and additionally
+retains `?` on POSIX. All read-only/foreign-key/query-only assertions remain intact.
+The environment example now leaves the smoke output blank with OS-specific absolute
+path examples; the offline test explicitly supplies its platform-native temporary
+output path, just as it explicitly supplies the credential and approval gates.
+The absolute-path validator and execution gates remain unchanged.
+
+Validation: 43 targeted tests passed; full pytest passed 909 tests with 2 existing skips.
+Ruff lint/format and Git whitespace checks passed. A fresh Windows workflow run after committing
+and pushing this correction is still required; Windows packaging/install validation
+and signing gates remain open. Existing macOS runtime artifacts are unaffected.
+
+
+## Phase 1 desktop implementation — 2026-09-05
+
+Implemented on master in the relocated OneDrive checkout. The research pipeline,
+model routing, evidence policies and conservative budget rules remain unchanged.
+Current authority: `.agent/plans/phase-1-desktop.md` and `desktop/README.md`.
+
+- Electron 44.2.0 shell, static Next.js UI, PyInstaller 6.22.2 backend; standalone
+  Node 24.18.0, locked Wigolo 0.2.1 and its matching Playwright Chromium are bundled.
+- Native macOS Keychain and Windows Credential Manager; save/replace/remove, safe
+  validation errors, explicit vault failure status and password clearing.
+- Strict non-secret preferences in platform user data, shared portable process locks,
+  read-only-source verified history import, cancellation-aware shutdown, Windows jobs
+  and macOS owned process groups. Packaged source/prompt/executable identity remains exact.
+- Session-authenticated local API, sandboxed renderer, no renderer Node access, no
+  browser credential/preferences storage, duplicate desktop instance exclusion.
+- Native macOS/Windows CI, lockfiles, build constraints and installer workflows added.
+  No remote publication, Git push, branch creation or paid provider calls performed.
+
+Verification: full pytest **909 passed, 2 existing skips**; Ruff check and format check,
+Git whitespace check, frontend lint/type/static build and JavaScript syntax checks passed.
+Frozen macOS smoke passed with an empty developer-tool PATH and unrelated temporary cwd:
+UI/backend health, rejected unauthorized requests/origins, isolated native-vault round-trip
+and restart persistence/cleanup, durable settings, exact identity, owned acquisition health
+and shutdown. Actual Electron window tests passed: page/credential controls, renderer
+isolation, duplicate instance exclusion and normal shutdown. The packaged .app was copied
+to `/private/tmp/ResearchAssistant Install Check/ResearchAssistant.app` and both window
+and frozen-runtime smokes passed from that independent installation-like location.
+
+Artifacts: `desktop/dist/ResearchAssistant-0.1.0-arm64.dmg`,
+`desktop/dist/ResearchAssistant-0.1.0-arm64-mac.zip`, and
+`desktop/dist/mac-arm64/ResearchAssistant.app`. These are local Apple Silicon test builds;
+DMG and ZIP integrity checks passed, and both smoke suites also passed directly from
+the read-only DMG. Checksums are recorded in the phase plan and `desktop/dist/SHA256SUMS.txt`. Runtime/build artifacts are ignored.
+
+**Outstanding delivery gates:** no Windows host was available here, so the Windows
+installer/workflow has not been executed and no Windows artifact is claimed. No Developer ID
+signing identity was available; these macOS builds are unsigned/not notarized. Clean-machine
+installation, minimum OS versions, Windows vault/process behavior and signed update behavior
+still require target-platform validation. Do not call Phase 1 fully release-verified or start
+Phase 2 on the basis of the macOS results. Phase 2 must preserve data-directory/vault
+identities, explicit compatible resume and all existing research boundaries.
+
+
+The active checkout is
+`/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant`.
+It is the same ResearchAssistant repository currently on `master`; the move from the
+older `Documents/GitHub` placement is a local workspace change only. Do not encode this
+absolute path in application code or packaged runtime data paths.
+
+# Handoff
+
+## 2026-08-29 - AUDIT-011 adaptive handoffs and invalid-result guards
+
+Three additional low-risk bugs were fixed within the current Phase 14 boundary. Adaptive
+Round-2 Gap Analysis now preserves the initial Planner's typed `claim_coverage_focus`; adaptive
+search now treats a successful empty provider response as a valid outcome, matching the
+OpenAlex degraded-pool fallback; and live/API result presentation no longer attempts to render
+an invalid final output from a blocked run. Invalid outputs remain diagnostic-only, with their
+validation errors exposed to the existing blocked-run view.
+
+Regression coverage was added at each boundary. No Round-4 policy, model schema, database
+migration, provider, dependency, or historical artifact changed, and no user decision was
+needed because these are contract-preserving failure-handling fixes.
+
+Verification: focused Phase 6/7/12/14 tests passed (122); complete offline pytest passed (899
+passed, 2 skipped; one existing FastAPI/httpx deprecation warning); Ruff lint and format checks,
+`git diff --check`, frontend ESLint, and the production Next.js build passed. No live provider
+call or commit was made.
+
+Operator handoff: restart the local API/site and start a new run with Run ID blank. The
+executable fingerprint changes with these fixes, so do not resume the displayed historical
+run; old artifacts remain readable and immutable.
+
+Do not begin another phase without explicit user direction.
+
+## 2026-08-29 - AUDIT-010 preserve Round-1 Planner coverage focus
+
+The Phase-3-to-Phase-6 typed handoff now carries the validated initial Planner
+`claim_coverage_focus` into `V2GapAnalysisInput`. Previously, the builder omitted that field,
+so Round-1 Gap Analysis received an empty focus even when the Planner had selected a claim
+component. The resulting “no claim_coverage_focus dimensions were supplied” message was
+therefore an application handoff bug, not evidence that the claim lacked a coverage model.
+
+A regression test covers the exact builder boundary. No Round-4 policy, model schema,
+database migration, provider, dependency, or historical artifact changed; the fix remains
+within Phase 14 and uses the existing typed contracts.
+
+Verification: focused Phase 6/12/14 tests passed (90); complete offline pytest passed (897
+passed, 2 skipped; one existing FastAPI/httpx deprecation warning); Ruff check, Ruff format
+check, and `git diff --check` passed. No live provider call or commit was made.
+
+Operator handoff: restart the local API/site and start a new run with Run ID blank. The
+executable fingerprint changes with this fix, so do not resume the displayed historical run;
+old artifacts remain readable and immutable.
+
+Do not begin another phase without explicit user direction.
+
+## 2026-08-29 - AUDIT-009 stable cross-round Gap identity
+
+Gap IDs are now persistent semantic identities rather than round-local labels. Reuse requires the
+same enabled direction and explicit `claim_dimension`/`unsupported_claim_component` identity;
+rationale and explanatory missing-evidence wording may evolve, while a genuinely new gap receives
+a new ID and a semantically duplicate gap cannot receive a second ID. Typed Gap Analysis output,
+source-selection history, and post-Round-3 reconciliation reject conflicting or duplicate semantic
+identities instead of merging them. Persistent IDs remain unnamespaced by round. Historical
+artifacts without claim-linked fields remain readable as legacy unknown identity and are not
+heuristically matched.
+
+Verification: 896 passed, 2 skipped; focused Phase 12/14 regressions passed (81 tests); Ruff
+check, Ruff format check, and `git diff --check` passed. The existing Starlette/httpx deprecation
+warning remains. No live provider call, dependency, migration, SQLite constraint, unrelated audit
+fix, or commit was added.
+
+Do not begin another phase without explicit user direction.
+
+## 2026-08-29 - AUDIT-007 direct v2 concurrency boundary
+
+The direct `run_v2_production_pipeline()` entry now holds the existing database-scoped
+`.mvp5.lock` for the complete fresh-v2 run. Independent callers for the same database therefore
+serialize before budget reservation and provider work; a second caller can reuse the first
+caller's persisted terminal result without duplicating external work. `LiveResearchController`
+continues to acquire the same lock and passes explicit ownership to avoid a self-deadlock.
+
+Reservation persistence failures remain fail-closed. When a start row was committed before an
+error was reported, the budget provider refreshes its immutable audit view before propagating so
+the uncertain reservation remains conservatively accounted and no provider call begins.
+
+Verification: 883 passed, 2 skipped; Ruff check, Ruff format check, and `git diff --check` passed.
+The existing FastAPI/httpx deprecation warning remains. No live provider call, dependency,
+migration, unrelated SQLite constraint, or commit was added.
+
+Do not begin another phase without explicit user direction.
+
+## Phase 14 conditional Round Four and gap reconciliation — 2026-08-28
+
+Fresh v2 can now execute one post-Round-3 cumulative Luna Gap Analysis and, only when the typed
+Governor reserves its entire workload plus protected downstream calls/tokens/cost, one narrow
+Round 4. The new path has distinct post-Phase-13 artifact and fingerprint identities; it permits
+at most two provider lanes and two queries per lane per enabled direction, with a maximum of four
+queries per enabled direction. It cannot create Round 5 or run Gap Analysis after Round 4.
+
+The post-Round-3 checkpoint now requires a typed claim-coverage map and uses deterministic
+per-round/direction quotas over the complete Round 1–3 context, with actual source-family
+identities rather than cluster labels. Every material gap and Round-4 direction names the claim
+component at issue and the kind of evidence that would resolve it. The shared typed Governor
+owns all authorization outcomes. Reservation preserves the original conservative Gap envelope
+and separately validates only remaining future workload against an actual post-Gap snapshot.
+Persisted final output resumes only when its unresolved-gap disclosure agrees with the same
+reconciliation passed to fresh final-output generation.
+
+The follow-up claim-coverage correction removes substring-driven claim decomposition. The
+application supplies typed evidence-audit dimensions while the validated Planner explicitly
+selects only asserted population/setting and mechanism/pathway components; disabled
+counterevidence is retained as an explicit unavailable assessment. Every cumulative Gap context
+record now identifies its completed round. Coverage-map components, material gaps, and search
+directions are exact-bound to the specification, while the final result retains the map and the
+gap-to-query/source/ledger reconciliation. The Governor receives observed authorization inputs;
+novelty and productivity are explicit preauthorization opportunities, not observations of an
+unexecuted plan. A separate typed post-plan artifact records accepted novel-query IDs and actual
+execution productivity only after deterministic plan validation and execution. Search-Agent
+planning failures persist a typed terminal decision without post-plan facts; provider failures
+after an accepted plan retain the actual partial execution facts.
+
+The final renderer emits its no-unresolved-gaps disclosure only for an empty gap tuple. A separate
+append-only terminal-outcome artifact records post-authorization Search-Agent/provider failures,
+leaving the authorization artifact immutable. The persisted Planner boundary accepts only
+searchable claim components, coverage assessments reproduce the full specification, a source
+family retains all completed-round provenance, and final coverage cannot differ from its Gap
+reconciliation.
+
+The final output carries deterministic reconciliation of the original post-Round-3 gaps. Coverage
+requires matching Round-4 targeted-gap provenance, analyzer-admitted evidence, and the Analyst's
+explicit addressed-gap declaration. A search result, recommendation, quotation, or unadmitted
+analysis alone never closes a gap. API, export, progress, and research-trail readers recognize the
+new version while preserving read-only Phase-13 and earlier artifacts unchanged.
+
+Post-completion audit remediation restores the documented macOS launcher, binds Gap Analysis and
+reconciliation artifacts to one run, blocks degraded Round 3 from entering Round 4, requires a
+fresh post-Gap budget snapshot and persisted preauthorization, preserves valid degraded Round-4
+survivors, and propagates typed cancellation through Scout retries.
+
+Verification for the final accumulated checkout (2026-08-29):
+`env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. .venv/bin/pytest -q -p no:cacheprovider` passed
+(878 passed, 2 skipped; one existing FastAPI/httpx deprecation warning).
+`./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .` (118 files already formatted), and
+`git diff --check` passed. The bare `pytest` command was unavailable on PATH; no live provider
+call, dependency, migration, or historical rewrite was made.
+
+Do not begin another phase without explicit user direction.
+
+## Luna authentication failure handling — 2026-08-28
+
+The shared OpenAI-compatible adapter now labels Luna failures as Luna rather than Xiaomi MiMo.
+`invoke_llm()` preserves an adapter's explicit non-retryable flag, and fresh-v2 Gap Analysis and
+Evidence Analyst stages propagate terminal provider failures after persisting the failed physical
+attempt. A bad Luna credential therefore stops the run at the first Luna call instead of causing
+retries or one failure per source.
+
+The provider setup display now says credentials are configured, not authenticated; authentication
+is checked when research starts. After this code change, restart the local API/site and start a
+new run with the corrected Luna key and `https://api.openai.com/v1`; leave Run ID blank because
+the executable fingerprint changed.
+
+Verification: focused provider, routing, Gap Analysis, Evidence Analyst, API, and production
+tests passed (130 passed, 1 expected skip). No live provider call was made.
+
+## Phase 13 analyzer-admission cutover — 2026-08-26
+
+Fresh v2 now uses Luna Evidence Analyst as its sole semantic judge. Assessment and final factual
+statement are returned in one call with one attempt per successfully extracted source. A new
+deterministic Analyzer Admission stage validates exact quote/provenance, direction, scores,
+placement, qualification, and statement identity, then persists analyzer-only evidence without
+Reviewer metadata. Fresh deep analysis uses a three-call per-source reservation and continues
+through the full priority pool until the existing run-wide budget is reached, preserving real
+attempted, rejected, failed, and budget-prevented states.
+
+Deterministic synthesis, release validation, API, UI, and export accept analyzer-admitted
+records and display that they were not independently reviewer-approved. Fresh synthesis makes
+no model call; the direct-MiMo route remains historical compatibility. Phase-13 keys and policy
+identities are versioned; Phase-12 and older Reviewer artifacts remain readable without
+relabeling. The prior `not_queued` collision is covered by restart regression tests.
+
+Verification: 826 Python tests passed with 2 expected skips; Ruff lint/format passed; frontend
+ESLint, TypeScript, and the Next.js 16.3.1 production build passed. No live paid run or dependency
+change was made. `pnpm` was not used for the final check because its wrapper attempted a registry
+fetch; installed local frontend tools passed directly.
+
+## Historical Claim Fit 2/3 admission policy correction — 2026-08-25
+
+The then-current Phase-12 policy required Evidence Quality ≥2 and Claim Fit ≥2. Claim Fit 2 was
+admitted only as `qualified_only` evidence with explicit qualification; Claim Fit 3 used ordinary
+placement and was not rejected merely for being contextual or narrower than the full claim. Exact
+quote verification, Reviewer approval, immutable Ledger admission, and final release validation
+were mandatory for that historical path. New Phase-13 runs use Analyzer Admission; this record
+remains readable without relabeling historical artifacts.
+
+The focused policy and v2 Reviewer tests pass (116 tests). No live paid research run was made.
+
+## Historical Phase 8 source-cap and deterministic deep-analysis backfill correction — 2026-08-24
+
+The authorized Phase-8 correction keeps the run-wide v2 maximum exactly 500,000 tokens and
+the existing 160 physical-call/cost ceilings. Each source now receives a hard 60,000-token
+allowance and a seven-call envelope: two bounded Extractor attempts, two bounded Analyst
+operations with up to two attempts each, and one independent Reviewer call. Reviewer rejection
+is terminal for that source; normal execution no longer performs Analyst revision or a second
+Reviewer call.
+
+Final Source Selection persists the full deterministic priority and reduced queue metadata.
+The source-aware provider boundary attributes physical calls to typed source IDs and charges
+unknown usage conservatively. A versioned typed backfill artifact records the original queue,
+replacement IDs, final order, terminal status/reasons, source token/cost reconciliation, and
+remaining run budget. Extraction, Analyst, and Reviewer terminal failures select the next
+unqueued survivor; successful source artifacts and completed backfill results are restart-safe.
+Downstream final-output generation consumes the typed final Reviewer result from the backfill
+artifact, while the existing validators, immutable Ledger admission, and synthesis contract
+remain unchanged.
+
+The Luna prompt now receives only the exact candidate quote block, its immediate context, and
+necessary metadata. Complete snapshots remain available for exact application verification but
+are not included in the Analyst request.
+
+Verification for this correction: focused Phase-8/9/10/12 tests pass, including six-source
+admission under the 500k ceiling, reduced workload metadata, one-call Reviewer rejection,
+prompt reduction, source reconciliation, and restart reuse. Complete pytest passes 792 tests
+with 2 expected skips; Ruff check, Ruff format check, and diff check pass. No dependency change
+or live paid run was made.
+
+## Budget and failure-diagnostics correction — 2026-08-21
+
+The default fresh-run budget is now $0.20 with the already-authorized 500,000-token hard
+maximum. Terminal v2 failures are persisted before returning to the live controller, and an
+empty deep-analysis queue reports the reservation reason instead of reaching synthesis with
+zero evidence. The Next.js API helper now renders FastAPI validation arrays, and failed-result
+views retain the backend's actionable failure message. The launcher validates the current
+loopback API version before reusing a listener and only stops a stale ResearchAssistant API
+process it can identify.
+
+The saved Luna route was corrected from the OpenAI dashboard URL to
+`https://api.openai.com/v1`, and setup now rejects the dashboard URL if entered again.
+Extractor output is now constrained to application-owned sentence ranges. Adaptive Search Agent
+provider failures preserve completed Round-1 work and stop with a typed provider-failure reason
+instead of aborting the entire run. The API and rebuilt frontend were restarted; the pinned
+Wigolo acquisition service reports healthy.
+
+Verification: complete Python suite 782 passed with 2 expected skips; focused adaptive,
+production, routing, and extraction suite 89 passed with 1 expected skip; Ruff lint/format,
+diff check, frontend ESLint, and Next.js 16.3.1 production build passed. No live paid run or
+dependency change was made.
+
+The earlier handoff records below are historical. Where they say MLP-5 is unauthorized or
+defer the visual redesign to MLP-5, they refer to the pre-MLP-5 state; the completed
+MLP-5 provider-selection scope is recorded in the current status above.
+
+## v2 provider setup and discovery wiring — 2026-08-21
+
+The Next.js provider panel now accepts OpenAI/Luna and optional PubMed credentials in addition
+to the existing fields, confirms Keychain persistence without returning secrets, and displays a
+distinct “Provider keys saved” state when route preflight is not yet complete. It also exposes
+independent arXiv, PubMed, and Crossref controls. arXiv has no key requirement; PubMed's key is
+optional; Crossref verifies DOI bibliographic metadata only and is never evidence.
+
+Provider setup also accepts optional Luna API base URL and model overrides. Without overrides,
+fresh v2 uses the production OpenAI-compatible route and `gpt-5.6-luna`; the OpenAI key and
+deployment-owned price caps remain fail-closed requirements.
+
+The setup form also stores the MiMo-v2.5 and Luna input/output price caps entered as published
+USD per million tokens, converting them deterministically into the per-token values used by
+budget enforcement. Never invent or silently default those prices.
+
+The setup modal remains open after a successful save and displays a presence-only route-setting
+checklist. Password inputs intentionally remain blank after save; never echo credentials.
+When route pricing is still missing, a launch attempt reports that readiness issue in place and
+does not force the provider modal open again. The separate `saved_settings` API field is the
+frontend contract for confirming the four non-secret budget settings across a panel reopen.
+The credential-save response also includes that confirmation immediately; do not restore a
+generic “Provider keys saved” label while required price settings remain absent.
+
+Fresh v2 runs pass the selected arXiv/PubMed controls into `ResearchControls`, instantiate the
+corresponding metadata adapters in `providers/v2_factory.py`, and pass an optional Crossref
+resolver through Round 1 and adaptive rounds. The Crossref selection is part of the fresh-run
+provider-policy fingerprint. Result views display the frozen discovery sources; historical runs
+retain their original rendering and contracts.
+
+Verification: 778 passed, 2 expected skips; focused API/frontend regression suite now passes
+35 tests; Ruff lint/format, diff check, frontend ESLint, and Next.js production build passed.
+No dependency or live provider call was added.
+
+## Historical ResearchAssistant v2 — Phase 12: Production Hardening and Cutover
+
+Status: Complete. Fresh website and CLI runs now use `run_v2_production_pipeline()` and the
+three-route production bundle. The Phase 11 `V2FinalResearchOutput` remains the canonical
+fresh result; the API, Next.js renderer, and local exports consume that persisted envelope.
+Historical runs continue through historical inspection/render/export and are not relabeled.
+
+The coordinator persists Round-1 search outcomes, every existing Phase 3–11 checkpoint, an
+exact-extraction bridge artifact, a semantic/provider production fingerprint, per-physical-call
+starts/completions, and the terminal Phase 12 result. Restart reuses compatible artifacts and
+cannot duplicate Ledger admissions. A failed run may resume under the exact claim and complete
+fingerprint; incomplete calls remain conservatively counted.
+
+Hard ceilings are 160 physical LLM calls and 500,000 tokens, with lower limits supported.
+Fourteen calls are protected before downstream selection/extraction/analysis/review/synthesis;
+Phase 8 then applies its existing worst-case per-source reservation. Ordinary provider/source
+failures preserve typed audit state and compatible work; direction, immutable quote, Reviewer,
+Ledger, synthesis, and release-integrity failures remain closed gates.
+
+Fresh model routes are MiMo-v2.5 Scout; MiMo-v2.5-Pro Planner/Search Agent/Source
+Selection/Extractor/Reviewer/Synthesizer; and GPT-5.6 Luna High Gap Analysis/Evidence Analyst.
+The transport remains OpenAI-compatible and validates the exact configured returned model.
+No live paid calls or dependency changes were made.
+
+Final verification at this handoff: complete Python suite 772 passed, 2 expected opt-in skips;
+focused Phase 12 suite 10 passed with mocked Runs A–H; Ruff lint/format, diff check, Python compilation, launcher
+syntax, frontend ESLint, and the Next.js 16.3.1 production build passed. The only warning is
+the existing Starlette TestClient/httpx deprecation.
+
+## Historical ResearchAssistant v2 — Phase 11: Synthesis and Final Research Output
+
+Status: Complete and verified.
+
+- `agents/v2_final_output.py` builds the narrow v2 Synthesizer input, invokes only the
+  MiMo-v2.5-Pro route, derives all source/gap/stopping disclosures from persisted typed
+  artifacts, persists `phase-11-final-research-output`, and fails closed through a complete
+  output hash.
+- `models.py` contains presentation-safe v2 source/gap/stopping/release models. Facts remain
+  in `SynthesisOutput` as exact Ledger strings; recommendation/source metadata is not a new
+  factual-evidence path.
+- The local API exposes the persisted v2 result through a read-only endpoint; `web/` fetches
+  it conditionally and leaves historical brief rendering unchanged. `brief_export.py` exports
+  v2 output only after rehashing the complete validated rendering.
+- Verification passed: 762 Python tests in three complete non-overlapping batches with 2
+  expected opt-in skips; the 14 Phase-11 tests cover all direction configurations, source
+  states, gaps/stops, disabled leakage, Ledger mismatch, export, API schema, and restart.
+  Ruff lint/format and diff checks passed. Frontend lint/build could not start because pnpm
+  required an unavailable registry install. No live provider call occurred.
+
+## Historical ResearchAssistant v2 — Phase 10: Reviewer and Claim Ledger Integration
+
+Status: Complete and verified.
+
+- `agents/v2_reviewer_ledger.py` reuses the established narrow Reviewer input/decision,
+  application-owned approval ID derivation, one allowed Analyst revision, deterministic
+  score placement, and `admit_ledger_record`; it adds no confidence status, replacement
+  wording, or extra quality judge.
+- Migration 13 persists append-only `v2_ledger_admissions` provenance without changing
+  historical Ledger records. Metadata includes direction, round, family, recommendation,
+  survivor, and Gap IDs; recommendation never controls admission.
+- Tests cover approval, rejection/revision, qualified-only, non-recommended admission,
+  disabled directions, approval IDs, migration/immutability, restart, prior release tests,
+  type contracts, and compatibility.
+- Final verification: 748 passed, 2 expected opt-in skips; Ruff check, Ruff format check,
+  and diff check passed. No live call occurred.
+
+## Historical ResearchAssistant v2 — Phase 9: Luna Evidence Analyst
+
+Phase 9 is complete. `agents/v2_evidence_analyst.py` consumes the bounded Phase-8 queue only
+when every queued survivor has an exact `CandidateQuoteBlock` and matching immutable
+`SourceSnapshot`. It reuses deterministic quote verification before any semantic work. The
+Extractor remains MiMo-v2.5-Pro passage selection only; application code still owns assembly,
+brackets/context, offsets, exact membership, hashes, candidate identity, and provenance.
+
+Historical Phase-9 execution routed three Analyst logical calls to GPT-5.6 Luna High: semantic
+assessment/scoring, initial canonical statement drafting, and the one possible
+Reviewer-directed statement revision. They use `prompts/v2_evidence_analyst.md`; the shared
+historical `prompts/analyst.md` and direct-MiMo route remain unchanged. The semantic schema
+separates source text, narrowest supported proposition, and claim relationship while
+retaining limitations, inferential boundaries, and reasoning. Direction crossing fails
+closed; qualification remains valid in either enabled direction.
+
+Application code continues to interpret the existing Evidence Quality / Claim Fit table,
+derive placement, require explicit qualification at Claim Fit 3, and construct the existing
+`ScoreDecision` and `StatementDraft`. Each Luna attempt is reserved and finished through the
+existing `model_route_attempts` physical-call/token/exact-cost system, with at most two
+attempts per operation. Restart reuses per-source, batch, revision, and completed attempt
+artifacts. Final Analyst failure retains the survivor and exact candidate, records failure,
+creates no Reviewer-ready draft, and cannot enter the Ledger. Phase 9 itself creates no
+`LedgerRecord`; downstream Reviewer approval and deterministic admission remain required.
+
+Verification: 7 focused Phase-9 tests passed. The complete offline suite passed with 742
+tests and 2 expected opt-in skips; the only warning is the pre-existing Starlette TestClient
+deprecation. Ruff lint, Ruff format check, and `git diff --check` passed. No live call occurred.
+
+## ResearchAssistant v2 — Phase 8: Source Selection and Deep-Analysis Queue
+
+Phase 8 is complete and verified. `agents/v2_source_selection.py` builds a strict selection
+input from the complete
+merged survivor pool and persisted discovery, acquisition/Probe, Gap, family, metadata, and
+round provenance. It uses only the configured MiMo-v2.5-Pro Source Selection route. The
+model returns ordered known survivor IDs with short rationales and optional known
+same-direction Gap IDs; recommendation does not create evidence, proof, Reviewer approval,
+or Ledger eligibility.
+
+Application validation retries once on provider/schema/integrity failure, rejects invented
+or family-dominated output, and falls back to deterministic complementary ordering without
+dropping a survivor. The queue puts recommendations first and complementary survivors next,
+then keeps only the longest prefix safe under exact remaining physical-call, token, and cost
+budgets. Worst-case reservation is twelve calls per source—two attempts for one Extractor,
+three Analyst, and two Reviewer operations—plus two mandatory Synthesis attempts. Each
+survivor has a persisted recommendation/queue status and explicit budget-prevention reason.
+
+Phase 9 or deep-analysis execution is not authorized by this handoff. Do not start queued
+Extractor/Analyst/Reviewer work without explicit user direction. No dependency, schema
+migration, or live provider call was added.
+
+Verification: 8 focused Phase-8 tests passed. The complete offline suite passed with 735
+tests and 2 expected opt-in skips; the only warning is the pre-existing Starlette TestClient
+deprecation. Ruff lint, Ruff format check, and `git diff --check` passed.
+
+## ResearchAssistant v2 — Phase 7: Adaptive Search Continuation
+
+Phase 7 is complete. `agents/v2_adaptive_search.py` continues only from a persisted Luna
+decision. Stop after Round 1 creates no adaptive plan or provider work. Continue invokes the
+configured MiMo-v2.5-Pro Search Agent with typed Gap IDs, discovered terminology, prior-query
+history, enabled directions, and application-computed provider capacity. Exact normalized
+repeats and clearly trivial token rewrites are rejected without embeddings.
+
+Every authorized round reuses the existing v2 provider search → normalize/cluster → batched
+Scout → safe acquisition → deterministic Probe → survivor merge flow. Round-specific plans,
+model reservations, search outcomes, discovery/acquisition outputs, execution summaries,
+merged survivors, and stop decisions are strict append-only v2 artifacts. Restart reads the
+completed artifact at each round boundary and does not repeat provider or model work.
+
+Luna runs again after Round 2. `research_governor.py` owns deterministic Round-3 authority:
+all material-gap, recommendation, new-direction, provider, novelty, ceiling, duplicate-rate,
+and protected-budget checks must pass. Round 3 is limited to three searches with one query per
+provider/direction lane. The hard maximum remains three rounds; there is no recursive Round 4,
+automatic citation tree, disabled-direction search, dependency, or database migration.
+
+Verification: 21 focused Phase-7 tests passed. The complete offline suite passed with 727
+tests and 2 expected opt-in skips; the only warning is the pre-existing Starlette TestClient
+deprecation. Ruff lint, Ruff format check, and `git diff --check` passed. No live call occurred.
+
+## ResearchAssistant v2 — Phase 6: Luna Gap Analysis
+
+Phase 6 is complete. `agents/v2_gap_analysis.py` consumes the immutable Phase-3/4/5 typed
+outputs only after Round-1 survivors exist. Its input carries the exact claim, enabled
+directions, completed Round 1, attempted queries, survivor metadata, at most 40 compact Probe
+excerpts of at most 1,200 characters each, conservative family/duplicate patterns, discovered
+terms, acquisition failures, previous gaps, and remaining budget state. It never sends full
+source documents, creates Ledger evidence, or makes factual claims.
+
+`V2GapAnalysisResult` contains a coverage summary, priority-ordered material gaps, an explicit
+continue/stop decision, a stop reason, specific typed gap-linked search directions, and
+discovered terms. Every gap/search direction must be in an enabled direction, and each enabled
+direction has a hard maximum of three gaps. A stop result must have no invented gaps or search
+directions.
+
+Gap Analysis uses the configured GPT-5.6 Luna High route and records the conservative input,
+output, token, and cost reservation for every attempt. It retries once at most. Two failures
+(or insufficient remaining budget) persist a `DEGRADED` output with no result and
+`stop_adaptive_continuation=True`; restart returns the exact persisted state without a new call.
+At the Phase-6 boundary, Round 2 and later execution were intentionally absent. Phase 7 now
+implements the explicitly authorized continuation described above.
+
+## ResearchAssistant v2 — Phase 5: Acquisition Routing, Snapshots, Probe, and Survivor Pool
+
+Phase 5 is complete. `agents/v2_acquisition.py` consumes immutable Phase-4 clusters in
+Scout retrieve → deterministic rank → Scout maybe order. It keeps Scout skip out of normal
+acquisition, attempts each preferred URL before bounded alternates, and stops after a
+successful equivalent source. The existing Wigolo adapter remains primary; Firecrawl is
+optional and only receives an approved verified preflight from a qualifying primary failure.
+
+Every success becomes a strict `SourceSnapshot` with source identity, provider provenance,
+normalization/hash validation, and an append-only v2 artifact audit chain. Probe is fully
+deterministic and no-LLM. It emits 2–5 exact source windows when available, preserves
+snapshot IDs/hashes and offsets, and uses opening/conclusion/numeric/citation fallback
+signals. Probe contains no claim or quality scoring and cannot enter the Ledger. A failed
+Probe preserves the snapshot and audit record but creates no survivor, so later Gap Analysis
+cannot consume unsafe/invented content.
+
+Verification: focused Phase-4/Phase-5 tests passed; the complete offline suite passed in two
+bounded batches (403 passed, 1 skipped; 297 passed, 1 skipped), for 700 passed and 2 expected
+skips. Ruff lint, format check, and `git diff --check` passed. No live call or dependency
+change was made.
+
+## ResearchAssistant v2 — Phase 4: Discovery Providers, Normalization, Clustering, and Batched Scout
+
+Phase 4 is complete. `agents/v2_discovery.py` owns fresh-v2 metadata-only normalization,
+conservative source clustering, stable application UUIDs, and at-most-30-item Scout batches.
+OpenAlex, arXiv, PubMed, Exa, and Serper are supported in the v2 provider enum and planning
+lanes; historical MLP discovery controls stay unchanged. `providers/crossref.py` optionally
+resolves DOI identity only; success verifies canonical bibliographic metadata and failure is
+kept as non-fatal audit metadata.
+
+Scout uses the v2 normal MiMo route (`mimo-v2.5`), returns retrieve/maybe/skip only, and sees
+no acquired content. Exact ID mapping rejects unknown, duplicate, missing, malformed, and
+wrong-run output. Two failed attempts preserve a per-batch audit failure and retain every
+candidate as maybe for deterministic downstream ranking. The complete output persists through
+the existing immutable v2 artifact envelope and resumes without a new Scout call.
+
+Verification: full Python suite, Ruff lint, Ruff format check, and `git diff --check` passed;
+no live calls were made.
+
+## ResearchAssistant v2 — Phase 3: Initial Planner and Broad Round 1
+
+Phase 3 is complete. `agents/v2_initial_planner.py` is the fresh-v2 startup boundary: it
+uses the frozen v2 MiMo-v2.5-Pro Planner route, sends a narrow typed request, and persists
+only the initial broad Round-1 plan. It does not execute discovery or generate later
+rounds. `V2InitialPlannerPolicy` in `models.py` is the one application-owned authority
+for enabled provider/direction lanes and preserves the existing 2/3/1
+SERP Search/Exa/OpenAlex ceilings for each enabled direction.
+
+Migration 12 adds append-only `v2_initial_planner_outputs` and
+`v2_round_one_search_queries`. Each stored query has run, direction, provider, numeric
+Round 1, strategy, text, timestamp, and policy identity. Restart returns the identical
+stored plan with no additional Planner call; a contract fingerprint drift fails closed.
+Historical planner outputs and Phase 1/2 v2 artifacts remain readable.
+
+Verification: 691 passed with 2 expected opt-in skips across the complete Python suite;
+Ruff lint/format and `git diff --check` passed. No live provider call was made.
+
+Do not start Round 2, Round 3, targeted replanning, discovery execution, Scout, Gap
+Analysis, source selection, or UI work without explicit user authorization.
+
+## Current project state — 2026-08-17
+
+A 2026-08-18 live-run correction aligns typed ranking fields with the already-authorized
+bounded workload: discovery selection ranks accept 1–20 and acquired extraction ranks
+accept 1–25. The previous stale 10-rank cap could invalidate a whole retrieval batch after
+successful provider discovery and acquisition, then surface as a misleading later Planner
+failure. No provider policy, evidence threshold, dependency, migration, or immutable
+historical row changed. Regression coverage now ranks the full 25-item backfill pool;
+661 tests pass with 2 expected skips, and Ruff plus diff checks pass. Frontend lint/build
+remain blocked by pnpm's unavailable registry install attempt.
+
+On 2026-08-18, the user explicitly authorized Firecrawl fallback for Wigolo authentication
+and paywall responses plus one direct Firecrawl re-acquisition after a MiMo exact-quote
+failure. The second MiMo extraction uses a new operation identity and only runs when the
+Firecrawl snapshot is non-empty and materially different. The retry remains bounded.
+
+MLP-5 Provider Selection & SERP Search is complete. The Next.js Advanced panel defaults
+SERP Search, Exa, and OpenAlex on, permits each to be disabled but never all at once, and
+contains the approved plain-language provider descriptions. New runs require keys only for
+their enabled sources. `ResearchControls.discovery_providers` is frozen into canonical run
+controls; the MiMo planner must return exactly two SERP Search, three Exa, and one OpenAlex
+query for every enabled provider per active stance. SERP Search uses only organic results,
+enforces twelve attempted calls per run, and keeps provider output as discovery metadata.
+The old CLI/programmatic default remains Exa/OpenAlex for compatibility; the web API passes
+the new default selection explicitly. Full offline suite passed: 655 passed, 2 expected
+opt-in skips. Ruff and `git diff --check` passed. Frontend lint/build was blocked because
+pnpm attempted a registry install and the registry was unavailable; restore `web/`
+dependencies before rerunning it.
+
+MLP-4 Research Quality & OpenAlex Integration is complete. Its corrective quality pass
+uses bounded source backfill, optional claim-facet ranking bonuses, source sentence-range
+selection, and a clean insufficient-evidence terminal path. `web/` remains the sole live
+product surface; a broader visual redesign remains outside the completed MLP-5 provider-selection
+scope. The current page now has
+default-off counterevidence, an Advanced 5/10/15/20 source target (default 10), required
+OpenAlex setup, mode-aware progress/results, honest estimated-cost wording, and a hidden
+terminal Research Trail drawer.
+
+New provider-specific Planner output contains three Exa queries and one OpenAlex query
+per active stance. Focused runs start only supporting research; balanced runs preserve
+equal sides. Discovery is merged and deterministically ranked, scores below 5 are not
+acquired, and the top N uses no wildcard or diversity reservation. Acquired page text is
+ranked a second time only to order extraction. Mode changes reduce actual work only and
+never rewrite configured usage ceilings.
+
+The 2026-08-17 user-authorized evidence-yield correction lowers the discovery floor from
+20 to 5, lowers current exact quote minimums from 50/75 to 20 statistical / 30
+non-statistical words, and permits zero claim-keyword matches as visible audit metadata
+before semantic Analyst review. Exact snapshot membership, ordering, offsets, immediate
+context, boundary/truncation rules, immutable evidence, Analyst scoring, Reviewer
+approval, Ledger admission, and final validation remain strict; fuzzy repair remains
+forbidden.
+
+The 2026-08-17 expanded-retrieval correction adds five bounded fallbacks per target
+(up to 25 acquisition ranks) and removes the stale pre-Analyst candidate `search_rank <=
+5` restriction. Historical seven-source runs remain readable; seven is not offered as a
+new live control.
+
+`Launch ResearchAssistant.command` starts the loopback API on 8765 and the built Next.js
+site on 3000, loads saved Keychain credentials inside Python, and cleans up only owned
+processes. Install the approved Python dependencies, then run `pnpm install` and
+`pnpm run build` in `web/` before using the launcher. Resolved versions are FastAPI
+0.141.1, Uvicorn 0.51.0, Next.js 16.3.1, React/React DOM 19.2.8, Motion 12.43.0,
+TypeScript 5.9.3, and ESLint 9.39.5.
+
+Regression proof is concentrated in `tests/test_mlp4_research_quality.py`,
+`tests/test_phase3.py`, and the provider/pipeline suites. The correction changes no
+dependency or migration and made no live provider call. Its policy/fingerprint identity
+bumps require a fresh run: restart the launcher and leave Run ID blank rather than
+resuming a run created under the previous thresholds. Old terminal runs remain readable.
+MLP-5 Provider Selection & SERP Search is complete; any later visual redesign remains outside
+the authorized scope.
+
+Correction verification passed: 651 tests with 2 expected opt-in skips, Ruff lint and
+format, frontend ESLint and optimized production build using installed dependencies,
+launcher syntax, and `git diff --check`.
+
+Keychain maintenance on 2026-08-15 replaced the background-incompatible command-line
+password prompt with direct in-process calls to Apple's Security framework. The new path
+successfully completed and cleaned up a disposable real-login-Keychain save/read round
+trip. Restart the launcher after pulling this state so the Python API loads the repaired
+credential module; previously failed saves must be entered again because they were never
+persisted. The availability check uses the framework symlink rather than requiring its
+shared-cache binary to appear as a regular file. Full regression is 613 passed with
+2 expected skips.
+
+## Completed research-pipeline state — 2026-08-11
+
+MVP-11 Adaptive Research Expansion & Cost Control (Research Governor) is complete and
+verified. It preserves MVP-9 exact quote assembly and MVP-10 Evidence Portfolio/Trail
+safeguards while using strict typed, cumulative-budget research rounds. SQLite migration
+9 is append-only and constrains every persisted research round to 1–3. Round 3 can begin
+only after the typed deterministic post-Round-2 decision; terminal results cannot resume
+into another round. Historical MVP-9 and MVP-10 databases remain read-only inspectable.
+MLP-1 and MLP-2 do not alter the completed research-pipeline contracts.
+
+## 2026-08-11 - MVP-9 Verified Quote Selection & Deterministic Assembly
+
+- MVP-9 is complete. `VerbatimQuoteSelection` is the only provider-facing Extractor
+  result: an ordered tuple of exact snapshot passages with strict extra-field rejection.
+- `build_provisional_candidate_from_selection()` and the shared Researcher quote helper
+  own canonical ellipses, immediate context, start/end/truncated markers, provenance,
+  and construction of the existing `ProvisionalCandidate`.
+- Orchestration validates the assembled provisional through the unchanged exact
+  membership/order/context/density/relevance filter before a candidate ID exists.
+  Exact-selection mismatch records one `exact_quote_failure` and does not retry or
+  switch models. Other approved objective failures retain existing bounded behavior.
+- Prompt identity is `mvp9-verbatim-quote-selection-v1`; direct-MiMo adapter identity is
+  `mvp9-xiaomi-mimo-selection-v1`; factory/retry/fingerprint identities are the MVP-9
+  verified-selection values. Use a new run ID for the next execution.
+- SQLite remains schema 7. New selection output is audit JSON in `model_route_attempts`;
+  assembled provisional/candidate rows retain the established quote and offset columns.
+  Historical terminal databases remain readable and no immutable row is rewritten.
+
+Verification handoff:
+
+- Focused selection: 107 passed, 1 expected opt-in skip.
+- Full offline suite: 579 passed, 2 expected opt-in skips.
+- Deterministic evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format and `git diff --check` passed.
+- No dependency, schema migration, live provider call, spending, generated tracked
+  artifact, commit, push, or pull request was added.
+
+Operator handoff:
+
+- Restart/reload the local application and leave Run ID blank. A pre-MVP-9 run must not
+  resume under the new extraction contract.
+- A valid selection can still fail density, relevance, or downstream semantic review;
+  MVP-9 prevents model-authored formatting failures but does not fabricate evidence or
+  guarantee that every source contains a passing passage.
+
+Do not start:
+
+- Do not begin a phase after MVP-9 without separate explicit user direction.
+
+## 2026-08-10 - MVP-8.2 Evidence Browser
+
+- MVP-8.2 is complete. `evidence_browser.py` reconstructs a run's evidence trail with
+  strict frozen Pydantic view models over one validated `ReadOnlyStore` session. It never
+  initializes, migrates, or writes a database.
+- `frontend/evidence_browser_app.py` is a separate local read-only Streamlit page. It
+  filters by stance, stage, URL, approval, and release; it labels trusted snapshots,
+  non-authoritative provider metadata, untrusted source text, and unreleased artifacts.
+- Released-statement traces join exact Ledger records to the matching approved Reviewer
+  decision, quote candidate, trusted snapshot, provenance, and valid final validation.
+  There are no edit, approval, release, header, or credential surfaces.
+- `tests/test_mvp8_2_evidence_browser.py` covers navigation, filters, blocked labeling,
+  missing/corrupt read-only failures, redaction, and database-byte immutability.
+
+Verification handoff:
+
+- Focused Evidence Browser tests: 6 passed.
+- Full offline suite passed with the existing 2 expected opt-in skips.
+- Deterministic evaluation, Ruff lint/format, and `git diff --check` passed.
+- No dependency, schema migration, provider call, spending, account, cloud feature, or
+  evidence/release-policy change was added.
+
+## 2026-08-10 - MVP-8.1 Research Controls
+
+- MVP-8.1 is complete. `ResearchControls` is frozen, strict, and defaults to standard
+  depth, report length, neutral tone, and no focus. Its optional typed focus fields are
+  explicitly supplied to `PlannerLLMInput`; application code never infers them.
+- Direct-MiMo factory configuration binds controls to equal-side bounded acquisition
+  policy and includes canonical controls JSON in the immutable provider policy identity.
+  Exact contract fingerprints reject changed controls on same-run resume. Existing
+  contracts without controls remain readable using safe defaults.
+- CLI, live start/status UI, and exported brief trace metadata show the controls. Tone
+  and length remain presentation-only controls and never alter factual Planner claims or
+  evidence/reviewer/Ledger artifacts.
+
+Verification handoff:
+
+- Focused regression selection: 90 passed, 2 expected skips.
+- Full suite: 565 passed, 2 expected skips.
+- Ruff lint/format, deterministic evaluation, and `git diff --check` passed.
+
+## 2026-08-10 - MVP-8 Briefs, Export & Performance
+
+- MVP-8 is complete and verified. `brief_export.py` exports only read-only reconstructed
+  RELEASED runs after rechecking valid final validation and the rendered hash.
+- `export-brief` writes local Markdown, PDF, or DOCX reports. Trace metadata includes the
+  run ID, rendered hash, exporter version, format, and aware generation time. Markdown is
+  deterministic for a fixed timestamp; no cloud/export account path exists.
+- Export preserves the complete released brief verbatim, including exact approved factual
+  statements, coverage warnings, and a human-review warning. Blocked, failed, cancelled,
+  and running runs fail closed.
+- CLI inspection and the local live UI show completed checkpoint progress. Exact
+  compatible failed-run resumes retain the existing typed valid-checkpoint reuse.
+
+Verification handoff:
+
+- Full offline suite: 557 passed, 2 expected opt-in skips.
+- Ruff lint/format, deterministic evaluation, and `git diff --check` passed.
+- No dependency, schema migration, live provider call, cloud sharing, external storage,
+  provider change, commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin a phase after MVP-8 without separate explicit user direction.
+
+## 2026-08-10 - MVP-7.1 MiMo Consolidation Completion
+
+- MVP-7.1 is complete and verified. It repairs the MVP-7 direct-MiMo consolidation
+  regression in `tests/mvp4_subprocess_driver.py` without reintroducing OpenRouter.
+- The subprocess driver uses the existing provider-neutral Phase 9 fakes and constructs
+  a canonical direct-MiMo-compatible run contract plus exact requested budget. Its
+  unique fixture source texts retain the eighteen-snapshot assertion; its cancellation
+  subclass waits only after the orchestrator persists a real running model attempt.
+- Active current code and guidance remain direct MiMo. Historical OpenRouter records
+  remain accurate and unchanged.
+
+Verification handoff:
+
+- Complete offline suite: 549 passed, 2 expected opt-in skips.
+- Ruff lint/format, `git diff --check`, and deterministic offline evaluation passed.
+- No dependency, live provider call, spending, database migration, generated tracked
+  artifact, commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin a phase after MVP-7.1 without separate explicit user direction.
+
+## 2026-08-10 - MVP-6.9 Acquisition and Configuration Integrity
+
+- MVP-6.9 is complete and verified. Schema version 7 is current; no later phase has
+  started or been authorized.
+- `MediaTypeProvenance` stores independently verified origin media type and its exact
+  validated URL separately from sanitized provider-declared metadata. Firecrawl Markdown
+  is `text/markdown` unless typed primary-preflight evidence applies to the same resolved
+  URL. Conflicts remain visible and never replace the verified value.
+- `VerifiedAcquisitionPreflight` crosses only approved primary-to-Firecrawl fallback
+  failures. Firecrawl uses the validated final URL and retains existing request, returned
+  source, canonical, credential, redirect, public-host, and SSRF boundaries.
+- Migration 7 adds nullable immutable-snapshot provenance columns without rewriting old
+  rows. Historical rows reconstruct with unknown provenance; new rows retain URL,
+  normalization/acquisition, provider, and media-type provenance context.
+- Compatibility identities are `mvp6.9-acquisition-provenance-v3`,
+  `mvp6.9-firecrawl-media-provenance-v3`, and
+  `mvp6.9-acquisition-configuration-integrity-v1` for both execution stacks. Use a new run
+  ID instead of resuming a pre-MVP-6.9 acquisition fingerprint.
+- The legacy MVP-2B boundary smoke remains supported but disabled. `.env.example` now has
+  a blank OpenRouter key, valid 25,000-token cap, one-call caps, $0.05 example cost cap,
+  absolute output path, and the actual enable/approval gates. `--execute` and all runtime
+  gates remain mandatory.
+- Package description is phase-neutral: `Evidence-constrained Debate Research Agent System
+  with deterministic release validation.`
+
+Files changed:
+
+- Provenance/acquisition: `models.py`, `providers/scraper.py`,
+  `providers/acquisition.py`, `providers/firecrawl.py`, `agents/researcher.py`, and
+  `agents/supportingresearcher.py`.
+- Persistence/compatibility/configuration: `store.py`, `providers/config.py`, both provider
+  factories, `.env.example`, and `pyproject.toml`.
+- Regression coverage: `tests/test_mvp6_9_acquisition_configuration.py` plus narrow
+  acquisition identity, resume, read-only migration, and schema-version updates in the
+  existing MVP-3A, MVP-6.3, MVP-6.5, and MVP-6.8 suites.
+- Records: the canonical MVP-6.9 plan, `.agent/PLANS.md`, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused required selection: 122 passed.
+- Full offline suite: 622 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; no live comparison ran.
+- Ruff lint/format, repository-wide type contract, `git diff --check`, knowledge-graph
+  refresh, and secret/generated-artifact/worktree review passed.
+- No dependency, live provider call, provider spending, integration opt-in, generated
+  tracked artifact, secret, commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin any phase after MVP-6.9 without separate explicit user direction.
+
+## 2026-08-10 - MVP-6.8 Persistence and Accounting Integrity
+
+- MVP-6.8 is complete and verified. Schema version 6 is current; MVP-6.9 and later work
+  have not started.
+- `store.py` installs four unconditional immutable-artifact triggers for `snapshots` and
+  `ledger_records`. Migration 6 also adds exact reservation/usage cost text columns,
+  converts historical `REAL` values, verifies all objects, and inserts its record in one
+  transaction. Reopen verifies the contract. Read-only inspection requires version 6;
+  writable run/resume intentionally migrates older databases.
+- `money.py` is the shared exact USD boundary. `ExactUSD` provides strict Pydantic
+  parsing and canonical JSON serialization; storage text is canonical, non-exponent,
+  finite, and non-negative. `add_usd()` prevents the default Decimal context from
+  rounding long exact sums.
+- New route-attempt writes keep legacy `reserved_cost_usd`/`cost_usd` REAL columns null
+  and write `reserved_cost_usd_exact`/`cost_usd_exact`. Historical REAL digits already
+  lost cannot be recovered; migration preserves only the deterministically recoverable
+  value and never fabricates precision.
+- Provider/accounting compatibility identities are
+  `mvp6.8-persistence-accounting-integrity-v1` and
+  `mvp6.8-exact-decimal-reserve-reconcile-v1`. Use a new run ID rather than resuming a
+  pre-MVP-6.8 run under the new accounting policy.
+
+Files changed:
+
+- Persistence/accounting: `money.py`, `models.py`, `store.py`, `orchestrator.py`,
+  `providers/config.py`, `providers/pricing.py` consumers in the MiMo/OpenRouter
+  adapters, both provider factories, and `frontend/live_service.py`.
+- Regression coverage: `tests/test_mvp6_8_persistence_accounting.py` plus exact-type and
+  migration compatibility updates in the existing MVP-2B, MVP-3A, MVP-3B, MVP-6.5,
+  MVP-6.6, and Phase 9 suites.
+- Records: the canonical MVP-6.8 plan, `.agent/PLANS.md`, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused required selection: 164 passed, 1 expected live-smoke skip.
+- Full suite: 605 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format, repository-wide type contract, `git diff --check`, direct migration/
+  trigger checks, and tracked-artifact/worktree review passed.
+- No dependency, live provider call, spending, generated tracked artifact, secret,
+  commit, push, or pull request was added.
+
+Do not start:
+
+- Do not begin MVP-6.9 or any later phase without separate explicit direction.
+
+## 2026-08-09 - MVP-6.7 Repository-Wide Type Contract Enforcement
+
+- MVP-6.7 is complete and verified. It is the final planned contradiction-audit
+  remediation phase; no later phase has started or been authorized.
+- `tests/test_type_contracts.py` is the repository-wide signature authority. It uses
+  standard-library AST parsing only, scans beneath the repository root with explicit
+  generated/vendor/cache exclusions, sorts paths and diagnostics, visits synchronous,
+  asynchronous, and nested definitions, and checks positional-only, ordinary,
+  keyword-only, `*args`, `**kwargs`, and return annotations. Only receiver parameters
+  named `self` or `cls` may be unannotated.
+- The pre-fix inventory covered 61 Python files and 1,195 functions. It found 11 missing
+  annotations across seven signatures in five test files. The regression test first
+  failed with the complete list, then passed after narrow corrections.
+- Corrected files are `tests/test_mvp1.py`, `tests/test_mvp3a_pipeline.py`,
+  `tests/test_mvp6_3_security.py`, `tests/test_phase4.py`, and `tests/test_phase8.py`.
+  Two old `type: ignore[no-untyped-def]` comments were removed; no new suppression or
+  broad `Any` type was introduced.
+
+Files changed:
+
+- Enforcement and annotations: `tests/test_type_contracts.py`, `tests/test_mvp1.py`,
+  `tests/test_mvp3a_pipeline.py`, `tests/test_mvp6_3_security.py`,
+  `tests/test_phase4.py`, and `tests/test_phase8.py`.
+- Phase records: `.agent/PLANS.md`, the canonical MVP-6.7 plan, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`.
+
+Verification handoff:
+
+- Isolated enforcement: 1 passed after the recorded 11-diagnostic regression-first
+  failure.
+- Affected focused suites: 145 passed, 1 expected opt-in skip.
+- Full suite: 579 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Independent post-fix AST inventory: 62 files, zero missing annotations.
+- Ruff lint/format, in-memory compilation, launcher syntax, suppression/assertion/diff,
+  dependency/migration/provider/artifact/history audits, and `git diff --check` passed.
+- No runtime behavior, assertion, expected value, dependency, Pydantic schema, SQLite
+  migration, provider call, spending, generated tracked artifact, commit, or Git history
+  rewrite occurred.
+
+Do not start:
+
+- Do not begin a phase after MVP-6.7 without separate explicit user direction.
+
+## 2026-08-09 - MVP-6.6 Runtime Status, Budget, and Contract Integrity
+
+- MVP-6.6 is complete and verified; MVP-6.7 and repository-wide type-hint work have not
+  started. RUNNING is exit 13 across direct CLI results, read-only inspection,
+  subprocesses, and live-web snapshots. Exit 0 never means nonterminal research;
+  `cancel-run` retains its separate persisted-administrative-success meaning.
+- `ModelUsageAccounting` is the typed authority for exact totals, known subtotals,
+  completeness, missing-attempt IDs, and conservative exposure. `ProviderPipelineResult`
+  retains `total_tokens` and `total_cost_usd` only as exact compatibility fields: zero
+  for zero attempts and `None` when incomplete.
+- Every persisted model attempt is conservatively potentially charge-capable. Exact
+  component usage replaces its reservation; missing component usage retains its full
+  reservation. No failure string or terminal state implies a free call. Retry/fallback
+  stops when incomplete unreserved usage makes remaining budget unprovable.
+- `provider_contract.py` is the single standard-library canonical identity algorithm.
+  Both factories use it, and the frozen `ProviderRunContract` validates exact keys,
+  duplicate-free canonical JSON, duplicated identities, repository revision, and
+  SHA-256 on creation/read. Stored inconsistency is never normalized or repaired and
+  blocks resume before provider work.
+- Valid historical canonical payloads retain compatibility because payload inputs and
+  fingerprint-version strings did not change. Runtime source changes still alter the
+  normal executable repository identity, and `provider_contract.py` is included in that
+  source hash.
+
+Files changed:
+
+- Runtime/contracts: `cli.py`, `models.py`, `orchestrator.py`, `provider_contract.py`,
+  `store.py`, `providers/factory.py`, `providers/mimo_factory.py`.
+- Live display: `frontend/live_service.py`, `frontend/live_app.py`.
+- Regression coverage: `tests/test_mvp6_6_runtime_integrity.py`,
+  `tests/test_mvp3a_pipeline.py`, `tests/test_mvp5_live_web.py`.
+- Phase/operator documentation: `.agent/PLANS.md`, the canonical MVP-6.6 plan,
+  `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `frontend/README.md`, `STATUS.md`, and `HANDOFF.md`.
+
+Verification handoff:
+
+- Required focused selection: 143 passed, 1 expected opt-in skip.
+- Full suite: 578 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format, 61-file in-memory compilation, launcher syntax, CLI help,
+  `git diff --check`, and final source/diff/artifact audits passed.
+- No dependency, SQLite migration, provider call, spending, generated tracked artifact,
+  commit, or MVP-6.7/type-hint work was added.
+
+Known limitation:
+
+- Historical incomplete usage without a defensible stored reservation remains readable
+  but fails closed before another budgeted call; no historical usage is fabricated.
+  Exa and Firecrawl charges remain external to MiMo model accounting.
+
+Do not start:
+
+- Do not begin MVP-6.7 or the remaining repository-wide type-hint phase without separate
+  explicit direction.
+
+## 2026-08-09 - MVP-6.5 Immutable Run Authority and Read-Only Inspection
+
+- MVP-6.5 is complete and verified; MVP-6.6 has not started. SQLite migration 5 is
+  `database-enforced immutable runs.raw_claim`. Migration 4 is accurately limited to
+  same-run provenance protection.
+- `store.py` installs `runs_raw_claim_immutable` atomically. It is a
+  `BEFORE UPDATE OF raw_claim ON runs` trigger with
+  `WHEN NEW.raw_claim IS NOT OLD.raw_claim`; every actual claim change aborts with
+  `runs.raw_claim is immutable`, regardless of status or direct-SQL caller. Identical
+  assignments remain valid. `update_run()` retains its earlier application guard.
+- `ReadOnlyStore` is the inspection/history boundary. It opens a safely encoded existing
+  path with URI `mode=ro`, foreign keys, `sqlite3.Row`, and connection-local
+  `query_only`; it deliberately does not use `immutable=1`. The compatibility check
+  validates integrity, migration rows 1-5, required objects, and exact trigger semantics.
+- Compatibility failures distinguish missing, invalid, older, newer, corrupt, and open/
+  permission cases. Inspection never creates or migrates. To migrate an older database,
+  intentionally start or resume a writable run; the normal `init_db()` path upgrades it.
+- `inspect_provider_run` reuses one read-only session for manifest, checkpoints, attempts,
+  artifacts, synthesis, validation, cancellation reason, and released-hash reconstruction.
+  CLI contract display, live history, and live contract display also use read-only
+  sessions. Missing history retains the empty tuple contract without creating a file.
+
+Files changed:
+
+- Store/runtime: `store.py`, `orchestrator.py`, `cli.py`, `frontend/live_service.py`.
+- Regression coverage: `tests/test_mvp6_5_read_only_inspection.py`, `tests/test_phase9.py`.
+- Phase records and operator documentation: `.agent/PLANS.md`, the canonical MVP-6.5
+  plan, `AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `frontend/README.md`, `STATUS.md`, and `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused required selection: 206 passed, 1 expected opt-in skip.
+- Full suite: 543 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed; optional live comparison skipped.
+- Ruff lint/format, Python compilation, launcher syntax, `git diff --check`, direct
+  schema/trigger inspection, migration record review, and before/after database-hash
+  comparison passed.
+- No dependency, ORM, provider call, spending, committed fixture mutation, generated
+  database/cache/coverage artifact, or commit was added.
+
+Known limitation:
+
+- Public-target validation and transport DNS remain separate as documented in MVP-6.3;
+  MVP-6.5 does not change that acquisition limitation. Read-only inspection supports
+  active WAL writers but does not promise a multi-query snapshot across a writer's
+  separate commits beyond ordinary SQLite read-transaction semantics.
+
+Do not start:
+
+- Do not begin MVP-6.6 or the CLI-status, usage-accounting, provider-contract, or
+  type-hint batches without separate explicit direction.
+
+## 2026-08-09 - MVP-6.4 Evidence Density Threshold Calibration
+
+- MVP-6.4 is complete and verified; MVP-6.5 has not started. Current provider-backed
+  evidence requires 50 exact quoted words only when both a digit and a recognized
+  statistical marker are present, and 75 otherwise. Digit-only, marker-only, and
+  incidental-substring cases use 75.
+- `agents/researcher.py` owns the strict current policy
+  `mvp6.4-evidence-density-50-75-v1`. Its existing whole-token, case-insensitive marker
+  classification feeds both initial filtering and downstream verification. Analyst and
+  Ledger paths share that same default policy.
+- Frozen fixture replay explicitly injects `legacy-frozen-fixture-50-100-v1`; this is
+  isolated compatibility behavior, not a current provider option. Historical runs and
+  fixtures are not rewritten or reinterpreted.
+- `prompts/extractor.md` and the direct MiMo compatibility instruction require exact
+  source text, 50 words only for digit-plus-marker evidence, 75 otherwise, no healing or
+  expansion, and authoritative Python validation.
+- Identity values: Extractor prompt `mvp6.4-extractor-50-75-v1`; prompt SHA-256
+  `a4f95d7468e22f6e95961d409ed7f99910ffe911b1a1788fb409b64bfc9725eb`;
+  aggregate prompt identity
+  `49cc02aee6025c4d2bf4a50b8ccfd97a23cb896f15ff8ecb650704ad45db33a2`;
+  provider post-filter validator `mvp6.4-provider-post-filter-50-75-v1`; provider
+  fingerprint version `mvp6.4-evidence-density-fingerprint-v1`.
+- Exact fingerprint matching prevents a 75/75 run from resuming under 50/75. Restart
+  the launcher/application and use a new run ID. Historical inspection remains tied to
+  the persisted identity.
+- Reviewer approval, literal entailment, material qualification, Ledger admission,
+  renderer policy, and deterministic final validation are unchanged.
+
+Files changed:
+
+- Policy and downstream identity: `agents/researcher.py`, `orchestrator.py`, `providers/factory.py`,
+  `providers/mimo_factory.py`.
+- Prompt behavior: `prompts/extractor.md`, `providers/mimo.py`.
+- Regression coverage: `tests/test_phase3.py`, `tests/test_phase4.py`,
+  `tests/test_phase8.py`, `tests/test_mvp3b_mimo.py`,
+  `tests/test_mvp3a_pipeline.py`.
+- Phase records: `.agent/PLANS.md`, the canonical MVP-6.4 plan, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`, `STATUS.md`, and
+  `HANDOFF.md`. Historical Phase 3/MVP-5 plans received explicit supersession labels.
+
+Verification handoff:
+
+- Focused role/integrity/release/fingerprint/fixture selection: 240 passed, 1 expected
+  opt-in skip.
+- Full suite: 517 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed.
+- Ruff lint/format, Python compilation, launcher syntax, `git diff --check`, tracked
+  stale-policy review, dependency/migration review, generated-artifact review, and final
+  diff review passed.
+- No provider call or spend occurred. No dependency or SQLite migration was added. No
+  generated cache/coverage artifact is tracked. Changes are uncommitted.
+
+Do not start:
+
+- Do not begin MVP-6.5 or the database, read-only inspection, CLI-status,
+  usage-accounting, provider-contract, or type-hint batches without separate explicit
+  direction.
+
+## 2026-08-09 - MVP-6.3 Public Acquisition and Provenance Security
+
+- MVP-6.3 is complete and verified; no later phase has started. The scope was limited to
+  redirect-time local acquisition safety, Firecrawl provenance validation, compatible
+  identity changes, regression tests, and documentation.
+- `providers/acquisition.py` now uses an explicit no-auto-follow redirect loop. It
+  validates the initial URL and every proposed next hop through the injectable resolver
+  before sending, permits exactly the configured number of 301/302/303/307/308 hops,
+  closes every response, rejects malformed locations/loops, and passes only the final
+  validated URL to Wigolo.
+- `providers/firecrawl.py` validates the direct request URL before the provider call and
+  validates returned `sourceURL` and recognized canonical metadata before constructing
+  provenance. Absent `sourceURL` uses only the already validated request URL. Unsafe or
+  malformed provenance fails with typed secret-free errors.
+- The existing fallback allowlist remains narrow. Authentication, paywall, access,
+  content/policy, size, and redirect-safety failures cannot activate Firecrawl.
+- New identities are `mvp6.3-public-acquisition-v2`,
+  `mvp6.3-firecrawl-provenance-v2`, and
+  `mvp6.3-public-acquisition-fingerprint-v2`. Acquisition identity is included in exact
+  run fingerprints, so pre-MVP-6.3 runs require a new run ID and historical artifacts
+  remain unchanged.
+- DNS validation is a pre-request policy check, not socket pinning. `httpx` resolves for
+  transport separately, and Wigolo performs its own fetch; do not describe the result as
+  complete DNS-rebinding protection.
+
+Files changed:
+
+- Provider behavior/identity: `providers/acquisition.py`, `providers/firecrawl.py`,
+  `providers/config.py`, `providers/factory.py`, `providers/mimo_factory.py`.
+- Regression compatibility: `tests/test_mvp6_3_security.py`,
+  `tests/test_mvp2b_providers.py`, `tests/test_post_mvp5_retrieval.py`,
+  `tests/test_mvp3a_pipeline.py`.
+- Phase documentation: `.agent/PLANS.md`, the canonical MVP-6.3 plan, `AGENTS.md`,
+  `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `frontend/README.md`, `STATUS.md`, and `HANDOFF.md`.
+
+Verification handoff:
+
+- Focused security/provider/persistence selection: 159 passed.
+- Full suite: 501 passed, 2 expected opt-in skips.
+- Offline evaluation: 38/38 passed.
+- Ruff lint/format, Python compilation, launcher syntax, and `git diff --check` passed.
+- All new security tests use injected transports and resolvers. No provider call or
+  spend occurred. No dependency or SQLite migration was added. Generated cache and
+  coverage artifacts are absent from the repository worktree. Changes are uncommitted.
+
+Do not start:
+
+- Do not begin MVP-6.4 or any database, accounting, evidence-policy, provider-contract,
+  CLI-status, usage-accounting, or type-hint batch without separate explicit direction.
+
+## 2026-08-09 - MVP-6.2 Batch A Records and Runtime Reporting
+
+- MVP-6 (`37c52a7`, `6e0f434`) and MVP-6.1 (`c10c844`) are completed committed work.
+  MVP-6.2 is current, but only Batch A was authorized and implemented. The later
+  security, database, accounting, evidence-policy, and model-contract batches remain
+  pending approval/implementation; MVP-6.2 is not complete, and no later phase started.
+- Current new-run identity is Exa Search `auto` for metadata-only discovery, pinned
+  loopback Wigolo `0.2.1` for primary acquisition, optional narrowly gated Firecrawl
+  fallback, and direct Xiaomi `mimo-v2.5-pro` for every LLM role. Native SearXNG remains
+  only in clearly historical compatibility records and adapters for old persisted runs.
+- The CLI launch summary now prints the configured Exa, Wigolo, and MiMo endpoints and
+  an explicit Firecrawl enabled/disabled state plus its configured endpoint when
+  enabled. It never prints keys. Focused tests cover both fallback states and secret
+  absence from output and SQLite.
+- Package metadata now describes the MVP-6.2 system. README verification documentation
+  names both normal opt-in skips. `.coverage` is deleted from tracking and ignored; its
+  prior binary is recoverable from Git history.
+- Verification passed: focused CLI 13 passed/1 expected skip; full suite 469 passed/2
+  expected skips; offline evaluation 38/38; Ruff lint/format; launcher shell syntax;
+  and `git diff --check`.
+- No provider call or spending occurred. No dependency or database migration was added.
+  Changes remain uncommitted.
+
+## 2026-08-09 - MVP-6.1 Live Worker Test Fix (`c10c844`)
+
+- Completed committed work: the live-worker redaction test waits within a bounded loop
+  for the background result rather than racing the initial starting snapshot.
+- The accidentally committed `.coverage` output is not part of the phase contract and
+  is removed by MVP-6.2 Batch A.
+
+## 2026-08-01 - MVP-6 Post-Audit Boundary Corrections (`6e0f434`)
+
+- Verified Python-normalized digital PDFs now continue into immutable source snapshots without
+  falsifying their content type. Unnormalized PDF payloads still fail closed.
+- The obsolete 40-second aggregate acquisition deadline was removed. The approved per-operation
+  preflight, HTML, PDF, and browser deadlines remain in force.
+- Candidate verification itself enforced the then-current MVP-6 75-word minimum; the direct MiMo prompt
+  also says 75 rather than 100.
+- Live display redaction covers the raw values and assignment labels for MiMo, Exa, and Firecrawl
+  keys.
+- The direct orchestration boundary rejects leading/trailing claim whitespace rather than silently
+  trimming the authoritative claim.
+- Package metadata now matches the tested Python 3.11 and 3.12 support range.
+- Acquisition rejects non-public initial URLs, DNS answers, and redirect targets.
+- Claims are immutable after run creation; inspection recomputes the released brief hash; SQLite
+  migration 4 rejects cross-run parent references.
+- Direct MiMo returns semantic content only. Python constructs all application-owned identity,
+  timestamps, provenance, score routing, and templates. No quote or metadata healing remains.
+- One live worker may use a given SQLite database at a time; separate database files can still
+  run concurrently.
+- `python-dotenv` was removed. Configuration is read from the explicit process environment and
+  `.env` files are never loaded automatically.
+- Verification: 468 passed and 2 skipped; 38/38 offline evaluations; Ruff lint/format,
+  launcher syntax, and diff checks passed.
+- No live provider call occurred. The unused dotenv dependency was removed and migration 4
+  added same-run integrity triggers as committed MVP-6 work.
+
+## 2026-08-01 - MVP-6 Bounded-Inference Evidence Policy (`37c52a7`)
+
+- New runs use a 75-word minimum for all exact quote candidates.
+- Claim Fit 5 is Strong/direct, Claim Fit 4 is Partial/indirect, and Claim Fit 3 is
+  Weak/contextual. Reviewer approval still requires the factual statement itself to be
+  literally entailed and qualified; it no longer requires that fact to independently
+  prove the entire debated claim.
+- One-sided released briefs carry a deterministic not-balanced warning naming the
+  missing stance. No-Ledger runs still fail rather than releasing an empty brief.
+- Prompt, validator, renderer, and evidence-policy identities changed, so the launcher
+  must be restarted and the next run must leave Run ID blank.
+- Frozen fixture replay explicitly retains its historical 50-statistical/100-
+  non-statistical threshold; this compatibility route is not used by new live runs.
+- Follow-up live-run correction: Claim Fit 4 Partial evidence relies on the deterministic
+  indirect renderer connective and does not require a magic qualification keyword. Claim
+  Fit 3, qualified-only, and Weak statements remain explicitly qualification-gated.
+  Failure stage is set before stage execution, and per-stance model-attempt counts are
+  joined through persisted snapshot/candidate IDs instead of generic stage-name text.
+- Evidence policy identity is now `post-mvp5-bounded-inference-v2`; restart and use a new
+  run ID. The failed v1 run must not be resumed under v2.
+- This policy correction was committed as part of MVP-6. No dependency or SQLite
+  migration was added.
+- Verification: 461 passed and 2 skipped in the full suite; 38/38 offline evaluations;
+  Ruff lint/format, launcher syntax, and diff checks passed. No live call or spend
+  occurred.
+
+## 2026-08-01 - MVP-6 Exa/Wigolo/Firecrawl Provider Correction (`37c52a7`)
+
+- New direct-MiMo runs now use Exa Search `auto` for metadata-only discovery, pinned
+  Wigolo `0.2.1` for primary acquisition, and optional Firecrawl v2 scrape fallback.
+- Required process secrets are `MIMO_API_KEY` and `EXA_API_KEY`.
+  `FIRECRAWL_API_KEY` is optional. The click launcher prompts for all three without
+  persistence; leaving Firecrawl blank disables fallback without disabling research.
+- Firecrawl is attempted only after Wigolo-local connection, timeout, malformed,
+  extraction, or challenge failures. It is never attempted for authentication, paywall,
+  access-denied, unsupported-content, size, redirect, or source-side failures.
+- The Wigolo child no longer receives native-SearXNG launch settings and never inherits
+  provider secrets. Existing historical Wigolo/SearXNG adapters/tests remain for prior
+  artifact compatibility, but the direct-MiMo factory constructs Exa discovery.
+- The provider/adapter/policy fingerprint includes Exa, Wigolo, and Firecrawl-enabled
+  identity. Old SearXNG runs require their historical executable identity; ordinary use
+  should start a new run ID.
+- Verification: 14 new provider tests; 451 passed and 2 skipped full suite; 38/38 offline
+  evaluations; Ruff lint/format, launcher syntax, and diff checks passed. No live call or
+  spend occurred.
+- This correction was committed as part of MVP-6 and added no dependency or SQLite
+  migration.
+
+## 2026-08-01 - MVP-5 Polished Local Live Web Interface
+
+Current branch and state:
+
+- `master`; all MVP-5 changes are intentionally uncommitted.
+- MVP-5 is complete. The obsolete scheduled-validation placeholder is superseded. MVP-6
+  is not authorized.
+
+Operator surface:
+
+- macOS: double-click `Launch ResearchAssistant.command`. With no inherited key, a native
+  hidden-input dialog requests `MIMO_API_KEY` for that server process only. Streamlit
+  opens on loopback and its Terminal/server process must remain running.
+- `frontend/live_app.py` is the live website. It controls exact claim, explicit budgets,
+  optional run ID, SQLite location, local service health/start/owned stop, live persisted
+  progress, cancellation, history, inspection, and released brief/hash/download.
+- `frontend/streamlit_app.py` remains fixture-only and is explicitly labeled as using no
+  MiMo, Wigolo, live search, or credentials.
+- Live identity remains pinned Wigolo `0.2.1` plus native SearXNG and direct Xiaomi
+  `mimo-v2.5-pro`. No `.env` or shell profile is loaded.
+
+Lifecycle, restart, and cancellation:
+
+- The live controller directly calls the stable MVP-4 application service in a background
+  worker. SQLite is authoritative. A process-local registry and per-database `flock`
+  prevent duplicate workers across reruns, sessions, and local processes.
+- Start stack runs exactly `npx -y wigolo@0.2.1 serve` with loopback/native-SearXNG
+  environment. Health verifies exact identity; output is bounded/redacted. Stop sends
+  termination only to the application-owned process group, including at server exit.
+- Same run ID still requires byte-exact claim and exact provider/model/prompt/schema/
+  adapter/normalization/policy/budget/repository fingerprint. Budget or identity changes
+  require a new run. Consumed usage is never reset.
+- Released, blocked, and cancelled runs reconstruct without calls. Failed runs may resume
+  only under the exact same contract. Cancellation is persisted and cooperative; an
+  active request may finish or reach its deadline, then no new call starts.
+- Status/exit mapping is released `0`, blocked `10`, failed `11`, cancelled `12`,
+  configuration error `20`, invalid input `21`.
+
+Security:
+
+- The browser and Streamlit session state never receive the MiMo key. The key is absent
+  from URLs, SQLite, subprocess arguments, launcher arguments, logs, downloaded briefs,
+  and rendered errors. Provider and child-process errors pass through bounded redaction.
+- The Wigolo child receives only a small allowlisted environment and never inherits
+  `MIMO_API_KEY`. User-selected existing database files must have a valid SQLite header.
+- Claims remain public/non-sensitive and all released output requires human review.
+- The confirmation is checked after form submission so Streamlit form batching cannot
+  leave a correctly configured user trapped behind a permanently disabled button; an
+  unchecked confirmation stops before run creation or provider spend.
+
+Files changed:
+
+- `.agent/PLANS.md`, `.agent/plans/phase-mvp-5-scheduled-live-validation.md`
+- `.gitignore`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `DECISIONS.md`, `README.md`,
+  `STATUS.md`, `HANDOFF.md`
+- `frontend/README.md`, `frontend/streamlit_app.py`, `frontend/live_app.py`,
+  `frontend/live_service.py`, `frontend/security.py`, `frontend/service_manager.py`
+- `store.py`, `tests/test_mvp5_live_web.py`, `Launch ResearchAssistant.command`
+
+Verification handoff:
+
+- Focused MVP-5: 17 passed. Full suite: 437 passed, 2 skipped.
+- Offline evaluation: 38 passed. Fixture release/block, mocked released live-web reopen,
+  restart/cancellation subprocess, secret scans, child ownership/cleanup, browser visual
+  smoke, Ruff lint/format, launcher syntax, and `git diff --check` passed.
+- Clean Python 3.12.13 installed requirements and imported the live surface with
+  Streamlit 1.60.0. Python 3.11 was unavailable locally but remains in CI. Node.js
+  24.18.0 and npm/npx 11.16.0 were present.
+- Optional real live web test was not approved/run; additional live cost is zero.
+
+Known limitations:
+
+- Initial dependency/Wigolo resource installation remains a setup step. Native SearXNG
+  cold/degraded searches may still exceed the unchanged 15-second deadline.
+- The local Streamlit server must remain alive. Cancellation is cooperative and arbitrary
+  cross-version crash recovery is unsupported. Cost is estimated.
+- No hosted UI, accounts, authentication, uploads, Docker, scheduling, or MVP-6 work.
+
+Do not start:
+
+- Do not begin MVP-6, scheduled validation, hosting, authentication, another provider,
+  or a timeout-policy change without explicit user direction.
+
+## 2026-08-01 - MVP-4 Usable Live CLI and MVP Release
+
+Current branch and state:
+
+- `master`; all MVP-4 changes are intentionally uncommitted.
+- MVP-4 is complete. MVP-5 is not authorized.
+
+Operator surface:
+
+- `python cli.py run EXACT_CLAIM --db-path PATH --max-tokens N --max-cost-usd USD`
+  launches the approved loopback Wigolo `0.2.1` plus direct Xiaomi
+  `mimo-v2.5-pro` stack. `--run-id` is optional and `--max-llm-calls` defaults to 160.
+- Required live secret: `MIMO_API_KEY`. Optional approved defaults are exposed through
+  `MIMO_BASE_URL`, `MIMO_MODEL`, and loopback `WIGOLO_BASE_URL`. No `.env` is loaded.
+- `inspect-run DATABASE RUN_ID` prints the authoritative audit and release reconstruction.
+  `cancel-run DATABASE RUN_ID` persists cancellation for a running process.
+- Exit codes: released `0`, blocked `10`, failed `11`, cancelled `12`, configuration
+  error `20`, invalid input `21`.
+
+Restart/cancellation contract:
+
+- Same run ID requires the byte-exact claim and exact provider/model/prompt/schema/adapter/
+  normalization/policy/budget/repository fingerprint. Any budget change requires a new
+  run ID; usage is never reset.
+- Released, blocked, and cancelled runs reconstruct without calls. Failed runs may resume
+  with the exact same fingerprint and reuse valid checkpoints/attempts without duplicating
+  snapshots, Ledger records, validation, or release artifacts.
+- Cancellation is cooperative. A second process can persist it during an active request;
+  that request may finish or reach its deadline, is recorded, and no later call starts
+  after observation.
+
+Verification handoff:
+
+- Focused MVP-4: 12 passed, 1 skipped. Full suite: 420 passed, 2 skipped.
+- Offline evaluation: 38 passed. Ruff lint/format, diff check, fixture smokes, mocked live
+  CLI smoke, restart/inspection/redaction, and second-process cancellation passed.
+- Clean Python 3.12.13 runtime installation, CLI help, and imports passed. Python 3.11 was
+  unavailable locally but remains in the unchanged supported CI matrix.
+- Optional live CLI smoke: not approved, not run, zero additional live cost.
+
+Known limitations:
+
+- Operators must bootstrap/warm native SearXNG and run pinned Wigolo on loopback. Process
+  lifecycle is external; cold/degraded Search can fail its fixed deadline.
+- MiMo cost is estimated. Public/non-sensitive claims and human review remain mandatory.
+- The Streamlit app is still fixture-only. No production web UI, hosting, accounts, or
+  scheduled validation was added.
+
+Do not start:
+
+- Do not begin MVP-5, modify Streamlit into a live UI, add providers, hosting, accounts,
+  or scheduled live work without explicit user direction.
+
+## 2026-07-31 - MVP-3B Full Live-Canary Stabilization
+
+Current branch:
+
+- `master`
+- All MVP-3B changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-3B is complete. A direct-MiMo positive canary released, its final hash and brief
+  reconstructed from SQLite, and the controlled negative canary failed safely.
+
+Live evidence:
+
+- Positive: `For adults with hypertension, regular aerobic exercise lowers resting
+  systolic blood pressure.` Run `2eb99893-b919-40c9-b5b8-b482b61e1c57`, terminal state
+  `released`, 6 Search / 13 acquisition / 9 snapshot / 34 physical LLM calls, 145,738
+  tokens, estimated USD 0.080223, valid final output, hash
+  `4f17c54f0b2d475552266026d5b6c0dd84b91a0044c1e60970dfc2e9526551ba`.
+- Negative: `The Moon is Earth's only natural satellite.` Run
+  `4defb64a-1fe2-4249-b67f-fb61cd4a2974`, terminal state `failed` at the Researcher
+  boundary, 6 Search / 29 acquisition / 12 snapshot / 1 physical LLM call, 3,255 tokens,
+  estimated USD 0.0025555. The one-call ceiling was consumed by Planner; subsequent
+  Extractor calls failed closed and no candidate reached the Ledger.
+- Both databases reconstructed, remained inside their approved ceilings, and contained no
+  MiMo credential. No accepted canary made an OpenRouter or MiniMax call.
+
+Implementation handoff:
+
+- `providers/mimo.py` is the direct Xiaomi JSON-mode adapter. Exact Pydantic validation
+  remains mandatory; deterministic normalization is limited to application-owned identity,
+  provenance, score-pair routing fields, approved connective templates, and exact text found
+  in the immutable snapshot.
+- `providers/wigolo.py` sends native `exclude_domains`, serializes calls for the local
+  SearXNG process, and retains strict 15-second balanced Search behavior.
+- Supporting/opposing live workers share one locked deduplication state, preventing
+  cross-stance duplicate URLs/content from producing conflicting immutable snapshots.
+- Direct-MiMo Analyst routing is derived from the fixed score-pair table after MiMo supplies
+  semantic quality/fit scores; stance compatibility is explicit and an independent Reviewer
+  still controls factual admission.
+- StatementDraft and synthesis connective identities are stamped from their immutable input
+  candidates/Ledger records; semantic draft text and approved factual statements are never
+  healed or rewritten.
+
+Verification:
+
+- Focused provider/mocked integration/restart/cancellation tests: 108 passed.
+- Full offline suite: 408 passed, 1 skipped.
+- Offline evaluation: all 38 cases passed.
+- Ruff lint, Ruff format, `git diff --check`, persistence reconstruction, and secret scans
+  passed.
+
+Known limitations and CLI suitability:
+
+- Native SearXNG must be bootstrapped with Python 3.10+ before Wigolo starts. On this Mac,
+  `/usr/bin/python3` 3.9 was incompatible; Python 3.12.13 bootstrapped successfully.
+- Core-only Wigolo can collapse to one engine and return unrelated results. The successful
+  canary used `WIGOLO_SEARCH=searxng`, `SEARXNG_MODE=native`, loopback port 3333, and an
+  already warmed sidecar. A cold balanced probe exceeded 15 seconds; a warmed probe passed.
+- Wigolo process ownership and SearXNG preflight are not implemented in this phase. They are
+  requirements for a usable live CLI, not permission to begin MVP-4.
+- MiMo cost is conservatively estimated from frozen pricing; billing confirmation is external.
+
+Do not start:
+
+- Do not add the live CLI, modify Streamlit, redesign orchestration, add another provider,
+  or begin MVP-4 without explicit user approval.
+
+## 2026-07-24 - MVP-3A Mocked Full-Provider Pipeline Integration
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-3A is complete offline. No live provider call was made.
+
+Implementation handoff:
+
+- `providers/factory.py` is the sole configured construction boundary. Its frozen strict
+  models validate Wigolo `0.2.1`, OpenRouter, all five MiMo Pro primary routes,
+  MiniMax M3 as the only fallback, explicit temperatures, strict structured output,
+  usage support, exact price-cap coverage, rank-five/keep-three acquisition, hard
+  ceilings, and a caller-supplied repository revision.
+- `run_mvp3a_pipeline()` constructs that bundle and delegates to
+  `run_provider_pipeline()` with strict reservation and fingerprint enforcement. The
+  existing direct injection surface remains available for older offline Phase 9 tests.
+- Immutable configuration and thread-safe HTTP clients are shared. Wigolo Search locks
+  health verification, OpenRouter uses thread-local call metadata, acquisition has no
+  mutable per-request state, and each worker opens only short-lived SQLite connections.
+- `ProviderRunContract` and SQLite migration 3 persist exact provider/adapter/model/
+  prompt/schema/normalization/PDF/acquisition/retry/budget/pricing/repository/policy
+  identity. A changed claim or incompatible fingerprint is rejected.
+- `ModelRouteAttempt` now persists conservative token/cost reservation as well as exact
+  usage. Reservations are atomic; completed exact usage replaces the active reservation
+  in subsequent budget calculations. Failed, malformed, and locally rejected responses
+  retain reported usage.
+- The approved route is exactly primary, primary retry, fallback, fallback retry for
+  objective failures. Semantic Reviewer disagreement still performs the one allowed
+  revision and does not route.
+- Cancellation is checked before/after Search, acquisition, and LLM calls and at stage
+  boundaries. An in-flight synchronous request may finish; no immediate-interruption
+  claim is made.
+- Released and blocked terminal reinvocations return reconstructed persistence without
+  new calls. Failed runs may resume only with the same claim/fingerprint. Cancelled runs
+  remain terminal. Valid checkpoints, attempts, budgets, snapshots, Ledger records, and
+  released output are not duplicated.
+
+Verification:
+
+- MVP-2B prerequisite: 40 passed.
+- Focused MVP-3A: 16 passed.
+- Full suite: 382 passed, 1 skipped.
+- The remaining skip is explicitly opt-in; no live gate was enabled.
+- Offline evaluation: all 38 cases passed; optional live comparison was skipped.
+- Fixture CLI smokes: valid released with hash
+  `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`;
+  invalid blocked with no hash.
+- Mocked full-pipeline smoke: passed.
+- Ruff lint/format and `git diff --check`: passed. Final Git status showed only the
+  intended uncommitted MVP-3A files.
+
+Remaining risks:
+
+- Exact live response compatibility, upstream identity, current price/cost reporting,
+  and real deadline behavior remain MVP-3B work.
+- The caller must provide an exact trustworthy repository revision for a live run.
+- Cancellation remains cooperative around blocking synchronous HTTP deadlines.
+
+Do not start:
+
+- Do not run a live canary, add a live CLI, modify Streamlit, add another provider or
+  browser path, or begin MVP-3B without explicit user direction.
+
+## 2026-07-22 - MVP-2B Production Provider Adapters and Boundary Proof
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-2B is complete offline. No live provider call was made.
+
+Implementation handoff:
+
+- `providers/wigolo.py` is the thread-safe discovery-only Search adapter. It verifies loopback
+  Wigolo identity/version, sends the fixed five-result/no-fetch request, preserves provider/rank /
+  telemetry metadata, removes duplicate URLs after their first rank, and raises secret-safe typed
+  failures.
+- `providers/acquisition.py` independently preflights original/final/canonical URL and media type,
+  streams under approved caps, uses direct Wigolo extraction first, and permits one controlled
+  rendered retry only after an explicit challenge/JavaScript-required status.
+- `providers/normalization.py` owns `ra-normalization-v1` and `ra-digital-pdf-v1`; every quote
+  offset refers to its final normalized text. PDF support is digital embedded text only, without
+  OCR.
+- `providers/openrouter.py` performs exactly one physical call. It sends the exact requested
+  Pydantic JSON Schema in strict mode, rejects wrapper/fenced/malformed/truncated/refused output,
+  records exact model/upstream/usage/cost metadata, and exposes typed usage to existing callers.
+- `providers/config.py` contains strict deadlines, caps, loopback/HTTPS validation, full-run
+  ceilings, and live-smoke gates. OpenRouter secrets come only from an explicitly provided process
+  environment mapping and remain redacted.
+- `providers/pricing.py` uses a dated conservative upper cap of USD 5/M input and USD 20/M output
+  for both approved models. Provider-reported cost wins; otherwise the result is explicitly marked
+  estimated. Unknown models/prices fail before a call.
+- Default routing is now MiMo Pro then MiniMax M3 for every stage. Legacy enum aliases remain only
+  for persisted compatibility and frozen historical quality evaluation.
+- The standalone boundary smoke is `scripts/mvp2b_live_smoke.py`; it is not a product CLI command.
+  Do not execute it without separate explicit approval for that exact run.
+
+Verification:
+
+- Focused MVP-2B: 40 passed.
+- Full offline suite: 366 passed, 1 skipped.
+- Offline evaluation: all 38 cases passed; approved default-route agreement is 100%.
+- Live smoke: not run. Live observed calls, usage, and cost are therefore unavailable.
+
+Known incompatibilities and next-phase cautions:
+
+- Exact live Wigolo `0.2.1` payload compatibility remains to be proven by the approved smoke. The
+  adapter accepts documented `results`, engine telemetry, fetch `status`, and Markdown/content
+  fields and rejects malformed variants rather than guessing.
+- A managed Node/Wigolo child-process lifecycle is not wired. The adapter requires and verifies an
+  already running pinned loopback service; do not add lifecycle or product commands in MVP-3A
+  unless its phase explicitly authorizes them.
+- The new provenance is not persisted in SQLite because the user prohibited a migration. Keep it
+  in typed boundary artifacts until a separately approved exact migration exists.
+- The stack is suitable for MVP-3A mocked integration. It is not yet live-production proven.
+
+Do not start:
+
+- Do not run the live smoke, connect full orchestration, add a live CLI/UI, modify Streamlit, add a
+  migration/provider/browser path, or begin MVP-3A without explicit user direction.
+
+## 2026-07-21 - MVP-2A Architecture Gate
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- MVP-2A Architecture Gate, documentation only.
+- MVP-2B implementation has not started.
+
+Approved primary design:
+
+- Use pinned local Wigolo `0.2.1` for discovery and controlled source acquisition. A
+  future ResearchAssistant process manager owns startup/health/identity/shutdown; users
+  should not manually enter searches or operate a separate normal-run terminal.
+- Search is discovery metadata only. Make six balanced discovery calls, rank five URLs
+  per query, and attempt them until three usable unique snapshots exist. Search snippets,
+  scores, evidence fields, and generated summaries never become source snapshots.
+- Fetch directly first and allow one Chromium-rendered retry only for explicit challenge
+  or JavaScript-required outcomes. No authentication, clicks, typing, profiles, or
+  general browser automation.
+- Support ordinary extracted HTML/text and a narrow digital-PDF path. Reject scanned,
+  encrypted, malformed, empty, oversized/timed-out, or unusably extracted PDFs without
+  OCR.
+- Independently classify origin media type, preserve original/final/advisory-canonical
+  URLs, deterministically normalize provider content to immutable 3,000-word plain-text
+  snapshots, and make exact Python-verified offsets reference only that stored text.
+- Use OpenRouter for all LLM calls: `xiaomi/mimo-v2.5-pro` primary for Planner,
+  Extractor, Analyst, Reviewer, and Synthesizer; `minimax/minimax-m3` as the only fallback.
+  Require strict JSON Schema and local exact Pydantic revalidation.
+- Retry only objective failures: primary, primary retry, fallback, fallback retry. All
+  physical calls share one run budget; reserve conservatively before calls, reconcile
+  exact usage after, retain usage on failures, and fail closed on unknown price/route.
+- Public/non-sensitive claims only. Configure OpenRouter data collection denied and
+  prompt logging off. Keep `OPENROUTER_API_KEY` out of Wigolo, logs, SQLite, checkpoints,
+  and exports; bind Wigolo to loopback.
+- Resume only when repository/provider/adapter/model/prompt/schema/acquisition/
+  normalization/PDF/retry/budget/pricing fingerprints match exactly.
+
+Current-versus-approved warning:
+
+- Current code and tests still implement fixed top-three retrieval, PDF unsupported,
+  and the earlier MiMo/DeepSeek alias route. MVP-2A deliberately did not change them.
+  MVP-2B must migrate these contracts explicitly and add regression tests; do not treat
+  documentation completion as runtime completion.
+
+Future implementation dependencies and limits requiring approval:
+
+- Proposed dependencies: `httpx` and `markdown-it-py`; Node.js and Wigolo `0.2.1` are
+  runtime prerequisites. No LLM SDK is proposed.
+- Proposed hard maximum per live canary/run: USD 1.00, 1,000,000 tokens, 160 physical LLM
+  calls, six searches, thirty acquisition candidates, and eighteen Extractor snapshots.
+- Proposed response caps: 10 MiB HTML/text, 25 MiB PDF. Proposed deadlines are in the
+  canonical plan.
+- `.env.example` changes, live CLI/UI behavior, and any SQLite migration also require
+  explicit approval.
+
+Canonical details:
+
+- `.agent/plans/phase-mvp-2a-architecture-gate.md` contains the two-stack evaluation,
+  exact request policy, calls/costs, failures, normalization/PDF contract, data handling,
+  deadlines, canary evidence, proof plan, acceptance criteria, and approval list.
+
+Verification:
+
+- Full pytest: 310 passed, 1 skipped; the skip is the existing optional live Phase 8
+  integration gate and no live option was enabled.
+- Ruff check passed; Ruff format check reported 34 files already formatted.
+- `git diff --check` passed. Only documentation and assistant-governance files changed;
+  no provider, dependency, environment template, schema, code, or test file changed.
+
+Do not start:
+
+- Do not add dependencies, providers, API keys, network-dependent tests, migrations,
+  process management, live commands, or any MVP-2B code without explicit user direction
+  and the approvals listed above.
+
+## 2026-07-19 - Daily Expanded CI Maintenance
+
+Current branch:
+
+- `master`
+
+Maintenance changes:
+
+- `.github/workflows/ci.yml` runs on every pushed branch, pull requests targeting
+  `master`, manual dispatch, and daily at 1:17 AM `America/Los_Angeles`.
+- Pytest runs with branch coverage on Python 3.11 and 3.12. Ruff and the deterministic
+  38-case offline evaluation each run once per workflow invocation.
+- `pytest-cov>=6.0,<7.0` is an explicitly approved development dependency. Coverage is
+  reported with missing lines but has no failure threshold.
+- This is CI/tooling maintenance only. No new product phase, live provider, API key,
+  network-dependent test, or runtime behavior was started.
+
+Verification:
+
+- Full pytest with branch coverage: 310 passed, 1 skipped; total coverage was 85%.
+- Offline evaluation: all 38 deterministic cases passed; optional live comparison was
+  skipped.
+- Ruff lint and format checks, workflow YAML parsing, and `git diff --check` passed.
+
+## 2026-07-19 - Phase MVP-1 Release-Contract Correctness
+
+Current branch:
+
+- `master`
+- Changes are intentionally uncommitted.
+
+Latest completed phase:
+
+- Phase MVP-1 Release-Contract Correctness.
+- No later post-MVP phase has started.
+
+Implementation handoff:
+
+- `SynthesisOutput` and `SynthesizerLLMInput` no longer contain title, displayed claim,
+  or arbitrary heading fields. `SynthesisSection` contains only `section_type` and typed
+  Ledger-backed items.
+- `agents/renderer.py` owns the fixed title, claim label, exact authoritative claim
+  insertion, structural headings, and present-section order. Release allows supporting,
+  opposing, and limitations sections once each in canonical order.
+- `ReviewerDecision` is the only model-facing Reviewer result. It forbids unknown fields
+  and cannot carry an approval ID. Application code validates its exact reviewed text,
+  derives an ID, and constructs the existing `StatementReviewResult`.
+- Approval IDs use canonical sorted compact JSON over `rappr_v1`,
+  `reviewer-decision-v1`, statement draft ID, quote block ID, exact reviewed text, and
+  normalized `approved`. The SHA-256 result is prefixed `rappr_v1_`.
+- Legacy UUID approval IDs remain accepted on persisted/domain review, Ledger, synthesis,
+  and fixture records. New provider-backed approvals use `rappr_v1` strings.
+- Existing SQLite synthesis title/claim/heading columns were not migrated or dropped;
+  fixed constants are written and legacy contents are ignored when reading the new
+  synthesis domain schema.
+- Completed synthesis checkpoints backed by SQLite synthesis rows remain readable. An
+  interrupted pre-MVP-1 run with only a cached serialized synthesis result is rejected
+  on restart and must be restarted as a fresh run; it is not treated as a completed
+  current-schema checkpoint.
+- Fixture runs are inserted as running and finalized only after validation. Released
+  fixtures persist as `RunStatus.COMPLETED`; validation blocks persist as
+  `RunStatus.BLOCKED`.
+
+Exact files changed:
+
+- `.agent/PLANS.md`
+- `.agent/plans/phase-mvp-1-release-contract-correctness.md`
+- `ARCHITECTURE.md`
+- `DECISIONS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `models.py`
+- `agents/reviewer.py`
+- `agents/synthesizer.py`
+- `agents/renderer.py`
+- `providers/llm.py`
+- `orchestrator.py`
+- `store.py`
+- `prompts/reviewer.md`
+- `prompts/synthesizer.md`
+- `evaluations/evaluator.py`
+- `tests/test_mvp1.py`
+- `tests/test_phase1.py`
+- `tests/test_phase2.py`
+- `tests/test_phase4.py`
+- `tests/test_phase5.py`
+- `tests/test_phase8.py`
+- `tests/test_phase9.py`
+- `tests/fixtures/basic_valid_run/synthesis.json`
+- `tests/fixtures/invalid_release_run/synthesis.json`
+- `tests/fixtures/phase5_expected_valid_brief.txt`
+
+Independent verification corrections:
+
+- Malformed nested synthesis structures now return a blocked schema validation result
+  instead of raising `AttributeError`.
+- Provider final validation now receives the persisted authoritative submitted claim
+  directly, and the released hash is regression-checked against the reopened rendering.
+- Architecture and restart/checkpoint compatibility documentation now match the MVP-1
+  contract.
+
+Verification results:
+
+- Focused MVP-1: 10 passed.
+- Relevant Phase 5/6/8/9/10: 126 passed, 1 skipped.
+- Full pytest: 310 passed, 1 skipped.
+- Offline evaluation: 38 cases passed; output was written under `/tmp`, not the repo.
+- Fixture CLI smoke: valid released with hash
+  `7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f`;
+  invalid blocked with no hash.
+- Reopened SQLite: valid status `completed`; invalid status `blocked`.
+- Ruff check passed; Ruff format check reported 34 files already formatted and changed
+  no files; `git diff --check` passed.
+
+Remaining risks:
+
+- Old serialized synthesis JSON carrying framing fields is intentionally incompatible
+  and must be regenerated. Old SQLite synthesis rows remain readable.
+- Ignored legacy synthesis framing columns remain in SQLite pending separately approved
+  cleanup.
+- A caller outside the repository orchestrators must pass the true authoritative claim
+  to render/validate; the two repository orchestrators do so.
+
+Do not start:
+
+- Do not add live providers, network calls, dependencies, frontend changes, `.env`
+  loading, live CLI behavior, multi-candidate extraction, cross-stance deduplication,
+  database triggers, or another post-MVP phase without explicit direction.
+
+
+## 2026-07-17 - Phase 10 Evaluation and Adversarial Testing
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 10 Evaluation and Adversarial Testing.
+- Post-MVP hardening has not started.
+
+Files changed:
+
+- `evaluations/__init__.py`
+- `evaluations/schema.py`
+- `evaluations/evaluator.py`
+- `evaluations/run_evaluations.py`
+- `evaluations/README.md`
+- `evaluations/cases/offline-corpus.json`
+- `evaluations/cases/regression-fixtures/`
+- `evaluations/output/.gitignore`
+- `tests/test_phase10.py`
+- `tests/fixtures/phase10/`
+- `.agent/plans/phase-10-evaluation.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Keep normal evaluation fully offline, deterministic, corpus-driven, and strict
+  Pydantic throughout internal evaluation flow.
+- Exercise the existing deterministic integrity and final-release gates directly; do
+  not copy, weaken, configure around, or replace them.
+- Score citation membership and macro-bracket correctness independently. A shifted
+  offset can fail citation membership while still identifying the same surrounding
+  sentences, and the corpus records those outcomes separately.
+- Use frozen fake-provider attempt histories for route reliability, retry/fallback,
+  failure-rate, token, and cost metrics. Keep offline semantic quality labels separate
+  from optional live observations.
+- Count fallback output safe only when Pydantic schema, snapshot integrity,
+  post-extraction filter, Reviewer, Ledger admission, and final validator gates are all
+  recorded. An unsafe fallback fixture forces the report to fail.
+- Compare MiMo V2.5 and MiMo V2.5 Pro only on identical frozen input IDs and report
+  stage-level deltas alongside reliability, latency, and cost. Do not change a route
+  based on benchmark preference alone.
+- Keep DeepSeek V4 Flash comparison Extractor-specific and use the same frozen Extractor
+  input. No new provider vendor or route was added.
+- Make optional live comparison an injected Protocol, skipped by default. Enabled calls
+  must preserve exact frozen input, alias, and pinned snapshot identity.
+- Report same-model Analyst/Reviewer correlated errors by case ID instead of removing
+  them from results.
+- Derive the human summary from the machine report and verify agreement before writing.
+- Freeze regression expectations in strict fixture manifests so corpus labels cannot be
+  changed to match a weakened or altered observed outcome.
+- Validate the complete configured route alias path and the documented one-retry limit;
+  reject missing MiMo normal/Pro quality pairs and token-bearing aliases without frozen
+  pricing.
+- Label frozen quality and pricing inputs in both report formats and use distinct runner
+  exit codes `0`, `1`, `2`, and `3` for pass, evaluated failure, expected
+  configuration/execution error, and unexpected internal error.
+- Add no dependencies and make no earlier implementation-file compatibility change.
+
+Commands run:
+
+- Before edits, `git status --short --branch` reported
+  `## master...origin/master` with no uncommitted changes.
+- Before edits, `git log --oneline -10` showed
+  `526a897 Complete Phase 9 orchestration` as the latest commit.
+- All four exact bare verification commands were attempted and failed before project
+  execution with `zsh: command not found: python`.
+- The identical commands with `PATH="$PWD/.venv/bin:$PATH"`, without setting
+  `PYTHONPATH`, all passed.
+- Focused Phase 10 pytest passed.
+- `git diff --check` passed.
+
+Exact results:
+
+- Offline evaluation: passed with 38 evaluated cases, explicit optional-live skip, and
+  no failures.
+- Focused Phase 10 suite: 30 passed.
+- Required Phase 1-through-10 selection: 294 passed, 1 skipped.
+- Full repository suite: 300 passed, 1 skipped.
+- The one skip is the optional Phase 8 integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+- Ruff check: all checks passed.
+- Ruff format check: 33 files already formatted.
+
+Known limitations:
+
+- Frozen quality scores and pricing are evaluation inputs, not current provider claims.
+- No live Search, Scraper, LLM, or live-evaluation adapter exists in the repository.
+- Bare `python` remains unavailable unless `.venv/bin` is placed first on `PATH`.
+
+Next exact task:
+
+- Post-MVP hardening based on evaluation results, only after explicit user direction.
+
+Do not start:
+
+- Do not start post-MVP hardening without explicit user direction.
+- Do not change routing defaults solely from frozen benchmark preference.
+- Do not add live vendors, network-dependent normal evaluation, validator weakening,
+  hidden skips, score inflation, production UI, or later work as a Phase 10 follow-up.
+
+## 2026-07-17 - Phase 9 Real Orchestration and Controlled Concurrency
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 9 Real Orchestration and Controlled Concurrency.
+- Phase 10 has not started.
+
+Files changed:
+
+- `orchestrator.py`
+- `cli.py`
+- `agents/supportingresearcher.py`
+- `providers/llm.py`
+- `models.py` (strict Phase 9 persistence and terminal-state compatibility models)
+- `store.py` (Phase 9 migration and typed checkpoint/attempt/cancellation operations)
+- `tests/test_phase9.py`
+- `.agent/plans/phase-09-orchestration.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Preserve `run_fixture_pipeline()` and add `run_provider_pipeline()` as a separate
+  synchronous provider-backed surface.
+- Use `ThreadPoolExecutor(max_workers=2)` only for the supporting and opposing
+  Researchers. Workers return strict Pydantic results and use only short-lived
+  worker-local SQLite connections for attempt audit reservations/finalization.
+- Keep every SQLite schema definition in `store.py:init_db()`. The new schema migration
+  is the minimal compatibility change required because Phase 8 intentionally kept rich
+  route attempts in memory while Phase 9 requires restart-safe audit history.
+- Assign deterministic operation and attempt IDs. Persist a running reservation before
+  each provider call, finalize it with objective failure or typed output, and reuse
+  completed typed output after restart.
+- Retry an alias once only for objective transient, timeout, malformed-output, schema,
+  exact-quote, interrupted, or deterministic validation failures. Record retry and
+  escalation reasons explicitly.
+- Enforce Extractor order `mimo-v2.5`, `mimo-v2.5-pro`, then
+  `deepseek-v4-flash`. MiMo Pro requires an objective escalation reason. DeepSeek Flash
+  remains a third-line availability fallback only.
+- Never route on semantic disagreement or confidence prose. Reviewer rejection triggers
+  one Analyst revision and one second review with the configured Reviewer primary unless
+  an objective invocation failure independently authorizes retry/fallback.
+- Subject all fallback output, including DeepSeek output, to the same local Pydantic,
+  snapshot, exact-quote, post-filter, Analyst, Reviewer, Ledger, and final-validator
+  requirements.
+- Treat one Researcher-side failure as explicit partial evidence and allow the other
+  side to continue. Treat both-side failure or no passing candidates as an explicit
+  failed run.
+- Persist explicit released, blocked, failed, and cancelled terminal states. Blocked,
+  failed, and cancelled runs never carry a final hash.
+- Retain provider-reported usage when typed output later fails an exact-quote or other
+  deterministic validation gate, so failed retries remain represented in persisted
+  token and cost totals.
+- Keep snapshots and Ledger records insert-only. Reruns compare deterministic existing
+  artifacts and never update, delete, or duplicate them.
+- Carry typed `RetrievalRecord` provenance in Phase 9 Extractor input so the model never
+  invents query ID, round, rank, URL, or retrieval-attempt metadata.
+- Add no dependency, live adapter, async rewrite, evaluation corpus, Phase 10 metric,
+  production UI, or Phase 10 behavior.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master`, with no
+  uncommitted changes.
+- `git log --oneline -10`: latest commit before Phase 9 edits was `dee6176 phase-08`.
+- Exact bare Phase 1-through-9 pytest command: failed before project execution with
+  `zsh: command not found: python`.
+- Exact bare Ruff check and Ruff format commands: both failed before project execution
+  with the same missing `python` error.
+- Identical required commands with `PATH="$PWD/.venv/bin:$PATH"`, without setting
+  `PYTHONPATH`: all passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase9.py -q`: passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest -q`: full repository suite passed.
+- `git diff --check`: passed.
+
+Exact results:
+
+- Focused Phase 9 suite: 27 passed in 2.89s.
+- Required Phase 1-through-9 selection: 264 passed, 1 skipped in 4.54s.
+- Full repository suite: 270 passed, 1 skipped in 4.51s.
+- Ruff check: all checks passed.
+- Ruff format check: 28 files already formatted.
+- The one skipped test is the optional Phase 8 integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+
+Known limitations:
+
+- No live Search, Scraper, or LLM vendor adapter exists. Phase 9 normal tests use only
+  injected deterministic fake providers and make no live-service call.
+- Optional token/cost totals require a provider to return strict
+  `ModelUsageMetadata` through `usage_for()`; unavailable metadata remains explicit
+  `None` rather than an estimate.
+- Bare `python` remains unavailable unless `.venv/bin` is placed on `PATH`.
+
+Next exact task:
+
+- Phase 10 evaluation and adversarial testing, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 10 without explicit user direction.
+- Do not add an evaluation corpus, Phase 10 metrics, new live vendor adapters,
+  network-dependent normal tests, validator weakening, production UI, async rewrite, or
+  later-phase behavior as a Phase 9 follow-up.
+
+## 2026-07-16 - Phase 8 LLM Provider and Structured Prompts
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 8 LLM Provider and Structured Prompts.
+- Phase 9 has not started.
+
+Files changed:
+
+- `providers/llm.py`
+- `prompts/planner.md`
+- `prompts/extractor.md`
+- `prompts/analyst.md`
+- `prompts/reviewer.md`
+- `prompts/synthesizer.md`
+- `agents/planner.py`
+- `agents/supportingresearcher.py`
+- `agents/analyst.py`
+- `agents/synthesizer.py`
+- `tests/test_phase8.py`
+- `.env.example`
+- `.agent/plans/phase-08-llm-integration.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Keep the LLM boundary synchronous, vendor-neutral, Pydantic-only, and one-call-at-a-
+  time. Phase 8 does not perform orchestration.
+- Make model routing strict application configuration: exactly one primary and up to two
+  ordered distinct fallbacks for every stage.
+- Reserve MiMo Pro for Planner, Analyst, and Synthesizer high-leverage reasoning; use
+  MiMo normal for repeated grounded Extractor and Reviewer work.
+- Treat DeepSeek aliases as third-line availability fallbacks that never bypass
+  deterministic checks, independent Reviewer approval, Ledger admission, or final
+  validation.
+- Record configured fallbacks while enforcing `fallback_executed: false`; runtime retry,
+  failover, restart, cancellation, budgets, and controlled concurrency remain Phase 9.
+- Reject unsupported temperature or provider-native structured-output controls
+  explicitly. Callers may disable unsupported controls explicitly, but local exact
+  Pydantic schema validation always remains active.
+- Carry Pydantic instances and requested Pydantic model classes in strict frozen request
+  and result artifacts; never convert internal handoffs to raw dictionaries.
+- Label source text `UNTRUSTED_SOURCE_TEXT`, ignore all embedded instructions, and
+  recheck deterministic integrity before Extractor/Analyst prompt construction.
+- Add no SDK, HTTP client, live vendor adapter, API key, dependency, database migration,
+  async code, evaluation corpus, or Phase 9 behavior.
+- Document only the blank `RUN_LLM_INTEGRATION_TESTS` opt-in gate in `.env.example`.
+
+Commands run:
+
+- Exact bare Phase 1-8 pytest command: failed before execution with
+  `zsh: command not found: python`.
+- Exact bare Ruff check and format commands: failed before execution with the same
+  missing `python` error.
+- Identical required commands with `PATH="$PWD/.venv/bin:$PATH"`: all passed without
+  setting `PYTHONPATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase8.py -q`: passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest -q`: full suite passed.
+
+Exact results:
+
+- Focused Phase 8 suite: 34 passed, 1 skipped in 0.18s.
+- Required Phase 1 through Phase 8 selection: 237 passed, 1 skipped in 2.14s.
+- Full pytest suite: 243 passed, 1 skipped in 2.28s.
+- Ruff check: all checks passed.
+- Ruff format check: 27 files already formatted.
+- The one skipped test is the optional integration gate because
+  `RUN_LLM_INTEGRATION_TESTS` was not enabled.
+
+Known limitations:
+
+- No real LLM vendor adapter, API call, or live integration test exists.
+- The richer invocation record is currently an in-memory typed audit artifact;
+  persistence and provider-backed stage coordination remain Phase 9 work.
+- Phase 8 validates fallback order but does not execute automatic retry or failover.
+- Bare `python` remains unavailable unless `.venv/bin` is placed on `PATH`.
+
+Next exact task:
+
+- Phase 9 real orchestration and controlled concurrency, only after explicit user
+  direction.
+
+Do not start:
+
+- Do not begin Phase 9 without explicit user direction.
+- Do not add real orchestration, sync-worker concurrency, runtime retry/restart/fallback,
+  cancellation, budgets, provider-backed persistence, evaluation corpus, or Phase 10
+  work as a Phase 8 follow-up.
+
+## 2026-07-10 - Phase 7B Search and Scraping Provider Interfaces
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 7B Search and Scraping Provider Interfaces.
+- Phase 8 has not started.
+
+Files changed:
+
+- `providers/search.py`
+- `providers/scraper.py`
+- `agents/supportingresearcher.py`
+- `agents/opposingresearcher.py`
+- `tests/test_phase7.py`
+- `models.py` (freeze `SourceSnapshot` compatibility fix)
+- `frontend/streamlit_app.py` (import-only compatibility fix for required Ruff checks)
+- `.agent/plans/phase-07-retrieval.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Keep search and scraper vendors behind runtime-checkable synchronous Protocols and
+  strict Pydantic request/response artifacts.
+- Preserve the existing persisted `RetrievalRecord`; place scrape-specific status,
+  content type, retry, failure, snapshot, and duplicate metadata in a new strict typed
+  `RetrievalOutcome` handoff.
+- Make balanced retrieval the cross-stance deduplication boundary and enforce nine
+  intended attempts per side and 18 total.
+- Retry timeouts according to `RetryPolicy`; fail non-timeout provider errors explicitly
+  without retrying them.
+- Reject malformed non-Pydantic provider responses explicitly at the provider boundary,
+  and validate consistency among retrieval status, scrape status, retry metadata,
+  content type, and snapshot provenance.
+- Treat PDF and binary content as explicitly unsupported; accept normalized text and
+  XML-family types only.
+- Freeze `SourceSnapshot` as the smallest earlier-file compatibility fix required for
+  immutable snapshot creation.
+- Apply only an import consolidation to the Phase 7A frontend because its committed
+  duplicate/misplaced imports blocked the required full-repository Ruff verification.
+- Use `.agent/plans/phase-07-retrieval.md`, the canonical path in the repository
+  roadmap, rather than creating the conflicting alternate plan filename from the prompt.
+- Add no dependencies, real adapters, network-dependent tests, LLM behavior, prompts,
+  semantic scoring, renderer behavior, async code, or Phase 8 work.
+
+Commands run:
+
+- Exact bare required pytest command for Phase 1 through Phase 7: failed before project
+  execution with `zsh: command not found: python`.
+- Exact bare required Ruff check and format commands: failed before project execution
+  with `zsh: command not found: python`.
+- The identical three commands with `PATH="$PWD/.venv/bin:$PATH"`: all passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: full suite passed.
+
+Exact results:
+
+- Required Phase 1 through Phase 7 tests: 203 passed in 2.19s.
+- Full pytest suite: 209 passed in 1.98s.
+- Ruff check: all checks passed.
+- Ruff format check: 25 files already formatted.
+- Bare exact commands: unavailable because this shell has no `python` on `PATH`.
+
+Audit note:
+
+- The claim that Ruff formatted 25 files was inaccurate: `ruff format --check .`
+  reported that 25 files were already formatted. No repository-wide formatting-only
+  changes were present or reverted.
+- The frontend import-only compatibility patch was retained because the committed file
+  produces seven Ruff errors; the application body is unchanged.
+
+Known limitations:
+
+- Bare `python` remains unavailable unless `.venv/bin` is placed on `PATH`.
+- Phase 7B provides interfaces and deterministic behavior only; it does not include a
+  live search or scraper vendor implementation.
+- Standalone stance calls deduplicate within their own call. Use `retrieve_balanced()`
+  for shared support/opposition deduplication.
+- Search errors or short search result sets fail explicitly before URL-bearing records
+  can be constructed for missing ranks.
+- Scraper adapters must return textual content; Phase 7B does not parse raw HTML.
+- Persistence wiring and full provider-backed orchestration are deferred to their
+  roadmap phase.
+
+Next exact task:
+
+- Phase 8 LLM provider and structured prompts, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 8 without explicit user direction.
+- Do not add LLM providers, prompts, live network adapters, API keys, semantic scoring,
+  renderer changes, async orchestration, or later-phase behavior as Phase 7B follow-up.
+
+## 2026-07-09 - Phase 7A Extremely Basic Local Frontend
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 7A Extremely Basic Local Frontend.
+- Phase 7B has not started.
+
+Files changed:
+
+- `frontend/streamlit_app.py`
+- `frontend/README.md`
+- `tests/test_phase7_frontend.py`
+- `tests/test_phase0_foundation.py`
+- `pyproject.toml`
+- `.agent/plans/phase-07a-local-frontend.md`
+- `.agent/PLANS.md`
+- `README.md`
+- `AGENTS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 7A as a thin local Streamlit wrapper around the existing Phase 6
+  `run_fixture_pipeline()` API.
+- Keep helper logic pure and testable through strict Pydantic UI summary models rather
+  than browser UI tests.
+- Add `streamlit>=1.37,<2.0` as the only new dependency because the phase explicitly
+  requires Streamlit.
+- Keep output behavior delegated to the Phase 6 fixture pipeline; default UI runs use the
+  fixture-local `.phase6_output/` behavior already implemented by the orchestrator.
+- Do not change `orchestrator.py`, `cli.py`, Ledger validation, renderer, synthesizer,
+  analyst, researcher, or planner behavior.
+- Do not add live LLM calls, live retrieval, scraping, providers, React, FastAPI,
+  authentication, uploads, dashboards, user accounts, database changes, Phase 7B work, or
+  Phase 8 work.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase7_frontend.py -q`:
+  passed with 4 passed in 0.23s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase0_foundation.py tests/test_phase7_frontend.py -q`:
+  passed with 6 passed in 0.19s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 188 passed in 1.73s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 22 files
+  already formatted.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pip install "streamlit>=1.37,<2.0"`: passed;
+  Streamlit 1.59.1 was already installed in the virtual environment.
+- Sandboxed `streamlit run frontend/streamlit_app.py --server.headless true --server.address 127.0.0.1 --server.port 8501`:
+  failed with `PermissionError: [Errno 1] Operation not permitted` while binding to
+  localhost.
+- Approved local server launch with `.venv/bin/streamlit`: passed and started
+  `http://127.0.0.1:8501`.
+- Approved `curl -I --max-time 5 http://127.0.0.1:8501`: passed with
+  `HTTP/1.1 200 OK`.
+
+Exact results:
+
+- Phase 7A focused tests: 4 passed.
+- Phase 0 plus Phase 7A targeted tests: 6 passed.
+- Full pytest suite: 188 passed.
+- Ruff check: all checks passed.
+- Ruff format check: 22 files already formatted.
+- Local Streamlit launch: passed at `http://127.0.0.1:8501` after localhost bind
+  approval.
+- Localhost response check: passed with `HTTP/1.1 200 OK`.
+
+Known limitations:
+
+- The frontend is intentionally basic and local-only.
+- The helper tests verify display data and wrapper behavior, not browser rendering.
+- Phase 7A still depends entirely on fixture artifacts; it does not add live retrieval,
+  scraping, LLM calls, provider-backed orchestration, uploads, dashboards, or accounts.
+- Streamlit introduces local web-serving transitive packages in the environment, but no
+  project web framework or HTTP-provider behavior was implemented.
+
+Next exact task:
+
+- Phase 7B search and scraping provider interfaces, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 7B without explicit user direction.
+- Do not add live LLM calls, live retrieval, scraping, provider integrations, API-key
+  reads, SDK integrations, React, FastAPI, uploads, authentication, dashboards, user
+  accounts, database changes, or Phase 8 behavior as part of Phase 7A follow-up.
+
+## 2026-07-04 - Phase 6 Fixture-Only Complete Pipeline
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 6 Fixture-Only Complete Pipeline.
+- Phase 7 has not started.
+
+Files changed:
+
+- `orchestrator.py`
+- `cli.py`
+- `tests/test_phase6.py`
+- `tests/fixtures/basic_valid_run/`
+- `tests/fixtures/invalid_release_run/`
+- `.agent/plans/phase-06-fixture-pipeline.md`
+- `.agent/PLANS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 6 as a fixture-only coordinator around the existing typed Phase 1
+  models, Phase 2 store functions, Phase 3 deterministic candidate filter, Phase 4
+  Ledger admission helper, and Phase 5 renderer/validator.
+- Keep fixture JSON at persistence boundaries only. Internal handoffs are Pydantic
+  model instances.
+- Derive Phase 6 Ledger claim IDs deterministically from run ID, Reviewer approval ID,
+  approved factual statement, and a Phase 6 derivation-version string.
+- Treat expected final-validator blocks as successful CLI execution with a typed
+  blocked result and useful validation errors.
+- Persist fixture output locally and deterministically in `.phase6_output/`, with
+  idempotent output verification on rerun.
+- Keep snapshots and Ledger records insert-only; reruns verify existing rows instead of
+  updating or deleting them.
+- Add no dependencies and do not start provider abstractions, search, scraping, LLM/API
+  calls, API-key reads, async code, web frameworks, ORMs, HTTP clients, or Phase 7 work.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master` with no
+  uncommitted changes.
+- `git log --oneline -10`: latest commit before Phase 6 edits was
+  `1cbf5c9 update files to phase-05`.
+- Exact `python cli.py run-fixture tests/fixtures/basic_valid_run`: failed before
+  project execution with `zsh:1: command not found: python`.
+- Exact `python cli.py run-fixture tests/fixtures/invalid_release_run`: failed before
+  project execution with `zsh:1: command not found: python`.
+- Exact `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py -q`:
+  failed before project execution with `zsh:1: command not found: python`.
+- Exact `python -m ruff check .`: failed before project execution with
+  `zsh:1: command not found: python`.
+- Exact `python -m ruff format --check .`: failed before project execution with
+  `zsh:1: command not found: python`.
+- `PATH="$PWD/.venv/bin:$PATH" python cli.py run-fixture tests/fixtures/basic_valid_run`:
+  passed and printed a released result with rendered hash
+  `cfb4182d7469c05f269150605aa24907fbc850ea7f70e4e86633a9c96f60f1ed`.
+- `PATH="$PWD/.venv/bin:$PATH" python cli.py run-fixture tests/fixtures/invalid_release_run`:
+  passed and printed a blocked result with an `altered_statement` validation error.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase6.py -q`: passed with
+  11 passed in 1.63s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py -q`:
+  passed with 182 passed in 3.38s.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 20 files
+  already formatted.
+
+Exact results:
+
+- Valid fixture CLI: released.
+- Invalid fixture CLI: blocked, not crashed.
+- Phase 6 focused tests: 11 passed.
+- Phase 1 through Phase 6 tests: 182 passed.
+- Ruff check: all checks passed.
+- Ruff format check: 20 files already formatted.
+
+Known limitations:
+
+- Bare `python` is still unavailable unless `.venv/bin` is placed on `PATH`.
+- Phase 6 is fully offline and fixture-only; it does not execute live retrieval,
+  scraping, LLM calls, or provider-backed orchestration.
+- The fixture pipeline proves deterministic wiring and validation behavior, not live
+  semantic research quality.
+
+Next exact task:
+
+- Phase 7 search and scraping provider interfaces, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 7 without explicit user direction.
+- Do not add live network calls, search providers, scrapers, LLM providers, API-key
+  reads, SDK integrations, async orchestration, web frameworks, ORMs, or HTTP clients as
+  part of Phase 6 follow-up.
+
+## 2026-07-04 - Post-Phase-5 Documentation State Audit
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 5 Synthesizer Schema, Renderer, and Release Validator.
+- Phase 6 has not started.
+
+Files changed in this audit:
+
+- `README.md`
+- `AGENTS.md`
+- `DECISIONS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `.agent/PLANS.md`
+- `.agent/plans/phase-00-foundation.md`
+- `.agent/plans/phase-04-ledger-admission.md`
+- `.agents/PLANS/phase-00-foundation.md`
+
+Work completed:
+
+- Audited the current docs, phase plans, `agents/`, and `tests/` after the Phase 5 commits.
+- Fixed stale current-state wording that still said Phase 3 was latest and Phase 4 had not
+  started.
+- Added current Phase 5 project-state guidance to the canonical plan index.
+- Added durable Phase 4 and Phase 5 decision entries.
+- Confirmed `.agent/plans/` is the intended source of truth. `.agents/PLANS/` was left in
+  place as a compatibility mirror and not consolidated or deleted.
+- Replaced the mirror file's stale absolute Windows path with the canonical relative plan
+  path.
+- Confirmed active deterministic modules are `models.py`, `store.py`, `utils.py`,
+  `agents/researcher.py`, `agents/analyst.py`, `agents/reviewer.py`,
+  `agents/synthesizer.py`, and `agents/renderer.py`.
+- Confirmed `agents/planner.py`, `agents/supportingresearcher.py`, and
+  `agents/opposingresearcher.py` remain placeholders for later roadmap phases.
+- Made no implementation, test, dependency, or Phase 6 behavior changes.
+
+Commands run:
+
+- `git status --short`: clean before audit edits.
+- `git log --oneline --decorate -n 8`: latest commits were `64d0408 phase-05 fix` and
+  `378d58a phase-05`.
+- `git diff dfa57af..HEAD --name-only`: confirmed Phase 5 changed seven tracked files.
+- `python -m pytest`: failed because this shell does not have `python` on `PATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 173 passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed, all checks passed.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed, 17 files already
+  formatted.
+
+Known limitations:
+
+- Plain `python` is unavailable unless `.venv/bin` is placed on `PATH`.
+- No Phase 6 fixture pipeline, orchestration, CLI, live retrieval, scraping, LLM/API calls,
+  provider integrations, SDK integrations, web frameworks, ORMs, or HTTP clients exist.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 6 without explicit user direction.
+- Do not add real search providers, scrapers, LLM providers, network calls, live API keys,
+  or external provider integrations.
+
+## 2026-07-04 - Phase 5 Verification Pass
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 5 Synthesizer Schema, Renderer, and Release Validator.
+- Phase 6 has not started.
+
+Files changed in this verification pass:
+
+- `agents/synthesizer.py`
+- `agents/renderer.py`
+- `tests/test_phase5.py`
+- `STATUS.md`
+- `HANDOFF.md`
+- `.agent/plans/phase-05-release-gate.md`
+
+Work completed:
+
+- Verified the original Phase 5 commit touched exactly the files documented in the Phase
+  5 plan and handoff.
+- Confirmed the renderer only produces final text through the validation gate and uses
+  fixed approved templates plus exact Ledger factual statements and source URLs.
+- Confirmed the validator enforces Ledger claim ID, Reviewer approval ID, exact
+  statement, placement, stance, entailment, section compatibility, template
+  compatibility, and one-use-per-Ledger-claim checks.
+- Added narrow regression tests for raw dictionary Ledger handoffs and empty approved
+  Ledger statements.
+- Tightened the synthesizer to reject non-`LedgerRecord` inputs with a clear exception.
+- Tightened the final validator to reject non-`LedgerRecord` inputs and malformed
+  `LedgerRecord` instances with typed invalid validation results and no rendered hash.
+
+Commands run:
+
+- `git status --short --branch`: clean before verification edits.
+- `git log --oneline --decorate -10`: latest commit before this pass was
+  `378d58a phase-05`.
+- `git show --stat --oneline --name-only HEAD`: confirmed Phase 5 changed seven files.
+- `git diff dfa57af..HEAD --name-only`: confirmed Phase 5 changed seven files.
+- Exact `python -m pytest`: failed because this shell did not have `python` on `PATH`.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 170 passed in 1.08s
+  before the verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed before the verification
+  patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed before the
+  verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest tests/test_phase5.py -q`: passed with
+  24 passed in 0.10s after the verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m pytest`: passed with 173 passed in 0.74s after
+  the verification patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff check .`: passed after the verification
+  patch.
+- `PATH="$PWD/.venv/bin:$PATH" python -m ruff format --check .`: passed after the
+  verification patch.
+
+Known limitations:
+
+- Plain `python` is unavailable unless `.venv/bin` is placed on `PATH`.
+- Template compatibility is deterministic configuration, not semantic review.
+- Source citations are still deterministic URL inclusions only.
+- No provider abstractions, real LLM/API calls, retrieval, scraping, fixture pipeline,
+  orchestration, CLI, dependencies, or Phase 6 behavior were added.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 6 without explicit user direction.
+- Do not add provider abstractions, real search, scraping, real LLM calls, SDK
+  integrations, live network calls, API keys, or external provider integrations.
+
+## 2026-07-03 - Phase 5 Synthesizer Schema, Renderer, and Release Validator
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 5 Synthesizer Schema, Renderer, and Release Validator.
+- Phase 6 has not started.
+
+Files changed:
+
+- `agents/synthesizer.py`
+- `agents/renderer.py`
+- `tests/test_phase5.py`
+- `tests/fixtures/phase5_expected_valid_brief.txt`
+- `.agent/plans/phase-05-release-gate.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 5 as deterministic typed helpers and a release validator around the
+  existing Phase 1 `SynthesisOutput`, `LedgerRecord`, and `ValidationResult` models.
+- Keep the fixed approved non-factual connective template registry in
+  `agents/renderer.py` as strict Pydantic configuration artifacts.
+- Build synthesis output only from typed `LedgerRecord` instances and copy Ledger IDs,
+  Reviewer approval IDs, stance, placement, entailment, and approved factual statements
+  exactly.
+- Render only after validation succeeds. Invalid releases return typed
+  `ValidationResult(valid=False, rendered_brief_hash=None)`.
+- Enforce one final rendered use per Ledger claim in Phase 5.
+- Treat `qualified_only`, Partial entailment, and Weak entailment as requiring approved
+  qualification or warning templates.
+- No model or SQLite schema change was needed. No dependencies were added.
+- No LLM calls, retrieval, scraping, provider integrations, fixture pipeline,
+  orchestration, CLI, external dependencies, async code, or Phase 6 work was added.
+
+Commands run:
+
+- `git status --short --branch`: before edits, `## master...origin/master`.
+- `git log --oneline -10`: latest commit before Phase 5 edits was `dfa57af phase-04`.
+- `python -m pytest tests/test_phase5.py -q`: first run failed only on the intentional
+  hash placeholder; final run passed with 21 passed in 0.12s.
+- `python -m ruff check .`: passed after import cleanup, all checks passed.
+- `python -m ruff format --check .`: passed, 17 files already formatted.
+- `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py -q`:
+  passed with 168 passed in 0.73s.
+- `python -m ruff check .`: final required run passed, all checks passed.
+- `python -m ruff format --check .`: final required run passed, 17 files already
+  formatted.
+
+Exact results:
+
+- Phase 5 focused tests: 21 passed in 0.12s.
+- Required Phase 1-5 tests: 168 passed in 0.73s.
+- Ruff check: all checks passed.
+- Ruff format check: 17 files already formatted.
+
+Known limitations:
+
+- Template compatibility is deterministic configuration, not semantic review.
+- Source citations are rendered mechanically from Ledger `source_url` values.
+- The synthesizer helper is deterministic and fixture-oriented; it is not an LLM-backed
+  synthesizer and does not orchestrate a complete run.
+
+Next exact task:
+
+- Phase 6 fixture-only complete pipeline.
+
+Do not start:
+
+- Do not begin Phase 7 or later work.
+- Do not add real search providers, scrapers, LLM providers, live network calls, API
+  keys, or external provider integrations as part of Phase 6.
+
+## 2026-07-03 - Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 4 Analyst Rules, Reviewer Rules, and Ledger Admission.
+- At that handoff time, Phase 5 had not started.
+
+Files changed:
+
+- `agents/analyst.py`
+- `agents/reviewer.py`
+- `tests/test_phase4.py`
+- `.agent/plans/phase-04-ledger-admission.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Decisions made:
+
+- Implement Phase 4 as deterministic typed helper surfaces around existing Pydantic
+  models rather than changing the model or SQLite schema.
+- Keep the explicit 25-row Evidence Quality and Claim Fit score-pair policy in
+  `agents/analyst.py`.
+- Reconstruct `LedgerRecord` values from the candidate, snapshot, Analyst decision,
+  reviewed draft, and Reviewer approval instead of accepting caller-supplied Ledger
+  fields.
+- Reuse Phase 3 `verify_candidate_against_snapshot()` before Ledger admission so hash
+  and offset re-verification are both required.
+- Treat Claim Fit 3, `qualified_only`, Partial entailment, and Weak entailment as
+  requiring explicit qualification markers before Ledger admission.
+- Keep Reviewer behavior fixture-driven and deterministic. No LLM calls, provider
+  integrations, retrieval, rendering, final validator, orchestration, async code, or
+  new dependencies were added.
+
+Commands run:
+
+- `git status --short --branch`: `## master...origin/master` before Phase 4 edits.
+- `git log --oneline -10`: latest commit before Phase 4 edits was `272c7bf phase-03 fix`.
+- `python -m pytest tests/test_phase4.py -q`: failed because `python` is not available
+  on PATH.
+- `python3 -m pytest tests/test_phase4.py -q`: failed because the system Python did not
+  have `pytest` installed.
+- `/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m pytest tests/test_phase4.py -q`:
+  failed because the bundled interpreter did not have `pytest` installed.
+- `/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m venv .venv`:
+  passed.
+- `.venv/bin/python -m pip install -e '.[dev]'`: first failed because sandboxed DNS
+  blocked package-index access; after approval, failed because editable package
+  discovery is not configured for the current flat layout.
+- `.venv/bin/python -m pip install 'pydantic>=2.0,<3.0' 'python-dotenv>=1.0,<2.0' 'pytest>=8.0,<9.0' 'ruff>=0.8,<1.0'`:
+  passed, installing only dependencies already declared in `pyproject.toml`.
+- `.venv/bin/python -m pytest tests/test_phase4.py -q`: first run found one adversarial
+  test construction issue; final run passed with 43 passed in 0.20s.
+- `.venv/bin/python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py -q`:
+  passed with 147 passed in 0.87s before documentation updates and 147 passed in
+  0.91s after documentation updates.
+- `.venv/bin/python -m ruff check .`: passed.
+- `.venv/bin/python -m ruff format --check .`: passed.
+- Exact required command
+  `python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py -q`:
+  initially failed with `zsh:1: command not found: python`; after the session-local
+  `python` launcher was restored, passed with 147 passed in 0.82s, then 147 passed in
+  0.74s after documentation updates.
+- Exact required command `python -m ruff check .`: initially failed with
+  `zsh:1: command not found: python`; after the launcher was restored, passed.
+- Exact required command `python -m ruff format --check .`: initially failed with
+  `zsh:1: command not found: python`; after the launcher was restored, passed.
+
+Known limitations:
+
+- Qualification checks are deterministic marker checks, not semantic judgment.
+- Reviewer approval is represented by typed fixtures/checks only; real Reviewer LLM
+  calls are still out of scope.
+- Plain `python` now resolves through a session-local temporary launcher and the exact
+  `python -m ...` checks pass. If Codex creates a new temporary PATH directory later,
+  that launcher may need to be restored.
+- Editable installation is blocked by current flat-layout package discovery. This was
+  not changed because Phase 4 does not require packaging work.
+
+Next exact task:
+
+- Phase 5 Synthesizer schema, renderer, and release validator.
+
+Do not start:
+
+- Do not begin Phase 5 or later work without explicit user direction.
+- Do not add LLM calls, retrieval, scraping, provider integrations, orchestration,
+  rendering, final validation, async code, or external dependencies as part of Phase 4.
+
+## 2026-06-27 - Documentation Consistency Pass After Phase 3
+
+Current branch:
+
+- `master`
+
+Latest completed phase:
+
+- Phase 3 Snapshot and Quotation Integrity.
+- At that handoff time, Phase 4 had not started.
+
+Latest important commits:
+
+- `2661eeb plan`
+- `298b711 phase-03`
+- `23caf22 phase-02 fix`
+- `cff9c0e phase 02 fix`
+- `2e80edb phase-01`
+- `d854df3 phase-00complete`
+
+Files changed by recent phases:
+
+- Phase 3: `utils.py`, `agents/researcher.py`, `tests/test_phase3.py`, `.agent/plans/phase-03-snapshot-integrity.md`, `.agent/PLANS.md`, `STATUS.md`, and `HANDOFF.md`.
+- Roadmap/documentation alignment: `.agent/PLANS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `STATUS.md`, and `HANDOFF.md`.
+- This consistency pass: documentation files only.
+
+Commands run:
+
+- `git branch --show-current`: `master`.
+- `git status --short`: only documentation files modified, plus the local `.pytest_cache/` permission warning.
+- `git status --porcelain=v1 -uno`: clean before this pass.
+- `git log --oneline -10`: latest commit was `2661eeb plan`.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: failed because it would reformat existing code/test files outside this documentation-only pass: `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`.
+- `.\.venv\Scripts\python.exe -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q`: 104 passed, one local `.pytest_cache` permission warning.
+- `git diff --stat`: documentation files only.
+- `git diff --name-only`: documentation files only.
+
+Current known limitations:
+
+- Sentence-boundary detection is deterministic and intentionally simple for MVP quote integrity.
+- The local `.pytest_cache` directory may emit a permission warning during pytest or Git scans.
+- Ruff format currently reports pre-existing formatting drift in `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`; those files were not modified during this documentation-only pass.
+
+Next exact task:
+
+- Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+
+Do not start:
+
+- Do not begin Phase 5 or later work.
+- Do not implement Phase 4 during documentation-only passes.
+- Do not create `agents/analyst.py` or `agents/reviewer.py` until Phase 4 is explicitly requested.
+
+## 2026-06-27 - Documentation Roadmap Alignment
+
+Current branch:
+
+- `master`
+- Attempted to create `docs/phase-roadmap`, but Git could not create the branch ref in this session.
+
+Files changed:
+
+- `.agent/PLANS.md`
+- `ARCHITECTURE.md`
+- `CONVENTIONS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Work completed:
+
+- Added the full Phase 0-10 roadmap to `.agent/PLANS.md`.
+- Added a short architecture note clarifying that architecture defines invariants while phase sequencing lives in `.agent/PLANS.md` and `.agent/plans/`.
+- Added a short conventions note clarifying phase-gated development and required pre-edit checks.
+- Confirmed at that time that Phase 3 was complete and Phase 4 had not started.
+
+Commands run:
+
+- `git branch --show-current`: `master`.
+- `git status --short`: clean except a permission warning when Git inspected `.pytest_cache/`.
+- `git status --porcelain=v1 -uno`: clean.
+- `git log --oneline -10`: latest commit was `298b711 phase-03`.
+- `git branch --list docs/phase-roadmap`: no local branch found.
+- `git switch -c docs/phase-roadmap`: failed because Git could not create `.git/refs/heads/docs/phase-roadmap`.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: failed because it would reformat existing code files outside this documentation-only pass: `agents/researcher.py`, `tests/test_phase3.py`, and `utils.py`.
+
+Scope review:
+
+- Documentation-only pass.
+- No code files changed.
+- No dependencies added.
+- No Analyst rules, Reviewer rules, Ledger admission, rendering, orchestration, retrieval, scraping, LLM provider work, or evaluation work was started.
+- `.agent/PLANS.md` now contains the Phase 0-10 roadmap.
+
+Next exact task:
+
+- Phase 4 Analyst rules, Reviewer rules, and Ledger admission, only after explicit user direction.
+
+## 2026-06-27 - Phase 3 Snapshot and Quotation Integrity
+
+Current branch:
+
+- `master`
+
+Files changed:
+
+- `utils.py`
+- `agents/researcher.py`
+- `tests/test_phase3.py`
+- `.agent/PLANS.md`
+- `.agent/plans/phase-03-snapshot-integrity.md`
+- `STATUS.md`
+- `HANDOFF.md`
+
+Work completed:
+
+- Implemented deterministic SHA-256, word-count, and quote-block UUID5 helpers.
+- Added `agents/researcher.py` as the shared deterministic post-extraction filter surface for future supporting and opposing researchers.
+- Added strict typed helper artifacts: `ParsedQuoteBlock`, `QuoteMetrics`, and `PostExtractionFilterResult`.
+- Implemented `build_source_snapshot()` and `validate_snapshot_integrity()` for recomputing snapshot hash and word count from `normalized_text`.
+- Implemented bracketed quote parsing, sequential exact segment matching, offset recording, immediate bracket-context validation, boundary-marker validation, statistical marker detection, claim-keyword matching, and architecture-defined quote length thresholds.
+- Implemented `filter_provisional_candidate()` so invalid provisional candidates return a typed rejection result and never receive a `CandidateQuoteBlock` or `quote_block_id`.
+- Implemented `verify_candidate_against_snapshot()` as a deterministic re-check function future Analyst code can call. It does not score evidence, create Analyst decisions, call a Reviewer, or admit anything to the Ledger.
+- Added adversarial Phase 3 coverage for invalid quote blocks, segment/order failures, context failures, snapshot integrity failures, boundary-marker misuse, threshold edges, statistical marker rules, missing keywords, repeated text disambiguation, ellipsis word counts, deterministic IDs, and tampered offsets.
+- During final self-review, fixed statistical marker substring matching so incidental words such as `corporate` cannot satisfy the `rate` marker, and added a pre-ID metadata validation guard for filter version and validation timestamp.
+- Documented Phase 3 in `.agent/plans/phase-03-snapshot-integrity.md` and updated the phase-plan index.
+
+Commands run:
+
+- `. .\.venv\Scripts\Activate.ps1; python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q`: failed because PowerShell script execution is disabled and `python` is not on PATH.
+- `cmd /c ".venv\Scripts\activate.bat && python -m pytest tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py -q"`: 104 passed, one local `.pytest_cache` permission warning.
+- `.\.venv\Scripts\python.exe -m ruff check .`: passed.
+- `.\.venv\Scripts\python.exe -m ruff format agents\researcher.py`: reformatted one file after the initial format check requested changes.
+- `.\.venv\Scripts\python.exe -m ruff format --check .`: passed.
+
+Known limitations:
+
+- Sentence-boundary detection is deterministic and intentionally simple for Phase 3. It handles the MVP test cases but is not a full NLP sentence segmenter.
+- The local `.pytest_cache` directory still causes a permission warning during pytest.
+- Verification used the virtual environment's Python executable directly because activation was blocked and `python` is not on PATH. `PYTHONPATH` was not set.
+
+Scope review:
+
+- Phase 1 models, Phase 2 store code, and the SQLite schema were not changed.
+- No retrieval, scraping, LLM calls, SDK integrations, Analyst scoring, Reviewer logic, Ledger admission, synthesis, rendering, final validation, orchestration, web frameworks, ORMs, HTTP clients, or Phase 4 work was implemented.
+- Tests assert that rejected post-extraction filter results have `candidate is None`, so invalid cases do not receive a candidate ID.
+
+Next exact task:
+
+- Phase 4 only after explicit user direction.
+
+## 2026-06-27 - Post-Phase-2 Hardening
+
+Current branch:
+
+- `master`
+
+Files changed:
+
+- `AGENTS.md`
+- `STATUS.md`
+- `HANDOFF.md`
+- `.agent/plans/phase-02-store.md`
+- `store.py`
+- `tests/test_phase1.py`
+- `tests/test_phase2.py`
+
+Work completed:
+
+- Performed a narrow post-Phase-2 hardening pass without beginning Phase 3.
+- Strengthened `AGENTS.md` with explicit rules against destructive Git commands without user instruction, undocumented deletion of protected docs/plans, weakening tests, and beginning the next phase.
+- Documented the strict internal Pydantic artifact default: `model_config = ConfigDict(extra="forbid")` unless a specific exception is documented.
+- Confirmed all internal artifact models in `models.py` already inherit `StrictModel`; no model redesign was needed.
+- Added representative regression tests proving unknown extra fields are rejected for `LedgerRecord`, `SynthesisItem`, `SynthesisSection`, `SynthesisOutput`, `ValidationError`, `ValidationResult`, `CandidateQuoteBlock`, `SourceSnapshot`, and `ModelInvocationRecord`.
+- Added a SQLite `schema_migrations` table in `init_db()` and an idempotent version 1 record for the Phase 2 initial schema.
+- Added Phase 2 tests proving the schema migration table and initial record exist after database initialization.
+- Reviewed Phase 1 and Phase 2 implementation for later-phase scope creep.
+- Updated `STATUS.md` and `.agent/plans/phase-02-store.md` with post-phase hardening notes.
+
+Commands run:
+
+- `git branch --show-current`: `master`
+- `git status --short`: reported the existing `.pytest_cache` permission warning.
+- `rg -n "requests|httpx|aiohttp|beautifulsoup|bs4|selenium|playwright|openai|anthropic|LLM|scrape|retriev|render|orchestrat|integrity|sha256|hash|Snapshot Integrity|Final Renderer|async def|sqlite3\\.connect\\(|UPDATE |DELETE |reset --hard|clean -fd|force-push|force push" .`: reviewed for scope creep and destructive-command references.
+- `pytest tests/test_phase1.py tests/test_phase2.py -q`: first attempt failed collection because the sandbox import path did not include the workspace root.
+- `PYTHONPATH=C:\Users\fchen\ResearchAssistant pytest tests/test_phase1.py tests/test_phase2.py -q`: 81 passed, one `.pytest_cache` permission warning.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Known limitations:
+
+- Snapshot `snapshot_sha256` and `word_count` still are not recomputed from `normalized_text` at model construction. This remains deferred to Phase 3, where snapshot and quotation integrity should be defined precisely.
+- The local `.pytest_cache` directory still causes a permission warning during pytest and git status scans.
+- No threaded SQLite concurrency test exists yet; Phase 2 still enforces no global connections by design through per-call connections.
+
+Scope review:
+
+- No retrieval implementation, scraper, LLM provider, orchestration, renderer behavior, or Phase 3 snapshot-integrity implementation was found.
+- No later-phase code was removed because no later-phase implementation was present.
+- Phase 3 was not started.
+
+Next exact task:
+
+- Phase 3 snapshot and quotation integrity.
+
+## 2026-06-26 - Phase 2 Hardening
+
+Work completed:
+
+- Performed a narrow Phase 2 hardening and cleanup pass without beginning Phase 3.
+- Updated `ARCHITECTURE.md` and `CONVENTIONS.md` for the two-axis eligibility rule, derived `ledger_score`, and Claim Fit 2 clarification.
+- Implemented deterministic scoring helpers in `models.py`.
+- Added `ledger_score` to `ScoreDecision` and `LedgerRecord`.
+- Enforced score eligibility, derived Ledger score, and placement consistency in `ScoreDecision` and `LedgerRecord`.
+- Strengthened `PlannerOutput`, `StatementReviewResult`, and `ValidationResult` validators.
+- Added SQLite foreign keys for clear architecture-defined artifact relationships:
+  planner queries to retrieval attempts, retrieval attempts to snapshots, snapshots/retrieval attempts to candidates, candidates to analyst decisions and statement drafts/reviews, approved reviews to Ledger records, and Ledger records to synthesis items.
+- Added `read_statement_draft()` to the store API.
+- Updated tests for all changed validators and store constraints.
+- Updated README phase text, Phase 2 plan notes, and the `HANDbOFF.md` typo in the Phase 0 plan.
+
+Verification:
+
+- `pytest`: 73 passed; one local `.pytest_cache` permission warning remains.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Tracked issues:
+
+- Snapshot `snapshot_sha256` and `word_count` validation against `normalized_text` is still deferred. Do this when snapshot normalization and hashing behavior are implemented precisely; do not guess the normalization rules in the model layer.
+- The local `.pytest_cache` directory still causes a permission warning.
+
+Important constraints:
+
+- Stop at Phase 2 unless the user explicitly requests Phase 3.
+- Do not implement web retrieval, scraping, LLM calls, orchestration, renderer logic, SDK integrations, web frameworks, ORMs, HTTP clients, or real agent behavior yet.
+- At Phase 2 close, agent modules remained placeholders.
+- Internal handoffs must continue to use Pydantic model instances, not raw dictionaries.
+- Claim Fit 2 records must not enter the final Ledger.
+
+Safe to continue:
+
+- Yes, after explicit user direction for Phase 3.
+
+## 2026-06-26 - Phase 2 Store
+
+Work completed:
+
+- Implemented the SQLite persistence layer in `store.py` with `init_db()` containing all schema definitions for 19 tables.
+- Created append-only storage for runs, planner outputs, planner queries, retrieval attempts, snapshots, provisional extractions, candidates, analyst decisions, statement review attempts, ledger records, synthesis attempts, validation runs, and model invocations.
+- All functions accept explicit `db_path` parameters; no global connections.
+- Read functions return Pydantic models; write functions accept Pydantic models.
+- Snapshots and Ledger records are INSERT-ONLY with no update or delete functions.
+- Multi-write operations use explicit transactions with rollback on failure.
+- Fixed `_validate_aware_datetime` in `models.py` to handle `None` for optional datetime fields.
+- Added `tests/test_phase2.py` with 36 tests covering all required scenarios.
+- Added `.agent/plans/phase-02-store.md` and updated `.agent/PLANS.md`.
+- Updated `STATUS.md` for Phase 2.
+
+Important constraints:
+
+- Stop at Phase 2 unless the user explicitly requests Phase 3.
+- Do not implement web retrieval, LLM calls, orchestration, rendering, SDK integrations, web frameworks, ORMs, or HTTP clients yet.
+- Continue passing Pydantic model instances between internal stages; do not pass raw dictionaries except at persistence, API, logging, or export boundaries.
+- Preserve the separate `evidence_quality` and `claim_fit` fields; do not add any composite evidence score.
+- Concurrent researcher workers must each open their own connections; this is enforced by design but not yet tested under threading.
+
+Verification:
+
+- `pytest tests/test_phase2.py`: 36 passed.
+- `pytest tests/`: 54 passed (Phase 0: 2, Phase 1: 16, Phase 2: 36).
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Open issue:
+
+- Verification used the local `.venv` created in Phase 1.
+
+Next expected phase:
+
+- Phase 3 should begin only after explicit user direction and should implement retrieval logging and web search integration.
+
+## 2026-06-26 - Phase 1 Models
+
+Work completed:
+
+- Implemented the Phase 1 Pydantic v2 model layer in `models.py`.
+- Added strict construction-time validation for Phase 1 contract requirements, including score bounds, required reviewer approval for approved Ledger records, timezone-aware timestamps, source/snapshot provenance, ordered non-overlapping offsets, exact Ledger statement fields, and synthesis section stance compatibility.
+- Added `tests/test_phase1.py` with valid and invalid model construction coverage.
+- Added `.agent/plans/phase-01-models.md` and updated `.agent/PLANS.md`.
+- Updated `STATUS.md` for Phase 1.
+
+Important constraints:
+
+- Stop at Phase 1 unless the user explicitly requests Phase 2.
+- Do not implement database operations, web retrieval, scraping, LLM calls, orchestration, rendering, SDK integrations, web frameworks, ORMs, or HTTP clients yet.
+- Continue passing Pydantic model instances between internal stages; do not pass raw dictionaries except at persistence, API, logging, or export boundaries.
+- Preserve the separate `evidence_quality` and `claim_fit` fields; do not add any composite evidence score.
+
+Verification:
+
+- `pytest tests/test_phase1.py`: 16 passed.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+
+Open issue:
+
+- The direct `pytest`, `python`, and `ruff` commands were not available on PATH. I created a local `.venv` with only the already-declared project/dev dependencies to run verification. The sandbox blocked recursive cleanup, so `.venv/` remains as an untracked local tooling directory.
+
+Next expected phase:
+
+- Phase 2 should begin only after explicit user direction and should build on the typed contracts without introducing raw-dictionary handoffs.
+
+## 2026-06-26 - Phase 0 Foundation
+
+Work completed:
+
+- Documented the Phase 0 architecture corrections requested by the user.
+- Added the repository scaffold needed for reliable AI-assisted development.
+- Configured `pyproject.toml` for Python 3.11+, Pydantic v2, python-dotenv, pytest, and Ruff.
+- Added a Phase 0 scaffold/configuration test.
+- Verified the phase with `pytest`, `ruff check .`, and `ruff format --check .`.
+
+Important constraints:
+
+- Do not begin Phase 1 without explicit user instruction.
+- Do not implement working agents, SQLite behavior, web retrieval, scraping, LLM calls, SDK integrations, ORMs, web frameworks, or HTTP libraries yet.
+- Future assistants must read `ARCHITECTURE.md` and `CONVENTIONS.md` completely before editing.
+- Internal handoffs must use Pydantic model instances, not raw dictionaries.
+
+Open issue:
+
+- No blocking Phase 0 issue remains. `.agent/plans/phase-00-foundation.md` is the canonical plan; `.agents/PLANS/phase-00-foundation.md` is only a compatibility pointer.
+
+Next expected phase:
+
+- Phase 1 should start only after the user explicitly requests it. It should begin with schemas and artifact-store design as described in `ARCHITECTURE.md`, without weakening the Phase 0 constraints.
+# MVP-11 — Adaptive Research Expansion & Cost Control
+
+- MVP-11 is complete. The Research Governor uses strict typed artifacts and fixed policy
+  `mvp11-research-governor-v1`; research round records are numeric and constrained to
+  1–3 in both Pydantic and SQLite migration 9.
+- Round 2 is completed once started; Round 3 is authorized only after deterministic
+  post-Round-2 checks for incomplete coverage, duplicate rate, recent productivity,
+  new angles, full conservative workload reservation, cancellation, terminal provider
+  conditions, and the fixed cap. No live provider calls were made.
+- Governor decision/round/terminal records are append-only. Read-only inspection keeps
+  MVP-9 and MVP-10 databases readable. A terminal Governor result prevents a failed or
+  cancelled run from resuming into another research round.
+- The direct-MiMo factory and compatibility fingerprint now include the MVP-11 policy;
+  new live Governor runs require a new Run ID rather than reusing an older contract.
+- Verification: complete pytest passed with two expected opt-in skips; focused Governor
+  regressions passed; Ruff and diff checks passed. Do not start a later phase without
+  explicit authorization.
+
+# MVP-10 — Evidence Portfolio & Trail
+
+- MVP-10 is the active authorized phase. Migration 8 is additive and transactional; it stores source-family membership, trail entries, portfolio items, and final coverage.
+- The new `evidence_portfolio.py` owns deterministic family and coverage labels. The provider workflow retains MVP-9 quote assembly and adds a bounded targeted Planner call when fewer than three approved families are present.
+- Verification: 584 passed with 2 expected opt-in skips; Ruff lint and format passed. No live provider calls or dependency changes were made.
+
+# ResearchAssistant v2 — Phase 1
+
+- The new foundation is isolated in strict frozen v2 schemas and additive migration 11.
+  `ResearchDirections` permits support only, challenge only, or both, and each fresh
+  v2 artifact rejects a disabled direction deterministically.
+- `ResearchControls` remains the historical focused/balanced compatibility reader.
+  Do not alter historical controls or use the v2 identity tables to resume a pre-v2
+  provider contract.
+- Future v2 phases may build behavior on these typed artifacts only after explicit
+  authorization; this phase intentionally changed no production research flow or UI.
+
+# ResearchAssistant v2 — Phase 2: Multi-Model Routing
+
+- V2 logical routing is now frozen: Planner, Search Agent, Source Selection, Extractor,
+  Reviewer, and Synthesizer use MiMo Pro; Scout uses MiMo normal; Gap Analysis and
+  Evidence Analyst use GPT-5.6 Luna High. This is configuration/identity only: no v2
+  Scout, Gap, Search Agent, source-selection, or Analyst execution was introduced.
+- `V2RoutingConfig.from_environment()` is the fresh-run preflight boundary. It requires
+  `MIMO_API_KEY`, explicit normal-MiMo pricing, and deployment-owned Luna endpoint,
+  API key, physical model, and pricing. Pro retains its frozen price cap only for the
+  known Pro physical model; any replacement requires explicit pricing.
+- Xiaomi routing supports independently bound MiMo normal and Pro physical models and
+  rejects a returned model mismatch. Luna has no transport adapter yet by design.
+- V2 provider contracts include logical routing, physical provider/model identity, exact
+  price caps, provider configuration excluding secrets, current prompt hashes/versions,
+  schema version, and policy version. Historical direct-MiMo contracts remain unchanged
+  and readable.
+- Verification: complete suite 682 passed, 2 expected skips; Ruff lint/format and
+  `git diff --check` passed. No live provider calls were made.

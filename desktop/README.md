@@ -1,6 +1,7 @@
-# Phase 1 desktop application
+# Desktop application
 
-Implementation and release checks are tracked in `.agent/plans/phase-1-desktop.md`.
+Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
+Current cleanup and verification are tracked in `.agent/plans/phase-2-cleanup.md`.
 This is a local application: provider calls run in its bundled Python backend. There
 is no hosted application backend and no automatic paid credential test.
 
@@ -107,3 +108,13 @@ inferred from the presence of a workflow or from a successful macOS build.
 Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [GitHub runner targets](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+## Phase 2 source compatibility
+
+Root contract, schema, fixture and application-runtime modules and the extracted
+`frontend/live_*` helpers remain covered by the existing recursive packaging and identity
+rules. No new dependency or resource root was introduced. Rebuild the bundle after source
+changes and start a new research run: the exact source/executable fingerprint changes.
+Historical inspection/export is preserved; incompatible resume still fails explicitly.
+See [current verification](../STATUS.md) for actual target results. Phase 3 UI work is not
+part of this cleanup.

@@ -1,101 +1,56 @@
 # ResearchAssistant
 
-ResearchAssistant is a source-backed research engine for examining a user claim. It searches for relevant material, preserves where evidence came from, tests whether it supports a narrow proposition, identifies gaps, and releases only validated conclusions.
+ResearchAssistant is a local desktop application for source-backed research on a claim.
+Choose Support, Challenge, or both. The existing v2 pipeline searches, acquires sources,
+preserves exact evidence and provenance, investigates gaps within budget, and releases
+only deterministically validated results. Historical runs remain readable and exportable.
+Provider calls run in the local Python backend; there is no hosted application backend.
 
-Its core philosophy is simple: **search broadly, inspect evidence, identify gaps, adapt research, and release only validated conclusions.**
+## Install and run
 
-Fresh website and CLI runs use the production ResearchAssistant v2 pipeline. Historical runs remain readable under the pipeline version that produced them.
+macOS test artifacts contain ResearchAssistant.app in a DMG/ZIP. Windows uses a per-user
+NSIS installer. End users need no Python, Node or Docker. See
+[desktop instructions](desktop/README.md) for installation, native credential storage,
+data locations, importing history, recovery, supported targets and release limitations.
+Unsigned builds are test artifacts; Windows installation and public-release gates must
+be verified on their native targets.
 
-## Working copy
+## Develop and verify
 
-The current Codex checkout is under the synced OneDrive `GitHub/ResearchAssistant`
-folder. Work from the repository root provided by the task; application data and runtime
-paths must remain platform-appropriate and must not depend on this local checkout path.
+Use Python 3.12, Node 24.18.0 and the committed dependency locks. From the repository root:
 
-## Desktop application
-
-Phase 1 adds a packaged local macOS/Windows application using the existing research UI
-and Python engine. See [desktop installation, data and build notes](desktop/README.md)
-for artifacts, supported targets, history import and outstanding release checks. The
-source-based launcher instructions below remain useful for development.
-
-## Features
-
-- **Research directions:** choose Support, Challenge, or both. A disabled direction is not researched or implied by the result.
-- **Adaptive research:** an initial search is followed by evidence inspection, gap analysis, and targeted follow-up rounds when useful and within budget.
-- **Evidence pipeline:** discovery → acquisition → immutable snapshots → passage extraction → Luna evidence analysis → deterministic admission → Ledger-backed synthesis.
-- **Provenance:** source tracking, immutable hashes, evidence locations, research-round context, and stated limitations travel with the result.
-- **Reliability:** restart-safe execution, deterministic validation, bounded model budgets, and compatibility with historical runs.
-
-## Architecture
-
-```text
-Claim
-  ↓
-Planner
-  ↓
-Discovery
-  ↓
-Scout
-  ↓
-Acquisition
-  ↓
-Probe
-  ↓
-Gap Analysis
-  ↓
-Adaptive Search
-  ↓
-Evidence Analysis
-  ↓
-Analyzer Admission
-  ↓
-Synthesis
-  ↓
-Validated Result
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt pytest ruff
+pnpm --dir web install --frozen-lockfile
+npm ci --prefix desktop
+.venv/bin/python -m pytest
+.venv/bin/python -m ruff check .
+.venv/bin/python -m ruff format --check .
+git diff --check
+pnpm --dir web lint
+pnpm --dir web exec tsc --noEmit
 ```
 
-Fresh v2 evidence is analyzer-admitted after deterministic checks and is explicitly labeled as not independently reviewer-approved. Historical Reviewer-backed runs remain readable.
+On Windows use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
+The [desktop build guide](desktop/README.md#build-and-verification-developersci-only)
+covers the static web export, frozen backend, native runtime/window smokes and installers.
+Build and smoke on both macOS and Windows; a macOS success cannot validate Windows.
+Tests do not require paid provider calls; existing opt-in integration checks remain opt-in.
 
-## Models
+For browser development run `.venv/bin/python -m frontend.api` and, in another terminal,
+`pnpm --dir web dev`. See [frontend developer notes](frontend/README.md).
+Use `.venv/bin/python cli.py --help` for the preserved fixture, inspection, export and
+live CLI entry points. Provider secrets are entered through the existing setup flow;
+never add them to source files, database exports or shell-profile loading.
 
-| Task | Model |
-| --- | --- |
-| Planner / Search / Selection | MiMo-v2.5-Pro |
-| Scout | MiMo-v2.5 |
-| Gap Analysis / Evidence Analyst | GPT-5.6 Luna |
-| Synthesis | Deterministic Python assembly |
+## Read next
 
-## Providers
+- [Architecture](ARCHITECTURE.md): module ownership, research flow and invariants.
+- [Conventions](CONVENTIONS.md) and [decisions](DECISIONS.md): contracts and rationale.
+- [Status](STATUS.md), [handoff](HANDOFF.md), [active plan](.agent/PLANS.md): current work and verification.
+- [Historical archive](docs/archive/README.md): exact replaced documents and completed plans.
 
-**LLM** OpenAI, Xiaomi
-
-**Discovery:** OpenAlex, arXiv, PubMed, Exa, and SerpSearch.
-
-**Metadata:** Crossref. Crossref provides metadata only; it is not evidence.
-
-**Acquisition:** Wigolo, with Firecrawl as a fallback.
-
-## Running locally
-
-The local product consists of the loopback API and the Next.js web app in `web/`. Configure provider credentials through the local interface, start the local acquisition service when prompted, and submit a public, non-sensitive claim.
-
-The repository also includes the CLI for local runs and inspection. See `--help` for available commands.
-
-## Verification
-
-Run the repository checks before shipping changes:
-
-```bash
-pytest
-ruff check .
-ruff format --check .
-```
-
-For the web app:
-
-```bash
-cd web
-pnpm lint
-pnpm build
-```
+Active work is Phase 2 cleanup. The Phase 3 frontend redesign has not started. The former
+README is preserved in [the archive](docs/archive/pre-phase-2/README.md); current operating
+instructions above and the desktop guide replace its older launcher-first descriptions.

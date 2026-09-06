@@ -2,93 +2,101 @@
 
 from __future__ import annotations
 
-import json
-import os
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, wait
-from decimal import Decimal
 from pathlib import Path
-from sqlite3 import Connection
 from threading import Event, Lock
-from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import Field, field_validator
-
-from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
-from agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
-from agents.v2_evidence_analyst import (
-    V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
-    V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
-)
 from agents.v2_final_output import render_v2_final_output
-from agents.v2_source_selection import (
-    V2_SOURCE_SELECTION_COMPLETION_KEY,
-    V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
-)
-from cli import CLIExitCode, repository_identity
+from application_runtime import CLIExitCode, repository_identity
 from desktop_paths import application_data_dir
 from file_lock import FileLock
+from frontend.live_contracts import (
+    LEGACY_LIVE_RESEARCH_CONTROLS,
+    AcquiredSourceScoreBreakdown,
+    DiscoveryScoreBreakdown,
+    LiveClassification,
+    LiveHistoryItem,
+    LiveRunRequest,
+    LiveRunSnapshot,
+    LiveStartResult,
+    ResearchProgress,
+    ResearchTrail,
+    ResearchTrailItem,
+)
+from frontend.live_history import history as read_history
+from frontend.live_history import research_trail as read_research_trail
+from frontend.live_progress import (
+    _diagnostic_component as _diagnostic_component,
+)
+from frontend.live_progress import (
+    _empty_progress as _empty_progress,
+)
+from frontend.live_progress import (
+    _read_first_v2_artifact as _read_first_v2_artifact,
+)
+from frontend.live_progress import (
+    _read_v2_budget_snapshot as _read_v2_budget_snapshot,
+)
+from frontend.live_progress import (
+    _read_v2_directional_progress as _read_v2_directional_progress,
+)
+from frontend.live_progress import (
+    _read_v2_directions as _read_v2_directions,
+)
+from frontend.live_progress import (
+    _research_progress as _research_progress,
+)
+from frontend.live_progress import (
+    _research_round_and_progress as _research_round_and_progress,
+)
+from frontend.live_progress import (
+    _result_message as _result_message,
+)
+from frontend.live_progress import (
+    _v2_current_round as _v2_current_round,
+)
+from frontend.live_progress import (
+    _v2_progress_percent as _v2_progress_percent,
+)
+from frontend.live_progress import (
+    _v2_research_progress as _v2_research_progress,
+)
+from frontend.live_progress import (
+    exit_code_for_status as exit_code_for_status,
+)
 from frontend.security import redact_text
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
     ResearchControls,
-    ResearchDirection,
     ResearchDirections,
     ResearchMode,
-    RunManifest,
     RunStatus,
-    Stage,
-    StrictModel,
-    V2AcquisitionProbeOutput,
-    V2DiscoveryScoutOutput,
-    V2EvidenceAnalystSourceResult,
-    V2PersistedArtifact,
-    V2ResultSource,
-    V2ResultSourceStatus,
-    V2RunDiagnostics,
-    V2SourceSelectionQueueResult,
 )
-from money import ExactUSD, add_usd
 from orchestrator import (
-    MVP10_TARGETED_RESEARCHERS_ARTIFACT,
-    MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
-    MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT,
-    PHASE9_RESEARCHERS_ARTIFACT,
     ClaimMismatchError,
     FingerprintMismatchError,
     ProviderPipelineResult,
-    ProviderRunStatus,
-    ResearcherPairResult,
     inspect_provider_run,
     request_run_cancellation,
 )
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
 from providers.v2_budget import (
-    V2BudgetSnapshot,
-    V2PhysicalCallCompletion,
-    V2PhysicalCallStart,
     V2RunCeilings,
 )
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 from store import (
-    list_runs,
     open_read_only_store,
     read_provider_run_contract,
     read_run,
-    read_stage_artifact,
-    read_v2_artifact,
 )
 from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
-    V2_PRODUCTION_FINGERPRINT_KEY,
     V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
-    V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
     V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
-    V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
-    V2ProductionFingerprint,
     V2ProductionPipelineResult,
     V2ProductionState,
     build_v2_run_diagnostics_or_empty,
@@ -100,179 +108,11 @@ from v2_orchestrator import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIVE_DB = application_data_dir() / "live-runs.sqlite3"
-LEGACY_LIVE_RESEARCH_CONTROLS = ResearchControls(
-    discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)
-)
-
-LiveClassification = Literal[
-    "starting",
-    "running",
-    "released",
-    "blocked",
-    "failed",
-    "cancelled",
-    "configuration_error",
-    "invalid_input",
-    "duplicate_active",
-]
-
-_MAX_EARLY_RESULTS = 32
 
 
 def contract_controls(policy_identity: str) -> ResearchControls:
     """Recover immutable controls persisted in the canonical provider contract."""
     return ResearchControls.from_policy_identity(policy_identity)
-
-
-def _read_first_v2_artifact(
-    db_path: str | Path | Connection,
-    run_id: UUID,
-    artifact_keys: tuple[str, ...],
-) -> V2PersistedArtifact:
-    """Read the newest key first while preserving access to historical v2 artifacts."""
-    for artifact_key in artifact_keys:
-        try:
-            return read_v2_artifact(db_path, run_id, artifact_key)
-        except KeyError:
-            continue
-    raise KeyError(f"none of the v2 artifacts exist for run {run_id}: {artifact_keys}")
-
-
-class LiveRunRequest(StrictModel):
-    raw_claim: str = Field(min_length=1)
-    db_path: str = Field(min_length=1)
-    run_id: UUID | None = None
-    max_tokens: int = Field(ge=1, le=500_000)
-    max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("1.00"))
-    max_llm_calls: int = Field(default=160, ge=1, le=160)
-    research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS
-    directions: ResearchDirections = ResearchDirections()
-    crossref_enabled: bool = False
-
-    @field_validator("raw_claim")
-    @classmethod
-    def validate_exact_claim(cls, value: str) -> str:
-        if value != value.strip():
-            raise ValueError("claim must not contain leading or trailing whitespace")
-        return value
-
-    @field_validator("db_path")
-    @classmethod
-    def validate_database_path(cls, value: str) -> str:
-        path = Path(value).expanduser().resolve()
-        if path.exists() and not path.is_file():
-            raise ValueError("database location must be a file")
-        if not path.parent.is_dir():
-            raise ValueError("database parent directory does not exist")
-        if not os.access(path.parent, os.W_OK):
-            raise ValueError("database parent directory is not writable")
-        if path.exists() and path.stat().st_size > 0:
-            with path.open("rb") as handle:
-                if handle.read(16) != b"SQLite format 3\x00":
-                    raise ValueError("existing database location is not a SQLite file")
-        return str(path)
-
-
-class ResearchProgress(StrictModel):
-    stance: Literal["supporting", "opposing"]
-    status: str = Field(min_length=1)
-    model_attempts: int = Field(ge=0)
-    retrieval_attempts: int = Field(ge=0)
-    usable_snapshots: int = Field(ge=0)
-    candidates: int = Field(ge=0)
-
-
-class LiveRunSnapshot(StrictModel):
-    run_id: UUID
-    db_path: str = Field(min_length=1)
-    raw_claim: str = Field(min_length=1)
-    classification: LiveClassification
-    exit_code: int | None = None
-    stage: str = Field(min_length=1)
-    latest_checkpoint: str | None = None
-    completed_checkpoints: int = Field(default=0, ge=0)
-    total_checkpoints: int = Field(default=5, ge=1)
-    current_research_round: int = Field(default=1, ge=1, le=4)
-    progress_percent: int = Field(default=0, ge=0, le=100)
-    message: str = Field(min_length=1)
-    diagnostic_component: str = Field(min_length=1)
-    model_calls_used: int = Field(ge=0)
-    retrieval_attempts_used: int = Field(ge=0)
-    total_tokens: int | None = Field(default=0, ge=0)
-    total_cost_usd: ExactUSD | None = Decimal("0")
-    known_token_subtotal: int = Field(default=0, ge=0)
-    known_cost_subtotal_usd: ExactUSD = Decimal("0")
-    token_usage_complete: bool = True
-    cost_usage_complete: bool = True
-    conservative_reserved_tokens: int | None = Field(default=0, ge=0)
-    conservative_reserved_cost_usd: ExactUSD | None = Decimal("0")
-    supporting: ResearchProgress
-    opposing: ResearchProgress
-    validation_errors: tuple[str, ...] = ()
-    final_brief: str | None = None
-    rendered_brief_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    provider_identity: str | None = None
-    model_identity: str | None = None
-    fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS
-    v2_diagnostics: V2RunDiagnostics | None = None
-
-
-class LiveHistoryItem(StrictModel):
-    run_id: UUID
-    raw_claim: str = Field(min_length=1)
-    status: str = Field(min_length=1)
-    stage: str = Field(min_length=1)
-    updated_at: str = Field(min_length=1)
-    completed_at: str | None = None
-
-
-class DiscoveryScoreBreakdown(StrictModel):
-    relevance: int = Field(ge=0, le=35)
-    intent_match: int = Field(ge=0, le=20)
-    directness: int = Field(ge=0, le=15)
-    metadata_completeness: int = Field(ge=0, le=10)
-    likely_accessibility: int = Field(ge=0, le=10)
-    source_novelty: int = Field(ge=0, le=10)
-    penalties: int = Field(ge=-45, le=0)
-
-
-class AcquiredSourceScoreBreakdown(StrictModel):
-    readability: int = Field(ge=0, le=25)
-    claim_term_coverage: int = Field(ge=0, le=35)
-    document_specificity: int = Field(ge=0, le=25)
-    evidence_language: int = Field(ge=0, le=15)
-    penalties: int = Field(ge=-20, le=0)
-
-
-class ResearchTrailItem(StrictModel):
-    research_round: int = Field(ge=1, le=4)
-    stance: Literal["supporting", "opposing"]
-    provider: DiscoveryProvider
-    intent: str = Field(min_length=1)
-    query_text: str = Field(min_length=1)
-    title: str
-    url: str = Field(min_length=1)
-    score: int | None = Field(default=None, ge=0, le=100)
-    decision: Literal["selected", "deferred", "discarded"]
-    selection_rank: int | None = Field(default=None, ge=1, le=20)
-    breakdown: DiscoveryScoreBreakdown | None = None
-    acquired_score: int | None = Field(default=None, ge=0, le=100)
-    extraction_rank: int | None = Field(default=None, ge=1, le=25)
-    acquired_breakdown: AcquiredSourceScoreBreakdown | None = None
-    acquisition_state: Literal["acquired", "attempted", "not_attempted"] | None = None
-
-
-class ResearchTrail(StrictModel):
-    run_id: UUID
-    items: tuple[ResearchTrailItem, ...]
-
-
-class LiveStartResult(StrictModel):
-    started: bool
-    run_id: UUID
-    classification: LiveClassification
-    message: str = Field(min_length=1)
 
 
 class _DatabaseLock(FileLock):
@@ -284,6 +124,25 @@ class _ActiveRun:
     def __init__(self, future: Future[LiveRunSnapshot], database_lock: _DatabaseLock) -> None:
         self.future = future
         self.database_lock = database_lock
+
+
+__all__ = [
+    "LEGACY_LIVE_RESEARCH_CONTROLS",
+    "AcquiredSourceScoreBreakdown",
+    "DiscoveryScoreBreakdown",
+    "LiveClassification",
+    "LiveHistoryItem",
+    "LiveRunRequest",
+    "LiveRunSnapshot",
+    "LiveStartResult",
+    "ResearchProgress",
+    "ResearchTrail",
+    "ResearchTrailItem",
+    "LiveResearchController",
+    "exit_code_for_status",
+]
+
+_MAX_EARLY_RESULTS = 32
 
 
 class LiveResearchController:
@@ -547,248 +406,10 @@ class LiveResearchController:
         )
 
     def history(self, db_path: str | Path, *, limit: int = 100) -> tuple[LiveHistoryItem, ...]:
-        path = Path(db_path).resolve()
-        if not path.is_file():
-            return ()
-        with open_read_only_store(path) as store:
-            manifests = list_runs(store.connection, limit=limit)
-            items: list[LiveHistoryItem] = []
-            for manifest in manifests:
-                try:
-                    artifact = _read_first_v2_artifact(
-                        store.connection,
-                        manifest.run_id,
-                        (
-                            V2_PRODUCTION_ARTIFACT_KEY,
-                            V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
-                            V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
-                        ),
-                    )
-                    result = V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
-                except (KeyError, ValueError):
-                    items.append(self._history_item(manifest))
-                    continue
-                items.append(
-                    LiveHistoryItem(
-                        run_id=manifest.run_id,
-                        raw_claim=manifest.raw_claim,
-                        status=manifest.status.value,
-                        stage=infer_v2_stage(
-                            str(path),
-                            manifest.run_id,
-                            result.current_stage,
-                            result.final_output is not None,
-                        ).value,
-                        updated_at=manifest.updated_at.isoformat(),
-                        completed_at=(
-                            manifest.completed_at.isoformat() if manifest.completed_at else None
-                        ),
-                    )
-                )
-        return tuple(items)
+        return read_history(db_path, limit=limit)
 
     def research_trail(self, db_path: str | Path, run_id: UUID) -> ResearchTrail:
-        path = Path(db_path).resolve()
-        if not path.is_file():
-            raise KeyError(f"run {run_id} not found")
-        stage_keys = (
-            (1, PHASE9_RESEARCHERS_ARTIFACT),
-            (2, MVP10_TARGETED_RESEARCHERS_ARTIFACT),
-            (2, MVP11_ROUND_TWO_RESEARCHERS_CHECKPOINT),
-            (3, MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT),
-        )
-        items: list[ResearchTrailItem] = []
-        with open_read_only_store(path) as store:
-            # An existing database is not evidence that this particular run exists.
-            read_run(store.connection, run_id)
-            items.extend(self._v2_research_trail_items(store.connection, run_id))
-            for research_round, artifact_key in stage_keys:
-                try:
-                    artifact = read_stage_artifact(store.connection, run_id, artifact_key)
-                except KeyError:
-                    continue
-                if artifact.artifact_type != ResearcherPairResult.__name__:
-                    continue
-                pair = ResearcherPairResult.model_validate_json(artifact.payload_json)
-                for side in (pair.supporting, pair.opposing):
-                    if side.retrieval_batch is None:
-                        continue
-                    outcomes_by_rank = {
-                        outcome.retrieval.search_rank: outcome
-                        for outcome in side.retrieval_batch.outcomes
-                    }
-                    acquired_by_retrieval = {
-                        item.retrieval_attempt_id: item
-                        for item in side.retrieval_batch.acquired_source_ranking
-                    }
-                    for ranked in side.retrieval_batch.discovery_ranking:
-                        components = ranked.components
-                        outcome = (
-                            outcomes_by_rank.get(ranked.selection_rank)
-                            if ranked.selection_rank is not None
-                            else None
-                        )
-                        acquired = (
-                            acquired_by_retrieval.get(outcome.retrieval.retrieval_attempt_id)
-                            if outcome is not None
-                            else None
-                        )
-                        items.append(
-                            ResearchTrailItem(
-                                research_round=research_round,
-                                stance=side.stance,
-                                provider=ranked.query.provider.value,
-                                intent=ranked.query.intent.value,
-                                query_text=ranked.query.query_text,
-                                title=ranked.result.title,
-                                url=ranked.canonical_url,
-                                score=ranked.score,
-                                decision=ranked.decision.value,
-                                selection_rank=ranked.selection_rank,
-                                breakdown=DiscoveryScoreBreakdown(
-                                    relevance=components.relevance,
-                                    intent_match=components.intent_match,
-                                    directness=components.directness,
-                                    metadata_completeness=components.metadata_completeness,
-                                    likely_accessibility=components.likely_accessibility,
-                                    source_novelty=components.source_novelty,
-                                    penalties=(
-                                        components.generic_homepage_penalty
-                                        + components.marketing_or_community_penalty
-                                        + components.unrelated_title_penalty
-                                    ),
-                                ),
-                                acquired_score=acquired.score if acquired is not None else None,
-                                extraction_rank=(
-                                    acquired.extraction_rank if acquired is not None else None
-                                ),
-                                acquired_breakdown=(
-                                    AcquiredSourceScoreBreakdown(
-                                        readability=acquired.components.readability,
-                                        claim_term_coverage=(
-                                            acquired.components.claim_term_coverage
-                                        ),
-                                        document_specificity=(
-                                            acquired.components.document_specificity
-                                        ),
-                                        evidence_language=acquired.components.evidence_language,
-                                        penalties=(
-                                            acquired.components.generic_or_promotional_penalty
-                                        ),
-                                    )
-                                    if acquired is not None
-                                    else None
-                                ),
-                            )
-                        )
-        return ResearchTrail(
-            run_id=run_id,
-            items=tuple(
-                sorted(
-                    items,
-                    key=lambda item: (
-                        item.research_round,
-                        item.stance,
-                        item.score is None,
-                        -(item.score or 0),
-                        item.url,
-                    ),
-                )
-            ),
-        )
-
-    def _v2_research_trail_items(
-        self, connection: Connection, run_id: UUID
-    ) -> tuple[ResearchTrailItem, ...]:
-        """Project persisted v2 discovery and acquisition artifacts into the trail contract."""
-        items: list[ResearchTrailItem] = []
-        decision_map = {
-            "retrieve": "selected",
-            "maybe": "deferred",
-            "skip": "discarded",
-        }
-        for research_round in (1, 2, 3, 4):
-            discovery_key = (
-                V2_SCOUT_ARTIFACT_KEY
-                if research_round == 1
-                else (
-                    "post-phase-13-round-4-discovery-scout-v1"
-                    if research_round == 4
-                    else f"phase-7-round-{research_round}-discovery-scout"
-                )
-            )
-            acquisition_key = (
-                V2_ACQUISITION_PROBE_ARTIFACT_KEY
-                if research_round == 1
-                else (
-                    "post-phase-13-round-4-acquisition-probe-v1"
-                    if research_round == 4
-                    else f"phase-7-round-{research_round}-acquisition-probe"
-                )
-            )
-            try:
-                artifact = read_v2_artifact(connection, run_id, discovery_key)
-            except KeyError:
-                continue
-            discovery = V2DiscoveryScoutOutput.model_validate_json(artifact.payload_json)
-            try:
-                acquisition_artifact = read_v2_artifact(connection, run_id, acquisition_key)
-            except KeyError:
-                acquisition = None
-            else:
-                acquisition = V2AcquisitionProbeOutput.model_validate_json(
-                    acquisition_artifact.payload_json
-                )
-            decisions = {
-                scout_item.item_id: scout_item.decision.value
-                for batch in discovery.scout_batches
-                for scout_item in batch.items
-            }
-            cluster_by_item = {
-                item_id: cluster.cluster_id
-                for cluster in discovery.clusters
-                for item_id in cluster.item_ids
-            }
-            acquired_clusters = (
-                {source.cluster_id for source in acquisition.acquisitions}
-                if acquisition is not None
-                else set()
-            )
-            attempted_clusters = (
-                {attempt.cluster_id for attempt in acquisition.attempts}
-                if acquisition is not None
-                else set()
-            )
-            for discovery_item in discovery.items:
-                decision = decisions.get(discovery_item.item_id)
-                if decision is None:
-                    continue
-                cluster_id = cluster_by_item.get(discovery_item.item_id)
-                acquisition_state: Literal["acquired", "attempted", "not_attempted"]
-                if cluster_id in acquired_clusters:
-                    acquisition_state = "acquired"
-                elif cluster_id in attempted_clusters:
-                    acquisition_state = "attempted"
-                else:
-                    acquisition_state = "not_attempted"
-                items.append(
-                    ResearchTrailItem(
-                        research_round=research_round,
-                        stance=(
-                            "supporting"
-                            if discovery_item.direction.value == "support"
-                            else "opposing"
-                        ),
-                        provider=discovery_item.provider,
-                        intent="v2 discovery",
-                        query_text=discovery_item.query_text,
-                        title=discovery_item.title or "",
-                        url=discovery_item.canonical_url,
-                        decision=decision_map[decision],
-                        acquisition_state=acquisition_state,
-                    )
-                )
-        return tuple(items)
+        return read_research_trail(db_path, run_id)
 
     def shutdown(self, *, timeout: float = 90) -> bool:
         """Cancel at existing boundaries, preserving reservations for unknown outcomes."""
@@ -1167,17 +788,6 @@ class LiveResearchController:
             opposing=_empty_progress("opposing"),
         )
 
-    @staticmethod
-    def _history_item(manifest: RunManifest) -> LiveHistoryItem:
-        return LiveHistoryItem(
-            run_id=manifest.run_id,
-            raw_claim=manifest.raw_claim,
-            status=manifest.status.value,
-            stage=manifest.current_stage.value,
-            updated_at=manifest.updated_at.isoformat(),
-            completed_at=manifest.completed_at.isoformat() if manifest.completed_at else None,
-        )
-
     def _redact(self, value: object) -> str:
         return redact_text(
             value,
@@ -1196,408 +806,6 @@ class LiveResearchController:
         )
 
 
-def exit_code_for_status(status: ProviderRunStatus) -> CLIExitCode:
-    if status is ProviderRunStatus.RELEASED:
-        return CLIExitCode.RELEASED
-    if status is ProviderRunStatus.BLOCKED:
-        return CLIExitCode.BLOCKED
-    if status is ProviderRunStatus.FAILED:
-        return CLIExitCode.FAILED
-    if status is ProviderRunStatus.CANCELLED:
-        return CLIExitCode.CANCELLED
-    if status is ProviderRunStatus.RUNNING:
-        return CLIExitCode.RUNNING
-    raise ValueError(f"unsupported provider run status: {status!r}")
-
-
 def prepare_default_database() -> Path:
     DEFAULT_LIVE_DB.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     return DEFAULT_LIVE_DB
-
-
-def _research_progress(
-    result: ProviderPipelineResult,
-    stance: Literal["supporting", "opposing"],
-) -> ResearchProgress:
-    if result.researcher_result is None:
-        status = "running" if result.status is ProviderRunStatus.RUNNING else "not available"
-        return ResearchProgress(
-            stance=stance,
-            status=status,
-            model_attempts=0,
-            retrieval_attempts=0,
-            usable_snapshots=0,
-            candidates=0,
-        )
-    side = getattr(result.researcher_result, stance)
-    outcomes = side.retrieval_batch.outcomes if side.retrieval_batch is not None else ()
-    usable = sum(1 for outcome in outcomes if outcome.snapshot_id is not None)
-    stance_artifact_ids = {candidate.quote_block_id for candidate in side.candidates}
-    if side.retrieval_batch is not None:
-        stance_artifact_ids.update(
-            snapshot.snapshot_id for snapshot in side.retrieval_batch.snapshots
-        )
-    attempts = sum(
-        1
-        for attempt in result.model_attempts
-        if any(artifact_id in stance_artifact_ids for artifact_id in attempt.input_artifact_ids)
-    )
-    return ResearchProgress(
-        stance=stance,
-        status=side.status.value,
-        model_attempts=attempts,
-        retrieval_attempts=len(outcomes),
-        usable_snapshots=usable,
-        candidates=len(side.candidates),
-    )
-
-
-def _empty_progress(stance: Literal["supporting", "opposing"]) -> ResearchProgress:
-    return ResearchProgress(
-        stance=stance,
-        status="not started",
-        model_attempts=0,
-        retrieval_attempts=0,
-        usable_snapshots=0,
-        candidates=0,
-    )
-
-
-def _v2_research_progress(
-    sources: tuple[V2ResultSource, ...],
-    stance: Literal["supporting", "opposing"],
-    enabled: bool,
-) -> ResearchProgress:
-    direction = "support" if stance == "supporting" else "challenge"
-    matching = tuple(source for source in sources if source.direction.value == direction)
-    analyzed_statuses = {
-        V2ResultSourceStatus.RECOMMENDED_ANALYZED,
-        V2ResultSourceStatus.RECOMMENDED_ANALYZER_ADMITTED,
-        V2ResultSourceStatus.RECOMMENDED_ANALYZER_REJECTED,
-        V2ResultSourceStatus.RECOMMENDED_ANALYZER_FAILED,
-        V2ResultSourceStatus.SURVIVING_ANALYZED,
-        V2ResultSourceStatus.SURVIVING_ANALYZER_ADMITTED,
-        V2ResultSourceStatus.SURVIVING_ANALYZER_REJECTED,
-        V2ResultSourceStatus.SURVIVING_ANALYZER_FAILED,
-    }
-    analyzed = sum(source.status in analyzed_statuses for source in matching)
-    return ResearchProgress(
-        stance=stance,
-        status="completed" if enabled else "disabled",
-        model_attempts=analyzed,
-        retrieval_attempts=len(matching),
-        usable_snapshots=len(matching),
-        candidates=analyzed,
-    )
-
-
-def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
-    try:
-        artifact = _read_first_v2_artifact(
-            db_path,
-            run_id,
-            (
-                V2_PRODUCTION_FINGERPRINT_KEY,
-                V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
-                V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
-            ),
-        )
-        fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
-        payload = json.loads(fingerprint.canonical_payload_json)
-        return ResearchDirections.model_validate(payload["directions"])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        return ResearchDirections()
-
-
-def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
-    ceilings = V2RunCeilings()
-    try:
-        artifact = _read_first_v2_artifact(
-            db_path,
-            run_id,
-            (
-                V2_PRODUCTION_FINGERPRINT_KEY,
-                V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
-                V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
-            ),
-        )
-        fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
-        payload = json.loads(fingerprint.canonical_payload_json)
-        ceilings = V2RunCeilings.model_validate(payload["ceilings"])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        pass
-
-    starts: list[V2PhysicalCallStart] = []
-    completions: dict[int, V2PhysicalCallCompletion] = {}
-    for sequence in range(1, ceilings.max_physical_calls + 1):
-        try:
-            start_artifact = _read_first_v2_artifact(
-                db_path,
-                run_id,
-                (
-                    f"phase-13-physical-call-{sequence:03d}-start",
-                    f"phase-12-physical-call-{sequence:03d}-start",
-                ),
-            )
-        except KeyError:
-            break
-        start = V2PhysicalCallStart.model_validate_json(start_artifact.payload_json)
-        starts.append(start)
-        try:
-            completion_artifact = _read_first_v2_artifact(
-                db_path,
-                run_id,
-                (
-                    f"phase-13-physical-call-{sequence:03d}-completion",
-                    f"phase-12-physical-call-{sequence:03d}-completion",
-                ),
-            )
-        except KeyError:
-            continue
-        completions[sequence] = V2PhysicalCallCompletion.model_validate_json(
-            completion_artifact.payload_json
-        )
-
-    token_exposure = 0
-    cost_exposure = Decimal("0")
-    for start in starts:
-        completion = completions.get(start.sequence)
-        token_exposure += (
-            completion.usage_tokens
-            if completion is not None and completion.usage_tokens is not None
-            else start.reserved_tokens
-        )
-        cost_exposure = add_usd(
-            cost_exposure,
-            (
-                completion.usage_cost_usd
-                if completion is not None and completion.usage_cost_usd is not None
-                else start.reserved_cost_usd
-            ),
-        )
-    return V2BudgetSnapshot(
-        physical_calls_used=len(starts),
-        token_exposure=token_exposure,
-        cost_exposure_usd=cost_exposure,
-        physical_calls_remaining=max(0, ceilings.max_physical_calls - len(starts)),
-        tokens_remaining=max(0, ceilings.max_total_tokens - token_exposure),
-        cost_remaining_usd=max(Decimal("0"), ceilings.max_total_cost_usd - cost_exposure),
-    )
-
-
-def _v2_current_round(db_path: str, run_id: UUID) -> int:
-    for round_number in (4, 3, 2):
-        for suffix in ("search-results", "discovery-scout", "acquisition-probe"):
-            try:
-                read_v2_artifact(
-                    db_path,
-                    run_id,
-                    (
-                        f"post-phase-13-round-4-{suffix}-v1"
-                        if round_number == 4
-                        else f"phase-7-round-{round_number}-{suffix}"
-                    ),
-                )
-            except KeyError:
-                continue
-            return round_number
-    return 1
-
-
-def _read_v2_directional_progress(
-    db_path: str,
-    run_id: UUID,
-    directions: ResearchDirections,
-    status: RunStatus,
-) -> tuple[ResearchProgress, ResearchProgress]:
-    acquired: dict[ResearchDirection, int] = {
-        ResearchDirection.SUPPORT: 0,
-        ResearchDirection.CHALLENGE: 0,
-    }
-    survivors: dict[ResearchDirection, set[UUID]] = {
-        ResearchDirection.SUPPORT: set(),
-        ResearchDirection.CHALLENGE: set(),
-    }
-    for round_number in (1, 2, 3, 4):
-        artifact_key = (
-            V2_ACQUISITION_PROBE_ARTIFACT_KEY
-            if round_number == 1
-            else "post-phase-13-round-4-acquisition-probe-v1"
-            if round_number == 4
-            else f"phase-7-round-{round_number}-acquisition-probe"
-        )
-        try:
-            artifact = read_v2_artifact(db_path, run_id, artifact_key)
-        except KeyError:
-            continue
-        output = V2AcquisitionProbeOutput.model_validate_json(artifact.payload_json)
-        for source in output.acquisitions:
-            acquired[source.direction] += 1
-        for survivor in output.survivors:
-            survivors[survivor.direction].add(survivor.snapshot_id)
-
-    survivor_ids: dict[ResearchDirection, tuple[UUID, ...]] = {
-        ResearchDirection.SUPPORT: (),
-        ResearchDirection.CHALLENGE: (),
-    }
-    try:
-        queue_artifact = _read_first_v2_artifact(
-            db_path,
-            run_id,
-            (V2_SOURCE_SELECTION_COMPLETION_KEY, V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY),
-        )
-    except KeyError:
-        pass
-    else:
-        queue = V2SourceSelectionQueueResult.model_validate_json(queue_artifact.payload_json)
-        survivor_ids = {
-            direction: tuple(
-                item.source_id for item in queue.input.survivors if item.direction is direction
-            )
-            for direction in (ResearchDirection.SUPPORT, ResearchDirection.CHALLENGE)
-        }
-    analyzed: dict[ResearchDirection, int] = {
-        ResearchDirection.SUPPORT: 0,
-        ResearchDirection.CHALLENGE: 0,
-    }
-    source_prefixes = (
-        V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
-        V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
-        "phase-9-luna-evidence-analyst-source",
-    )
-    for direction, source_ids in survivor_ids.items():
-        for source_id in source_ids:
-            source_artifact = None
-            for prefix in source_prefixes:
-                try:
-                    source_artifact = read_v2_artifact(
-                        db_path,
-                        run_id,
-                        f"{prefix}-{source_id}",
-                    )
-                except KeyError:
-                    continue
-                break
-            if source_artifact is None:
-                continue
-            source_result = V2EvidenceAnalystSourceResult.model_validate_json(
-                source_artifact.payload_json
-            )
-            if source_result.state.value != "not_queued":
-                analyzed[direction] += 1
-
-    def build_progress(direction: ResearchDirection) -> ResearchProgress:
-        enabled = directions.permits(direction)
-        terminal = status is not RunStatus.RUNNING
-        return ResearchProgress(
-            stance="supporting" if direction is ResearchDirection.SUPPORT else "opposing",
-            status=("disabled" if not enabled else "completed" if terminal else "running"),
-            model_attempts=analyzed[direction],
-            retrieval_attempts=acquired[direction],
-            usable_snapshots=len(survivors[direction]),
-            candidates=analyzed[direction],
-        )
-
-    return build_progress(ResearchDirection.SUPPORT), build_progress(ResearchDirection.CHALLENGE)
-
-
-def _v2_progress_percent(
-    stage: Stage,
-    current_round: int,
-    diagnostics: V2RunDiagnostics,
-    budget: V2BudgetSnapshot,
-    supporting: ResearchProgress,
-    opposing: ResearchProgress,
-) -> int:
-    stage_value = stage.value
-    base = {
-        "claim_planner": 4,
-        "discovery": 12,
-        "acquisition": 25,
-        "gap_analysis": 39,
-        "adaptive_search": 50,
-        "source_selection": 63,
-        "deep_analysis": 70,
-        "evidence_analyst": 70,
-        "evidence_admission": 85,
-        "review": 85,
-        "statement_reviewer": 85,
-        "claim_ledger": 87,
-        "debate_synthesizer": 92,
-        "synthesis": 92,
-        "final_renderer_validator": 97,
-    }.get(stage_value, 5)
-    analyzed = supporting.candidates + opposing.candidates
-    if stage_value in {"adaptive_search", "source_selection"}:
-        activity = min(9, budget.physical_calls_used // 2)
-        return min(69 if stage_value == "source_selection" else 61, base + activity)
-    if stage_value in {"deep_analysis", "evidence_analyst"}:
-        queued = max(1, diagnostics.sources_queued_for_analysis)
-        return min(84, base + round(14 * min(1.0, analyzed / queued)))
-    if stage_value in {"evidence_admission", "statement_reviewer", "claim_ledger"}:
-        return min(90, base + min(3, diagnostics.approved_evidence_records))
-    if current_round > 1:
-        return min(87, base + (current_round - 1) * 2)
-    return base
-
-
-def _research_round_and_progress(result: ProviderPipelineResult) -> tuple[int, int]:
-    checkpoint_keys = {checkpoint.stage_key for checkpoint in result.checkpoints}
-    if any(key.startswith("mvp11-round-three") for key in checkpoint_keys):
-        current_round = 3
-    elif any(key.startswith("mvp11-round-two") for key in checkpoint_keys):
-        current_round = 2
-    else:
-        current_round = 1
-    if result.status is not ProviderRunStatus.RUNNING:
-        return current_round, 100
-    if result.current_stage.value in {"debate_synthesizer", "final_renderer_validator"}:
-        return current_round, 88 if result.current_stage.value == "debate_synthesizer" else 96
-    stage_progress = {
-        "claim_planner": 10,
-        "supporting_researcher": 28,
-        "opposing_researcher": 34,
-        "evidence_analyst": 52,
-        "evidence_admission": 58,
-        "statement_reviewer": 58,
-        "claim_ledger": 62,
-    }.get(result.current_stage.value, 5)
-    round_floor = {1: 0, 2: 62, 3: 76}[current_round]
-    round_span = {1: 1.0, 2: 0.18, 3: 0.12}[current_round]
-    return current_round, min(
-        87, max(round_floor, round_floor + round(stage_progress * round_span))
-    )
-
-
-def _result_message(result: ProviderPipelineResult) -> str:
-    if result.status is ProviderRunStatus.RELEASED:
-        return "Released after deterministic validation. Human review is still required."
-    if result.status is ProviderRunStatus.BLOCKED:
-        return "Blocked by the deterministic final validator; no brief or hash was released."
-    if result.status is ProviderRunStatus.CANCELLED:
-        return (
-            f"Cancelled at the cooperative {result.current_stage.value} boundary. "
-            "An already active request was allowed to finish or reach its deadline."
-        )
-    if result.status is ProviderRunStatus.FAILED:
-        return f"Failed in {result.current_stage.value}: {result.failure_reason}"
-    if result.status is ProviderRunStatus.RUNNING:
-        return f"Research is running in {result.current_stage.value}."
-    raise ValueError(f"unsupported provider run status: {result.status!r}")
-
-
-def _diagnostic_component(result: ProviderPipelineResult) -> str:
-    if result.status is ProviderRunStatus.BLOCKED:
-        return "validation"
-    reason = (result.failure_reason or "").lower()
-    if "searxng" in reason:
-        return "searxng"
-    if "wigolo" in reason:
-        return "wigolo"
-    if any(term in reason for term in ("retrieval", "acquisition", "source", "scrape")):
-        return "retrieval"
-    if any(term in reason for term in ("mimo", "xiaomi", "model", "llm")):
-        return "mimo"
-    if "validat" in reason:
-        return "validation"
-    return result.current_stage.value
