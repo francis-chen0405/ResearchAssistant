@@ -1,5 +1,18 @@
 # Status
 
+## Windows CI line-ending correction — 2026-09-06
+
+The second Windows workflow (job 101523018809, commit 8eb5172) reached Ruff
+formatting, which rejected all 128 Python files. The repository lacked a checkout
+line-ending policy while Ruff required LF. Added `.gitattributes` with
+`* text=auto eol=lf` to preserve consistent text bytes across platforms.
+
+Validation: an isolated Git checkout with `core.autocrlf=true` reproduced all 128
+format failures without the rule. With the rule, the same checkout had zero CRLF
+Python files, all 128 passed Ruff formatting, and source bytes matched the original
+checkout. No application code or formatter requirements changed. A new pushed
+workflow must still verify Windows packaging; install and signing gates remain open.
+
 ## Windows CI path-fixture correction — 2026-09-06
 
 The first Desktop Phase 1 workflow passed macOS (job 101520646091) and failed

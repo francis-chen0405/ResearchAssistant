@@ -1,0 +1,3 @@
+# Keep text checkouts identical across macOS and Windows.
+# Ruff requires LF; source and prompt fingerprints also depend on exact bytes.
+* text=auto eol=lf
