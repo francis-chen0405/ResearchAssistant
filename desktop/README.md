@@ -1,6 +1,7 @@
-# Phase 1 desktop application
+# Desktop application
 
-Implementation and release checks are tracked in `.agent/plans/phase-1-desktop.md`.
+Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
+Current cleanup and verification are tracked in `.agent/plans/phase-2-cleanup.md`.
 This is a local application: provider calls run in its bundled Python backend. There
 is no hosted application backend and no automatic paid credential test.
 
@@ -12,8 +13,9 @@ Python, Node, pnpm or Docker. Updates replace the application bundle, not its da
 Unsigned test artifacts are not a signed/notarized public release.
 
 Targets for this phase: Apple Silicon macOS 14+ and x64 Windows 11. Local verification
-is on macOS 26.6.2 arm64. Windows and minimum-OS/clean-machine verification remain
-release gates until the corresponding artifact has actually been installed and tested.
+is on macOS 26.6.2 arm64. Native Windows build/runtime evidence is tracked in the Phase 2 verification record.
+Clean-machine installation and minimum-OS verification remain release gates until the
+corresponding artifact has actually been installed and tested.
 Intel macOS and Windows ARM64 are not claimed as verified targets.
 
 Persistent data:
@@ -107,3 +109,24 @@ inferred from the presence of a workflow or from a successful macOS build.
 Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [GitHub runner targets](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+## Phase 2 source compatibility
+
+Root contract, schema, fixture and application-runtime modules and the extracted
+`frontend/live_*` helpers remain covered by the existing recursive packaging and identity
+rules. No new dependency or resource root was introduced. Rebuild the bundle after source
+changes and start a new research run: the exact source/executable fingerprint changes.
+Historical inspection/export is preserved; incompatible resume still fails explicitly.
+See [current verification](../STATUS.md) for actual target results. Phase 3 UI work is not
+part of this cleanup.
+
+On this OneDrive-backed checkout, macOS disk-image creation returned `Operation not
+supported by device` when output was inside the synced directory. The same unchanged
+builder succeeded with a local temporary output directory:
+
+```sh
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run package --prefix desktop -- --config.directories.output=/private/tmp/researchassistant-phase2-final
+```
+
+This is a developer build-location workaround, not an application runtime-path change.
+Do not embed this temporary path or the checkout path in application code.

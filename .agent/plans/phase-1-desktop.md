@@ -1,5 +1,12 @@
 # Phase 1 — local desktop application
 
+> Historical Phase 1 implementation and verification record. Its original status and
+> branch instructions below describe that phase only. Current Phase 2 authority is
+> [the cleanup plan](phase-2-cleanup.md); later native build/runtime results are in
+> [the Phase 2 verification record](../../docs/verification/phase-2.md). Original
+> installation/signing gates remain separate. This notice replaces the old header's
+> implication of current implementation authority without removing its history.
+
 Status: implementation in progress. Current desktop scope supersedes historical
 MVP/MLP/v2 summaries. Work stays on master at the user's explicit request.
 Research stages, routing, budgets, evidence and resume policies are unchanged.
