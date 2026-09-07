@@ -1,6 +1,6 @@
 # Phase 2 — Codebase and Documentation Cleanup
 
-Status: active; authorized 2026-09-06. Work is on `codex/phase-2-cleanup`,
+Status: complete; authorized 2026-09-06. Work is on `codex/phase-2-cleanup`,
 from clean Phase 1 HEAD `6499f1d`. Phase 3 frontend redesign is not authorized.
 
 ## Prerequisites and baseline
@@ -76,4 +76,18 @@ Only unused imports were removed; no historical execution, reader, export, or fi
 contract was deleted. No dependencies or UI components changed. Original docs were
 archived without content changes; `docs/archive/README.md` explains each exact replacement.
 All model schemas/class/function ASTs and initialized SQL/migration rows match baseline.
-Step 7 is in progress; final results belong in `docs/verification/phase-2.md`.
+Step 7 is complete. Final source revision `52e8f75` passes 923 Python tests (2 existing
+skips), Ruff lint/format, full branch whitespace validation, frontend lint/types/static
+build, and the established native macOS/Windows resource, runtime/window and installer
+checks. Local read-only mounted-DMG smokes and DMG/ZIP validation pass. Regular CI also
+passes Python 3.11/3.12 and the offline adversarial evaluation.
+
+`docs/verification/phase-2.md` records exact CI runs, checksums, the local synced-folder
+packaging workaround and initial concurrent mounted-launch timeout followed by the
+unchanged sequential smoke passing. No acceptance threshold was weakened.
+
+The missing Phase 1 native Windows build/runtime proof is now supplied by the Phase 2
+matrix. Clean-machine installation, minimum-OS, signing and notarization remain separate
+public-release gates. Phase 3 is not authorized; UI components and prompts are unchanged.
+Existing one-way contracts/read projections support that later work without moving
+worker, cancellation or lock ownership into the UI.

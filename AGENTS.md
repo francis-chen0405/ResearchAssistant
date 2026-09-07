@@ -10,9 +10,9 @@ location is a workspace detail only and must not be embedded in application runt
 
 Current authority: `.agent/plans/phase-2-cleanup.md`, `ARCHITECTURE.md`, and
 `desktop/README.md`. Phase 2 maintainability refactoring and documentation consolidation
-is authorized on a new `codex/` branch. Phase 3 frontend redesign is not authorized.
-Phase 1 desktop implementation exists; native Windows and public-release verification
-remain explicit gates. The current research pipeline is completed v2 Phase 14.
+was completed on `codex/phase-2-cleanup`. Phase 3 frontend redesign is not authorized.
+Phase 1 native macOS/Windows build and runtime checks now pass. Clean-machine
+installation, minimum-OS, signing and notarization remain public-release gates. The current research pipeline is completed v2 Phase 14.
 Before editing, completely read architecture, conventions, decisions, status, handoff,
 `.agent/PLANS.md`, relevant current plans and applicable nested instructions.
 The original chronological preamble is preserved in

@@ -1,7 +1,7 @@
 # Architecture
 
 Current product: the Phase 1 local desktop application with the completed v2
-Phase 14 research pipeline. Active work is [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md).
+Phase 14 research pipeline. [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md) is complete.
 Phase 3 frontend redesign has not started. [Desktop operations](desktop/README.md)
 cover installers, data, credentials, service ownership and release verification.
 

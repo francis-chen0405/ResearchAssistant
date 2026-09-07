@@ -51,6 +51,6 @@ never add them to source files, database exports or shell-profile loading.
 - [Status](STATUS.md), [handoff](HANDOFF.md), [active plan](.agent/PLANS.md): current work and verification.
 - [Historical archive](docs/archive/README.md): exact replaced documents and completed plans.
 
-Active work is Phase 2 cleanup. The Phase 3 frontend redesign has not started. The former
+Phase 2 cleanup is complete. The Phase 3 frontend redesign has not started. The former
 README is preserved in [the archive](docs/archive/pre-phase-2/README.md); current operating
 instructions above and the desktop guide replace its older launcher-first descriptions.

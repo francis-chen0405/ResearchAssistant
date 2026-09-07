@@ -1,12 +1,14 @@
 # Phase plans
 
-Active: [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md).
+Latest completed: [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md).
 Only maintainability refactoring and documentation consolidation are authorized.
 Phase 3 frontend redesign has not started.
 
 The [Phase 1 desktop plan](plans/phase-1-desktop.md) retains the original implementation
-and verification record, including open Windows, signing, minimum-OS and clean-machine
-gates. It is a prerequisite record, not a second active implementation plan.
+and verification record, including its originally open Windows and public-release gates.
+The linked Phase 2 record supplies later native build/runtime verification; installation
+and signing gates remain. It is a prerequisite record, not a second active implementation
+plan.
 
 The latest completed research phase is
 [v2 Phase 14 — Conditional Round Four](plans/phase-v2-14-conditional-round-four.md).

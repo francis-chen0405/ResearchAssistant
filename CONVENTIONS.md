@@ -1,6 +1,6 @@
 # Development conventions
 
-Current scope is [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md). Read
+Latest authorized scope is [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md). Read
 [architecture](ARCHITECTURE.md), [status](STATUS.md), [handoff](HANDOFF.md),
 [decisions](DECISIONS.md), [plan index](.agent/PLANS.md) and applicable `AGENTS.md`
 before editing. Stop at the authorized phase boundary; no Phase 3 redesign.

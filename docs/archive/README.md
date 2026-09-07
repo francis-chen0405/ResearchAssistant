@@ -27,7 +27,7 @@ original paths to preserve inbound links; the list below explicitly classifies t
 historical. Their old stop/next-phase instructions do not override the active plan.
 
 The [Phase 1 desktop record](../../.agent/plans/phase-1-desktop.md) remains in place
-because native-platform and release verification gates are still open. Active work is
+because native-platform and release verification gates are still open. Latest authorized work is
 [Phase 2 cleanup](../../.agent/plans/phase-2-cleanup.md).
 
 ## Retained historical plans
