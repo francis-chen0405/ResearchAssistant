@@ -28,6 +28,7 @@ from agents.v2_final_output import (
     V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
 )
 from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_ARTIFACT_KEY
+from application_runtime import repository_identity
 from credential_store import (
     KeychainUnavailableError,
     ProviderCredentials,
@@ -47,6 +48,7 @@ from frontend.live_service import (
     ResearchTrail,
     prepare_default_database,
 )
+from frontend.provider_connections import ConnectionCheck, check_connection
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
 from history_import import HistoryImportResult, import_history
@@ -61,11 +63,18 @@ from models import (
     V2FinalResearchOutput,
     V2ReviewerLedgerBatchResult,
 )
+from providers.model_profiles import STANDARD_PROFILE, ModelProfile, ProfileId, profile_environment
+from providers.v2_factory import V2ProductionFactoryConfig
 from store import open_read_only_store, read_v2_artifact
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
 API_VERSION = "mlp-5-v2-phase13-analyzer-admission"
+CREDENTIAL_ACCESS_MESSAGE = (
+    "Credential vault access was not granted. On macOS, the system Keychain prompt "
+    "needs your Mac login/keychain password, not a provider API key. "
+    "Enter API keys only in the app's provider fields."
+)
 WEB_ORIGINS = ("http://127.0.0.1:3000", "http://localhost:3000")
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
@@ -280,6 +289,7 @@ def _saved_setting_names(environment: MutableMapping[str, str]) -> tuple[str, ..
 
 
 class ResearchStartInput(StrictModel):
+    model_profile: ProfileId | None = None
     raw_claim: str = Field(min_length=1)
     acknowledged_public: bool
     db_path: str | None = None
@@ -423,10 +433,7 @@ def create_app(
             try:
                 runtime.credential_loader(runtime.environment)
             except KeychainUnavailableError:
-                runtime.credential_error = (
-                    "The operating system credential vault is unavailable or contains invalid "
-                    "provider settings. Unlock it or replace the saved keys in Provider setup."
-                )
+                runtime.credential_error = CREDENTIAL_ACCESS_MESSAGE
         prepare_default_database()
         yield
         if runtime.services.owns_running_process() and not runtime.controller.has_active_runs():
@@ -458,6 +465,13 @@ def create_app(
     async def invalid_request(_: Request, exc: RequestValidationError) -> JSONResponse:
         # Pydantic's default response includes raw input, including password fields.
         return JSONResponse(status_code=422, content={"detail": "Invalid request fields."})
+
+    @app.post("/api/credentials/{name}/check", response_model=ConnectionCheck)
+    def validate_connection(name: str) -> ConnectionCheck:
+        try:
+            return check_connection(name, runtime.environment)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unknown provider.") from exc
 
     @app.post("/api/credentials/{name}/remove")
     def delete_credential(name: str) -> dict[str, bool]:
@@ -496,8 +510,13 @@ def create_app(
     def health() -> ApiHealth:
         return ApiHealth()
 
+    @app.get("/api/model-profiles", response_model=tuple[ModelProfile, ...])
+    def model_profiles() -> tuple[ModelProfile, ...]:
+        return (STANDARD_PROFILE,)
+
     @app.get("/api/configuration", response_model=ConfigurationResponse)
     def configuration(
+        model_profile: ProfileId | None = None,
         use_serpsearch: bool = True,
         use_exa: bool = True,
         use_openalex: bool = True,
@@ -513,6 +532,22 @@ def create_app(
                 use_pubmed=use_pubmed,
             )
         )
+        if model_profile is not None:
+            try:
+                V2ProductionFactoryConfig.from_environment(
+                    profile_environment(runtime.environment, model_profile),
+                    repository_revision=repository_identity(),
+                    discovery_providers=_selected_discovery_providers(
+                        use_serpsearch=use_serpsearch,
+                        use_exa=use_exa,
+                        use_openalex=use_openalex,
+                        use_arxiv=use_arxiv,
+                        use_pubmed=use_pubmed,
+                    ),
+                )
+                config_message = None
+            except (ValueError, RuntimeError) as exc:
+                config_message = redact_text(exc)
         return ConfigurationResponse(
             configured=config_message is None and runtime.credential_error is None,
             message=(
@@ -537,6 +572,8 @@ def create_app(
         use_arxiv: bool = False,
         use_pubmed: bool = False,
     ) -> CredentialSetupResponse:
+        if runtime.controller.has_active_runs():
+            raise HTTPException(status_code=409, detail="Wait for active research to finish.")
         if not any(
             (
                 payload.mimo_api_key,
@@ -601,7 +638,7 @@ def create_app(
             runtime.credential_applier(credentials, runtime.environment)
             runtime.credential_error = None
         except KeychainUnavailableError as exc:
-            raise HTTPException(status_code=503, detail=redact_text(exc)) from exc
+            raise HTTPException(status_code=503, detail=CREDENTIAL_ACCESS_MESSAGE) from exc
         config_message = runtime.controller.configuration_message(
             discovery_providers=_selected_discovery_providers(
                 use_serpsearch=use_serpsearch,
@@ -643,6 +680,7 @@ def create_app(
             raise HTTPException(status_code=422, detail="Select at least one research source.")
         database = payload.db_path or str(prepare_default_database())
         request = LiveRunRequest(
+            model_profile=payload.model_profile,
             raw_claim=payload.raw_claim,
             db_path=database,
             run_id=payload.run_id,

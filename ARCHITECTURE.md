@@ -2,7 +2,7 @@
 
 Current product: the Phase 1 local desktop application with the completed v2
 Phase 14 research pipeline. [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md) is complete.
-Phase 3 frontend redesign has not started. [Desktop operations](desktop/README.md)
+Phase 3 frontend and supported settings work is authorized and in progress. [Desktop operations](desktop/README.md)
 cover installers, data, credentials, service ownership and release verification.
 
 ## Module boundaries
@@ -149,3 +149,19 @@ The full pre-cleanup architecture is preserved verbatim in
 narratives and historical schemas. This document replaces their competing current-state
 claims with the verified module map and invariants above. The
 [archive index](docs/archive/README.md) identifies exact replacements and retained plans.
+
+## Phase 3 presentation and settings
+
+`web/components/workspace.tsx` owns the shared workspace frame, progress path and evidence
+presentation. `web/lib/preview.ts` contains only fictional local example data. Native modal
+behavior lives in `web/components/dialog.tsx`; transient credential entry lives in
+`web/components/provider-setup.tsx`. `web/lib/api.ts` remains the frontend API boundary.
+
+`providers/model_profiles.py` owns the strict supported catalog and copied-environment
+resolution. `frontend/profile_preflight.py` checks the first planner reservation offline;
+it does not promise a complete run fits every budget. `frontend/provider_connections.py`
+performs explicit fixed-host model-list authentication checks without generation, with
+presence-only disclosure for source providers lacking a configured free check. Preferences
+add a backward-compatible profile default; exact provider/model/budget values remain frozen
+by existing per-run contracts. No database, prompt, research-policy or dependency change.
+See [model settings](docs/model-settings.md) for maintained caps and compatibility details.

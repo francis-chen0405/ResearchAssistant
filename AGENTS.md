@@ -8,9 +8,9 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current authority: `.agent/plans/phase-2-cleanup.md`, `ARCHITECTURE.md`, and
+Current authority: `.agent/plans/phase-3-frontend-settings.md`, `ARCHITECTURE.md`, and
 `desktop/README.md`. Phase 2 maintainability refactoring and documentation consolidation
-was completed on `codex/phase-2-cleanup`. Phase 3 frontend redesign is not authorized.
+was completed on `codex/phase-2-cleanup`. Phase 3 frontend redesign and provider/model settings are explicitly authorized on 2026-09-07.
 Phase 1 native macOS/Windows build and runtime checks now pass. Clean-machine
 installation, minimum-OS, signing and notarization remain public-release gates. The current research pipeline is completed v2 Phase 14.
 Before editing, completely read architecture, conventions, decisions, status, handoff,

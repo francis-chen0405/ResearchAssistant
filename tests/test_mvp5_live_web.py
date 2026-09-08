@@ -473,15 +473,15 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
         expected in source
         for expected in (
             "Research a claim.",
-            "See the evidence.",
+            "See the whole picture.",
             "History",
             "Provider setup",
-            "leave blank to keep the saved key",
+            "ProviderSetup",
             "Advanced",
             "Begin research",
-            "Run settings",
+            "Research preferences",
             "Token ceiling",
-            "MiMo cost ceiling",
+            "Model cost ceiling",
             "Call ceiling",
             "Run ID",
             "SQLite database",
@@ -517,29 +517,32 @@ def test_provider_setup_modal_keeps_its_save_action_reachable_on_short_screens()
 
 
 def test_live_next_provider_setup_uses_password_fields() -> None:
-    source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
+    source = (ROOT / "web" / "components" / "provider-setup.tsx").read_text(encoding="utf-8")
 
     assert all(
         label in source
         for label in (
-            "MiMo API key",
-            "OpenAI API key",
-            "Luna API base URL",
-            "Luna model ID",
-            "MiMo v2.5 input price",
-            "MiMo v2.5 output price",
-            "Luna input price",
-            "Luna output price",
-            "SERP Search API key",
-            "Exa API key",
-            "OpenAlex API key",
-            "PubMed API key",
-            "Firecrawl API key",
+            "Xiaomi MiMo",
+            "OpenAI",
+            "SERP Search",
+            "Exa",
+            "OpenAlex",
+            "PubMed",
+            "Firecrawl",
+            "luna_base_url",
+            "luna_model",
+            "input_per_million",
+            "output_per_million",
+            "completion_limit",
+            "Restore standard route",
         )
     )
-    assert source.count('type="password"') == 7
-    assert "Keys go directly to your macOS Keychain" in source
-    assert "They are never returned to this page" in source
+    # Seven data-driven fields; the browser smoke asserts seven rendered password inputs.
+    assert source.count('vault: "') == 7
+    assert 'type="password"' in source
+    assert "macOS Keychain or Windows Credential Manager" in source
+    assert "setKeys({})" in source
+    assert "Enter a key to replace the saved key" in source
 
 
 def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> None:

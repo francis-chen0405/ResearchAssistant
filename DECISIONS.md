@@ -45,3 +45,19 @@ invariants, operating instructions and concise state. Exact pre-cleanup files re
 Earlier choices and their supersessions remain in the
 [complete decision history](docs/archive/pre-phase-2/DECISIONS.md). Historical policy
 text describes its original contract; it is not authorization for current changes.
+
+## 2026-09-07 — Phase 3 frontend and provider/model settings
+
+The user's explicit Phase 3 request supersedes the previous prohibition on frontend work.
+Use the existing Electron/static Next.js/Python architecture and native credential vault.
+The ivory/grid presentation and fictional interactive preview share real workspace components.
+Support only the established MiMo/Luna role combination; expose roles and conservative
+maintained caps without claiming arbitrary model compatibility. Profile resolution copies
+configuration before startup, and the first planner reservation is validated offline.
+No dependency or broader research behavior change was needed.
+
+A denied old-to-new Keychain smoke exposed confusing password guidance. Both frozen backends
+were ad hoc signed with different designated identities; macOS required renewed access and
+returned -128 on cancellation. Clarify the system password versus provider API key in Settings
+and sanitized errors. Preserve OS vault access controls. Cross-version credentials remain
+unverified; stable production signing and user-granted access must be verified separately.

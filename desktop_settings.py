@@ -15,6 +15,7 @@ from models import StrictModel
 
 
 class InterfaceSettings(StrictModel):
+    modelProfile: Literal["standard-2026-09"] = "standard-2026-09"
     dbPath: str = ""
     maxTokens: int = Field(default=500_000, ge=1, le=500_000)
     maxCost: str = Field(default="0.20", pattern=r"^\d+(?:\.\d+)?$")

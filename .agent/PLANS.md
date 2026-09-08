@@ -1,8 +1,8 @@
 # Phase plans
 
 Latest completed: [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md).
-Only maintainability refactoring and documentation consolidation are authorized.
-Phase 3 frontend redesign has not started.
+Active: [Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md),
+explicitly authorized 2026-09-07. Stop at its boundary.
 
 The [Phase 1 desktop plan](plans/phase-1-desktop.md) retains the original implementation
 and verification record, including its originally open Windows and public-release gates.

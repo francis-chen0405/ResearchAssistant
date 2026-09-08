@@ -417,3 +417,93 @@ def test_research_trail_returns_not_found_for_an_unknown_run(tmp_path: Path) -> 
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Research run not found."
+
+
+def test_phase3_catalog_and_profile_configuration_are_offline() -> None:
+    client, controller, _ = _client()
+    controller.environment.update({"MIMO_API_KEY": "test-mimo", "LUNA_API_KEY": "test-luna"})
+    catalog = client.get("/api/model-profiles")
+    assert catalog.status_code == 200
+    assert catalog.json()[0]["id"] == "standard-2026-09"
+    assert "test-luna" not in catalog.text
+    ready = client.get(
+        "/api/configuration",
+        params={
+            "model_profile": "standard-2026-09",
+            "use_serpsearch": "false",
+            "use_exa": "false",
+            "use_openalex": "false",
+            "use_arxiv": "true",
+        },
+    )
+    assert ready.status_code == 200
+    assert ready.json()["configured"] is True
+    assert "LUNA_INPUT_USD_PER_TOKEN" not in controller.environment
+    assert client.get("/api/configuration?model_profile=unknown").status_code == 422
+
+
+def test_phase3_profile_is_carried_in_the_typed_start_request(tmp_path: Path) -> None:
+    client, controller, _ = _client()
+    result = client.post(
+        "/api/research/start",
+        json={
+            "model_profile": "standard-2026-09",
+            "raw_claim": "A public claim",
+            "acknowledged_public": True,
+            "db_path": str(tmp_path / "research.sqlite3"),
+            "max_cost_usd": "0.50",
+        },
+    )
+    assert result.status_code == 200
+    assert controller.started[0].model_profile == "standard-2026-09"
+    assert controller.started[0].max_cost_usd == Decimal("0.50")
+    rejected = client.post(
+        "/api/research/start",
+        json={
+            "model_profile": "arbitrary-model",
+            "raw_claim": "A public claim",
+            "acknowledged_public": True,
+        },
+    )
+    assert rejected.status_code == 422
+    assert len(controller.started) == 1
+
+
+def test_phase3_credentials_cannot_change_during_active_research() -> None:
+    from unittest.mock import patch
+
+    client, controller, saved = _client()
+    with patch.object(controller, "has_active_runs", return_value=True):
+        response = client.post("/api/credentials", json={"mimo_api_key": "must-not-save"})
+        assert response.status_code == 409
+        assert client.post("/api/credentials/MIMO_API_KEY/remove").status_code == 409
+    assert not saved
+    assert "must-not-save" not in response.text
+
+
+def test_phase3_denied_vault_access_explains_system_password_without_echoing_key() -> None:
+    from credential_store import KeychainUnavailableError
+
+    environment: dict[str, str] = {}
+
+    def deny(credentials: ProviderCredentials) -> None:
+        raise KeychainUnavailableError("Native access cancelled at a private local path")
+
+    app = create_app(
+        ApiRuntime(
+            controller=FakeController(environment),
+            services=FakeServices(),
+            environment=environment,
+            credential_saver=deny,
+        ),
+        load_keychain_on_start=False,
+        allowed_hosts=("testserver",),
+    )
+    response = TestClient(app).post(
+        "/api/credentials", json={"mimo_api_key": "not-a-real-provider-key"}
+    )
+    assert response.status_code == 503
+    assert "Mac login/keychain password" in response.text
+    assert "not-a-real-provider-key" not in response.text
+    assert "private local path" not in response.text
+    assert not environment

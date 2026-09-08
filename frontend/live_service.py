@@ -66,6 +66,7 @@ from frontend.live_progress import (
 from frontend.live_progress import (
     exit_code_for_status as exit_code_for_status,
 )
+from frontend.profile_preflight import check_start_reservation
 from frontend.security import redact_text
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
@@ -84,6 +85,7 @@ from orchestrator import (
 )
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
+from providers.model_profiles import profile_environment
 from providers.v2_budget import (
     V2RunCeilings,
 )
@@ -224,13 +226,16 @@ class LiveResearchController:
                     ),
                 )
         try:
+            run_environment = profile_environment(self._environment, request.model_profile)
+            if request.model_profile is not None and self._legacy_runner is None:
+                check_start_reservation(request, self._environment)
             wigolo = WigoloConfig(
-                base_url=self._environment.get("WIGOLO_BASE_URL", "http://127.0.0.1:8000")
+                base_url=run_environment.get("WIGOLO_BASE_URL", "http://127.0.0.1:8000")
             )
             if self._legacy_runner is None:
                 factory_config: MimoProviderFactoryConfig | V2ProductionFactoryConfig = (
                     V2ProductionFactoryConfig.from_environment(
-                        self._environment,
+                        run_environment,
                         repository_revision=repository_identity(),
                         discovery_providers=request.research_controls.discovery_providers,
                         wigolo=wigolo,
@@ -244,7 +249,7 @@ class LiveResearchController:
                 )
             else:
                 factory_config = MimoProviderFactoryConfig.from_environment(
-                    self._environment,
+                    run_environment,
                     repository_revision=repository_identity(),
                     wigolo=wigolo,
                     ceilings=RunCeilings(

@@ -130,3 +130,18 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run package --prefix desktop -- --config.d
 
 This is a developer build-location workaround, not an application runtime-path change.
 Do not embed this temporary path or the checkout path in application code.
+
+## Phase 3 frontend verification and upgrade behavior
+
+Run `node desktop/frontend-smoke.cjs` after exporting `web/out`. It uses the existing
+acquisition Playwright installation and intercepts every application API; no provider
+calls are made. Screenshots are written to `desktop/build/phase3-screenshots/`.
+The desktop CI workflow includes this interaction test on both target platforms.
+
+`desktop/upgrade-smoke.py PREVIOUS_RESOURCES CURRENT_RESOURCES` tests isolated historical
+read/export, preferences and cross-executable native credentials. On macOS unsigned
+updates may cause a Keychain permission prompt. That OS prompt expects the Mac login/keychain
+password, never a provider API key. Do not weaken ACLs to bypass it. The current cross-version
+credential test was denied by the user and must not be rerun without renewed authorization.
+Same-build vault persistence and old-to-new non-secret data are separate checks.
+See [Phase 3 verification](../docs/verification/phase-3.md) for actual results and limitations.

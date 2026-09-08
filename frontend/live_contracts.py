@@ -19,6 +19,7 @@ from models import (
     V2RunDiagnostics,
 )
 from money import ExactUSD
+from providers.model_profiles import ProfileId
 
 LEGACY_LIVE_RESEARCH_CONTROLS = ResearchControls(
     discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)
@@ -38,6 +39,7 @@ LiveClassification = Literal[
 
 
 class LiveRunRequest(StrictModel):
+    model_profile: ProfileId | None = None
     raw_claim: str = Field(min_length=1)
     db_path: str = Field(min_length=1)
     run_id: UUID | None = None

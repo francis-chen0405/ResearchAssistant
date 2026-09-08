@@ -57,6 +57,10 @@ jobs:
           pnpm exec tsc --noEmit
       - name: Build bundled runtimes and static frontend
         run: python desktop/build.py
+      - name: Exercise offline research interface
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/desktop/build/resources/browsers
+        run: node desktop/frontend-smoke.cjs
       - name: Exercise frozen bundle without developer tools
         run: python desktop/smoke.py desktop/build/resources
       - name: Exercise desktop window

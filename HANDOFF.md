@@ -1,29 +1,33 @@
 # Handoff
 
-Phase 2 is complete on `codex/phase-2-cleanup`, from clean Phase 1 commit `6499f1d`.
-No pre-existing user edits were present. Do not begin Phase 3 frontend redesign without
-explicit authorization. No merge or public release was performed.
+Phase 3 was developed on `codex/phase-3-frontend-settings`, from clean completed
+Phase 2, and delivered to local `master` by fast-forward at the user’s request.
+The user explicitly authorized this phase. No push, public release, paid call or
+dependency addition was performed. Stop at the Phase 3 boundary.
 
-Read [architecture](ARCHITECTURE.md), [conventions](CONVENTIONS.md),
-[completed plan](.agent/plans/phase-2-cleanup.md) and
-[verification record](docs/verification/phase-2.md). Stable `models`, `store`,
-`orchestrator`, CLI and controller entry points remain. Fixture and historical provider
-execution/read/export are intentionally retained. Native vault, data-path, lock and
-process-tree ownership remain unchanged.
+Read [architecture](ARCHITECTURE.md), [configuration](docs/model-settings.md),
+[active plan](.agent/plans/phase-3-frontend-settings.md) and
+[verification](docs/verification/phase-3.md) for actual checks and artifact locations.
+The UI now shares reusable workspace/progress/dialog components; demo data is isolated
+from live APIs. Standard model selection resolves a copied environment before worker
+startup and preserves existing immutable configuration, accounting and release checks.
 
-All required checks pass, including both native desktop builds, runtime/window smokes
-and installers. Final executable source is `52e8f75`; later commits record documentation
-only. The local final DMG passed both mounted-artifact smokes and archive checks.
-Signing/notarization, minimum-OS and clean-machine installation remain release gates.
+Outstanding: rebuild and test Windows on an authorized native runner; verify credential
+access across signed versions, clean-machine install, minimum OS and signing/notarization.
+The user denied an isolated old-to-new Keychain test after entering a provider API key
+into the macOS password prompt. Different ad hoc executable identities explain the
+system access request; cancellation returned -128. Do not rerun that cross-version prompt
+without new authorization. Do not weaken native ACLs. Settings and API errors now explain
+the distinction. Same-build native vault round-trip/persistence remains separately tested.
 
-Rebuild, restart and start a new run after updating: source-layout changes alter the
-unchanged executable fingerprint. Never loosen resume checks or reinterpret historical
-rows. Phase 3 can use the strict request/view contracts and read-only history/progress
-projections; worker, cancellation and cross-process lock ownership remain in the controller.
-UI components and prompts were untouched.
+Rebuild, restart and start a new run after updating. The source/executable fingerprint
+changes; incompatible resume must still fail explicitly. Historical inspection/export
+must remain read-only and preserve exact validated output.
 
-Use `.venv/bin/python -m pytest` / `-m ruff` in this checkout: installed launcher
-shebangs reference its older location. For local DMG creation, use the documented
-temporary output directory; the synced checkout rejected disk-image creation.
-The [original handoff](docs/archive/pre-phase-2/HANDOFF.md) preserves the full prior
-narrative; this file replaces it with the current boundary and verification outcome.
+Use `.venv/bin/python -m pytest` / `-m ruff`: launcher shebangs reference the older
+checkout. Local DMG output must use a temporary directory because the synced checkout
+rejects disk-image creation; this is not an application runtime path.
+
+This replaces the prior handoff while preserving its exact text in the
+[Phase 2 handoff](docs/archive/phase-2-handoff/HANDOFF.md) and the
+[earlier archive](docs/archive/pre-phase-2/HANDOFF.md).

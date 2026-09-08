@@ -184,6 +184,7 @@ export type V2EvidenceDisplay = {
 };
 
 type StartInput = {
+  model_profile: "standard-2026-09";
   raw_claim: string;
   acknowledged_public: boolean;
   db_path: string;
@@ -256,12 +257,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const researchApi = {
+  profiles: () => request<ModelProfile[]>("/api/model-profiles"),
+  checkConnection: (name: string) => request<{ state: string; message: string }>(`/api/credentials/${name}/check`, { method: "POST" }),
   importHistory: (source: string) => request<{ db_path: string; run_count: number }>(`/api/history/import?source=${encodeURIComponent(source)}`, { method: "POST" }),
   preferences: () => request<InterfaceSettings>("/api/preferences"),
   savePreferences: (settings: InterfaceSettings) => request<InterfaceSettings>("/api/preferences", { method: "POST", body: JSON.stringify(settings) }),
   removeCredential: (name: string) => request<{ removed: boolean }>(`/api/credentials/${encodeURIComponent(name)}/remove`, { method: "POST" }),
   configuration: (selection: ProviderSelection) =>
     request<Configuration>(`/api/configuration?${new URLSearchParams({
+      model_profile: "standard-2026-09",
       use_serpsearch: String(selection.use_serpsearch),
       use_exa: String(selection.use_exa),
       use_openalex: String(selection.use_openalex),
@@ -305,8 +309,11 @@ export const researchApi = {
 };
 
 export type InterfaceSettings = {
+  modelProfile: "standard-2026-09";
   dbPath: string; maxTokens: number; maxCost: string; maxCalls: number;
   supportEnabled: boolean; challengeEnabled: boolean; sourceTarget: 5 | 10 | 15 | 20;
   useSerpSearch: boolean; useExa: boolean; useOpenAlex: boolean; useArxiv: boolean;
   usePubmed: boolean; useCrossref: boolean;
 };
+
+export type ModelProfile = { id: "standard-2026-09"; name: string; description: string; pricing_reviewed: string; models: { model: string; roles: string; input_per_million: string; output_per_million: string; completion_limit: number; output_contract: string }[] };
