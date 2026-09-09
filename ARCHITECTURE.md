@@ -165,3 +165,8 @@ presence-only disclosure for source providers lacking a configured free check. P
 add a backward-compatible profile default; exact provider/model/budget values remain frozen
 by existing per-run contracts. No database, prompt, research-policy or dependency change.
 See [model settings](docs/model-settings.md) for maintained caps and compatibility details.
+
+The 2026-09-08 visual refinement keeps preview timing local to `ProductPreview`, pauses
+for pointer/focus inspection and hidden documents, and renders a static completed
+example under reduced motion. Shared workspace colors are warm; backend contracts are
+unchanged. The desktop home uses a compact two-column layout with responsive stacking.

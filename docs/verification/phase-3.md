@@ -109,3 +109,37 @@ Windows verification remain separate outstanding gates.
 Inspection also confirmed `/Applications/ResearchAssistant.app` still contained the old
 frontend. The new Phase 3 DMG was opened for the user to replace the installed application.
 Installation/replacement by the user has not yet been verified.
+
+## 2026-09-08 warm palette and automatic preview
+
+User-requested visual refinement: coral/apricot/green/plum replaces blue workspace
+surfaces; compact side-by-side desktop home; repetitive caption/footer copy removed.
+Only Nomu's initial viewport was visually inspected, without scrolling.
+
+- 942 Python tests passed, 2 existing skips and one existing warning.
+- Ruff lint/format, ESLint, TypeScript, static production build and diff check passed.
+- Offline browser acceptance now verifies automatic ready/active/review/complete/error/
+  recovery transitions without playback buttons, hover/focus pause, and static completed
+  reduced-motion presentation. All original credential, startup, cancellation, history,
+  quotation, clipboard/export, keyboard and resize checks remain.
+- Home fits vertically at 1440/1280/1024 desktop widths and 768px height; all automatic
+  states fit at 1280×860. Narrow 800/480 layouts remain readable with no horizontal overflow.
+- Screenshots were inspected for home, completed preview and the actual active workspace.
+- The existing frozen backend is reused byte-for-byte; only the static frontend changes.
+  No credential migration or research runtime change requires another Keychain test.
+
+Revised unsigned macOS artifacts are delivered separately under `desktop/dist/phase3-colors/`;
+the previous Phase 3 installer remains intact. Windows and public-release gates remain.
+
+Final macOS verification: DMG checksum and ZIP integrity passed. The packaged Electron
+window test passed (frontend load, authentication, empty password fields, renderer
+isolation, duplicate exclusion and normal shutdown). The first launch concurrent with
+packaging timed out; the unchanged test passed after packaging completed. Backend
+executable bytes match the previous Phase 3 artifact exactly.
+
+SHA-256 for `desktop/dist/phase3-colors/`:
+
+```text
+10d942def84af5abf8798406903f68eb677292cef840e28da04b06bf06c18501  ResearchAssistant-0.1.0-arm64.dmg
+93ef31dc14733110663a0ee6aaf88e129619cbb1981237b50969ff83002a2a63  ResearchAssistant-0.1.0-arm64-mac.zip
+```

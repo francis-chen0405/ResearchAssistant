@@ -51,15 +51,29 @@ async function main() {
       await route.fulfill({status,json:body});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    await page.getByRole('button',{name:'Play example'}).waitFor();
-    await page.screenshot({path:path.join(shots,'home-ready.png'),fullPage:true,animations:'disabled'});
-    for (const state of ['active','review','complete']) { await page.getByRole('button',{name:state==='active'?'Play example':'Next stage'}).click(); await page.screenshot({path:path.join(shots,`preview-${state}.png`),fullPage:true,animations:'disabled'}); }
+    const preview = page.locator('.preview-wrap');
     await page.getByText('Example complete',{exact:true}).waitFor();
-    await page.getByRole('button',{name:'Show interruption'}).click();
-    await page.getByText('Connection interrupted',{exact:true}).waitFor();
-    await page.screenshot({path:path.join(shots,'preview-error.png'),fullPage:true,animations:'disabled'});
+    await page.waitForTimeout(4000);
+    assert.equal(await preview.getAttribute('data-preview-step'),'3','Reduced motion keeps the complete example still');
+    assert.equal(await preview.getByRole('button').count(),0,'Example has no playback or direction buttons');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.getByText('Ready to begin',{exact:true}).waitFor();
+    await page.mouse.move(0,0);
+    await page.screenshot({path:path.join(shots,'home-ready.png'),fullPage:true,animations:'disabled'});
+    for (const [step,state] of [[1,'active'],[2,'review'],[3,'complete'],[4,'error'],[1,'retry']]) {
+      await page.waitForFunction(expected => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === String(expected), step);
+      assert.equal(await preview.getAttribute('data-preview-step'),String(step),`Automatic ${state} state`);
+      await page.screenshot({path:path.join(shots,`preview-${state}.png`),fullPage:true,animations:'disabled'});
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),`Home fits at ${state}`);
+    }
+    await preview.hover(); await page.waitForTimeout(4000);
+    assert.equal(await preview.getAttribute('data-preview-step'),'1','Hover pauses the example');
+    await page.mouse.move(0,0); await page.waitForFunction(() => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === '2');
+    assert.equal(await preview.getAttribute('data-preview-step'),'2','Example resumes after hover');
+    await preview.locator('summary').first().focus(); await page.waitForTimeout(4000);
+    assert.equal(await preview.getAttribute('data-preview-step'),'2','Keyboard source inspection pauses the example');
     assert.equal(started,null,'Preview must not create a real run');
-    await page.getByRole('button',{name:'Retry example'}).click();
+    await page.emulateMedia({reducedMotion:'reduce'});
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
     assert.equal(await dialog.locator('input[type=password]').count(),7);
@@ -72,9 +86,11 @@ async function main() {
     await dialog.getByRole('button',{name:'Check connection',exact:true}).first().click();
     await dialog.getByText(/Key accepted and supported models/).waitFor(); assert.equal(checked,1);
     await page.screenshot({path:path.join(shots,'provider-settings.png'),fullPage:true,animations:'disabled'});
+    console.log('Verified preview and provider setup');
     // Native dialog keyboard containment and Escape restoration.
     for(let i=0;i<30;i++) { await page.keyboard.press('Tab'); assert.equal(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement)),true, `Tab ${i}: ${await page.evaluate(()=>document.activeElement.outerHTML.slice(0,200))}`); }
     await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({state:'hidden'}); assert.equal(await page.getByRole('dialog').count(),0);
+    console.log('Verified keyboard dialog');
     await page.getByRole('button',{name:'Research',exact:true}).click();
     await page.getByLabel('Your research question',{exact:true}).fill('Can greener streets make cities cooler?');
     await page.getByRole('button',{name:'Both sides',exact:true}).click();
@@ -117,9 +133,11 @@ async function main() {
     await page.getByText('Key removed.',{exact:true}).waitFor(); assert.equal(removed,1);
     await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'Home',exact:true}).click();
-    for (const width of [1024,800,480]) {
-      await page.setViewportSize({width,height:800});
+    await page.locator('.welcome-view').waitFor();
+    for (const width of [1440,1280,1024,800,480]) {
+      await page.setViewportSize({width,height:width>=1024?768:800});
       await page.screenshot({path:path.join(shots,`home-${width}.png`),fullPage:true,animations:'disabled'});
+      if(width>=1024) assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),`Desktop home vertical overflow at ${width}: ${await page.evaluate(()=>document.documentElement.scrollHeight)}`);
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Horizontal overflow at ${width}`);
       await page.getByRole('button',{name:/Provider setup/}).click();
       await page.getByRole('dialog').getByRole('button',{name:'Save keys securely'}).scrollIntoViewIfNeeded();
@@ -127,7 +145,7 @@ async function main() {
       await page.keyboard.press('Escape');
     }
     assert.deepEqual(errors,[]);
-    console.log('PASS: offline preview states, 7 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.');
+    console.log('PASS: automatic offline preview/recovery, hover/focus pause, static reduced motion, desktop viewport fit, 7 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.');
   } finally { if(browser) await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

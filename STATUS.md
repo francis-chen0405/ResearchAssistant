@@ -21,3 +21,25 @@ its cancellation does not establish that the provider rejected a key.
 [Architecture](ARCHITECTURE.md). This replaces the previous current-state summary;
 the exact [Phase 2 status](docs/archive/phase-2-handoff/STATUS.md) and
 [earlier history](docs/archive/pre-phase-2/STATUS.md) are preserved.
+
+## 2026-09-08 visual refinement
+
+The user requested warmer, more varied colors, automatic preview playback, a smaller
+side-by-side desktop home layout and removal of repetitive explanatory/footer copy.
+The initial viewport of https://nomu.store/ was inspected without scrolling or exploring
+lower sections. Coral, apricot, green and plum now distinguish actions, workspace,
+supporting and challenging evidence. The hero and preview share the desktop viewport;
+narrow windows retain readable stacking and scrolling.
+
+The isolated example automatically advances through preparation, evidence, completion,
+interruption and recovery. Hover and keyboard inspection pause it; hidden documents do
+not advance. Reduced-motion mode shows a static completed example. A compact Example
+badge and fictional source labels preserve its distinction from actual research. No
+provider calls, engine changes, new dependencies or storage changes were introduced.
+This supersedes the earlier manual example controls and dark workspace styling.
+
+Verification: 942 tests passed, 2 existing skips; Ruff, frontend lint/types/build,
+offline browser acceptance, archive validation and packaged Mac window test passed.
+Updated installer and screenshots: `desktop/dist/phase3-colors/`. Replace the installed
+app to see this refinement. See the Phase 3 verification record for retry details
+and unchanged Windows/public-release gates.
