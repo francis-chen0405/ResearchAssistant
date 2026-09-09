@@ -2,8 +2,9 @@
 
 Phase 3 frontend and provider/model settings were developed on
 `codex/phase-3-frontend-settings` and delivered to local `master` at the user’s request. Verification and release limits are recorded in
-[Phase 3 verification](docs/verification/phase-3.md). Windows rebuilding and native
-cross-version credential approval remain outstanding; Phase 3 is not fully verified.
+[Phase 3 verification](docs/verification/phase-3.md). The authorized 2026-09-08 macOS
+upgrade test passed for native credentials, preferences and research history. Windows
+rebuilding remains outstanding; Phase 3 is not fully verified.
 
 The redesigned welcome, interactive fictional preview, research workspace, evidence,
 history and settings share one visual system. Provider credentials stay in the native

@@ -61,3 +61,7 @@ were ad hoc signed with different designated identities; macOS required renewed 
 returned -128 on cancellation. Clarify the system password versus provider API key in Settings
 and sanitized errors. Preserve OS vault access controls. Cross-version credentials remain
 unverified; stable production signing and user-granted access must be verified separately.
+
+Follow-up 2026-09-08: the explicitly authorized isolated cross-version credential test
+passed unchanged. This supersedes the unverified local upgrade result above; production
+signing and Windows verification remain separate gates.

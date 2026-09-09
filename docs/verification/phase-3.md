@@ -95,3 +95,17 @@ c2af252700e2f29eee098e55db938a24db05c22f2df3fafb5a0251eca75cfd4a  ResearchAssist
 The existing Phase 2 artifacts are preserved in their prior locations. No new Windows
 artifact is claimed. Installer signing/icon/version distribution preparation remains
 outside this unsigned test delivery; the existing Electron default icon is retained.
+
+## 2026-09-08 authorized upgrade verification
+
+The user explicitly authorized another isolated test. The unchanged
+`desktop/upgrade-smoke.py` passed against the preceding Phase 2 frozen app and the new
+Phase 3 resources: native credential persistence, migrated preferences, identical
+validated historical brief and byte-identical history database, with distinct executable
+identities. This supersedes the earlier unverified credential result after cancellation;
+no assertions, timeouts or vault access controls were weakened. Signed distribution and
+Windows verification remain separate outstanding gates.
+
+Inspection also confirmed `/Applications/ResearchAssistant.app` still contained the old
+frontend. The new Phase 3 DMG was opened for the user to replace the installed application.
+Installation/replacement by the user has not yet been verified.

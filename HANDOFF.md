@@ -31,3 +31,17 @@ rejects disk-image creation; this is not an application runtime path.
 This replaces the prior handoff while preserving its exact text in the
 [Phase 2 handoff](docs/archive/phase-2-handoff/HANDOFF.md) and the
 [earlier archive](docs/archive/pre-phase-2/HANDOFF.md).
+
+## 2026-09-08 authorized upgrade verification
+
+The user explicitly authorized another isolated test. The unchanged
+`desktop/upgrade-smoke.py` passed against the preceding Phase 2 frozen app and the new
+Phase 3 resources: native credential persistence, migrated preferences, identical
+validated historical brief and byte-identical history database, with distinct executable
+identities. This supersedes the earlier unverified credential result after cancellation;
+no assertions, timeouts or vault access controls were weakened. Signed distribution and
+Windows verification remain separate outstanding gates.
+
+Inspection also confirmed `/Applications/ResearchAssistant.app` still contained the old
+frontend. The new Phase 3 DMG was opened for the user to replace the installed application.
+Installation/replacement by the user has not yet been verified.

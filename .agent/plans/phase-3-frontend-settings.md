@@ -43,3 +43,17 @@ Do not declare cross-platform phase acceptance complete or begin another phase.
 
 The user subsequently requested delivery on `master`; local delivery uses a fast-forward
 that includes the completed Phase 2 prerequisite commits. Remote publication is not authorized.
+
+## 2026-09-08 authorized upgrade verification
+
+The user explicitly authorized another isolated test. The unchanged
+`desktop/upgrade-smoke.py` passed against the preceding Phase 2 frozen app and the new
+Phase 3 resources: native credential persistence, migrated preferences, identical
+validated historical brief and byte-identical history database, with distinct executable
+identities. This supersedes the earlier unverified credential result after cancellation;
+no assertions, timeouts or vault access controls were weakened. Signed distribution and
+Windows verification remain separate outstanding gates.
+
+Inspection also confirmed `/Applications/ResearchAssistant.app` still contained the old
+frontend. The new Phase 3 DMG was opened for the user to replace the installed application.
+Installation/replacement by the user has not yet been verified.
