@@ -170,3 +170,8 @@ The 2026-09-08 visual refinement keeps preview timing local to `ProductPreview`,
 for pointer/focus inspection and hidden documents, and renders a static completed
 example under reduced motion. Shared workspace colors are warm; backend contracts are
 unchanged. The desktop home uses a compact two-column layout with responsive stacking.
+
+The 2026-09-09 refinement replaces fictional preview passages with four curated public
+report excerpts in `web/lib/preview.ts`. Their editorial placement, links and context
+are documented in [preview sources](docs/preview-sources.md). They remain separate from
+API state and validated live research artifacts; animation and usage remain simulated.

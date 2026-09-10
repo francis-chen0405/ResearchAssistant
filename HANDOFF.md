@@ -67,3 +67,16 @@ offline browser acceptance, archive validation and packaged Mac window test pass
 Updated installer and screenshots: `desktop/dist/phase3-colors/`. Replace the installed
 app to see this refinement. See the Phase 3 verification record for retry details
 and unchanged Windows/public-release gates.
+
+## 2026-09-09 orange/green and sourced evidence refinement
+
+At the user's request, orange and green are the only accent families; neutral surfaces
+replace saturated background panels. Four real-source cards replace the fictional pair
+and takeaway box. Source-type labels were removed; source links, years and expandable
+context remain. Automatic playback, reduced motion, side-by-side desktop layout and
+all actual research functionality remain. See [preview source audit](docs/preview-sources.md)
+for provenance and the distinction between curated example material and live-run output.
+
+Verification passed: 942 Python tests (2 existing skips), Ruff, frontend lint/types/build,
+offline browser interaction/desktop-fit checks, DMG/ZIP integrity and packaged Mac
+window/security/shutdown checks. Updated installer: `desktop/dist/phase3-evidence/`.

@@ -18,8 +18,8 @@ export function ProgressPath({ labels, current }: { labels: string[]; current: n
   return <ol className="progress-path" aria-label="Research stages">{labels.map((label, index) => <li key={label} className={index < current ? "done" : index === current ? "current" : ""} aria-current={index === current ? "step" : undefined}><span>{index < current ? "✓" : String(index + 1).padStart(2, "0")}</span><b>{label}</b></li>)}</ol>;
 }
 
-export function EvidenceTile({ title, direction, quote, context, sourceLabel }: { title: string; direction: "support" | "challenge"; quote: string; context: string; sourceLabel: string }) {
-  return <article className={`evidence-tile ${direction}`}><div><StatusPill tone={direction}>{direction === "support" ? "Supporting" : "Challenging"}</StatusPill><small>{sourceLabel}</small></div><h3>{title}</h3><blockquote>“{quote}”</blockquote><details><summary>Source context <span aria-hidden="true">↗</span></summary><p>{context}</p></details></article>;
+export function EvidenceTile({ title, direction, quote, context, sourceLabel, sourceUrl }: { title: string; direction: "support" | "challenge"; quote: string; context: string; sourceLabel: string; sourceUrl: string }) {
+  return <article className={`evidence-tile ${direction}`}><StatusPill tone={direction}>{direction === "support" ? "Supporting" : "Challenging"}</StatusPill><h3>{title}</h3><blockquote>“{quote}”</blockquote><div className="evidence-source-row"><a href={sourceUrl} target="_blank" rel="noreferrer">{sourceLabel} ↗</a><details><summary>Context</summary><p>{context}</p></details></div></article>;
 }
 
 const previewSequence = [0, 1, 2, 3, 4, 1, 2, 3];
@@ -58,10 +58,11 @@ export function ProductPreview() {
         <ProgressPath labels={["Preparing", "Finding evidence", "Checking sources", "Synthesis"]} current={isError ? 1 : step} />
       </div>
       <div className="preview-scene" key={scene}>
-        <div className="preview-evidence"><div className="evidence-stack-heading"><span>Evidence collected</span><b>{step === 0 ? "00" : step === 1 || isError ? "01" : "02"}</b></div>
-          {step === 0 ? <div className="evidence-placeholder"><span aria-hidden="true">↗</span><h3>Every finding starts with a source.</h3><div className="placeholder-lines" aria-hidden="true"><i /><i /><i /></div></div> : previewEvidence.slice(0, step === 1 || isError ? 1 : 2).map(item => <EvidenceTile key={item.title} {...item} sourceLabel={item.kind} />)}
+        <div className="preview-evidence"><div className="evidence-stack-heading"><span>Evidence collected</span><b>{step === 0 ? "00" : step === 1 || isError ? "01" : step === 2 ? "03" : "04"}</b></div>
+          {previewEvidence.map((item, index) => index < (step === 0 ? 0 : step === 1 || isError ? 1 : step === 2 ? 3 : 4)
+            ? <EvidenceTile key={item.title} {...item} />
+            : <div className="evidence-placeholder" key={item.title} aria-label="Source pending"><span aria-hidden="true">↗</span><h3>{isError ? "Reconnecting…" : "Following the evidence…"}</h3><div className="placeholder-lines" aria-hidden="true"><i /><i /><i /></div></div>)}
         </div>
-        <div className={`preview-conclusion ${step === 3 ? "complete" : ""}`}><span className="workspace-kicker">{isError ? "RECONNECTING" : step === 3 ? "THE TAKEAWAY" : "EVIDENCE TRAIL"}</span><p>{isError ? "Connection interrupted. Keeping collected evidence and trying again…" : step === 3 ? "Greener streets may help, with important local differences. The finding and its limits belong together." : step === 0 ? "Preparing the question and finding a starting point." : "Checking exact passages and keeping both sides in view."}</p></div>
       </div>
       <div className="preview-budget"><span>Example usage</span><strong>{step === 0 ? "$0.00" : step === 1 || isError ? "$0.03" : "$0.08"}<small> / $0.20</small></strong><progress max={20} value={step === 0 ? 0 : step === 1 || isError ? 3 : 8} /></div>
     </WorkspaceFrame>

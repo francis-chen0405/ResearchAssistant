@@ -143,3 +143,35 @@ SHA-256 for `desktop/dist/phase3-colors/`:
 10d942def84af5abf8798406903f68eb677292cef840e28da04b06bf06c18501  ResearchAssistant-0.1.0-arm64.dmg
 93ef31dc14733110663a0ee6aaf88e129619cbb1981237b50969ff83002a2a63  ResearchAssistant-0.1.0-arm64-mac.zip
 ```
+
+## 2026-09-09 orange/green and real-source cards
+
+Only orange/green accents and neutral surfaces remain in the revised presentation.
+The example uses four linked public-report excerpts (two supporting and two challenging)
+for the claim “Green technology solves climate change.” The takeaway and illustrative
+source-type labels are removed. Source years, links and expandable context remain.
+[Source audit](../preview-sources.md) records exact document locations and qualifications;
+this is curated example evidence, not a paid live pipeline run or admitted run artifact.
+
+- Python suite: 942 passed, 2 existing skips and the existing Starlette warning.
+- Ruff lint/format, ESLint, TypeScript, static export and diff checks passed.
+- Offline browser checks passed: four cards with four distinct official document links,
+  two supporting/two challenging, removed takeaway/type labels; automatic playback and
+  recovery; hover/focus pause; reduced motion; full credential/research/history/export
+  interactions and dialog keyboard checks.
+- Desktop home fits at 1440/1280/1024 widths and 768px height; preview states fit at
+  1280×860. Narrow layouts retain readable scrolling without horizontal overflow.
+- The finished preview screenshots were visually inspected. Backend/resources outside
+  the static frontend are unchanged; no new credential migration prompt is needed.
+
+Updated unsigned Mac artifacts: `desktop/dist/phase3-evidence/`, including DMG, ZIP,
+checksums and screenshots. Earlier installers remain in their separate folders.
+Windows and public-release signing/clean-machine/minimum-OS gates remain unchanged.
+
+```text
+8838ee9f9a7431fc1338b40d41d8f6bdb580fb9e8c169a21dcab7ac2a7fc5b4d  ResearchAssistant-0.1.0-arm64.dmg
+bd197576bdb212bcc4cf7ca5bc9e9c90206ffce7d49757a5bf357de9d8c996f8  ResearchAssistant-0.1.0-arm64-mac.zip
+```
+
+Final artifact checks passed: DMG checksum, ZIP integrity and packaged Electron window
+load/authentication/renderer isolation/duplicate exclusion/normal shutdown.

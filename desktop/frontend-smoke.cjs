@@ -56,6 +56,15 @@ async function main() {
     await page.waitForTimeout(4000);
     assert.equal(await preview.getAttribute('data-preview-step'),'3','Reduced motion keeps the complete example still');
     assert.equal(await preview.getByRole('button').count(),0,'Example has no playback or direction buttons');
+    assert.equal(await preview.locator('.evidence-tile').count(),4,'Completed example has four sourced cards');
+    assert.equal(await preview.locator('.evidence-tile.support').count(),2);
+    assert.equal(await preview.locator('.evidence-tile.challenge').count(),2);
+    assert.equal(await preview.locator('.preview-conclusion').count(),0,'No takeaway panel');
+    assert.equal(await preview.getByText(/Illustrative study|Illustrative review/).count(),0);
+    assert.match(await preview.locator('h2').innerText(),/Green technology solves climate change/);
+    const sourceLinks = await preview.locator('.evidence-source-row a').evaluateAll(links => links.map(link => link.href));
+    assert.equal(new Set(sourceLinks).size,4,'Four distinct source documents');
+    for (const link of sourceLinks) assert.ok(['www.iea.org','www.ipcc.ch','wedocs.unep.org'].includes(new URL(link).hostname));
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.getByText('Ready to begin',{exact:true}).waitFor();
     await page.mouse.move(0,0);
