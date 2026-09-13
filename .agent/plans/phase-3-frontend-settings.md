@@ -92,3 +92,16 @@ for provenance and the distinction between curated example material and live-run
 Verification passed: 942 Python tests (2 existing skips), Ruff, frontend lint/types/build,
 offline browser interaction/desktop-fit checks, DMG/ZIP integrity and packaged Mac
 window/security/shutdown checks. Updated installer: `desktop/dist/phase3-evidence/`.
+
+## 2026-09-12 preview tempo and orange hue
+
+The requested fivefold speedup conflicts with the above-10-second full-loop minimum:
+28.8 / 5 = 5.76 seconds. The loop is now 10.4 seconds (8 × 1.3 seconds), with its first
+completed result at 3.9 seconds. This replaces the prior 3.6-second stage timing.
+Hover/focus pause and static reduced-motion behavior remain. Orange accents shift toward
+amber-orange; green and neutral surfaces remain. Browser timing measured 10,496 ms.
+942 tests passed (2 existing skips), plus Ruff, frontend lint/types/build and offline
+browser acceptance. New Mac installer location: `desktop/dist/phase3-tempo/`.
+
+Final Mac artifact checks passed: DMG checksum, ZIP integrity and packaged window
+load/authentication/renderer isolation/duplicate exclusion/normal shutdown.

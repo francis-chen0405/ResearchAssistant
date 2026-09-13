@@ -65,16 +65,21 @@ async function main() {
     const sourceLinks = await preview.locator('.evidence-source-row a').evaluateAll(links => links.map(link => link.href));
     assert.equal(new Set(sourceLinks).size,4,'Four distinct source documents');
     for (const link of sourceLinks) assert.ok(['www.iea.org','www.ipcc.ch','wedocs.unep.org'].includes(new URL(link).hostname));
+    const loopStarted = Date.now();
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.getByText('Ready to begin',{exact:true}).waitFor();
     await page.mouse.move(0,0);
     await page.screenshot({path:path.join(shots,'home-ready.png'),fullPage:true,animations:'disabled'});
-    for (const [step,state] of [[1,'active'],[2,'review'],[3,'complete'],[4,'error'],[1,'retry']]) {
+    for (const [step,state] of [[1,'active'],[2,'review'],[3,'complete'],[4,'error'],[1,'retry'],[2,'review-recovered'],[3,'complete-recovered'],[0,'loop-reset']]) {
       await page.waitForFunction(expected => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === String(expected), step);
       assert.equal(await preview.getAttribute('data-preview-step'),String(step),`Automatic ${state} state`);
       await page.screenshot({path:path.join(shots,`preview-${state}.png`),fullPage:true,animations:'disabled'});
       assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),`Home fits at ${state}`);
     }
+    const loopElapsed = Date.now() - loopStarted;
+    assert.ok(loopElapsed > 10000 && loopElapsed < 14000, `Loop must stay over 10 seconds and finish promptly: ${loopElapsed}ms`);
+    console.log(`Preview loop: ${loopElapsed}ms`);
+    await page.waitForFunction(() => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === '1');
     await preview.hover(); await page.waitForTimeout(4000);
     assert.equal(await preview.getAttribute('data-preview-step'),'1','Hover pauses the example');
     await page.mouse.move(0,0); await page.waitForFunction(() => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === '2');

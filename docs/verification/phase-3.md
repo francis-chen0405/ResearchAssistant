@@ -175,3 +175,21 @@ bd197576bdb212bcc4cf7ca5bc9e9c90206ffce7d49757a5bf357de9d8c996f8  ResearchAssist
 
 Final artifact checks passed: DMG checksum, ZIP integrity and packaged Electron window
 load/authentication/renderer isolation/duplicate exclusion/normal shutdown.
+
+## 2026-09-12 preview tempo and orange hue
+
+The requested fivefold speedup conflicts with the above-10-second full-loop minimum:
+28.8 / 5 = 5.76 seconds. The loop is now 10.4 seconds (8 × 1.3 seconds), with its first
+completed result at 3.9 seconds. This replaces the prior 3.6-second stage timing.
+Hover/focus pause and static reduced-motion behavior remain. Orange accents shift toward
+amber-orange; green and neutral surfaces remain. Browser timing measured 10,496 ms.
+942 tests passed (2 existing skips), plus Ruff, frontend lint/types/build and offline
+browser acceptance. New Mac installer location: `desktop/dist/phase3-tempo/`.
+
+Final Mac artifact checks passed: DMG checksum, ZIP integrity and packaged window
+load/authentication/renderer isolation/duplicate exclusion/normal shutdown.
+
+```text
+ebe2acdb3f7713f50058c7ff870c5dcd011bfb6d7d6f532b885bd6c00a57e8a1  desktop/dist/phase3-tempo/ResearchAssistant-0.1.0-arm64.dmg
+954e2f70ef436c48ceb2a19d007ccf830b198ad3306f5a541c25c4586ec76bad  desktop/dist/phase3-tempo/ResearchAssistant-0.1.0-arm64-mac.zip
+```

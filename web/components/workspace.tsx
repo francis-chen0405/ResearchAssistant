@@ -23,6 +23,8 @@ export function EvidenceTile({ title, direction, quote, context, sourceLabel, so
 }
 
 const previewSequence = [0, 1, 2, 3, 4, 1, 2, 3];
+// Eight scenes: 10.4 seconds per unpaused loop, above the requested 10s minimum.
+const previewStepMs = 1300;
 const motionPreference = "(prefers-reduced-motion: reduce)";
 function subscribeMotion(onChange: () => void) {
   const media = window.matchMedia(motionPreference);
@@ -40,7 +42,7 @@ export function ProductPreview() {
     if (reducedMotion || paused) return;
     const timer = window.setInterval(() => {
       if (!document.hidden) setScene(current => (current + 1) % previewSequence.length);
-    }, 3600);
+    }, previewStepMs);
     return () => window.clearInterval(timer);
   }, [reducedMotion, paused]);
   const isError = step === 4;
