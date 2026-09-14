@@ -1,5 +1,20 @@
 # Architecture
 
+The user authorized the adaptive-search reliability corrective plan on 2026-09-12.
+This extends the Phase 3 boundary only for the corrections in that plan.
+
+Fresh initial plans persist the complete typed artifact atomically with the historical
+relational projection; readback validates their agreement and retains coverage focus.
+Early gap inputs use a new strict coverage policy and the shared prompt respects completed
+round count. Round 2/3 Search Agent attempts have immutable start/outcome artifacts and
+physical-call provenance links. One repair is allowed after schema/semantic rejection,
+using current budget snapshots and preserving downstream reserves. Unknown outcomes stop
+without replay. Round 4 authorization and per-source analysis limits are unchanged.
+
+Fresh selection inputs mark conservative gap reporting and carry latest strategy coverage;
+final output cannot equate source relevance with resolution. Legacy handoffs retain legacy
+reporting. No database migration or historical payload rewrite is needed.
+
 Current product: the Phase 1 local desktop application with the completed v2
 Phase 14 research pipeline. [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md) is complete.
 Phase 3 frontend and supported settings work is authorized and in progress. [Desktop operations](desktop/README.md)

@@ -2436,6 +2436,21 @@ def insert_v2_initial_planner_output(
                     _dt_to_iso(search.created_at),
                 ),
             )
+        # Keep the complete typed handoff in the same transaction as its relational
+        # projection. Coverage fields have no columns in the historical schema.
+        conn.execute(
+            """INSERT INTO v2_artifacts
+               (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                str(output.run_id),
+                "phase-3-initial-round-1-plan",
+                type(output).__name__,
+                canonical_v2_artifact_json(output),
+                v2_artifact_fingerprint(output),
+                _dt_to_iso(output.planned_at),
+            ),
+        )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -2459,7 +2474,7 @@ def read_v2_initial_planner_output(
             "SELECT * FROM v2_round_one_search_queries WHERE run_id = ? ORDER BY rowid",
             (str(run_id),),
         ).fetchall()
-        return V2InitialPlannerOutput.model_validate(
+        relational = V2InitialPlannerOutput.model_validate(
             {
                 "run_id": run_id,
                 "raw_claim": row["raw_claim"],
@@ -2486,6 +2501,18 @@ def read_v2_initial_planner_output(
                 "planned_at": _iso_to_dt(row["planned_at"]),
             }
         )
+        artifact_row = conn.execute(
+            "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+            (str(run_id), "phase-3-initial-round-1-plan"),
+        ).fetchone()
+        if artifact_row is None:
+            return relational
+        complete = V2InitialPlannerOutput.model_validate_json(
+            _row_to_v2_artifact(artifact_row).payload_json
+        )
+        if complete.model_copy(update={"claim_coverage_focus": ()}) != relational:
+            raise sqlite3.IntegrityError("Initial planner artifact disagrees with stored queries")
+        return complete
 
 
 def _row_to_v2_artifact(row: sqlite3.Row) -> V2PersistedArtifact:

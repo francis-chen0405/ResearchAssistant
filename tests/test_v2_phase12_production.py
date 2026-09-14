@@ -271,7 +271,7 @@ class _V2Model:
                 direction = request.input_artifact.directions.enabled_directions[0]
                 focus = coverage_focus[0] if coverage_focus else None
                 gap = V2MaterialGap(
-                    gap_id=f"gap-round-{self.successful_gaps}",
+                    gap_id="gap-round-3",
                     direction=direction,
                     missing_evidence="Independent replication evidence remains missing.",
                     rationale="The current pool contains a material replication gap.",
@@ -417,14 +417,22 @@ class _TwoSameDirectionRoundFourGapModel(_V2Model):
             assert len(output.material_gaps) == 1
             first_gap = output.material_gaps[0]
             if request.input_artifact.completed_round < 3:
-                first_gap = first_gap.model_copy(update={"direction": ResearchDirection.CHALLENGE})
+                first_gap = first_gap.model_copy(
+                    update={
+                        "direction": ResearchDirection.CHALLENGE,
+                        "gap_id": "gap-challenge-stable",
+                    }
+                )
                 assert len(output.new_search_directions) == 1
                 output = output.model_copy(
                     update={
                         "material_gaps": (first_gap,),
                         "new_search_directions": (
                             output.new_search_directions[0].model_copy(
-                                update={"direction": ResearchDirection.CHALLENGE}
+                                update={
+                                    "direction": ResearchDirection.CHALLENGE,
+                                    "gap_id": "gap-challenge-stable",
+                                }
                             ),
                         ),
                     }
@@ -1862,8 +1870,10 @@ def test_run_f_round_three_is_denied_to_protect_downstream_budget(tmp_path: Path
 
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
     assert result.final_output is not None
-    assert result.final_output.stopping.completed_rounds == 3
-    assert result.final_output.stopping.reason.value == "hard_round_limit"
+    # The fresh post-Round-2 budget, rather than the stale Round-1 balance, governs entry.
+    assert result.final_output.stopping.completed_rounds == 2
+    assert result.final_output.stopping.reason.value == "budget"
+    assert model.search_agent_calls == 1
 
 
 def test_run_g_transient_gap_degradation_preserves_valid_release(tmp_path: Path) -> None:

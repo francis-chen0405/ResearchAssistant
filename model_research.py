@@ -1266,6 +1266,7 @@ class V2GapAnalysisInput(StrictModel):
     policy_identity: Literal[
         "researchassistant-v2-phase-6-gap-analysis-v1",
         "researchassistant-v2-post-phase-13-gap-analysis-v1",
+        "researchassistant-v2-adaptive-gap-analysis-v2",
     ] = V2_GAP_ANALYSIS_POLICY_IDENTITY
 
     @model_validator(mode="after")
@@ -1430,7 +1431,10 @@ class V2GapAnalysisOutput(StrictModel):
                 not self.result.continue_research
             ):
                 raise ValueError("completed Gap Analysis state must agree with its decision")
-            if self.input.policy_identity == V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY:
+            if self.input.policy_identity in {
+                V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
+                "researchassistant-v2-adaptive-gap-analysis-v2",
+            }:
                 expected_dimensions = tuple(
                     item.dimension for item in self.input.claim_coverage_focus
                 )
@@ -1895,6 +1899,8 @@ class V2SourceSelectionInput(StrictModel):
     directions: ResearchDirections
     survivors: tuple[V2SourceSelectionCandidate, ...] = Field(min_length=1, max_length=75)
     gap_history: tuple[V2SourceSelectionGap, ...] = Field(max_length=18)
+    gap_reporting_policy: Literal["legacy", "conservative-v1"] = "legacy"
+    latest_gap_coverage: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
     policy_identity: Literal["researchassistant-v2-phase-8-source-selection-v1"] = (
         V2_SOURCE_SELECTION_POLICY_IDENTITY
     )

@@ -701,6 +701,7 @@ def test_round_three_rejects_a_trivial_query_rewrite(tmp_path: Path) -> None:
         search_outputs=[
             _proposal("independent cohort outcome instrument evaluation"),
             _proposal("evaluation instrument outcome cohort independent"),
+            _proposal("evaluation instrument outcome cohort independent"),
         ],
         gap_outputs=[_luna_continue()],
     )
@@ -913,7 +914,7 @@ def test_semantically_invalid_search_agent_plans_fail_closed(
 ) -> None:
     case_path = tmp_path / case_name
     case_path.mkdir()
-    llm = FakeAdaptiveLLM(search_outputs=[proposal], gap_outputs=[])
+    llm = FakeAdaptiveLLM(search_outputs=[proposal, proposal], gap_outputs=[])
     search = FakeSearch()
     result = _run(
         case_path,
@@ -934,7 +935,8 @@ def test_gap_direction_mismatch_is_an_invalid_search_agent_plan(tmp_path: Path) 
                 "independent challenge direction outcome",
                 direction=ResearchDirection.CHALLENGE,
             )
-        ],
+        ]
+        * 2,
         gap_outputs=[],
     )
     search = FakeSearch()
@@ -1048,7 +1050,7 @@ def test_query_novelty_rejects_exact_and_trivial_rewrites() -> None:
 
 def test_invalid_search_agent_repeat_is_rejected_before_provider_work(tmp_path: Path) -> None:
     llm = FakeAdaptiveLLM(
-        search_outputs=[_proposal("broad round one direct evidence")],
+        search_outputs=[_proposal("broad round one direct evidence")] * 2,
         gap_outputs=[],
     )
     search = FakeSearch()

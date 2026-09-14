@@ -8,7 +8,9 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -53,6 +55,7 @@ from providers.llm import (
     load_prompt,
     render_stage_prompt,
 )
+from providers.mimo import MimoFailureCode, MimoProviderError
 from providers.pricing import conservative_token_estimate
 from providers.ranking import canonical_discovery_url
 from providers.scraper import ScraperProvider
@@ -96,6 +99,10 @@ _ROUND_TWO_PER_DIRECTION_CAPS = {
 class V2AdaptivePlanValidationError(ValueError):
     """A Search Agent proposal failed deterministic semantic plan validation."""
 
+    def __init__(self, message: str, *, code: str = "invalid_plan") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class V2AdaptiveNoEligibleProviderError(LookupError):
     """No enabled provider remains within its application-owned search ceiling."""
@@ -107,6 +114,62 @@ class V2AdaptiveBudgetError(LookupError):
 
 class V2AdaptiveNoContinuationError(LookupError):
     """The persisted gap result does not authorize another adaptive search round."""
+
+
+class V2AdaptiveCancellationError(RuntimeError):
+    """Cancellation observed before a planning attempt."""
+
+
+class V2PlanningAttempt(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    attempt_id: UUID
+    round_number: Literal[2, 3]
+    attempt_number: int = Field(ge=1, le=2)
+    request_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    prompt_version: str
+    started_at: datetime
+
+    @field_validator("started_at")
+    @classmethod
+    def validate_time(cls, value: datetime) -> datetime:
+        return _aware_datetime(value)
+
+
+class V2PlanningOutcome(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    candidate: V2AdaptiveSearchModelOutput | None = None
+    rejection_code: str | None = None
+    explanation: str | None = None
+    completed_at: datetime
+
+    @field_validator("completed_at")
+    @classmethod
+    def validate_time(cls, value: datetime) -> datetime:
+        return _aware_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> V2PlanningOutcome:
+        if self.rejection_code is None:
+            if self.candidate is None or self.explanation is not None:
+                raise ValueError("Accepted planning outcomes require a candidate and no failure")
+        elif self.explanation is None:
+            raise ValueError("Rejected planning outcomes require a diagnostic")
+        return self
+
+
+class V2PlanningRepairInput(V2SearchAgentInput):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rejected: V2PlanningOutcome
+    instruction: str = (
+        "Repair the entire proposal using the validation feedback. All original controls, "
+        "Gap IDs, query history and caps still apply. Do not merely add one word or reorder "
+        "a rejected query. Return only the requested search output schema."
+    )
 
 
 def _aware_datetime(value: datetime) -> datetime:
@@ -305,6 +368,7 @@ def run_v2_adaptive_search_continuation(
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     budget: V2AdaptiveBudgetState,
     provider_attempts: Mapping[DiscoveryProvider, int] | None = None,
+    budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2AdaptiveContinuationResult:
@@ -368,6 +432,7 @@ def run_v2_adaptive_search_continuation(
         known_urls=_known_urls((round_one_discovery,)),
         base_pool=initial_pool,
         budget=budget,
+        budget_snapshot=budget_snapshot,
         cancellation_requested=cancellation_requested,
         clock=now,
     )
@@ -405,6 +470,7 @@ def run_v2_adaptive_search_continuation(
             now,
         )
 
+    budget = budget_snapshot() if budget_snapshot else budget
     gap_two_input = _round_two_gap_input(
         round_one_gap, plan_two, discovery_two, acquisition_two, budget
     )
@@ -415,6 +481,7 @@ def run_v2_adaptive_search_continuation(
         routing_config=routing_config,
         clock=now,
     )
+    budget = budget_snapshot() if budget_snapshot else budget
     if gap_two.stop_adaptive_continuation:
         code = (
             V2AdaptiveStopCode.GAP_ANALYSIS_DEGRADED
@@ -473,7 +540,20 @@ def run_v2_adaptive_search_continuation(
             llm_provider=llm_provider,
             routing_config=routing_config,
             budget=budget,
+            budget_snapshot=budget_snapshot,
+            cancellation_requested=cancellation_requested,
             clock=now,
+        )
+    except V2AdaptiveCancellationError:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.CANCELLED,
+            "Research stopped before follow-up search planning.",
+            2,
+            now,
         )
     except LLMResponseValidationError as exc:
         reason = V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
@@ -702,6 +782,7 @@ def _run_round(
     known_urls: frozenset[str],
     base_pool: V2MergedSurvivorPool,
     budget: V2AdaptiveBudgetState,
+    budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
     cancellation_requested: Callable[[], bool] | None,
     clock: Callable[[], datetime],
 ) -> (
@@ -737,7 +818,20 @@ def _run_round(
             llm_provider=llm_provider,
             routing_config=routing_config,
             budget=budget,
+            budget_snapshot=budget_snapshot,
+            cancellation_requested=cancellation_requested,
             clock=clock,
+        )
+    except V2AdaptiveCancellationError:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            base_pool,
+            V2AdaptiveStopCode.CANCELLED,
+            "Research stopped before follow-up search planning.",
+            round_number - 1,
+            clock,
         )
     except LLMResponseValidationError as exc:
         return _finish(
@@ -845,6 +939,8 @@ def _plan_round(
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
     budget: V2AdaptiveBudgetState,
+    budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime],
 ) -> V2AdaptivePlannedRound:
     key = f"phase-7-round-{round_number}-plan"
@@ -897,15 +993,17 @@ def _plan_round(
         model_alias=route.logical_alias,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.SEARCH_AGENT).generation,
     )
-    reservation = routing_config.preflight().reserve(
-        LLMStage.SEARCH_AGENT, conservative_token_estimate(request.rendered_prompt)
+    plan, reservation = _plan_with_repair(
+        path=path,
+        request=request,
+        request_input=request_input,
+        llm_provider=llm_provider,
+        routing_config=routing_config,
+        budget=budget,
+        budget_snapshot=budget_snapshot,
+        cancellation_requested=cancellation_requested,
+        clock=clock,
     )
-    _require_budget(budget, reservation.reserved_tokens, reservation.reserved_cost_usd)
-    invocation = invoke_llm(llm_provider, request, clock=clock)
-    response = invocation.output_artifact
-    if not isinstance(response, V2AdaptiveSearchModelOutput):
-        raise V2AdaptivePlanValidationError("Search Agent returned an unexpected typed artifact")
-    plan = _validate_and_assemble_plan(request_input, response, prompt.version, clock())
     planned = V2AdaptivePlannedRound(
         run_id=initial_plan.run_id,
         plan=plan,
@@ -918,6 +1016,166 @@ def _plan_round(
     )
     insert_v2_artifact(path, key, planned, plan.planned_at)
     return planned
+
+
+def _plan_with_repair(
+    *,
+    path: str,
+    request: LLMRequest,
+    request_input: V2SearchAgentInput,
+    llm_provider: LLMProvider,
+    routing_config: V2RoutingConfig,
+    budget: V2AdaptiveBudgetState,
+    budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None,
+    cancellation_requested: Callable[[], bool] | None,
+    clock: Callable[[], datetime],
+) -> tuple[V2AdaptiveRoundPlan, V2SearchAgentReservation]:
+    prior: V2PlanningOutcome | None = None
+    remaining = budget
+    for number in (1, 2):
+        if _cancelled(cancellation_requested):
+            raise V2AdaptiveCancellationError()
+        rendered = request.rendered_prompt
+        input_artifact = request_input
+        if prior is not None:
+            input_artifact = V2PlanningRepairInput(
+                **request_input.model_dump(),
+                rejected=prior,
+            )
+            rendered = render_stage_prompt(
+                request.prompt,
+                input_artifact,
+                V2AdaptiveSearchModelOutput,
+            )
+        attempt_id = uuid5(
+            request.run_id, f"adaptive-reliability-{request_input.round_number}-{number}"
+        )
+        current = request.model_copy(
+            update={
+                "rendered_prompt": rendered,
+                "input_artifact": input_artifact,
+                "input_artifact_ids": (*request.input_artifact_ids, attempt_id),
+            }
+        )
+        reserved = routing_config.preflight().reserve(
+            LLMStage.SEARCH_AGENT, conservative_token_estimate(rendered)
+        )
+        reservation = V2SearchAgentReservation(
+            input_tokens=reserved.input_tokens,
+            output_tokens=reserved.output_tokens,
+            reserved_tokens=reserved.reserved_tokens,
+            reserved_cost_usd=reserved.reserved_cost_usd,
+        )
+        key = f"adaptive-reliability-round-{request_input.round_number}-attempt-{number}"
+        try:
+            started = V2PlanningAttempt.model_validate_json(
+                read_v2_artifact(path, request.run_id, key).payload_json
+            )
+        except KeyError:
+            started = None
+        digest = sha256(rendered.encode()).hexdigest()
+        if started is not None:
+            if started.request_hash != digest:
+                raise V2AdaptivePlanValidationError("Persisted planning request does not match")
+            try:
+                outcome = V2PlanningOutcome.model_validate_json(
+                    read_v2_artifact(path, request.run_id, key + "-outcome").payload_json
+                )
+            except KeyError as exc:
+                raise V2AdaptivePlanValidationError(
+                    "Follow-up planning has an unknown outcome; its attempt remains consumed",
+                    code="unknown_outcome",
+                ) from exc
+        else:
+            _require_budget(
+                budget_snapshot() if budget_snapshot else remaining,
+                reserved.reserved_tokens,
+                reserved.reserved_cost_usd,
+            )
+            started = V2PlanningAttempt(
+                run_id=request.run_id,
+                attempt_id=attempt_id,
+                round_number=request_input.round_number,
+                attempt_number=number,
+                request_hash=digest,
+                prompt_version=request.prompt.version,
+                started_at=clock(),
+            )
+            insert_v2_artifact(path, key, started, started.started_at)
+            try:
+                response = invoke_llm(llm_provider, current, clock=clock).output_artifact
+                if not isinstance(response, V2AdaptiveSearchModelOutput):
+                    raise V2AdaptivePlanValidationError("Unexpected Search Agent artifact")
+                try:
+                    _validate_and_assemble_plan(
+                        request_input, response, request.prompt.version, clock()
+                    )
+                    outcome = V2PlanningOutcome(
+                        run_id=request.run_id, candidate=response, completed_at=clock()
+                    )
+                except V2AdaptivePlanValidationError as exc:
+                    outcome = V2PlanningOutcome(
+                        run_id=request.run_id,
+                        candidate=response,
+                        rejection_code=exc.code,
+                        explanation=str(exc)[:2000],
+                        completed_at=clock(),
+                    )
+            except LLMResponseValidationError:
+                outcome = V2PlanningOutcome(
+                    run_id=request.run_id,
+                    rejection_code="schema_failure",
+                    explanation="Return a valid instance of the requested output schema.",
+                    completed_at=clock(),
+                )
+            except LLMInvocationError as exc:
+                cause = exc.__cause__
+                if isinstance(cause, MimoProviderError) and cause.code in {
+                    MimoFailureCode.SCHEMA,
+                    MimoFailureCode.MALFORMED_JSON,
+                    MimoFailureCode.TRUNCATED,
+                }:
+                    outcome = V2PlanningOutcome(
+                        run_id=request.run_id,
+                        rejection_code="schema_failure",
+                        explanation="Return complete valid JSON matching the requested schema.",
+                        completed_at=clock(),
+                    )
+                else:
+                    outcome = V2PlanningOutcome(
+                        run_id=request.run_id,
+                        rejection_code="provider_failure",
+                        explanation="Provider call failed; no automatic planning repair.",
+                        completed_at=clock(),
+                    )
+                    insert_v2_artifact(path, key + "-outcome", outcome, outcome.completed_at)
+                    raise
+            insert_v2_artifact(path, key + "-outcome", outcome, outcome.completed_at)
+        if outcome.rejection_code is None and outcome.candidate is not None:
+            return (
+                _validate_and_assemble_plan(
+                    request_input, outcome.candidate, request.prompt.version, outcome.completed_at
+                ),
+                reservation,
+            )
+        if outcome.rejection_code == "provider_failure":
+            raise V2AdaptivePlanValidationError("A previous planning provider call failed")
+        prior = outcome
+        remaining = remaining.model_copy(
+            update={
+                "model_calls_remaining": max(0, remaining.model_calls_remaining - 1),
+                "tokens_remaining": None
+                if remaining.tokens_remaining is None
+                else max(0, remaining.tokens_remaining - reserved.reserved_tokens),
+                "cost_remaining_usd": None
+                if remaining.cost_remaining_usd is None
+                else max(Decimal("0"), remaining.cost_remaining_usd - reserved.reserved_cost_usd),
+            }
+        )
+    raise V2AdaptivePlanValidationError(
+        "Follow-up search stopped after two invalid plans. Results use sources already collected. "
+        + (prior.explanation or "")
+    )
 
 
 def _validate_and_assemble_plan(
@@ -939,22 +1197,41 @@ def _validate_and_assemble_plan(
         try:
             request.directions.require_permitted(item.direction)
         except ValueError as exc:
-            raise V2AdaptivePlanValidationError(str(exc)) from exc
+            raise V2AdaptivePlanValidationError(str(exc), code="disabled_direction") from exc
         if item.provider not in request.eligible_providers:
             raise V2AdaptivePlanValidationError(
-                "Search Agent selected a disabled or ineligible provider"
+                "Search Agent selected a disabled or ineligible provider", code="disabled_provider"
             )
         if any(gap_id not in gap_by_id for gap_id in item.targeted_gap_ids):
-            raise V2AdaptivePlanValidationError("Search Agent query must target persisted Gap IDs")
+            raise V2AdaptivePlanValidationError(
+                "Search Agent query must target persisted Gap IDs", code="unknown_gap"
+            )
         if any(
             gap_by_id[gap_id].direction is not item.direction for gap_id in item.targeted_gap_ids
         ):
             raise V2AdaptivePlanValidationError(
-                "Search Agent query direction must match every targeted Gap"
+                "Search Agent query direction must match every targeted Gap",
+                code="gap_direction_mismatch",
             )
         if not queries_are_materially_new(item.query_text, tuple(history)):
+            match = next(
+                (
+                    position
+                    for position, previous in enumerate(history, 1)
+                    if not queries_are_materially_new(item.query_text, (previous,))
+                ),
+                0,
+            )
+            origin = (
+                "previous query history"
+                if match <= len(request.previous_queries)
+                else "this proposal"
+            )
             raise V2AdaptivePlanValidationError(
-                "Search Agent query repeats or trivially rewrites query history"
+                f"Search Agent query {index} repeats or trivially rewrites query history: "
+                f"matched query {match} in {origin} "
+                "(equal tokens or at most one token difference).",
+                code="repeated_query",
             )
         history.append(item.query_text)
         cap = (
@@ -1306,6 +1583,7 @@ def _round_two_gap_input(
         acquisition_failures=tuple((*prior.acquisition_failures, *failures))[:150],
         previous_gaps=round_one_gap.result.material_gaps if round_one_gap.result else (),
         claim_coverage_focus=prior.claim_coverage_focus,
+        policy_identity=prior.policy_identity,
         remaining_budget=V2GapBudgetState(
             model_calls_remaining=max(0, budget.model_calls_remaining - 1),
             tokens_remaining=budget.tokens_remaining,
@@ -1450,13 +1728,16 @@ def _cluster_direction(cluster_id: UUID, output: V2DiscoveryScoutOutput) -> Rese
 def _require_budget(budget: V2AdaptiveBudgetState, tokens: int, cost: Decimal) -> None:
     if budget.model_calls_remaining <= budget.protected_downstream_model_calls:
         raise V2AdaptiveBudgetError("Insufficient protected model-call budget for adaptive search.")
-    if budget.tokens_remaining is not None and tokens > budget.tokens_remaining:
+    if (
+        budget.tokens_remaining is not None
+        and tokens + budget.protected_downstream_tokens > budget.tokens_remaining
+    ):
         raise V2AdaptiveBudgetError(
             "Insufficient token budget for adaptive Search Agent reservation."
         )
     if (
         budget.cost_remaining_usd is not None
-        and add_usd(Decimal("0"), cost) > budget.cost_remaining_usd
+        and add_usd(budget.protected_downstream_cost_usd, cost) > budget.cost_remaining_usd
     ):
         raise V2AdaptiveBudgetError(
             "Insufficient cost budget for adaptive Search Agent reservation."

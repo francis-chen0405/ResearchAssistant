@@ -63,6 +63,7 @@ class V2PhysicalCallStart(StrictModel):
     reserved_tokens: int = Field(ge=1)
     reserved_cost_usd: Decimal = Field(ge=0)
     source_id: UUID | None = None
+    input_artifact_ids: tuple[UUID, ...] = ()
     source_token_cap: int = Field(
         default=V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
         ge=1,
@@ -231,6 +232,7 @@ class BudgetedV2LLMProvider:
                 reserved_tokens=reservation.reserved_tokens,
                 reserved_cost_usd=reservation.reserved_cost_usd,
                 source_id=request.source_id,
+                input_artifact_ids=request.input_artifact_ids,
                 source_token_cap=(request.source_token_cap or V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP),
                 source_physical_call_cap=(
                     request.source_physical_call_cap or V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP

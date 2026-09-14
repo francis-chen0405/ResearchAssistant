@@ -1,5 +1,20 @@
 # Current decisions
 
+## 2026-09-14 — Authorized adaptive-search reliability correction
+
+The user's implementation request extends Phase 3 only for the approved corrective plan.
+Fresh plans receive an exact-claim coverage default and atomic full-artifact persistence.
+Round-aware gap instructions preserve stable Gap identity. Round 2/3 permit one bounded
+repair with persisted diagnostics and physical-call linkage, current budget checks and
+unchanged downstream reserves. Unknown attempts are never silently reissued; no automatic
+fallback query is added. Round 4 keeps its existing Governor authorization and call limits.
+
+Fresh source-selection handoffs explicitly select conservative gap reporting. Relevant
+admitted evidence does not prove gap resolution; latest strategy coverage is distinct from
+final proof. Old handoffs retain legacy reporting and stored reports remain unchanged.
+No dependency or database migration is introduced. Changed executable/prompt identity still
+requires a new run. Acquisition quality, pricing and timeout changes remain separate work.
+
 ## 2026-09-06 — Phase 2 code and documentation cleanup
 
 Use coherent implementation modules behind stable public imports. Shared domain

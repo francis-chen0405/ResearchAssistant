@@ -10,6 +10,7 @@ from typing import Literal
 from uuid import UUID
 
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
+from agents.v2_adaptive_search import V2PlanningAttempt
 from agents.v2_evidence_analyst import (
     V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
     V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
@@ -454,6 +455,23 @@ def _result_message(result: ProviderPipelineResult) -> str:
     if result.status is ProviderRunStatus.RUNNING:
         return f"Research is running in {result.current_stage.value}."
     raise ValueError(f"unsupported provider run status: {result.status!r}")
+
+
+def adaptive_planning_message(db_path: str, run_id: UUID, stage: Stage) -> str:
+    """Expose bounded repair activity without query text or provider errors."""
+    if stage is Stage.ADAPTIVE_SEARCH:
+        for round_number in (3, 2):
+            key = f"adaptive-reliability-round-{round_number}-attempt-2"
+            try:
+                started = read_v2_artifact(db_path, run_id, key)
+            except KeyError:
+                continue
+            V2PlanningAttempt.model_validate_json(started.payload_json)
+            try:
+                read_v2_artifact(db_path, run_id, key + "-outcome")
+            except KeyError:
+                return "Refining follow-up searches."
+    return f"Research is running in {stage.value}."
 
 
 def _diagnostic_component(result: ProviderPipelineResult) -> str:

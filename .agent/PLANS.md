@@ -1,8 +1,13 @@
 # Phase plans
 
+Active corrective work: [Adaptive search reliability](plans/adaptive-search-reliability.md),
+explicitly authorized by the user's implementation request on 2026-09-12. This narrowly
+supersedes the Phase 3 research-behavior boundary; no other next phase is authorized.
+
 Latest completed: [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md).
-Active: [Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md),
-explicitly authorized 2026-09-07. Stop at its boundary.
+[Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md)
+retains its implementation and outstanding platform-verification record. The user explicitly
+authorized the corrective work above; stop after that correction.
 
 The [Phase 1 desktop plan](plans/phase-1-desktop.md) retains the original implementation
 and verification record, including its originally open Windows and public-release gates.

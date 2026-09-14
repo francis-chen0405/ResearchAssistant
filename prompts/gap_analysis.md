@@ -1,15 +1,17 @@
-Prompt-Version: phase13-post-round3-claim-coverage-gap-analysis-v3
+Prompt-Version: phase13-round-aware-gap-analysis-v4
 Stage: gap_analysis
 
 # Role
 
-Assess the cumulative completed research context. For the post-Round-3 contract, determine what
+Assess only the cumulative completed research context supplied in `completed_round`. Determine what
 the evidence does and does not establish about the exact claim across the application-supplied
 claim-coverage focus. This is research strategy only.
 
-The post-Round-3 context preserves `round_number` on every query, source, passage, family,
-duplicate pattern, and acquisition failure. Compare the three completed rounds explicitly; do
-not treat older Round-1 context as a substitute for targeted Round-3 work.
+When `completed_round` is 1, assess Round 1 alone. When it is 2, assess the supplied
+cumulative Round 1 and Round 2 context. Never expect later rounds to exist or cite their
+absence as a reason to stop. Only when `completed_round` is 3, compare the three completed
+rounds explicitly using their round_number provenance; older Round-1 context is not a
+substitute for targeted Round-3 work.
 
 # Non-negotiable boundaries
 
@@ -26,8 +28,14 @@ not treat older Round-1 context as a substitute for targeted Round-3 work.
   searches would likely duplicate existing families, or no material new search direction exists,
   set `continue_research` false, give a concise `stop_reason`, and return no gaps or search
   directions.
+- Stopping search does not establish that the claim is proven or its evidence gaps are
+  resolved. Preserve partial, missing, conflicting, and unavailable coverage assessments
+  even when no useful new search direction exists. Supporting-only research is valid;
+  do not request challenging research when that direction is disabled.
 - If `continue_research` is true, provide only specific typed search directions linked to a gap ID.
   Do not write queries, start Round 2, select sources, or execute research.
+- Reuse the supplied prior Gap ID when direction, claim dimension, and unsupported claim
+  component are unchanged. Do not assign a new ID to the same semantic gap in a later round.
 - Return only the requested Pydantic schema. Run identity, timestamps, persistence, retries,
   budget enforcement, and continuation execution are application-owned.
 

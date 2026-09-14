@@ -200,6 +200,11 @@ def build_v2_gap_analysis_input(
         acquisition_failures=failures,
         previous_gaps=previous_gaps,
         claim_coverage_focus=planner_output.claim_coverage_focus,
+        policy_identity=(
+            "researchassistant-v2-adaptive-gap-analysis-v2"
+            if planner_output.claim_coverage_focus
+            else "researchassistant-v2-phase-6-gap-analysis-v1"
+        ),
         remaining_budget=remaining_budget,
     )
 

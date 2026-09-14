@@ -1,5 +1,21 @@
 # Current status
 
+## 2026-09-14 — Adaptive-search reliability
+
+The user authorized and implementation completed the
+[corrective plan](.agent/plans/adaptive-search-reliability.md): exact-claim coverage defaults
+and restart persistence, round-aware gap checks, one audited/budgeted Round-2/3 planning
+repair, and conservative unresolved-gap reporting. Supporting-only remains fully supported.
+Historical reports, Round-4 authorization, budgets and evidence validators are preserved.
+
+Verification: 959 Python tests passed, 2 existing skips; Ruff lint/format, frontend
+lint/types/build, offline browser acceptance, visual review and frozen native smoke passed.
+No dependencies, database migrations, paid research or remote publication. Packaged Mac
+delivery is tracked in [verification](docs/verification/adaptive-search-reliability.md).
+The verified update is installed in `/Applications/ResearchAssistant.app`; DMG/ZIP artifacts
+are in `desktop/dist/adaptive-reliability/`. Installed window checks and archive integrity passed.
+The Phase 3 record below remains the preceding implementation/platform history.
+
 Phase 3 frontend and provider/model settings were developed on
 `codex/phase-3-frontend-settings` and delivered to local `master` at the user’s request. Verification and release limits are recorded in
 [Phase 3 verification](docs/verification/phase-3.md). The authorized 2026-09-08 macOS

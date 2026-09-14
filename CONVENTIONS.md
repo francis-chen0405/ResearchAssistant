@@ -1,9 +1,12 @@
 # Development conventions
 
-Latest authorized scope is [Phase 3 frontend and settings](.agent/plans/phase-3-frontend-settings.md). Read
+The user authorized the adaptive-search reliability corrective plan on 2026-09-12.
+Its bounded research changes supersede the Phase 3-only scope below for this work.
+
+Latest authorized scope is [adaptive search reliability](.agent/plans/adaptive-search-reliability.md). Read
 [architecture](ARCHITECTURE.md), [status](STATUS.md), [handoff](HANDOFF.md),
 [decisions](DECISIONS.md), [plan index](.agent/PLANS.md) and applicable `AGENTS.md`
-before editing. Stop at the authorized phase boundary; stop after Phase 3.
+before editing. Stop at the authorized corrective boundary; do not begin another phase.
 
 ## Contracts and code
 

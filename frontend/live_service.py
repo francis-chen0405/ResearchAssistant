@@ -64,6 +64,9 @@ from frontend.live_progress import (
     _v2_research_progress as _v2_research_progress,
 )
 from frontend.live_progress import (
+    adaptive_planning_message,
+)
+from frontend.live_progress import (
     exit_code_for_status as exit_code_for_status,
 )
 from frontend.profile_preflight import check_start_reservation
@@ -634,7 +637,7 @@ class LiveResearchController:
                 opposing,
             ),
             message=(
-                f"Research is running in {stage.value}."
+                adaptive_planning_message(db_path, run_id, stage)
                 if manifest.status is RunStatus.RUNNING
                 else f"Research is {classification}."
             ),

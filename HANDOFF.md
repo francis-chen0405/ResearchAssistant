@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-09-14 corrective delivery
+
+The user explicitly authorized implementing the adaptive-search reliability plan after
+Phase 3. Implementation and offline checks pass: 959 tests, 2 existing skips; Ruff,
+frontend lint/types/build, browser acceptance and isolated frozen native smoke. See
+[plan](.agent/plans/adaptive-search-reliability.md) and
+[delivery verification](docs/verification/adaptive-search-reliability.md).
+The new Mac app is installed and verified with isolated test data; it is closed. Installers
+are in `desktop/dist/adaptive-reliability/`. The prior app bundle is retained as a temporary
+backup at the location in the verification record. No user data or real credentials changed.
+
+Use a new run with the updated app; old fingerprints remain incompatible with resume.
+Round 2/3 now get one persisted, budgeted repair. Unresolved gaps survive relevant evidence;
+old reports keep their historical reporting semantics. No paid test was run. Stop at this
+corrective boundary. Acquisition/error-page filtering, model pricing and long timeouts are
+separate investigations, not implemented here. Commit locally to master; do not push.
+
+The Phase 3 handoff below is retained as historical implementation/platform context.
+
 Phase 3 was developed on `codex/phase-3-frontend-settings`, from clean completed
 Phase 2, and delivered to local `master` by fast-forward at the user’s request.
 The user explicitly authorized this phase. No push, public release, paid call or

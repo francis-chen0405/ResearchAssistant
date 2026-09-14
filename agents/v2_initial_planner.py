@@ -9,6 +9,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from pydantic import ConfigDict
 
+from agents.v2_coverage import claim_component_focus
 from models import (
     DiscoveryProvider,
     ProviderRunContract,
@@ -215,7 +216,9 @@ def _assemble_initial_plan(
         directions=planner_input.directions,
         discovery_providers=planner_input.discovery_providers,
         scope_interpretations=response.scope_interpretations,
-        claim_coverage_focus=response.claim_coverage_focus,
+        claim_coverage_focus=claim_component_focus(
+            planner_input.raw_claim, response.claim_coverage_focus
+        ),
         searches=searches,
         planner_prompt_version=prompt_version,
         planned_at=planned_at,

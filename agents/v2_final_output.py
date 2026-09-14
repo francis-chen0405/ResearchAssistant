@@ -265,7 +265,9 @@ def build_v2_final_research_output(
         ),
         "gap_reconciliation": gap_reconciliation,
         "claim_coverage_map": (
-            gap_reconciliation.claim_coverage_map if gap_reconciliation is not None else ()
+            gap_reconciliation.claim_coverage_map
+            if gap_reconciliation is not None
+            else selection.input.latest_gap_coverage
         ),
         "stopping": stopping,
         "created_at": _aware(created_at),
@@ -354,6 +356,34 @@ def _v2_integrity_errors(
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     selection = evidence_result.analyst_result.input.queue_result
+    if (
+        selection.input.gap_reporting_policy == "conservative-v1"
+        and output_fields.get("gap_reconciliation") is None
+    ):
+        actual = output_fields.get("unresolved_material_gaps", ())
+        expected = {gap.gap_id: gap for gap in selection.input.gap_history}
+        actual_by_id = (
+            {gap.gap_id: gap for gap in actual if isinstance(gap, V2UnresolvedMaterialGap)}
+            if isinstance(actual, tuple)
+            else {}
+        )
+        if set(actual_by_id) != set(expected) or any(
+            actual_by_id[gap_id].missing_evidence != gap.missing_evidence
+            or actual_by_id[gap_id].direction != gap.direction
+            or actual_by_id[gap_id].assessed_after_round != gap.assessed_after_round
+            for gap_id, gap in expected.items()
+            if gap_id in actual_by_id
+        ):
+            errors.append(
+                _error(
+                    "unresolved_material_gaps",
+                    "Known gaps require validated resolution proof before removal.",
+                )
+            )
+        if output_fields.get("claim_coverage_map", ()) != selection.input.latest_gap_coverage:
+            errors.append(
+                _error("claim_coverage_map", "Latest strategy coverage must be preserved.")
+            )
     source_by_id = {item.source_id: item for item in selection.input.survivors}
     status_by_id = {item.source_id: item for item in selection.source_statuses}
     admission_by_id = {item.source_id: item for item in evidence_result.source_results}
@@ -548,6 +578,13 @@ def _unresolved_gaps(
             for item in gap_reconciliation.records
             if item.state is not V2GapCoverageState.COVERED
         )
+    if (
+        evidence_result.analyst_result.input.queue_result.input.gap_reporting_policy
+        == "conservative-v1"
+    ):
+        # Relevance is not resolution. Keep the most recent assessment of each Gap.
+        latest = {gap.gap_id: gap for gap in gaps}
+        return tuple(latest.values())
     covered = {
         gap_id
         for source in evidence_result.source_results
@@ -652,9 +689,22 @@ def _validate_persisted_output(
         raise ValueError("persisted v2 final output does not match the current inputs")
     if output.directions != expected.directions:
         raise ValueError("persisted v2 final output directions do not match the current inputs")
-    if output.unresolved_material_gaps != expected.unresolved_material_gaps:
+    expected_gaps = tuple(
+        V2UnresolvedMaterialGap(
+            gap_id=gap.gap_id,
+            direction=gap.direction,
+            missing_evidence=gap.missing_evidence,
+            assessed_after_round=gap.assessed_after_round,
+        )
+        for gap in expected.unresolved_material_gaps
+    )
+    if output.unresolved_material_gaps != expected_gaps:
         raise ValueError("persisted v2 final output gap reconciliation does not match inputs")
-    expected_coverage = gap_reconciliation.claim_coverage_map if gap_reconciliation else ()
+    expected_coverage = (
+        gap_reconciliation.claim_coverage_map
+        if gap_reconciliation
+        else evidence_result.analyst_result.input.queue_result.input.latest_gap_coverage
+    )
     if output.claim_coverage_map != expected_coverage:
         raise ValueError("persisted v2 final output coverage disclosure does not match inputs")
 

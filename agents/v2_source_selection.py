@@ -18,6 +18,8 @@ from models import (
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     ResearchDirection,
     V2AcquisitionProbeOutput,
+    V2ClaimCoverageAssessment,
+    V2ClaimCoverageState,
     V2DeepAnalysisBudget,
     V2DeepAnalysisBudgetReason,
     V2DeepAnalysisQueuePlan,
@@ -194,6 +196,34 @@ def build_v2_source_selection_input(
         directions=directions,
         survivors=tuple(candidates),
         gap_history=gap_rows,
+        gap_reporting_policy="conservative-v1",
+        latest_gap_coverage=_latest_gap_coverage(gap_outputs),
+    )
+
+
+def _latest_gap_coverage(
+    outputs: tuple[V2GapAnalysisOutput, ...],
+) -> tuple[V2ClaimCoverageAssessment, ...]:
+    for output in reversed(outputs):
+        if output.result is not None and output.result.claim_coverage_map:
+            return output.result.claim_coverage_map
+    focus = next(
+        (
+            output.input.claim_coverage_focus
+            for output in reversed(outputs)
+            if output.input.claim_coverage_focus
+        ),
+        (),
+    )
+    return tuple(
+        V2ClaimCoverageAssessment(
+            **item.model_dump(),
+            coverage_state=V2ClaimCoverageState.UNAVAILABLE,
+            evidence_summary=(
+                "No completed coverage assessment is available; coverage is unverified."
+            ),
+        )
+        for item in focus
     )
 
 

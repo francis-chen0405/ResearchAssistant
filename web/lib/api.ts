@@ -160,6 +160,7 @@ export type V2FinalResearchOutput = {
   recommended_sources: V2ResultSource[];
   all_surviving_sources: V2ResultSource[];
   unresolved_material_gaps: { gap_id: string; direction: "support" | "challenge"; missing_evidence: string; assessed_after_round: number }[];
+  claim_coverage_map?: { dimension: string; claim_component: string; coverage_state: string; evidence_summary: string }[];
   stopping: { reason: string; explanation: string; completed_rounds: number };
   release_validation: { valid: boolean; rendered_output_hash: string | null };
 };

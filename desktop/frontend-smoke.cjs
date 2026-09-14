@@ -25,7 +25,7 @@ async function main() {
     const page = await context.newPage();
     const errors = []; page.on('pageerror', e=>errors.push(e.message));
     let preferences = {modelProfile:'standard-2026-09',dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
-    let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false;
+    let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false; let invalidPlan = false;
     const id='11111111-1111-4111-8111-111111111111';
     const progress = {status:'running',model_attempts:1,retrieval_attempts:2,usable_snapshots:1,candidates:1};
     const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
@@ -42,7 +42,7 @@ async function main() {
       else if(p==='/api/history') body={items:run ? [{run_id:id,raw_claim:started.raw_claim,status:run,stage:'discovery',updated_at:'2026-09-07T12:00:00Z'}] : []};
       else if(p.endsWith('/v2-result')) {
         if(!detailed) { status=404; body={detail:'Historical brief'}; }
-        else body={run_id:id,exact_claim:started.raw_claim,directions:{support_enabled:true,challenge_enabled:true},synthesis:{sections:[{section_type:'supporting',items:[{approved_factual_statement:'Illustrative supporting finding.',admission_method:'analyzer_admitted'}]},{section_type:'opposing',items:[{approved_factual_statement:'Illustrative challenging finding.',admission_method:'analyzer_admitted'}]}]},recommended_source_ids:[],recommended_sources:[],all_surviving_sources:[],unresolved_material_gaps:[{gap_id:'internal-gap-example',direction:'challenge',missing_evidence:'Long-term air temperature data is unavailable.'}],stopping:{reason:'budget_limit',explanation:'Research stopped before all sources could be examined.'},release_validation:{valid:true,rendered_output_hash:'a'.repeat(64)}};
+        else body={run_id:id,exact_claim:started.raw_claim,directions:{support_enabled:true,challenge_enabled:true},synthesis:{sections:[{section_type:'supporting',items:[{approved_factual_statement:'Illustrative supporting finding.',admission_method:'analyzer_admitted'}]},{section_type:'opposing',items:[{approved_factual_statement:'Illustrative challenging finding.',admission_method:'analyzer_admitted'}]}]},recommended_source_ids:[],recommended_sources:[],all_surviving_sources:[],unresolved_material_gaps:[{gap_id:'internal-gap-example',direction:'challenge',missing_evidence:'Long-term air temperature data is unavailable.'}],claim_coverage_map:[{dimension:'effect_or_association',claim_component:started.raw_claim,coverage_state:'partial',evidence_summary:'Direct evidence remains incomplete.'}],stopping:{reason:invalidPlan?'invalid_search_agent_plan':'budget_limit',explanation:invalidPlan?'Follow-up search stopped after two invalid plans. Results use sources already collected.':'Research stopped before all sources could be examined.'},release_validation:{valid:true,rendered_output_hash:'a'.repeat(64)}};
       }
       else if(p.endsWith('/v2-evidence')) body={run_id:id,items:detailed ? ['support','challenge'].map(direction=>({source_id:direction,title:direction==='support'?'Illustrative canopy study':'Illustrative climate review',source_url:'https://example.org/study',source_family:'Research paper',direction,recommendation_status:'Analyzed',selection_rationale:'Relevant to the question',gap_ids:[],evidence_summary:'Source context is limited to the measured conditions.',supporting_proposition:direction==='support'?'Canopy cover was associated with cooling.':'Cooling varied with local conditions.',quote_passage:'This is an exact illustrative quotation for the offline test.',limitations:['Surface temperatures only; not a general estimate of air temperature.'],validation_status:'analyzer_admitted'})) : []};
       else if(p.endsWith('/trail')) body={run_id:id,items:[]};
@@ -139,6 +139,14 @@ async function main() {
     assert.equal(await page.locator('.evidence-card.challenge').count(),1);
     assert.equal(await page.getByText('internal-gap-example',{exact:true}).count(),0);
     await page.screenshot({path:path.join(shots,'research-evidence.png'),fullPage:true,animations:'disabled'});
+    await page.getByRole('heading',{name:'Latest research coverage assessment',exact:true}).waitFor();
+    await page.getByText('Direct evidence remains incomplete.',{exact:true}).waitFor();
+    invalidPlan=true;
+    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await page.locator('.result-limitation').getByText(/Follow-up search stopped after two invalid plans/).waitFor();
+    await page.getByText('Long-term air temperature data is unavailable.',{exact:false}).waitFor();
+    await page.screenshot({path:path.join(shots,'adaptive-search-limitations.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Settings',exact:true}).click();
     await page.getByRole('dialog').getByRole('switch',{name:'arXiv',exact:true}).click();
     await page.keyboard.press('Escape');

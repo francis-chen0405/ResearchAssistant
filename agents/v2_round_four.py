@@ -27,6 +27,7 @@ from agents.v2_adaptive_search import (
     _run_round_from_plan,
     _validate_and_assemble_plan,
 )
+from agents.v2_coverage import claim_component_focus
 from agents.v2_gap_analysis import run_v2_gap_analysis
 from evidence_portfolio import identify_source_family
 from models import (
@@ -757,18 +758,7 @@ def _claim_coverage_specification(
     The validated Planner may explicitly add only relevant population or mechanism components;
     it cannot widen this bounded continuation implicitly.
     """
-    component_focus = list(planner_focus)
-    if not any(
-        item.dimension is V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION for item in component_focus
-    ):
-        component_focus.insert(
-            0,
-            V2ClaimCoverageFocus(
-                dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
-                claim_component=exact_claim,
-                kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
-            ),
-        )
+    component_focus = claim_component_focus(exact_claim, planner_focus)
     focus = [
         *component_focus,
         V2ClaimCoverageFocus(
