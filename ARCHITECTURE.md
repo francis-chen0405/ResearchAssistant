@@ -15,10 +15,12 @@ Fresh selection inputs mark conservative gap reporting and carry latest strategy
 final output cannot equate source relevance with resolution. Legacy handoffs retain legacy
 reporting. No database migration or historical payload rewrite is needed.
 
-Current product: the Phase 1 local desktop application with the completed v2
-Phase 14 research pipeline. [Phase 2 cleanup](.agent/plans/phase-2-cleanup.md) is complete.
-Phase 3 frontend and supported settings work is authorized and in progress. [Desktop operations](desktop/README.md)
-cover installers, data, credentials, service ownership and release verification.
+Current product: the Phase 1 local desktop application with the completed v2 Phase 14
+research-policy pipeline, completed Phase 3 frontend/provider-model settings, and the
+completed adaptive-search reliability correction. Phase 2 cleanup is complete. Windows
+rebuild/install evidence, clean-machine/minimum-OS checks, signing and notarization remain
+release gates. [Desktop operations](desktop/README.md) cover installers, data, credentials,
+service ownership and release verification.
 
 ## Module boundaries
 
@@ -168,7 +170,8 @@ claims with the verified module map and invariants above. The
 ## Phase 3 presentation and settings
 
 `web/components/workspace.tsx` owns the shared workspace frame, progress path and evidence
-presentation. `web/lib/preview.ts` contains only fictional local example data. Native modal
+presentation. `web/lib/preview.ts` contains curated local example data and never represents
+live research artifacts. Native modal
 behavior lives in `web/components/dialog.tsx`; transient credential entry lives in
 `web/components/provider-setup.tsx`. `web/lib/api.ts` remains the frontend API boundary.
 
@@ -178,7 +181,9 @@ it does not promise a complete run fits every budget. `frontend/provider_connect
 performs explicit fixed-host model-list authentication checks without generation, with
 presence-only disclosure for source providers lacking a configured free check. Preferences
 add a backward-compatible profile default; exact provider/model/budget values remain frozen
-by existing per-run contracts. No database, prompt, research-policy or dependency change.
+by existing per-run contracts. During Phase 3, no database, prompt, research-policy or
+dependency change was made; the subsequent adaptive correction is documented at the top
+of this architecture record.
 See [model settings](docs/model-settings.md) for maintained caps and compatibility details.
 
 The 2026-09-08 visual refinement keeps preview timing local to `ProductPreview`, pauses

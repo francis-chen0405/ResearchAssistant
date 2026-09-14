@@ -54,7 +54,7 @@ before editing. Stop at the authorized corrective boundary; do not begin another
 ## Documentation and verification
 
 `STATUS.md` is the concise current state; `HANDOFF.md` gives the next work boundary.
-`.agent/PLANS.md` identifies the active plan. Completed narratives belong in the linked
+`.agent/PLANS.md` identifies the current plan state. Completed narratives belong in the linked
 archive; existing plan paths remain stable historical references. Explain the exact
 replacement before moving architecture, conventions, decisions or phase records.
 The `.agents/PLANS` compatibility pointer is not a second authority.

@@ -19,13 +19,15 @@ separate investigations, not implemented here. Commit locally to master; do not 
 
 The Phase 3 handoff below is retained as historical implementation/platform context.
 
+## Historical Phase 3 handoff
+
 Phase 3 was developed on `codex/phase-3-frontend-settings`, from clean completed
 Phase 2, and delivered to local `master` by fast-forward at the user’s request.
 The user explicitly authorized this phase. No push, public release, paid call or
 dependency addition was performed. Stop at the Phase 3 boundary.
 
 Read [architecture](ARCHITECTURE.md), [configuration](docs/model-settings.md),
-[active plan](.agent/plans/phase-3-frontend-settings.md) and
+[Phase 3 plan](.agent/plans/phase-3-frontend-settings.md) and
 [verification](docs/verification/phase-3.md) for actual checks and artifact locations.
 The UI now shares reusable workspace/progress/dialog components; demo data is isolated
 from live APIs. Standard model selection resolves a copied environment before worker
@@ -33,11 +35,12 @@ startup and preserves existing immutable configuration, accounting and release c
 
 Outstanding: rebuild and test Windows on an authorized native runner; verify credential
 access across signed versions, clean-machine install, minimum OS and signing/notarization.
-The user denied an isolated old-to-new Keychain test after entering a provider API key
-into the macOS password prompt. Different ad hoc executable identities explain the
-system access request; cancellation returned -128. Do not rerun that cross-version prompt
-without new authorization. Do not weaken native ACLs. Settings and API errors now explain
-the distinction. Same-build native vault round-trip/persistence remains separately tested.
+An earlier isolated old-to-new Keychain test was denied after a provider API key was entered
+into the macOS password prompt. Different ad hoc executable identities explain the system
+access request; cancellation returned -128. The user then explicitly authorized the
+unchanged 2026-09-08 upgrade smoke, which passed cross-version credential persistence and
+historical data checks. Do not weaken native ACLs. Settings and API errors still explain the
+distinction. Same-build native vault round-trip/persistence remains separately tested.
 
 Rebuild, restart and start a new run after updating. The source/executable fingerprint
 changes; incompatible resume must still fail explicitly. Historical inspection/export

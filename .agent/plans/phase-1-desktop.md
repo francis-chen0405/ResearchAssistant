@@ -1,14 +1,15 @@
 # Phase 1 — local desktop application
 
 > Historical Phase 1 implementation and verification record. Its original status and
-> branch instructions below describe that phase only. Current Phase 2 authority is
-> [the cleanup plan](phase-2-cleanup.md); later native build/runtime results are in
+> branch instructions below describe that phase only. Current authority is the completed
+> [adaptive-search reliability plan](adaptive-search-reliability.md); later native
+> build/runtime results are in
 > [the Phase 2 verification record](../../docs/verification/phase-2.md). Original
 > installation/signing gates remain separate. This notice replaces the old header's
 > implication of current implementation authority without removing its history.
 
-Status: implementation in progress. Current desktop scope supersedes historical
-MVP/MLP/v2 summaries. Work stays on master at the user's explicit request.
+Status: implementation complete; platform and public-release gates remain. Current desktop
+scope supersedes historical MVP/MLP/v2 summaries. Work stays on master at the user's explicit request.
 Research stages, routing, budgets, evidence and resume policies are unchanged.
 
 ## Packaging decision
@@ -24,12 +25,12 @@ and an explicit Windows native credential-vault backend. No plaintext fallback.
 
 ## Acceptance sequence
 
-- [ ] Packaged vertical slice on macOS and Windows: UI, Python health, durable data,
+- [x] Packaged vertical slice on macOS and Windows: UI, Python health, durable data,
   isolated OS vault round-trip, owned Wigolo start/health/stop.
 - [x] Portable paths, cross-process exclusion, settings and history migration.
 - [x] Credential save/replace/remove, sanitized errors, local request authentication.
 - [x] Shutdown, cancellation, crash recovery, source/prompt fingerprints.
-- [ ] Reproducible installers and offline CI checks on both operating systems.
+- [x] Reproducible installers and offline CI checks on both operating systems.
 - [x] Full Python/frontend checks and actual artifact/platform evidence.
 
 No installer or platform verification is claimed until exercised. Signing,
@@ -49,7 +50,7 @@ No paid provider calls or publishing are authorized by this implementation.
 - [x] macOS/Windows CI and package workflows, dependency locks and build constraints.
 - [x] pytest 909 passed / 2 existing skips; Ruff lint/format, Git diff check, frontend
   lint/type/static build and JavaScript syntax checks passed.
-- [ ] Windows workflow execution, actual Windows installer and Windows installation test.
+- [ ] Actual Windows installer installation test.
 - [ ] Signing/notarization, minimum-OS and clean-machine release verification.
 
 This is an implemented desktop foundation with verified local macOS test artifacts,
@@ -79,8 +80,9 @@ Final SHA-256 checksums (also in `desktop/dist/SHA256SUMS.txt`):
 1440f75d71610ca7faeecac6ece6a4ff8c004990cf06b26dd6836a04a1cd9152  ResearchAssistant-0.1.0-arm64-mac.zip
 ```
 
-macOS test artifacts are complete. The unchecked Windows and release-signing gates above
-remain open; no actual Windows artifact or clean Windows install is claimed.
+macOS and Windows CI/package artifacts are complete. Signing, notarization, minimum-OS and
+clean-machine installation remain open release gates; the CI/package evidence does not claim
+a clean Windows installation.
 
 ## Windows CI path-fixture correction — 2026-09-06
 
@@ -96,10 +98,10 @@ path examples; the offline test explicitly supplies its platform-native temporar
 output path, just as it explicitly supplies the credential and approval gates.
 The absolute-path validator and execution gates remain unchanged.
 
-Validation: 43 targeted tests passed; full pytest passed 909 tests with 2 existing skips.
-Ruff lint/format and Git whitespace checks passed. A fresh Windows workflow run after committing
-and pushing this correction is still required; Windows packaging/install validation
-and signing gates remain open. Existing macOS runtime artifacts are unaffected.
+Validation at that point: 43 targeted tests passed; full pytest passed 909 tests with 2 existing
+skips. Ruff lint/format and Git whitespace checks passed. A later Phase 2 native matrix supplied
+the Windows workflow/package evidence; installation and signing gates remain open. Existing
+macOS runtime artifacts were unaffected.
 
 ## Windows CI line-ending correction — 2026-09-06
 
@@ -108,8 +110,8 @@ formatting, which rejected all 128 Python files. The repository lacked a checkou
 line-ending policy while Ruff required LF. Added `.gitattributes` with
 `* text=auto eol=lf` to preserve consistent text bytes across platforms.
 
-Validation: an isolated Git checkout with `core.autocrlf=true` reproduced all 128
+Validation at that point: an isolated Git checkout with `core.autocrlf=true` reproduced all 128
 format failures without the rule. With the rule, the same checkout had zero CRLF
 Python files, all 128 passed Ruff formatting, and source bytes matched the original
-checkout. No application code or formatter requirements changed. A new pushed
-workflow must still verify Windows packaging; install and signing gates remain open.
+checkout. No application code or formatter requirements changed. The later Phase 2 native
+matrix verified Windows packaging; installation and signing gates remain open.

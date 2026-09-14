@@ -18,17 +18,18 @@ plan path when navigating those references.
 | [HANDOFF.md](pre-phase-2/HANDOFF.md) | [HANDOFF.md](../../HANDOFF.md) | next-work boundary and outstanding checks |
 | [README.md](pre-phase-2/README.md) | [README.md](../../README.md) | current product and operating entry points |
 | [frontend/README.md](pre-phase-2/frontend/README.md) | [frontend/README.md](../../frontend/README.md) | current application service ownership |
-| [.agent/PLANS.md](pre-phase-2/.agent/PLANS.md) | [.agent/PLANS.md](../../.agent/PLANS.md) | active plan and historical index |
+| [.agent/PLANS.md](pre-phase-2/.agent/PLANS.md) | [.agent/PLANS.md](../../.agent/PLANS.md) | current plan state and historical index |
 
 Completed status/handoff narratives and architecture/convention/decision chronology
 are now archived here. No content was discarded. Prompts were neither moved nor edited:
 `prompts/*.md` are executable application inputs. Completed phase plans retain their
 original paths to preserve inbound links; the list below explicitly classifies them as
-historical. Their old stop/next-phase instructions do not override the active plan.
+historical. Their old stop/next-phase instructions do not override the current scope.
 
 The [Phase 1 desktop record](../../.agent/plans/phase-1-desktop.md) remains in place
 because native-platform and release verification gates are still open. Latest authorized work is
-[Phase 2 cleanup](../../.agent/plans/phase-2-cleanup.md).
+[Adaptive search reliability](../../.agent/plans/adaptive-search-reliability.md); Phase 2 cleanup
+and Phase 3 frontend/settings remain the preceding implementation records.
 
 ## Retained historical plans
 

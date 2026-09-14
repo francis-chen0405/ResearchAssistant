@@ -65,11 +65,13 @@ text describes its original contract; it is not authorization for current change
 
 The user's explicit Phase 3 request supersedes the previous prohibition on frontend work.
 Use the existing Electron/static Next.js/Python architecture and native credential vault.
-The ivory/grid presentation and fictional interactive preview share real workspace components.
+The ivory/grid presentation and local interactive preview share real workspace components;
+the preview was later refined with curated public report excerpts.
 Support only the established MiMo/Luna role combination; expose roles and conservative
 maintained caps without claiming arbitrary model compatibility. Profile resolution copies
 configuration before startup, and the first planner reservation is validated offline.
-No dependency or broader research behavior change was needed.
+For the Phase 3 frontend/settings scope, no dependency or broader research behavior change
+was needed. The later adaptive-search correction is recorded above.
 
 A denied old-to-new Keychain smoke exposed confusing password guidance. Both frozen backends
 were ad hoc signed with different designated identities; macOS required renewed access and

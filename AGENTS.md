@@ -8,11 +8,14 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current authority: `.agent/plans/phase-3-frontend-settings.md`, `ARCHITECTURE.md`, and
-`desktop/README.md`. Phase 2 maintainability refactoring and documentation consolidation
-was completed on `codex/phase-2-cleanup`. Phase 3 frontend redesign and provider/model settings are explicitly authorized on 2026-09-07.
+Current authority: `.agent/plans/adaptive-search-reliability.md`, `ARCHITECTURE.md`,
+`STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
+Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction
+are complete on local `master`; the correction was authorized on 2026-09-12.
 Phase 1 native macOS/Windows build and runtime checks now pass. Clean-machine
-installation, minimum-OS, signing and notarization remain public-release gates. The current research pipeline is completed v2 Phase 14.
+installation, minimum-OS, signing and notarization remain public-release gates. The v2
+Phase 14 plan is the predecessor research-policy record; the current pipeline also
+includes the completed adaptive-search reliability correction.
 Before editing, completely read architecture, conventions, decisions, status, handoff,
 `.agent/PLANS.md`, relevant current plans and applicable nested instructions.
 The original chronological preamble is preserved in

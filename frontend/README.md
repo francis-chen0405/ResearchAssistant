@@ -18,6 +18,7 @@ historical export adapters remain available; they do not select a new research p
 Fresh research uses `v2_orchestrator.py` and current configured discovery/model routes.
 
 See [architecture](../ARCHITECTURE.md) for exact evidence, persistence, accounting and
-credential invariants. UI components and workflows are unchanged; Phase 3 has not begun.
+credential invariants. The Phase 3 workspace, settings and history workflows are implemented;
+fresh research also includes the bounded adaptive-search reliability correction.
 The [original frontend README](../docs/archive/pre-phase-2/frontend/README.md) is preserved
 verbatim. This document replaces its historical MLP-only provider/launcher description.

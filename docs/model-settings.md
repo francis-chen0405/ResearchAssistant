@@ -9,8 +9,9 @@ URLs, exports and logs.
 
 ## Supported profile
 
-`standard-2026-09` uses the existing adapters and logical roles, with no new research
-behavior. Advanced role assignments are inspectable, not arbitrarily editable: accepting
+`standard-2026-09` uses the existing adapters and logical roles; selecting this profile
+does not add research behavior. Advanced role assignments are inspectable, not arbitrarily
+editable: accepting
 an arbitrary model name is not a compatibility guarantee.
 
 | Model | Roles | Input cap / million | Output cap / million |

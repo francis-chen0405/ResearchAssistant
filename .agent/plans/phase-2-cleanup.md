@@ -1,7 +1,8 @@
 # Phase 2 — Codebase and Documentation Cleanup
 
 Status: complete; authorized 2026-09-06. Work is on `codex/phase-2-cleanup`,
-from clean Phase 1 HEAD `6499f1d`. Phase 3 frontend redesign is not authorized.
+from clean Phase 1 HEAD `6499f1d`. At this phase boundary, Phase 3 frontend redesign
+was not authorized; later work is recorded in the Phase 3 and adaptive-search plans.
 
 ## Prerequisites and baseline
 
@@ -88,6 +89,7 @@ unchanged sequential smoke passing. No acceptance threshold was weakened.
 
 The missing Phase 1 native Windows build/runtime proof is now supplied by the Phase 2
 matrix. Clean-machine installation, minimum-OS, signing and notarization remain separate
-public-release gates. Phase 3 is not authorized; UI components and prompts are unchanged.
+public-release gates. At the Phase 2 boundary, Phase 3 was not authorized and UI components
+and prompts were unchanged; later records document the authorized frontend and adaptive work.
 Existing one-way contracts/read projections support that later work without moving
 worker, cancellation or lock ownership into the UI.

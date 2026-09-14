@@ -1,12 +1,14 @@
 # Phase 3 — Frontend overhaul and provider/model settings
 
-Authorized 2026-09-07 by the user's full Phase 3 request. In progress on
-`codex/phase-3-frontend-settings`, from clean completed Phase 2.
-This replaces the older current-state prohibition on Phase 3, not its historical record.
+Authorized 2026-09-07 by the user's full Phase 3 request and completed locally on
+`master` after development on `codex/phase-3-frontend-settings`, from clean completed
+Phase 2. This is now a completed implementation/platform record; the adaptive-search
+reliability correction is the subsequent completed corrective plan.
 
 1. Verify prior handoffs, live contracts and native packaging (read completed).
-2. Build an ivory/grid design system, floating navigation, welcome and interactive
-   explicitly fictional preview; share workspace/status components with real research.
+2. Build an ivory/grid design system, floating navigation, welcome and interactive local
+   preview; share workspace/status components with real research. The preview is later
+   refined with curated public report excerpts while remaining separate from live runs.
 3. Expose direction, supported model profile, budget and readiness in the composer.
    Cohesively rebuild results, history, provider setup and accessible dialogs.
 4. Add strict supported-profile selection, maintained conservative prices and offline
@@ -31,13 +33,15 @@ available for historical compatibility but is not advertised as tested model sup
 
 Steps 1–5 are implemented: all redesigned surfaces, shared/local-only preview, provider
 settings, strict profile defaults, offline preflight and automated interaction coverage.
-No new dependency, provider or research behavior was introduced. Current STATUS/HANDOFF
+No new dependency, provider or research behavior was introduced within the Phase 3 scope.
+Current STATUS/HANDOFF
 replace their prior summaries, preserved verbatim under `docs/archive/phase-2-handoff/`.
 
-Step 6 is partially verified: the native macOS build is rebuilt; Windows requires an
-authorized native runner. The user denied the cross-version Keychain prompt; its separate
-credential migration assertion remains unverified, not waived. Old-to-new preferences
-and historical brief/database integrity passed a data-only check without sharing a key.
+Step 6 is complete for the available macOS tooling: the native macOS build and isolated
+upgrade smoke passed. The explicitly authorized 2026-09-08 cross-version Keychain test
+verified credential persistence, migrated preferences and historical data integrity.
+Windows requires an authorized native runner; signing, notarization, clean-machine and
+minimum-OS checks remain release gates.
 The [verification record](../../docs/verification/phase-3.md) records final checks/artifacts.
 Do not declare cross-platform phase acceptance complete or begin another phase.
 

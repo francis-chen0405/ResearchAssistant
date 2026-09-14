@@ -1,7 +1,9 @@
 # Desktop application
 
 Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
-Current cleanup and verification are tracked in `.agent/plans/phase-2-cleanup.md`.
+Current adaptive-search verification is tracked in
+`docs/verification/adaptive-search-reliability.md`; Phase 2 cleanup and Phase 3 frontend
+records remain available for their historical build and platform context.
 This is a local application: provider calls run in its bundled Python backend. There
 is no hosted application backend and no automatic paid credential test.
 
@@ -110,15 +112,16 @@ Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [GitHub runner targets](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-## Phase 2 source compatibility
+## Historical Phase 2 source compatibility
 
 Root contract, schema, fixture and application-runtime modules and the extracted
 `frontend/live_*` helpers remain covered by the existing recursive packaging and identity
 rules. No new dependency or resource root was introduced. Rebuild the bundle after source
 changes and start a new research run: the exact source/executable fingerprint changes.
 Historical inspection/export is preserved; incompatible resume still fails explicitly.
-See [current verification](../STATUS.md) for actual target results. Phase 3 UI work is not
-part of this cleanup.
+See [current verification](../STATUS.md) for actual target results. Phase 3 UI and the
+adaptive-search correction are subsequent work; rebuild after source changes and use the
+current verification records for their checks.
 
 On this OneDrive-backed checkout, macOS disk-image creation returned `Operation not
 supported by device` when output was inside the synced directory. The same unchanged
@@ -141,7 +144,10 @@ The desktop CI workflow includes this interaction test on both target platforms.
 `desktop/upgrade-smoke.py PREVIOUS_RESOURCES CURRENT_RESOURCES` tests isolated historical
 read/export, preferences and cross-executable native credentials. On macOS unsigned
 updates may cause a Keychain permission prompt. That OS prompt expects the Mac login/keychain
-password, never a provider API key. Do not weaken ACLs to bypass it. The current cross-version
-credential test was denied by the user and must not be rerun without renewed authorization.
-Same-build vault persistence and old-to-new non-secret data are separate checks.
-See [Phase 3 verification](../docs/verification/phase-3.md) for actual results and limitations.
+password, never a provider API key. Do not weaken ACLs to bypass it. An earlier cross-version
+credential prompt was denied, then the user explicitly authorized the unchanged isolated
+upgrade smoke on 2026-09-08; it passed native credential persistence, preferences and history
+checks. Same-build vault persistence and old-to-new non-secret data remain separate checks.
+See [Phase 3 verification](../docs/verification/phase-3.md) and
+[adaptive-search verification](../docs/verification/adaptive-search-reliability.md) for
+actual results and limitations.

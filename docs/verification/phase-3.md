@@ -42,12 +42,14 @@ Local target: Apple Silicon macOS. No paid provider calls or public publishing.
 - Phase 2 to Phase 3 preferences and historical data passed a separate isolated data-only
   check: migrated profile default, retained budget, identical validated historical brief
   and byte-identical history database, with distinct executable identities.
-- Cross-version native credential check **not verified**: the user denied the macOS
+- At the initial Phase 3 verification point, the cross-version native credential check was
+  **not verified**: the user denied the macOS
   Keychain prompt. OS status -128 indicates cancellation. Both backends were ad hoc signed
   with different identifiers and no TeamIdentifier. The prompt expects a Mac login/keychain
   password, not a provider API key. The app now explains this and returns sanitized access
   guidance on denial; the regression confirms secrets and native error details are not echoed.
-  Native security was not weakened and the denied cross-version prompt was not repeated.
+  Native security was not weakened. The explicitly authorized follow-up below supersedes this
+  initial status and passed the same isolated cross-version credential check.
 
 Two existing source-text UI tests were updated to follow the extracted provider
 component and renamed controls. The seven-field/security assertions are retained and

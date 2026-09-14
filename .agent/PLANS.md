@@ -1,13 +1,13 @@
 # Phase plans
 
-Active corrective work: [Adaptive search reliability](plans/adaptive-search-reliability.md),
-explicitly authorized by the user's implementation request on 2026-09-12. This narrowly
-supersedes the Phase 3 research-behavior boundary; no other next phase is authorized.
+No plan is currently active. The latest completed work is [Adaptive search reliability](plans/adaptive-search-reliability.md),
+explicitly authorized by the user's implementation request on 2026-09-12. It narrowly
+extended the Phase 3 research-behavior boundary; no other next phase is authorized.
 
-Latest completed: [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md).
-[Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md)
-retains its implementation and outstanding platform-verification record. The user explicitly
-authorized the corrective work above; stop after that correction.
+[Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md) and
+[Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md) are preceding
+completed records. Their remaining platform and release checks are still tracked where
+they apply; stop after the adaptive correction.
 
 The [Phase 1 desktop plan](plans/phase-1-desktop.md) retains the original implementation
 and verification record, including its originally open Windows and public-release gates.
@@ -15,9 +15,9 @@ The linked Phase 2 record supplies later native build/runtime verification; inst
 and signing gates remain. It is a prerequisite record, not a second active implementation
 plan.
 
-The latest completed research phase is
-[v2 Phase 14 — Conditional Round Four](plans/phase-v2-14-conditional-round-four.md).
-Research behavior and historical contracts are unchanged in Phase 2.
+The latest completed research-policy phase is [v2 Phase 14 — Conditional Round Four](plans/phase-v2-14-conditional-round-four.md).
+Phase 2 preserved that policy; the later adaptive correction adds bounded fresh-run
+reliability behavior while retaining historical contracts.
 
 Completed plan files remain at their original paths for stable references. The
 [archive index](../docs/archive/README.md) lists them and links the verbatim
