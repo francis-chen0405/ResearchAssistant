@@ -53,7 +53,7 @@ from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_SCOUT_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "v2_scout.md"
-V2_SCOUT_BATCH_SIZE = 30
+V2_SCOUT_BATCH_SIZE = 20
 V2_SCOUT_ARTIFACT_KEY = "phase-4-discovery-scout"
 _TITLE_TOKEN_RE = re.compile(r"[a-z0-9]+")
 _DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)\s*", re.IGNORECASE)

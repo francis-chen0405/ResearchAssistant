@@ -8,11 +8,12 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current authority: `.agent/plans/adaptive-search-reliability.md`, `ARCHITECTURE.md`,
+Current authority: `.agent/plans/mac-release-cache-pricing.md`, `ARCHITECTURE.md`,
 `STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
 Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction
 are complete on local `master`; the correction was authorized on 2026-09-12.
-Phase 1 native macOS/Windows build and runtime checks now pass. Clean-machine
+The Phase 2 native macOS/Windows matrix supplies the earlier Phase 1 build/runtime
+evidence; it does not verify the subsequent Phase 3/adaptive Windows build. Clean-machine
 installation, minimum-OS, signing and notarization remain public-release gates. The v2
 Phase 14 plan is the predecessor research-policy record; the current pipeline also
 includes the completed adaptive-search reliability correction.

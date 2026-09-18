@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from agents.v2_adaptive_search import (
+    V2AdaptiveBudgetState,
     V2AdaptivePlannedRound,
     V2SearchAgentReservation,
     _validate_and_assemble_plan,
@@ -19,6 +20,7 @@ from agents.v2_adaptive_search import (
 from agents.v2_round_four import (
     _build_round_four_search_agent_request,
     _claim_coverage_specification,
+    _conservative_reservation,
     _plan_round_four,
     _representative_families,
     _representative_round_rows,
@@ -60,6 +62,38 @@ from models import (
 from research_governor import V2RoundFourGovernorInput, evaluate_v2_round_four_authorization
 
 NOW = datetime(2026, 8, 28, tzinfo=UTC)
+
+
+def test_round_four_reserves_both_attempts_for_smaller_scout_batches() -> None:
+    from test_v2_phase4_discovery_scout import _routing
+
+    gap = _continuity_output((), _identity_gap())
+    budget = V2AdaptiveBudgetState(model_calls_remaining=8)
+    reservation = _conservative_reservation(
+        budget=budget,
+        post_gap_budget=budget,
+        gap=gap,
+        routing_config=_routing(),
+        maximum_queries=5,
+        search_agent_tokens=100,
+        search_agent_cost=Decimal("0.001"),
+    )
+    assert reservation is not None
+    assert reservation.scout_calls == 4  # 25 candidates, two batches, two attempts each.
+    assert reservation.optional_calls == 7
+    insufficient = V2AdaptiveBudgetState(model_calls_remaining=7)
+    assert (
+        _conservative_reservation(
+            budget=insufficient,
+            post_gap_budget=insufficient,
+            gap=gap,
+            routing_config=_routing(),
+            maximum_queries=5,
+            search_agent_tokens=100,
+            search_agent_cost=Decimal("0.001"),
+        )
+        is None
+    )
 
 
 def _gap() -> V2MaterialGap:

@@ -1,5 +1,14 @@
 # Desktop application
 
+Current delivery target is Apple Silicon macOS first; Windows release work is deferred.
+The [Mac/cache-pricing plan](../.agent/plans/mac-release-cache-pricing.md) tracks this
+delivery. Without a Developer ID certificate, its DMG/ZIP is an unsigned test release.
+Downloading outside the App Store still uses macOS Gatekeeper checks: Apple describes
+[Developer ID and notarization](https://developer.apple.com/developer-id/) for that route.
+No membership is required to build or test locally; this does not establish signed
+public-release readiness. The installer declares macOS 14+, but minimum-OS and
+clean-machine acceptance still require tests on those systems.
+
 Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
 Current adaptive-search verification is tracked in
 `docs/verification/adaptive-search-reliability.md`; Phase 2 cleanup and Phase 3 frontend

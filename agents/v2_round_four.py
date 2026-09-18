@@ -28,6 +28,7 @@ from agents.v2_adaptive_search import (
     _validate_and_assemble_plan,
 )
 from agents.v2_coverage import claim_component_focus
+from agents.v2_discovery import V2_SCOUT_BATCH_SIZE
 from agents.v2_gap_analysis import run_v2_gap_analysis
 from evidence_portfolio import identify_source_family
 from models import (
@@ -1281,7 +1282,7 @@ def _conservative_reservation(
     search_agent_tokens: int,
     search_agent_cost: Decimal,
 ) -> V2RoundFourReservation | None:
-    scout_calls = ((maximum_queries * 5 + 29) // 30) * 2
+    scout_calls = ((maximum_queries * 5 + V2_SCOUT_BATCH_SIZE - 1) // V2_SCOUT_BATCH_SIZE) * 2
     scout_reserve = routing_config.preflight().reserve(LLMStage.SCOUT, 1)
     gap_reserve = _gap_reservation(gap.input, routing_config)
     optional_tokens = (

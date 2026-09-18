@@ -338,7 +338,7 @@ def test_crossref_adapter_success_and_failure_are_non_evidentiary() -> None:
         failed.resolve("10.1000/abc")
 
 
-def test_v2_scout_batches_thirty_items_retries_falls_back_and_persists(tmp_path: Path) -> None:
+def test_v2_scout_batches_twenty_items_retries_falls_back_and_persists(tmp_path: Path) -> None:
     run_id = uuid4()
     directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
     queries = tuple(
@@ -371,7 +371,7 @@ def test_v2_scout_batches_thirty_items_retries_falls_back_and_persists(tmp_path:
                     title=f"Study {index}",
                     rank=index + 1,
                 )
-                for index in range(31)
+                for index in range(51)
             ),
         ),
     )
@@ -400,17 +400,19 @@ def test_v2_scout_batches_thirty_items_retries_falls_back_and_persists(tmp_path:
     )
 
     assert [len(request.input_artifact.candidates) for request in scout.requests] == [
-        30,
-        30,
-        1,
-        1,
+        20,
+        20,
+        20,
+        20,
+        11,
+        11,
     ]
-    assert V2_SCOUT_BATCH_SIZE == 30
+    assert V2_SCOUT_BATCH_SIZE == 20
     assert scout.requests[0].model_alias.value == "mimo-v2.5"
     assert all(
         audit.fallback_used and audit.attempted_calls == 2 for audit in result.output.scout_audits
     )
-    assert len(scout_ordered_item_ids(result.output)) == 31
+    assert len(scout_ordered_item_ids(result.output)) == 51
     resumed = run_v2_discovery_and_scout(
         db_path=db_path,
         planner_output=plan,

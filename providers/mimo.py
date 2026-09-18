@@ -6,7 +6,7 @@ import json
 import re
 import time
 from datetime import UTC, datetime
-from decimal import ROUND_UP, Decimal
+from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
 from threading import local
@@ -45,11 +45,13 @@ from models import (
 from money import parse_exact_usd
 from providers.config import LunaConfig, MimoConfig, MimoRouteConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
-from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap, conservative_token_estimate
-
-MIMO_PRO_CACHE_HIT_USD_PER_TOKEN = Decimal("0.0000000036")
-MIMO_PRO_CACHE_MISS_USD_PER_TOKEN = Decimal("0.000000435")
-MIMO_PRO_OUTPUT_USD_PER_TOKEN = Decimal("0.00000087")
+from providers.pricing import (
+    DIRECT_MIMO_PRICE_CAP,
+    CacheTokenPrices,
+    ModelPriceCap,
+    cache_prices_for_route,
+    conservative_token_estimate,
+)
 
 
 class MimoFailureCode(StrEnum):
@@ -185,6 +187,7 @@ class XiaomiMimoAdapter:
             headers=_auth_headers(config),
         )
         self._price_cap = price_cap
+        self._cache_prices = cache_prices_for_route(config.base_url, config.model)
         self._max_call_cost_usd = parse_exact_usd(max_call_cost_usd)
         self._max_call_tokens = max_call_tokens
         self._expected_model_alias = expected_model_alias
@@ -304,7 +307,12 @@ class XiaomiMimoAdapter:
                 ),
                 retryable=True,
             ) from exc
-        usage = _usage(body.get("usage"), self._price_cap, self._provider_label)
+        usage = _usage(
+            body.get("usage"),
+            self._price_cap,
+            self._provider_label,
+            cache_prices=self._cache_prices,
+        )
         if usage.total_tokens is None or usage.total_tokens > self._max_call_tokens:
             raise MimoProviderError(
                 MimoFailureCode.BUDGET,
@@ -358,7 +366,12 @@ class XiaomiMimoAdapter:
             body = response.json()
             if not isinstance(body, dict) or body.get("usage") is None:
                 return
-            usage = _usage(body["usage"], self._price_cap, self._provider_label)
+            usage = _usage(
+                body["usage"],
+                self._price_cap,
+                self._provider_label,
+                cache_prices=self._cache_prices,
+            )
         except Exception:
             return
         self._thread_state.last_failure_usage = usage
@@ -377,6 +390,10 @@ def _request_payload(
     }
     if request.generation.temperature is not None and not isinstance(config, LunaConfig):
         payload["temperature"] = request.generation.temperature
+    if isinstance(config, LunaConfig):
+        payload["reasoning_effort"] = "high"
+        if config.base_url == "https://api.openai.com/v1":
+            payload["service_tier"] = "default"
     return payload
 
 
@@ -686,6 +703,8 @@ def _usage(
     raw: Any,
     cap: ModelPriceCap,
     provider_label: str = "Xiaomi MiMo",
+    *,
+    cache_prices: CacheTokenPrices | None = None,
 ) -> ModelUsageMetadata:
     if not isinstance(raw, dict):
         raise MimoProviderError(
@@ -713,11 +732,12 @@ def _usage(
         )
     cached = _cached_prompt_tokens(raw, prompt)
     uncached = prompt - cached if cached is not None else None
-    cost = (
-        _cache_aware_cost(cached=cached, uncached=uncached, output=completion)
-        if cached is not None and uncached is not None
-        else cap.upper_bound(prompt, completion)
-    )
+    cost = cap.upper_bound(prompt, completion)
+    if cached is not None and cache_prices is not None:
+        writes = _cache_write_tokens(raw, prompt - cached)
+        cost = cache_prices.estimate(
+            prompt=prompt, cached=cached, output=completion, cache_writes=writes
+        )
     return ModelUsageMetadata(
         input_tokens=prompt,
         cached_input_tokens=cached,
@@ -738,13 +758,18 @@ def _cached_prompt_tokens(raw: dict[str, Any], prompt_tokens: int) -> int | None
     return cached
 
 
-def _cache_aware_cost(*, cached: int, uncached: int, output: int) -> Decimal:
-    value = (
-        Decimal(cached) * MIMO_PRO_CACHE_HIT_USD_PER_TOKEN
-        + Decimal(uncached) * MIMO_PRO_CACHE_MISS_USD_PER_TOKEN
-        + Decimal(output) * MIMO_PRO_OUTPUT_USD_PER_TOKEN
-    )
-    return value.quantize(Decimal("0.000000001"), rounding=ROUND_UP)
+def _cache_write_tokens(raw: dict[str, Any], uncached_tokens: int) -> int | None:
+    details = raw.get("prompt_tokens_details")
+    if not isinstance(details, dict):
+        return None
+    writes = details.get("cache_write_tokens")
+    if (
+        isinstance(writes, bool)
+        or not isinstance(writes, int)
+        or not 0 <= writes <= uncached_tokens
+    ):
+        return None
+    return writes
 
 
 def _http_error(response: httpx.Response, *, provider_label: str) -> MimoProviderError:

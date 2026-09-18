@@ -2,8 +2,9 @@
 
 Authorized 2026-09-07 by the user's full Phase 3 request and completed locally on
 `master` after development on `codex/phase-3-frontend-settings`, from clean completed
-Phase 2. This is now a completed implementation/platform record; the adaptive-search
-reliability correction is the subsequent completed corrective plan.
+Phase 2. Implementation and local macOS verification are complete; current Windows
+and public-release acceptance remain open. The adaptive-search reliability correction
+is the subsequent completed corrective plan.
 
 1. Verify prior handoffs, live contracts and native packaging (read completed).
 2. Build an ivory/grid design system, floating navigation, welcome and interactive local

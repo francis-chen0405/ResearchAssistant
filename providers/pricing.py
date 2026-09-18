@@ -27,6 +27,70 @@ class ModelPriceCap(StrictModel):
         return value.quantize(Decimal("0.000000001"), rounding=ROUND_UP)
 
 
+class CacheTokenPrices(StrictModel):
+    """Published standard text-token rates; immutable and separate from reservations."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    input_per_million: Decimal = Field(gt=0)
+    cached_per_million: Decimal = Field(gt=0)
+    output_per_million: Decimal = Field(gt=0)
+    cache_write_multiplier: Decimal = Field(default=Decimal("1"), ge=1)
+    long_context_threshold: int | None = Field(default=None, gt=0)
+
+    def estimate(
+        self, *, prompt: int, cached: int, output: int, cache_writes: int | None
+    ) -> Decimal:
+        # Missing write counts are not evidence of free writes. MiMo's multiplier
+        # is 1 because its published cache-miss tariff has no additional write fee.
+        uncached = prompt - cached
+        writes = uncached if cache_writes is None else cache_writes
+        if min(prompt, cached, output, writes) < 0 or cached + writes > prompt:
+            raise ValueError("cache token counts must partition input tokens")
+        input_cost = (
+            Decimal(cached) * self.cached_per_million
+            + Decimal(uncached - writes) * self.input_per_million
+            + Decimal(writes) * self.input_per_million * self.cache_write_multiplier
+        )
+        output_cost = Decimal(output) * self.output_per_million
+        if self.long_context_threshold is not None and prompt > self.long_context_threshold:
+            input_cost *= 2
+            output_cost *= Decimal("1.5")
+        return ((input_cost + output_cost) / Decimal(1_000_000)).quantize(
+            Decimal("0.000000001"), rounding=ROUND_UP
+        )
+
+
+def cache_prices_for_route(base_url: str, model: str) -> CacheTokenPrices | None:
+    """No published discount is inferred for custom endpoints or unknown models.
+
+    Reviewed 2026-09-17: official OpenAI Luna model/caching docs and Xiaomi overseas
+    pay-as-you-go pricing. Source URLs and fallback rules are in docs/model-settings.md.
+    """
+    if base_url == "https://api.xiaomimimo.com/v1":
+        if model == "mimo-v2.5-pro":
+            return CacheTokenPrices(
+                input_per_million=Decimal("0.435"),
+                cached_per_million=Decimal("0.0036"),
+                output_per_million=Decimal("0.87"),
+            )
+        if model == "mimo-v2.5":
+            return CacheTokenPrices(
+                input_per_million=Decimal("0.14"),
+                cached_per_million=Decimal("0.0028"),
+                output_per_million=Decimal("0.28"),
+            )
+    if base_url == "https://api.openai.com/v1" and model == "gpt-5.6-luna":
+        return CacheTokenPrices(
+            input_per_million=Decimal("0.20"),
+            cached_per_million=Decimal("0.02"),
+            output_per_million=Decimal("1.20"),
+            cache_write_multiplier=Decimal("1.25"),
+            long_context_threshold=272_000,
+        )
+    return None
+
+
 COMPATIBILITY_PRICE_CAPS = {
     "mimo-v2.5-pro": ModelPriceCap(
         model="mimo-v2.5-pro",

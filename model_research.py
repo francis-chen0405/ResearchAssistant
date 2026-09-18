@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from model_contracts import (
     DiscoveryProvider,
@@ -336,20 +337,21 @@ class V2InitialPlannerModelOutput(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     scope_interpretations: tuple[V2ScopeInterpretation, ...] = Field(default=(), max_length=4)
-    claim_coverage_focus: tuple[V2ClaimCoverageFocus, ...] = Field(default=(), max_length=3)
+    claim_coverage_focus: tuple[V2InitialPlannerClaimComponent, ...] = Field(
+        default=(), max_length=3
+    )
     searches: tuple[V2InitialPlannerSearchResponse, ...]
 
     @field_validator("claim_coverage_focus")
     @classmethod
     def validate_claim_components(
-        cls, value: tuple[V2ClaimCoverageFocus, ...]
-    ) -> tuple[V2ClaimCoverageFocus, ...]:
-        if any(item.kind is not V2ClaimCoverageKind.CLAIM_COMPONENT for item in value):
-            raise ValueError(
-                "Planner may select claim components but not evidence-audit dimensions"
-            )
+        cls, value: tuple[V2InitialPlannerClaimComponent, ...]
+    ) -> tuple[V2InitialPlannerClaimComponent, ...]:
         if len({item.dimension for item in value}) != len(value):
-            raise ValueError("Planner claim-coverage dimensions must be unique")
+            raise PydanticCustomError(
+                "planner_duplicate_coverage_dimension",
+                "Planner claim-coverage dimensions must be unique",
+            )
         return value
 
 
@@ -1126,6 +1128,19 @@ class V2ClaimCoverageFocus(StrictModel):
         if self.searchable == (self.unavailable_reason is not None):
             raise ValueError("claim-coverage availability and unavailable reason must agree")
         return self
+
+
+class V2InitialPlannerClaimComponent(V2ClaimCoverageFocus):
+    """Narrow fresh response schema; generic historical coverage stays unchanged."""
+
+    dimension: Literal[
+        V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+        V2ClaimCoverageDimension.POPULATION_AND_SETTING,
+        V2ClaimCoverageDimension.MECHANISM_OR_PATHWAY,
+    ]
+    kind: Literal[V2ClaimCoverageKind.CLAIM_COMPONENT] = V2ClaimCoverageKind.CLAIM_COMPONENT
+    searchable: Literal[True] = True
+    unavailable_reason: None = None
 
 
 class V2GapIdentity(StrictModel):

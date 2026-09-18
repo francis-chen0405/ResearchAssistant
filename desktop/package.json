@@ -19,7 +19,7 @@
     "directories": { "output": "dist" },
     "files": ["main.cjs", "package.json"],
     "extraResources": [{ "from": "build/resources", "to": "." }],
-    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.productivity" },
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.productivity", "minimumSystemVersion": "14.0" },
     "win": { "target": ["nsis"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false }
   }

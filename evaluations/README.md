@@ -52,8 +52,9 @@ input text, model alias, and pinned snapshot from the corpus. Returned observati
 match that identity exactly or evaluation fails.
 
 The command-line `--enable-live` flag deliberately fails unless an embedding application
-injects a provider. This repository contains no live vendor adapter, API-key integration,
-HTTP client, or normal network dependency.
+injects a provider. This evaluation harness contains no built-in live vendor adapter or
+API-key integration and makes no network calls in its default offline mode. The production
+application separately contains live provider adapters and HTTP clients under `providers/`.
 
 ## Exit behavior
 

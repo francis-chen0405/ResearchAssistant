@@ -1,5 +1,62 @@
 # Handoff
 
+## 2026-09-17 Reliability follow-up
+
+The user authorized reliability before distribution and larger model responses within
+the same total budget. The active Mac/cache plan includes this extension. Fresh planner
+schema/default mismatch, Scout batching and Round-4 call estimates are corrected. The
+Standard profile supplies 4,096/8,192/16,384 completion allowances for Scout/Pro/Luna;
+legacy unprofiled defaults remain 4,096. No retry, timeout or global budget increase.
+992 tests (2 existing skips), Ruff, offline evaluation, rebuilt native smoke, archive
+integrity, upgrade and packaged/installed window checks pass. The app is installed;
+latest downloads are in `desktop/dist/mac-reliability/`; see
+[reliability record](docs/verification/planner-scout-reliability.md).
+
+Never rerun or reset `desktop/build/mac-cache-live-acceptance/attempts.json`: five
+submissions are consumed and the backend stopped. Outcomes: harness cancellation,
+rejected overlap, initial-planner failure, and two 20-minute deep-analysis cancellations.
+Total recorded model cost is $0.178617536; no final report was released. These original
+candidate tests do not validate later fixes. Read the final acceptance record before
+any further provider action; new paid tests need permission.
+
+## 2026-09-17 Mac-first delivery
+
+Current authority is [Mac-first release/cache pricing](.agent/plans/mac-release-cache-pricing.md).
+The user resolved the earlier audit decisions: Mac first, Windows deferred, and official
+model-specific cache accounting. The implementation, 984-test suite, offline checks,
+packaging, native/upgrade/window tests and installed identity pass. The new unsigned Mac
+app is installed; the prior app is backed up. Read the exact artifact/verification record
+in [Mac verification](docs/verification/mac-cache-pricing.md).
+
+Live acceptance is authorized for at most five submissions total with at most $5 model
+budget and existing source-service quotas. The ledger under
+`desktop/build/mac-cache-live-acceptance/attempts.json` is authoritative; do not reset it
+or silently add paid tests. Initial harness interruption/rejected overlap count toward
+that limit. A completed live attempt failed the initial planner's claim-coverage contract;
+do not weaken validation or declare general research quality accepted. Final live results
+are recorded in verification. No remote publication or paid Apple enrollment occurred.
+
+The user has no Developer ID certificate; downloadable unsigned test delivery is possible,
+but signing/notarization and clean-machine/minimum-OS checks remain open. Earlier audit
+and phase notes below are historical, not unresolved choices or current execution authority.
+
+## 2026-09-17 audit follow-up
+
+Read the [MLP readiness audit](.agent/plans/mlp-readiness.md) before planning further
+implementation. Documentation now distinguishes historical Windows verification from
+current-version acceptance and scopes the no-network claim to the evaluation harness.
+The current code still has a reproduced shared-adapter cache-pricing mismatch; decide
+the accounting policy with the user before implementation. Recommended next work is
+route-cap accounting with regression tests, followed by evidence-led acquisition/latency
+investigation and explicitly budgeted live acceptance on the selected delivery target.
+
+This audit changed documentation only. It did not start a new product phase, alter
+historical artifacts, rebuild/install the app or run paid providers. Fresh Python/Ruff,
+offline evaluation and frontend lint/type checks pass; details and pending decisions are
+in the readiness plan. Later implementation will require a fresh build and new research
+runs under the existing fingerprint rules. Earlier delivery instructions below describe
+their dated work and do not constitute new commit/push or paid-call authorization.
+
 ## 2026-09-14 corrective delivery
 
 The user explicitly authorized implementing the adaptive-search reliability plan after

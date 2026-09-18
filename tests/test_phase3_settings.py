@@ -16,6 +16,7 @@ from frontend.profile_preflight import check_start_reservation
 from frontend.provider_connections import check_connection
 from models import DiscoveryProvider, ResearchControls
 from providers.config import ProviderConfigurationError
+from providers.llm import LLMStage
 from providers.model_profiles import STANDARD_PROFILE, profile_environment
 from providers.v2_routing import V2RoutingConfig
 
@@ -87,7 +88,7 @@ def test_preflight_reserves_real_planner_prompt_offline(tmp_path: Path) -> None:
     )
     reservation = check_start_reservation(request, environment)
     assert reservation.input_tokens > 1000
-    assert reservation.output_tokens == 4096
+    assert reservation.output_tokens == 8192
     assert reservation.reserved_cost_usd > 0
     assert not (tmp_path / "new.sqlite3").exists()
     with pytest.raises(ValueError, match="token limit"):
@@ -96,6 +97,28 @@ def test_preflight_reserves_real_planner_prompt_offline(tmp_path: Path) -> None:
         check_start_reservation(
             request.model_copy(update={"max_cost_usd": Decimal("0.000001")}), environment
         )
+
+
+def test_profile_response_allowances_are_reserved_and_fingerprinted() -> None:
+    environment = {"MIMO_API_KEY": "test-mimo", "LUNA_API_KEY": "test-luna"}
+    resolved = profile_environment(environment, STANDARD_PROFILE.id)
+    routes = V2RoutingConfig.from_environment(resolved, repository_revision="test")
+    for stage, allowance in (
+        (LLMStage.SCOUT, 4096),
+        (LLMStage.SOURCE_SELECTION, 8192),
+        (LLMStage.GAP_ANALYSIS, 16384),
+    ):
+        reservation = routes.preflight().reserve(stage, 1000)
+        assert reservation.output_tokens == allowance
+        assert reservation.reserved_tokens == 1000 + allowance
+        assert reservation.reserved_cost_usd == routes.preflight().for_stage(
+            stage
+        ).price_cap.upper_bound(1000, allowance)
+    old = V2RoutingConfig.from_environment(
+        {**resolved, "LUNA_MAX_COMPLETION_TOKENS": "4096"}, repository_revision="test"
+    )
+    assert old.fingerprint_payload() != routes.fingerprint_payload()
+    assert [model.completion_limit for model in STANDARD_PROFILE.models] == [4096, 8192, 16384]
 
 
 @pytest.mark.parametrize(

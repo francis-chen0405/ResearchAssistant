@@ -1,5 +1,65 @@
 # Current status
 
+## 2026-09-17 — Authorized reliability follow-up
+
+The user prioritized reliable research and explicitly chose larger responses within
+the same total budget. Fresh initial-planner responses now have a narrow valid-default
+claim-component schema, unchanged strict rejection and clearer duplicate diagnostics.
+Scout uses batches of 20 with corrected Round-4 call reservations. Standard profile
+allowances are 4,096 Scout / 8,192 Pro / 16,384 Luna High; request payloads, reservations
+and configuration identity agree. Historical generic schemas and data remain unchanged.
+
+992 Python tests pass (2 existing skips), Ruff and frozen offline evaluation pass.
+The backend rebuild, native runtime/vault/settings/service smoke, packaging, archive
+integrity, upgrade and packaged/installed window checks pass. The updated app is installed;
+downloads are in `desktop/dist/mac-reliability/`. Original live acceptance uses the preceding frozen
+build and cannot establish these fixes' live effectiveness. See
+[reliability verification](docs/verification/planner-scout-reliability.md).
+
+All five submissions are consumed: one harness cancellation, one rejected overlap, one
+planner failure and two 20-minute cancellations during deep analysis. No final report
+was released; recorded model exposure totals $0.178617536, excluding source-service fees.
+The test backend stopped. Further paid acceptance needs a new explicit allowance.
+The five-submission cap must not be reset. Public distribution remains
+deferred pending live reliability, signing/notarization and clean-machine/minimum-OS checks.
+
+## 2026-09-17 — Mac-first cache-pricing delivery
+
+The user selected Mac first, deferred Windows, and authorized researched cache accounting.
+Model-specific tariffs now replace the shared Pro-only calculation; Luna cache writes,
+long-context multipliers and explicit High effort are covered. Reservations and unknown
+usage remain conservative; historical data and schema 13 are unchanged.
+
+984 Python tests pass (2 existing skips), along with Ruff, offline evaluation, frontend
+checks, rebuilt backend, offline browser acceptance, native runtime, packaged/installed
+window and cross-version upgrade checks. The new unsigned Mac build is installed;
+downloadable DMG/ZIP and checksums are in `desktop/dist/mac-cache-pricing/`.
+See [verification](docs/verification/mac-cache-pricing.md).
+
+The authorized live acceptance is bounded to five submissions, including an initial
+harness interruption and rejected overlap. A live initial-planner schema rejection
+prevented claiming dependable MLP research quality; final outcomes are in verification.
+No Apple Developer certificate is available. Public signing/notarization and actual
+clean-machine/minimum-OS acceptance remain open; Windows is not a Mac release gate.
+
+## 2026-09-17 — Repository audit and MLP readiness
+
+The core local MLP is implemented; acceptance for reliable live use and public distribution
+is not complete. The [readiness audit](.agent/plans/mlp-readiness.md) separates current
+Mac delivery from the earlier successful Phase 2 Windows matrix and the outstanding
+current-version Windows/install/signing gates. Misleading completion wording and the
+evaluation README's repository-wide no-network claim were clarified.
+
+A synthetic offline probe confirmed that cached-token usage in the shared model adapter
+uses hard-coded MiMo Pro prices for every route, bypassing configured model caps. The
+result flows into remaining-budget calculations. Runtime is unchanged pending the user's
+choice of conservative cap accounting or verified model-specific cache pricing.
+Acquisition quality and long timeouts remain separate evidence-gathering follow-ups.
+
+Fresh checks: 959 Python tests passed, 2 existing skips; Ruff lint/format, 38-case offline
+evaluation, frontend ESLint and TypeScript passed. No paid calls or new packaged build.
+The readiness plan records scope, limitations, proposed acceptance and pending decisions.
+
 ## 2026-09-14 — Adaptive-search reliability
 
 The user authorized and implementation completed the

@@ -29,7 +29,7 @@ class ModelProfile(StrictModel):
     id: ProfileId = "standard-2026-09"
     name: str = "Standard research"
     description: str = "MiMo discovery and extraction · Luna High analysis"
-    pricing_reviewed: str = "2026-09-07"
+    pricing_reviewed: str = "2026-09-17"
     models: tuple[SupportedModel, ...]
 
 
@@ -44,12 +44,14 @@ STANDARD_PROFILE = ModelProfile(
         SupportedModel(
             model="mimo-v2.5-pro",
             roles="Planning, search, selection and exact extraction",
+            completion_limit=8192,
             input_per_million=Decimal("0.50"),
             output_per_million=Decimal("1.00"),
         ),
         SupportedModel(
             model="gpt-5.6-luna",
             roles="Gap analysis and evidence analysis · High",
+            completion_limit=16384,
             input_per_million=Decimal("0.50"),
             output_per_million=Decimal("1.80"),
         ),
@@ -64,7 +66,8 @@ def profile_environment(
 
     Legacy callers retain their exact route configuration. Desktop profile callers
     fail closed on untested endpoint/model overrides instead of silently rerouting keys.
-    Price caps include Luna long-context and cache-write exposure. No cache discount.
+    Reservations include Luna long-context/cache-write exposure without a cache discount.
+    Completed usage uses verified route-specific cache rates where metadata permits.
     """
     resolved = dict(environment)
     if profile is None:
@@ -89,6 +92,7 @@ def profile_environment(
     for prefix, model in zip(
         ("MIMO_V25", "MIMO_V25_PRO", "LUNA"), STANDARD_PROFILE.models, strict=True
     ):
+        resolved[f"{prefix}_MAX_COMPLETION_TOKENS"] = str(model.completion_limit)
         resolved[f"{prefix}_INPUT_USD_PER_TOKEN"] = str(
             model.input_per_million / Decimal(1_000_000)
         )

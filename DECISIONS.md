@@ -1,5 +1,34 @@
 # Current decisions
 
+## 2026-09-17 — Reliability before distribution
+
+The user explicitly selected research reliability as the next milestone. Correct the
+demonstrated fresh planner schema/default contradiction and reduce new Scout batches to
+20 based on successful smaller live batches. Keep generic historical coverage schemas,
+all evidence validators, two-attempt Scout limit and global budgets unchanged. Round 4
+must reserve for the smaller batches. This extends the active Mac/cache plan; it does
+not replenish the five-submission test allowance. See
+[reliability evidence](docs/verification/planner-scout-reliability.md).
+
+## 2026-09-17 — Mac first and verified cache accounting
+
+The user selected macOS as the first delivery target and deferred Windows. They
+authorized official pricing research and correction for Luna High/MiMo Pro; the shared
+Scout route is included to prevent cross-model accounting. Reservations keep existing
+caps. Completed usage uses verified model/endpoint-specific cache rates, including
+Luna cache writes and long-context multipliers; uncertain cache metadata stays conservative.
+Luna's configured High effort is now explicit in the request, with standard service tier
+on the official endpoint. Historical usage/reports remain unchanged; new source requires
+new runs. No dependencies or database migrations are introduced.
+
+The user has no Apple Developer membership/certificate. Deliver an unsigned downloadable
+Mac test candidate; signing/notarization and clean-machine/minimum-OS acceptance remain
+public-release limitations. The package now declares the documented macOS 14 floor.
+The user authorized at most five research prompts under the proposed combined $5 model
+budget plus existing search/acquisition quotas. Test history is isolated; no remote
+publication or account purchase is authorized. See the
+[active plan](.agent/plans/mac-release-cache-pricing.md) for evidence and outcome.
+
 ## 2026-09-14 — Authorized adaptive-search reliability correction
 
 The user's implementation request extends Phase 3 only for the approved corrective plan.

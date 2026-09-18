@@ -365,6 +365,12 @@ class MimoRouteConfig(StrictModel):
             api_key=SecretStr(api_key),
             base_url=environment.get("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1").strip(),
             model=model,
+            max_completion_tokens=int(
+                environment.get(
+                    model_environment_name.removesuffix("_MODEL") + "_MAX_COMPLETION_TOKENS",
+                    "4096",
+                )
+            ),
         )
 
 
@@ -411,6 +417,7 @@ class LunaConfig(StrictModel):
             api_key=SecretStr(api_key),
             base_url=environment.get("LUNA_BASE_URL", "https://api.openai.com/v1").strip(),
             model=environment.get("LUNA_MODEL", "gpt-5.6-luna").strip(),
+            max_completion_tokens=int(environment.get("LUNA_MAX_COMPLETION_TOKENS", "4096")),
         )
 
 

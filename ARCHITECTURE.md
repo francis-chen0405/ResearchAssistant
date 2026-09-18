@@ -1,5 +1,10 @@
 # Architecture
 
+The user subsequently authorized [Mac-first release and model-aware cache accounting](.agent/plans/mac-release-cache-pricing.md).
+Windows release acceptance is deferred. The following adaptive-search policy remains intact.
+The user subsequently authorized planner/Scout reliability fixes based on the bounded
+live acceptance, with the same five-submission maximum and unchanged evidence gates.
+
 The user authorized the adaptive-search reliability corrective plan on 2026-09-12.
 This extends the Phase 3 boundary only for the corrections in that plan.
 
@@ -17,9 +22,10 @@ reporting. No database migration or historical payload rewrite is needed.
 
 Current product: the Phase 1 local desktop application with the completed v2 Phase 14
 research-policy pipeline, completed Phase 3 frontend/provider-model settings, and the
-completed adaptive-search reliability correction. Phase 2 cleanup is complete. Windows
-rebuild/install evidence, clean-machine/minimum-OS checks, signing and notarization remain
-release gates. [Desktop operations](desktop/README.md) cover installers, data, credentials,
+completed adaptive-search reliability correction. Phase 2 cleanup is complete, including
+its native Windows CI/runtime matrix. Current Windows rebuild/installation is deferred;
+Mac clean-machine/minimum-OS checks, signing and notarization remain public-release gates.
+[Desktop operations](desktop/README.md) cover installers, data, credentials,
 service ownership and release verification.
 
 ## Module boundaries
@@ -79,6 +85,11 @@ exact claim + enabled directions + frozen configuration
 
 Scout uses MiMo-v2.5; Planner, Search Agent, Source Selection and exact Extractor use
 MiMo-v2.5-Pro. Gap Analysis and Evidence Analyst use the configured Luna High route.
+Fresh Scout batches contain at most 20 candidates; historical 30-item batches remain
+readable. Standard profile completion allowances are 4,096 / 8,192 / 16,384 for
+Scout / Pro / Luna, fully reserved within unchanged total budgets. Fresh initial-planner
+coverage uses a narrow claim-component response schema with valid defaults; generic
+historical coverage semantics remain unchanged.
 Fresh Analyst assessment and statement drafting use one call per successfully extracted
 source. Fresh synthesis makes no model call and fresh runs make no Reviewer call.
 Analyzer Admission checks structure/provenance/policy; it does not independently prove
@@ -102,6 +113,10 @@ existing bounded acquisition/fallback policies. No cleanup change alters those p
   missing usage is never zero or a refund. Maximum fresh ceilings remain 160 calls and
   500,000 tokens with lower configured limits supported. Provider-specific search and
   acquisition limits remain separate. No synthetic per-call subscription price is added.
+- Fresh completed usage uses verified endpoint/model-specific cache tariffs, including
+  Luna cache writes and long-context multipliers. Missing/invalid metadata and unknown
+  outcomes remain conservative. Historical costs are not recalculated. Luna High is
+  explicit in the outgoing request; the official Luna route uses standard service tier.
 - Optional continuation protects downstream work. Deep analysis retains the existing
   60,000-token source allowance and three-call envelope (two extraction attempts and
   one Analyst call), and preserves actual failed/rejected/budget-prevented states.
