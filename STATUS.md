@@ -1,5 +1,30 @@
 # Current status
 
+## 2026-09-18 — Deterministic deep-analysis concurrency
+
+The authorized reliability phase now runs fresh-v2 source analysis in deterministic
+priority waves with a fixed four-worker maximum. Every wave must fit complete conservative
+source envelopes for calls, tokens and cost before dispatch. Extraction, Analyst and
+deterministic admission remain sequential within each source; acquisition, routing,
+budgets, deadlines and evidence policy are unchanged. Completion order cannot reorder the
+persisted execution, queue, terminal or reconciliation projections.
+
+Cancellation is propagated through the LLM invocation boundary, pending futures are
+cancelled, running calls are drained and conservatively audited, and a cancelled run does
+not receive the aggregate backfill-completion artifact. The backfill policy is now
+`researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v2-waves4`, so
+serial-policy runs cannot silently resume under concurrent semantics.
+
+Physical-call reconciliation now bulk-loads the current and legacy audit in one bounded
+query, validates dense sequences and payload identity, gives current keys precedence and
+retains missing completion usage conservatively. Synthetic eight-source timing was 0.4286s
+serial, 0.2221s with two workers and 0.1057s with four workers (1.93× and 4.06×); this is
+offline scheduling evidence, not a claim about live runtime. Verification and final test
+counts: 1,007 passed with two existing skips; Ruff lint/format, diff whitespace, the
+38-case frozen offline evaluation, rebuilt arm64 backend and isolated native smoke passed.
+No installer was built or installed. Paid live effectiveness remains unverified and
+requires separate authorization.
+
 ## 2026-09-17 — Authorized reliability follow-up
 
 The user prioritized reliable research and explicitly chose larger responses within

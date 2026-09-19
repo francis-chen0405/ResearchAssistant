@@ -1,5 +1,9 @@
 # Development conventions
 
+Latest implementation scope is
+[deterministic deep-analysis concurrency](.agent/plans/deep-analysis-deterministic-concurrency.md),
+authorized on 2026-09-18. Its specific concurrency rules are recorded below.
+
 The user authorized the adaptive-search reliability corrective plan on 2026-09-12.
 Its bounded research changes supersede the Phase 3-only scope below for this work.
 
@@ -71,3 +75,19 @@ The full former conventions are preserved in
 [the pre-Phase-2 archive](docs/archive/pre-phase-2/CONVENTIONS.md). Current rules here
 replace stale no-HTTP/framework, single-file and earlier-phase instructions; approved
 runtime behavior and all evidence/release invariants remain unchanged.
+
+## Deep-analysis concurrency conventions (2026-09-18)
+
+- Fresh deep analysis uses fixed, priority-ordered waves of at most four sources. Never
+  submit the full survivor queue or let completion timing choose a later source.
+- A wave is eligible only when its complete conservative source envelopes and protected
+  downstream capacity fit the current global call, token and cost snapshot. The provider
+  lock remains the final reservation authority.
+- Source workers return strict typed results and never mutate shared aggregate collections.
+  Each worker opens persistence operations through existing store functions; connections
+  and cursors are never shared.
+- Cancellation must remain a distinct exception through generic invocation wrappers.
+  Cancel work that has not started, drain running work, persist its audit exposure and do
+  not write a terminal aggregate for the cancelled stage.
+- Read physical-call audit rows in one bounded query, validate the run-wide dense sequence,
+  then filter/group by source. Missing completion usage remains conservatively reserved.

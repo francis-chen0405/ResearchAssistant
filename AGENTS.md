@@ -8,7 +8,8 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current authority: `.agent/plans/mac-release-cache-pricing.md`, `ARCHITECTURE.md`,
+Current implementation authority: `.agent/plans/deep-analysis-deterministic-concurrency.md`.
+Release authority remains `.agent/plans/mac-release-cache-pricing.md`. Also read `ARCHITECTURE.md`,
 `STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
 Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction
 are complete on local `master`; the correction was authorized on 2026-09-12.

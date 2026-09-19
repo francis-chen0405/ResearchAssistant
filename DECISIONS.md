@@ -1,5 +1,8 @@
 # Current decisions
 
+The latest implementation decision is the 2026-09-18 bounded deterministic fresh-v2
+source-wave policy recorded below.
+
 ## 2026-09-17 — Reliability before distribution
 
 The user explicitly selected research reliability as the next milestone. Correct the
@@ -111,3 +114,18 @@ unverified; stable production signing and user-granted access must be verified s
 Follow-up 2026-09-08: the explicitly authorized isolated cross-version credential test
 passed unchanged. This supersedes the unverified local upgrade result above; production
 signing and Windows verification remain separate gates.
+
+## 2026-09-18 — Bounded deterministic fresh-v2 source waves
+
+Use a fixed maximum of four source workers in fresh deep analysis. Dispatch only the next
+budget-safe priority prefix; keep the three model-call envelope within each source
+sequential. This reduces idle transport time while preserving deterministic source choice,
+the shared budget lock, per-source caps, restart artifacts and evidence validation.
+
+Version the backfill policy as
+`researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v2-waves4` because
+worker count can change which source calls reserve first near a constrained boundary.
+Cancellation remains its own exception across `invoke_llm`; a cancelled wave drains but
+cannot write aggregate completion. Use a shared typed bulk reader for physical-call audit
+recovery and reconciliation. No acquisition concurrency, routing/budget/deadline change,
+dependency, schema migration or paid validation is part of this decision.

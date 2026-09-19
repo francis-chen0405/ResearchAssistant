@@ -1,5 +1,10 @@
 # Phase plans
 
+Active implementation record: [Deterministic deep-analysis concurrency](plans/deep-analysis-deterministic-concurrency.md),
+explicitly authorized on 2026-09-18 to address the serial fresh-v2 bottleneck without
+changing acquisition, routing, budgets, deadlines or evidence policy. The Mac-first plan
+remains the release/distribution authority; its exhausted paid-test limit still applies.
+
 The 2026-09-17 [MLP readiness audit and proposed next steps](plans/mlp-readiness.md)
 records the user-requested repository review and safe documentation corrections.
 Its product/accounting decisions were subsequently resolved by the active plan below.

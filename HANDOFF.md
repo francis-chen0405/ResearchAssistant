@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-09-18 Deep-analysis concurrency
+
+Current implementation authority is
+[deterministic deep-analysis concurrency](.agent/plans/deep-analysis-deterministic-concurrency.md).
+Fresh-v2 deep analysis dispatches only budget-safe priority prefixes and uses at most four
+source workers. Workers share the locked budgeted provider but no SQLite connection,
+cursor or mutable aggregate. Each source still executes extraction, Analyst and admission
+in order. The coordinator drains in-flight work before propagating cancellation and never
+writes the aggregate completion artifact for a cancelled run.
+
+The physical-call audit has one typed bulk reader shared by provider recovery and
+deep-analysis reconciliation. It accepts current and legacy keys, requires dense global
+start sequences, preserves unknown usage at reservation exposure and groups source
+sequences only after validating the run-wide audit. The execution policy identity is
+versioned `v2-waves4`; changed frozen identity requires a new run.
+
+Synthetic eight-source delay measurements were 0.4286s serial, 0.2221s with two workers
+and 0.1057s with four workers. Treat these only as deterministic scheduler measurements.
+The 1,007-test suite passed with two existing skips, along with Ruff lint/format, diff
+whitespace, the 38-case frozen evaluation, rebuilt arm64 backend and isolated native
+smoke. No paid provider test, installer build, install, push, merge or public release was
+performed. Live speed and research effectiveness remain unverified; any paid acceptance
+needs new authorization because the previous five-submission allowance is exhausted.
+
 ## 2026-09-17 Reliability follow-up
 
 The user authorized reliability before distribution and larger model responses within

@@ -57,7 +57,7 @@ V2_EVIDENCE_ADMISSION_POLICY_IDENTITY = "researchassistant-v2-phase-13-analyzer-
 V2_REVIEWER_LEDGER_POLICY_IDENTITY = "researchassistant-v2-phase-10-reviewer-ledger-v2"
 
 V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY = (
-    "researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v1"
+    "researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v2-waves4"
 )
 
 V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP = 60_000

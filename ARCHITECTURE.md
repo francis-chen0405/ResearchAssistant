@@ -1,5 +1,8 @@
 # Architecture
 
+The user authorized the deterministic deep-analysis concurrency plan on 2026-09-18.
+The current execution design is recorded below under “Deterministic deep-analysis waves.”
+
 The user subsequently authorized [Mac-first release and model-aware cache accounting](.agent/plans/mac-release-cache-pricing.md).
 Windows release acceptance is deferred. The following adaptive-search policy remains intact.
 The user subsequently authorized planner/Scout reliability fixes based on the bounded
@@ -210,3 +213,26 @@ The 2026-09-09 refinement replaces fictional preview passages with four curated 
 report excerpts in `web/lib/preview.ts`. Their editorial placement, links and context
 are documented in [preview sources](docs/preview-sources.md). They remain separate from
 API state and validated live research artifacts; animation and usage remain simulated.
+
+## Deterministic deep-analysis waves (2026-09-18)
+
+`agents/v2_deep_analysis.py` coordinates fresh source envelopes in priority-ordered waves
+of at most four. It dispatches only the largest prefix whose complete three-call,
+60,000-token and route-priced cost envelopes fit the current locked provider snapshot plus
+any persisted downstream reserve. A source worker owns only immutable typed inputs and
+returns a strict typed outcome; it does not mutate coordinator collections or share a
+database connection. Extraction, Analyst and deterministic admission remain sequential
+inside that worker.
+
+The budget provider reserves physical sequences under its existing lock before transport.
+Semantic outputs, executions and terminal reasons are rebuilt in priority order after the
+wave drains, independent of completion order. Cancellation crosses the generic LLM
+invocation boundary without being converted into a provider failure; not-started futures
+are cancelled, in-flight calls drain, and their completion or conservative exposure stays
+audited. Aggregate completion is written only after all final projections exist.
+
+`store.read_v2_physical_call_artifacts` loads at most 640 current/legacy physical audit
+rows in one query. `providers.v2_budget.read_v2_physical_call_audit` validates hashes,
+types, run IDs, key/payload sequences, current-key precedence and a dense global start
+sequence. Deep analysis filters that validated typed audit by source for reconciliation.
+No connection or cursor crosses a worker boundary.
