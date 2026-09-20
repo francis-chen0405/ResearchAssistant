@@ -9,8 +9,8 @@ including artifact probes, progress, budget, diagnostics and terminal reconstruc
 Preserve path-based helper APIs, integrity/schema validation and fresh committed reads.
 Prevent overlapping frontend polls and stop scheduled work on terminal state or cleanup.
 
-Base: the Mac-first `master` line. The separate deep-analysis concurrency work remains
-outside this delivery and is intentionally not required for the SQLite polling fix.
+The SQLite changes were isolated from the implementation worktree and are now combined
+with the separately reviewed deep-analysis concurrency commit on local `master`.
 
 No WAL activation, schema change, persistent validation cache, shared worker connection,
 dependency, research-policy change, paid call, packaging, merge, push or publication.
@@ -52,4 +52,5 @@ intentional imported-path correction, and database bytes/mtime stayed unchanged.
 Verification passed: 1,019 Python tests with two existing skips; Ruff lint/format;
 frontend ESLint, TypeScript and desktop production export; the dedicated delayed/error/
 terminal/replacement/unmount polling smoke; established offline frontend acceptance; JavaScript
-syntax; and diff whitespace. No provider call, packaging, install, push or merge occurred.
+syntax; and diff whitespace. No provider call, packaging or install occurred. The change is
+merged locally into `master`; no remote push or publication occurred.

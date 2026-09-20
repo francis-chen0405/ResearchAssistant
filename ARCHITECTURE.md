@@ -1,7 +1,12 @@
 # Architecture
 
 Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It preserves the Mac-first release boundary.
+explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+phase and preserves the Mac-first release boundary. Earlier dated scope statements below
+remain historical.
+
+The user authorized the deterministic deep-analysis concurrency plan on 2026-09-18.
+The current execution design is recorded below under “Deterministic deep-analysis waves.”
 
 The user subsequently authorized [Mac-first release and model-aware cache accounting](.agent/plans/mac-release-cache-pricing.md).
 Windows release acceptance is deferred. The following adaptive-search policy remains intact.
@@ -53,14 +58,6 @@ service ownership and release verification.
 | Local API and browser presentation | `frontend/api.py`, `web/` |
 | Desktop lifecycle | `desktop/main.cjs`, `desktop/backend.py`, `frontend/service_manager.py` |
 | Platform storage, vault and exclusion | `desktop_paths.py`, `desktop_settings.py`, `credential_store.py`, `file_lock.py`, `process_tree.py` |
-
-V2 status snapshots open one request-scoped `ReadOnlyStore` and pass its connection through
-all artifact, budget, progress, provider and diagnostic readers. Terminal reconstruction
-uses the requested database connection, including imported results whose stored original
-path has moved. Validation still runs once per request; no connection or validation result
-survives it. The browser schedules the next poll 1.5 seconds after completion, stops on
-terminal results, and aborts cleanup work on run changes or unmount. Journal mode,
-busy-timeout defaults and schema version remain unchanged.
 
 Dependencies between model implementation modules are one-way: shared contracts →
 research contracts → evidence/result contracts. The latter also uses shared contracts.
@@ -174,6 +171,15 @@ and validates integrity/schema. It never initializes, migrates, creates a missin
 or falls back to writable access; `immutable=1` is not used with possible WAL writers.
 Intentional writable run/resume retains the existing migration behavior.
 
+V2 status snapshots open one request-scoped `ReadOnlyStore` and pass its connection
+through all artifact, budget, progress, provider and diagnostic readers. Terminal
+reconstruction uses the requested database connection, including imported results whose
+stored original path has moved. Validation still runs once per request; no connection or
+validation result survives it. Queries retain their existing transaction behavior and
+subsequent polls observe newly committed artifacts. The browser schedules the next poll
+1.5 seconds after completion, stops on terminal results, and aborts/cleans up on run changes
+or unmount. Journal mode, busy-timeout defaults and schema version remain unchanged.
+
 Historical provider, Reviewer-backed, portfolio/Governor, inspection/export and frozen
 fixture contracts remain executable. They are required by existing callers/tests and
 persisted artifacts; none was declared unused or removed. Legacy SQLite framing and
@@ -221,3 +227,26 @@ The 2026-09-09 refinement replaces fictional preview passages with four curated 
 report excerpts in `web/lib/preview.ts`. Their editorial placement, links and context
 are documented in [preview sources](docs/preview-sources.md). They remain separate from
 API state and validated live research artifacts; animation and usage remain simulated.
+
+## Deterministic deep-analysis waves (2026-09-18)
+
+`agents/v2_deep_analysis.py` coordinates fresh source envelopes in priority-ordered waves
+of at most four. It dispatches only the largest prefix whose complete three-call,
+60,000-token and route-priced cost envelopes fit the current locked provider snapshot plus
+any persisted downstream reserve. A source worker owns only immutable typed inputs and
+returns a strict typed outcome; it does not mutate coordinator collections or share a
+database connection. Extraction, Analyst and deterministic admission remain sequential
+inside that worker.
+
+The budget provider reserves physical sequences under its existing lock before transport.
+Semantic outputs, executions and terminal reasons are rebuilt in priority order after the
+wave drains, independent of completion order. Cancellation crosses the generic LLM
+invocation boundary without being converted into a provider failure; not-started futures
+are cancelled, in-flight calls drain, and their completion or conservative exposure stays
+audited. Aggregate completion is written only after all final projections exist.
+
+`store.read_v2_physical_call_artifacts` loads at most 640 current/legacy physical audit
+rows in one query. `providers.v2_budget.read_v2_physical_call_audit` validates hashes,
+types, run IDs, key/payload sequences, current-key precedence and a dense global start
+sequence. Deep analysis filters that validated typed audit by source for reconciliation.
+No connection or cursor crosses a worker boundary.

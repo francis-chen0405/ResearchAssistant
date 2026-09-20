@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -17,12 +18,19 @@ from models import (
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     ModelUsageMetadata,
     StrictModel,
+    V2PersistedArtifact,
 )
 from money import add_usd
-from providers.llm import LLMProvider, LLMProviderCapabilities, LLMRequest, ModelAlias
+from providers.llm import (
+    LLMProvider,
+    LLMProviderCapabilities,
+    LLMRequest,
+    ModelAlias,
+    V2CancellationRequested,
+)
 from providers.pricing import conservative_token_estimate
 from providers.v2_routing import V2RoutingConfig
-from store import insert_v2_artifact, read_v2_artifact
+from store import DatabaseReader, insert_v2_artifact, read_v2_physical_call_artifacts
 
 V2_MAX_PHYSICAL_CALLS = 160
 V2_MAX_TOTAL_TOKENS = 500_000
@@ -30,10 +38,6 @@ V2_DEFAULT_TOTAL_COST_USD = Decimal("0.20")
 V2_BUDGET_POLICY_IDENTITY = "researchassistant-v2-phase-13-run-budget-analyzer-admission-v1"
 V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX = "phase-12-physical-call"
 V2_PHYSICAL_CALL_ARTIFACT_PREFIX = "phase-13-physical-call"
-
-
-class V2CancellationRequested(RuntimeError):
-    """Stop v2 work before a new external model call is started."""
 
 
 def _aware(value: datetime) -> datetime:
@@ -92,6 +96,28 @@ class V2PhysicalCallCompletion(StrictModel):
     def validate_failure(self) -> V2PhysicalCallCompletion:
         if self.succeeded == (self.failure is not None):
             raise ValueError("physical-call success and failure fields must agree")
+        return self
+
+
+class V2PhysicalCallAudit(StrictModel):
+    """One dense, globally ordered physical-call audit with unknown completions retained."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    starts: tuple[V2PhysicalCallStart, ...]
+    completions: tuple[V2PhysicalCallCompletion | None, ...]
+
+    @model_validator(mode="after")
+    def validate_sequences(self) -> V2PhysicalCallAudit:
+        if len(self.starts) != len(self.completions):
+            raise ValueError("physical-call starts and completions must be aligned")
+        sequences = tuple(item.sequence for item in self.starts)
+        expected = tuple(range(1, len(sequences) + 1))
+        if sequences != expected:
+            raise ValueError("physical-call audit start sequence must be dense")
+        for start, completion in zip(self.starts, self.completions, strict=True):
+            if completion is not None and completion.sequence != start.sequence:
+                raise ValueError("physical-call completion sequence does not match its start")
         return self
 
 
@@ -365,38 +391,80 @@ def _source_exposure(
     return tokens, cost
 
 
+_PHYSICAL_CALL_ARTIFACT_KEY = re.compile(
+    r"^(?P<prefix>phase-(?:12|13)-physical-call)-(?P<sequence>[0-9]{3})-"
+    r"(?P<kind>start|completion)$"
+)
+
+
+def read_v2_physical_call_audit(
+    db_path: DatabaseReader,
+    run_id: UUID,
+) -> V2PhysicalCallAudit:
+    """Read and validate the complete current/legacy physical-call audit in one query."""
+    rows = read_v2_physical_call_artifacts(db_path, run_id)
+    selected: dict[tuple[int, str], tuple[int, V2PersistedArtifact]] = {}
+    for row in rows:
+        match = _PHYSICAL_CALL_ARTIFACT_KEY.fullmatch(row.artifact_key)
+        if match is None:
+            raise ValueError(f"invalid physical-call artifact key: {row.artifact_key}")
+        sequence = int(match["sequence"])
+        kind = match["kind"]
+        prefix = match["prefix"]
+        prefix_rank = 0 if prefix == V2_PHYSICAL_CALL_ARTIFACT_PREFIX else 1
+        key = (sequence, kind)
+        previous = selected.get(key)
+        if previous is None or prefix_rank < previous[0]:
+            selected[key] = (prefix_rank, row)
+
+    starts_by_sequence: dict[int, V2PhysicalCallStart] = {}
+    completions_by_sequence: dict[int, V2PhysicalCallCompletion] = {}
+    for (sequence, kind), (_prefix_rank, row) in selected.items():
+        if row.run_id != run_id:
+            raise ValueError(f"physical-call artifact {row.artifact_key} has the wrong run_id")
+        expected_type = "V2PhysicalCallStart" if kind == "start" else "V2PhysicalCallCompletion"
+        if row.artifact_type != expected_type:
+            raise ValueError(
+                f"physical-call artifact {row.artifact_key} has type {row.artifact_type!r}"
+            )
+        if kind == "start":
+            start = V2PhysicalCallStart.model_validate_json(row.payload_json)
+            if start.run_id != run_id:
+                raise ValueError(f"physical-call artifact {row.artifact_key} has the wrong run_id")
+            if start.sequence != sequence:
+                raise ValueError(
+                    f"physical-call artifact {row.artifact_key} has the wrong sequence"
+                )
+            starts_by_sequence[sequence] = start
+        else:
+            completion = V2PhysicalCallCompletion.model_validate_json(row.payload_json)
+            if completion.run_id != run_id:
+                raise ValueError(f"physical-call artifact {row.artifact_key} has the wrong run_id")
+            if completion.sequence != sequence:
+                raise ValueError(
+                    f"physical-call artifact {row.artifact_key} has the wrong sequence"
+                )
+            completions_by_sequence[sequence] = completion
+
+    if set(completions_by_sequence).difference(starts_by_sequence):
+        raise ValueError("physical-call completion has no corresponding start")
+    sequences = tuple(sorted(starts_by_sequence))
+    starts = tuple(starts_by_sequence[sequence] for sequence in sequences)
+    completions = tuple(completions_by_sequence.get(sequence) for sequence in sequences)
+    return V2PhysicalCallAudit(starts=starts, completions=completions)
+
+
 def _read_audit(
     path: str,
     run_id: UUID,
 ) -> tuple[list[V2PhysicalCallStart], dict[int, V2PhysicalCallCompletion]]:
-    starts: list[V2PhysicalCallStart] = []
-    completions: dict[int, V2PhysicalCallCompletion] = {}
-    for sequence in range(1, V2_MAX_PHYSICAL_CALLS + 1):
-        start_row = None
-        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
-            try:
-                start_row = read_v2_artifact(path, run_id, f"{prefix}-{sequence:03d}-start")
-            except KeyError:
-                continue
-            break
-        if start_row is None:
-            break
-        starts.append(V2PhysicalCallStart.model_validate_json(start_row.payload_json))
-        completion_row = None
-        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
-            try:
-                completion_row = read_v2_artifact(
-                    path, run_id, f"{prefix}-{sequence:03d}-completion"
-                )
-            except KeyError:
-                continue
-            break
-        if completion_row is None:
-            continue
-        completions[sequence] = V2PhysicalCallCompletion.model_validate_json(
-            completion_row.payload_json
-        )
-    return starts, completions
+    """Preserve the historical mutable audit projection for the budget provider."""
+    audit = read_v2_physical_call_audit(path, run_id)
+    return list(audit.starts), {
+        completion.sequence: completion
+        for completion in audit.completions
+        if completion is not None
+    }
 
 
 def _completed_usage(

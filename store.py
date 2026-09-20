@@ -2228,6 +2228,28 @@ def read_v2_artifact(
         return _row_to_v2_artifact(row)
 
 
+def read_v2_physical_call_artifacts(
+    db_path: DatabaseReader,
+    run_id: UUID,
+) -> tuple[V2PersistedArtifact, ...]:
+    """Read every current or legacy physical-call envelope in one query."""
+    with _read_connection(db_path) as conn:
+        rows = conn.execute(
+            """SELECT * FROM v2_artifacts
+               WHERE run_id = ?
+                 AND (
+                     artifact_key LIKE 'phase-13-physical-call-%'
+                     OR artifact_key LIKE 'phase-12-physical-call-%'
+                 )
+               ORDER BY artifact_key
+               LIMIT 641""",
+            (str(run_id),),
+        ).fetchall()
+        if len(rows) > 640:
+            raise sqlite3.IntegrityError("v2 physical-call audit exceeds its bounded row count")
+        return tuple(_row_to_v2_artifact(row) for row in rows)
+
+
 def insert_v2_ledger_admission(
     db_path: str,
     record: LedgerRecord,

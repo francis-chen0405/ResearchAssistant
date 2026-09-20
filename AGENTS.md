@@ -1,7 +1,9 @@
 # AI Assistant Instructions
 
 Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It preserves the Mac-first release boundary.
+explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+phase and preserves the Mac-first release boundary. Earlier dated scope statements below
+remain historical.
 
 ## Active Codex checkout
 
@@ -12,6 +14,7 @@ Use the repository root supplied by the task when working; do not assume the old
 location is a workspace detail only and must not be embedded in application runtime paths.
 
 Current implementation authority: `.agent/plans/sqlite-status-polling.md`.
+The completed predecessor is `.agent/plans/deep-analysis-deterministic-concurrency.md`.
 Release authority remains `.agent/plans/mac-release-cache-pricing.md`. Also read `ARCHITECTURE.md`,
 `STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
 Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction

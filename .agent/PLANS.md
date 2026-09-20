@@ -1,8 +1,14 @@
 # Phase plans
 
 Current implementation scope is [SQLite status polling](plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It preserves the Mac-first release boundary and
-does not include the separate deep-analysis concurrency work from another worktree.
+explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+phase and preserves the Mac-first release boundary. Earlier dated scope statements below
+remain historical.
+
+Completed predecessor: [Deterministic deep-analysis concurrency](plans/deep-analysis-deterministic-concurrency.md),
+explicitly authorized on 2026-09-18 to address the serial fresh-v2 bottleneck without
+changing acquisition, routing, budgets, deadlines or evidence policy. The Mac-first plan
+remains the release/distribution authority; its exhausted paid-test limit still applies.
 
 The 2026-09-17 [MLP readiness audit and proposed next steps](plans/mlp-readiness.md)
 records the user-requested repository review and safe documentation corrections.
@@ -11,14 +17,15 @@ Its product/accounting decisions were subsequently resolved by the active plan b
 Release authority: [Mac-first release and cache pricing](plans/mac-release-cache-pricing.md),
 authorized by the user's follow-up to the readiness audit, then extended explicitly to
 planner/Scout reliability before distribution. Windows release work is deferred.
-The latest completed work is [Adaptive search reliability](plans/adaptive-search-reliability.md),
+Earlier completed work is [Adaptive search reliability](plans/adaptive-search-reliability.md),
 explicitly authorized by the user's implementation request on 2026-09-12. It narrowly
 extended the Phase 3 research-behavior boundary; the new plan adds the bounded Mac/pricing work above.
 
 [Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md) and
 [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md) are preceding
 completed records. Their remaining platform and release checks are still tracked where
-they apply; the SQLite plan above authorizes the current implementation follow-up.
+they apply; the Mac/pricing plan retains the release boundary while the SQLite plan above
+authorizes the current implementation follow-up.
 
 The [Phase 1 desktop plan](plans/phase-1-desktop.md) retains the original implementation
 and verification record, including its originally open Windows and public-release gates.

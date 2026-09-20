@@ -3,17 +3,26 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field, model_validator
 
 from agents.v2_acquisition import V2AcquisitionProbeOutput
 from agents.v2_discovery import V2DiscoveryScoutOutput
-from agents.v2_evidence_admission import run_v2_evidence_admission
-from agents.v2_evidence_analyst import run_v2_evidence_analyst
+from agents.v2_evidence_admission import (
+    V2_EVIDENCE_ADMISSION_SOURCE_ARTIFACT_PREFIX,
+    V2_EVIDENCE_ADMISSION_SOURCE_LEGACY_PREFIX,
+    run_v2_evidence_admission,
+)
+from agents.v2_evidence_analyst import (
+    V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
+    V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
+    run_v2_evidence_analyst,
+)
 from agents.v2_extraction import (
     V2ExactExtractionResult,
     V2ExtractionState,
@@ -22,6 +31,7 @@ from agents.v2_extraction import (
 )
 from agents.v2_source_selection import _source_reservation
 from models import (
+    V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     StrictModel,
@@ -46,20 +56,21 @@ from models import (
     V2SourceSelectionQueueResult,
 )
 from money import add_usd
-from providers.llm import LLMProvider
+from providers.llm import LLMProvider, LLMStage
 from providers.v2_budget import (
-    V2_PHYSICAL_CALL_ARTIFACT_PREFIX,
-    V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX,
     V2BudgetExceededError,
     V2BudgetSnapshot,
     V2CancellationRequested,
+    V2PhysicalCallAudit,
     V2PhysicalCallCompletion,
     V2PhysicalCallStart,
+    read_v2_physical_call_audit,
 )
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY = "phase-13-deep-analysis-backfill-analyzer-admission"
+V2_DEEP_ANALYSIS_MAX_WORKERS = 4
 
 
 class V2DeepAnalysisWave(StrictModel):
@@ -73,6 +84,41 @@ class V2DeepAnalysisWave(StrictModel):
     admission: V2EvidenceAdmissionBatchResult | None = None
 
 
+class V2DeepAnalysisWorkerResult(StrictModel):
+    """Typed coordinator handoff from one source worker."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    wave: V2DeepAnalysisWave | None = None
+    failure_state: V2DeepAnalysisSourceExecutionState | None = None
+    failure_reason: str | None = Field(default=None, min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> V2DeepAnalysisWorkerResult:
+        if self.wave is not None:
+            if self.wave.source_id != self.source_id:
+                raise ValueError("deep-analysis worker result must match its source")
+            if self.failure_state is not None or self.failure_reason is not None:
+                raise ValueError("successful deep-analysis workers cannot carry failure fields")
+            return self
+        if self.failure_state is None or self.failure_reason is None:
+            raise ValueError("failed deep-analysis workers require a state and reason")
+        return self
+
+
+class V2DeepAnalysisSourceEnvelope(StrictModel):
+    """Remaining conservative work for one restart-aware source."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    candidate: V2SourceSelectionCandidate
+    physical_calls: int = Field(ge=0, le=V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP)
+    reserved_tokens: int = Field(ge=0, le=V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP)
+    reserved_cost_usd: Decimal = Field(ge=0)
+    source_cap_reservable: bool = True
+
+
 def run_v2_deep_analysis_with_backfill(
     *,
     db_path: str | Path,
@@ -81,6 +127,7 @@ def run_v2_deep_analysis_with_backfill(
     acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
+    cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2DeepAnalysisBackfillResult:
     """Execute the initial queue and backfill terminal source failures in priority order."""
@@ -106,47 +153,103 @@ def run_v2_deep_analysis_with_backfill(
     executions: dict[UUID, V2DeepAnalysisSourceExecution] = {}
     terminal_reasons: list[str] = []
 
-    for source_id in priority:
-        if source_id in attempted:
-            continue
-        attempted_source_ids.append(source_id)
-        try:
-            wave = _run_source_wave(
-                path=path,
-                source_id=source_id,
-                queue_result=_single_source_queue(queue_result, source_id, routing_config),
-                discovery_outputs=discovery_outputs,
-                acquisition_outputs=acquisition_outputs,
-                llm_provider=llm_provider,
-                routing_config=routing_config,
-                clock=now,
+    initial_audit = read_v2_physical_call_audit(path, queue_result.run_id)
+    pending = tuple(
+        _remaining_source_envelope(
+            path=path,
+            run_id=queue_result.run_id,
+            candidate=candidates[source_id],
+            routing_config=routing_config,
+            audit=initial_audit,
+        )
+        for source_id in priority
+    )
+    cursor = 0
+    stop_after_wave = False
+    while cursor < len(pending) and not stop_after_wave:
+        if cancellation_requested is not None and cancellation_requested():
+            raise V2CancellationRequested(
+                "v2 cancellation was observed before a deep-analysis wave"
             )
-            attempted[source_id] = wave
-            execution = _execution_from_wave(path, wave)
-        except V2CancellationRequested:
-            raise
-        except Exception as exc:
-            reason = f"{type(exc).__name__}: {exc}"[:1000]
-            terminal_reasons.append(reason)
-            execution = V2DeepAnalysisSourceExecution(
+        snapshot = _provider_snapshot(llm_provider)
+        wave_candidates = _safe_wave_prefix(
+            envelopes=pending[cursor:],
+            snapshot=snapshot,
+            max_workers=V2_DEEP_ANALYSIS_MAX_WORKERS,
+            protected_physical_calls=queue_result.mandatory_synthesis_physical_calls,
+            protected_tokens=0,
+            protected_cost_usd=Decimal("0"),
+        )
+        if not wave_candidates:
+            source_id = pending[cursor].candidate.source_id
+            reason = "V2BudgetExceededError: remaining budget cannot cover the next source envelope"
+            attempted_source_ids.append(source_id)
+            executions[source_id] = V2DeepAnalysisSourceExecution(
                 source_id=source_id,
-                state=(
-                    V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
-                    if isinstance(exc, V2BudgetExceededError)
-                    else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
-                ),
+                state=V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED,
                 failure_reason=reason,
             )
-        executions[source_id] = execution
-        if execution.state in {
-            V2DeepAnalysisSourceExecutionState.ADMITTED,
-            V2DeepAnalysisSourceExecutionState.ANALYZER_ADMITTED,
-        }:
-            admitted.append(source_id)
-        elif execution.failure_reason is not None:
-            terminal_reasons.append(execution.failure_reason)
-        if execution.state is V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED:
+            terminal_reasons.append(reason)
             break
+
+        wave_source_ids = tuple(item.source_id for item in wave_candidates)
+
+        def worker(source_id: UUID) -> V2DeepAnalysisWorkerResult:
+            if cancellation_requested is not None and cancellation_requested():
+                raise V2CancellationRequested(
+                    "v2 cancellation was observed before source deep analysis"
+                )
+            try:
+                source_wave = _run_source_wave(
+                    path=path,
+                    source_id=source_id,
+                    queue_result=_single_source_queue(queue_result, source_id, routing_config),
+                    discovery_outputs=discovery_outputs,
+                    acquisition_outputs=acquisition_outputs,
+                    llm_provider=llm_provider,
+                    routing_config=routing_config,
+                    clock=now,
+                )
+            except V2CancellationRequested:
+                raise
+            except Exception as exc:
+                return _worker_failure(source_id, exc)
+            return V2DeepAnalysisWorkerResult(source_id=source_id, wave=source_wave)
+
+        worker_results = _execute_source_batch(
+            source_ids=wave_source_ids,
+            worker=worker,
+            max_workers=V2_DEEP_ANALYSIS_MAX_WORKERS,
+        )
+        _raise_if_cancelled(
+            cancellation_requested,
+            "v2 cancellation was observed after a deep-analysis wave",
+        )
+        for worker_result in worker_results:
+            source_id = worker_result.source_id
+            attempted_source_ids.append(source_id)
+            if worker_result.wave is not None:
+                attempted[source_id] = worker_result.wave
+                execution = _execution_from_wave(worker_result.wave, ())
+            else:
+                if worker_result.failure_state is None or worker_result.failure_reason is None:
+                    raise AssertionError("validated worker failure lost its terminal fields")
+                execution = V2DeepAnalysisSourceExecution(
+                    source_id=source_id,
+                    state=worker_result.failure_state,
+                    failure_reason=worker_result.failure_reason,
+                )
+            executions[source_id] = execution
+            if execution.state in {
+                V2DeepAnalysisSourceExecutionState.ADMITTED,
+                V2DeepAnalysisSourceExecutionState.ANALYZER_ADMITTED,
+            }:
+                admitted.append(source_id)
+            elif execution.failure_reason is not None:
+                terminal_reasons.append(execution.failure_reason)
+            if execution.state is V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED:
+                stop_after_wave = True
+        cursor += len(wave_candidates)
 
     final_queue = _final_queue_result(
         queue_result,
@@ -155,11 +258,20 @@ def run_v2_deep_analysis_with_backfill(
         attempted_source_ids=tuple(attempted_source_ids),
     )
     final_analyst = _final_analyst_result(final_queue, attempted, tuple(attempted_source_ids))
+    _raise_if_cancelled(
+        cancellation_requested,
+        "v2 cancellation was observed before final evidence admission",
+    )
     final_admission = run_v2_evidence_admission(
         db_path=path,
         analyst_result=final_analyst,
         clock=now,
     )
+    _raise_if_cancelled(
+        cancellation_requested,
+        "v2 cancellation was observed after final evidence admission",
+    )
+    audit = read_v2_physical_call_audit(path, queue_result.run_id)
     source_executions = tuple(
         executions.get(
             source_id,
@@ -168,18 +280,19 @@ def run_v2_deep_analysis_with_backfill(
                 state=V2DeepAnalysisSourceExecutionState.NOT_ATTEMPTED,
             ),
         )
-        for source_id in source_ids
+        if source_id not in executions
+        else _execution_with_audit(executions[source_id], audit)
+        for source_id in priority
     )
     reconciliations = tuple(
         _reconcile_source(
-            path=path,
-            run_id=queue_result.run_id,
+            audit=audit,
             source_id=source_id,
             source_cost_cap=_source_reservation(routing_config.preflight(), candidates[source_id])[
                 1
             ],
         )
-        for source_id in source_ids
+        for source_id in priority
     )
     remaining = _remaining_budget(llm_provider, queue_result.initial_budget)
     result = V2DeepAnalysisBackfillResult(
@@ -197,8 +310,201 @@ def run_v2_deep_analysis_with_backfill(
         terminal_reasons=tuple(dict.fromkeys(terminal_reasons)),
         completed_at=_aware(now()),
     )
+    _raise_if_cancelled(
+        cancellation_requested,
+        "v2 cancellation was observed before deep-analysis completion",
+    )
     insert_v2_artifact(path, V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY, result, result.completed_at)
     return result
+
+
+def _provider_snapshot(provider: LLMProvider) -> V2BudgetSnapshot:
+    snapshot_method = getattr(provider, "snapshot", None)
+    snapshot = snapshot_method() if callable(snapshot_method) else None
+    if not isinstance(snapshot, V2BudgetSnapshot):
+        raise TypeError("concurrent deep analysis requires a budget snapshot provider")
+    return snapshot
+
+
+def _raise_if_cancelled(
+    cancellation_requested: Callable[[], bool] | None,
+    message: str,
+) -> None:
+    if cancellation_requested is not None and cancellation_requested():
+        raise V2CancellationRequested(message)
+
+
+def _safe_wave_prefix(
+    *,
+    envelopes: tuple[V2DeepAnalysisSourceEnvelope, ...],
+    snapshot: V2BudgetSnapshot,
+    max_workers: int,
+    protected_physical_calls: int,
+    protected_tokens: int = 0,
+    protected_cost_usd: Decimal = Decimal("0"),
+) -> tuple[V2SourceSelectionCandidate, ...]:
+    """Return the largest bounded priority prefix whose complete envelopes fit."""
+    if not 1 <= max_workers <= V2_DEEP_ANALYSIS_MAX_WORKERS:
+        raise ValueError("deep-analysis worker count must be between one and four")
+    if protected_physical_calls < 0 or protected_tokens < 0 or protected_cost_usd < 0:
+        raise ValueError("protected downstream capacity cannot be negative")
+    selected: list[V2SourceSelectionCandidate] = []
+    reserved_calls = protected_physical_calls
+    reserved_tokens = protected_tokens
+    reserved_cost = protected_cost_usd
+    for envelope in envelopes[:max_workers]:
+        if not envelope.source_cap_reservable:
+            break
+        next_calls = reserved_calls + envelope.physical_calls
+        next_tokens = reserved_tokens + envelope.reserved_tokens
+        next_cost = add_usd(reserved_cost, envelope.reserved_cost_usd)
+        if (
+            next_calls > snapshot.physical_calls_remaining
+            or next_tokens > snapshot.tokens_remaining
+            or next_cost > snapshot.cost_remaining_usd
+        ):
+            break
+        selected.append(envelope.candidate)
+        reserved_calls = next_calls
+        reserved_tokens = next_tokens
+        reserved_cost = next_cost
+    return tuple(selected)
+
+
+def _remaining_source_envelope(
+    *,
+    path: str,
+    run_id: UUID,
+    candidate: V2SourceSelectionCandidate,
+    routing_config: V2RoutingConfig,
+    audit: V2PhysicalCallAudit | None = None,
+) -> V2DeepAnalysisSourceEnvelope:
+    source_id = candidate.source_id
+    source_starts, source_completions = _source_audit(
+        audit or V2PhysicalCallAudit(starts=(), completions=()), source_id
+    )
+    source_token_exposure = sum(
+        completion.usage_tokens
+        if completion is not None and completion.usage_tokens is not None
+        else start.reserved_tokens
+        for start, completion in zip(source_starts, source_completions, strict=True)
+    )
+
+    def envelope(
+        *,
+        physical_calls: int,
+        reserved_tokens: int,
+        reserved_cost_usd: Decimal,
+    ) -> V2DeepAnalysisSourceEnvelope:
+        return V2DeepAnalysisSourceEnvelope(
+            candidate=candidate,
+            physical_calls=physical_calls,
+            reserved_tokens=reserved_tokens,
+            reserved_cost_usd=reserved_cost_usd,
+            source_cap_reservable=(
+                len(source_starts) + physical_calls <= V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
+                and source_token_exposure + reserved_tokens <= V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
+            ),
+        )
+
+    completed_model_keys = (
+        f"{V2_EVIDENCE_ADMISSION_SOURCE_ARTIFACT_PREFIX}-{source_id}",
+        f"{V2_EVIDENCE_ADMISSION_SOURCE_LEGACY_PREFIX}-{source_id}",
+        f"{V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX}-{source_id}",
+        f"{V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX}-{source_id}",
+        f"phase-13-luna-evidence-analyst-batch-source-{source_id}",
+    )
+    if any(_artifact_exists(path, run_id, key) for key in completed_model_keys):
+        return envelope(
+            physical_calls=0,
+            reserved_tokens=0,
+            reserved_cost_usd=Decimal("0"),
+        )
+    extraction_key = f"phase-13-exact-extraction-source-{source_id}"
+    if _artifact_exists(path, run_id, extraction_key):
+        reservation = routing_config.preflight().reserve(
+            LLMStage.ANALYST,
+            candidate.deep_analysis_input_tokens,
+        )
+        return envelope(
+            physical_calls=1,
+            reserved_tokens=reservation.reserved_tokens,
+            reserved_cost_usd=reservation.reserved_cost_usd,
+        )
+    source_tokens, source_cost = _source_reservation(routing_config.preflight(), candidate)
+    return envelope(
+        physical_calls=V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+        reserved_tokens=source_tokens,
+        reserved_cost_usd=source_cost,
+    )
+
+
+def _artifact_exists(path: str, run_id: UUID, artifact_key: str) -> bool:
+    try:
+        read_v2_artifact(path, run_id, artifact_key)
+    except KeyError:
+        return False
+    return True
+
+
+def _execute_source_batch(
+    *,
+    source_ids: tuple[UUID, ...],
+    worker: Callable[[UUID], V2DeepAnalysisWorkerResult],
+    max_workers: int,
+) -> tuple[V2DeepAnalysisWorkerResult, ...]:
+    """Run one already-budgeted wave and return typed results in priority order."""
+    if not source_ids:
+        return ()
+    if not 1 <= max_workers <= V2_DEEP_ANALYSIS_MAX_WORKERS:
+        raise ValueError("deep-analysis worker count must be between one and four")
+    if len(source_ids) > max_workers:
+        raise ValueError("a deep-analysis wave cannot exceed its worker bound")
+    results: dict[UUID, V2DeepAnalysisWorkerResult] = {}
+    cancellation: V2CancellationRequested | None = None
+    with ThreadPoolExecutor(
+        max_workers=min(max_workers, len(source_ids)),
+        thread_name_prefix="v2-deep-analysis",
+    ) as executor:
+        futures: dict[Future[V2DeepAnalysisWorkerResult], UUID] = {
+            executor.submit(worker, source_id): source_id for source_id in source_ids
+        }
+        for future in as_completed(futures):
+            source_id = futures[future]
+            try:
+                result = future.result()
+            except CancelledError:
+                continue
+            except V2CancellationRequested as exc:
+                if cancellation is None:
+                    cancellation = exc
+                    for pending in futures:
+                        if pending is not future:
+                            pending.cancel()
+                continue
+            except Exception as exc:
+                result = _worker_failure(source_id, exc)
+            if result.source_id != source_id:
+                raise ValueError("deep-analysis worker returned a foreign source result")
+            results[source_id] = result
+    if cancellation is not None:
+        raise cancellation
+    if set(results) != set(source_ids):
+        raise RuntimeError("deep-analysis wave ended without every source result")
+    return tuple(results[source_id] for source_id in source_ids)
+
+
+def _worker_failure(source_id: UUID, exc: Exception) -> V2DeepAnalysisWorkerResult:
+    reason = f"{type(exc).__name__}: {exc}"[:1000]
+    return V2DeepAnalysisWorkerResult(
+        source_id=source_id,
+        failure_state=(
+            V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
+            if isinstance(exc, V2BudgetExceededError)
+            else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
+        ),
+        failure_reason=reason,
+    )
 
 
 def _run_source_wave(
@@ -384,8 +690,8 @@ def _reservation_points(
 
 
 def _execution_from_wave(
-    path: str,
     wave: V2DeepAnalysisWave,
+    sequences: tuple[int, ...],
 ) -> V2DeepAnalysisSourceExecution:
     extraction = wave.extraction.sources[0]
     analyst = next(item for item in wave.analyst.source_results if item.source_id == wave.source_id)
@@ -393,7 +699,6 @@ def _execution_from_wave(
     if admission is None:
         raise ValueError("fresh deep-analysis waves require an evidence admission result")
     admitted = next(item for item in admission.source_results if item.source_id == wave.source_id)
-    sequences = _physical_sequences(path, wave.extraction.run_id, wave.source_id)
     if extraction.state is V2ExtractionState.FAILED:
         extraction_failure = extraction.failure or "exact extraction failed"
         return V2DeepAnalysisSourceExecution(
@@ -542,19 +847,28 @@ def _provenance(
     )
 
 
-def _physical_sequences(path: str, run_id: UUID, source_id: UUID) -> tuple[int, ...]:
-    starts, _completions = _read_source_audit(path, run_id, source_id)
-    return tuple(item.sequence for item in starts)
+def _physical_sequences(audit: V2PhysicalCallAudit, source_id: UUID) -> tuple[int, ...]:
+    return tuple(item.sequence for item in audit.starts if item.source_id == source_id)
+
+
+def _execution_with_audit(
+    execution: V2DeepAnalysisSourceExecution,
+    audit: V2PhysicalCallAudit,
+) -> V2DeepAnalysisSourceExecution:
+    if execution.state is V2DeepAnalysisSourceExecutionState.NOT_ATTEMPTED:
+        return execution
+    return execution.model_copy(
+        update={"physical_call_sequences": _physical_sequences(audit, execution.source_id)}
+    )
 
 
 def _reconcile_source(
     *,
-    path: str,
-    run_id: UUID,
+    audit: V2PhysicalCallAudit,
     source_id: UUID,
     source_cost_cap: Decimal,
 ) -> V2DeepAnalysisSourceReconciliation:
-    starts, completions = _read_source_audit(path, run_id, source_id)
+    starts, completions = _source_audit(audit, source_id)
     accounted_tokens = sum(
         completion.usage_tokens
         if completion is not None and completion.usage_tokens is not None
@@ -580,44 +894,18 @@ def _reconcile_source(
     )
 
 
-def _read_source_audit(
-    path: str,
-    run_id: UUID,
+def _source_audit(
+    audit: V2PhysicalCallAudit,
     source_id: UUID,
-) -> tuple[list[V2PhysicalCallStart], list[V2PhysicalCallCompletion | None]]:
+) -> tuple[tuple[V2PhysicalCallStart, ...], tuple[V2PhysicalCallCompletion | None, ...]]:
     starts: list[V2PhysicalCallStart] = []
     completions: list[V2PhysicalCallCompletion | None] = []
-    for sequence in range(1, 161):
-        row = None
-        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
-            try:
-                row = read_v2_artifact(path, run_id, f"{prefix}-{sequence:03d}-start")
-            except KeyError:
-                continue
-            break
-        if row is None:
-            break
-        start = V2PhysicalCallStart.model_validate_json(row.payload_json)
+    for start, completion in zip(audit.starts, audit.completions, strict=True):
         if start.source_id != source_id:
             continue
-        completion_row = None
-        for prefix in (V2_PHYSICAL_CALL_ARTIFACT_PREFIX, V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX):
-            try:
-                completion_row = read_v2_artifact(
-                    path, run_id, f"{prefix}-{sequence:03d}-completion"
-                )
-            except KeyError:
-                continue
-            break
-        if completion_row is None:
-            completion_row = None
         starts.append(start)
-        completions.append(
-            V2PhysicalCallCompletion.model_validate_json(completion_row.payload_json)
-            if completion_row is not None
-            else None
-        )
-    return starts, completions
+        completions.append(completion)
+    return tuple(starts), tuple(completions)
 
 
 def _remaining_budget(
@@ -641,7 +929,10 @@ def _read_backfill(path: str, run_id: UUID) -> V2DeepAnalysisBackfillResult | No
         artifact = read_v2_artifact(path, run_id, V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY)
     except KeyError:
         return None
-    return V2DeepAnalysisBackfillResult.model_validate_json(artifact.payload_json)
+    result = V2DeepAnalysisBackfillResult.model_validate_json(artifact.payload_json)
+    if result.policy_identity != V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY:
+        raise ValueError("persisted deep-analysis backfill uses an incompatible execution policy")
+    return result
 
 
 def _aware(value: datetime) -> datetime:

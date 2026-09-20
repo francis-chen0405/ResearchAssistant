@@ -1,17 +1,12 @@
 # Current decisions
 
-## 2026-09-19 — Request-scoped SQLite status inspection
+Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
+explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+phase and preserves the Mac-first release boundary. Earlier dated scope statements below
+remain historical.
 
-Use one validated read-only session per v2 status request, passing its connection through
-progress and terminal reconstruction. Retain one integrity/schema validation each request
-rather than caching validation or connections across requests. This bounds repeated open
-and validation work without relaxing corruption checks or retaining stale read sessions.
-Status polling waits for completion before scheduling its next request and cancels pending
-work on terminal state, run replacement or unmount.
-
-WAL, explicit busy-timeout policy, checkpoint/sidecar management and backup/import changes
-remain a separate storage decision. No schema, dependency, research-policy, paid-call or
-release-gate change is authorized by this phase.
+The preceding implementation decision is the 2026-09-18 bounded deterministic fresh-v2
+source-wave policy recorded below.
 
 ## 2026-09-17 — Reliability before distribution
 
@@ -124,3 +119,31 @@ unverified; stable production signing and user-granted access must be verified s
 Follow-up 2026-09-08: the explicitly authorized isolated cross-version credential test
 passed unchanged. This supersedes the unverified local upgrade result above; production
 signing and Windows verification remain separate gates.
+
+## 2026-09-18 — Bounded deterministic fresh-v2 source waves
+
+Use a fixed maximum of four source workers in fresh deep analysis. Dispatch only the next
+budget-safe priority prefix; keep the three model-call envelope within each source
+sequential. This reduces idle transport time while preserving deterministic source choice,
+the shared budget lock, per-source caps, restart artifacts and evidence validation.
+
+Version the backfill policy as
+`researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v2-waves4` because
+worker count can change which source calls reserve first near a constrained boundary.
+Cancellation remains its own exception across `invoke_llm`; a cancelled wave drains but
+cannot write aggregate completion. Use a shared typed bulk reader for physical-call audit
+recovery and reconciliation. No acquisition concurrency, routing/budget/deadline change,
+dependency, schema migration or paid validation is part of this decision.
+
+## 2026-09-19 — Request-scoped SQLite status inspection
+
+Use one validated read-only session per v2 status request, passing its connection through
+progress and terminal reconstruction. Retain one integrity/schema validation each request
+rather than caching validation or connections across requests. This bounds repeated open
+and validation work without relaxing corruption checks or retaining stale read sessions.
+Status polling waits for completion before scheduling its next request and cancels its
+pending work on terminal state, run replacement or unmount.
+
+WAL activation, busy-timeout changes, checkpoint/sidecar management and backup/import
+changes remain a separate storage decision. No schema, dependency, research behavior,
+paid-call allowance or release gate changes are authorized by this phase.

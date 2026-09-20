@@ -456,6 +456,10 @@ class LLMProviderExecutionError(LLMInvocationError):
     """Raised when the provider adapter itself fails."""
 
 
+class V2CancellationRequested(RuntimeError):
+    """Stop v2 work without converting cancellation into a provider failure."""
+
+
 def is_non_retryable_provider_error(error: LLMInvocationError) -> bool:
     """Return whether a provider explicitly marked its failure as terminal."""
     return (
@@ -646,6 +650,8 @@ def invoke_llm(
         validate_provider_capabilities(capabilities, request.generation)
         try:
             response = provider.generate(request)
+        except V2CancellationRequested:
+            raise
         except Exception as exc:
             provider_retryable = getattr(exc, "retryable", None)
             raise _InvocationProblem(

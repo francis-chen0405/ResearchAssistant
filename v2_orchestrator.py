@@ -973,6 +973,7 @@ def _run_v2_production_pipeline(
             acquisition_outputs=acquisitions,
             llm_provider=budgeted_llm,
             routing_config=routing_config,
+            cancellation_requested=effective_cancellation_requested,
             clock=now,
         )
         _raise_if_v2_cancelled(effective_cancellation_requested)
