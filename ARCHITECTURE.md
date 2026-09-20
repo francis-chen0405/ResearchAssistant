@@ -1,5 +1,8 @@
 # Architecture
 
+Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
+explicitly authorized on 2026-09-19. It preserves the Mac-first release boundary.
+
 The user subsequently authorized [Mac-first release and model-aware cache accounting](.agent/plans/mac-release-cache-pricing.md).
 Windows release acceptance is deferred. The following adaptive-search policy remains intact.
 The user subsequently authorized planner/Scout reliability fixes based on the bounded
@@ -50,6 +53,14 @@ service ownership and release verification.
 | Local API and browser presentation | `frontend/api.py`, `web/` |
 | Desktop lifecycle | `desktop/main.cjs`, `desktop/backend.py`, `frontend/service_manager.py` |
 | Platform storage, vault and exclusion | `desktop_paths.py`, `desktop_settings.py`, `credential_store.py`, `file_lock.py`, `process_tree.py` |
+
+V2 status snapshots open one request-scoped `ReadOnlyStore` and pass its connection through
+all artifact, budget, progress, provider and diagnostic readers. Terminal reconstruction
+uses the requested database connection, including imported results whose stored original
+path has moved. Validation still runs once per request; no connection or validation result
+survives it. The browser schedules the next poll 1.5 seconds after completion, stops on
+terminal results, and aborts cleanup work on run changes or unmount. Journal mode,
+busy-timeout defaults and schema version remain unchanged.
 
 Dependencies between model implementation modules are one-way: shared contracts →
 research contracts → evidence/result contracts. The latter also uses shared contracts.

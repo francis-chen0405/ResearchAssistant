@@ -162,7 +162,7 @@ def _v2_research_progress(
     )
 
 
-def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
+def _read_v2_directions(db_path: str | Path | Connection, run_id: UUID) -> ResearchDirections:
     try:
         artifact = _read_first_v2_artifact(
             db_path,
@@ -180,7 +180,10 @@ def _read_v2_directions(db_path: str, run_id: UUID) -> ResearchDirections:
         return ResearchDirections()
 
 
-def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
+def _read_v2_budget_snapshot(
+    db_path: str | Path | Connection,
+    run_id: UUID,
+) -> V2BudgetSnapshot:
     ceilings = V2RunCeilings()
     try:
         artifact = _read_first_v2_artifact(
@@ -256,7 +259,7 @@ def _read_v2_budget_snapshot(db_path: str, run_id: UUID) -> V2BudgetSnapshot:
     )
 
 
-def _v2_current_round(db_path: str, run_id: UUID) -> int:
+def _v2_current_round(db_path: str | Path | Connection, run_id: UUID) -> int:
     for round_number in (4, 3, 2):
         for suffix in ("search-results", "discovery-scout", "acquisition-probe"):
             try:
@@ -276,7 +279,7 @@ def _v2_current_round(db_path: str, run_id: UUID) -> int:
 
 
 def _read_v2_directional_progress(
-    db_path: str,
+    db_path: str | Path | Connection,
     run_id: UUID,
     directions: ResearchDirections,
     status: RunStatus,
@@ -457,7 +460,11 @@ def _result_message(result: ProviderPipelineResult) -> str:
     raise ValueError(f"unsupported provider run status: {result.status!r}")
 
 
-def adaptive_planning_message(db_path: str, run_id: UUID, stage: Stage) -> str:
+def adaptive_planning_message(
+    db_path: str | Path | Connection,
+    run_id: UUID,
+    stage: Stage,
+) -> str:
     """Expose bounded repair activity without query text or provider errors."""
     if stage is Stage.ADAPTIVE_SEARCH:
         for round_number in (3, 2):

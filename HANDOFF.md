@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-09-20 SQLite status polling
+
+Current implementation authority is the completed
+[SQLite polling plan](.agent/plans/sqlite-status-polling.md). Each v2 snapshot owns one
+validated `mode=ro`, `query_only` session and passes that connection through every v2
+projection reader. Connections close on success and error; later requests see later
+commits and revalidate a database replaced at the same path. Imported terminal snapshots
+use the requested database path for subsequent UI requests.
+
+Frontend polling is completion-driven, so a slow response cannot overlap another poll.
+The dedicated browser test covers error recovery, a response longer than the old interval,
+terminal stop, active-run replacement and unmount cleanup. Exact operation counts and
+limitations are in [verification](docs/verification/sqlite-status-polling.md). The 1,019-test
+suite passed with two existing skips, along with Ruff and relevant frontend checks.
+
+WAL and explicit busy-timeout policy remain a separate storage decision requiring
+checkpoint/sidecar, import/backup and interruption analysis. No live acceptance, packaging,
+installation, push or merge occurred for this phase.
+
 ## 2026-09-17 Reliability follow-up
 
 The user authorized reliability before distribution and larger model responses within

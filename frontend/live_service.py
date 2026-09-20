@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from pathlib import Path
+from sqlite3 import Connection
 from threading import Event, Lock
 from uuid import UUID, uuid4
 
@@ -325,26 +326,34 @@ class LiveResearchController:
             early = self._early_results.pop(key, None)
         if Path(resolved).is_file():
             try:
-                artifact = _read_first_v2_artifact(
-                    resolved,
-                    run_id,
-                    (
-                        V2_PRODUCTION_ARTIFACT_KEY,
-                        V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
-                        V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
-                    ),
-                )
-                return self._snapshot_from_v2_result(
-                    V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
-                )
+                with open_read_only_store(resolved) as store:
+                    try:
+                        artifact = _read_first_v2_artifact(
+                            store.connection,
+                            run_id,
+                            (
+                                V2_PRODUCTION_ARTIFACT_KEY,
+                                V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+                                V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+                            ),
+                        )
+                    except KeyError:
+                        v2_providers = configured_v2_providers(store.connection, run_id)
+                        if v2_providers:
+                            return self._snapshot_from_v2_progress(
+                                resolved,
+                                run_id,
+                                v2_providers,
+                                source=store.connection,
+                            )
+                    else:
+                        return self._snapshot_from_v2_result(
+                            V2ProductionPipelineResult.model_validate_json(artifact.payload_json),
+                            source=store.connection,
+                            db_path=resolved,
+                        )
             except KeyError:
                 pass
-            v2_providers = configured_v2_providers(resolved, run_id)
-            if v2_providers:
-                try:
-                    return self._snapshot_from_v2_progress(resolved, run_id, v2_providers)
-                except KeyError:
-                    pass
             try:
                 result = self._inspector(resolved, run_id)
                 return self._snapshot_from_result(result)
@@ -582,22 +591,25 @@ class LiveResearchController:
         db_path: str,
         run_id: UUID,
         providers: tuple[DiscoveryProvider, ...],
+        *,
+        source: str | Path | Connection | None = None,
     ) -> LiveRunSnapshot:
-        manifest = read_run(db_path, run_id)
-        directions = _read_v2_directions(db_path, run_id)
-        diagnostics = build_v2_run_diagnostics_or_empty(db_path, run_id, providers)
-        budget = _read_v2_budget_snapshot(db_path, run_id)
-        stage = infer_v2_stage(db_path, run_id, manifest.current_stage, False)
-        current_round = _v2_current_round(db_path, run_id)
+        read_source = source if source is not None else db_path
+        manifest = read_run(read_source, run_id)
+        directions = _read_v2_directions(read_source, run_id)
+        diagnostics = build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
+        budget = _read_v2_budget_snapshot(read_source, run_id)
+        stage = infer_v2_stage(read_source, run_id, manifest.current_stage, False)
+        current_round = _v2_current_round(read_source, run_id)
         supporting, opposing = _read_v2_directional_progress(
-            db_path,
+            read_source,
             run_id,
             directions,
             manifest.status,
         )
         contract = None
         try:
-            contract = read_provider_run_contract(db_path, run_id)
+            contract = read_provider_run_contract(read_source, run_id)
         except KeyError:
             pass
         classification: LiveClassification = {
@@ -637,7 +649,7 @@ class LiveResearchController:
                 opposing,
             ),
             message=(
-                adaptive_planning_message(db_path, run_id, stage)
+                adaptive_planning_message(read_source, run_id, stage)
                 if manifest.status is RunStatus.RUNNING
                 else f"Research is {classification}."
             ),
@@ -668,22 +680,27 @@ class LiveResearchController:
     def _snapshot_from_v2_result(
         self,
         result: V2ProductionPipelineResult,
+        *,
+        source: str | Path | Connection | None = None,
+        db_path: str | None = None,
     ) -> LiveRunSnapshot:
+        read_source = source if source is not None else result.db_path
+        displayed_db_path = db_path if db_path is not None else result.db_path
         output = result.final_output
         directions = output.directions if output is not None else ResearchDirections()
         sources = output.all_surviving_sources if output is not None else ()
         diagnostics = result.diagnostics
         if diagnostics is None:
-            providers = configured_v2_providers(result.db_path, result.run_id)
+            providers = configured_v2_providers(read_source, result.run_id)
             if providers:
                 diagnostics = build_v2_run_diagnostics_or_empty(
-                    result.db_path,
+                    read_source,
                     result.run_id,
                     providers,
                     final_output=output,
                 )
         stage = infer_v2_stage(
-            result.db_path,
+            read_source,
             result.run_id,
             result.current_stage,
             output is not None,
@@ -697,7 +714,7 @@ class LiveResearchController:
         }[result.state]
         return LiveRunSnapshot(
             run_id=result.run_id,
-            db_path=result.db_path,
+            db_path=displayed_db_path,
             raw_claim=result.raw_claim,
             classification=classification,
             exit_code=int(exit_code),

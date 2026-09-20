@@ -1,9 +1,12 @@
 # Development conventions
 
+Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
+explicitly authorized on 2026-09-19. It preserves the Mac-first release boundary.
+
 The user authorized the adaptive-search reliability corrective plan on 2026-09-12.
 Its bounded research changes supersede the Phase 3-only scope below for this work.
 
-Latest authorized scope is [Mac-first release and cache pricing](.agent/plans/mac-release-cache-pricing.md),
+Release scope is [Mac-first release and cache pricing](.agent/plans/mac-release-cache-pricing.md),
 following the completed adaptive correction. Read
 [architecture](ARCHITECTURE.md), [status](STATUS.md), [handoff](HANDOFF.md),
 [decisions](DECISIONS.md), [plan index](.agent/PLANS.md) and applicable `AGENTS.md`

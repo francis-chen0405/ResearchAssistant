@@ -1,5 +1,24 @@
 # Current status
 
+## 2026-09-20 — SQLite status polling
+
+V2 progress and terminal snapshots now use one validated, request-scoped read-only SQLite
+connection for every artifact, budget, diagnostic, stage and progress read. Full
+integrity/schema validation remains mandatory once per request. Imported terminal results
+now return the database path actually opened, so later UI requests do not use a stale path.
+
+The browser starts the next poll 1.5 seconds after the preceding request completes,
+retries ordinary failures, stops on terminal state and aborts work during cleanup. Prepared
+fixtures fell from 51 connections and 17 validations to one of each for adaptive search,
+and from 65 and 33 to one of each for planning. Outputs stayed equal and database bytes and
+mtime were unchanged. These counts do not predict live research duration.
+
+Verification passed: 1,019 Python tests with two existing skips; Ruff; frontend lint,
+types and production export; dedicated polling browser acceptance; established offline
+frontend acceptance; JavaScript syntax and diff whitespace. No dependency, migration,
+WAL change, paid call, package, install, push or merge. See the
+[verification record](docs/verification/sqlite-status-polling.md).
+
 ## 2026-09-17 — Authorized reliability follow-up
 
 The user prioritized reliable research and explicitly chose larger responses within

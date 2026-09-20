@@ -14,7 +14,10 @@ from pydantic import ValidationError
 
 import agents.v2_final_output as v2_final_output
 import agents.v2_round_four as v2_round_four
+import frontend.live_progress as live_progress_module
+import frontend.live_service as live_service_module
 import providers.v2_budget as v2_budget
+import store as store_module
 import v2_orchestrator
 from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
@@ -61,6 +64,7 @@ from models import (
     V2InitialPlannerModelOutput,
     V2InitialPlannerSearchResponse,
     V2MaterialGap,
+    V2PersistedArtifact,
     V2PipelineIdentity,
     V2ProviderRunDiagnostics,
     V2RoundFourGovernorDecision,
@@ -1652,6 +1656,146 @@ def test_running_v2_snapshot_reports_persisted_progress(tmp_path: Path) -> None:
     assert after_call.progress_percent == before_call.progress_percent + 1
 
 
+def test_running_v2_snapshot_reuses_one_validated_read_only_connection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = str(tmp_path / "one-session-v2.sqlite3")
+    run_id = uuid4()
+    ceilings = V2RunCeilings(
+        max_physical_calls=40,
+        max_total_tokens=100_000,
+        max_total_cost_usd=Decimal("1"),
+    )
+    init_db(db_path)
+    insert_run(
+        db_path,
+        RunManifest(
+            run_id=run_id,
+            status=RunStatus.RUNNING,
+            raw_claim="The regional program increases course completion.",
+            current_stage=Stage.CLAIM_PLANNER,
+            created_at=NOW,
+            updated_at=NOW,
+        ),
+    )
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    fingerprint = _production_fingerprint(
+        run_id,
+        ResearchDirections(support_enabled=True, challenge_enabled=False),
+        (DiscoveryProvider.EXA,),
+        ceilings,
+        _routing(),
+        "test-provider-policy",
+        NOW,
+    )
+    assert isinstance(fingerprint, V2ProductionFingerprint)
+    insert_v2_artifact(db_path, V2_PRODUCTION_FINGERPRINT_KEY, fingerprint, NOW)
+
+    before = Path(db_path).read_bytes(), Path(db_path).stat().st_mtime_ns
+    opened = 0
+    opened_connections: list[sqlite3.Connection] = []
+    quick_checks: list[str] = []
+    validation_calls = 0
+    pragma_states: list[tuple[int, int]] = []
+    connections: list[sqlite3.Connection] = []
+    original_connect = store_module.sqlite3.connect
+    original_validate = store_module._validate_read_only_schema
+    original_open = live_service_module.open_read_only_store
+    original_progress_read = live_progress_module.read_v2_artifact
+    original_orchestrator_read = v2_orchestrator.read_v2_artifact
+    original_read_run = live_service_module.read_run
+    original_read_contract = live_service_module.read_provider_run_contract
+
+    def trace_statement(statement: str) -> None:
+        if statement.strip().lower() == "pragma quick_check":
+            quick_checks.append(statement)
+
+    def tracked_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        assert kwargs.get("uri") is True
+        assert "?mode=ro" in str(args[0])
+        connection = original_connect(*args, **kwargs)
+        opened_connections.append(connection)
+        connection.set_trace_callback(trace_statement)
+        return connection
+
+    def tracked_validate(connection: sqlite3.Connection) -> object:
+        nonlocal validation_calls
+        validation_calls += 1
+        pragma_states.append(
+            (
+                int(connection.execute("PRAGMA query_only").fetchone()[0]),
+                int(connection.execute("PRAGMA foreign_keys").fetchone()[0]),
+            )
+        )
+        return original_validate(connection)
+
+    def tracked_open(path: str | Path) -> object:
+        nonlocal opened
+        opened += 1
+        return original_open(path)
+
+    def tracked_progress_read(
+        source: str | Path | sqlite3.Connection,
+        artifact_run_id: UUID,
+        artifact_key: str,
+    ) -> V2PersistedArtifact:
+        if not isinstance(source, sqlite3.Connection):
+            raise AssertionError("v2 progress attempted a writable-capable path read")
+        connections.append(source)
+        return original_progress_read(source, artifact_run_id, artifact_key)
+
+    def tracked_orchestrator_read(
+        source: str | Path | sqlite3.Connection,
+        artifact_run_id: UUID,
+        artifact_key: str,
+    ) -> V2PersistedArtifact:
+        if not isinstance(source, sqlite3.Connection):
+            raise AssertionError("v2 diagnostics attempted a writable-capable path read")
+        connections.append(source)
+        return original_orchestrator_read(source, artifact_run_id, artifact_key)
+
+    def tracked_read_run(
+        source: str | Path | sqlite3.Connection,
+        artifact_run_id: UUID,
+    ) -> RunManifest:
+        if not isinstance(source, sqlite3.Connection):
+            raise AssertionError("v2 snapshot attempted a path-based manifest read")
+        connections.append(source)
+        return original_read_run(source, artifact_run_id)
+
+    def tracked_read_contract(
+        source: str | Path | sqlite3.Connection,
+        artifact_run_id: UUID,
+    ) -> object:
+        if not isinstance(source, sqlite3.Connection):
+            raise AssertionError("v2 snapshot attempted a path-based contract read")
+        connections.append(source)
+        return original_read_contract(source, artifact_run_id)
+
+    monkeypatch.setattr(store_module.sqlite3, "connect", tracked_connect)
+    monkeypatch.setattr(store_module, "_validate_read_only_schema", tracked_validate)
+    monkeypatch.setattr(live_service_module, "open_read_only_store", tracked_open)
+    monkeypatch.setattr(live_progress_module, "read_v2_artifact", tracked_progress_read)
+    monkeypatch.setattr(v2_orchestrator, "read_v2_artifact", tracked_orchestrator_read)
+    monkeypatch.setattr(live_service_module, "read_run", tracked_read_run)
+    monkeypatch.setattr(live_service_module, "read_provider_run_contract", tracked_read_contract)
+
+    snapshot = LiveResearchController(environment={}).snapshot(db_path, run_id)
+
+    assert snapshot.classification == "running"
+    assert opened == 1
+    assert validation_calls == 1
+    assert quick_checks == ["PRAGMA quick_check"]
+    assert connections
+    assert all(connection is connections[0] for connection in connections)
+    assert pragma_states == [(1, 1)]
+    assert opened_connections == [connections[0]]
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        opened_connections[0].execute("SELECT 1")
+    assert (Path(db_path).read_bytes(), Path(db_path).stat().st_mtime_ns) == before
+
+
 def test_extraction_failure_is_preserved_in_final_pipeline_reason(tmp_path: Path) -> None:
     result = _run(
         tmp_path / "extraction-failure.sqlite3",
@@ -2277,3 +2421,64 @@ def test_partial_v2_reservation_failure_preserves_committed_audit_state(
         read_v2_artifact(str(db_path), result.run_id, V2_PRODUCTION_ARTIFACT_KEY).payload_json
     )
     assert persisted == result
+
+
+@pytest.mark.parametrize("state", tuple(V2ProductionState))
+def test_imported_terminal_snapshot_reuses_requested_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: V2ProductionState
+) -> None:
+    # Obtain a real offline released output so release validation is never bypassed.
+    generated = tmp_path / "generated.sqlite3"
+    released = _run(generated, _V2Model(), _Search(), _Scraper())
+    original = tmp_path / "original.sqlite3"
+    imported = tmp_path / "imported.sqlite3"
+    init_db(str(original))
+    insert_run(str(original), read_run(str(generated), released.run_id))
+    insert_v2_pipeline_identity(str(original), released.run_id, V2PipelineIdentity(), NOW)
+    fingerprint = V2ProductionFingerprint.model_validate_json(
+        read_v2_artifact(
+            str(generated), released.run_id, V2_PRODUCTION_FINGERPRINT_KEY
+        ).payload_json
+    )
+    insert_v2_artifact(str(original), V2_PRODUCTION_FINGERPRINT_KEY, fingerprint, NOW)
+    terminal = V2ProductionPipelineResult.model_validate(
+        released.model_dump()
+        | {
+            "db_path": str(original),
+            "state": state,
+            "diagnostics": None,
+            "current_stage": Stage.CLAIM_PLANNER,
+            "failure_reason": None if state is V2ProductionState.RELEASED else "Saved stop reason.",
+            "final_output": released.final_output if state is V2ProductionState.RELEASED else None,
+        }
+    )
+    insert_v2_artifact(str(original), V2_PRODUCTION_LEGACY_ARTIFACT_KEY, terminal, NOW)
+    controller = LiveResearchController(environment={})
+    expected = controller.snapshot(original, released.run_id)
+    original.rename(imported)
+    before = imported.read_bytes(), imported.stat().st_mtime_ns
+    opened: list[sqlite3.Connection] = []
+    statements: list[str] = []
+    original_connect = sqlite3.connect
+
+    def tracked_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        assert kwargs.get("uri") is True
+        assert str(args[0]) == f"file:{imported}?mode=ro"
+        connection = original_connect(*args, **kwargs)
+        connection.set_trace_callback(statements.append)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", tracked_connect)
+    actual = controller.snapshot(imported, released.run_id)
+    assert actual == expected.model_copy(update={"db_path": str(imported)})
+    assert actual.db_path == str(imported)
+    assert actual.classification == state.value
+    assert actual.v2_diagnostics is not None
+    assert actual.research_controls.discovery_providers == (DiscoveryProvider.EXA,)
+    assert len(opened) == 1
+    assert statements.count("PRAGMA quick_check") == 1
+    assert (imported.read_bytes(), imported.stat().st_mtime_ns) == before
+    assert not original.exists()
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        opened[0].execute("SELECT 1")

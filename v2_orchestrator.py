@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from sqlite3 import Connection
 from uuid import UUID, uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -140,10 +141,17 @@ V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 8
 V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE = 8
 
 
-def _read_v2_payload(path: str | Path, run_id: UUID, artifact_key: str) -> str | None:
+def _read_v2_payload(
+    path: str | Path | Connection,
+    run_id: UUID,
+    artifact_key: str,
+) -> str | None:
     try:
-        with open_read_only_store(path) as store:
-            artifact = read_v2_artifact(store.connection, run_id, artifact_key)
+        if isinstance(path, Connection):
+            artifact = read_v2_artifact(path, run_id, artifact_key)
+        else:
+            with open_read_only_store(path) as store:
+                artifact = read_v2_artifact(store.connection, run_id, artifact_key)
     except KeyError:
         return None
     return artifact.payload_json
@@ -165,7 +173,10 @@ def _empty_v2_run_diagnostics(
     )
 
 
-def configured_v2_providers(path: str | Path, run_id: UUID) -> tuple[DiscoveryProvider, ...]:
+def configured_v2_providers(
+    path: str | Path | Connection,
+    run_id: UUID,
+) -> tuple[DiscoveryProvider, ...]:
     """Read the configured discovery lanes from the immutable v2 fingerprint."""
     payload = _read_v2_payload(path, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
     if payload is None:
@@ -183,7 +194,7 @@ def configured_v2_providers(path: str | Path, run_id: UUID) -> tuple[DiscoveryPr
 
 
 def build_v2_run_diagnostics(
-    path: str | Path,
+    path: str | Path | Connection,
     run_id: UUID,
     configured_providers: tuple[DiscoveryProvider, ...],
     final_output: V2FinalResearchOutput | None = None,
@@ -418,7 +429,7 @@ def build_v2_run_diagnostics(
 
 
 def build_v2_run_diagnostics_or_empty(
-    path: str | Path,
+    path: str | Path | Connection,
     run_id: UUID,
     configured_providers: tuple[DiscoveryProvider, ...],
     final_output: V2FinalResearchOutput | None = None,
@@ -431,7 +442,7 @@ def build_v2_run_diagnostics_or_empty(
 
 
 def infer_v2_stage(
-    path: str | Path,
+    path: str | Path | Connection,
     run_id: UUID,
     current_stage: Stage,
     final_output_present: bool,

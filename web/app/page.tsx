@@ -213,17 +213,28 @@ export default function Home() {
   useEffect(() => {
     if (!activeRun || activeRunIsTerminal) return;
     let disposed = false;
-    const poll = async () => {
+    let timer: number | undefined;
+    const controller = new AbortController();
+    const poll = async (): Promise<void> => {
+      if (disposed) return;
       try {
-        const result = await researchApi.snapshot(activeRun.id, activeRun.database);
-        if (!disposed) { setSnapshot(result); setOffline(false); }
+        const result = await researchApi.snapshot(activeRun.id, activeRun.database, controller.signal);
+        if (disposed) return;
+        setSnapshot(result);
+        setOffline(false);
+        if (terminalStates.has(result.classification)) return;
       } catch (error) {
-        if (!disposed) setNotice(error instanceof Error ? error.message : "Progress is temporarily unavailable.");
+        if (disposed || controller.signal.aborted) return;
+        setNotice(error instanceof Error ? error.message : "Progress is temporarily unavailable.");
       }
+      if (!disposed) timer = window.setTimeout(() => void poll(), 1500);
     };
     void poll();
-    const timer = window.setInterval(() => void poll(), 1500);
-    return () => { disposed = true; window.clearInterval(timer); };
+    return () => {
+      disposed = true;
+      controller.abort();
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [activeRun, activeRunIsTerminal]);
 
   const beginResearch = async (event: FormEvent<HTMLFormElement>) => {

@@ -1,5 +1,18 @@
 # Current decisions
 
+## 2026-09-19 — Request-scoped SQLite status inspection
+
+Use one validated read-only session per v2 status request, passing its connection through
+progress and terminal reconstruction. Retain one integrity/schema validation each request
+rather than caching validation or connections across requests. This bounds repeated open
+and validation work without relaxing corruption checks or retaining stale read sessions.
+Status polling waits for completion before scheduling its next request and cancels pending
+work on terminal state, run replacement or unmount.
+
+WAL, explicit busy-timeout policy, checkpoint/sidecar management and backup/import changes
+remain a separate storage decision. No schema, dependency, research-policy, paid-call or
+release-gate change is authorized by this phase.
+
 ## 2026-09-17 — Reliability before distribution
 
 The user explicitly selected research reliability as the next milestone. Correct the

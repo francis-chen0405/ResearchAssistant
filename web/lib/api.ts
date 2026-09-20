@@ -289,8 +289,8 @@ export const researchApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  snapshot: (runId: string, database: string) =>
-    request<RunSnapshot>(`/api/research/${runId}?db_path=${encodeURIComponent(database)}`),
+  snapshot: (runId: string, database: string, signal?: AbortSignal) =>
+    request<RunSnapshot>(`/api/research/${runId}?db_path=${encodeURIComponent(database)}`, { signal }),
   cancel: (runId: string, database: string) =>
     request<{ cancelled: boolean; message: string }>(`/api/research/${runId}/cancel`, {
       method: "POST",
