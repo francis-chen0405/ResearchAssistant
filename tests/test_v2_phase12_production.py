@@ -7,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import cast
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 import pytest
@@ -2463,7 +2464,10 @@ def test_imported_terminal_snapshot_reuses_requested_database(
 
     def tracked_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
         assert kwargs.get("uri") is True
-        assert str(args[0]) == f"file:{imported}?mode=ro"
+        uri = str(args[0])
+        assert uri.startswith("file:") and uri.endswith("?mode=ro")
+        encoded_path = uri[len("file:") : -len("?mode=ro")]
+        assert unquote(encoded_path).replace("\\", "/") == imported.as_posix()
         connection = original_connect(*args, **kwargs)
         connection.set_trace_callback(statements.append)
         opened.append(connection)
