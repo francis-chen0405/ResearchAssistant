@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from decimal import Decimal, InvalidOperation
 from os import environ, urandom
 from pathlib import Path
@@ -24,6 +24,8 @@ from models import (
     ResearchFocus,
     ResearchMode,
 )
+
+# Retain the historical symbol as an explicit compatibility seam for callers and tests.
 from orchestrator import (
     ClaimMismatchError,
     FingerprintMismatchError,
@@ -33,8 +35,9 @@ from orchestrator import (
     inspect_provider_run,
     request_run_cancellation,
     run_fixture_pipeline,
-    run_mvp3b_pipeline,
+    run_mvp3b_pipeline,  # noqa: F401
 )
+from pipeline_compatibility import LegacyPipelineRunner
 from providers.config import (
     ProviderConfigurationError,
     RunCeilings,
@@ -51,8 +54,6 @@ from v2_orchestrator import (
     v2_cancellation_requested,
 )
 
-DEFAULT_PROVIDER_RUNNER = run_mvp3b_pipeline
-
 
 class CLIArgumentError(ValueError):
     """Invalid command-line input without argparse's process-level exit."""
@@ -63,7 +64,12 @@ class _ArgumentParser(argparse.ArgumentParser):
         raise CLIArgumentError(message)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    legacy_runner: LegacyPipelineRunner | None = None,
+    identity_provider: Callable[[], str] | None = None,
+) -> int:
     parser = _build_parser()
     try:
         args = parser.parse_args(argv)
@@ -74,7 +80,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run-fixture":
         return _run_fixture_command(args.fixture_dir, args.output_dir)
     if args.command == "run":
-        return _run_live_command(args, environment=environ)
+        return _run_live_command(
+            args,
+            environment=environ,
+            legacy_runner=legacy_runner,
+            identity_provider=(
+                identity_provider if identity_provider is not None else repository_identity
+            ),
+        )
     if args.command == "inspect-run":
         return _inspect_run_command(args.db_path, args.run_id)
     if args.command == "cancel-run":
@@ -142,7 +155,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str]) -> int:
+def _run_live_command(
+    args: argparse.Namespace,
+    *,
+    environment: Mapping[str, str],
+    legacy_runner: LegacyPipelineRunner | None,
+    identity_provider: Callable[[], str],
+) -> int:
     try:
         claim = _validate_exact_claim(args.claim)
         ceilings = _parse_run_ceilings(
@@ -172,14 +191,14 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
         print(f"invalid input: {exc}", file=sys.stderr)
         return CLIExitCode.INVALID_INPUT
 
-    legacy_injected = run_mvp3b_pipeline is not DEFAULT_PROVIDER_RUNNER
     try:
         wigolo = WigoloConfig(base_url=environment.get("WIGOLO_BASE_URL", "http://127.0.0.1:8000"))
-        if legacy_injected:
+        repository_revision = identity_provider()
+        if legacy_runner is not None:
             factory_config: MimoProviderFactoryConfig | V2ProductionFactoryConfig = (
                 MimoProviderFactoryConfig.from_environment(
                     environment,
-                    repository_revision=repository_identity(),
+                    repository_revision=repository_revision,
                     wigolo=wigolo,
                     ceilings=ceilings,
                     research_controls=controls,
@@ -188,7 +207,7 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
         else:
             factory_config = V2ProductionFactoryConfig.from_environment(
                 environment,
-                repository_revision=repository_identity(),
+                repository_revision=repository_revision,
                 wigolo=wigolo,
                 discovery_providers=controls.discovery_providers,
                 ceilings=V2RunCeilings(
@@ -209,7 +228,9 @@ def _run_live_command(args: argparse.Namespace, *, environment: Mapping[str, str
         _print_v2_launch_summary(db_path, run_id, claim, factory_config, controls)
     try:
         if isinstance(factory_config, MimoProviderFactoryConfig):
-            result = run_mvp3b_pipeline(
+            if legacy_runner is None:
+                raise TypeError("legacy factory requires an explicitly selected legacy runner")
+            result = legacy_runner(
                 claim,
                 db_path=db_path,
                 factory_config=factory_config,

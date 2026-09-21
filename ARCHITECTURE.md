@@ -1,7 +1,7 @@
 # Architecture
 
-Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+Current implementation scope is [Explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md),
+explicitly authorized on 2026-09-20. It follows the completed SQLite status-polling
 phase and preserves the Mac-first release boundary. Earlier dated scope statements below
 remain historical.
 
@@ -67,6 +67,19 @@ its connection factory to schema initialization; schema code has no artifact rea
 The live controller delegates history/progress work and retains locks and workers.
 The CLI delegates identity to the shared application boundary; neither the desktop
 backend nor the live service imports the CLI merely to compute identity.
+
+CLI `main()` selects v2 by default. Only an explicit `legacy_runner` dependency
+selects historical execution; rebinding the historical function export does not select
+a pipeline. Tests may also pass an `identity_provider` for deterministic source identity.
+`pipeline_compatibility.LegacyPipelineRunner` describes the callable contract used by
+the CLI and controller. The controller retains `runner` as a compatibility alias and
+rejects supplying both names. No command-line or HTTP legacy-mode switch is exposed.
+
+V2 still imports shared snapshot/quotation helpers from `agents.researcher` and
+scoring, drafting and qualification helpers from `agents.analyst`. Historical
+Reviewer/Ledger adapters also use those modules. This is intentional compatibility
+debt; it does not dispatch the historical orchestrator. Neutral helper extraction is
+separate future work, with compatibility exports required.
 
 ## Runtime and research flow
 

@@ -87,6 +87,7 @@ from orchestrator import (
     inspect_provider_run,
     request_run_cancellation,
 )
+from pipeline_compatibility import LegacyPipelineRunner
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
 from providers.model_profiles import profile_environment
@@ -152,19 +153,26 @@ _MAX_EARLY_RESULTS = 32
 
 
 class LiveResearchController:
-    """Keep local website requests responsive while SQLite remains authoritative."""
+    """Own fresh-v2 workers and snapshots, with explicit legacy compatibility injection.
+
+    ``runner`` remains an alias for older callers; new compatibility callers should
+    pass ``legacy_runner``. Ordinary production construction supplies neither.
+    """
 
     def __init__(
         self,
         *,
         environment: Mapping[str, str],
-        runner: Callable[..., ProviderPipelineResult] | None = None,
+        legacy_runner: LegacyPipelineRunner | None = None,
+        runner: LegacyPipelineRunner | None = None,
         inspector: Callable[..., ProviderPipelineResult] = inspect_provider_run,
         max_workers: int = 2,
     ) -> None:
+        if legacy_runner is not None and runner is not None:
+            raise TypeError("pass either legacy_runner or its runner alias, not both")
         self._shutdown_requested = Event()
         self._environment = environment
-        self._legacy_runner = runner
+        self._legacy_runner = legacy_runner if legacy_runner is not None else runner
         self._inspector = inspector
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="mvp5-live")
         self._lock = Lock()

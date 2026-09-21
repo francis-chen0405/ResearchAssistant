@@ -1,7 +1,7 @@
 # Development conventions
 
-Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+Current implementation scope is [Explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md),
+explicitly authorized on 2026-09-20. It follows the completed SQLite status-polling
 phase and preserves the Mac-first release boundary. Earlier dated scope statements below
 remain historical.
 

@@ -9,14 +9,18 @@ import time
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
+from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import cli  # noqa: E402
-from models import ProviderRunContract  # noqa: E402
+from models import ProviderRunContract, ResearchControls  # noqa: E402
+from orchestrator import ProviderPipelineResult  # noqa: E402
+from pipeline_compatibility import LegacyPipelineRunner  # noqa: E402
 from provider_contract import canonical_provider_contract_payload  # noqa: E402
 from providers.llm import DEFAULT_LLM_ROUTING  # noqa: E402
+from providers.mimo_factory import MimoProviderFactoryConfig  # noqa: E402
 from store import read_cancellation_request  # noqa: E402
 
 
@@ -70,8 +74,14 @@ def main() -> int:
     else:
         llm = llm_type(**llm_kwargs)
 
-    def mocked_runner(*args: object, **kwargs: object) -> object:
-        factory_config = kwargs["factory_config"]
+    def mocked_runner(
+        raw_claim: str,
+        *,
+        db_path: str | Path,
+        factory_config: MimoProviderFactoryConfig,
+        run_id: UUID,
+        research_controls: ResearchControls,
+    ) -> ProviderPipelineResult:
         budget = helpers["OrchestrationBudget"](
             max_model_calls=factory_config.ceilings.max_llm_calls,
             retrieval_attempts_per_side=factory_config.acquisition.maximum_attempts_per_stance,
@@ -103,7 +113,7 @@ def main() -> int:
             }
         )
         contract = ProviderRunContract(
-            run_id=kwargs["run_id"],
+            run_id=run_id,
             fingerprint_sha256=sha256(payload_json.encode("utf-8")).hexdigest(),
             provider_identity="mocked-direct-mimo",
             adapter_identity="mocked-direct-mimo-v1",
@@ -128,22 +138,23 @@ def main() -> int:
 
         scraper.scrape = scrape
         return run_pipeline(
-            args[0],
-            db_path=kwargs["db_path"],
+            raw_claim,
+            db_path=db_path,
             search_provider=search_type(),
             scraper_provider=scraper,
             llm_provider=llm,
-            run_id=kwargs["run_id"],
+            run_id=run_id,
             config=config,
             provider_contract=contract,
             clock=lambda: now,
         )
 
-    cli.run_mvp3b_pipeline = mocked_runner
-    cli.repository_identity = lambda: os.environ.get(
-        "MVP4_REPOSITORY_IDENTITY", "source-sha256:" + "a" * 64
-    )
-    return cli.main()
+    legacy_runner: LegacyPipelineRunner = mocked_runner
+
+    def identity_provider() -> str:
+        return os.environ.get("MVP4_REPOSITORY_IDENTITY", "source-sha256:" + "a" * 64)
+
+    return cli.main(legacy_runner=legacy_runner, identity_provider=identity_provider)
 
 
 if __name__ == "__main__":

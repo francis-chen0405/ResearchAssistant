@@ -1,5 +1,28 @@
 # Current status
 
+## 2026-09-21 — Explicit pipeline selection
+
+Ordinary CLI and live-controller construction now selects the fresh v2 pipeline
+explicitly. The former CLI function-identity check and `DEFAULT_PROVIDER_RUNNER` seam
+are gone: rebinding the historical `run_mvp3b_pipeline` export cannot change production
+factory selection. Historical execution remains available through the public
+`orchestrator.run_mvp3b_pipeline` boundary and an explicit typed `legacy_runner`
+dependency. The controller retains its older `runner` keyword as a compatibility alias
+and rejects conflicting names before creating workers. Subprocess compatibility tests
+now pass their historical runner and repository identity provider directly.
+
+V2's imports from legacy-named evidence modules remain load-bearing shared-helper
+compatibility debt; those modules and historical imports were preserved. Neutral helper
+ownership is a separate future phase. Source identity changed, so exact resume requires
+new runs; historical inspection/export remains readable. No database schema, persisted
+payload, prompt, provider route, budget rule, live call, or release behavior changed.
+
+Verification passed: 1,026 Python tests with two existing skips; Ruff lint/format;
+frontend ESLint, TypeScript and production export; offline frontend acceptance; offline
+status-polling acceptance; and diff whitespace checks. No paid/live provider calls,
+dependencies, packaging, installation, push or publication occurred. See the
+[explicit pipeline selection plan](.agent/plans/explicit-pipeline-selection.md).
+
 ## 2026-09-20 — SQLite status polling
 
 V2 progress and terminal snapshots now use one validated, request-scoped read-only

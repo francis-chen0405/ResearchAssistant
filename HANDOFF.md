@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-09-21 Explicit pipeline selection
+
+The completed [explicit pipeline selection plan](.agent/plans/explicit-pipeline-selection.md)
+is the latest implementation record. Ordinary CLI and API construction selects v2;
+historical execution is selected only through an explicit typed `legacy_runner` dependency.
+The CLI no longer infers a pipeline from whether a historical function was monkeypatched.
+Deterministic subprocess tests inject both their compatibility runner and repository identity
+provider. `LiveResearchController` accepts the named `legacy_runner`, preserves the older
+`runner` alias, and rejects conflicting injection before worker allocation.
+
+The historical orchestrator, evidence modules, public imports and persisted contracts remain
+available. V2's shared imports from legacy-named evidence modules remain intentional
+compatibility debt and are a separate future extraction phase. Source identity changed, so
+new exact runs are required; historical inspection/export remains readable.
+
+Verification passed: 1,026 Python tests with two existing skips; Ruff lint/format;
+frontend lint, TypeScript, production export, offline frontend acceptance and offline
+status-polling acceptance; and diff whitespace checks. No paid/live calls, dependency,
+schema, prompt, provider, budget, packaging, installation, push or publication occurred.
+The work is committed directly on local `master`; remote `master` was not changed.
+
 ## 2026-09-20 SQLite status polling
 
 Current implementation authority is the completed

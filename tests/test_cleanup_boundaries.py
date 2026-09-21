@@ -40,6 +40,7 @@ for name in models.__all__:
         "store_schema.py",
         "fixture_pipeline.py",
         "pipeline_artifacts.py",
+        "pipeline_compatibility.py",
         "application_runtime.py",
         "frontend/live_contracts.py",
         "frontend/live_history.py",

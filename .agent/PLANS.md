@@ -1,11 +1,14 @@
 # Phase plans
 
-Current implementation scope is [SQLite status polling](plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+Current implementation scope is the completed [Explicit pipeline selection](plans/explicit-pipeline-selection.md),
+explicitly authorized on 2026-09-20 and verified on 2026-09-21. It follows the completed SQLite status-polling
 phase and preserves the Mac-first release boundary. Earlier dated scope statements below
 remain historical.
 
-Completed predecessor: [Deterministic deep-analysis concurrency](plans/deep-analysis-deterministic-concurrency.md),
+Completed predecessor: [SQLite status polling](plans/sqlite-status-polling.md),
+authorized 2026-09-19 and verified 2026-09-20.
+
+Earlier completed work: [Deterministic deep-analysis concurrency](plans/deep-analysis-deterministic-concurrency.md),
 explicitly authorized on 2026-09-18 to address the serial fresh-v2 bottleneck without
 changing acquisition, routing, budgets, deadlines or evidence policy. The Mac-first plan
 remains the release/distribution authority; its exhausted paid-test limit still applies.
@@ -24,7 +27,7 @@ extended the Phase 3 research-behavior boundary; the new plan adds the bounded M
 [Phase 3 — Frontend and provider/model settings](plans/phase-3-frontend-settings.md) and
 [Phase 2 — Codebase and Documentation Cleanup](plans/phase-2-cleanup.md) are preceding
 completed records. Their remaining platform and release checks are still tracked where
-they apply; the Mac/pricing plan retains the release boundary while the SQLite plan above
+they apply; the Mac/pricing plan retains the release boundary while the selection plan above
 authorizes the current implementation follow-up.
 
 The [Phase 1 desktop plan](plans/phase-1-desktop.md) retains the original implementation

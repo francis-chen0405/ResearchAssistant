@@ -1,12 +1,22 @@
 # Current decisions
 
-Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+Current implementation scope is [Explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md),
+explicitly authorized on 2026-09-20. It follows the completed SQLite status-polling
 phase and preserves the Mac-first release boundary. Earlier dated scope statements below
 remain historical.
 
-The preceding implementation decision is the 2026-09-18 bounded deterministic fresh-v2
-source-wave policy recorded below.
+The preceding implementation decision is the 2026-09-19 request-scoped SQLite status
+inspection policy recorded below.
+
+## 2026-09-20 — Explicit compatibility injection
+
+Ordinary CLI/controller construction uses v2. Select historical execution only by
+passing a typed `legacy_runner`; replace CLI function-identity probing and subprocess
+global reassignment with explicit runner/identity dependencies. Preserve the controller's
+`runner` keyword as an alias and reject conflicting injections before worker allocation.
+Keep historical public functions, fixtures and legacy evidence-helper ownership intact.
+Callable protocols describe application dependencies; research handoffs remain strict
+Pydantic models. Work and commit directly on local `master`, without push or publication.
 
 ## 2026-09-17 — Reliability before distribution
 

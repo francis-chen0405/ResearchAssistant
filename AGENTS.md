@@ -1,7 +1,7 @@
 # AI Assistant Instructions
 
-Current implementation scope is [SQLite status polling](.agent/plans/sqlite-status-polling.md),
-explicitly authorized on 2026-09-19. It follows the completed deep-analysis concurrency
+Current implementation scope is the completed [Explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md),
+explicitly authorized on 2026-09-20 and verified on 2026-09-21. It follows the completed SQLite status-polling
 phase and preserves the Mac-first release boundary. Earlier dated scope statements below
 remain historical.
 
@@ -13,8 +13,8 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current implementation authority: `.agent/plans/sqlite-status-polling.md`.
-The completed predecessor is `.agent/plans/deep-analysis-deterministic-concurrency.md`.
+Current implementation authority: `.agent/plans/explicit-pipeline-selection.md`.
+The completed predecessor is `.agent/plans/sqlite-status-polling.md`.
 Release authority remains `.agent/plans/mac-release-cache-pricing.md`. Also read `ARCHITECTURE.md`,
 `STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
 Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction
