@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from agents.researcher import (
+from evidence_core import (
     CURRENT_QUOTE_LENGTH_POLICY,
     assemble_quote_block_from_selected_segments,
     filter_provisional_candidate,

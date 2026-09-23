@@ -1,12 +1,20 @@
 # Current decisions
 
-Current implementation scope is [Explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md),
-explicitly authorized on 2026-09-20. It follows the completed SQLite status-polling
-phase and preserves the Mac-first release boundary. Earlier dated scope statements below
-remain historical.
+Current implementation scope is [Neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md),
+explicitly authorized on 2026-09-23. It follows the completed explicit pipeline-selection
+and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated
+scope statements below remain historical.
 
 The preceding implementation decision is the 2026-09-19 request-scoped SQLite status
 inspection policy recorded below.
+
+## 2026-09-23 — Neutral evidence ownership
+
+Fresh v2 stages import source-evidence and Analyst helpers from neutral root modules rather
+than historical agent modules. Keep the old researcher, analyst and supporting-researcher
+paths as compatibility facades or historical retrieval owners. Preserve behavior, public
+imports and persisted contracts; do not remove the historical orchestrator without a
+separate compatibility/deprecation decision.
 
 ## 2026-09-20 — Explicit compatibility injection
 

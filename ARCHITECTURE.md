@@ -1,9 +1,9 @@
 # Architecture
 
-Current implementation scope is [Explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md),
-explicitly authorized on 2026-09-20. It follows the completed SQLite status-polling
-phase and preserves the Mac-first release boundary. Earlier dated scope statements below
-remain historical.
+Current implementation scope is [Neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md),
+explicitly authorized on 2026-09-23. It follows the completed explicit pipeline-selection
+and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated
+scope statements below remain historical.
 
 The user authorized the deterministic deep-analysis concurrency plan on 2026-09-18.
 The current execution design is recorded below under “Deterministic deep-analysis waves.”
@@ -44,6 +44,8 @@ service ownership and release verification.
 | Historical provider execution and inspection | `orchestrator.py` |
 | Frozen offline fixture replay and audit files | `fixture_pipeline.py` |
 | Shared deterministic compare-before-insert helpers | `pipeline_artifacts.py` |
+| Shared source snapshots, quotations and trust boundary | `evidence_core.py` |
+| Shared Analyst scoring, drafting and admission | `evidence_analysis.py` |
 | Stable domain imports | `models.py`, explicit exports of the modules below |
 | Shared evidence, historical contracts and run lifecycle | `model_contracts.py` |
 | V2 discovery, planning, gaps, continuation and queue contracts | `model_research.py` |
@@ -60,8 +62,9 @@ service ownership and release verification.
 | Platform storage, vault and exclusion | `desktop_paths.py`, `desktop_settings.py`, `credential_store.py`, `file_lock.py`, `process_tree.py` |
 
 Dependencies between model implementation modules are one-way: shared contracts →
-research contracts → evidence/result contracts. The latter also uses shared contracts.
-They do not import the compatibility facade. Existing `models`, `store`,
+research contracts → evidence/result contracts. Neutral evidence helpers use the shared
+contract modules and do not import historical agent modules. Historical agent paths
+re-export neutral helpers or retain historical retrieval behavior. Existing `models`, `store`,
 `orchestrator` and controller entry points remain available. `store.init_db()` supplies
 its connection factory to schema initialization; schema code has no artifact readers.
 The live controller delegates history/progress work and retains locks and workers.
@@ -75,11 +78,12 @@ a pipeline. Tests may also pass an `identity_provider` for deterministic source 
 the CLI and controller. The controller retains `runner` as a compatibility alias and
 rejects supplying both names. No command-line or HTTP legacy-mode switch is exposed.
 
-V2 still imports shared snapshot/quotation helpers from `agents.researcher` and
-scoring, drafting and qualification helpers from `agents.analyst`. Historical
-Reviewer/Ledger adapters also use those modules. This is intentional compatibility
-debt; it does not dispatch the historical orchestrator. Neutral helper extraction is
-separate future work, with compatibility exports required.
+Fresh v2 stages import shared snapshot/quotation helpers from `evidence_core` and scoring,
+drafting, qualification and admission helpers from `evidence_analysis`. The historical
+`agents.researcher` and `agents.analyst` paths remain explicit compatibility facades, while
+`agents.supportingresearcher` retains historical retrieval behavior and re-exports the
+neutral trust envelope. Historical Reviewer/Ledger adapters continue to use compatibility
+paths where required; those paths remain available without making fresh v2 depend on them.
 
 ## Runtime and research flow
 

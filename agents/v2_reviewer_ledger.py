@@ -9,13 +9,13 @@ from pathlib import Path
 from time import monotonic
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from agents.analyst import LedgerAdmissionRequest, ValidatedLedgerPayload, admit_ledger_record
 from agents.reviewer import (
     ReviewerDecision,
     build_reviewer_input,
     build_statement_review_result,
     validate_reviewer_decision,
 )
+from evidence_analysis import LedgerAdmissionRequest, ValidatedLedgerPayload, admit_ledger_record
 from models import (
     CandidateQuoteBlock,
     ModelAttemptStatus,

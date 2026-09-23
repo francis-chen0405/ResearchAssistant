@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -77,3 +78,41 @@ def test_fixture_and_exit_contracts_keep_compatibility_imports() -> None:
     assert orchestrator.FixturePipelineResult is fixture_pipeline.FixturePipelineResult
     assert orchestrator.FixturePipelineError is FixturePipelineError
     assert fixture_pipeline.FixturePipelineError is FixturePipelineError
+
+
+def test_fresh_v2_modules_do_not_import_legacy_agent_helpers() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    fresh_modules = [
+        repository_root / "v2_orchestrator.py",
+        *sorted((repository_root / "agents").glob("v2_*.py")),
+    ]
+    forbidden = {
+        "agents.analyst",
+        "agents.researcher",
+        "agents.supportingresearcher",
+    }
+
+    for path in fresh_modules:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        imported = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
+        assert imported.isdisjoint(forbidden), path
+
+
+def test_historical_evidence_paths_reexport_neutral_implementations() -> None:
+    import agents.analyst as historical_analyst
+    import agents.researcher as historical_researcher
+    import agents.supportingresearcher as historical_supporting
+    import evidence_analysis
+    import evidence_core
+
+    assert historical_researcher.build_source_snapshot is evidence_core.build_source_snapshot
+    assert historical_researcher.verify_candidate_against_snapshot is (
+        evidence_core.verify_candidate_against_snapshot
+    )
+    assert historical_analyst.score_candidate is evidence_analysis.score_candidate
+    assert historical_analyst.admit_ledger_record is evidence_analysis.admit_ledger_record
+    assert historical_supporting.UntrustedSourceText is evidence_core.UntrustedSourceText

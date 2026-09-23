@@ -1,5 +1,25 @@
 # Current status
 
+## 2026-09-23 — Neutral evidence ownership
+
+Fresh v2 stages no longer import source-evidence or Analyst helpers through the historical
+`agents.researcher`, `agents.analyst` or `agents.supportingresearcher` modules. Neutral
+`evidence_core.py` now owns source snapshots, quotation validation, candidate filtering,
+candidate verification and the untrusted-source envelope. Neutral `evidence_analysis.py`
+owns Analyst inputs, score-pair policy, drafting, qualification and Ledger admission.
+
+The historical agent paths remain available as explicit compatibility facades or historical
+retrieval owners, and their public models/functions resolve to the neutral implementations.
+The existing renderer/synthesizer modules remain shared final-output owners. `orchestrator.py`
+remains an explicit historical execution boundary; ordinary CLI/controller construction still
+selects v2 and does not dispatch it.
+
+Verification passed: 1,027 Python tests with two existing skips; Ruff lint/format; and diff
+whitespace checks. No dependency, schema, prompt, provider, budget, packaging, installation,
+live call, push or publication changed. The source identity surface changed, so exact resume
+requires new runs; historical inspection and export remain readable. See the [neutral evidence
+ownership plan](.agent/plans/neutral-evidence-ownership.md).
+
 ## 2026-09-21 — Explicit pipeline selection
 
 Ordinary CLI and live-controller construction now selects the fresh v2 pipeline

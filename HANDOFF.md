@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-09-23 Neutral evidence ownership
+
+The completed [neutral evidence ownership plan](.agent/plans/neutral-evidence-ownership.md)
+is the latest implementation record. Fresh v2 stages import source-snapshot, quotation,
+untrusted-source, Analyst scoring, drafting and Ledger admission helpers from the neutral
+`evidence_core.py` and `evidence_analysis.py` modules. They no longer reach those helpers
+through historical agent modules.
+
+`agents.researcher` and `agents.analyst` are compatibility facades; `agents.supportingresearcher`
+retains historical retrieval behavior and re-exports the neutral trust envelope. Public names,
+model fields, validation behavior, persisted contracts and historical execution remain intact.
+The historical `orchestrator.py` remains an explicit compatibility boundary and is not selected
+by ordinary CLI/controller construction. Renderer and synthesizer remain shared final-output owners.
+
+Verification passed: 1,027 Python tests with two existing skips; Ruff lint/format; and diff
+whitespace checks. No dependency, schema, prompt, provider, budget, packaging, installation,
+live call, push or publication changed. The source identity surface changed, so exact resume
+requires new runs; historical inspection and export remain readable.
+
 ## 2026-09-21 Explicit pipeline selection
 
 The completed [explicit pipeline selection plan](.agent/plans/explicit-pipeline-selection.md)

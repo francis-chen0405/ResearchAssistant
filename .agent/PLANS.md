@@ -1,11 +1,16 @@
 # Phase plans
 
-Current implementation scope is the completed [Explicit pipeline selection](plans/explicit-pipeline-selection.md),
-explicitly authorized on 2026-09-20 and verified on 2026-09-21. It follows the completed SQLite status-polling
-phase and preserves the Mac-first release boundary. Earlier dated scope statements below
+Current implementation scope is the completed [Neutral evidence ownership](plans/neutral-evidence-ownership.md),
+explicitly authorized on 2026-09-23 and verified on 2026-09-23. It follows the completed explicit pipeline-selection
+and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated scope statements below
 remain historical.
 
-Completed predecessor: [SQLite status polling](plans/sqlite-status-polling.md),
+Completed latest phase: [Neutral evidence ownership](plans/neutral-evidence-ownership.md), authorized by the
+user after the explicit pipeline-selection review. Fresh v2 stages now import neutral evidence helpers directly;
+historical agent paths remain compatibility facades.
+
+Completed predecessor: [Explicit pipeline selection](plans/explicit-pipeline-selection.md),
+authorized 2026-09-20 and verified 2026-09-21. Its predecessor is [SQLite status polling](plans/sqlite-status-polling.md),
 authorized 2026-09-19 and verified 2026-09-20.
 
 Earlier completed work: [Deterministic deep-analysis concurrency](plans/deep-analysis-deterministic-concurrency.md),

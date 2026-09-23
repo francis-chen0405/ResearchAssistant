@@ -12,12 +12,12 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel
 
-from agents.analyst import (
+from evidence_analysis import (
     create_statement_draft,
     score_candidate,
     statement_has_required_qualification,
 )
-from agents.researcher import parse_extracted_quote_block, verify_candidate_against_snapshot
+from evidence_core import parse_extracted_quote_block, verify_candidate_against_snapshot
 from models import (
     ModelAttemptStatus,
     ModelRouteAttempt,

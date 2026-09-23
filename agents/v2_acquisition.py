@@ -14,7 +14,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict
 
-from agents.researcher import build_source_snapshot
+from evidence_core import build_source_snapshot
 from models import (
     ResearchDirection,
     SourceCluster,

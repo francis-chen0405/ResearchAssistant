@@ -14,7 +14,6 @@ from uuid import UUID, uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from agents.researcher import EVIDENCE_POLICY_VERSION
 from agents.synthesizer import V2_DETERMINISTIC_SYNTHESIZER_VERSION
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY, run_v2_acquisition_probe
 from agents.v2_adaptive_search import (
@@ -55,6 +54,7 @@ from agents.v2_source_selection import (
     build_v2_source_selection_input,
     run_v2_source_selection_and_queue,
 )
+from evidence_core import EVIDENCE_POLICY_VERSION
 from file_lock import FileLock
 from models import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,

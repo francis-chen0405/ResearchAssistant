@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from agents.analyst import statement_has_required_qualification
-from agents.researcher import verify_candidate_against_snapshot
+from evidence_analysis import statement_has_required_qualification
+from evidence_core import verify_candidate_against_snapshot
 from models import (
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     Placement,
