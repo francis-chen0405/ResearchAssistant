@@ -19,6 +19,10 @@ from models import (
     V2RunDiagnostics,
 )
 from money import ExactUSD
+from providers.model_choices import (
+    DEFAULT_STAGE_MODELS,
+    StageModelSelections,
+)
 from providers.model_profiles import ProfileId
 
 LEGACY_LIVE_RESEARCH_CONTROLS = ResearchControls(
@@ -40,11 +44,12 @@ LiveClassification = Literal[
 
 class LiveRunRequest(StrictModel):
     model_profile: ProfileId | None = None
+    stage_models: StageModelSelections = DEFAULT_STAGE_MODELS
     raw_claim: str = Field(min_length=1)
     db_path: str = Field(min_length=1)
     run_id: UUID | None = None
     max_tokens: int = Field(ge=1, le=500_000)
-    max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("1.00"))
+    max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("20.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS
     directions: ResearchDirections = ResearchDirections()

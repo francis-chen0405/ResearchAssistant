@@ -27,6 +27,7 @@ from providers.exa import ExaSearchAdapter
 from providers.firecrawl import FirecrawlAcquisitionAdapter
 from providers.llm import ModelAlias
 from providers.mimo import XiaomiMimoAdapter
+from providers.model_choices import ACTIVE_MODEL_STAGES, StageModelSelections
 from providers.openalex import OpenAlexSearchAdapter
 from providers.pubmed import PubMedSearchAdapter
 from providers.scraper import ScraperProvider
@@ -83,12 +84,14 @@ class V2ProductionFactoryConfig(StrictModel):
         ceilings: V2RunCeilings | None = None,
         wigolo: WigoloConfig | None = None,
         crossref_enabled: bool = False,
+        stage_models: StageModelSelections | None = None,
     ) -> V2ProductionFactoryConfig:
         enabled = set(discovery_providers)
         return cls(
             routing=V2RoutingConfig.from_environment(
                 environment,
                 repository_revision=repository_revision,
+                stage_models=stage_models,
             ),
             ceilings=ceilings or V2RunCeilings(),
             discovery_providers=discovery_providers,
@@ -207,34 +210,62 @@ def build_v2_production_bundle(
     )
     per_call_tokens = config.ceilings.max_total_tokens
     per_call_cost = config.ceilings.max_total_cost_usd
-    llm = RoutedV2LLMProvider(
-        {
-            ModelAlias.MIMO_V25: XiaomiMimoAdapter(
-                config.routing.mimo_v25,
-                client=injected.mimo_v25_llm or injected.llm,
-                price_cap=config.routing.mimo_v25_price_cap,
-                max_call_cost_usd=per_call_cost,
-                max_call_tokens=per_call_tokens,
-                expected_model_alias=ModelAlias.MIMO_V25,
-            ),
-            ModelAlias.MIMO_V25_PRO: XiaomiMimoAdapter(
-                config.routing.mimo_v25_pro,
-                client=injected.mimo_v25_pro_llm or injected.llm,
-                price_cap=config.routing.mimo_v25_pro_price_cap,
-                max_call_cost_usd=per_call_cost,
-                max_call_tokens=per_call_tokens,
-                expected_model_alias=ModelAlias.MIMO_V25_PRO,
-            ),
-            ModelAlias.GPT_5_6_LUNA_HIGH: XiaomiMimoAdapter(
-                config.routing.luna,
-                client=injected.luna_llm or injected.llm,
-                price_cap=config.routing.luna_price_cap,
-                max_call_cost_usd=per_call_cost,
-                max_call_tokens=per_call_tokens,
-                expected_model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
-            ),
-        }
-    )
+    if config.routing.stage_models is not None:
+        llm = RoutedV2LLMProvider(
+            {
+                stage: XiaomiMimoAdapter(
+                    config.routing.configuration_for_stage(stage).config,
+                    client=(
+                        injected.luna_llm or injected.llm
+                        if config.routing.configuration_for_stage(stage).route.provider_name
+                        == "openai"
+                        else injected.mimo_v25_pro_llm or injected.mimo_v25_llm or injected.llm
+                    ),
+                    price_cap=config.routing.configuration_for_stage(stage).route.price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=config.routing.configuration_for_stage(
+                        stage
+                    ).route.logical_alias,
+                )
+                for stage in ACTIVE_MODEL_STAGES
+            }
+        )
+    else:
+        assert config.routing.mimo_v25 is not None
+        assert config.routing.mimo_v25_pro is not None
+        assert config.routing.luna is not None
+        assert config.routing.mimo_v25_price_cap is not None
+        assert config.routing.mimo_v25_pro_price_cap is not None
+        assert config.routing.luna_price_cap is not None
+        llm = RoutedV2LLMProvider(
+            {
+                ModelAlias.MIMO_V25: XiaomiMimoAdapter(
+                    config.routing.mimo_v25,
+                    client=injected.mimo_v25_llm or injected.llm,
+                    price_cap=config.routing.mimo_v25_price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=ModelAlias.MIMO_V25,
+                ),
+                ModelAlias.MIMO_V25_PRO: XiaomiMimoAdapter(
+                    config.routing.mimo_v25_pro,
+                    client=injected.mimo_v25_pro_llm or injected.llm,
+                    price_cap=config.routing.mimo_v25_pro_price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=ModelAlias.MIMO_V25_PRO,
+                ),
+                ModelAlias.GPT_5_6_LUNA_HIGH: XiaomiMimoAdapter(
+                    config.routing.luna,
+                    client=injected.luna_llm or injected.llm,
+                    price_cap=config.routing.luna_price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+                ),
+            }
+        )
     return V2ProductionProviderBundle(
         search_providers={provider: composite for provider in config.discovery_providers},
         wigolo=wigolo,

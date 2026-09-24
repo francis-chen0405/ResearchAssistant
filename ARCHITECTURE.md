@@ -1,9 +1,9 @@
 # Architecture
 
-Current implementation scope is [Neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md),
-explicitly authorized on 2026-09-23. It follows the completed explicit pipeline-selection
-and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated
-scope statements below remain historical.
+Current implementation scope is [Per-step model choices](.agent/plans/per-step-model-choices.md),
+explicitly authorized on 2026-09-23. It follows the completed neutral evidence ownership,
+explicit pipeline-selection and SQLite status-polling phases and preserves the Mac-first
+release boundary. Earlier dated scope statements below remain historical.
 
 The user authorized the deterministic deep-analysis concurrency plan on 2026-09-18.
 The current execution design is recorded below under “Deterministic deep-analysis waves.”
@@ -100,19 +100,25 @@ Fresh website and CLI requests use this existing synchronous v2 sequence:
 exact claim + enabled directions + frozen configuration
   → Initial Planner → metadata discovery/normalization/clustering → Scout
   → independent acquisition → immutable snapshot → deterministic Probe
-  → bounded Luna Gap Analysis → optional adaptive Round 2 / Governor Round 3
+  → bounded Gap Analysis → optional adaptive Round 2 / Governor Round 3
   → optional post-Round-3 Gap Analysis and Governor-authorized Round 4
   → complete survivor pool → recommendation and budget-derived priority
-  → exact extraction → Luna Analyst → deterministic Analyzer Admission
+  → exact extraction → Evidence Analyst → deterministic Analyzer Admission
   → typed admitted-evidence projection → deterministic synthesis
   → deterministic final validation → rendered output and release hash
 ```
 
-Scout uses MiMo-v2.5; Planner, Search Agent, Source Selection and exact Extractor use
-MiMo-v2.5-Pro. Gap Analysis and Evidence Analyst use the configured Luna High route.
+Each of the seven active model steps uses its frozen choice from Luna High/XHigh, MiMo
+v2.6 Pro/Flash, Sol High and Terra High. Scout and exact Extractor default to Luna High;
+the other five default to Luna XHigh. Fresh desktop, API and ordinary CLI requests share
+these defaults. The historical Standard profile retains its earlier Scout MiMo-v2.5,
+Planner/Search/Selection/Extractor MiMo-v2.5-Pro and Gap/Analyst Luna High routes.
 Fresh Scout batches contain at most 20 candidates; historical 30-item batches remain
 readable. Standard profile completion allowances are 4,096 / 8,192 / 16,384 for
-Scout / Pro / Luna, fully reserved within unchanged total budgets. Fresh initial-planner
+Scout / Pro / Luna, fully reserved within the historical profile's total budget. Selected
+fresh routes reserve 4,096 Scout, 8,192 ordinary, and 16,384 Gap/Analyst completion
+tokens within their chosen budget, which defaults to $0.20 and may be set up to $20.
+Fresh initial-planner
 coverage uses a narrow claim-component response schema with valid defaults; generic
 historical coverage semantics remain unchanged.
 Fresh Analyst assessment and statement drafting use one call per successfully extracted
@@ -139,9 +145,10 @@ existing bounded acquisition/fallback policies. No cleanup change alters those p
   500,000 tokens with lower configured limits supported. Provider-specific search and
   acquisition limits remain separate. No synthetic per-call subscription price is added.
 - Fresh completed usage uses verified endpoint/model-specific cache tariffs, including
-  Luna cache writes and long-context multipliers. Missing/invalid metadata and unknown
-  outcomes remain conservative. Historical costs are not recalculated. Luna High is
-  explicit in the outgoing request; the official Luna route uses standard service tier.
+  OpenAI cache writes and long-context multipliers. Missing/invalid metadata and unknown
+  outcomes remain conservative. Historical costs are not recalculated. Selected OpenAI
+  routes send their chosen high or xhigh effort and standard service tier; selected MiMo
+  routes send thinking mode. The seven choices are part of the frozen run fingerprint.
 - Optional continuation protects downstream work. Deep analysis retains the existing
   60,000-token source allowance and three-call envelope (two extraction attempts and
   one Analyst call), and preserves actual failed/rejected/budget-prevented states.

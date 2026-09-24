@@ -63,7 +63,19 @@ from models import (
     V2FinalResearchOutput,
     V2ReviewerLedgerBatchResult,
 )
-from providers.model_profiles import STANDARD_PROFILE, ModelProfile, ProfileId, profile_environment
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    StageModelSelections,
+    model_options_payload,
+)
+from providers.model_profiles import (
+    CONFIGURABLE_PROFILE,
+    STANDARD_PROFILE,
+    ModelProfile,
+    ProfileId,
+    profile_environment,
+)
 from providers.v2_factory import V2ProductionFactoryConfig
 from store import open_read_only_store, read_v2_artifact
 
@@ -84,6 +96,8 @@ class ControllerBoundary(Protocol):
         self,
         *,
         discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+        model_profile: ProfileId | None = None,
+        stage_models: StageModelSelections = DEFAULT_STAGE_MODELS,
     ) -> str | None: ...
 
     def start(self, request: LiveRunRequest) -> LiveStartResult: ...
@@ -184,6 +198,18 @@ class ConfigurationResponse(StrictModel):
     service: ServiceDiagnostic
 
 
+class ConfigurationCheckInput(StrictModel):
+    """Typed offline setup check for a selected model mix and source lanes."""
+
+    model_profile: ProfileId = CONFIGURABLE_PROFILE_ID
+    stage_models: StageModelSelections = DEFAULT_STAGE_MODELS
+    use_serpsearch: bool = True
+    use_exa: bool = True
+    use_openalex: bool = True
+    use_arxiv: bool = False
+    use_pubmed: bool = False
+
+
 def _selected_discovery_providers(
     *,
     use_serpsearch: bool,
@@ -207,6 +233,8 @@ def _selected_discovery_providers(
 
 
 class CredentialSetupRequest(StrictModel):
+    model_profile: ProfileId = CONFIGURABLE_PROFILE_ID
+    stage_models: StageModelSelections = DEFAULT_STAGE_MODELS
     mimo_api_key: SecretStr | None = None
     luna_api_key: SecretStr | None = None
     luna_base_url: str | None = None
@@ -289,13 +317,14 @@ def _saved_setting_names(environment: MutableMapping[str, str]) -> tuple[str, ..
 
 
 class ResearchStartInput(StrictModel):
-    model_profile: ProfileId | None = None
+    model_profile: ProfileId = CONFIGURABLE_PROFILE_ID
+    stage_models: StageModelSelections = DEFAULT_STAGE_MODELS
     raw_claim: str = Field(min_length=1)
     acknowledged_public: bool
     db_path: str | None = None
     run_id: UUID | None = None
     max_tokens: int = Field(default=500_000, ge=1, le=500_000)
-    max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("1.00"))
+    max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("20.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     support_enabled: bool = True
     challenge_enabled: bool = False
@@ -512,7 +541,25 @@ def create_app(
 
     @app.get("/api/model-profiles", response_model=tuple[ModelProfile, ...])
     def model_profiles() -> tuple[ModelProfile, ...]:
-        return (STANDARD_PROFILE,)
+        return (STANDARD_PROFILE, CONFIGURABLE_PROFILE)
+
+    @app.get("/api/model-options")
+    def model_options() -> dict[str, object]:
+        """Return the selectable per-stage model catalog and defaults."""
+        payload = model_options_payload()
+        return {
+            "choices": tuple(
+                {
+                    "id": choice.id,
+                    "label": choice.label,
+                    "provider": choice.provider,
+                    "input_per_million": choice.input_per_million,
+                    "output_per_million": choice.output_per_million,
+                }
+                for choice in payload.choices
+            ),
+            "defaults": payload.defaults,
+        }
 
     @app.get("/api/configuration", response_model=ConfigurationResponse)
     def configuration(
@@ -523,19 +570,27 @@ def create_app(
         use_arxiv: bool = False,
         use_pubmed: bool = False,
     ) -> ConfigurationResponse:
+        discovery_providers = _selected_discovery_providers(
+            use_serpsearch=use_serpsearch,
+            use_exa=use_exa,
+            use_openalex=use_openalex,
+            use_arxiv=use_arxiv,
+            use_pubmed=use_pubmed,
+        )
         config_message = runtime.controller.configuration_message(
-            discovery_providers=_selected_discovery_providers(
-                use_serpsearch=use_serpsearch,
-                use_exa=use_exa,
-                use_openalex=use_openalex,
-                use_arxiv=use_arxiv,
-                use_pubmed=use_pubmed,
-            )
+            discovery_providers=discovery_providers,
         )
         if model_profile is not None:
+            selected_stage_models = (
+                DEFAULT_STAGE_MODELS if model_profile == CONFIGURABLE_PROFILE_ID else None
+            )
             try:
                 V2ProductionFactoryConfig.from_environment(
-                    profile_environment(runtime.environment, model_profile),
+                    profile_environment(
+                        runtime.environment,
+                        model_profile,
+                        stage_models=selected_stage_models,
+                    ),
                     repository_revision=repository_identity(),
                     discovery_providers=_selected_discovery_providers(
                         use_serpsearch=use_serpsearch,
@@ -544,6 +599,7 @@ def create_app(
                         use_arxiv=use_arxiv,
                         use_pubmed=use_pubmed,
                     ),
+                    stage_models=selected_stage_models,
                 )
                 config_message = None
             except (ValueError, RuntimeError) as exc:
@@ -554,6 +610,62 @@ def create_app(
                 runtime.credential_error
                 or config_message
                 or "MiMo and your selected research sources are configured; credentials are "
+                "checked when research starts."
+            ),
+            default_db_path=str(prepare_default_database()),
+            firecrawl_enabled=bool(runtime.environment.get("FIRECRAWL_API_KEY", "").strip()),
+            saved_credentials=_saved_credential_names(runtime.environment),
+            saved_settings=_saved_setting_names(runtime.environment),
+            service=runtime.services.probe(),
+        )
+
+    @app.post("/api/configuration/check", response_model=ConfigurationResponse)
+    def configuration_check(payload: ConfigurationCheckInput) -> ConfigurationResponse:
+        """Check selected model routes and enabled source credentials without a call."""
+        discovery_providers = _selected_discovery_providers(
+            use_serpsearch=payload.use_serpsearch,
+            use_exa=payload.use_exa,
+            use_openalex=payload.use_openalex,
+            use_arxiv=payload.use_arxiv,
+            use_pubmed=payload.use_pubmed,
+        )
+        selected_stage_models = (
+            payload.stage_models if payload.model_profile == CONFIGURABLE_PROFILE_ID else None
+        )
+        try:
+            config_message = runtime.controller.configuration_message(
+                discovery_providers=discovery_providers,
+                model_profile=payload.model_profile,
+                stage_models=payload.stage_models,
+            )
+        except TypeError as exc:
+            # Keep injected compatibility controllers usable while they adopt the
+            # selection-aware boundary. The real controller accepts these fields.
+            if "model_profile" not in str(exc) and "stage_models" not in str(exc):
+                raise
+            config_message = runtime.controller.configuration_message(
+                discovery_providers=discovery_providers,
+            )
+        try:
+            V2ProductionFactoryConfig.from_environment(
+                profile_environment(
+                    runtime.environment,
+                    payload.model_profile,
+                    stage_models=selected_stage_models,
+                ),
+                repository_revision=repository_identity(),
+                discovery_providers=discovery_providers,
+                stage_models=selected_stage_models,
+            )
+            config_message = None
+        except (ValueError, RuntimeError) as exc:
+            config_message = redact_text(exc)
+        return ConfigurationResponse(
+            configured=config_message is None and runtime.credential_error is None,
+            message=(
+                runtime.credential_error
+                or config_message
+                or "Selected models and research sources are configured; credentials are "
                 "checked when research starts."
             ),
             default_db_path=str(prepare_default_database()),
@@ -639,15 +751,27 @@ def create_app(
             runtime.credential_error = None
         except KeychainUnavailableError as exc:
             raise HTTPException(status_code=503, detail=CREDENTIAL_ACCESS_MESSAGE) from exc
-        config_message = runtime.controller.configuration_message(
-            discovery_providers=_selected_discovery_providers(
-                use_serpsearch=use_serpsearch,
-                use_exa=use_exa,
-                use_openalex=use_openalex,
-                use_arxiv=use_arxiv,
-                use_pubmed=use_pubmed,
-            )
+        discovery_providers = _selected_discovery_providers(
+            use_serpsearch=use_serpsearch,
+            use_exa=use_exa,
+            use_openalex=use_openalex,
+            use_arxiv=use_arxiv,
+            use_pubmed=use_pubmed,
         )
+        try:
+            config_message = runtime.controller.configuration_message(
+                discovery_providers=discovery_providers,
+                model_profile=payload.model_profile,
+                stage_models=payload.stage_models,
+            )
+        except TypeError as exc:
+            # Keep injected compatibility controllers usable while they adopt the
+            # selection-aware boundary. The real controller accepts these fields.
+            if "model_profile" not in str(exc) and "stage_models" not in str(exc):
+                raise
+            config_message = runtime.controller.configuration_message(
+                discovery_providers=discovery_providers,
+            )
         return CredentialSetupResponse(
             saved=True,
             configured=config_message is None,
@@ -681,6 +805,7 @@ def create_app(
         database = payload.db_path or str(prepare_default_database())
         request = LiveRunRequest(
             model_profile=payload.model_profile,
+            stage_models=payload.stage_models,
             raw_claim=payload.raw_claim,
             db_path=database,
             run_id=payload.run_id,

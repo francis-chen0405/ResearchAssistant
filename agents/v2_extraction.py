@@ -190,9 +190,12 @@ def run_v2_exact_extraction(
         return result
 
     route = routing_config.preflight().for_stage(LLMStage.EXTRACTOR)
-    if route.logical_alias is not ModelAlias.MIMO_V25_PRO:
+    if routing_config.stage_models is None and route.logical_alias is not ModelAlias.MIMO_V25_PRO:
         raise ValueError("fresh v2 extraction must use MiMo-v2.5-Pro")
-    if V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).primary is not route.logical_alias:
+    if (
+        routing_config.stage_models is None
+        and V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).primary is not route.logical_alias
+    ):
         raise ValueError("configured Extractor route does not match v2 policy")
     snapshots = _snapshots_by_source(acquisition_outputs)
     source_rows = {item.source_id: item for item in queue_result.input.survivors}
@@ -210,6 +213,8 @@ def run_v2_exact_extraction(
                 query_round=source.research_round,
                 search_rank=_search_rank(source_id, discovery_outputs),
                 llm_provider=llm_provider,
+                model_alias=route.logical_alias,
+                physical_model=route.physical_model,
                 clock=now,
             )
         )
@@ -241,6 +246,8 @@ def _extract_source(
     search_rank: int,
     llm_provider: LLMProvider,
     clock: Callable[[], datetime],
+    model_alias: ModelAlias = ModelAlias.MIMO_V25_PRO,
+    physical_model: str = "mimo-v2.5-pro",
 ) -> V2ExtractionSourceResult:
     validate_snapshot_integrity(snapshot)
     input_artifact = V2ExtractionLLMInput(
@@ -272,7 +279,7 @@ def _extract_source(
             input_artifact=input_artifact,
             input_artifact_ids=(snapshot.snapshot_id,),
             requested_output_type=V2VerbatimQuoteSelection,
-            model_alias=ModelAlias.MIMO_V25_PRO,
+            model_alias=model_alias,
             generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
             source_id=source_id,
         )
@@ -313,7 +320,7 @@ def _extract_source(
                     truncated=snapshot.truncated,
                 ),
                 extraction_prompt_version=prompt.version,
-                extraction_model_name=ModelAlias.MIMO_V25_PRO.value,
+                extraction_model_name=physical_model,
                 extracted_at=_aware(clock()),
             )
             filtered = filter_provisional_candidate(

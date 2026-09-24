@@ -39,11 +39,13 @@ from orchestrator import (
 )
 from pipeline_compatibility import LegacyPipelineRunner
 from providers.config import (
+    OFFICIAL_OPENAI_BASE_URL,
     ProviderConfigurationError,
     RunCeilings,
     WigoloConfig,
 )
 from providers.mimo_factory import MimoProviderFactoryConfig
+from providers.model_choices import ACTIVE_MODEL_STAGES, ModelChoice, StageModelSelections
 from providers.v2_budget import V2RunCeilings
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 from store import open_read_only_store, read_provider_run_contract
@@ -122,8 +124,15 @@ def _build_parser() -> argparse.ArgumentParser:
     live_run.add_argument("--db-path", type=Path, required=True)
     live_run.add_argument("--run-id", type=UUID, default=None)
     live_run.add_argument("--max-tokens", type=int, required=True)
-    live_run.add_argument("--max-cost-usd", required=True)
+    live_run.add_argument("--max-cost-usd", default="0.20")
     live_run.add_argument("--max-llm-calls", type=int, default=160)
+    live_run.add_argument(
+        "--model",
+        action="append",
+        default=[],
+        metavar="STAGE=CHOICE",
+        help="Choose one of the six supported models for a research stage; repeat per stage.",
+    )
     live_run.add_argument("--depth", type=ResearchDepth, default=ResearchDepth.STANDARD)
     live_run.add_argument("--length", type=ReportLength, default=ReportLength.REPORT)
     live_run.add_argument("--tone", type=PresentationTone, default=PresentationTone.NEUTRAL)
@@ -155,6 +164,22 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _parse_stage_models(values: list[str]) -> StageModelSelections:
+    selected = StageModelSelections().model_dump(mode="json")
+    allowed = {stage.value for stage in ACTIVE_MODEL_STAGES}
+    seen: set[str] = set()
+    for value in values:
+        stage, separator, choice = value.partition("=")
+        if not separator or stage not in allowed or stage in seen:
+            raise ValueError(f"invalid or repeated --model stage: {value}")
+        try:
+            selected[stage] = ModelChoice(choice).value
+        except ValueError as exc:
+            raise ValueError(f"unsupported --model choice: {choice}") from exc
+        seen.add(stage)
+    return StageModelSelections.model_validate(selected)
+
+
 def _run_live_command(
     args: argparse.Namespace,
     *,
@@ -169,6 +194,9 @@ def _run_live_command(
             max_cost_usd=args.max_cost_usd,
             max_llm_calls=args.max_llm_calls,
         )
+        stage_models = _parse_stage_models(args.model)
+        if legacy_runner is not None and args.model:
+            raise ValueError("per-stage model choices are available only for fresh v2 runs")
         focus_values = {
             "geographic_area": args.focus_geographic_area,
             "timeframe": args.focus_timeframe,
@@ -205,11 +233,16 @@ def _run_live_command(
                 )
             )
         else:
+            selected_environment = dict(environment)
+            selected_environment["LUNA_BASE_URL"] = OFFICIAL_OPENAI_BASE_URL
+            selected_environment["MIMO_BASE_URL"] = "https://api.xiaomimimo.com/v1"
+            selected_environment["LUNA_MODEL"] = "gpt-5.6-luna"
             factory_config = V2ProductionFactoryConfig.from_environment(
-                environment,
+                selected_environment,
                 repository_revision=repository_revision,
                 wigolo=wigolo,
                 discovery_providers=controls.discovery_providers,
+                stage_models=stage_models,
                 ceilings=V2RunCeilings(
                     max_physical_calls=ceilings.max_llm_calls,
                     max_total_tokens=ceilings.max_tokens,

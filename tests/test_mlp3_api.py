@@ -27,14 +27,18 @@ class FakeController:
         self.started: list[LiveRunRequest] = []
         self.cancelled: list[tuple[str, UUID]] = []
         self.configuration_requests: list[tuple[DiscoveryProvider, ...] | None] = []
+        self.selection_requests: list[tuple[str | None, object]] = []
         self.run_id = uuid4()
 
     def configuration_message(
         self,
         *,
         discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+        model_profile: str | None = None,
+        stage_models: object = None,
     ) -> str | None:
         self.configuration_requests.append(discovery_providers)
+        self.selection_requests.append((model_profile, stage_models))
         if self.environment.get("MIMO_API_KEY") and self.environment.get("EXA_API_KEY"):
             return None
         return "Provider configuration is incomplete."
@@ -230,6 +234,33 @@ def test_credentials_can_save_one_new_provider_key_without_resending_existing_ke
     empty = client.post("/api/credentials", json={})
     assert empty.status_code == 422
     assert empty.json()["detail"] == "Enter at least one API key to save."
+
+
+def test_credentials_readiness_receives_the_selected_model_mix() -> None:
+    client, controller, _ = _client()
+    selected = {
+        "planner": "mimo-v2.6-flash",
+        "scout": "mimo-v2.6-flash",
+        "gap_analysis": "mimo-v2.6-flash",
+        "search_agent": "mimo-v2.6-flash",
+        "source_selection": "mimo-v2.6-flash",
+        "extractor": "mimo-v2.6-flash",
+        "analyst": "mimo-v2.6-flash",
+    }
+
+    response = client.post(
+        "/api/credentials",
+        json={
+            "model_profile": "configurable-2026-09",
+            "stage_models": selected,
+            "mimo_api_key": "mimo-secret",
+            "exa_api_key": "exa-secret",
+        },
+    )
+
+    assert response.status_code == 200
+    assert controller.selection_requests[-1][0] == "configurable-2026-09"
+    assert controller.selection_requests[-1][1].model_dump(mode="json") == selected
 
 
 def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -> None:
@@ -440,6 +471,39 @@ def test_phase3_catalog_and_profile_configuration_are_offline() -> None:
     assert ready.json()["configured"] is True
     assert "LUNA_INPUT_USD_PER_TOKEN" not in controller.environment
     assert client.get("/api/configuration?model_profile=unknown").status_code == 422
+
+
+def test_model_options_and_selection_aware_configuration_check_are_offline() -> None:
+    client, controller, _ = _client()
+    controller.environment.update({"LUNA_API_KEY": "test-luna"})
+
+    options = client.get("/api/model-options")
+    assert options.status_code == 200
+    payload = options.json()
+    assert len(payload["choices"]) == 6
+    assert {
+        "id",
+        "label",
+        "provider",
+        "input_per_million",
+        "output_per_million",
+    } == set(payload["choices"][0])
+    assert payload["defaults"]["scout"] == "gpt-5.6-luna-high"
+    assert payload["defaults"]["planner"] == "gpt-5.6-luna-xhigh"
+
+    checked = client.post(
+        "/api/configuration/check",
+        json={
+            "stage_models": payload["defaults"],
+            "use_serpsearch": False,
+            "use_exa": False,
+            "use_openalex": False,
+            "use_arxiv": True,
+            "use_pubmed": False,
+        },
+    )
+    assert checked.status_code == 200
+    assert checked.json()["configured"] is True
 
 
 def test_phase3_profile_is_carried_in_the_typed_start_request(tmp_path: Path) -> None:

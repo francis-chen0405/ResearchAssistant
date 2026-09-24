@@ -55,12 +55,13 @@ never add them to source files, database exports or shell-profile loading.
 - [Status](STATUS.md), [handoff](HANDOFF.md), [plan index](.agent/PLANS.md): current work and verification.
 - [Historical archive](docs/archive/README.md): exact replaced documents and completed plans.
 
-Phase 2 cleanup, the Phase 3 frontend/provider-model settings work, and the adaptive-search
-reliability correction are complete locally on `master`. Current work is the
-[Mac-first cache-pricing delivery](.agent/plans/mac-release-cache-pricing.md); Windows is
-deferred and does not block the Mac milestone. The unsigned Mac candidate, verification
-and remaining live-quality/clean-machine/minimum-OS/signing limits are recorded in
-[Mac verification](docs/verification/mac-cache-pricing.md).
+Phase 2 cleanup, the Phase 3 frontend/provider-model settings work, the adaptive-search
+reliability correction, neutral evidence ownership and per-step model choices are complete
+locally on `master`. The confirmed per-step audit fixes keep setup readiness, credential
+payloads, model choices and offline desktop checks aligned. The Mac-first release boundary
+remains in force; Windows is deferred and does not block the Mac milestone. The unsigned Mac
+candidate, verification and remaining live-quality/clean-machine/minimum-OS/signing limits
+are recorded in [Mac verification](docs/verification/mac-cache-pricing.md).
 The former README is preserved in [the archive](docs/archive/pre-phase-2/README.md);
 current operating instructions above and the desktop guide replace its older launcher-first
 descriptions.

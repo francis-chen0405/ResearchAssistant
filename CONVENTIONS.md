@@ -1,9 +1,10 @@
 # Development conventions
 
-Current implementation scope is [Neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md),
-explicitly authorized on 2026-09-23. It follows the completed explicit pipeline-selection
-and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated
-scope statements below remain historical.
+Current implementation scope is [Per-step model choices](.agent/plans/per-step-model-choices.md),
+explicitly authorized on 2026-09-23, including the confirmed post-audit fixes recorded in the
+current status and handoff. It follows the completed neutral evidence ownership, explicit
+pipeline-selection and SQLite status-polling phases and preserves the Mac-first release boundary.
+Earlier dated scope statements below remain historical.
 
 Preceding implementation scope is
 [deterministic deep-analysis concurrency](.agent/plans/deep-analysis-deterministic-concurrency.md),

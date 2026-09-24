@@ -90,7 +90,12 @@ from orchestrator import (
 from pipeline_compatibility import LegacyPipelineRunner
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
-from providers.model_profiles import profile_environment
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    StageModelSelections,
+)
+from providers.model_profiles import ProfileId, profile_environment
 from providers.v2_budget import (
     V2RunCeilings,
 )
@@ -183,6 +188,8 @@ class LiveResearchController:
         self,
         *,
         discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+        model_profile: ProfileId | None = None,
+        stage_models: StageModelSelections = DEFAULT_STAGE_MODELS,
     ) -> str | None:
         selected_providers = (
             discovery_providers
@@ -190,15 +197,25 @@ class LiveResearchController:
             else DEFAULT_RESEARCH_CONTROLS.discovery_providers
         )
         try:
+            selected_profile = model_profile
+            selected_stage_models = (
+                stage_models if selected_profile == CONFIGURABLE_PROFILE_ID else None
+            )
+            configured_environment = profile_environment(
+                self._environment,
+                selected_profile,
+                stage_models=selected_stage_models,
+            )
             if self._legacy_runner is None:
                 V2ProductionFactoryConfig.from_environment(
-                    self._environment,
+                    configured_environment,
                     repository_revision=repository_identity(),
                     discovery_providers=selected_providers,
+                    stage_models=selected_stage_models,
                 )
             else:
                 MimoProviderFactoryConfig.from_environment(
-                    self._environment,
+                    configured_environment,
                     repository_revision=repository_identity(),
                 )
         except Exception as exc:
@@ -238,7 +255,14 @@ class LiveResearchController:
                     ),
                 )
         try:
-            run_environment = profile_environment(self._environment, request.model_profile)
+            selected_stage_models = (
+                request.stage_models if request.model_profile == CONFIGURABLE_PROFILE_ID else None
+            )
+            run_environment = profile_environment(
+                self._environment,
+                request.model_profile,
+                stage_models=selected_stage_models,
+            )
             if request.model_profile is not None and self._legacy_runner is None:
                 check_start_reservation(request, self._environment)
             wigolo = WigoloConfig(
@@ -250,6 +274,7 @@ class LiveResearchController:
                         run_environment,
                         repository_revision=repository_identity(),
                         discovery_providers=request.research_controls.discovery_providers,
+                        stage_models=selected_stage_models,
                         wigolo=wigolo,
                         ceilings=V2RunCeilings(
                             max_physical_calls=request.max_llm_calls,

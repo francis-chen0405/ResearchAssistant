@@ -24,7 +24,7 @@ async function main() {
     const context = await browser.newContext({viewport:{width:1280,height:860}, reducedMotion:'reduce', acceptDownloads:true, permissions:['clipboard-read','clipboard-write']});
     const page = await context.newPage();
     const errors = []; page.on('pageerror', e=>errors.push(e.message));
-    let preferences = {modelProfile:'standard-2026-09',dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
+    let preferences = {modelProfile:'configurable-2026-09',stageModels:{planner:'gpt-5.6-luna-xhigh',scout:'gpt-5.6-luna-high',gap_analysis:'gpt-5.6-luna-xhigh',search_agent:'gpt-5.6-luna-xhigh',source_selection:'gpt-5.6-luna-xhigh',extractor:'gpt-5.6-luna-high',analyst:'gpt-5.6-luna-xhigh'},dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
     let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false; let invalidPlan = false;
     const id='11111111-1111-4111-8111-111111111111';
     const progress = {status:'running',model_attempts:1,retrieval_attempts:2,usable_snapshots:1,candidates:1};
@@ -32,9 +32,10 @@ async function main() {
     await page.route('**/api/**', async route => {
       const req=route.request(); const url=new URL(req.url()); const p=url.pathname; let body={}; let status=200;
       if(p==='/api/preferences') { if(req.method()==='POST') preferences=req.postDataJSON(); body=preferences; }
-      else if(p==='/api/configuration') body={configured:saved.includes('mimo') && saved.includes('openai'),message:'Offline test configuration',default_db_path:preferences.dbPath,saved_credentials:saved,saved_settings:[],firecrawl_enabled:false,service:{wigolo_ready:true,state:'healthy',message:'Research tools ready'}};
-      else if(p==='/api/model-profiles') body=[{id:'standard-2026-09',name:'Standard research',description:'MiMo + Luna High',pricing_reviewed:'2026-09-07',models:[{model:'gpt-5.6-luna',roles:'Analysis',input_per_million:'0.50',output_per_million:'1.80',completion_limit:4096}]}];
-      else if(p==='/api/credentials') { const keys=req.postDataJSON(); assert.equal(keys.mimo_api_key,'offline-mimo-key'); assert.equal(keys.luna_api_key,'offline-luna-key'); saved=['mimo','openai']; body={saved:true,message:'Saved',saved_settings:[]}; }
+      else if(p==='/api/model-options') body={choices:[['gpt-5.6-luna-high','GPT-5.6 Luna · High','openai'],['gpt-5.6-luna-xhigh','GPT-5.6 Luna · XHigh','openai'],['mimo-v2.6-pro','MiMo v2.6 Pro','mimo'],['mimo-v2.6-flash','MiMo v2.6 Flash','mimo'],['gpt-6-sol-high','GPT-6 Sol · High','openai'],['gpt-5.6-terra-high','GPT-5.6 Terra · High','openai']].map(([id,label,provider])=>({id,label,provider,input_per_million:'0.20',output_per_million:'1.20'})),defaults:preferences.stageModels};
+      else if(p==='/api/configuration/check') { assert.equal(req.method(),'POST'); const payload=req.postDataJSON(); assert.equal(payload.model_profile,'configurable-2026-09'); assert.equal(Object.keys(payload.stage_models).length,7); preferences.stageModels=payload.stage_models; const required=new Set(Object.values(payload.stage_models).map(choice=>choice.startsWith('mimo-')?'mimo':'openai')); body={configured:[...required].every(provider=>saved.includes(provider)),message:'Offline test configuration',default_db_path:preferences.dbPath,saved_credentials:saved,saved_settings:[],firecrawl_enabled:false,service:{wigolo_ready:true,state:'healthy',message:'Research tools ready'}}; }
+      else if(p==='/api/model-profiles') body=[{id:'configurable-2026-09',name:'Choose each research model',description:'Six supported choices for each active model step',pricing_reviewed:'2026-09-23',models:[{model:'gpt-5.6-luna-high',roles:'Any active model step',input_per_million:'0.50',output_per_million:'1.80',completion_limit:16384},{model:'mimo-v2.6-flash',roles:'Any active model step',input_per_million:'0.15',output_per_million:'0.30',completion_limit:16384}]}];
+      else if(p==='/api/credentials') { const keys=req.postDataJSON(); assert.equal(keys.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(keys.stage_models),Array(7).fill('mimo-v2.6-flash')); assert.equal(keys.mimo_api_key,'offline-mimo-key'); assert.equal(keys.luna_api_key,undefined); saved=['mimo']; body={saved:true,message:'Saved',saved_settings:[]}; }
       else if(p.endsWith('/check')) { checked++; body={state:'connected',message:'Key accepted and supported models listed. No text was generated.'}; }
       else if(p.endsWith('/remove')) { removed++; saved=saved.filter(s=>s!=='mimo'); body={removed:true}; }
       else if(p==='/api/research/start') { started=req.postDataJSON(); run='running'; body={started:true,run_id:id,classification:'starting',message:'Research started.'}; }
@@ -88,11 +89,14 @@ async function main() {
     assert.equal(await preview.getAttribute('data-preview-step'),'2','Keyboard source inspection pauses the example');
     assert.equal(started,null,'Preview must not create a real run');
     await page.emulateMedia({reducedMotion:'reduce'});
+    await page.getByRole('button',{name:'Explore the workspace',exact:true}).click();
+    await page.getByRole('heading',{name:'Choose a model for each research role',exact:true}).waitFor();
+    for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await page.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
     assert.equal(await dialog.locator('input[type=password]').count(),7);
+    assert.match(await dialog.innerText(),/OpenAI[\s\S]*Optional until a research role uses a GPT model/);
     await dialog.getByLabel('Xiaomi MiMo API key',{exact:true}).fill('offline-mimo-key');
-    await dialog.getByLabel('OpenAI API key',{exact:true}).fill('offline-luna-key');
     await dialog.getByRole('button',{name:'Save keys securely'}).click();
     await dialog.getByText('Saved securely. You can now check access or begin research.').waitFor();
     for(const input of await dialog.locator('input[type=password]').all()) assert.equal(await input.inputValue(),'');
@@ -113,7 +117,7 @@ async function main() {
     await page.screenshot({path:path.join(shots,'composer.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Begin research',exact:true}).click();
     await page.getByRole('button',{name:'Cancel run',exact:true}).waitFor();
-    assert.equal(started.model_profile,'standard-2026-09'); assert.equal(started.max_cost_usd,'0.50'); assert.equal(started.challenge_enabled,true);
+    assert.equal(started.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(started.stage_models),Array(7).fill('mimo-v2.6-flash')); assert.equal(started.max_cost_usd,'0.50'); assert.equal(started.challenge_enabled,true);
     await page.screenshot({path:path.join(shots,'research-active.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Cancel run',exact:true}).click();
     await page.getByText('No brief was released.',{exact:true}).waitFor();

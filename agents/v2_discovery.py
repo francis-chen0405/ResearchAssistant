@@ -42,6 +42,7 @@ from providers.llm import (
     LLMProvider,
     LLMRequest,
     LLMStage,
+    ModelAlias,
     invoke_llm,
     load_prompt_file,
     render_stage_prompt,
@@ -277,6 +278,7 @@ def run_v2_discovery_and_scout(
         directions=planner_output.directions,
         items=items,
         llm_provider=llm_provider,
+        model_alias=routing_config.preflight().for_stage(LLMStage.SCOUT).logical_alias,
         clock=now,
         cancellation_requested=cancellation_requested,
     )
@@ -325,6 +327,7 @@ def _run_scout_batches(
     directions: ResearchDirections,
     items: tuple[NormalizedDiscoveryItem, ...],
     llm_provider: LLMProvider,
+    model_alias: ModelAlias,
     clock: Callable[[], datetime],
     cancellation_requested: Callable[[], bool] | None,
 ) -> tuple[tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...]]:
@@ -355,7 +358,7 @@ def _run_scout_batches(
                 input_artifact=request_input,
                 input_artifact_ids=(run_id,),
                 requested_output_type=ScoutBatch,
-                model_alias=V2_LLM_ROUTING.for_stage(LLMStage.SCOUT).primary,
+                model_alias=model_alias,
                 generation=V2_LLM_ROUTING.for_stage(LLMStage.SCOUT).generation,
             )
             try:
@@ -546,7 +549,9 @@ def _scout_candidate(item: NormalizedDiscoveryItem) -> ScoutCandidate:
 
 def _require_mimo_scout_route(routing_config: V2RoutingConfig) -> None:
     route = routing_config.preflight().for_stage(LLMStage.SCOUT)
-    if route.logical_alias.value != "mimo-v2.5" or route.physical_model != "mimo-v2.5":
+    if routing_config.stage_models is None and (
+        route.logical_alias.value != "mimo-v2.5" or route.physical_model != "mimo-v2.5"
+    ):
         raise ValueError("the v2 Scout requires MiMo-v2.5")
 
 

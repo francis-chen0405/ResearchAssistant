@@ -161,7 +161,7 @@ def run_v2_initial_planner(
         input_artifact=planner_input,
         input_artifact_ids=(resolved_run_id,),
         requested_output_type=V2InitialPlannerModelOutput,
-        model_alias=V2_LLM_ROUTING.for_stage(LLMStage.PLANNER).primary,
+        model_alias=routing_config.preflight().for_stage(LLMStage.PLANNER).logical_alias,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.PLANNER).generation,
     )
     invocation = invoke_llm(llm_provider, request, clock=now)
@@ -227,7 +227,9 @@ def _assemble_initial_plan(
 
 def _require_mimo_pro_planner_route(routing_config: V2RoutingConfig) -> None:
     route = routing_config.preflight().for_stage(LLMStage.PLANNER)
-    if route.logical_alias.value != "mimo-v2.5-pro" or route.physical_model != "mimo-v2.5-pro":
+    if routing_config.stage_models is None and (
+        route.logical_alias.value != "mimo-v2.5-pro" or route.physical_model != "mimo-v2.5-pro"
+    ):
         raise ValueError("the v2 Initial Planner requires MiMo-v2.5-Pro")
 
 

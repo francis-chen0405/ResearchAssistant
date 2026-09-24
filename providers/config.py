@@ -13,6 +13,8 @@ from pydantic import ConfigDict, Field, SecretStr, field_validator
 from models import StrictModel
 from money import ExactUSD
 
+OFFICIAL_OPENAI_BASE_URL = "https://api.openai.com/v1"
+
 
 class ProviderConfigurationError(RuntimeError):
     """Raised before a live call when provider configuration is invalid."""
@@ -41,7 +43,7 @@ class DeadlineConfig(StrictModel):
 class RunCeilings(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    max_cost_usd: Annotated[ExactUSD, Field(gt=Decimal("0"), le=Decimal("1.00"))] = Decimal("1.00")
+    max_cost_usd: Annotated[ExactUSD, Field(gt=Decimal("0"), le=Decimal("20.00"))] = Decimal("1.00")
     max_tokens: int = Field(default=1_000_000, ge=1, le=1_000_000)
     max_llm_calls: int = Field(default=160, ge=1, le=160)
 
@@ -419,6 +421,19 @@ class LunaConfig(StrictModel):
             model=environment.get("LUNA_MODEL", "gpt-5.6-luna").strip(),
             max_completion_tokens=int(environment.get("LUNA_MAX_COMPLETION_TOKENS", "4096")),
         )
+
+
+class OpenAIChoiceConfig(LunaConfig):
+    """Official OpenAI route for a selected fresh-v2 model and effort."""
+
+    provider_name: Literal["openai"] = "openai"
+    adapter_version: Literal["v2-openai-choice-v1"] = "v2-openai-choice-v1"
+
+
+class MimoChoiceConfig(MimoRouteConfig):
+    """Official Xiaomi route for a selected fresh-v2 MiMo model."""
+
+    adapter_version: Literal["v2-mimo-choice-v1"] = "v2-mimo-choice-v1"
 
 
 class LiveSmokeConfig(StrictModel):

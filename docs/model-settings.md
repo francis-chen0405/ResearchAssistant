@@ -1,18 +1,55 @@
 # Provider connections and supported model settings
 
-Connections authenticate provider accounts. The Standard research profile selects
+Connections authenticate provider accounts. The configurable research profile selects
 models and conservative budget caps; it is stored separately from secret credentials.
 API keys remain in the unchanged macOS Keychain/Windows Credential Manager namespace.
 Password fields are transient and cleared after save attempts. Stored secrets are never
 returned to the renderer. All credentials remain excluded from preferences, SQLite,
 URLs, exports and logs.
 
-## Supported profile
+## Configurable research profile
 
-`standard-2026-09` uses the existing adapters and logical roles; selecting this profile
-does not add research behavior. Advanced role assignments are inspectable, not arbitrarily
-editable: accepting
-an arbitrary model name is not a compatibility guarantee.
+`configurable-2026-09` is the default for fresh desktop, research-start API and ordinary
+CLI runs. Each of the seven active model steps has one frozen choice from the six options
+below. Scout and exact Extractor default to Luna High; Planner, Gap Analysis, Search Agent,
+Source Selection and Evidence Analyst default to Luna XHigh. Reviewer and synthesis are
+deterministic in fresh runs, so they have no selector. The model-options API returns the
+same catalog and defaults as the desktop. The selection-aware configuration check asks
+only for keys used by the chosen model steps and enabled search providers.
+
+| Choice | Provider model | Reasoning | Published input / cached / output per million | Conservative input / output cap per million |
+| --- | --- | --- | ---: | ---: |
+| GPT-5.6 Luna High | `gpt-5.6-luna` | high | $0.20 / $0.02 / $1.20 | $0.50 / $1.80 |
+| GPT-5.6 Luna XHigh | `gpt-5.6-luna` | xhigh | $0.20 / $0.02 / $1.20 | $0.50 / $1.80 |
+| MiMo v2.6 Pro | `mimo-v2.6-pro` | thinking | $0.435 / $0.0036 / $0.87 | $0.50 / $1.00 |
+| MiMo v2.6 Flash | `mimo-v2.6-flash` | thinking | $0.14 / $0.0028 / $0.28 | $0.15 / $0.30 |
+| GPT-6 Sol High | `gpt-6-sol` | high | $2.00 / $0.20 / $10.00 | $5.00 / $15.00 |
+| GPT-5.6 Terra High | `gpt-5.6-terra` | high | $2.00 / $0.20 / $12.00 | $5.00 / $18.00 |
+
+The selected route uses the official provider endpoint, the model ID and reasoning
+setting shown above, and the stage's 4,096 Scout, 8,192 standard, or 16,384 Gap/Analyst
+completion allowance. The selected provider's API key is required only if one or more
+stages use it. The default whole-run model budget remains $0.20; users may explicitly
+choose up to $20. The 160-call and 500,000-token ceilings, strict output validation,
+evidence rules and conservative per-call reservations are unchanged. Search and
+acquisition service charges remain separate. CLI overrides use repeated
+`--model STAGE=CHOICE` values with stage and choice IDs from `/api/model-options`.
+
+Pricing and capabilities were reviewed against [Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna),
+[Sol](https://developers.openai.com/api/docs/models/gpt-6-sol),
+[Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra),
+[MiMo API and thinking mode](https://mimo.mi.com/docs/en-US/api/chat/openai-api), and
+[MiMo pricing](https://mimo.mi.com/docs/en-US/price/pay-as-you-go). OpenAI caps cover
+cache-write and long-context multipliers without assuming any cache discount. MiMo
+caps round above published miss and output prices. Completed usage uses exact official
+endpoint/model cache rates when usage metadata permits; unknown usage keeps the
+reservation. These are estimates, not provider invoices. No paid calls were used to
+verify this profile.
+
+## Historical Standard profile
+
+`standard-2026-09` retains its earlier fixed three-model routing for historical
+compatibility. Its original roles, reservations and saved run identities remain readable.
 
 | Model | Roles | Input cap / million | Output cap / million |
 | --- | --- | ---: | ---: |
@@ -57,8 +94,9 @@ of larger responses within the same run budget. Preflight and every physical att
 reserve the complete route allowance; configuration fingerprints include it. Legacy
 callers without a profile retain the 4,096 default. Typed JSON adapter checks remain.
 Luna explicitly requests `reasoning_effort: high` and the official endpoint's
-standard (`default`) service tier; fresh synthesis remains deterministic. The existing
-160-call/500,000-token/$1 maximums remain, with lower user limits permitted.
+standard (`default`) service tier; fresh synthesis remains deterministic. The earlier
+Standard profile used a $1 configured maximum; configurable runs now permit an explicit
+budget up to $20 while keeping the $0.20 default and the same call/token limits.
 Before a profile worker starts, the real initial-planner prompt/schema/input are rendered
 locally and conservatively reserved; an insufficient token or dollar budget is rejected.
 This is a first-call affordability check, not a promise that the complete run fits.
@@ -66,19 +104,25 @@ Every subsequent physical attempt retains its original reservation and validatio
 
 ## Persistence and compatibility
 
-`preferences.json` remains version 1. Its strict interface model adds a defaulted
-`modelProfile` field, so older preference files preserve their values. Legacy non-secret
+`preferences.json` remains version 1. Older desktop preferences migrate to the new
+configurable profile on read, keeping other settings and the default seven choices.
+Legacy non-secret
 route/price preferences remain readable and are never overwritten by merely selecting
 the new profile. A profile resolves a separate environment snapshot for each new run.
 The existing frozen provider configuration captures exact routes/prices, budget and
 source/prompt/executable identity. Changed settings cannot alter active or saved runs.
 Existing historical read/export and exact resume rejection stay unchanged.
 
-Desktop requests explicitly carry a supported profile ID. Older API/CLI requests which
-omit it retain their legacy explicit configuration semantics. Custom endpoint/model
-overrides are rejected by the supported profile rather than silently forwarding keys
-to another host. The settings dialog can explicitly restore the standard Luna route.
-An externally configured nonstandard MiMo deployment must be corrected by its operator.
+Desktop requests explicitly carry a supported profile ID and seven selections. New
+research-start API requests default to the configurable profile and choices. Ordinary
+CLI requests also use these choices; they pin official provider endpoints instead of
+following old custom endpoint variables. Internal historical callers may still use the
+old profile and routing. The seven choices and exact route parameters enter the new
+run fingerprint, so a changed choice requires a new run. Historical SQLite rows are
+inspected without rewriting them. Custom endpoint/model overrides are rejected by
+the configurable desktop profile instead of forwarding keys to another host. The
+settings dialog can explicitly restore the standard Luna route. An externally
+configured nonstandard MiMo deployment must be corrected by its operator.
 
 ## Connection checks
 

@@ -112,11 +112,20 @@ def run_v2_evidence_analyst(
 
     analyst_route = routing_config.preflight().for_stage(LLMStage.ANALYST)
     extractor_route = routing_config.preflight().for_stage(LLMStage.EXTRACTOR)
-    if analyst_route.logical_alias is not ModelAlias.GPT_5_6_LUNA_HIGH:
+    if (
+        routing_config.stage_models is None
+        and analyst_route.logical_alias is not ModelAlias.GPT_5_6_LUNA_HIGH
+    ):
         raise ValueError("fresh v2 Evidence Analyst work must use GPT-5.6 Luna High")
-    if extractor_route.logical_alias is not ModelAlias.MIMO_V25_PRO:
+    if (
+        routing_config.stage_models is None
+        and extractor_route.logical_alias is not ModelAlias.MIMO_V25_PRO
+    ):
         raise ValueError("v2 exact passage selection must remain on MiMo-v2.5-Pro")
-    if V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).primary is not analyst_route.logical_alias:
+    if (
+        routing_config.stage_models is None
+        and V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).primary is not analyst_route.logical_alias
+    ):
         raise ValueError("configured Analyst route does not match the v2 routing policy")
 
     queued = {item.source_id: item for item in batch_input.queued_candidates}
@@ -464,7 +473,7 @@ def _invoke_bounded_analyst(
             input_artifact_ids=(source_id,),
             requested_output_type=output_type,
             pinned_model_snapshot=route.physical_model,
-            model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+            model_alias=route.logical_alias,
             configured_fallbacks=(),
             generation=V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).generation,
             source_id=source_id,

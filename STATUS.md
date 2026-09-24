@@ -1,5 +1,29 @@
 # Current status
 
+## 2026-09-23 — Per-step model choices and confirmed audit fixes
+
+The per-step model-choice phase is the current implementation authority. The confirmed
+post-audit fixes keep the six-model catalog and seven-stage selections aligned through
+provider setup readiness, credential-save payloads, connection checks and the two offline
+desktop browser smokes. Connection checks accept any supported selectable model listed by
+the authenticated provider, while preserving rejected-key and unavailable-response states.
+The upgrade smoke now preserves and verifies the configurable profile and migrated stage
+selections alongside the existing history, brief and credential checks.
+
+Verification passed: 1,122 Python tests with two existing skips, Ruff lint and format,
+diff whitespace checks, frontend ESLint, TypeScript and static export, JavaScript syntax
+checks, the frontend interaction smoke, the status-polling smoke and the isolated upgrade
+smoke in the Luna XHigh helper's run. The browser smoke selected MiMo Flash for all seven roles and verified that OpenAI
+credentials were conditional; the upgrade smoke verified configurable stage selection
+migration alongside the prior history and credential checks. No dependency, schema, prompt,
+paid provider call, publication or release-target change was made. Mac-first release gates
+and Windows deferral remain unchanged.
+
+After a final backend rebuild, two further upgrade-smoke attempts timed out waiting for a
+frozen backend startup line. Both the prior packaged backend and the final rebuilt backend
+passed their separate native self-tests. The intermittent upgrade startup needs another
+isolated run before it is treated as a stable release gate; its cause was not established.
+
 ## 2026-09-23 — Neutral evidence ownership
 
 Fresh v2 stages no longer import source-evidence or Analyst helpers through the historical

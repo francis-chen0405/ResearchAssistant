@@ -4,13 +4,20 @@ import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "motion/
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Configuration,
+  DEFAULT_STAGE_MODELS,
   HistoryItem,
+  ModelOption,
+  ModelOptions,
+  ModelChoiceId,
   ResearchTrailItem,
   RunSnapshot,
   ServiceDiagnostic,
   V2EvidenceDisplay,
   V2FinalResearchOutput,
   V2ProviderRunDiagnostics,
+  StageModelKey,
+  StageModels,
+  STAGE_MODEL_KEYS,
   researchApi,
 } from "@/lib/api";
 
@@ -20,7 +27,8 @@ import { ProductPreview, ProgressPath, StatusPill, WorkspaceFrame } from "@/comp
 
 type MainView = "home" | "research" | "history";
 type Settings = {
-  modelProfile: "standard-2026-09";
+  modelProfile: "configurable-2026-09";
+  stageModels: StageModels;
   dbPath: string;
   runId: string;
   maxTokens: number;
@@ -129,13 +137,55 @@ function understandableConfigurationMessage(message: string): string {
   return message;
 }
 
+const defaultModelOptions: ModelOption[] = [
+  { id: "gpt-5.6-luna-high", label: "GPT-5.6 Luna · High", provider: "openai", input_per_million: "", output_per_million: "" },
+  { id: "gpt-5.6-luna-xhigh", label: "GPT-5.6 Luna · XHigh", provider: "openai", input_per_million: "", output_per_million: "" },
+  { id: "mimo-v2.6-pro", label: "MiMo v2.6 · Pro", provider: "mimo", input_per_million: "", output_per_million: "" },
+  { id: "mimo-v2.6-flash", label: "MiMo v2.6 · Flash", provider: "mimo", input_per_million: "", output_per_million: "" },
+  { id: "gpt-6-sol-high", label: "GPT-6 Sol · High", provider: "openai", input_per_million: "", output_per_million: "" },
+  { id: "gpt-5.6-terra-high", label: "GPT-5.6 Terra · High", provider: "openai", input_per_million: "", output_per_million: "" },
+];
+
+const stageLabels: Record<StageModelKey, string> = {
+  planner: "Planning",
+  scout: "Scouting",
+  gap_analysis: "Gap analysis",
+  search_agent: "Search planning",
+  source_selection: "Source selection",
+  extractor: "Exact extraction",
+  analyst: "Evidence analysis",
+};
+
+function mergeStageModels(current: Partial<StageModels> | undefined, defaults: StageModels): StageModels {
+  return STAGE_MODEL_KEYS.reduce((result, key) => {
+    result[key] = current?.[key] ?? defaults[key];
+    return result;
+  }, {} as StageModels);
+}
+
+function providerRequirement(stageModels: StageModels): string {
+  const usesMiMo = Object.values(stageModels).some((choice) => choice.startsWith("mimo-"));
+  const usesOpenAI = Object.values(stageModels).some((choice) => choice.startsWith("gpt-"));
+  if (usesMiMo && usesOpenAI) return "MiMo and OpenAI keys required for the selected stages.";
+  if (usesMiMo) return "A MiMo key is required for the selected stages.";
+  return "An OpenAI key is required for the selected stages.";
+}
+
+function budgetOptions(current: string): string[] {
+  const values = ["0.20", "0.50", "1.00", "2.00", "5.00", "10.00", "20.00"];
+  const numeric = Number(current);
+  if (Number.isFinite(numeric) && numeric > 0 && numeric <= 20 && !values.includes(current)) values.push(current);
+  return values;
+}
+
 export default function Home() {
   const reduceMotion = useReducedMotion();
   const [view, setView] = useState<MainView>("home");
   const [claim, setClaim] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [configuration, setConfiguration] = useState<Configuration | null>(null);
-  const [settings, setSettings] = useState<Settings>({ modelProfile: "standard-2026-09", dbPath: "", runId: "", maxTokens: 500_000, maxCost: "0.20", maxCalls: 160, supportEnabled: true, challengeEnabled: false, sourceTarget: 10, useSerpSearch: true, useExa: true, useOpenAlex: true, useArxiv: false, usePubmed: false, useCrossref: true });
+  const [settings, setSettings] = useState<Settings>({ modelProfile: "configurable-2026-09", stageModels: DEFAULT_STAGE_MODELS, dbPath: "", runId: "", maxTokens: 500_000, maxCost: "0.20", maxCalls: 160, supportEnabled: true, challengeEnabled: false, sourceTarget: 10, useSerpSearch: true, useExa: true, useOpenAlex: true, useArxiv: false, usePubmed: false, useCrossref: true });
+  const [modelOptions, setModelOptions] = useState<ModelOptions>({ choices: defaultModelOptions, defaults: DEFAULT_STAGE_MODELS });
   const [providerPreferencesLoaded, setProviderPreferencesLoaded] = useState(false);
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [activeRun, setActiveRun] = useState<{ id: string; database: string } | null>(null);
@@ -150,13 +200,22 @@ export default function Home() {
     let disposed = false;
     researchApi.preferences().then((saved) => {
       if (!disposed) {
-        setSettings((current) => ({ ...current, ...saved, dbPath: saved.dbPath || current.dbPath }));
+        setSettings((current) => ({ ...current, ...saved, modelProfile: "configurable-2026-09", stageModels: mergeStageModels(saved.stageModels, DEFAULT_STAGE_MODELS), dbPath: saved.dbPath || current.dbPath }));
         setProviderPreferencesLoaded(true);
       }
     }).catch(() => {
       if (!disposed) setNotice("Saved settings could not be loaded. Reopen the app before changing preferences.");
     });
     return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    researchApi.modelOptions().then((options) => {
+      setModelOptions(options);
+      setSettings((current) => ({ ...current, stageModels: mergeStageModels(current.stageModels, options.defaults) }));
+    }).catch(() => {
+      // The bundled defaults keep the controls usable while the local API is offline.
+    });
   }, []);
 
   useEffect(() => {
@@ -171,7 +230,7 @@ export default function Home() {
 
   const refreshConfiguration = useCallback(async () => {
     try {
-      const result = await researchApi.configuration({
+      const result = await researchApi.configuration(settings.stageModels, {
         use_serpsearch: settings.useSerpSearch,
         use_exa: settings.useExa,
         use_openalex: settings.useOpenAlex,
@@ -184,7 +243,7 @@ export default function Home() {
     } catch {
       setOffline(true);
     }
-  }, [settings.useArxiv, settings.useExa, settings.useOpenAlex, settings.usePubmed, settings.useSerpSearch]);
+  }, [settings.stageModels, settings.useArxiv, settings.useExa, settings.useOpenAlex, settings.usePubmed, settings.useSerpSearch]);
 
   const refreshHistory = useCallback(async () => {
     if (!settings.dbPath) return;
@@ -251,6 +310,7 @@ export default function Home() {
       }
       const result = await researchApi.start({
         model_profile: settings.modelProfile,
+        stage_models: settings.stageModels,
         raw_claim: trimmedClaim,
         acknowledged_public: acknowledged,
         db_path: settings.dbPath,
@@ -318,12 +378,12 @@ export default function Home() {
           ) : activeRun ? (
             <StartingView key="starting" claim={claim} reduceMotion={Boolean(reduceMotion)} />
           ) : (
-            <ResearchView key="new" settings={settings} onSettings={setSettings} ready={Boolean(configuration?.configured && !offline)} onSetup={() => setSetupOpen(true)} claim={claim} acknowledged={acknowledged} busy={busy} supportEnabled={settings.supportEnabled} challengeEnabled={settings.challengeEnabled} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
+            <ResearchView key="new" settings={settings} modelOptions={modelOptions} onSettings={setSettings} ready={Boolean(configuration?.configured && !offline)} onSetup={() => setSetupOpen(true)} claim={claim} acknowledged={acknowledged} busy={busy} supportEnabled={settings.supportEnabled} challengeEnabled={settings.challengeEnabled} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
           )}
         </AnimatePresence>
         <AnimatePresence>
           {notice && <Notice message={notice} onClose={() => setNotice(null)} />}
-          {setupOpen && <ProviderSetup key="provider-setup" configuration={configuration} selectedProviders={{ use_serpsearch: settings.useSerpSearch, use_exa: settings.useExa, use_openalex: settings.useOpenAlex, use_arxiv: settings.useArxiv, use_pubmed: settings.usePubmed }} onClose={() => setSetupOpen(false)} onSaved={async (message) => { setNotice(message); await refreshConfiguration(); }} />}
+          {setupOpen && <ProviderSetup key="provider-setup" configuration={configuration} selectedProviders={{ use_serpsearch: settings.useSerpSearch, use_exa: settings.useExa, use_openalex: settings.useOpenAlex, use_arxiv: settings.useArxiv, use_pubmed: settings.usePubmed }} stageModels={settings.stageModels} onClose={() => setSetupOpen(false)} onSaved={async (message) => { setNotice(message); await refreshConfiguration(); }} />}
           {advancedOpen && <AdvancedPanel key="advanced" settings={settings} configuration={configuration} active={Boolean(activeRun && (!snapshot || !terminalStates.has(snapshot.classification)))} onSettings={setSettings} onClose={() => setAdvancedOpen(false)} onService={async (action) => {
             try {
               const service = action === "start" ? await researchApi.startService() : await researchApi.stopService();
@@ -349,8 +409,9 @@ function WelcomeView({ ready, onStart, onSetup }: { ready: boolean; onStart: () 
   return <motion.section className="welcome-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><div className="welcome-hero"><StatusPill tone={ready ? "support" : "neutral"}>{ready ? "Ready for your next question" : "Your next discovery starts here"}</StatusPill><h1>Research a claim.<br /><span>See the whole picture.</span></h1><p>Go beyond the first answer. Explore evidence, examine the sources,<br className="desktop-break" /> and build a clearer view of what holds up.</p><div className="welcome-actions"><button className="primary-action" onClick={ready ? onStart : onSetup}>{ready ? "Start research" : "Connect providers"} <span aria-hidden="true">↗</span></button><button className="text-action" onClick={onStart}>{ready ? "Write a question" : "Explore the workspace"} <span aria-hidden="true">→</span></button></div><div className="welcome-promises"><span>↗ Traceable sources</span><span>⊕ Support & challenge</span><span>◷ Your budget, your control</span></div></div><ProductPreview /></motion.section>;
 }
 
-function ResearchView({ claim, acknowledged, busy, settings, onSettings, ready, onSetup, onClaim, onAcknowledged, onSubmit }: { claim: string; acknowledged: boolean; busy: boolean; settings: Settings; onSettings: (settings: Settings) => void; ready: boolean; onSetup: () => void; supportEnabled: boolean; challengeEnabled: boolean; reduceMotion: boolean; onClaim: (claim: string) => void; onAcknowledged: (acknowledged: boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <motion.section className="composer-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><div className="page-heading"><p className="eyebrow">A fresh line of inquiry</p><h1>What deserves a closer look?</h1><p>Start with a public question or claim. We’ll follow the sources.</p></div><form className="claim-composer" onSubmit={onSubmit}><div className="composer-label"><label htmlFor="claim">Your research question</label><StatusPill tone={ready ? "support" : "neutral"}>{ready ? "Providers configured" : "Setup needed"}</StatusPill></div><textarea id="claim" value={claim} onChange={event => onClaim(event.target.value)} placeholder="e.g. Can greener streets make cities cooler?" rows={3} /><div className="composer-options"><fieldset><legend>Research direction</legend><div className="direction-options">{[{ label: "Support", support: true, challenge: false }, { label: "Challenge", support: false, challenge: true }, { label: "Both sides", support: true, challenge: true }].map(item => <button type="button" key={item.label} aria-pressed={settings.supportEnabled === item.support && settings.challengeEnabled === item.challenge} onClick={() => onSettings({ ...settings, supportEnabled: item.support, challengeEnabled: item.challenge })}>{item.label}</button>)}</div></fieldset><label>Model profile<select value={settings.modelProfile} onChange={() => onSettings({ ...settings, modelProfile: "standard-2026-09" })}><option value="standard-2026-09">Standard research</option></select><small>MiMo + Luna High</small></label><label>Model budget limit<select value={settings.maxCost} onChange={event => onSettings({ ...settings, maxCost: event.target.value })}>{[...new Set(["0.20", "0.50", "1.00", settings.maxCost])].map(value => <option key={value} value={value}>${Number(value).toFixed(2)}</option>)}</select><small>Search service charges are separate</small></label></div><label className="acknowledgement"><input type="checkbox" checked={acknowledged} onChange={event => onAcknowledged(event.target.checked)} /><span>This is public and non-sensitive, and I’ll review what comes back.</span></label><div className="composer-footer"><span>Exact passages. Visible limitations. Saved on this device.</span>{ready ? <button type="submit" className="primary-action" disabled={!claim.trim() || !acknowledged || busy}>{busy ? "Starting…" : "Begin research"} <span aria-hidden="true">↗</span></button> : <button type="button" className="primary-action" onClick={onSetup}>Connect providers <span aria-hidden="true">↗</span></button>}</div></form><div className="composer-guide"><article><b>01 / Ask</b><p>Choose the direction and a model spending limit.</p></article><article><b>02 / Examine</b><p>Follow discovery, source checks and evidence analysis.</p></article><article><b>03 / Understand</b><p>Read the findings with quotations and their limitations.</p></article></div></motion.section>;
+function ResearchView({ claim, acknowledged, busy, settings, modelOptions, onSettings, ready, onSetup, onClaim, onAcknowledged, onSubmit }: { claim: string; acknowledged: boolean; busy: boolean; settings: Settings; modelOptions: ModelOptions; onSettings: (settings: Settings) => void; ready: boolean; onSetup: () => void; supportEnabled: boolean; challengeEnabled: boolean; reduceMotion: boolean; onClaim: (claim: string) => void; onAcknowledged: (acknowledged: boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const updateStageModel = (stage: StageModelKey, choice: ModelChoiceId) => onSettings({ ...settings, stageModels: { ...settings.stageModels, [stage]: choice } });
+  return <motion.section className="composer-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><div className="page-heading"><p className="eyebrow">A fresh line of inquiry</p><h1>What deserves a closer look?</h1><p>Start with a public question or claim. We’ll follow the sources.</p></div><form className="claim-composer" onSubmit={onSubmit}><div className="composer-label"><label htmlFor="claim">Your research question</label><StatusPill tone={ready ? "support" : "neutral"}>{ready ? "Providers configured" : "Setup needed"}</StatusPill></div><textarea id="claim" value={claim} onChange={event => onClaim(event.target.value)} placeholder="e.g. Can greener streets make cities cooler?" rows={3} /><div className="composer-options"><fieldset><legend>Research direction</legend><div className="direction-options">{[{ label: "Support", support: true, challenge: false }, { label: "Challenge", support: false, challenge: true }, { label: "Both sides", support: true, challenge: true }].map(item => <button type="button" key={item.label} aria-pressed={settings.supportEnabled === item.support && settings.challengeEnabled === item.challenge} onClick={() => onSettings({ ...settings, supportEnabled: item.support, challengeEnabled: item.challenge })}>{item.label}</button>)}</div></fieldset><label>Model profile<select value={settings.modelProfile} disabled><option value="configurable-2026-09">Configurable research</option></select><small>Choose each research role below.</small></label><label>Model budget limit<select value={settings.maxCost} onChange={event => onSettings({ ...settings, maxCost: event.target.value })}>{budgetOptions(settings.maxCost).map(value => <option key={value} value={value}>${Number(value).toFixed(2)}</option>)}</select><small>Search service charges are separate.</small></label></div><section className="stage-model-settings" aria-labelledby="stage-model-heading"><div><p className="eyebrow">Model routing</p><h2 id="stage-model-heading">Choose a model for each research role</h2><p>{providerRequirement(settings.stageModels)}</p></div><div className="stage-model-grid">{STAGE_MODEL_KEYS.map((stage) => <label key={stage} htmlFor={`stage-model-${stage}`}>{stageLabels[stage]}<select id={`stage-model-${stage}`} value={settings.stageModels[stage]} onChange={event => updateStageModel(stage, event.target.value as ModelChoiceId)}>{modelOptions.choices.map(choice => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select><small>{stage === "scout" || stage === "extractor" ? "Default: Luna High" : "Default: Luna XHigh"}</small></label>)}</div></section><label className="acknowledgement"><input type="checkbox" checked={acknowledged} onChange={event => onAcknowledged(event.target.checked)} /><span>This is public and non-sensitive, and I’ll review what comes back.</span></label><div className="composer-footer"><span>Exact passages. Visible limitations. Saved on this device.</span>{ready ? <button type="submit" className="primary-action" disabled={!claim.trim() || !acknowledged || busy}>{busy ? "Starting…" : "Begin research"} <span aria-hidden="true">↗</span></button> : <button type="button" className="primary-action" onClick={onSetup}>Connect providers <span aria-hidden="true">↗</span></button>}</div></form><div className="composer-guide"><article><b>01 / Ask</b><p>Choose the direction and a model spending limit.</p></article><article><b>02 / Examine</b><p>Follow discovery, source checks and evidence analysis.</p></article><article><b>03 / Understand</b><p>Read the findings with quotations and their limitations.</p></article></div></motion.section>;
 }
 
 function StartingView({ claim, reduceMotion }: { claim: string; reduceMotion: boolean }) {
@@ -468,7 +529,7 @@ function AdvancedPanel({ settings, configuration, active, onSettings, onClose, o
   ] as const;
   const selectedCount = sources.filter(([key]) => settings[key]).length;
   const directionCount = Number(settings.supportEnabled) + Number(settings.challengeEnabled);
-  return <Dialog title="Research preferences" onClose={onClose}><p className="panel-intro">Choose the research direction, discovery providers, and local limits. At least one source is required.</p><section className="research-options"><div className="option-copy"><strong>Support</strong><span>Look for evidence that supports the claim.</span></div><button type="button" role="switch" aria-label="Support research" aria-checked={settings.supportEnabled} className={`switch ${settings.supportEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.supportEnabled)} onClick={() => update("supportEnabled", !settings.supportEnabled)}><i /></button><div className="option-copy"><strong>Challenge</strong><span>Look for evidence that challenges or limits the claim.</span></div><button type="button" role="switch" aria-label="Challenge research" aria-checked={settings.challengeEnabled} className={`switch ${settings.challengeEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.challengeEnabled)} onClick={() => update("challengeEnabled", !settings.challengeEnabled)}><i /></button>{sources.map(([key, label, copy]) => <div className="option-row" key={key}><div className="option-copy"><strong>{label}</strong><span>{copy}</span></div><button type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></div>)}<div className="option-row"><div className="option-copy"><strong>Crossref metadata</strong><span>Verify DOI bibliographic details for discovered sources. Crossref is metadata only, not evidence.</span></div><button type="button" role="switch" aria-label="Crossref metadata enrichment" aria-checked={settings.useCrossref} className={`switch ${settings.useCrossref ? "on" : ""}`} disabled={active} onClick={() => update("useCrossref", !settings.useCrossref)}><i /></button></div><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each enabled direction, with bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><details className="advanced-details"><summary>Advanced limits & history import</summary><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="500000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>Model cost ceiling<input type="text" inputMode="decimal" value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)} /></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><button type="button" disabled={active || !settings.dbPath} onClick={() => void importDatabase()}>Import this database into app storage</button>{importMessage && <p role="status">{importMessage}</p>}</details><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Directions determine the scope of research. A disabled direction is not searched or inferred in the result.</p></Dialog>;
+  return <Dialog title="Research preferences" onClose={onClose}><p className="panel-intro">Choose the research direction, discovery providers, and local limits. At least one source is required.</p><section className="research-options"><div className="option-copy"><strong>Support</strong><span>Look for evidence that supports the claim.</span></div><button type="button" role="switch" aria-label="Support research" aria-checked={settings.supportEnabled} className={`switch ${settings.supportEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.supportEnabled)} onClick={() => update("supportEnabled", !settings.supportEnabled)}><i /></button><div className="option-copy"><strong>Challenge</strong><span>Look for evidence that challenges or limits the claim.</span></div><button type="button" role="switch" aria-label="Challenge research" aria-checked={settings.challengeEnabled} className={`switch ${settings.challengeEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.challengeEnabled)} onClick={() => update("challengeEnabled", !settings.challengeEnabled)}><i /></button>{sources.map(([key, label, copy]) => <div className="option-row" key={key}><div className="option-copy"><strong>{label}</strong><span>{copy}</span></div><button type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></div>)}<div className="option-row"><div className="option-copy"><strong>Crossref metadata</strong><span>Verify DOI bibliographic details for discovered sources. Crossref is metadata only, not evidence.</span></div><button type="button" role="switch" aria-label="Crossref metadata enrichment" aria-checked={settings.useCrossref} className={`switch ${settings.useCrossref ? "on" : ""}`} disabled={active} onClick={() => update("useCrossref", !settings.useCrossref)}><i /></button></div><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each enabled direction, with bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><details className="advanced-details"><summary>Advanced limits & history import</summary><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="500000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>Model cost ceiling<select value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)}>{budgetOptions(settings.maxCost).map(value => <option key={value} value={value}>${Number(value).toFixed(2)}</option>)}</select></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><button type="button" disabled={active || !settings.dbPath} onClick={() => void importDatabase()}>Import this database into app storage</button>{importMessage && <p role="status">{importMessage}</p>}</details><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Directions determine the scope of research. A disabled direction is not searched or inferred in the result.</p></Dialog>;
 }
 
 function ServiceCard({ service, active, onService }: { service: ServiceDiagnostic | null; active: boolean; onService: (action: "start" | "stop") => void }) {

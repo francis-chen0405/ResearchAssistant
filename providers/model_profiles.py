@@ -10,8 +10,14 @@ from pydantic import ConfigDict
 
 from models import StrictModel
 from providers.config import ProviderConfigurationError
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    MODEL_OPTIONS,
+    StageModelSelections,
+)
 
-ProfileId = Literal["standard-2026-09"]
+ProfileId = Literal["standard-2026-09", "configurable-2026-09"]
 
 
 class SupportedModel(StrictModel):
@@ -58,9 +64,28 @@ STANDARD_PROFILE = ModelProfile(
     )
 )
 
+CONFIGURABLE_PROFILE = ModelProfile(
+    id=CONFIGURABLE_PROFILE_ID,
+    name="Choose each research model",
+    description="Six supported choices for each active model step",
+    pricing_reviewed="2026-09-23",
+    models=tuple(
+        SupportedModel(
+            model=option.id.value,
+            roles="Any active model step",
+            input_per_million=option.input_cap_per_million,
+            output_per_million=option.output_cap_per_million,
+            completion_limit=16384,
+        )
+        for option in MODEL_OPTIONS
+    ),
+)
+
 
 def profile_environment(
-    environment: Mapping[str, str], profile: ProfileId | None
+    environment: Mapping[str, str],
+    profile: ProfileId | None,
+    stage_models: StageModelSelections | None = None,
 ) -> dict[str, str]:
     """Resolve a run-local environment; never mutate credentials or saved settings.
 
@@ -71,6 +96,26 @@ def profile_environment(
     """
     resolved = dict(environment)
     if profile is None:
+        return resolved
+    if profile == CONFIGURABLE_PROFILE_ID:
+        selections = stage_models or DEFAULT_STAGE_MODELS
+        required_providers = {
+            option.provider
+            for option in MODEL_OPTIONS
+            if option.id in set(selections.model_dump().values())
+        }
+        if (
+            "openai" in required_providers
+            and resolved.get("LUNA_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+            != "https://api.openai.com/v1"
+        ):
+            raise ProviderConfigurationError("Selected OpenAI models require the official endpoint")
+        if (
+            "mimo" in required_providers
+            and resolved.get("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1").rstrip("/")
+            != "https://api.xiaomimimo.com/v1"
+        ):
+            raise ProviderConfigurationError("Selected MiMo models require the official endpoint")
         return resolved
     if profile != STANDARD_PROFILE.id:
         raise ProviderConfigurationError("Select a supported model profile.")

@@ -13,12 +13,24 @@ from decimal import Decimal
 from hashlib import sha256
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, SecretStr, model_validator
 
 from models import ProviderRunContract, StrictModel
 from provider_contract import canonical_provider_contract_payload
-from providers.config import LunaConfig, MimoRouteConfig, ProviderConfigurationError
+from providers.config import (
+    LunaConfig,
+    MimoChoiceConfig,
+    MimoRouteConfig,
+    OpenAIChoiceConfig,
+    ProviderConfigurationError,
+)
 from providers.llm import V2_LLM_ROUTING, LLMStage, ModelAlias, StageRoute, load_prompt
+from providers.model_choices import (
+    ACTIVE_MODEL_STAGES,
+    StageModelSelections,
+    completion_limit_for,
+    option_for,
+)
 from providers.pricing import (
     DIRECT_MIMO_PRICE_CAP,
     ModelPriceCap,
@@ -48,6 +60,24 @@ class V2PhysicalModelRoute(StrictModel):
     def validate_pricing_model(self) -> V2PhysicalModelRoute:
         if self.price_cap.model != self.physical_model:
             raise ValueError("route price cap must cover the configured physical model")
+        return self
+
+
+class V2StageConfiguration(StrictModel):
+    """One selected stage route with its secret-bearing transport configuration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    stage: LLMStage
+    route: V2PhysicalModelRoute
+    config: MimoChoiceConfig | OpenAIChoiceConfig
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> V2StageConfiguration:
+        if self.route.physical_model != self.config.model:
+            raise ValueError("selected stage model and adapter model must agree")
+        if self.route.max_completion_tokens != self.config.max_completion_tokens:
+            raise ValueError("selected stage allowance and adapter allowance must agree")
         return self
 
 
@@ -83,7 +113,7 @@ class V2RoutingPreflight(StrictModel):
         stages = tuple(stage for stage, _ in self.routing)
         if len(stages) != len(set(stages)):
             raise ValueError("v2 routing preflight cannot contain duplicate stages")
-        if set(stages) != set(LLMStage):
+        if set(stages) not in (set(LLMStage), set(ACTIVE_MODEL_STAGES)):
             raise ValueError("v2 routing preflight must cover every enabled v2 stage")
         return self
 
@@ -115,16 +145,46 @@ class V2RoutingConfig(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    mimo_v25: MimoRouteConfig
-    mimo_v25_pro: MimoRouteConfig
-    luna: LunaConfig
-    mimo_v25_price_cap: ModelPriceCap
-    mimo_v25_pro_price_cap: ModelPriceCap
-    luna_price_cap: ModelPriceCap
+    mimo_v25: MimoRouteConfig | None = None
+    mimo_v25_pro: MimoRouteConfig | None = None
+    luna: LunaConfig | None = None
+    mimo_v25_price_cap: ModelPriceCap | None = None
+    mimo_v25_pro_price_cap: ModelPriceCap | None = None
+    luna_price_cap: ModelPriceCap | None = None
+    stage_models: StageModelSelections | None = None
+    stage_configurations: tuple[V2StageConfiguration, ...] = ()
     repository_revision: str = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_routes(self) -> V2RoutingConfig:
+        if self.stage_models is not None:
+            stages = tuple(item.stage for item in self.stage_configurations)
+            if len(stages) != len(set(stages)) or set(stages) != set(ACTIVE_MODEL_STAGES):
+                raise ValueError("selected routes must cover each active v2 stage once")
+            if any(
+                item.route.logical_alias.value != self.stage_models.for_stage(item.stage).value
+                for item in self.stage_configurations
+            ):
+                raise ValueError("selected route identity must match its stage choice")
+            return self
+        if any(
+            value is None
+            for value in (
+                self.mimo_v25,
+                self.mimo_v25_pro,
+                self.luna,
+                self.mimo_v25_price_cap,
+                self.mimo_v25_pro_price_cap,
+                self.luna_price_cap,
+            )
+        ):
+            raise ValueError("legacy v2 routing requires all three configured routes")
+        assert self.mimo_v25 is not None
+        assert self.mimo_v25_pro is not None
+        assert self.luna is not None
+        assert self.mimo_v25_price_cap is not None
+        assert self.mimo_v25_pro_price_cap is not None
+        assert self.luna_price_cap is not None
         if self.mimo_v25.model == self.mimo_v25_pro.model:
             raise ValueError("MiMo-v2.5 and MiMo-v2.5-Pro must use distinct physical models")
         expected = (
@@ -142,7 +202,14 @@ class V2RoutingConfig(StrictModel):
         environment: Mapping[str, str],
         *,
         repository_revision: str,
+        stage_models: StageModelSelections | None = None,
     ) -> V2RoutingConfig:
+        if stage_models is not None:
+            return cls(
+                stage_models=stage_models,
+                stage_configurations=_selected_stage_configurations(environment, stage_models),
+                repository_revision=repository_revision,
+            )
         try:
             mimo_v25 = MimoRouteConfig.from_environment(
                 environment,
@@ -188,18 +255,27 @@ class V2RoutingConfig(StrictModel):
 
     def preflight(self) -> V2RoutingPreflight:
         """Verify all enabled target stages resolve before any provider work starts."""
+        if self.stage_models is not None:
+            return V2RoutingPreflight(
+                routing=tuple((item.stage, item.route) for item in self.stage_configurations)
+            )
         routes = tuple(
             (stage, self.route_for_alias(V2_LLM_ROUTING.for_stage(stage))) for stage in LLMStage
         )
         return V2RoutingPreflight(routing=routes)
 
     def route_for_alias(self, stage_route: StageRoute) -> V2PhysicalModelRoute:
+        if self.stage_models is not None:
+            raise ProviderConfigurationError("selected routes must be resolved by stage")
         alias = stage_route.primary
         if alias is ModelAlias.MIMO_V25:
+            assert self.mimo_v25 is not None and self.mimo_v25_price_cap is not None
             return _mimo_route(alias, self.mimo_v25, self.mimo_v25_price_cap)
         if alias is ModelAlias.MIMO_V25_PRO:
+            assert self.mimo_v25_pro is not None and self.mimo_v25_pro_price_cap is not None
             return _mimo_route(alias, self.mimo_v25_pro, self.mimo_v25_pro_price_cap)
         if alias is ModelAlias.GPT_5_6_LUNA_HIGH:
+            assert self.luna is not None and self.luna_price_cap is not None
             return V2PhysicalModelRoute(
                 logical_alias=alias,
                 provider_name=self.luna.provider_name,
@@ -210,6 +286,12 @@ class V2RoutingConfig(StrictModel):
                 price_cap=self.luna_price_cap,
             )
         raise ProviderConfigurationError(f"unsupported v2 logical model alias: {alias.value}")
+
+    def configuration_for_stage(self, stage: LLMStage) -> V2StageConfiguration:
+        for item in self.stage_configurations:
+            if item.stage is stage:
+                return item
+        raise ProviderConfigurationError(f"no selected adapter for {stage.value}")
 
     def fingerprint_payload(self) -> dict[str, str]:
         """Return canonical contract fields without serializing credentials."""
@@ -226,10 +308,14 @@ class V2RoutingConfig(StrictModel):
             separators=(",", ":"),
         )
         routing_json = json.dumps(
-            {
-                stage.value: V2_LLM_ROUTING.for_stage(stage).model_dump(mode="json")
-                for stage in LLMStage
-            },
+            (
+                self.stage_models.model_dump(mode="json")
+                if self.stage_models is not None
+                else {
+                    stage.value: V2_LLM_ROUTING.for_stage(stage).model_dump(mode="json")
+                    for stage in LLMStage
+                }
+            ),
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -303,3 +389,62 @@ def _mimo_route(
         max_completion_tokens=config.max_completion_tokens,
         price_cap=price_cap,
     )
+
+
+def _selected_stage_configurations(
+    environment: Mapping[str, str], stage_models: StageModelSelections
+) -> tuple[V2StageConfiguration, ...]:
+    selected = tuple(option_for(stage_models.for_stage(stage)) for stage in ACTIVE_MODEL_STAGES)
+    needs_openai = any(option.provider == "openai" for option in selected)
+    needs_mimo = any(option.provider == "mimo" for option in selected)
+    openai_key = environment.get("LUNA_API_KEY", "").strip()
+    mimo_key = environment.get("MIMO_API_KEY", "").strip()
+    if needs_openai and not openai_key:
+        raise ProviderConfigurationError("OpenAI API key is required by the selected model steps")
+    if needs_mimo and not mimo_key:
+        raise ProviderConfigurationError("MiMo API key is required by the selected model steps")
+    if (
+        needs_openai
+        and environment.get("LUNA_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        != "https://api.openai.com/v1"
+    ):
+        raise ProviderConfigurationError("Selected OpenAI models require the official API endpoint")
+    if (
+        needs_mimo
+        and environment.get("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1").rstrip("/")
+        != "https://api.xiaomimimo.com/v1"
+    ):
+        raise ProviderConfigurationError("Selected MiMo models require the official API endpoint")
+    if needs_openai and environment.get("LUNA_MODEL", "gpt-5.6-luna") != "gpt-5.6-luna":
+        raise ProviderConfigurationError("Restore the standard OpenAI model override first")
+    configurations: list[V2StageConfiguration] = []
+    for stage, option in zip(ACTIVE_MODEL_STAGES, selected, strict=True):
+        allowance = completion_limit_for(stage)
+        price_cap = ModelPriceCap(
+            model=option.model,
+            input_usd_per_token=option.input_cap_per_million / Decimal(1_000_000),
+            output_usd_per_token=option.output_cap_per_million / Decimal(1_000_000),
+        )
+        if option.provider == "openai":
+            config: MimoChoiceConfig | OpenAIChoiceConfig = OpenAIChoiceConfig(
+                api_key=SecretStr(openai_key),
+                model=option.model,
+                max_completion_tokens=allowance,
+            )
+        else:
+            config = MimoChoiceConfig(
+                api_key=SecretStr(mimo_key),
+                model=option.model,
+                max_completion_tokens=allowance,
+            )
+        route = V2PhysicalModelRoute(
+            logical_alias=ModelAlias(option.id.value),
+            provider_name=config.provider_name,
+            adapter_version=config.adapter_version,
+            base_url=config.base_url,
+            physical_model=option.model,
+            max_completion_tokens=allowance,
+            price_cap=price_cap,
+        )
+        configurations.append(V2StageConfiguration(stage=stage, route=route, config=config))
+    return tuple(configurations)

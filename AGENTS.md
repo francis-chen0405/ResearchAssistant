@@ -1,9 +1,9 @@
 # AI Assistant Instructions
 
-Current implementation scope is the completed [Neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md),
-explicitly authorized on 2026-09-23 and verified on 2026-09-23. It follows the completed explicit pipeline-selection
-and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated scope statements below
-remain historical.
+Current implementation scope is the completed [Per-step model choices](.agent/plans/per-step-model-choices.md),
+explicitly authorized on 2026-09-23, including the confirmed post-audit fixes recorded in the current status and
+handoff. It follows the completed neutral evidence ownership, explicit pipeline-selection and SQLite status-polling
+phases and preserves the Mac-first release boundary. Earlier dated scope statements below remain historical.
 
 ## Active Codex checkout
 
@@ -13,9 +13,9 @@ Use the repository root supplied by the task when working; do not assume the old
 `/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
 location is a workspace detail only and must not be embedded in application runtime paths.
 
-Current implementation authority: `.agent/plans/neutral-evidence-ownership.md`.
-The completed predecessor is `.agent/plans/explicit-pipeline-selection.md`; its predecessor
-is `.agent/plans/sqlite-status-polling.md`.
+Current implementation authority: `.agent/plans/per-step-model-choices.md`.
+The completed predecessor is `.agent/plans/neutral-evidence-ownership.md`; its predecessor
+is `.agent/plans/explicit-pipeline-selection.md` (with SQLite status polling before it).
 Release authority remains `.agent/plans/mac-release-cache-pricing.md`. Also read `ARCHITECTURE.md`,
 `STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
 Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction

@@ -36,7 +36,16 @@ async function main() {
     const runId = "22222222-2222-4222-8222-222222222222";
     const replacementRunId = "33333333-3333-4333-8333-333333333333";
     let preferences = {
-      modelProfile: "standard-2026-09",
+      modelProfile: "configurable-2026-09",
+      stageModels: {
+        planner: "gpt-5.6-luna-xhigh",
+        scout: "gpt-5.6-luna-high",
+        gap_analysis: "gpt-5.6-luna-xhigh",
+        search_agent: "gpt-5.6-luna-xhigh",
+        source_selection: "gpt-5.6-luna-xhigh",
+        extractor: "gpt-5.6-luna-high",
+        analyst: "gpt-5.6-luna-xhigh",
+      },
       dbPath: database,
       maxTokens: 500000,
       maxCost: "0.20",
@@ -108,7 +117,23 @@ async function main() {
       if (pathname === "/api/preferences") {
         if (request.method() === "POST") preferences = request.postDataJSON();
         body = preferences;
-      } else if (pathname === "/api/configuration") {
+      } else if (pathname === "/api/model-options") {
+        body = {
+          choices: [
+            ["gpt-5.6-luna-high", "GPT-5.6 Luna · High", "openai"],
+            ["gpt-5.6-luna-xhigh", "GPT-5.6 Luna · XHigh", "openai"],
+            ["mimo-v2.6-pro", "MiMo v2.6 Pro", "mimo"],
+            ["mimo-v2.6-flash", "MiMo v2.6 Flash", "mimo"],
+            ["gpt-6-sol-high", "GPT-6 Sol · High", "openai"],
+            ["gpt-5.6-terra-high", "GPT-5.6 Terra · High", "openai"],
+          ].map(([id, label, provider]) => ({ id, label, provider, input_per_million: "0.20", output_per_million: "1.20" })),
+          defaults: preferences.stageModels,
+        };
+      } else if (pathname === "/api/configuration/check") {
+        assert.equal(request.method(), "POST");
+        const payload = request.postDataJSON();
+        assert.equal(payload.model_profile, "configurable-2026-09");
+        assert.deepEqual(payload.stage_models, preferences.stageModels);
         body = {
           configured: true,
           message: "Offline polling test configuration",

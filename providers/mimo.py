@@ -43,8 +43,9 @@ from models import (
     validate_planner_provider_selection,
 )
 from money import parse_exact_usd
-from providers.config import LunaConfig, MimoConfig, MimoRouteConfig
+from providers.config import LunaConfig, MimoChoiceConfig, MimoConfig, MimoRouteConfig
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage, ModelAlias
+from providers.model_choices import ModelChoice, option_for
 from providers.pricing import (
     DIRECT_MIMO_PRICE_CAP,
     CacheTokenPrices,
@@ -388,12 +389,21 @@ def _request_payload(
         "stream": False,
         "max_completion_tokens": config.max_completion_tokens,
     }
-    if request.generation.temperature is not None and not isinstance(config, LunaConfig):
+    if request.generation.temperature is not None and not isinstance(
+        config, (LunaConfig, MimoChoiceConfig)
+    ):
         payload["temperature"] = request.generation.temperature
     if isinstance(config, LunaConfig):
-        payload["reasoning_effort"] = "high"
+        if config.provider_name == "openai":
+            payload["reasoning_effort"] = option_for(
+                ModelChoice(request.model_alias.value)
+            ).reasoning_effort
+        else:
+            payload["reasoning_effort"] = "high"
         if config.base_url == "https://api.openai.com/v1":
             payload["service_tier"] = "default"
+    elif isinstance(config, MimoChoiceConfig):
+        payload["thinking"] = {"type": "enabled"}
     return payload
 
 
@@ -820,7 +830,9 @@ def _http_error(response: httpx.Response, *, provider_label: str) -> MimoProvide
 
 
 def _provider_label(config: MimoConfig | MimoRouteConfig | LunaConfig) -> str:
-    return "Luna" if isinstance(config, LunaConfig) else "Xiaomi MiMo"
+    if isinstance(config, LunaConfig):
+        return "OpenAI" if config.provider_name == "openai" else "Luna"
+    return "Xiaomi MiMo"
 
 
 def _malformed(message: str) -> MimoProviderError:

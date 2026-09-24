@@ -976,7 +976,7 @@ def _plan_round(
         maximum_queries=maximum_queries,
     )
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
-    if (
+    if routing_config.stage_models is None and (
         route.logical_alias is not V2_LLM_ROUTING.for_stage(LLMStage.SEARCH_AGENT).primary
         or route.physical_model != "mimo-v2.5-pro"
     ):

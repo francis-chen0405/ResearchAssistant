@@ -8,6 +8,7 @@ from decimal import ROUND_UP, Decimal
 from pydantic import ConfigDict, Field
 
 from models import StrictModel
+from providers.model_choices import MODEL_OPTIONS
 
 DIRECT_MIMO_PRICING_POLICY_VERSION = "xiaomi-mimo-price-cap-2026-08-10-v2"
 
@@ -64,9 +65,25 @@ class CacheTokenPrices(StrictModel):
 def cache_prices_for_route(base_url: str, model: str) -> CacheTokenPrices | None:
     """No published discount is inferred for custom endpoints or unknown models.
 
-    Reviewed 2026-09-17: official OpenAI Luna model/caching docs and Xiaomi overseas
-    pay-as-you-go pricing. Source URLs and fallback rules are in docs/model-settings.md.
+    Reviewed 2026-09-23 for the selected OpenAI and MiMo models. Source URLs and
+    fallback rules are in docs/model-settings.md.
     """
+    for option in MODEL_OPTIONS:
+        official_url = (
+            "https://api.openai.com/v1"
+            if option.provider == "openai"
+            else "https://api.xiaomimimo.com/v1"
+        )
+        if base_url == official_url and model == option.model:
+            return CacheTokenPrices(
+                input_per_million=option.input_per_million,
+                cached_per_million=option.cached_input_per_million,
+                output_per_million=option.output_per_million,
+                cache_write_multiplier=(
+                    Decimal("1.25") if option.provider == "openai" else Decimal("1")
+                ),
+                long_context_threshold=(272_000 if option.provider == "openai" else None),
+            )
     if base_url == "https://api.xiaomimimo.com/v1":
         if model == "mimo-v2.5-pro":
             return CacheTokenPrices(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Literal
@@ -12,10 +13,17 @@ from pydantic import Field, field_validator
 from desktop_paths import application_data_dir
 from file_lock import FileLock
 from models import StrictModel
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    StageModelSelections,
+)
+from providers.model_profiles import ProfileId
 
 
 class InterfaceSettings(StrictModel):
-    modelProfile: Literal["standard-2026-09"] = "standard-2026-09"
+    modelProfile: ProfileId = CONFIGURABLE_PROFILE_ID
+    stageModels: StageModelSelections = DEFAULT_STAGE_MODELS
     dbPath: str = ""
     maxTokens: int = Field(default=500_000, ge=1, le=500_000)
     maxCost: str = Field(default="0.20", pattern=r"^\d+(?:\.\d+)?$")
@@ -29,6 +37,17 @@ class InterfaceSettings(StrictModel):
     useArxiv: bool = False
     usePubmed: bool = False
     useCrossref: bool = True
+
+    @field_validator("maxCost")
+    @classmethod
+    def validate_max_cost(cls, value: str) -> str:
+        try:
+            amount = Decimal(value)
+        except InvalidOperation as exc:
+            raise ValueError("maxCost must be a decimal amount") from exc
+        if amount <= 0 or amount > Decimal("20.00"):
+            raise ValueError("maxCost must be greater than $0 and at most $20.00")
+        return value
 
 
 SETTING_NAMES = frozenset(
@@ -60,7 +79,13 @@ def read_preferences(path: Path | None = None) -> Preferences:
     path = path or application_data_dir() / "preferences.json"
     if not path.exists():
         return Preferences()
-    return Preferences.model_validate_json(path.read_text(encoding="utf-8"))
+    preferences = Preferences.model_validate_json(path.read_text(encoding="utf-8"))
+    if preferences.interface.modelProfile == "standard-2026-09":
+        migrated_interface = preferences.interface.model_copy(
+            update={"modelProfile": CONFIGURABLE_PROFILE_ID}
+        )
+        return preferences.model_copy(update={"interface": migrated_interface})
+    return preferences
 
 
 def update_preferences(

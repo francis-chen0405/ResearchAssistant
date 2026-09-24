@@ -8,6 +8,7 @@ from typing import Literal
 import httpx
 
 from models import StrictModel
+from providers.model_choices import MODEL_OPTIONS
 
 
 class ConnectionCheck(StrictModel):
@@ -74,13 +75,14 @@ def check_connection(
             )
         payload = response.json()
         available = {item.get("id") for item in payload.get("data", []) if isinstance(item, dict)}
-        required = {"mimo-v2.5", "mimo-v2.5-pro"} if name == "mimo" else {"gpt-5.6-luna"}
-        if not required.issubset(available):
+        provider = "mimo" if name == "mimo" else "openai"
+        supported = {option.model for option in MODEL_OPTIONS if option.provider == provider}
+        if not available.intersection(supported):
             return ConnectionCheck(
                 provider=name,
                 state="unavailable",
                 message=(
-                    "The key was accepted, but the supported models were not listed "
+                    "The key was accepted, but no selectable supported model was listed "
                     "for this account."
                 ),
             )

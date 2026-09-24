@@ -17,6 +17,7 @@ from frontend.provider_connections import check_connection
 from models import DiscoveryProvider, ResearchControls
 from providers.config import ProviderConfigurationError
 from providers.llm import LLMStage
+from providers.model_choices import CONFIGURABLE_PROFILE_ID, DEFAULT_STAGE_MODELS
 from providers.model_profiles import STANDARD_PROFILE, profile_environment
 from providers.v2_routing import V2RoutingConfig
 
@@ -69,7 +70,8 @@ def test_old_preferences_upgrade_without_losing_data(tmp_path: Path) -> None:
         '{"version":1,"interface":{"dbPath":"old-history.sqlite3","maxCost":"0.50","useArxiv":true},"provider_settings":{"LUNA_MODEL":"gpt-5.6-luna"}}'
     )
     saved = read_preferences(path)
-    assert saved.interface.modelProfile == STANDARD_PROFILE.id
+    assert saved.interface.modelProfile == CONFIGURABLE_PROFILE_ID
+    assert saved.interface.stageModels == DEFAULT_STAGE_MODELS
     updated = update_preferences(interface=saved.interface, path=path)
     assert updated.interface.dbPath == "old-history.sqlite3"
     assert updated.interface.maxCost == "0.50"
@@ -123,7 +125,10 @@ def test_profile_response_allowances_are_reserved_and_fingerprinted() -> None:
 
 @pytest.mark.parametrize(
     "provider,secret_name,model",
-    [("mimo", "MIMO_API_KEY", "mimo-v2.5"), ("openai", "LUNA_API_KEY", "gpt-5.6-luna")],
+    [
+        ("mimo", "MIMO_API_KEY", "mimo-v2.6-flash"),
+        ("openai", "LUNA_API_KEY", "gpt-6-sol"),
+    ],
 )
 def test_connection_check_never_generates_or_returns_secrets(
     provider: str, secret_name: str, model: str
@@ -141,6 +146,17 @@ def test_connection_check_never_generates_or_returns_secrets(
     assert seen[0].url.path == "/v1/models"
     assert not seen[0].content
     assert "not-a-real-secret" not in result.model_dump_json()
+
+
+def test_connection_check_rejects_accounts_without_selectable_models() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json={"data": [{"id": "mimo-v2.5-pro"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection("mimo", {"MIMO_API_KEY": "test"}, client=client)
+    assert result.state == "unavailable"
+    assert "selectable supported model" in result.message
 
 
 @pytest.mark.parametrize(

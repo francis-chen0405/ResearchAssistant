@@ -9,6 +9,7 @@ from agents.v2_initial_planner import V2_INITIAL_PLANNER_PROMPT_PATH
 from frontend.live_contracts import LiveRunRequest
 from models import V2InitialPlannerInput, V2InitialPlannerModelOutput, V2InitialPlannerPolicy
 from providers.llm import LLMStage, load_prompt_file, render_stage_prompt
+from providers.model_choices import CONFIGURABLE_PROFILE_ID
 from providers.model_profiles import profile_environment
 from providers.pricing import conservative_token_estimate
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
@@ -18,7 +19,17 @@ def check_start_reservation(
     request: LiveRunRequest, environment: Mapping[str, str]
 ) -> V2ModelReservation:
     routing = V2RoutingConfig.from_environment(
-        profile_environment(environment, request.model_profile), repository_revision="preflight"
+        profile_environment(
+            environment,
+            request.model_profile,
+            stage_models=(
+                request.stage_models if request.model_profile == CONFIGURABLE_PROFILE_ID else None
+            ),
+        ),
+        repository_revision="preflight",
+        stage_models=(
+            request.stage_models if request.model_profile == CONFIGURABLE_PROFILE_ID else None
+        ),
     )
     providers = request.research_controls.discovery_providers
     artifact = V2InitialPlannerInput(

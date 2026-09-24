@@ -258,7 +258,10 @@ def run_v2_source_selection_and_queue(
 
     insert_v2_artifact(path, V2_SOURCE_SELECTION_POOL_KEY, selection_input, completed_at)
     route = routing_config.preflight().for_stage(LLMStage.SOURCE_SELECTION)
-    if route.logical_alias is not V2_LLM_ROUTING.for_stage(LLMStage.SOURCE_SELECTION).primary:
+    if (
+        routing_config.stage_models is None
+        and route.logical_alias is not V2_LLM_ROUTING.for_stage(LLMStage.SOURCE_SELECTION).primary
+    ):
         raise ValueError("Final Source Selection must use the MiMo-v2.5-Pro route")
     prompt = load_prompt(LLMStage.SOURCE_SELECTION)
     request = LLMRequest(

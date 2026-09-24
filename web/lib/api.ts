@@ -185,7 +185,8 @@ export type V2EvidenceDisplay = {
 };
 
 type StartInput = {
-  model_profile: "standard-2026-09";
+  model_profile: "configurable-2026-09";
+  stage_models: StageModels;
   raw_claim: string;
   acknowledged_public: boolean;
   db_path: string;
@@ -208,6 +209,49 @@ export type ProviderSelection = Pick<
   StartInput,
   "use_serpsearch" | "use_exa" | "use_openalex" | "use_arxiv" | "use_pubmed"
 >;
+
+export const STAGE_MODEL_KEYS = [
+  "planner",
+  "scout",
+  "gap_analysis",
+  "search_agent",
+  "source_selection",
+  "extractor",
+  "analyst",
+] as const;
+
+export type StageModelKey = (typeof STAGE_MODEL_KEYS)[number];
+export type ModelChoiceId =
+  | "gpt-5.6-luna-high"
+  | "gpt-5.6-luna-xhigh"
+  | "mimo-v2.6-pro"
+  | "mimo-v2.6-flash"
+  | "gpt-6-sol-high"
+  | "gpt-5.6-terra-high";
+export type StageModels = Record<StageModelKey, ModelChoiceId>;
+
+export const DEFAULT_STAGE_MODELS: StageModels = {
+  planner: "gpt-5.6-luna-xhigh",
+  scout: "gpt-5.6-luna-high",
+  gap_analysis: "gpt-5.6-luna-xhigh",
+  search_agent: "gpt-5.6-luna-xhigh",
+  source_selection: "gpt-5.6-luna-xhigh",
+  extractor: "gpt-5.6-luna-high",
+  analyst: "gpt-5.6-luna-xhigh",
+};
+
+export type ModelOption = {
+  id: ModelChoiceId;
+  label: string;
+  provider: "openai" | "mimo" | string;
+  input_per_million: string | number;
+  output_per_million: string | number;
+};
+
+export type ModelOptions = {
+  choices: ModelOption[];
+  defaults: StageModels;
+};
 
 type StartResult = {
   started: boolean;
@@ -259,21 +303,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const researchApi = {
   profiles: () => request<ModelProfile[]>("/api/model-profiles"),
+  modelOptions: () => request<ModelOptions>("/api/model-options"),
   checkConnection: (name: string) => request<{ state: string; message: string }>(`/api/credentials/${name}/check`, { method: "POST" }),
   importHistory: (source: string) => request<{ db_path: string; run_count: number }>(`/api/history/import?source=${encodeURIComponent(source)}`, { method: "POST" }),
   preferences: () => request<InterfaceSettings>("/api/preferences"),
   savePreferences: (settings: InterfaceSettings) => request<InterfaceSettings>("/api/preferences", { method: "POST", body: JSON.stringify(settings) }),
   removeCredential: (name: string) => request<{ removed: boolean }>(`/api/credentials/${encodeURIComponent(name)}/remove`, { method: "POST" }),
-  configuration: (selection: ProviderSelection) =>
-    request<Configuration>(`/api/configuration?${new URLSearchParams({
-      model_profile: "standard-2026-09",
-      use_serpsearch: String(selection.use_serpsearch),
-      use_exa: String(selection.use_exa),
-      use_openalex: String(selection.use_openalex),
-      use_arxiv: String(selection.use_arxiv),
-      use_pubmed: String(selection.use_pubmed),
-    }).toString()}`),
-  saveCredentials: (payload: CredentialInput, selection: ProviderSelection) =>
+  configuration: (stageModels: StageModels, selection: ProviderSelection) =>
+    request<Configuration>("/api/configuration/check", {
+      method: "POST",
+      body: JSON.stringify({
+        model_profile: "configurable-2026-09",
+        stage_models: stageModels,
+        use_serpsearch: selection.use_serpsearch,
+        use_exa: selection.use_exa,
+        use_openalex: selection.use_openalex,
+        use_arxiv: selection.use_arxiv,
+        use_pubmed: selection.use_pubmed,
+      }),
+    }),
+  saveCredentials: (payload: CredentialInput, stageModels: StageModels, selection: ProviderSelection) =>
     request<{ saved: boolean; configured: boolean; message: string; saved_settings: string[] }>(`/api/credentials?${new URLSearchParams({
       use_serpsearch: String(selection.use_serpsearch),
       use_exa: String(selection.use_exa),
@@ -282,7 +331,7 @@ export const researchApi = {
       use_pubmed: String(selection.use_pubmed),
     }).toString()}`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ model_profile: "configurable-2026-09", stage_models: stageModels, ...payload }),
     }),
   start: (payload: StartInput) =>
     request<StartResult>("/api/research/start", {
@@ -310,11 +359,12 @@ export const researchApi = {
 };
 
 export type InterfaceSettings = {
-  modelProfile: "standard-2026-09";
+  modelProfile: "configurable-2026-09";
+  stageModels: StageModels;
   dbPath: string; maxTokens: number; maxCost: string; maxCalls: number;
   supportEnabled: boolean; challengeEnabled: boolean; sourceTarget: 5 | 10 | 15 | 20;
   useSerpSearch: boolean; useExa: boolean; useOpenAlex: boolean; useArxiv: boolean;
   usePubmed: boolean; useCrossref: boolean;
 };
 
-export type ModelProfile = { id: "standard-2026-09"; name: string; description: string; pricing_reviewed: string; models: { model: string; roles: string; input_per_million: string; output_per_million: string; completion_limit: number; output_contract: string }[] };
+export type ModelProfile = { id: "configurable-2026-09" | "standard-2026-09"; name: string; description: string; pricing_reviewed: string; models: { model: string; roles: string; input_per_million: string; output_per_million: string; completion_limit: number; output_contract: string }[] };

@@ -1,11 +1,16 @@
 # Phase plans
 
-Current implementation scope is the completed [Neutral evidence ownership](plans/neutral-evidence-ownership.md),
-explicitly authorized on 2026-09-23 and verified on 2026-09-23. It follows the completed explicit pipeline-selection
-and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated scope statements below
-remain historical.
+Current implementation scope is the completed [Per-step model choices](plans/per-step-model-choices.md),
+explicitly authorized on 2026-09-23, including the confirmed post-audit fixes recorded in the current
+status and handoff. It follows the completed neutral evidence ownership, explicit pipeline-selection
+and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated scope
+statements below remain historical.
 
-Completed latest phase: [Neutral evidence ownership](plans/neutral-evidence-ownership.md), authorized by the
+Completed latest phase: [Per-step model choices](plans/per-step-model-choices.md), authorized by the user
+on 2026-09-23. Each active fresh-v2 stage now has an explicit selectable model choice; the confirmed
+audit fixes preserve those choices through setup checks, credentials readiness and offline desktop smokes.
+
+Completed predecessor: [Neutral evidence ownership](plans/neutral-evidence-ownership.md), authorized by the
 user after the explicit pipeline-selection review. Fresh v2 stages now import neutral evidence helpers directly;
 historical agent paths remain compatibility facades.
 

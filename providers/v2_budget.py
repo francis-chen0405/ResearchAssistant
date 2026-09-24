@@ -25,6 +25,7 @@ from providers.llm import (
     LLMProvider,
     LLMProviderCapabilities,
     LLMRequest,
+    LLMStage,
     ModelAlias,
     V2CancellationRequested,
 )
@@ -53,7 +54,9 @@ class V2RunCeilings(StrictModel):
 
     max_physical_calls: int = Field(default=V2_MAX_PHYSICAL_CALLS, ge=1, le=160)
     max_total_tokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=500_000)
-    max_total_cost_usd: Decimal = Field(default=V2_DEFAULT_TOTAL_COST_USD, gt=0)
+    max_total_cost_usd: Decimal = Field(
+        default=V2_DEFAULT_TOTAL_COST_USD, gt=0, le=Decimal("20.00")
+    )
     policy_identity: str = V2_BUDGET_POLICY_IDENTITY
 
 
@@ -144,19 +147,29 @@ class RoutedV2LLMProvider:
         supports_structured_output_control=True,
     )
 
-    def __init__(self, providers: Mapping[ModelAlias, LLMProvider]) -> None:
+    def __init__(self, providers: Mapping[ModelAlias | LLMStage, LLMProvider]) -> None:
         required = {
             ModelAlias.MIMO_V25,
             ModelAlias.MIMO_V25_PRO,
             ModelAlias.GPT_5_6_LUNA_HIGH,
         }
-        if set(providers) != required:
-            raise ValueError("v2 routed provider requires exact normal, Pro, and Luna aliases")
+        selected_stages = {
+            LLMStage.PLANNER,
+            LLMStage.SCOUT,
+            LLMStage.GAP_ANALYSIS,
+            LLMStage.SEARCH_AGENT,
+            LLMStage.SOURCE_SELECTION,
+            LLMStage.EXTRACTOR,
+            LLMStage.ANALYST,
+        }
+        if set(providers) not in (required, selected_stages):
+            raise ValueError("v2 routed provider requires complete alias or stage coverage")
+        self._by_stage = set(providers) == selected_stages
         self._providers = dict(providers)
         self._thread_state = local()
 
     def generate(self, request: LLMRequest) -> BaseModel:
-        provider = self._providers[request.model_alias]
+        provider = self._providers[request.stage if self._by_stage else request.model_alias]
         self._thread_state.provider = provider
         return provider.generate(request)
 
@@ -218,6 +231,11 @@ class BudgetedV2LLMProvider:
     def generate(self, request: LLMRequest) -> BaseModel:
         if request.run_id != self._run_id:
             raise ValueError("budgeted provider request must match its v2 run")
+        if (
+            self._routing.preflight().for_stage(request.stage).logical_alias
+            is not request.model_alias
+        ):
+            raise ValueError("model request does not match the frozen route for its stage")
         if self._cancellation_requested is not None and self._cancellation_requested():
             raise V2CancellationRequested("v2 cancellation was observed before a model call")
         reservation = self._routing.preflight().reserve(

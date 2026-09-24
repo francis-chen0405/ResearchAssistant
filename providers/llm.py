@@ -66,6 +66,11 @@ class LLMStage(StrEnum):
 class ModelAlias(StrEnum):
     MIMO_V25_PRO = "mimo-v2.5-pro"
     GPT_5_6_LUNA_HIGH = "gpt-5.6-luna-high"
+    GPT_5_6_LUNA_XHIGH = "gpt-5.6-luna-xhigh"
+    MIMO_V26_PRO = "mimo-v2.6-pro"
+    MIMO_V26_FLASH = "mimo-v2.6-flash"
+    GPT_6_SOL_HIGH = "gpt-6-sol-high"
+    GPT_5_6_TERRA_HIGH = "gpt-5.6-terra-high"
     MINIMAX_M3 = "minimax-m3"
     # Legacy aliases remain readable for existing persisted Phase 8/9 artifacts.
     MIMO_V25 = "mimo-v2.5"

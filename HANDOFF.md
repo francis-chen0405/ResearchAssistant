@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-09-23 Per-step model choices and confirmed audit fixes
+
+The current implementation authority is the [per-step model choices plan](.agent/plans/per-step-model-choices.md).
+The confirmed audit fixes keep the selected model profile and stage choices in the POST
+configuration check and credential-save paths, use the supported selectable catalog for
+provider model checks, and update the offline frontend and upgrade smokes to exercise the
+configurable profile and conditional provider credentials. Historical records and the
+Mac-first release boundary remain unchanged.
+
+Verification passed: 1,122 Python tests with two existing skips, Ruff lint and format,
+diff whitespace checks, frontend lint, TypeScript and static export, JavaScript syntax, the
+frontend interaction smoke, the status-polling smoke and one isolated upgrade smoke run. Two
+upgrade reruns after the final backend rebuild timed out waiting for startup; both prior
+and final backends passed separate native self-tests, so investigate the intermittent
+upgrade startup before relying on that gate. No paid
+provider calls or dependency changes were made. Keep the existing Windows deferral,
+clean-machine, minimum-OS, signing and notarization gates.
+
 ## 2026-09-23 Neutral evidence ownership
 
 The completed [neutral evidence ownership plan](.agent/plans/neutral-evidence-ownership.md)

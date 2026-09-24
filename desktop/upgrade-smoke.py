@@ -14,6 +14,16 @@ from uuid import uuid4
 import httpx
 from smoke import startup_line
 
+EXPECTED_CONFIGURABLE_STAGE_MODELS = {
+    "planner": "gpt-5.6-luna-xhigh",
+    "scout": "gpt-5.6-luna-high",
+    "gap_analysis": "gpt-5.6-luna-xhigh",
+    "search_agent": "gpt-5.6-luna-xhigh",
+    "source_selection": "gpt-5.6-luna-xhigh",
+    "extractor": "gpt-5.6-luna-high",
+    "analyst": "gpt-5.6-luna-xhigh",
+}
+
 
 def main() -> None:
     previous, current = (Path(value).resolve() for value in sys.argv[1:3])
@@ -150,7 +160,8 @@ def main() -> None:
                         else:
                             assert brief == prior_brief
                             assert preferences["maxCost"] == "0.15"
-                            assert preferences["modelProfile"] == "standard-2026-09"
+                            assert preferences["modelProfile"] == "configurable-2026-09"
+                            assert preferences["stageModels"] == EXPECTED_CONFIGURABLE_STAGE_MODELS
                     process.stdin.close()
                     assert process.wait(timeout=100) == 0
                 finally:
@@ -160,9 +171,9 @@ def main() -> None:
             assert identities[0] != identities[1], "Expected distinct preceding and new executables"
             assert database.read_bytes() == original_database
             print(
-                "PASS: Phase 2 to Phase 3 native credential persistence, preference migration, "
-                "identical validated historical brief and unchanged history database; "
-                "new executable identity retained."
+                "PASS: native credential persistence, configurable model-choice preference "
+                "migration, identical validated historical brief and unchanged history "
+                "database; new executable identity retained."
             )
         finally:
             executable = (

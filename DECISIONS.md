@@ -1,9 +1,19 @@
 # Current decisions
 
-Current implementation scope is [Neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md),
-explicitly authorized on 2026-09-23. It follows the completed explicit pipeline-selection
-and SQLite status-polling phases and preserves the Mac-first release boundary. Earlier dated
-scope statements below remain historical.
+Current implementation scope is [Per-step model choices](.agent/plans/per-step-model-choices.md),
+explicitly authorized on 2026-09-23. It follows the completed neutral evidence ownership,
+explicit pipeline-selection and SQLite status-polling phases and preserves the Mac-first
+release boundary. Earlier dated scope statements below remain historical.
+
+## 2026-09-23 — Per-step model choices
+
+Fresh runs select one of six reviewed provider models/efforts independently for each
+of seven active model steps. Scout and exact extraction default to Luna High; the other
+five default to Luna XHigh. The choice fixes endpoint, model ID, effort or thinking mode,
+allowance, credential and conservative price cap in the run fingerprint. Default model
+budget stays $0.20 with explicit selection up to $20. The historical Standard profile,
+saved run data, strict output/evidence gates and deterministic stages remain compatible.
+See [model settings](docs/model-settings.md) for the exact catalog and source pricing.
 
 The preceding implementation decision is the 2026-09-19 request-scoped SQLite status
 inspection policy recorded below.
