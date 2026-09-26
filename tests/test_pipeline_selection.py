@@ -23,7 +23,7 @@ from orchestrator import ProviderPipelineResult, ProviderRunStatus
 from providers.config import RunCeilings
 from providers.llm import LLMStage
 from providers.mimo_factory import MimoProviderFactoryConfig
-from providers.model_choices import DEFAULT_STAGE_MODELS
+from providers.model_choices import ACTIVE_MODEL_STAGES, DEFAULT_STAGE_MODELS
 from providers.v2_budget import V2BudgetSnapshot
 from providers.v2_factory import V2ProductionFactoryConfig
 from v2_orchestrator import (
@@ -126,6 +126,11 @@ def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     environment = _environment()
+    environment.update(
+        MIMO_BASE_URL="https://api.xiaomimimo.com/v1",
+        LUNA_BASE_URL="https://api.openai.com/v1",
+        LUNA_MODEL="gpt-6-luna",
+    )
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
 
@@ -179,6 +184,84 @@ def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
     assert kwargs["directions"] == ResearchDirections(support_enabled=True, challenge_enabled=False)
     assert kwargs["discovery_providers"] == (DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)
     assert kwargs["ceilings"] == bundle_calls[0].ceilings
+
+
+@pytest.mark.parametrize(
+    ("override_name", "override_value", "all_mimo", "expected_error"),
+    [
+        ("LUNA_BASE_URL", "https://gateway.example.test/v1", False, "official API endpoint"),
+        ("MIMO_BASE_URL", "https://gateway.example.test/v1", True, "official API endpoint"),
+        ("LUNA_MODEL", "gateway-only-model", False, "standard OpenAI model override"),
+    ],
+)
+def test_cli_rejects_selected_custom_route_before_provider_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    override_name: str,
+    override_value: str,
+    all_mimo: bool,
+    expected_error: str,
+) -> None:
+    environment = _environment()
+    environment.update(
+        MIMO_BASE_URL="https://api.xiaomimimo.com/v1",
+        LUNA_BASE_URL="https://api.openai.com/v1",
+        LUNA_MODEL="gpt-6-luna",
+    )
+    environment[override_name] = override_value
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+    def forbidden_bundle(config: V2ProductionFactoryConfig) -> None:
+        pytest.fail("invalid CLI routing must not construct provider clients")
+
+    monkeypatch.setattr(cli, "build_v2_production_bundle", forbidden_bundle)
+    argv = _cli_argv(tmp_path / "rejected.sqlite3", uuid4())
+    if all_mimo:
+        for stage in ACTIVE_MODEL_STAGES:
+            argv.extend(("--model", f"{stage.value}=mimo-v2.6-pro"))
+
+    result = cli.main(argv, identity_provider=lambda: IDENTITY)
+
+    output = capsys.readouterr()
+    assert result == CLIExitCode.CONFIGURATION_ERROR
+    assert expected_error in output.err
+    for secret in (environment["MIMO_API_KEY"], environment["LUNA_API_KEY"]):
+        assert secret not in output.out + output.err
+
+
+def test_cli_ignores_unselected_openai_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    environment = _environment()
+    environment["MIMO_BASE_URL"] = "https://api.xiaomimimo.com/v1"
+    environment["LUNA_MODEL"] = "gateway-only-model"
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("LUNA_API_KEY")
+    configured: list[V2ProductionFactoryConfig] = []
+
+    class BundleCaptured(Exception):
+        pass
+
+    def capture_bundle(config: V2ProductionFactoryConfig) -> None:
+        configured.append(config)
+        raise BundleCaptured
+
+    monkeypatch.setattr(cli, "build_v2_production_bundle", capture_bundle)
+    argv = _cli_argv(tmp_path / "mimo-only.sqlite3", uuid4())
+    for stage in ACTIVE_MODEL_STAGES:
+        argv.extend(("--model", f"{stage.value}=mimo-v2.6-pro"))
+
+    assert cli.main(argv, identity_provider=lambda: IDENTITY) == CLIExitCode.FAILED
+
+    assert len(configured) == 1
+    assert configured[0].routing.stage_models is not None
+    assert all(
+        item.route.provider_name == "xiaomi-mimo"
+        for item in configured[0].routing.stage_configurations
+    )
 
 
 def test_cli_explicit_legacy_runner_receives_legacy_configuration_and_identity(

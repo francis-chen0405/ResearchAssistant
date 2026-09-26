@@ -17,7 +17,12 @@ from frontend.provider_connections import check_connection
 from models import DiscoveryProvider, ResearchControls
 from providers.config import ProviderConfigurationError
 from providers.llm import LLMStage
-from providers.model_choices import CONFIGURABLE_PROFILE_ID, DEFAULT_STAGE_MODELS
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    ModelChoice,
+    StageModelSelections,
+)
 from providers.model_profiles import STANDARD_PROFILE, profile_environment
 from providers.v2_routing import V2RoutingConfig
 
@@ -166,8 +171,25 @@ def test_connection_check_never_generates_or_returns_secrets(
         seen.append(request)
         return httpx.Response(200, json={"data": [{"id": model}, {"id": "mimo-v2.5-pro"}]})
 
+    stage_models = DEFAULT_STAGE_MODELS
+    if provider == "mimo":
+        stage_models = StageModelSelections(
+            planner=ModelChoice.MIMO_V26_FLASH,
+            scout=ModelChoice.MIMO_V26_FLASH,
+            gap_analysis=ModelChoice.MIMO_V26_FLASH,
+            search_agent=ModelChoice.MIMO_V26_FLASH,
+            source_selection=ModelChoice.MIMO_V26_FLASH,
+            extractor=ModelChoice.MIMO_V26_FLASH,
+            analyst=ModelChoice.MIMO_V26_FLASH,
+        )
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        result = check_connection(provider, {secret_name: "not-a-real-secret"}, client=client)
+        result = check_connection(
+            provider,
+            {secret_name: "not-a-real-secret"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=stage_models,
+            client=client,
+        )
     assert result.state == "connected"
     assert len(seen) == 1 and seen[0].method == "GET"
     assert seen[0].url.path == "/v1/models"
@@ -181,9 +203,230 @@ def test_connection_check_rejects_accounts_without_selectable_models() -> None:
         return httpx.Response(200, json={"data": [{"id": "mimo-v2.5-pro"}]})
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        result = check_connection("mimo", {"MIMO_API_KEY": "test"}, client=client)
+        result = check_connection(
+            "mimo",
+            {"MIMO_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
     assert result.state == "unavailable"
-    assert "selectable supported model" in result.message
+    assert "selected" in result.message.lower()
+
+
+def test_connection_check_requires_every_distinct_selected_model() -> None:
+    selections = StageModelSelections(
+        planner=ModelChoice.GPT_6_LUNA_HIGH,
+        scout=ModelChoice.GPT_6_LUNA_XHIGH,
+        gap_analysis=ModelChoice.GPT_6_SOL_HIGH,
+        search_agent=ModelChoice.GPT_6_SOL_HIGH,
+        source_selection=ModelChoice.GPT_6_LUNA_HIGH,
+        extractor=ModelChoice.GPT_6_LUNA_XHIGH,
+        analyst=ModelChoice.GPT_6_SOL_HIGH,
+    )
+
+    def luna_only(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json={"data": [{"id": "gpt-6-luna"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(luna_only)) as client:
+        missing_sol = check_connection(
+            "openai",
+            {"LUNA_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=selections,
+            client=client,
+        )
+    assert missing_sol.state == "unavailable"
+
+    def selected_models(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "gpt-6-luna"}, {"id": "gpt-6-sol"}]},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(selected_models)) as client:
+        available = check_connection(
+            "openai",
+            {"LUNA_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=selections,
+            client=client,
+        )
+    assert available.state == "connected"
+
+
+def test_connection_check_for_named_provider_ignores_other_selected_provider() -> None:
+    selections = StageModelSelections(
+        planner=ModelChoice.MIMO_V26_FLASH,
+        scout=ModelChoice.GPT_6_SOL_HIGH,
+        gap_analysis=ModelChoice.GPT_6_SOL_HIGH,
+        search_agent=ModelChoice.GPT_6_SOL_HIGH,
+        source_selection=ModelChoice.GPT_6_SOL_HIGH,
+        extractor=ModelChoice.GPT_6_SOL_HIGH,
+        analyst=ModelChoice.GPT_6_SOL_HIGH,
+    )
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": [{"id": "mimo-v2.6-flash"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection(
+            "mimo",
+            {"MIMO_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=selections,
+            client=client,
+        )
+    assert result.state == "connected"
+    assert len(seen) == 1
+    assert seen[0].url.host == "api.xiaomimimo.com"
+
+
+def test_connection_check_standard_profile_uses_historical_physical_models() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "gpt-5.6-luna"}, {"id": "gpt-6-luna"}]},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection(
+            "openai",
+            {"LUNA_API_KEY": "test"},
+            model_profile="standard-2026-09",
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert result.state == "connected"
+
+
+def test_connection_check_standard_mimo_requires_both_historical_models() -> None:
+    def pro_only(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json={"data": [{"id": "mimo-v2.5-pro"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(pro_only)) as client:
+        missing = check_connection(
+            "mimo",
+            {"MIMO_API_KEY": "test"},
+            model_profile="standard-2026-09",
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert missing.state == "unavailable"
+
+    def both_models(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "mimo-v2.5"}, {"id": "mimo-v2.5-pro"}]},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(both_models)) as client:
+        connected = check_connection(
+            "mimo",
+            {"MIMO_API_KEY": "test"},
+            model_profile="standard-2026-09",
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert connected.state == "connected"
+
+
+def test_connection_check_unselected_provider_makes_no_request() -> None:
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": [{"id": "mimo-v2.6-flash"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection(
+            "mimo",
+            {"MIMO_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert result.state == "unavailable"
+    assert "not selected" in result.message.lower()
+    assert seen == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"data": []},
+        {"data": [{"name": "gpt-6-luna"}]},
+        {"data": "malformed"},
+        {},
+    ],
+)
+def test_connection_check_requires_a_well_formed_selected_model_list(
+    payload: object,
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection(
+            "openai",
+            {"LUNA_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert result.state == "unavailable"
+    assert "not listed" in result.message.lower() or "could not be confirmed" in (
+        result.message.lower()
+    )
+
+
+def test_connection_check_custom_endpoint_makes_no_request() -> None:
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": [{"id": "gpt-6-luna"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection(
+            "openai",
+            {
+                "LUNA_API_KEY": "test",
+                "LUNA_BASE_URL": "https://gateway.example.test/v1",
+            },
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert result.state == "unavailable"
+    assert seen == []
+
+
+def test_connection_check_custom_model_override_makes_no_request() -> None:
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": [{"id": "gpt-6-luna"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = check_connection(
+            "openai",
+            {"LUNA_API_KEY": "test", "LUNA_MODEL": "gateway-deployment"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
+    assert result.state == "unavailable"
+    assert seen == []
 
 
 @pytest.mark.parametrize(
@@ -201,15 +444,39 @@ def test_connection_failures_are_sanitized(status: int, expected: str) -> None:
         return httpx.Response(status, text="private-secret-and-provider-detail")
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        result = check_connection("openai", {"LUNA_API_KEY": "test"}, client=client)
+        result = check_connection(
+            "openai",
+            {"LUNA_API_KEY": "test"},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+            client=client,
+        )
     assert result.state == expected
     assert "private-secret" not in result.model_dump_json()
 
 
 def test_source_presence_check_is_not_misrepresented_as_authentication() -> None:
-    assert check_connection("exa", {}).state == "missing"
-    result = check_connection("exa", {"EXA_API_KEY": "test"})
+    assert (
+        check_connection(
+            "exa",
+            {},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+        ).state
+        == "missing"
+    )
+    result = check_connection(
+        "exa",
+        {"EXA_API_KEY": "test"},
+        model_profile=CONFIGURABLE_PROFILE_ID,
+        stage_models=DEFAULT_STAGE_MODELS,
+    )
     assert result.state == "saved"
     assert "explicit research run" in result.message
     with pytest.raises(ValueError):
-        check_connection("unknown", {})
+        check_connection(
+            "unknown",
+            {},
+            model_profile=CONFIGURABLE_PROFILE_ID,
+            stage_models=DEFAULT_STAGE_MODELS,
+        )

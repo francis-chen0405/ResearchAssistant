@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from "motion/react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Configuration,
   DEFAULT_STAGE_MODELS,
@@ -195,6 +195,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+  const configurationRequestId = useRef(0);
 
   useEffect(() => {
     let disposed = false;
@@ -228,7 +229,9 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [providerPreferencesLoaded, settings]);
 
-  const refreshConfiguration = useCallback(async () => {
+  const refreshConfiguration = useCallback(async (signal?: AbortSignal) => {
+    const requestId = ++configurationRequestId.current;
+    const isCurrentRequest = () => requestId === configurationRequestId.current && !signal?.aborted;
     try {
       const result = await researchApi.configuration(settings.stageModels, {
         use_serpsearch: settings.useSerpSearch,
@@ -236,12 +239,13 @@ export default function Home() {
         use_openalex: settings.useOpenAlex,
         use_arxiv: settings.useArxiv,
         use_pubmed: settings.usePubmed,
-      });
+      }, signal);
+      if (!isCurrentRequest()) return;
       setConfiguration(result);
       setOffline(false);
       setSettings((current) => ({ ...current, dbPath: current.dbPath || result.default_db_path }));
     } catch {
-      setOffline(true);
+      if (isCurrentRequest()) setOffline(true);
     }
   }, [settings.stageModels, settings.useArxiv, settings.useExa, settings.useOpenAlex, settings.usePubmed, settings.useSerpSearch]);
 
@@ -259,8 +263,13 @@ export default function Home() {
   }, [settings.dbPath]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void refreshConfiguration(), 0);
-    return () => window.clearTimeout(timer);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void refreshConfiguration(controller.signal), 0);
+    return () => {
+      controller.abort();
+      configurationRequestId.current += 1;
+      window.clearTimeout(timer);
+    };
   }, [refreshConfiguration]);
   useEffect(() => {
     if (view !== "history") return;

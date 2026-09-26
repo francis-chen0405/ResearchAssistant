@@ -1,5 +1,32 @@
 # Current status
 
+## 2026-09-25 — CLI routing and selection-aware setup correction (worktree)
+
+Fresh-v2 CLI runs now pass configured endpoint and model settings to the existing
+selected-route validator. Unsupported overrides for a selected provider return the
+configuration-error exit code before provider construction or outbound requests;
+overrides for an entirely unused provider remain conditional. The explicit historical
+runner is unchanged. Provider connection checks now require every distinct physical
+model ID selected for the named provider, including the historical Standard profile's
+routes. The web check sends current stage choices and discards feedback from older
+choices. Direct checks without a body use saved preferences and do not claim readiness
+when those preferences are invalid.
+
+Direct GET `/api/configuration` now checks saved stage choices for the configurable
+profile, including when the profile query is omitted. Invalid saved preferences produce
+a sanitized non-ready response. Both API fallbacks that classified `TypeError` by its
+message were removed. The web configuration status ignores late success and failure
+responses after selection changes or unmount.
+
+Offline verification passed: 1,145 Python tests with two existing skips, Ruff lint and format,
+`git diff --check`, frontend ESLint and TypeScript, a webpack static export, the
+frontend interaction and polling browser smokes, and a new out-of-order configuration
+browser smoke. No paid
+provider call, dependency install, app package, installation, or publication was made.
+The default Turbopack build could not follow a dependency symlink outside this
+worktree; the webpack export passed. Real provider access and the known intermittent
+upgrade smoke remain unverified. Existing Mac-first release gates remain open.
+
 ## 2026-09-25 — GPT-6 Luna model choices and replacement app
 
 The two selectable GPT-5.6 Luna options were replaced by GPT-6 Luna High and XHigh.

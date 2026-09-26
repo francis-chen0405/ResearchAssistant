@@ -210,6 +210,13 @@ class ConfigurationCheckInput(StrictModel):
     use_pubmed: bool = False
 
 
+class ConnectionCheckInput(StrictModel):
+    """The exact model selection whose account access should be checked."""
+
+    model_profile: ProfileId
+    stage_models: StageModelSelections
+
+
 def _selected_discovery_providers(
     *,
     use_serpsearch: bool,
@@ -496,9 +503,36 @@ def create_app(
         return JSONResponse(status_code=422, content={"detail": "Invalid request fields."})
 
     @app.post("/api/credentials/{name}/check", response_model=ConnectionCheck)
-    def validate_connection(name: str) -> ConnectionCheck:
+    def validate_connection(
+        name: str, payload: ConnectionCheckInput | None = None
+    ) -> ConnectionCheck:
         try:
-            return check_connection(name, runtime.environment)
+            if payload is None:
+                try:
+                    interface = read_preferences().interface
+                    payload = ConnectionCheckInput(
+                        model_profile=interface.modelProfile,
+                        stage_models=interface.stageModels,
+                    )
+                except (OSError, ValueError, RuntimeError):
+                    if name in ("mimo", "openai"):
+                        return ConnectionCheck(
+                            provider=name,
+                            state="unavailable",
+                            message=(
+                                "Saved model selections could not be read. Review your settings."
+                            ),
+                        )
+                    payload = ConnectionCheckInput(
+                        model_profile=CONFIGURABLE_PROFILE_ID,
+                        stage_models=DEFAULT_STAGE_MODELS,
+                    )
+            return check_connection(
+                name,
+                runtime.environment,
+                model_profile=payload.model_profile,
+                stage_models=payload.stage_models,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail="Unknown provider.") from exc
 
@@ -577,28 +611,34 @@ def create_app(
             use_arxiv=use_arxiv,
             use_pubmed=use_pubmed,
         )
-        config_message = runtime.controller.configuration_message(
-            discovery_providers=discovery_providers,
-        )
-        if model_profile is not None:
+        selected_profile = model_profile
+        current_stage_models = DEFAULT_STAGE_MODELS
+        config_message: str | None = None
+        if selected_profile != STANDARD_PROFILE.id:
+            try:
+                saved_interface = read_preferences().interface
+                selected_profile = selected_profile or saved_interface.modelProfile
+                current_stage_models = saved_interface.stageModels
+            except (OSError, ValueError, RuntimeError):
+                config_message = "Saved model selections could not be read. Review your settings."
+        if config_message is None:
             selected_stage_models = (
-                DEFAULT_STAGE_MODELS if model_profile == CONFIGURABLE_PROFILE_ID else None
+                current_stage_models if selected_profile == CONFIGURABLE_PROFILE_ID else None
+            )
+            config_message = runtime.controller.configuration_message(
+                discovery_providers=discovery_providers,
+                model_profile=selected_profile,
+                stage_models=current_stage_models,
             )
             try:
                 V2ProductionFactoryConfig.from_environment(
                     profile_environment(
                         runtime.environment,
-                        model_profile,
+                        selected_profile,
                         stage_models=selected_stage_models,
                     ),
                     repository_revision=repository_identity(),
-                    discovery_providers=_selected_discovery_providers(
-                        use_serpsearch=use_serpsearch,
-                        use_exa=use_exa,
-                        use_openalex=use_openalex,
-                        use_arxiv=use_arxiv,
-                        use_pubmed=use_pubmed,
-                    ),
+                    discovery_providers=discovery_providers,
                     stage_models=selected_stage_models,
                 )
                 config_message = None
@@ -632,20 +672,11 @@ def create_app(
         selected_stage_models = (
             payload.stage_models if payload.model_profile == CONFIGURABLE_PROFILE_ID else None
         )
-        try:
-            config_message = runtime.controller.configuration_message(
-                discovery_providers=discovery_providers,
-                model_profile=payload.model_profile,
-                stage_models=payload.stage_models,
-            )
-        except TypeError as exc:
-            # Keep injected compatibility controllers usable while they adopt the
-            # selection-aware boundary. The real controller accepts these fields.
-            if "model_profile" not in str(exc) and "stage_models" not in str(exc):
-                raise
-            config_message = runtime.controller.configuration_message(
-                discovery_providers=discovery_providers,
-            )
+        config_message = runtime.controller.configuration_message(
+            discovery_providers=discovery_providers,
+            model_profile=payload.model_profile,
+            stage_models=payload.stage_models,
+        )
         try:
             V2ProductionFactoryConfig.from_environment(
                 profile_environment(
@@ -758,20 +789,11 @@ def create_app(
             use_arxiv=use_arxiv,
             use_pubmed=use_pubmed,
         )
-        try:
-            config_message = runtime.controller.configuration_message(
-                discovery_providers=discovery_providers,
-                model_profile=payload.model_profile,
-                stage_models=payload.stage_models,
-            )
-        except TypeError as exc:
-            # Keep injected compatibility controllers usable while they adopt the
-            # selection-aware boundary. The real controller accepts these fields.
-            if "model_profile" not in str(exc) and "stage_models" not in str(exc):
-                raise
-            config_message = runtime.controller.configuration_message(
-                discovery_providers=discovery_providers,
-            )
+        config_message = runtime.controller.configuration_message(
+            discovery_providers=discovery_providers,
+            model_profile=payload.model_profile,
+            stage_models=payload.stage_models,
+        )
         return CredentialSetupResponse(
             saved=True,
             configured=config_message is None,

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from credential_store import ProviderCredentials
-from frontend.api import ApiRuntime, create_app
+from desktop_settings import InterfaceSettings, Preferences
+from frontend.api import ApiRuntime, ConnectionCheck, create_app
 from frontend.live_service import (
     LiveHistoryItem,
     LiveRunRequest,
@@ -19,6 +21,12 @@ from frontend.live_service import (
 )
 from frontend.service_manager import ServiceDiagnostic
 from models import DiscoveryProvider
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    ModelChoice,
+    StageModelSelections,
+)
 
 
 class FakeController:
@@ -261,6 +269,212 @@ def test_credentials_readiness_receives_the_selected_model_mix() -> None:
     assert response.status_code == 200
     assert controller.selection_requests[-1][0] == "configurable-2026-09"
     assert controller.selection_requests[-1][1].model_dump(mode="json") == selected
+
+
+def test_provider_connection_check_receives_explicit_or_saved_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import frontend.api as api_module
+
+    client, _, _ = _client()
+    selected = StageModelSelections(
+        planner=ModelChoice.GPT_6_SOL_HIGH,
+        scout=ModelChoice.GPT_6_SOL_HIGH,
+        gap_analysis=ModelChoice.GPT_6_SOL_HIGH,
+        search_agent=ModelChoice.GPT_6_SOL_HIGH,
+        source_selection=ModelChoice.GPT_6_SOL_HIGH,
+        extractor=ModelChoice.GPT_6_SOL_HIGH,
+        analyst=ModelChoice.GPT_6_SOL_HIGH,
+    )
+    saved = StageModelSelections(
+        planner=ModelChoice.MIMO_V26_FLASH,
+        scout=ModelChoice.MIMO_V26_FLASH,
+        gap_analysis=ModelChoice.MIMO_V26_FLASH,
+        search_agent=ModelChoice.MIMO_V26_FLASH,
+        source_selection=ModelChoice.MIMO_V26_FLASH,
+        extractor=ModelChoice.MIMO_V26_FLASH,
+        analyst=ModelChoice.MIMO_V26_FLASH,
+    )
+
+    def saved_preferences() -> Preferences:
+        return Preferences(interface=InterfaceSettings(stageModels=saved))
+
+    monkeypatch.setattr(api_module, "read_preferences", saved_preferences)
+    seen: list[tuple[str, str, StageModelSelections]] = []
+
+    def check(
+        name: str,
+        environment: Mapping[str, str],
+        *,
+        model_profile: str,
+        stage_models: StageModelSelections,
+    ) -> ConnectionCheck:
+        del environment
+        seen.append((name, model_profile, stage_models))
+        return ConnectionCheck(provider=name, state="unavailable", message="Not ready.")
+
+    monkeypatch.setattr(api_module, "check_connection", check)
+    explicit = client.post(
+        "/api/credentials/openai/check",
+        json={
+            "model_profile": CONFIGURABLE_PROFILE_ID,
+            "stage_models": selected.model_dump(mode="json"),
+        },
+    )
+    saved_selection = client.post("/api/credentials/mimo/check")
+
+    assert explicit.status_code == 200
+    assert saved_selection.status_code == 200
+    assert seen == [
+        ("openai", CONFIGURABLE_PROFILE_ID, selected),
+        ("mimo", CONFIGURABLE_PROFILE_ID, saved),
+    ]
+
+
+def test_get_configuration_uses_saved_stage_model_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import frontend.api as api_module
+
+    client, controller, _ = _client()
+    controller.environment.update(
+        {
+            "MIMO_API_KEY": "test-mimo",
+            "EXA_API_KEY": "test-exa",
+            "LUNA_BASE_URL": "https://gateway.example.test/v1",
+        }
+    )
+    selected = StageModelSelections(
+        planner=ModelChoice.MIMO_V26_FLASH,
+        scout=ModelChoice.MIMO_V26_FLASH,
+        gap_analysis=ModelChoice.MIMO_V26_FLASH,
+        search_agent=ModelChoice.MIMO_V26_FLASH,
+        source_selection=ModelChoice.MIMO_V26_FLASH,
+        extractor=ModelChoice.MIMO_V26_FLASH,
+        analyst=ModelChoice.MIMO_V26_FLASH,
+    )
+
+    def saved_preferences() -> Preferences:
+        return Preferences(interface=InterfaceSettings(stageModels=selected))
+
+    monkeypatch.setattr(api_module, "read_preferences", saved_preferences)
+
+    response = client.get(
+        "/api/configuration",
+        params={
+            "model_profile": CONFIGURABLE_PROFILE_ID,
+            "use_serpsearch": "false",
+            "use_exa": "true",
+            "use_openalex": "false",
+            "use_arxiv": "false",
+            "use_pubmed": "false",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["configured"] is True
+    without_profile = client.get(
+        "/api/configuration",
+        params={
+            "use_serpsearch": "false",
+            "use_exa": "true",
+            "use_openalex": "false",
+            "use_arxiv": "false",
+            "use_pubmed": "false",
+        },
+    )
+    assert without_profile.status_code == 200
+    assert without_profile.json()["configured"] is True
+
+
+def test_get_configuration_is_not_ready_for_invalid_saved_preferences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import frontend.api as api_module
+
+    client, controller, _ = _client()
+    controller.environment.update({"MIMO_API_KEY": "test-mimo", "EXA_API_KEY": "test-exa"})
+
+    def invalid_preferences() -> Preferences:
+        raise ValueError("private invalid saved preference details")
+
+    monkeypatch.setattr(api_module, "read_preferences", invalid_preferences)
+
+    response = client.get("/api/configuration")
+
+    assert response.status_code == 200
+    assert response.json()["configured"] is False
+    assert "saved model selections could not be read" in response.json()["message"].lower()
+    assert "private invalid saved preference details" not in response.text
+
+
+def test_connection_check_without_body_is_unavailable_for_invalid_saved_preferences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import frontend.api as api_module
+
+    client, _, _ = _client()
+    called = False
+
+    def invalid_preferences() -> Preferences:
+        raise ValueError("invalid saved preference details")
+
+    def check(
+        name: str,
+        environment: Mapping[str, str],
+        *,
+        model_profile: str,
+        stage_models: StageModelSelections,
+    ) -> ConnectionCheck:
+        nonlocal called
+        del environment, model_profile, stage_models
+        called = True
+        return ConnectionCheck(provider=name, state="connected", message="Should not be used.")
+
+    monkeypatch.setattr(api_module, "read_preferences", invalid_preferences)
+    monkeypatch.setattr(api_module, "check_connection", check)
+
+    response = client.post("/api/credentials/openai/check")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "unavailable"
+    assert "saved model selections could not be read" in response.json()["message"].lower()
+    assert "invalid saved preference details" not in response.text
+    assert called is False
+
+
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        (
+            "/api/configuration/check",
+            {"model_profile": CONFIGURABLE_PROFILE_ID},
+        ),
+        ("/api/credentials", {"mimo_api_key": "test-mimo"}),
+    ],
+)
+def test_internal_type_error_is_not_treated_as_legacy_controller_signature(
+    path: str,
+    payload: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, controller, _ = _client()
+
+    def configuration_message(
+        *,
+        discovery_providers: tuple[DiscoveryProvider, ...] | None = None,
+        model_profile: str | None = None,
+        stage_models: StageModelSelections = DEFAULT_STAGE_MODELS,
+    ) -> str | None:
+        del discovery_providers, stage_models
+        if model_profile is not None:
+            raise TypeError("internal stage_models processing failed")
+        return None
+
+    monkeypatch.setattr(controller, "configuration_message", configuration_message)
+
+    with pytest.raises(TypeError, match="internal stage_models processing failed"):
+        client.post(path, json=payload)
 
 
 def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -> None:

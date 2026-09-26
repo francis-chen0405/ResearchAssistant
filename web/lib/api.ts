@@ -304,14 +304,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const researchApi = {
   profiles: () => request<ModelProfile[]>("/api/model-profiles"),
   modelOptions: () => request<ModelOptions>("/api/model-options"),
-  checkConnection: (name: string) => request<{ state: string; message: string }>(`/api/credentials/${name}/check`, { method: "POST" }),
+  checkConnection: (name: string, stageModels: StageModels) => request<{ state: string; message: string }>(`/api/credentials/${encodeURIComponent(name)}/check`, {
+    method: "POST",
+    body: JSON.stringify({ model_profile: "configurable-2026-09", stage_models: stageModels }),
+  }),
   importHistory: (source: string) => request<{ db_path: string; run_count: number }>(`/api/history/import?source=${encodeURIComponent(source)}`, { method: "POST" }),
   preferences: () => request<InterfaceSettings>("/api/preferences"),
   savePreferences: (settings: InterfaceSettings) => request<InterfaceSettings>("/api/preferences", { method: "POST", body: JSON.stringify(settings) }),
   removeCredential: (name: string) => request<{ removed: boolean }>(`/api/credentials/${encodeURIComponent(name)}/remove`, { method: "POST" }),
-  configuration: (stageModels: StageModels, selection: ProviderSelection) =>
+  configuration: (stageModels: StageModels, selection: ProviderSelection, signal?: AbortSignal) =>
     request<Configuration>("/api/configuration/check", {
       method: "POST",
+      signal,
       body: JSON.stringify({
         model_profile: "configurable-2026-09",
         stage_models: stageModels,

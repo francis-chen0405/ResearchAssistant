@@ -1,5 +1,46 @@
 # Handoff
 
+## 2026-09-25 CLI routing and selection-aware setup correction
+
+This bounded correction was made in a detached ResearchAssistant worktree at commit
+`833a39c`; it has not been installed or published. `cli.py` no longer replaces
+`LUNA_BASE_URL`, `MIMO_BASE_URL`, or `LUNA_MODEL` before fresh-v2 configuration.
+The selected-route validator rejects a custom route before bundle construction,
+returns the existing configuration-error exit code, and does not disclose API keys.
+An override for a provider unused by all seven stage selections remains allowed.
+The explicitly injected historical runner keeps its separate configuration path.
+
+`POST /api/credentials/{name}/check` accepts a strict body with `model_profile` and
+`stage_models`. The web sends its current choices. For model providers, a connected
+state means the key was accepted and every distinct selected physical model ID was
+listed by that provider. Luna High and XHigh deduplicate to one ID; Sol requires its
+own ID; Standard checks its historical Luna and both MiMo IDs. A model provider with
+no selected stage does not make an HTTP request or report connected. Direct requests
+without a body use saved preferences; unreadable preferences give a sanitized
+non-ready result. Source-provider key status remains presence-only. The provider
+setup UI clears feedback for old choices and ignores late check results.
+
+GET `/api/configuration` uses saved stage choices for a configurable profile, whether
+or not the query names that profile. Unreadable preferences give a sanitized
+non-ready result. The two string-matched `TypeError` compatibility catches in
+`frontend/api.py` were removed; controller calls use the typed boundary and an
+internal `TypeError` now propagates. The web configuration check uses an abort signal
+and request identity so late success and error responses cannot replace a newer
+selection's status, including on unmount.
+
+Verification: 1,145 Python tests with two existing skips and one existing
+Starlette/httpx deprecation warning; Ruff lint/format; `git diff --check`; frontend
+ESLint, TypeScript, webpack desktop static export, `desktop/frontend-smoke.cjs`,
+`desktop/frontend-poll-smoke.cjs`, and new
+`desktop/configuration-race-smoke.cjs` all passed. Browser smokes used mocked local
+API responses.
+The default Turbopack build could not follow a dependency symlink outside the
+worktree; the webpack export passed. No paid provider calls, credential installation,
+dependency install, app packaging, installation, or publication occurred. The
+intermittent upgrade smoke was not part of this correction and remains an unreliable
+release gate. Real provider access and the existing Mac-first public-release gates
+remain unverified.
+
 ## 2026-09-25 GPT-6 Luna model choices and replacement app
 
 The active selectable GPT-5.6 Luna choices are now GPT-6 Luna High and XHigh, both routed

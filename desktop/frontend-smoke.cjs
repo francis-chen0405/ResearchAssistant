@@ -36,7 +36,7 @@ async function main() {
       else if(p==='/api/configuration/check') { assert.equal(req.method(),'POST'); const payload=req.postDataJSON(); assert.equal(payload.model_profile,'configurable-2026-09'); assert.equal(Object.keys(payload.stage_models).length,7); preferences.stageModels=payload.stage_models; const required=new Set(Object.values(payload.stage_models).map(choice=>choice.startsWith('mimo-')?'mimo':'openai')); body={configured:[...required].every(provider=>saved.includes(provider)),message:'Offline test configuration',default_db_path:preferences.dbPath,saved_credentials:saved,saved_settings:[],firecrawl_enabled:false,service:{wigolo_ready:true,state:'healthy',message:'Research tools ready'}}; }
       else if(p==='/api/model-profiles') body=[{id:'configurable-2026-09',name:'Choose each research model',description:'Six supported choices for each active model step',pricing_reviewed:'2026-09-25',models:[{model:'gpt-6-luna-high',roles:'Any active model step',input_per_million:'0.25',output_per_million:'0.75',completion_limit:16384},{model:'mimo-v2.6-flash',roles:'Any active model step',input_per_million:'0.15',output_per_million:'0.30',completion_limit:16384}]}];
       else if(p==='/api/credentials') { const keys=req.postDataJSON(); assert.equal(keys.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(keys.stage_models),Array(7).fill('mimo-v2.6-flash')); assert.equal(keys.mimo_api_key,'offline-mimo-key'); assert.equal(keys.luna_api_key,undefined); saved=['mimo']; body={saved:true,message:'Saved',saved_settings:[]}; }
-      else if(p.endsWith('/check')) { checked++; body={state:'connected',message:'Key accepted and supported models listed. No text was generated.'}; }
+      else if(p.endsWith('/check')) { assert.equal(req.method(),'POST'); const payload=req.postDataJSON(); assert.equal(payload.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(payload.stage_models),Array(7).fill('mimo-v2.6-flash')); checked++; body={state:'connected',message:'Key accepted and selected model IDs listed. No text was generated.'}; }
       else if(p.endsWith('/remove')) { removed++; saved=saved.filter(s=>s!=='mimo'); body={removed:true}; }
       else if(p==='/api/research/start') { started=req.postDataJSON(); run='running'; body={started:true,run_id:id,classification:'starting',message:'Research started.'}; }
       else if(p.endsWith('/cancel')) { run='cancelled'; body={cancelled:true,message:'Cancellation requested.'}; }
@@ -102,7 +102,7 @@ async function main() {
     for(const input of await dialog.locator('input[type=password]').all()) assert.equal(await input.inputValue(),'');
     assert.equal(await page.evaluate(()=>localStorage.length),0);
     await dialog.getByRole('button',{name:'Check connection',exact:true}).first().click();
-    await dialog.getByText(/Key accepted and supported models/).waitFor(); assert.equal(checked,1);
+    await dialog.getByText(/Key accepted and selected model IDs/).waitFor(); assert.equal(checked,1);
     await page.screenshot({path:path.join(shots,'provider-settings.png'),fullPage:true,animations:'disabled'});
     console.log('Verified preview and provider setup');
     // Native dialog keyboard containment and Escape restoration.

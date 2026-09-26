@@ -39,7 +39,6 @@ from orchestrator import (
 )
 from pipeline_compatibility import LegacyPipelineRunner
 from providers.config import (
-    OFFICIAL_OPENAI_BASE_URL,
     ProviderConfigurationError,
     RunCeilings,
     WigoloConfig,
@@ -233,12 +232,8 @@ def _run_live_command(
                 )
             )
         else:
-            selected_environment = dict(environment)
-            selected_environment["LUNA_BASE_URL"] = OFFICIAL_OPENAI_BASE_URL
-            selected_environment["MIMO_BASE_URL"] = "https://api.xiaomimimo.com/v1"
-            selected_environment["LUNA_MODEL"] = "gpt-6-luna"
             factory_config = V2ProductionFactoryConfig.from_environment(
-                selected_environment,
+                environment,
                 repository_revision=repository_revision,
                 wigolo=wigolo,
                 discovery_providers=controls.discovery_providers,
