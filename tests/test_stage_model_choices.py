@@ -159,11 +159,25 @@ def test_every_stage_choice_uses_its_selected_mock_transport(
 def test_default_selections_and_catalog_are_exact() -> None:
     assert len(MODEL_OPTIONS) == 6
     assert {option.id for option in MODEL_OPTIONS} == set(ModelChoice)
-    assert DEFAULT_STAGE_MODELS.scout is ModelChoice.GPT_5_6_LUNA_HIGH
-    assert DEFAULT_STAGE_MODELS.extractor is ModelChoice.GPT_5_6_LUNA_HIGH
+    assert DEFAULT_STAGE_MODELS.scout is ModelChoice.GPT_6_LUNA_HIGH
+    assert DEFAULT_STAGE_MODELS.extractor is ModelChoice.GPT_6_LUNA_HIGH
     for stage in ACTIVE_MODEL_STAGES:
         if stage not in (LLMStage.SCOUT, LLMStage.EXTRACTOR):
-            assert DEFAULT_STAGE_MODELS.for_stage(stage) is ModelChoice.GPT_5_6_LUNA_XHIGH
+            assert DEFAULT_STAGE_MODELS.for_stage(stage) is ModelChoice.GPT_6_LUNA_XHIGH
+    assert "gpt-5.6-luna-high" not in {choice.value for choice in ModelChoice}
+    assert "gpt-5.6-luna-xhigh" not in {choice.value for choice in ModelChoice}
+    for choice, effort in (
+        (ModelChoice.GPT_6_LUNA_HIGH, "high"),
+        (ModelChoice.GPT_6_LUNA_XHIGH, "xhigh"),
+    ):
+        option = option_for(choice)
+        assert option.model == "gpt-6-luna"
+        assert option.reasoning_effort == effort
+        assert option.input_per_million == Decimal("0.10")
+        assert option.cached_input_per_million == Decimal("0.01")
+        assert option.output_per_million == Decimal("0.50")
+        assert option.input_cap_per_million == Decimal("0.25")
+        assert option.output_cap_per_million == Decimal("0.75")
     with pytest.raises(ValidationError):
         StageModelSelections(planner="unknown")
     with pytest.raises(ValidationError):
@@ -188,6 +202,22 @@ def test_credentials_are_required_only_for_selected_providers() -> None:
     )
     with pytest.raises(ProviderConfigurationError, match="OpenAI API key"):
         V2RoutingConfig.from_environment({}, repository_revision="test", stage_models=mixed)
+
+
+def test_selected_openai_route_accepts_luna6_marker_and_legacy_luna5_marker() -> None:
+    for marker in ("gpt-6-luna", "gpt-5.6-luna"):
+        routing = V2RoutingConfig.from_environment(
+            {"LUNA_API_KEY": "test-openai", "LUNA_MODEL": marker},
+            repository_revision="test",
+            stage_models=DEFAULT_STAGE_MODELS,
+        )
+        assert routing.configuration_for_stage(LLMStage.SCOUT).route.physical_model == "gpt-6-luna"
+    with pytest.raises(ProviderConfigurationError, match="standard OpenAI model override"):
+        V2RoutingConfig.from_environment(
+            {"LUNA_API_KEY": "test-openai", "LUNA_MODEL": "custom-model"},
+            repository_revision="test",
+            stage_models=DEFAULT_STAGE_MODELS,
+        )
 
 
 def test_choice_fingerprint_and_price_catalog_are_model_specific() -> None:
@@ -223,10 +253,19 @@ def test_choice_fingerprint_and_price_catalog_are_model_specific() -> None:
 
 
 def test_cli_model_overrides_and_rejections() -> None:
-    selected = _parse_stage_models(["planner=gpt-6-sol-high", "analyst=mimo-v2.6-pro"])
-    assert selected.planner is ModelChoice.GPT_6_SOL_HIGH
+    selected = _parse_stage_models(
+        [
+            "planner=gpt-6-luna-xhigh",
+            "scout=gpt-6-luna-high",
+            "source_selection=gpt-6-sol-high",
+            "analyst=mimo-v2.6-pro",
+        ]
+    )
+    assert selected.planner is ModelChoice.GPT_6_LUNA_XHIGH
+    assert selected.scout is ModelChoice.GPT_6_LUNA_HIGH
+    assert selected.source_selection is ModelChoice.GPT_6_SOL_HIGH
     assert selected.analyst is ModelChoice.MIMO_V26_PRO
-    assert selected.scout is ModelChoice.GPT_5_6_LUNA_HIGH
+    assert selected.extractor is ModelChoice.GPT_6_LUNA_HIGH
     with pytest.raises(ValueError, match="repeated"):
         _parse_stage_models(["planner=gpt-6-sol-high", "planner=mimo-v2.6-pro"])
     with pytest.raises(ValueError, match="unsupported"):

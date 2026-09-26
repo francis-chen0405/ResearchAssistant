@@ -108,7 +108,7 @@ exact claim + enabled directions + frozen configuration
   → deterministic final validation → rendered output and release hash
 ```
 
-Each of the seven active model steps uses its frozen choice from Luna High/XHigh, MiMo
+Each of the seven active model steps uses its frozen choice from GPT-6 Luna High/XHigh, MiMo
 v2.6 Pro/Flash, Sol High and Terra High. Scout and exact Extractor default to Luna High;
 the other five default to Luna XHigh. Fresh desktop, API and ordinary CLI requests share
 these defaults. The historical Standard profile retains its earlier Scout MiMo-v2.5,

@@ -236,7 +236,7 @@ def _run_live_command(
             selected_environment = dict(environment)
             selected_environment["LUNA_BASE_URL"] = OFFICIAL_OPENAI_BASE_URL
             selected_environment["MIMO_BASE_URL"] = "https://api.xiaomimimo.com/v1"
-            selected_environment["LUNA_MODEL"] = "gpt-5.6-luna"
+            selected_environment["LUNA_MODEL"] = "gpt-6-luna"
             factory_config = V2ProductionFactoryConfig.from_environment(
                 selected_environment,
                 repository_revision=repository_revision,

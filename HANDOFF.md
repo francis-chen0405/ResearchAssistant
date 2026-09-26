@@ -1,5 +1,64 @@
 # Handoff
 
+## 2026-09-25 GPT-6 Luna model choices and replacement app
+
+The active selectable GPT-5.6 Luna choices are now GPT-6 Luna High and XHigh, both routed
+to `gpt-6-luna` with the selected reasoning effort. Scout and exact Extractor default to
+High; the remaining five model stages default to XHigh. The other four choices remain
+selectable. Saved desktop stage IDs migrate on read. Historical Standard profile records,
+the low-level v2 compatibility route used without explicit stage selections, and stored run
+identities remain compatible.
+An explicit Standard-profile API request still selects its historical GPT-5.6 Luna route;
+new configurable requests use GPT-6 Luna defaults.
+
+All 42 stage/choice routes pass through the mocked provider API tests, alongside model
+options, selected-provider readiness, pricing, preference migration and fingerprint checks.
+Full verification passed: 1,124 Python tests (two existing skips), Ruff lint/format,
+diff whitespace, frontend ESLint/TypeScript/static export, and the offline interaction and
+polling browser checks. A final GPT-5.6 Luna High helper audit confirmed no active-route
+findings. No provider API calls or credits were used.
+
+The verified arm64 bundle replaced `/Applications/ResearchAssistant.app`; the packaged
+`app.asar` and frontend entrypoint were compared after installation. The prior app bundle
+is preserved at `/private/tmp/ResearchAssistant-before-gpt6-luna-20260925.app`.
+
+Artifacts are in `desktop/dist/model-choices/`:
+
+- `ResearchAssistant-0.1.0-arm64.dmg`: SHA-256
+  `28148c5b9f344cca80680fccb4d957a23b32506dac260dae1f32648b351f447e`
+- `ResearchAssistant-0.1.0-arm64-mac.zip`: SHA-256
+  `ac12dd54ba22ddb94cdf057449480490859041310b1403617c34b468c4c12570`
+
+The ZIP integrity test and DMG checksum verification passed. Independent review confirmed
+GPT-6 Luna selectors/defaults and that the only GPT-5.6 Luna frontend references are
+compatibility migration/restore paths. The low-level no-selection v2 route also retains its
+older model for explicitly requested Standard runs and existing direct-v2 configuration
+fingerprints. The isolated frozen credential smoke could not complete because macOS
+Keychain returned `-60008`; a separate frozen loopback API smoke timed out. Neither check
+called a provider. The app remains unsigned. Signing/notarization,
+clean-machine installation, minimum-OS and current-version Windows checks remain open.
+
+## Earlier 2026-09-25 per-step model-choice Mac app delivery
+
+The current app is installed at `/Applications/ResearchAssistant.app` from the verified
+arm64 package. There was no app at that path immediately before installation. The ZIP
+integrity and DMG checksum checks passed. Packaged and installed window smokes and the
+installed frozen-backend smoke passed with isolated data; the installed `app.asar` matched
+the package. The existing `live-runs.sqlite3` and `preferences.json` checksums did not
+change during installation or smoke testing. No paid provider calls were made.
+
+Artifacts are in `desktop/dist/model-choices/`:
+
+- `ResearchAssistant-0.1.0-arm64.dmg`: SHA-256
+  `7a89263185c1bb1d69d99a78cffaad2d50337d1cab3449d005a903081c668397`
+- `ResearchAssistant-0.1.0-arm64-mac.zip`: SHA-256
+  `5e1f9e3d37fa39d2fe7c8a471bd1be07e2975a4d52ef2693ae6850ee237b451e`
+
+The build is unsigned. Signing/notarization, clean-machine installation, minimum-OS and
+current-version Windows checks remain release gates. The intermittent upgrade-smoke
+startup timeout described below remains unresolved. The next phase should preserve those
+gates and avoid paid provider verification without explicit direction.
+
 ## 2026-09-23 Per-step model choices and confirmed audit fixes
 
 The current implementation authority is the [per-step model choices plan](.agent/plans/per-step-model-choices.md).

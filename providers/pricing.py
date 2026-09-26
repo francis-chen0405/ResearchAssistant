@@ -65,7 +65,7 @@ class CacheTokenPrices(StrictModel):
 def cache_prices_for_route(base_url: str, model: str) -> CacheTokenPrices | None:
     """No published discount is inferred for custom endpoints or unknown models.
 
-    Reviewed 2026-09-23 for the selected OpenAI and MiMo models. Source URLs and
+    Reviewed 2026-09-25 for the selected OpenAI and MiMo models. Source URLs and
     fallback rules are in docs/model-settings.md.
     """
     for option in MODEL_OPTIONS:

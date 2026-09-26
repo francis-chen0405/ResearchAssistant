@@ -21,7 +21,9 @@ from models import (
 )
 from orchestrator import ProviderPipelineResult, ProviderRunStatus
 from providers.config import RunCeilings
+from providers.llm import LLMStage
 from providers.mimo_factory import MimoProviderFactoryConfig
+from providers.model_choices import DEFAULT_STAGE_MODELS
 from providers.v2_budget import V2BudgetSnapshot
 from providers.v2_factory import V2ProductionFactoryConfig
 from v2_orchestrator import (
@@ -165,6 +167,11 @@ def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
     assert legacy_calls == []
     assert len(bundle_calls) == 1
     assert bundle_calls[0].routing.repository_revision == IDENTITY
+    assert bundle_calls[0].routing.stage_models == DEFAULT_STAGE_MODELS
+    assert (
+        bundle_calls[0].routing.configuration_for_stage(LLMStage.SCOUT).route.physical_model
+        == "gpt-6-luna"
+    )
     assert len(pipeline_calls) == 1
     raw_claim, kwargs = pipeline_calls[0]
     assert raw_claim == CLAIM

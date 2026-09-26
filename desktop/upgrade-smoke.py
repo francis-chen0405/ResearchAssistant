@@ -15,13 +15,13 @@ import httpx
 from smoke import startup_line
 
 EXPECTED_CONFIGURABLE_STAGE_MODELS = {
-    "planner": "gpt-5.6-luna-xhigh",
-    "scout": "gpt-5.6-luna-high",
-    "gap_analysis": "gpt-5.6-luna-xhigh",
-    "search_agent": "gpt-5.6-luna-xhigh",
-    "source_selection": "gpt-5.6-luna-xhigh",
-    "extractor": "gpt-5.6-luna-high",
-    "analyst": "gpt-5.6-luna-xhigh",
+    "planner": "gpt-6-luna-xhigh",
+    "scout": "gpt-6-luna-high",
+    "gap_analysis": "gpt-6-luna-xhigh",
+    "search_agent": "gpt-6-luna-xhigh",
+    "source_selection": "gpt-6-luna-xhigh",
+    "extractor": "gpt-6-luna-high",
+    "analyst": "gpt-6-luna-xhigh",
 }
 
 

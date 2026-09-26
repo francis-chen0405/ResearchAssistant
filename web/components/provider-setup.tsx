@@ -6,7 +6,7 @@ import { StatusPill } from "./workspace";
 
 const providers = [
   { id: "mimo", field: "mimo_api_key", vault: "MIMO_API_KEY", name: "Xiaomi MiMo", description: "Finds, selects and extracts research. Required." },
-  { id: "openai", field: "luna_api_key", vault: "LUNA_API_KEY", name: "OpenAI", description: "Luna High checks gaps and analyzes evidence. Required." },
+  { id: "openai", field: "luna_api_key", vault: "LUNA_API_KEY", name: "OpenAI", description: "Provides the selected GPT models for your research roles." },
   { id: "serpsearch", field: "serpsearch_api_key", vault: "SERPSEARCH_API_KEY", name: "SERP Search", description: "Web search. Required when selected." },
   { id: "exa", field: "exa_api_key", vault: "EXA_API_KEY", name: "Exa", description: "Search by meaning. Required when selected." },
   { id: "openalex", field: "openalex_api_key", vault: "OPENALEX_API_KEY", name: "OpenAlex", description: "Scholarly literature. Required when selected." },

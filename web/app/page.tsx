@@ -138,8 +138,8 @@ function understandableConfigurationMessage(message: string): string {
 }
 
 const defaultModelOptions: ModelOption[] = [
-  { id: "gpt-5.6-luna-high", label: "GPT-5.6 Luna · High", provider: "openai", input_per_million: "", output_per_million: "" },
-  { id: "gpt-5.6-luna-xhigh", label: "GPT-5.6 Luna · XHigh", provider: "openai", input_per_million: "", output_per_million: "" },
+  { id: "gpt-6-luna-high", label: "GPT-6 Luna · High", provider: "openai", input_per_million: "", output_per_million: "" },
+  { id: "gpt-6-luna-xhigh", label: "GPT-6 Luna · XHigh", provider: "openai", input_per_million: "", output_per_million: "" },
   { id: "mimo-v2.6-pro", label: "MiMo v2.6 · Pro", provider: "mimo", input_per_million: "", output_per_million: "" },
   { id: "mimo-v2.6-flash", label: "MiMo v2.6 · Flash", provider: "mimo", input_per_million: "", output_per_million: "" },
   { id: "gpt-6-sol-high", label: "GPT-6 Sol · High", provider: "openai", input_per_million: "", output_per_million: "" },

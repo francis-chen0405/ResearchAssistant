@@ -415,7 +415,10 @@ def _selected_stage_configurations(
         != "https://api.xiaomimimo.com/v1"
     ):
         raise ProviderConfigurationError("Selected MiMo models require the official API endpoint")
-    if needs_openai and environment.get("LUNA_MODEL", "gpt-5.6-luna") != "gpt-5.6-luna":
+    if needs_openai and environment.get("LUNA_MODEL", "gpt-6-luna") not in {
+        "gpt-5.6-luna",
+        "gpt-6-luna",
+    }:
         raise ProviderConfigurationError("Restore the standard OpenAI model override first")
     configurations: list[V2StageConfiguration] = []
     for stage, option in zip(ACTIVE_MODEL_STAGES, selected, strict=True):

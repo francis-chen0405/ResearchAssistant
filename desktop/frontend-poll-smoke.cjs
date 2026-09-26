@@ -38,13 +38,13 @@ async function main() {
     let preferences = {
       modelProfile: "configurable-2026-09",
       stageModels: {
-        planner: "gpt-5.6-luna-xhigh",
-        scout: "gpt-5.6-luna-high",
-        gap_analysis: "gpt-5.6-luna-xhigh",
-        search_agent: "gpt-5.6-luna-xhigh",
-        source_selection: "gpt-5.6-luna-xhigh",
-        extractor: "gpt-5.6-luna-high",
-        analyst: "gpt-5.6-luna-xhigh",
+        planner: "gpt-6-luna-xhigh",
+        scout: "gpt-6-luna-high",
+        gap_analysis: "gpt-6-luna-xhigh",
+        search_agent: "gpt-6-luna-xhigh",
+        source_selection: "gpt-6-luna-xhigh",
+        extractor: "gpt-6-luna-high",
+        analyst: "gpt-6-luna-xhigh",
       },
       dbPath: database,
       maxTokens: 500000,
@@ -120,13 +120,26 @@ async function main() {
       } else if (pathname === "/api/model-options") {
         body = {
           choices: [
-            ["gpt-5.6-luna-high", "GPT-5.6 Luna · High", "openai"],
-            ["gpt-5.6-luna-xhigh", "GPT-5.6 Luna · XHigh", "openai"],
+            ["gpt-6-luna-high", "GPT-6 Luna · High", "openai"],
+            ["gpt-6-luna-xhigh", "GPT-6 Luna · XHigh", "openai"],
             ["mimo-v2.6-pro", "MiMo v2.6 Pro", "mimo"],
             ["mimo-v2.6-flash", "MiMo v2.6 Flash", "mimo"],
             ["gpt-6-sol-high", "GPT-6 Sol · High", "openai"],
             ["gpt-5.6-terra-high", "GPT-5.6 Terra · High", "openai"],
-          ].map(([id, label, provider]) => ({ id, label, provider, input_per_million: "0.20", output_per_million: "1.20" })),
+          ].map(([id, label, provider]) => ({
+            id,
+            label,
+            provider,
+            input_per_million:
+              id === "mimo-v2.6-pro" ? "0.435" :
+              id === "mimo-v2.6-flash" ? "0.14" :
+              id.startsWith("gpt-6-luna-") ? "0.10" : "2.00",
+            output_per_million:
+              id === "mimo-v2.6-pro" ? "0.87" :
+              id === "mimo-v2.6-flash" ? "0.28" :
+              id === "gpt-6-sol-high" ? "10.00" :
+              id === "gpt-5.6-terra-high" ? "12.00" : "0.50",
+          })),
           defaults: preferences.stageModels,
         };
       } else if (pathname === "/api/configuration/check") {

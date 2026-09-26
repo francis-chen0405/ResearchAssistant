@@ -79,6 +79,33 @@ def test_old_preferences_upgrade_without_losing_data(tmp_path: Path) -> None:
     assert updated.provider_settings == saved.provider_settings
 
 
+def test_saved_luna_56_stage_choices_migrate_to_luna_6(tmp_path: Path) -> None:
+    path = tmp_path / "preferences.json"
+    path.write_text(
+        '{"version":1,"interface":{"stageModels":{'
+        '"planner":"gpt-5.6-luna-xhigh",'
+        '"scout":"gpt-5.6-luna-high",'
+        '"gap_analysis":"gpt-5.6-luna-xhigh",'
+        '"search_agent":"mimo-v2.6-pro",'
+        '"source_selection":"gpt-6-sol-high",'
+        '"extractor":"gpt-5.6-luna-high",'
+        '"analyst":"gpt-5.6-terra-high"}}}'
+    )
+
+    saved = read_preferences(path)
+
+    assert saved.interface.stageModels.model_dump(mode="json") == {
+        "planner": "gpt-6-luna-xhigh",
+        "scout": "gpt-6-luna-high",
+        "gap_analysis": "gpt-6-luna-xhigh",
+        "search_agent": "mimo-v2.6-pro",
+        "source_selection": "gpt-6-sol-high",
+        "extractor": "gpt-6-luna-high",
+        "analyst": "gpt-5.6-terra-high",
+    }
+    assert path.read_text().find("gpt-5.6-luna") >= 0
+
+
 def test_preflight_reserves_real_planner_prompt_offline(tmp_path: Path) -> None:
     environment = {"MIMO_API_KEY": "test-mimo", "LUNA_API_KEY": "test-luna"}
     request = LiveRunRequest(
@@ -127,7 +154,7 @@ def test_profile_response_allowances_are_reserved_and_fingerprinted() -> None:
     "provider,secret_name,model",
     [
         ("mimo", "MIMO_API_KEY", "mimo-v2.6-flash"),
-        ("openai", "LUNA_API_KEY", "gpt-6-sol"),
+        ("openai", "LUNA_API_KEY", "gpt-6-luna"),
     ],
 )
 def test_connection_check_never_generates_or_returns_secrets(

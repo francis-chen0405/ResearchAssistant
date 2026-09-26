@@ -222,8 +222,8 @@ export const STAGE_MODEL_KEYS = [
 
 export type StageModelKey = (typeof STAGE_MODEL_KEYS)[number];
 export type ModelChoiceId =
-  | "gpt-5.6-luna-high"
-  | "gpt-5.6-luna-xhigh"
+  | "gpt-6-luna-high"
+  | "gpt-6-luna-xhigh"
   | "mimo-v2.6-pro"
   | "mimo-v2.6-flash"
   | "gpt-6-sol-high"
@@ -231,13 +231,13 @@ export type ModelChoiceId =
 export type StageModels = Record<StageModelKey, ModelChoiceId>;
 
 export const DEFAULT_STAGE_MODELS: StageModels = {
-  planner: "gpt-5.6-luna-xhigh",
-  scout: "gpt-5.6-luna-high",
-  gap_analysis: "gpt-5.6-luna-xhigh",
-  search_agent: "gpt-5.6-luna-xhigh",
-  source_selection: "gpt-5.6-luna-xhigh",
-  extractor: "gpt-5.6-luna-high",
-  analyst: "gpt-5.6-luna-xhigh",
+  planner: "gpt-6-luna-xhigh",
+  scout: "gpt-6-luna-high",
+  gap_analysis: "gpt-6-luna-xhigh",
+  search_agent: "gpt-6-luna-xhigh",
+  source_selection: "gpt-6-luna-xhigh",
+  extractor: "gpt-6-luna-high",
+  analyst: "gpt-6-luna-xhigh",
 };
 
 export type ModelOption = {

@@ -488,8 +488,16 @@ def test_model_options_and_selection_aware_configuration_check_are_offline() -> 
         "input_per_million",
         "output_per_million",
     } == set(payload["choices"][0])
-    assert payload["defaults"]["scout"] == "gpt-5.6-luna-high"
-    assert payload["defaults"]["planner"] == "gpt-5.6-luna-xhigh"
+    assert payload["defaults"]["scout"] == "gpt-6-luna-high"
+    assert payload["defaults"]["planner"] == "gpt-6-luna-xhigh"
+    luna_choices = {
+        choice["id"]: choice
+        for choice in payload["choices"]
+        if choice["id"].startswith("gpt-6-luna-")
+    }
+    assert set(luna_choices) == {"gpt-6-luna-high", "gpt-6-luna-xhigh"}
+    assert all(choice["input_per_million"] == "0.10" for choice in luna_choices.values())
+    assert all(choice["output_per_million"] == "0.50" for choice in luna_choices.values())
 
     checked = client.post(
         "/api/configuration/check",

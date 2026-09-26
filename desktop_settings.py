@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -61,6 +62,11 @@ SETTING_NAMES = frozenset(
     }
 )
 
+_MIGRATED_STAGE_MODEL_CHOICES = {
+    "gpt-5.6-luna-high": "gpt-6-luna-high",
+    "gpt-5.6-luna-xhigh": "gpt-6-luna-xhigh",
+}
+
 
 class Preferences(StrictModel):
     version: Literal[1] = 1
@@ -79,7 +85,19 @@ def read_preferences(path: Path | None = None) -> Preferences:
     path = path or application_data_dir() / "preferences.json"
     if not path.exists():
         return Preferences()
-    preferences = Preferences.model_validate_json(path.read_text(encoding="utf-8"))
+    payload: object = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        interface = payload.get("interface")
+        if isinstance(interface, dict):
+            stage_models = interface.get("stageModels")
+            if isinstance(stage_models, dict):
+                interface["stageModels"] = {
+                    stage: _MIGRATED_STAGE_MODEL_CHOICES.get(choice, choice)
+                    if isinstance(choice, str)
+                    else choice
+                    for stage, choice in stage_models.items()
+                }
+    preferences = Preferences.model_validate(payload)
     if preferences.interface.modelProfile == "standard-2026-09":
         migrated_interface = preferences.interface.model_copy(
             update={"modelProfile": CONFIGURABLE_PROFILE_ID}

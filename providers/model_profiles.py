@@ -68,7 +68,7 @@ CONFIGURABLE_PROFILE = ModelProfile(
     id=CONFIGURABLE_PROFILE_ID,
     name="Choose each research model",
     description="Six supported choices for each active model step",
-    pricing_reviewed="2026-09-23",
+    pricing_reviewed="2026-09-25",
     models=tuple(
         SupportedModel(
             model=option.id.value,

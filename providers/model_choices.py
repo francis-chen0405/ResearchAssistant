@@ -15,8 +15,8 @@ CONFIGURABLE_PROFILE_ID = "configurable-2026-09"
 
 
 class ModelChoice(StrEnum):
-    GPT_5_6_LUNA_HIGH = "gpt-5.6-luna-high"
-    GPT_5_6_LUNA_XHIGH = "gpt-5.6-luna-xhigh"
+    GPT_6_LUNA_HIGH = "gpt-6-luna-high"
+    GPT_6_LUNA_XHIGH = "gpt-6-luna-xhigh"
     MIMO_V26_PRO = "mimo-v2.6-pro"
     MIMO_V26_FLASH = "mimo-v2.6-flash"
     GPT_6_SOL_HIGH = "gpt-6-sol-high"
@@ -28,13 +28,13 @@ class StageModelSelections(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    planner: ModelChoice = ModelChoice.GPT_5_6_LUNA_XHIGH
-    scout: ModelChoice = ModelChoice.GPT_5_6_LUNA_HIGH
-    gap_analysis: ModelChoice = ModelChoice.GPT_5_6_LUNA_XHIGH
-    search_agent: ModelChoice = ModelChoice.GPT_5_6_LUNA_XHIGH
-    source_selection: ModelChoice = ModelChoice.GPT_5_6_LUNA_XHIGH
-    extractor: ModelChoice = ModelChoice.GPT_5_6_LUNA_HIGH
-    analyst: ModelChoice = ModelChoice.GPT_5_6_LUNA_XHIGH
+    planner: ModelChoice = ModelChoice.GPT_6_LUNA_XHIGH
+    scout: ModelChoice = ModelChoice.GPT_6_LUNA_HIGH
+    gap_analysis: ModelChoice = ModelChoice.GPT_6_LUNA_XHIGH
+    search_agent: ModelChoice = ModelChoice.GPT_6_LUNA_XHIGH
+    source_selection: ModelChoice = ModelChoice.GPT_6_LUNA_XHIGH
+    extractor: ModelChoice = ModelChoice.GPT_6_LUNA_HIGH
+    analyst: ModelChoice = ModelChoice.GPT_6_LUNA_XHIGH
 
     def for_stage(self, stage: LLMStage) -> ModelChoice:
         if stage in (LLMStage.REVIEWER, LLMStage.SYNTHESIZER):
@@ -71,28 +71,28 @@ class ModelOption(StrictModel):
 
 MODEL_OPTIONS = (
     ModelOption(
-        id=ModelChoice.GPT_5_6_LUNA_HIGH,
-        label="GPT-5.6 Luna · High",
+        id=ModelChoice.GPT_6_LUNA_HIGH,
+        label="GPT-6 Luna · High",
         provider="openai",
-        model="gpt-5.6-luna",
+        model="gpt-6-luna",
         reasoning_effort="high",
-        input_per_million=Decimal("0.20"),
-        cached_input_per_million=Decimal("0.02"),
-        output_per_million=Decimal("1.20"),
-        input_cap_per_million=Decimal("0.50"),
-        output_cap_per_million=Decimal("1.80"),
+        input_per_million=Decimal("0.10"),
+        cached_input_per_million=Decimal("0.01"),
+        output_per_million=Decimal("0.50"),
+        input_cap_per_million=Decimal("0.25"),
+        output_cap_per_million=Decimal("0.75"),
     ),
     ModelOption(
-        id=ModelChoice.GPT_5_6_LUNA_XHIGH,
-        label="GPT-5.6 Luna · XHigh",
+        id=ModelChoice.GPT_6_LUNA_XHIGH,
+        label="GPT-6 Luna · XHigh",
         provider="openai",
-        model="gpt-5.6-luna",
+        model="gpt-6-luna",
         reasoning_effort="xhigh",
-        input_per_million=Decimal("0.20"),
-        cached_input_per_million=Decimal("0.02"),
-        output_per_million=Decimal("1.20"),
-        input_cap_per_million=Decimal("0.50"),
-        output_cap_per_million=Decimal("1.80"),
+        input_per_million=Decimal("0.10"),
+        cached_input_per_million=Decimal("0.01"),
+        output_per_million=Decimal("0.50"),
+        input_cap_per_million=Decimal("0.25"),
+        output_cap_per_million=Decimal("0.75"),
     ),
     ModelOption(
         id=ModelChoice.MIMO_V26_PRO,

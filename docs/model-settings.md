@@ -19,8 +19,8 @@ only for keys used by the chosen model steps and enabled search providers.
 
 | Choice | Provider model | Reasoning | Published input / cached / output per million | Conservative input / output cap per million |
 | --- | --- | --- | ---: | ---: |
-| GPT-5.6 Luna High | `gpt-5.6-luna` | high | $0.20 / $0.02 / $1.20 | $0.50 / $1.80 |
-| GPT-5.6 Luna XHigh | `gpt-5.6-luna` | xhigh | $0.20 / $0.02 / $1.20 | $0.50 / $1.80 |
+| GPT-6 Luna High | `gpt-6-luna` | high | $0.10 / $0.01 / $0.50 | $0.25 / $0.75 |
+| GPT-6 Luna XHigh | `gpt-6-luna` | xhigh | $0.10 / $0.01 / $0.50 | $0.25 / $0.75 |
 | MiMo v2.6 Pro | `mimo-v2.6-pro` | thinking | $0.435 / $0.0036 / $0.87 | $0.50 / $1.00 |
 | MiMo v2.6 Flash | `mimo-v2.6-flash` | thinking | $0.14 / $0.0028 / $0.28 | $0.15 / $0.30 |
 | GPT-6 Sol High | `gpt-6-sol` | high | $2.00 / $0.20 / $10.00 | $5.00 / $15.00 |
@@ -35,7 +35,7 @@ evidence rules and conservative per-call reservations are unchanged. Search and
 acquisition service charges remain separate. CLI overrides use repeated
 `--model STAGE=CHOICE` values with stage and choice IDs from `/api/model-options`.
 
-Pricing and capabilities were reviewed against [Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna),
+Pricing and capabilities were reviewed against [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
 [Sol](https://developers.openai.com/api/docs/models/gpt-6-sol),
 [Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra),
 [MiMo API and thinking mode](https://mimo.mi.com/docs/en-US/api/chat/openai-api), and
@@ -46,10 +46,19 @@ endpoint/model cache rates when usage metadata permits; unknown usage keeps the
 reservation. These are estimates, not provider invoices. No paid calls were used to
 verify this profile.
 
+GPT-6 Luna's $0.25 input and $0.75 output caps cover the published 2x long-context
+input multiplier, 1.25x possible cache-write input charge and 1.5x long-context output
+multiplier. Reservations do not assume cached-input discounts.
+
 ## Historical Standard profile
 
 `standard-2026-09` retains its earlier fixed three-model routing for historical
 compatibility. Its original roles, reservations and saved run identities remain readable.
+
+The low-level v2 compatibility path also retains the original fixed routes when callers
+omit `StageModelSelections`, including GPT-5.6 Luna High. New desktop, API and CLI runs
+always resolve and freeze explicit stage selections from the current catalog; the
+no-selection path remains for older direct-v2 configurations and their run fingerprints.
 
 | Model | Roles | Input cap / million | Output cap / million |
 | --- | --- | ---: | ---: |
@@ -105,7 +114,8 @@ Every subsequent physical attempt retains its original reservation and validatio
 ## Persistence and compatibility
 
 `preferences.json` remains version 1. Older desktop preferences migrate to the new
-configurable profile on read, keeping other settings and the default seven choices.
+configurable profile on read. Saved GPT-5.6 Luna High/XHigh stage choices migrate to
+their GPT-6 Luna counterparts; other saved stage choices and settings are preserved.
 Legacy non-secret
 route/price preferences remain readable and are never overwritten by merely selecting
 the new profile. A profile resolves a separate environment snapshot for each new run.

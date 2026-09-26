@@ -1,5 +1,51 @@
 # Current status
 
+## 2026-09-25 — GPT-6 Luna model choices and replacement app
+
+The two selectable GPT-5.6 Luna options were replaced by GPT-6 Luna High and XHigh.
+Both route to `gpt-6-luna` with the matching reasoning effort. Scout and exact extraction
+default to High; the other five active model steps default to XHigh. The other four model
+choices remain available. Saved stage choices migrate on read; historical Standard runs
+and low-level v2 configurations without explicit stage choices remain compatible.
+The explicitly selected historical Standard profile continues to use GPT-5.6 Luna High;
+all fresh configurable desktop, API and CLI runs use the GPT-6 Luna defaults.
+
+Verification passed: 1,124 Python tests (two existing skips), Ruff lint and format,
+`git diff --check`, frontend ESLint and TypeScript, desktop static export, offline browser
+interaction and polling checks, and mocked API routing for all 42 stage/choice combinations.
+The final GPT-5.6 Luna High audit found no confirmed active-route issue; a focused route
+trace confirmed remaining 5.6 routing belongs only to explicit historical Standard and
+no-selection compatibility requests. The arm64 package
+passes ZIP integrity and DMG checksum verification; an independent package review verified
+the active selectors, defaults, endpoints and legacy migration. No provider calls or credits
+were used.
+
+The verified app bundle replaced `/Applications/ResearchAssistant.app`; its packaged
+`app.asar` and frontend entrypoint match the candidate. The previous app bundle is preserved
+at `/private/tmp/ResearchAssistant-before-gpt6-luna-20260925.app`. Updated installers are in
+`desktop/dist/model-choices/` and their checksums are in `HANDOFF.md`.
+
+The isolated frozen credential smoke could not complete because macOS Keychain returned
+`-60008`; the additional frozen loopback API check timed out in this environment. The
+mocked provider/API route suite passed without credentials. The build is unsigned; signing,
+notarization, clean-machine installation, minimum-OS verification and current-version
+Windows testing remain release gates.
+
+## Earlier 2026-09-25 — Per-step model-choice Mac app installed
+
+Built the current Mac app and installed it at `/Applications/ResearchAssistant.app`.
+The ZIP passed its integrity check, the DMG passed `hdiutil verify`, and the packaged
+and installed app passed isolated desktop-window and frozen-backend smokes. The installed
+`app.asar` matches the packaged copy. Checksums of the existing live research database
+and desktop preferences were unchanged before and after installation. The verified DMG
+and ZIP are in `desktop/dist/model-choices/`; SHA-256 values are recorded in
+`HANDOFF.md`. No paid provider calls were made.
+
+This remains an unsigned local Mac build. Signing/notarization, clean-machine installation,
+minimum-OS verification, and current-version Windows verification remain release gates.
+The previously observed intermittent upgrade-smoke startup timeout was not resolved by
+this packaging and installation pass.
+
 ## 2026-09-23 — Per-step model choices and confirmed audit fixes
 
 The per-step model-choice phase is the current implementation authority. The confirmed
