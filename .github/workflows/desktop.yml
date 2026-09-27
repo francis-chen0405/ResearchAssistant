@@ -38,7 +38,7 @@ jobs:
           version: "11.19.0"
       - name: Install Python dependencies
         run: |
-          python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt pytest ruff
+          python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt httpx2 pytest ruff
       - name: Install locked frontend and desktop dependencies
         run: |
           pnpm --dir web install --frozen-lockfile
@@ -60,7 +60,10 @@ jobs:
       - name: Exercise offline research interface
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/desktop/build/resources/browsers
-        run: node desktop/frontend-smoke.cjs
+        run: |
+          node desktop/frontend-smoke.cjs
+          node desktop/frontend-poll-smoke.cjs
+          node desktop/configuration-race-smoke.cjs
       - name: Exercise frozen bundle without developer tools
         run: python desktop/smoke.py desktop/build/resources
       - name: Exercise desktop window

@@ -263,7 +263,7 @@ def run_v2_discovery_and_scout(
         if output.directions != planner_output.directions:
             raise ValueError("persisted discovery output directions do not match the initial plan")
         return V2DiscoveryScoutRunResult(output=output, resumed=True)
-    _require_mimo_scout_route(routing_config)
+    routing_config.preflight()
     items = normalize_discovery_responses(
         run_id=planner_output.run_id,
         directions=planner_output.directions,
@@ -545,14 +545,6 @@ def _scout_candidate(item: NormalizedDiscoveryItem) -> ScoutCandidate:
         publication_date=item.publication_date,
         source_type=item.source_type,
     )
-
-
-def _require_mimo_scout_route(routing_config: V2RoutingConfig) -> None:
-    route = routing_config.preflight().for_stage(LLMStage.SCOUT)
-    if routing_config.stage_models is None and (
-        route.logical_alias.value != "mimo-v2.5" or route.physical_model != "mimo-v2.5"
-    ):
-        raise ValueError("the v2 Scout requires MiMo-v2.5")
 
 
 def _require_aware(value: datetime, name: str) -> None:

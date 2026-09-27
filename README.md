@@ -1,31 +1,18 @@
 # ResearchAssistant
 
-ResearchAssistant is a local desktop application for source-backed research on a claim.
-Choose Support, Challenge, or both. The existing v2 pipeline searches, acquires sources,
-preserves exact evidence and provenance, investigates gaps within budget, and releases
-only deterministically validated results. Historical runs remain readable and exportable.
-Provider calls run in the local Python backend; there is no hosted application backend.
+ResearchAssistant is a local desktop application for source-backed research on a claim. Choose Support, Challenge, or both. The local Python backend discovers sources, preserves exact evidence and provenance, investigates gaps within budget, and releases only deterministically validated results. Historical runs remain readable and exportable. There is no hosted application backend.
 
 ## Install and run
 
-The latest Mac test build includes cache-accounting and planner/Scout reliability fixes;
-see [verification and downloads](docs/verification/planner-scout-reliability.md).
-Offline/native checks pass; dependable live completion remains an acceptance gate.
-
-macOS test artifacts contain ResearchAssistant.app in a DMG/ZIP. Windows uses a per-user
-NSIS installer. End users need no Python, Node or Docker. See
-[desktop instructions](desktop/README.md) for installation, native credential storage,
-data locations, importing history, recovery, supported targets and release limitations.
-Unsigned builds are test artifacts; Windows installation and public-release gates must
-be verified on their native targets.
+The desktop application bundles its runtime; end users do not install Python, Node, or Docker. macOS is the first release target and the current candidate is unsigned. Live-quality acceptance, clean-machine and minimum-OS checks, signing, and notarization remain open. Current evidence and the Windows deferral are in [STATUS](STATUS.md) and [desktop operations](desktop/README.md).
 
 ## Develop and verify
 
-Use Python 3.12, Node 24.18.0 and the committed dependency locks. From the repository root:
+Use Python 3.12, Node 24.18.0, and the committed locks. From the repository root:
 
 ```sh
 python3.12 -m venv .venv
-.venv/bin/python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt pytest ruff
+.venv/bin/python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt httpx2 pytest pytest-cov ruff
 pnpm --dir web install --frozen-lockfile
 npm ci --prefix desktop
 .venv/bin/python -m pytest
@@ -36,32 +23,17 @@ pnpm --dir web lint
 pnpm --dir web exec tsc --noEmit
 ```
 
-On Windows use `.venv\Scripts\python.exe` instead of `.venv/bin/python`.
-The [desktop build guide](desktop/README.md#build-and-verification-developersci-only)
-covers the static web export, frozen backend, native runtime/window smokes and installers.
-Build and smoke on both macOS and Windows; a macOS success cannot validate Windows.
-Tests do not require paid provider calls; existing opt-in integration checks remain opt-in.
+The constraints file pins the validated environment. `httpx2`, pytest, pytest-cov, and Ruff are explicit development/test packages in the install command because setuptools editable installation is not supported by the repository's flat package layout. For a base Python install, use `python -m pip install -c desktop/constraints.txt -r requirements.txt`. The legacy Streamlit frontend is intentionally separate from the base install: `python -m pip install -c desktop/constraints.txt -r requirements-legacy.txt`. Its constrained no-index dry run has been verified.
 
-For browser development run `.venv/bin/python -m frontend.api` and, in another terminal,
-`pnpm --dir web dev`. See [frontend developer notes](frontend/README.md).
-Use `.venv/bin/python cli.py --help` for the preserved fixture, inspection, export and
-live CLI entry points. Provider secrets are entered through the existing setup flow;
-never add them to source files, database exports or shell-profile loading.
+On Windows, use `.venv\Scripts\python.exe` in place of `.venv/bin/python`. See the [desktop build guide](desktop/README.md) for static export, backend builds, native smokes, and installers. A successful macOS build does not verify Windows. Tests do not require paid provider calls; opt-in integration checks remain opt-in.
 
-## Read next
+For browser development, run `.venv/bin/python -m frontend.api` and `pnpm --dir web dev` in separate terminals. See [frontend notes](frontend/README.md). The CLI retains fixture, inspection, export, and live entry points. Desktop credentials use native settings; CLI credentials come from the process environment. Never put secrets in source files or rely on automatic `.env` or shell-profile loading.
 
-- [Architecture](ARCHITECTURE.md): module ownership, research flow and invariants.
-- [Conventions](CONVENTIONS.md) and [decisions](DECISIONS.md): contracts and rationale.
-- [Status](STATUS.md), [handoff](HANDOFF.md), [plan index](.agent/PLANS.md): current work and verification.
-- [Historical archive](docs/archive/README.md): exact replaced documents and completed plans.
+## Project guidance
 
-Phase 2 cleanup, the Phase 3 frontend/provider-model settings work, the adaptive-search
-reliability correction, neutral evidence ownership and per-step model choices are complete
-locally on `master`. The confirmed per-step audit fixes keep setup readiness, credential
-payloads, model choices and offline desktop checks aligned. The Mac-first release boundary
-remains in force; Windows is deferred and does not block the Mac milestone. The unsigned Mac
-candidate, verification and remaining live-quality/clean-machine/minimum-OS/signing limits
-are recorded in [Mac verification](docs/verification/mac-cache-pricing.md).
-The former README is preserved in [the archive](docs/archive/pre-phase-2/README.md);
-current operating instructions above and the desktop guide replace its older launcher-first
-descriptions.
+- [Architecture](ARCHITECTURE.md): runtime, module ownership, and research flow. [Research invariants](docs/research-invariants.md) records the detailed current evidence and storage rules.
+- [Conventions](CONVENTIONS.md), [decisions](DECISIONS.md), and [plans](.agent/PLANS.md): development rules and current scope.
+- [Status](STATUS.md) and [handoff](HANDOFF.md): verified state, open checks, and next boundary.
+- [Historical archive index](docs/archive/INDEX.md): replaced records and completed plan history.
+
+The long historical README was archived verbatim on 2026-09-26. This replacement puts current installation, development, and release guidance first.

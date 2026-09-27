@@ -42,6 +42,30 @@ V2_ROUTING_POLICY_VERSION = "researchassistant-v2-routing-policy-v1"
 V2_ROUTING_PROMPT_VERSION = "researchassistant-v2-routing-unwired-prompt-v1"
 V2_ROUTING_SCHEMA_VERSION = "researchassistant-v2-phase-1-contracts-v1"
 
+_LEGACY_STAGE_ROUTE_ERRORS = {
+    LLMStage.PLANNER: "the v2 Initial Planner requires MiMo-v2.5-Pro",
+    LLMStage.SCOUT: "the v2 Scout requires MiMo-v2.5",
+    LLMStage.GAP_ANALYSIS: "Gap Analysis route must use GPT-5.6 Luna High",
+    LLMStage.SEARCH_AGENT: "v2 adaptive Search Agent requires MiMo-v2.5-Pro",
+    LLMStage.SOURCE_SELECTION: "Final Source Selection must use the MiMo-v2.5-Pro route",
+    LLMStage.EXTRACTOR: "fresh v2 extraction must use MiMo-v2.5-Pro",
+    LLMStage.ANALYST: "fresh v2 Evidence Analyst work must use GPT-5.6 Luna High",
+}
+_LEGACY_STAGE_ALIASES = {
+    LLMStage.PLANNER: ModelAlias.MIMO_V25_PRO,
+    LLMStage.SCOUT: ModelAlias.MIMO_V25,
+    LLMStage.GAP_ANALYSIS: ModelAlias.GPT_5_6_LUNA_HIGH,
+    LLMStage.SEARCH_AGENT: ModelAlias.MIMO_V25_PRO,
+    LLMStage.SOURCE_SELECTION: ModelAlias.MIMO_V25_PRO,
+    LLMStage.EXTRACTOR: ModelAlias.MIMO_V25_PRO,
+    LLMStage.ANALYST: ModelAlias.GPT_5_6_LUNA_HIGH,
+}
+_LEGACY_STAGE_PHYSICAL_MODELS = {
+    LLMStage.PLANNER: "mimo-v2.5-pro",
+    LLMStage.SCOUT: "mimo-v2.5",
+    LLMStage.SEARCH_AGENT: "mimo-v2.5-pro",
+}
+
 
 class V2PhysicalModelRoute(StrictModel):
     """Secret-free physical route selected for one logical model alias."""
@@ -262,7 +286,29 @@ class V2RoutingConfig(StrictModel):
         routes = tuple(
             (stage, self.route_for_alias(V2_LLM_ROUTING.for_stage(stage))) for stage in LLMStage
         )
+        self._validate_legacy_stage_routes(routes)
         return V2RoutingPreflight(routing=routes)
+
+    @staticmethod
+    def _validate_legacy_stage_routes(
+        routes: tuple[tuple[LLMStage, V2PhysicalModelRoute], ...],
+    ) -> None:
+        """Keep the no-selection v2 compatibility routes aligned with stage policy."""
+        for stage, route in routes:
+            if stage not in ACTIVE_MODEL_STAGES:
+                continue
+            if route.logical_alias is not _LEGACY_STAGE_ALIASES[stage]:
+                raise ValueError(_LEGACY_STAGE_ROUTE_ERRORS[stage])
+            expected_model = _LEGACY_STAGE_PHYSICAL_MODELS.get(stage)
+            if expected_model is not None and route.physical_model != expected_model:
+                raise ValueError(_LEGACY_STAGE_ROUTE_ERRORS[stage])
+
+    def artifact_model_name_for_stage(self, stage: LLMStage) -> str:
+        """Return stable artifact metadata without collapsing a selected effort choice."""
+        route = self.preflight().for_stage(stage)
+        if self.stage_models is not None:
+            return route.logical_alias.value
+        return route.physical_model
 
     def route_for_alias(self, stage_route: StageRoute) -> V2PhysicalModelRoute:
         if self.stage_models is not None:

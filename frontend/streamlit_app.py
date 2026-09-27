@@ -231,7 +231,8 @@ def _load_streamlit() -> object:
         import streamlit as st
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "Streamlit is not installed. Install project dependencies, then run "
+            "Streamlit is not installed. "
+            "Run `python -m pip install -r requirements-legacy.txt`, then "
             "`streamlit run frontend/streamlit_app.py` from the repository root."
         ) from exc
     return st

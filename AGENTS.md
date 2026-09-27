@@ -1,58 +1,23 @@
-# AI Assistant Instructions
+# Assistant instructions
 
-Current implementation scope is the completed [Per-step model choices](.agent/plans/per-step-model-choices.md),
-explicitly authorized on 2026-09-23, including the confirmed post-audit fixes recorded in the current status and
-handoff. It follows the completed neutral evidence ownership, explicit pipeline-selection and SQLite status-polling
-phases and preserves the Mac-first release boundary. Earlier dated scope statements below remain historical.
+## Current authority
 
-## Active Codex checkout
+The currently authorized work is [Audit maintenance and follow-up checks](.agent/plans/audit-maintenance.md), approved 2026-09-26. The completed [per-step model choices plan](.agent/plans/per-step-model-choices.md) remains the latest completed product implementation. The [Mac-first release plan](.agent/plans/mac-release-cache-pricing.md) records the release boundary: Windows release work is deferred, the five-submission live-test allowance is exhausted, and public-release checks remain open.
 
-The active local checkout for this project is currently located at
-`/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant`.
-Use the repository root supplied by the task when working; do not assume the older
-`/Users/francischen/Documents/GitHub/ResearchAssistant` placement. This synced-folder
-location is a workspace detail only and must not be embedded in application runtime paths.
+Read [architecture](ARCHITECTURE.md), [conventions](CONVENTIONS.md), [decisions](DECISIONS.md), [status](STATUS.md), [handoff](HANDOFF.md), [.agent/PLANS.md](.agent/PLANS.md), the applicable plan, and [desktop operations](desktop/README.md) before editing. Follow more specific nested instructions where they apply. The exact preceding root documents are preserved in the [archive index](docs/archive/INDEX.md); this file replaces their stale current-scope narrative.
 
-Current implementation authority: `.agent/plans/per-step-model-choices.md`.
-The completed predecessor is `.agent/plans/neutral-evidence-ownership.md`; its predecessor
-is `.agent/plans/explicit-pipeline-selection.md` (with SQLite status polling before it).
-Release authority remains `.agent/plans/mac-release-cache-pricing.md`. Also read `ARCHITECTURE.md`,
-`STATUS.md`, `HANDOFF.md`, and `desktop/README.md`. Phase 2 maintainability refactoring,
-Phase 3 frontend/provider-model settings, and the adaptive-search reliability correction
-are complete on local `master`; the correction was authorized on 2026-09-12.
-The Phase 2 native macOS/Windows matrix supplies the earlier Phase 1 build/runtime
-evidence; it does not verify the subsequent Phase 3/adaptive Windows build. Clean-machine
-installation, minimum-OS, signing and notarization remain public-release gates. The v2
-Phase 14 plan is the predecessor research-policy record; the current pipeline also
-includes the completed adaptive-search reliability correction.
-Before editing, completely read architecture, conventions, decisions, status, handoff,
-`.agent/PLANS.md`, relevant current plans and applicable nested instructions.
-The original chronological preamble is preserved in
-`docs/archive/pre-phase-2/AGENTS.md`; this paragraph replaces its stale phase authority.
+## Required rules
 
-Required rules for every future assistant:
+- Stop at the authorized scope. Do not start further work without explicit user direction.
+- Use strict Pydantic models (`ConfigDict(extra="forbid")`) for internal agent handoffs. JSON belongs at persistence, API, logging, and export boundaries; never pass raw dictionaries between agents.
+- Annotate every named parameter and return on repository-owned Python functions, including tests and nested functions. Only conventional `self` and `cls` receivers may be unannotated. `tests/test_type_contracts.py` enforces this rule.
+- Preserve immutable evidence and final artifacts. Never weaken tests, remove assertions, skip checks, or lower acceptance criteria to make a change pass.
+- Prefer a failing regression test before fixing a validator or integrity bug. Never silently return `None` on failure; raise a clear exception or return a typed failure.
+- Do not add dependencies without first flagging them and receiving explicit approval when outside the authorized scope. Record any approved dependency change in the plan, status, and handoff.
+- Do not implement out-of-scope provider calls, web retrieval, scraping, database changes, live agent behavior, or framework/SDK integrations.
+- Do not run destructive Git commands such as hard reset, clean, or force-push unless explicitly instructed. Preserve in-progress work and avoid unrelated edits.
+- Do not remove architecture, convention, decision, status, handoff, or plan content without stating its replacement and keeping the historical record.
+- Update STATUS.md and HANDOFF.md with actual changes, verification, unresolved issues, and the next boundary. Never claim an upgrade or release gate passed without its evidence.
+- Before phase completion, run `pytest`, `ruff check .`, and `ruff format --check .` as required by the applicable plan; preserve existing skips and report results accurately.
 
-- Stop at the current phase boundary. Do not begin the next phase without explicit user direction.
-- Do not begin the next phase.
-- Use Pydantic models for all internal agent handoffs.
-- Use `model_config = ConfigDict(extra="forbid")` for internal Pydantic artifacts unless a specific exception is documented.
-- Never pass raw dictionaries between agents; JSON belongs only at persistence, API, logging, or export boundaries.
-- Never weaken tests, delete assertions, skip checks, or lower acceptance criteria to make work pass.
-- Do not weaken tests to make implementation pass.
-- Prefer adding failing regression tests before fixing validator or integrity bugs.
-- Never add dependencies without flagging them first and getting explicit approval when they are outside the current phase.
-- Document any approved dependency change in the relevant status, handoff, and phase-plan files.
-- Never silently return `None` on failure; raise a clear exception or return a typed failure model.
-- Require explicit return annotations and annotations for every named parameter on every
-  repository-owned Python `def` and `async def`; only conventional receivers named `self`
-  or `cls` may be unannotated. The repository-wide AST regression lives in
-  `tests/test_type_contracts.py` and covers production and test code, including nested functions.
-- Never run destructive Git commands such as `git reset --hard`, `git clean -fd`, or force-push unless explicitly instructed by the user.
-- Never delete architecture, convention, status, handoff, or phase-plan content without explaining the exact replacement.
-- Avoid unrelated edits, refactors, formatting churn, and metadata changes.
-- Do not implement live agent behavior, database changes, web retrieval, scraping, LLM calls, SDK integrations, production web frameworks, ORMs, HTTP clients, or other out-of-phase behavior unless the active phase explicitly requires them.
-- Treat artifacts that reach the Ledger, `SynthesisOutput`, or final validator as immutable.
-- Update `STATUS.md` and `HANDOFF.md` after each phase with what changed, what was verified, what remains unresolved, and what the next phase should know.
-- Run `pytest`, `ruff check .`, and `ruff format --check .` before considering a phase complete.
-
-If the architecture and conventions conflict, pause implementation work and resolve the documentation mismatch first with minimal explicit edits.
+If architecture and conventions conflict, resolve the documentation mismatch with a minimal explicit change before implementation.

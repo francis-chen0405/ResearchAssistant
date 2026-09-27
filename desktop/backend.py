@@ -31,7 +31,14 @@ class Bootstrap(StrictModel):
     smoke_secret: SecretStr | None = None
 
 
+def smoke_phase(name: str) -> None:
+    """Emit fixed diagnostic labels only; never include bootstrap values."""
+    if "--self-test" in sys.argv:
+        print(f"SMOKE_PHASE:{name}", file=sys.stderr, flush=True)
+
+
 def main() -> None:
+    smoke_phase("bootstrap")
     bootstrap = Bootstrap.model_validate_json(sys.stdin.readline())
     if len(bootstrap.token.get_secret_value()) < 32:
         raise RuntimeError("Invalid desktop session")
@@ -42,15 +49,18 @@ def main() -> None:
             "ResearchAssistant.Smoke." + (bootstrap.smoke_namespace or secrets.token_hex(12)) + "."
         )
         if "--cleanup-smoke" in sys.argv:
+            smoke_phase("credential-cleanup")
             credential_store.remove_credential("MIMO_API_KEY")
             return
         if "--verify-persistence" in sys.argv:
+            smoke_phase("credential-read")
             if (
                 bootstrap.smoke_secret is None
                 or credential_store._read_secret("MIMO_API_KEY")
                 != bootstrap.smoke_secret.get_secret_value()
             ):
                 raise RuntimeError("Cross-process credential persistence failed")
+        smoke_phase("credential-roundtrip")
         secret = secrets.token_hex(24)
         try:
             credential_store.save_credentials(
@@ -62,12 +72,14 @@ def main() -> None:
             credential_store.remove_credential("MIMO_API_KEY")
         if credential_store._read_secret("MIMO_API_KEY") is not None:
             raise RuntimeError("Native vault cleanup failed")
+        smoke_phase("data-roundtrip")
         data = application_data_dir()
         data.mkdir(parents=True, exist_ok=True)
         probe = data / "desktop-smoke.txt"
         probe.write_text("persistent", encoding="utf-8")
         if probe.read_text(encoding="utf-8") != "persistent":
             raise RuntimeError("Application data round-trip failed")
+    smoke_phase("runtime")
     runtime = create_default_runtime()
     node = resources / "node" / ("node.exe" if sys.platform == "win32" else "bin/node")
     wigolo = resources / "acquisition/node_modules/wigolo/dist/index.js"
@@ -115,6 +127,7 @@ def main() -> None:
         server.should_exit = True
 
     Thread(target=parent_closed, daemon=True).start()
+    smoke_phase("identity")
     print(
         json.dumps(
             {
@@ -127,6 +140,7 @@ def main() -> None:
         flush=True,
     )
     try:
+        smoke_phase("server")
         server.run(sockets=[sock])
     finally:
         completed = runtime.controller.shutdown(timeout=90)

@@ -17,24 +17,36 @@ from agents.v2_evidence_analyst import (
     revise_v2_canonical_statement,
     run_v2_evidence_analyst,
 )
-from agents.v2_extraction import V2ExtractionState, _extract_source
+from agents.v2_extraction import (
+    V2ExtractionState,
+    _extract_source,
+    run_v2_exact_extraction,
+)
 from agents.v2_source_selection import calculate_v2_deep_analysis_queue
 from models import (
     CandidateQuoteBlock,
+    DiscoveryProvenance,
     DiscoveryProvider,
+    DiscoveryProviderReference,
     ModelAttemptStatus,
     ModelUsageMetadata,
+    NormalizedDiscoveryItem,
     ProvisionalCandidate,
     ResearchDirection,
     ResearchDirections,
     RunManifest,
     RunStatus,
     ScoreDecision,
+    SourceCluster,
     SourceSnapshot,
     Stage,
     Stance,
+    V2AcquiredSource,
+    V2AcquisitionProbeOutput,
+    V2AcquisitionProvider,
     V2CanonicalStatementModelOutput,
     V2DeepAnalysisBudget,
+    V2DiscoveryScoutOutput,
     V2EvidenceAnalystBatchInput,
     V2EvidenceAnalystCandidateInput,
     V2EvidenceAnalystExtractionFailure,
@@ -42,6 +54,7 @@ from models import (
     V2EvidenceAnalystState,
     V2EvidenceRelationship,
     V2PipelineIdentity,
+    V2ProbeResult,
     V2SourceSelectionCandidate,
     V2SourceSelectionInput,
     V2SourceSelectionQueueResult,
@@ -58,6 +71,7 @@ from providers.llm import (
     ModelAlias,
 )
 from providers.mimo import MimoFailureCode, MimoProviderError
+from providers.model_choices import DEFAULT_STAGE_MODELS, ModelChoice, StageModelSelections
 from providers.v2_routing import V2RoutingConfig
 from store import (
     init_db,
@@ -578,6 +592,144 @@ def test_exact_extraction_retry_requires_a_non_empty_contiguous_range() -> None:
     assert result.state is V2ExtractionState.EXTRACTED
     assert len(provider.requests) == 2
     assert "return at least one source sentence range" in provider.requests[-1].rendered_prompt
+
+
+@pytest.mark.parametrize(
+    ("choice", "expected_model_name"),
+    (
+        (ModelChoice.GPT_6_LUNA_HIGH, "gpt-6-luna-high"),
+        (ModelChoice.GPT_6_LUNA_XHIGH, "gpt-6-luna-xhigh"),
+        (None, "mimo-v2.5-pro"),
+    ),
+)
+def test_extraction_persists_selected_effort_and_preserves_legacy_model_name(
+    tmp_path: Path,
+    choice: ModelChoice | None,
+    expected_model_name: str,
+) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    queue_result = batch.queue_result
+    source = queue_result.input.survivors[0]
+    snapshot = batch.queued_candidates[0].snapshot
+    query_id = source.search_provenance[0].query_id
+    provenance = DiscoveryProvenance(
+        provider=DiscoveryProvider.OPENALEX,
+        query_id=query_id,
+        query_text="regional course completion study",
+        direction=source.direction,
+        round_number=1,
+        provider_rank=1,
+        original_url=source.source_url,
+    )
+    item = NormalizedDiscoveryItem(
+        run_id=run_id,
+        item_id=uuid4(),
+        provider=DiscoveryProvider.OPENALEX,
+        query_id=query_id,
+        query_text=provenance.query_text,
+        direction=source.direction,
+        round_number=1,
+        provider_rank=1,
+        source_url=source.source_url,
+        canonical_url=source.source_url,
+        provenance_chain=(provenance,),
+        discovered_at=NOW,
+    )
+    cluster = SourceCluster(
+        cluster_id=source.source_id,
+        preferred_url=source.source_url,
+        canonical_url=source.source_url,
+        item_ids=(item.item_id,),
+        provider_references=(
+            DiscoveryProviderReference(
+                provider=DiscoveryProvider.OPENALEX,
+                item_id=item.item_id,
+                provider_rank=1,
+            ),
+        ),
+        query_references=(query_id,),
+        metadata_provenance=(provenance,),
+    )
+    discovery = V2DiscoveryScoutOutput(
+        run_id=run_id,
+        directions=queue_result.input.directions,
+        items=(item,),
+        clusters=(cluster,),
+        scout_batches=(),
+        scout_audits=(),
+        completed_at=NOW,
+    )
+    acquisition = V2AcquisitionProbeOutput(
+        run_id=run_id,
+        directions=queue_result.input.directions,
+        acquisitions=(
+            V2AcquiredSource(
+                cluster_id=source.source_id,
+                direction=source.direction,
+                snapshot=snapshot,
+                provider=V2AcquisitionProvider.WIGOLO,
+            ),
+        ),
+        attempts=(),
+        probes=(
+            V2ProbeResult(
+                cluster_id=source.source_id,
+                snapshot_id=snapshot.snapshot_id,
+                snapshot_sha256=snapshot.snapshot_sha256,
+                succeeded=True,
+            ),
+        ),
+        survivors=(),
+        completed_at=NOW,
+    )
+    if choice is None:
+        routing = _routing()
+    else:
+        stage_models = StageModelSelections.model_validate(
+            {
+                **DEFAULT_STAGE_MODELS.model_dump(mode="json"),
+                "extractor": choice.value,
+            }
+        )
+        routing = V2RoutingConfig.from_environment(
+            {"LUNA_API_KEY": "selected-openai", "MIMO_API_KEY": "selected-mimo"},
+            repository_revision="extraction-effort-test",
+            stage_models=stage_models,
+        )
+    db_path = _prepare_db(tmp_path, run_id)
+    provider = FakeLunaAnalyst(
+        [
+            V2VerbatimQuoteSelection(
+                selected_sentence_ranges=({"start_sentence": 2, "end_sentence": 2},)
+            )
+        ]
+    )
+
+    result = run_v2_exact_extraction(
+        db_path=db_path,
+        queue_result=queue_result,
+        discovery_outputs=(discovery,),
+        acquisition_outputs=(acquisition,),
+        llm_provider=provider,
+        routing_config=routing,
+        clock=lambda: NOW,
+    )
+    resumed = run_v2_exact_extraction(
+        db_path=db_path,
+        queue_result=queue_result,
+        discovery_outputs=(discovery,),
+        acquisition_outputs=(acquisition,),
+        llm_provider=provider,
+        routing_config=routing,
+        clock=lambda: NOW,
+    )
+
+    candidate = result.sources[0].candidate
+    assert candidate is not None
+    assert candidate.extraction_model_name == expected_model_name
+    assert resumed == result
+    assert len(provider.requests) == 1
 
 
 @pytest.mark.parametrize(

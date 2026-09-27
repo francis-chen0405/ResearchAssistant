@@ -8,6 +8,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+import providers.v2_routing as v2_routing
 from agents.planner import PlannerLLMInput
 from models import PlannerOutput
 from providers.config import LunaConfig, MimoRouteConfig, ProviderConfigurationError
@@ -108,6 +109,52 @@ def test_v2_preflight_rejects_unknown_normal_route_pricing() -> None:
 
     with pytest.raises(ProviderConfigurationError, match="MIMO_V25_INPUT_USD_PER_TOKEN"):
         _config(environment)
+
+
+@pytest.mark.parametrize(
+    ("model_name", "model", "input_price_name", "output_price_name", "message"),
+    (
+        (
+            "MIMO_V25_MODEL",
+            "custom-scout-model",
+            "MIMO_V25_INPUT_USD_PER_TOKEN",
+            "MIMO_V25_OUTPUT_USD_PER_TOKEN",
+            "the v2 Scout requires MiMo-v2.5",
+        ),
+        (
+            "MIMO_V25_PRO_MODEL",
+            "custom-pro-model",
+            "MIMO_V25_PRO_INPUT_USD_PER_TOKEN",
+            "MIMO_V25_PRO_OUTPUT_USD_PER_TOKEN",
+            "the v2 Initial Planner requires MiMo-v2.5-Pro",
+        ),
+    ),
+)
+def test_legacy_stage_physical_model_policy_is_checked_by_routing_preflight(
+    model_name: str,
+    model: str,
+    input_price_name: str,
+    output_price_name: str,
+    message: str,
+) -> None:
+    environment = _environment()
+    environment[model_name] = model
+    environment[input_price_name] = "0.000001"
+    environment[output_price_name] = "0.000002"
+
+    with pytest.raises(ValueError, match=message):
+        _config(environment).preflight()
+
+
+def test_legacy_stage_alias_policy_rejects_route_map_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    changed_planner = V2_LLM_ROUTING.planner.model_copy(update={"primary": ModelAlias.MIMO_V25})
+    changed_routes = V2_LLM_ROUTING.model_copy(update={"planner": changed_planner})
+    monkeypatch.setattr(v2_routing, "V2_LLM_ROUTING", changed_routes)
+
+    with pytest.raises(ValueError, match="Initial Planner requires MiMo-v2.5-Pro"):
+        _config().preflight()
 
 
 def test_mimo_normal_route_rejects_returned_model_mismatch() -> None:

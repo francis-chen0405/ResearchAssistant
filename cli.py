@@ -101,7 +101,8 @@ def main(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = _ArgumentParser(
-        description="Debate Research Agent System CLI",
+        prog="ResearchAssistant",
+        description="Command-line interface for ResearchAssistant.",
         epilog=(
             "Research exit codes: released=0, blocked=10, failed=11, cancelled=12, "
             "running/nonterminal=13, configuration=20, invalid-input=21. A successful "

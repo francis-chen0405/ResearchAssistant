@@ -426,5 +426,5 @@ def test_current_acquisition_and_fingerprint_identities_are_explicit() -> None:
 def test_package_description_is_durable_and_phase_neutral() -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
     description = project["description"]
-    assert "Debate Research Agent System" in description
+    assert "ResearchAssistant" in description
     assert "MVP-" not in description

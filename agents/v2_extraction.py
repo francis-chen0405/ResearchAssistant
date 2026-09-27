@@ -190,13 +190,7 @@ def run_v2_exact_extraction(
         return result
 
     route = routing_config.preflight().for_stage(LLMStage.EXTRACTOR)
-    if routing_config.stage_models is None and route.logical_alias is not ModelAlias.MIMO_V25_PRO:
-        raise ValueError("fresh v2 extraction must use MiMo-v2.5-Pro")
-    if (
-        routing_config.stage_models is None
-        and V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).primary is not route.logical_alias
-    ):
-        raise ValueError("configured Extractor route does not match v2 policy")
+    artifact_model_name = routing_config.artifact_model_name_for_stage(LLMStage.EXTRACTOR)
     snapshots = _snapshots_by_source(acquisition_outputs)
     source_rows = {item.source_id: item for item in queue_result.input.survivors}
     results: list[V2ExtractionSourceResult] = []
@@ -214,7 +208,7 @@ def run_v2_exact_extraction(
                 search_rank=_search_rank(source_id, discovery_outputs),
                 llm_provider=llm_provider,
                 model_alias=route.logical_alias,
-                physical_model=route.physical_model,
+                recorded_model_name=artifact_model_name,
                 clock=now,
             )
         )
@@ -248,6 +242,7 @@ def _extract_source(
     clock: Callable[[], datetime],
     model_alias: ModelAlias = ModelAlias.MIMO_V25_PRO,
     physical_model: str = "mimo-v2.5-pro",
+    recorded_model_name: str | None = None,
 ) -> V2ExtractionSourceResult:
     validate_snapshot_integrity(snapshot)
     input_artifact = V2ExtractionLLMInput(
@@ -320,7 +315,9 @@ def _extract_source(
                     truncated=snapshot.truncated,
                 ),
                 extraction_prompt_version=prompt.version,
-                extraction_model_name=physical_model,
+                extraction_model_name=(
+                    recorded_model_name if recorded_model_name is not None else physical_model
+                ),
                 extracted_at=_aware(clock()),
             )
             filtered = filter_provisional_candidate(

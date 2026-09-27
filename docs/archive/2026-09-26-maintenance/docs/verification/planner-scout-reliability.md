@@ -57,8 +57,7 @@ with the previous bundle at
 Real history, preferences and credentials were not replaced. Installed-window smoke
 also passed; the app closed normally after the isolated check.
 
-Historical artifact checksums from the 2026-09-17 verification follow. These generated
-local files are not distributed by Git and are not a current download location:
+Downloads are in `desktop/dist/mac-reliability/`:
 
 - `ResearchAssistant-0.1.0-arm64.dmg` — SHA-256
   `c3f6db2217797a8ff7db9056391fb51c7bd88b8b2a3b1a868b32dd0e3352edfb`
@@ -66,7 +65,7 @@ local files are not distributed by Git and are not a current download location:
   `a1c295ab00a2a8ce731ea83f1e89ff50bddf40eb0e3a4523f55e1d98f4b112d0`
 - `SHA256SUMS.txt` and `READ-ME-FIRST.txt`.
 
-These superseded the earlier Mac/cache candidate as unsigned local test artifacts;
+These supersede the earlier Mac/cache candidate. They remain unsigned test downloads;
 clean-machine and actual macOS 14 checks, Developer ID signing/notarization and public
 distribution remain open. No remote publication occurred. The original live acceptance
 uses the prior frozen Mac/cache build, not these fixes. No end-to-end live quality or

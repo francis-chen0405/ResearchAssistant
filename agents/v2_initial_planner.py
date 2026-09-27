@@ -89,7 +89,6 @@ def run_v2_initial_planner(
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     init_db(path)
     contract = routing_config.contract(resolved_run_id, planned_at)
-    _require_mimo_pro_planner_route(routing_config)
 
     try:
         existing_manifest = read_run(path, resolved_run_id)
@@ -223,14 +222,6 @@ def _assemble_initial_plan(
         planner_prompt_version=prompt_version,
         planned_at=planned_at,
     )
-
-
-def _require_mimo_pro_planner_route(routing_config: V2RoutingConfig) -> None:
-    route = routing_config.preflight().for_stage(LLMStage.PLANNER)
-    if routing_config.stage_models is None and (
-        route.logical_alias.value != "mimo-v2.5-pro" or route.physical_model != "mimo-v2.5-pro"
-    ):
-        raise ValueError("the v2 Initial Planner requires MiMo-v2.5-Pro")
 
 
 def _aware_now(clock: Callable[[], datetime]) -> datetime:

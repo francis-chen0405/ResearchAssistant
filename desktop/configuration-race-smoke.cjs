@@ -7,19 +7,6 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
-const waitFor = (predicate, message) => new Promise((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error(message)), 5000);
-  const poll = () => {
-    if (predicate()) {
-      clearTimeout(timeout);
-      resolve();
-    } else {
-      setTimeout(poll, 10);
-    }
-  };
-  poll();
-});
-
 async function main() {
   const root = path.resolve(__dirname, "../web/out");
   if (!fs.existsSync(path.join(root, "index.html"))) {

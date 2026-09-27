@@ -8,11 +8,12 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from uuid import uuid4
 
 import httpx
-from smoke import startup_line
+from smoke_support import BackendMonitor, wait_for_health
 
 EXPECTED_CONFIGURABLE_STAGE_MODELS = {
     "planner": "gpt-6-luna-xhigh",
@@ -110,6 +111,7 @@ def main() -> None:
                     stderr=subprocess.PIPE,
                     text=True,
                 )
+                monitor = BackendMonitor(process, label=f"upgrade launch {index}")
                 try:
                     assert process.stdin is not None and process.stdout is not None
                     process.stdin.write(
@@ -124,13 +126,7 @@ def main() -> None:
                         + "\n"
                     )
                     process.stdin.flush()
-                    line = startup_line(process.stdout)
-                    if not line:
-                        assert process.stderr is not None
-                        error = process.stderr.read()
-                        for value in (token, namespace, vault_secret):
-                            error = error.replace(value, "[redacted]")
-                        raise RuntimeError(f"Upgrade launch {index} failed: {error}")
+                    line = monitor.startup()
                     startup = json.loads(line)
                     identities.append(startup["identity"])
                     with httpx.Client(
@@ -138,6 +134,12 @@ def main() -> None:
                         headers={"Authorization": f"Bearer {token}"},
                         timeout=30,
                     ) as client:
+                        wait_for_health(client)
+                        print(
+                            f"Upgrade launch {index}: authenticated health ready in "
+                            f"{time.monotonic() - monitor.started:.2f}s",
+                            flush=True,
+                        )
                         history = client.get("/api/history", params={"db_path": str(database)})
                         history.raise_for_status()
                         assert len(history.json()["items"]) == 1
@@ -163,11 +165,9 @@ def main() -> None:
                             assert preferences["modelProfile"] == "configurable-2026-09"
                             assert preferences["stageModels"] == EXPECTED_CONFIGURABLE_STAGE_MODELS
                     process.stdin.close()
-                    assert process.wait(timeout=100) == 0
+                    monitor.wait_exit()
                 finally:
-                    if process.poll() is None:
-                        process.kill()
-                        process.wait(timeout=10)
+                    monitor.stop()
             assert identities[0] != identities[1], "Expected distinct preceding and new executables"
             assert database.read_bytes() == original_database
             print(

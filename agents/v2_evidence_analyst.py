@@ -43,7 +43,6 @@ from providers.llm import (
     LLMProvider,
     LLMRequest,
     LLMStage,
-    ModelAlias,
     RetryMetadata,
     invoke_llm,
     is_non_retryable_provider_error,
@@ -110,24 +109,7 @@ def run_v2_evidence_analyst(
             raise ValueError("persisted Phase-13 input does not match the requested queue")
         return result
 
-    analyst_route = routing_config.preflight().for_stage(LLMStage.ANALYST)
-    extractor_route = routing_config.preflight().for_stage(LLMStage.EXTRACTOR)
-    if (
-        routing_config.stage_models is None
-        and analyst_route.logical_alias is not ModelAlias.GPT_5_6_LUNA_HIGH
-    ):
-        raise ValueError("fresh v2 Evidence Analyst work must use GPT-5.6 Luna High")
-    if (
-        routing_config.stage_models is None
-        and extractor_route.logical_alias is not ModelAlias.MIMO_V25_PRO
-    ):
-        raise ValueError("v2 exact passage selection must remain on MiMo-v2.5-Pro")
-    if (
-        routing_config.stage_models is None
-        and V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).primary is not analyst_route.logical_alias
-    ):
-        raise ValueError("configured Analyst route does not match the v2 routing policy")
-
+    routing_config.preflight()
     queued = {item.source_id: item for item in batch_input.queued_candidates}
     extraction_failures = {item.source_id: item.failure for item in batch_input.extraction_failures}
     results: list[V2EvidenceAnalystSourceResult] = []

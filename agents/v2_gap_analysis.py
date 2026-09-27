@@ -238,11 +238,6 @@ def run_v2_gap_analysis(
         return V2GapAnalysisRunResult(**output.model_dump(), resumed=True)
 
     route = routing_config.preflight().for_stage(LLMStage.GAP_ANALYSIS)
-    if (
-        routing_config.stage_models is None
-        and route.logical_alias is not V2_LLM_ROUTING.for_stage(LLMStage.GAP_ANALYSIS).primary
-    ):
-        raise ValueError("Gap Analysis route must use GPT-5.6 Luna High")
     prompt = load_prompt(LLMStage.GAP_ANALYSIS)
     request = LLMRequest(
         run_id=gap_input.run_id,

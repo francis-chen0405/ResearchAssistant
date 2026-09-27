@@ -204,6 +204,42 @@ def test_credentials_are_required_only_for_selected_providers() -> None:
         V2RoutingConfig.from_environment({}, repository_revision="test", stage_models=mixed)
 
 
+@pytest.mark.parametrize(
+    ("choice", "expected"),
+    (
+        (ModelChoice.GPT_6_LUNA_HIGH, "gpt-6-luna-high"),
+        (ModelChoice.GPT_6_LUNA_XHIGH, "gpt-6-luna-xhigh"),
+    ),
+)
+def test_extraction_artifact_model_identity_retains_selected_effort(
+    choice: ModelChoice, expected: str
+) -> None:
+    routing = V2RoutingConfig.from_environment(
+        {"LUNA_API_KEY": "test-openai"},
+        repository_revision="test",
+        stage_models=_selections(LLMStage.EXTRACTOR, choice),
+    )
+
+    assert routing.configuration_for_stage(LLMStage.EXTRACTOR).route.physical_model == "gpt-6-luna"
+    assert routing.artifact_model_name_for_stage(LLMStage.EXTRACTOR) == expected
+
+
+def test_extraction_artifact_model_identity_keeps_legacy_physical_route() -> None:
+    routing = V2RoutingConfig.from_environment(
+        {
+            "LUNA_API_KEY": "test-openai",
+            "MIMO_API_KEY": "test-mimo",
+            "LUNA_INPUT_USD_PER_TOKEN": "0.000001",
+            "LUNA_OUTPUT_USD_PER_TOKEN": "0.000002",
+            "MIMO_V25_INPUT_USD_PER_TOKEN": "0.000001",
+            "MIMO_V25_OUTPUT_USD_PER_TOKEN": "0.000002",
+        },
+        repository_revision="test",
+    )
+
+    assert routing.artifact_model_name_for_stage(LLMStage.EXTRACTOR) == "mimo-v2.5-pro"
+
+
 def test_selected_openai_route_accepts_luna6_marker_and_legacy_luna5_marker() -> None:
     for marker in ("gpt-6-luna", "gpt-5.6-luna"):
         routing = V2RoutingConfig.from_environment(

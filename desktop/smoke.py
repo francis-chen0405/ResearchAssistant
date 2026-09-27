@@ -10,21 +10,9 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from queue import Queue
-from threading import Thread
-from typing import TextIO
 
 import httpx
-
-
-def startup_line(stream: TextIO) -> str:
-    lines: Queue[str] = Queue(maxsize=1)
-
-    def read_line() -> None:
-        lines.put(stream.readline())
-
-    Thread(target=read_line, daemon=True).start()
-    return lines.get(timeout=45)
+from smoke_support import BackendMonitor, wait_for_health
 
 
 def main() -> None:
@@ -68,6 +56,7 @@ def main() -> None:
             stderr=subprocess.PIPE,
             text=True,
         )
+        monitor = BackendMonitor(process, label="frozen smoke")
         try:
             assert process.stdin is not None and process.stdout is not None
             process.stdin.write(
@@ -77,7 +66,7 @@ def main() -> None:
                 + "\n"
             )
             process.stdin.flush()
-            bootstrap = json.loads(startup_line(process.stdout))
+            bootstrap = json.loads(monitor.startup())
             assert bootstrap["self_test"]
             assert bootstrap["identity"].startswith("source-sha256:")
             with httpx.Client(
@@ -85,15 +74,7 @@ def main() -> None:
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=10,
             ) as client:
-                for _attempt in range(100):
-                    try:
-                        if client.get("/api/health").status_code == 200:
-                            break
-                    except httpx.HTTPError:
-                        pass
-                    time.sleep(0.1)
-                else:
-                    raise RuntimeError("Frozen backend health failed")
+                wait_for_health(client)
                 assert client.get("/api/health", headers={"Authorization": ""}).status_code == 401
                 assert (
                     client.get("/api/health", headers={"Origin": "https://example.com"}).status_code
@@ -124,7 +105,7 @@ def main() -> None:
                     "/api/credentials", json={"mimo_api_key": saved_secret}
                 ).raise_for_status()
             process.stdin.close()
-            assert process.wait(timeout=100) == 0
+            monitor.wait_exit()
             assert (Path(temporary) / "desktop-smoke.txt").read_text() == "persistent"
             assert (
                 json.loads((Path(temporary) / "preferences.json").read_text())["interface"][
@@ -141,6 +122,7 @@ def main() -> None:
                 stderr=subprocess.PIPE,
                 text=True,
             )
+            second_monitor = BackendMonitor(second, label="frozen restart")
             try:
                 assert second.stdin is not None and second.stdout is not None
                 second.stdin.write(
@@ -155,40 +137,41 @@ def main() -> None:
                     + "\n"
                 )
                 second.stdin.flush()
-                restarted = json.loads(startup_line(second.stdout))
+                restarted = json.loads(second_monitor.startup())
                 assert restarted["identity"] == bootstrap["identity"]
+                with httpx.Client(
+                    base_url=restarted["origin"],
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
+                ) as client:
+                    wait_for_health(client)
                 second.stdin.close()
-                assert second.wait(timeout=100) == 0
+                second_monitor.wait_exit()
             finally:
-                if second.poll() is None:
-                    second.kill()
-                    second.wait(timeout=10)
+                second_monitor.stop()
             print(
                 "PASS: frozen UI/backend, authentication, native vault cleanup, "
                 "durable settings, owned Wigolo lifecycle"
             )
         finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=10)
-            cleanup = subprocess.run(
-                [str(executable), "--self-test", "--cleanup-smoke"],
-                input=json.dumps(
-                    {"token": token, "resources": str(resources), "smoke_namespace": namespace}
+            try:
+                monitor.stop()
+            finally:
+                cleanup = subprocess.run(
+                    [str(executable), "--self-test", "--cleanup-smoke"],
+                    input=json.dumps(
+                        {"token": token, "resources": str(resources), "smoke_namespace": namespace}
+                    )
+                    + "\n",
+                    env=env,
+                    cwd=temporary,
+                    capture_output=True,
+                    text=True,
+                    timeout=45,
+                    check=False,
                 )
-                + "\n",
-                env=env,
-                cwd=temporary,
-                capture_output=True,
-                text=True,
-                timeout=45,
-                check=False,
-            )
-            if cleanup.returncode != 0:
-                raise RuntimeError("Native smoke credential cleanup failed")
-            if process.returncode:
-                assert process.stderr is not None
-                print(process.stderr.read(), file=sys.stderr)
+                if cleanup.returncode != 0:
+                    raise RuntimeError("Native smoke credential cleanup failed")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,10 @@ def _load_streamlit() -> object:
     try:
         import streamlit as st
     except ImportError as exc:  # pragma: no cover - environment guard
-        raise RuntimeError("Streamlit is required to launch the local evidence browser") from exc
+        raise RuntimeError(
+            "Streamlit is required for the legacy evidence browser. "
+            "Run `python -m pip install -r requirements-legacy.txt` from the repository root."
+        ) from exc
     return st
 
 

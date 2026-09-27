@@ -82,7 +82,7 @@ build requirements using `desktop/constraints.txt`; install web dependencies wit
 committed pnpm lock and desktop dependencies with the committed npm locks.
 
 ```sh
-python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt pytest ruff
+python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt httpx2 pytest ruff
 pnpm --dir web install --frozen-lockfile
 npm ci --prefix desktop
 node desktop/node_modules/electron/install.js
@@ -145,10 +145,12 @@ Do not embed this temporary path or the checkout path in application code.
 
 ## Phase 3 frontend verification and upgrade behavior
 
-Run `node desktop/frontend-smoke.cjs` after exporting `web/out`. It uses the existing
-acquisition Playwright installation and intercepts every application API; no provider
-calls are made. Screenshots are written to `desktop/build/phase3-screenshots/`.
-The desktop CI workflow includes this interaction test on both target platforms.
+After exporting `web/out`, run `node desktop/frontend-smoke.cjs`,
+`node desktop/frontend-poll-smoke.cjs`, and
+`node desktop/configuration-race-smoke.cjs`. They use the existing acquisition
+Playwright installation and mocked application APIs; no provider calls are made.
+The interaction smoke writes screenshots to `desktop/build/phase3-screenshots/`.
+Desktop CI runs all three on both target platforms.
 
 `desktop/upgrade-smoke.py PREVIOUS_RESOURCES CURRENT_RESOURCES` tests isolated historical
 read/export, preferences and cross-executable native credentials. On macOS unsigned
@@ -160,3 +162,22 @@ checks. Same-build vault persistence and old-to-new non-secret data remain separ
 See [Phase 3 verification](../docs/verification/phase-3.md) and
 [adaptive-search verification](../docs/verification/adaptive-search-reliability.md) for
 actual results and limitations.
+
+## Upgrade diagnostics
+
+Run the upgrade check against a previous resource directory and a freshly rebuilt
+current directory. Both must contain distinct backend executables. The test retains
+all native-credential, preference-migration, exact historical-report and byte-identical
+database assertions. It waits for authenticated health after each startup announcement;
+announcing an address alone does not mean the API is accepting requests.
+
+Both output pipes are drained continuously. Startup and shutdown failures report the
+launch index, elapsed time, exit status, last known phase and stderr character count.
+New self-test builds emit fixed phase labels, including credential access and identity
+calculation; older builds report that phase information is unavailable. Raw child
+output and bootstrap values are not logged. The startup deadline remains 45 seconds
+and shutdown remains 100 seconds. A vault permission prompt still requires an OS
+response; the harness neither grants access nor silently skips credential checks.
+
+The legacy Streamlit interface is optional: install `requirements-legacy.txt` from the
+repository root only if you use it. The desktop runtime does not require Streamlit.

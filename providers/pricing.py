@@ -97,6 +97,7 @@ def cache_prices_for_route(base_url: str, model: str) -> CacheTokenPrices | None
                 cached_per_million=Decimal("0.0028"),
                 output_per_million=Decimal("0.28"),
             )
+    # Historical Standard profiles still use this model outside the active choice catalog.
     if base_url == "https://api.openai.com/v1" and model == "gpt-5.6-luna":
         return CacheTokenPrices(
             input_per_million=Decimal("0.20"),

@@ -1,177 +1,24 @@
 # Current decisions
 
-Current implementation scope is [Per-step model choices](.agent/plans/per-step-model-choices.md),
-explicitly authorized on 2026-09-23. It follows the completed neutral evidence ownership,
-explicit pipeline-selection and SQLite status-polling phases and preserves the Mac-first
-release boundary. Earlier dated scope statements below remain historical.
+This file records decisions that still govern current behavior. The exact preceding decision history is preserved in the [2026-09-26 archive](docs/archive/2026-09-26-maintenance/DECISIONS.md); older complete records are indexed in [the archive guide](docs/archive/INDEX.md). Completed plan files remain authoritative evidence for their implementation details.
 
-## 2026-09-23 — Per-step model choices
+## Research execution
 
-Fresh runs select one of six reviewed provider models/efforts independently for each
-of seven active model steps. Scout and exact extraction default to Luna High; the other
-five default to Luna XHigh. The choice fixes endpoint, model ID, effort or thinking mode,
-allowance, credential and conservative price cap in the run fingerprint. Default model
-budget stays $0.20 with explicit selection up to $20. The historical Standard profile,
-saved run data, strict output/evidence gates and deterministic stages remain compatible.
-See [model settings](docs/model-settings.md) for the exact catalog and source pricing.
+- Fresh website, API, and ordinary CLI requests select the v2 pipeline. Historical provider execution remains available only through the explicit `legacy_runner` dependency. See [explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md).
+- Fresh v2 stages import neutral source-evidence and Analyst helpers. Historical agent imports and the historical orchestrator remain supported compatibility surfaces. See [neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md).
+- Fresh deep analysis uses deterministic priority waves of at most four sources. Dispatch only a budget-safe priority prefix, do not share SQLite connections or mutable handoffs across workers, and drain in-flight work on cancellation. See [deep-analysis concurrency](.agent/plans/deep-analysis-deterministic-concurrency.md).
+- Each of seven active model stages has an explicit selectable route. A selected choice, route settings, price cap, stage allowance, and run configuration participate in frozen identity. Defaults and the historical Standard profile remain distinct. See [per-step model choices](.agent/plans/per-step-model-choices.md) and [model settings](docs/model-settings.md).
+- Physical provider attempts reserve their calls, tokens, and conservative cost before transport. Unknown or missing usage does not erase exposure. Historical costs and run identities are not rewritten.
 
-The preceding implementation decision is the 2026-09-19 request-scoped SQLite status
-inspection policy recorded below.
+## Evidence, storage, and application boundaries
 
-## 2026-09-23 — Neutral evidence ownership
+- Exact quotations, source provenance, separate Evidence Quality and Claim Fit scores, immutable Ledger/output artifacts, and deterministic final validation remain required. Analyzer Admission checks structure and policy; it is not independent proof of entailment.
+- SQLite remains schema 13. History and status inspection use validated read-only access. Each v2 status request owns one validated session; polling does not overlap requests. No WAL, migration, or persistence redesign is inferred. See [SQLite status polling](.agent/plans/sqlite-status-polling.md).
+- Credentials remain in native macOS Keychain or Windows Credential Manager. Secrets are not placed in browser storage, logs, SQLite, exports, or child arguments; the documented OpenAlex upstream HTTPS query-key exception is the only URL exception. Runtime data remains outside the application bundle and checkout.
+- Package metadata uses the Python distribution name `researchassistant`, version `0.1.0`; user-facing CLI and application copy use `ResearchAssistant`. Streamlit remains outside the base install and is installed only through `requirements-legacy.txt`. The `dev` dependency set includes `httpx2` for Starlette tests; versions are constrained in `desktop/constraints.txt`.
 
-Fresh v2 stages import source-evidence and Analyst helpers from neutral root modules rather
-than historical agent modules. Keep the old researcher, analyst and supporting-researcher
-paths as compatibility facades or historical retrieval owners. Preserve behavior, public
-imports and persisted contracts; do not remove the historical orchestrator without a
-separate compatibility/deprecation decision.
+## Release boundary
 
-## 2026-09-20 — Explicit compatibility injection
+macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).
 
-Ordinary CLI/controller construction uses v2. Select historical execution only by
-passing a typed `legacy_runner`; replace CLI function-identity probing and subprocess
-global reassignment with explicit runner/identity dependencies. Preserve the controller's
-`runner` keyword as an alias and reject conflicting injections before worker allocation.
-Keep historical public functions, fixtures and legacy evidence-helper ownership intact.
-Callable protocols describe application dependencies; research handoffs remain strict
-Pydantic models. Work and commit directly on local `master`, without push or publication.
-
-## 2026-09-17 — Reliability before distribution
-
-The user explicitly selected research reliability as the next milestone. Correct the
-demonstrated fresh planner schema/default contradiction and reduce new Scout batches to
-20 based on successful smaller live batches. Keep generic historical coverage schemas,
-all evidence validators, two-attempt Scout limit and global budgets unchanged. Round 4
-must reserve for the smaller batches. This extends the active Mac/cache plan; it does
-not replenish the five-submission test allowance. See
-[reliability evidence](docs/verification/planner-scout-reliability.md).
-
-## 2026-09-17 — Mac first and verified cache accounting
-
-The user selected macOS as the first delivery target and deferred Windows. They
-authorized official pricing research and correction for Luna High/MiMo Pro; the shared
-Scout route is included to prevent cross-model accounting. Reservations keep existing
-caps. Completed usage uses verified model/endpoint-specific cache rates, including
-Luna cache writes and long-context multipliers; uncertain cache metadata stays conservative.
-Luna's configured High effort is now explicit in the request, with standard service tier
-on the official endpoint. Historical usage/reports remain unchanged; new source requires
-new runs. No dependencies or database migrations are introduced.
-
-The user has no Apple Developer membership/certificate. Deliver an unsigned downloadable
-Mac test candidate; signing/notarization and clean-machine/minimum-OS acceptance remain
-public-release limitations. The package now declares the documented macOS 14 floor.
-The user authorized at most five research prompts under the proposed combined $5 model
-budget plus existing search/acquisition quotas. Test history is isolated; no remote
-publication or account purchase is authorized. See the
-[active plan](.agent/plans/mac-release-cache-pricing.md) for evidence and outcome.
-
-## 2026-09-14 — Authorized adaptive-search reliability correction
-
-The user's implementation request extends Phase 3 only for the approved corrective plan.
-Fresh plans receive an exact-claim coverage default and atomic full-artifact persistence.
-Round-aware gap instructions preserve stable Gap identity. Round 2/3 permit one bounded
-repair with persisted diagnostics and physical-call linkage, current budget checks and
-unchanged downstream reserves. Unknown attempts are never silently reissued; no automatic
-fallback query is added. Round 4 keeps its existing Governor authorization and call limits.
-
-Fresh source-selection handoffs explicitly select conservative gap reporting. Relevant
-admitted evidence does not prove gap resolution; latest strategy coverage is distinct from
-final proof. Old handoffs retain legacy reporting and stored reports remain unchanged.
-No dependency or database migration is introduced. Changed executable/prompt identity still
-requires a new run. Acquisition quality, pricing and timeout changes remain separate work.
-
-## 2026-09-06 — Phase 2 code and documentation cleanup
-
-Use coherent implementation modules behind stable public imports. Shared domain
-contracts, v2 strategy contracts and v2 evidence/results have one-way dependencies.
-Fixture execution is separate from historical provider execution. Schema/migration
-code is separate from typed persistence/read-only readers. Live request/view models,
-progress projections and history readers are separate from worker and lock ownership.
-Shared application identity and exit codes no longer require importing the CLI.
-
-Preserve existing schemas, SQL/migrations, policy identities, prompt bytes, strictness,
-immutability, prices/accounting, cancellation and release gates. Source layout changes
-naturally change executable fingerprints and require new runs; do not relax resume.
-No dependency is added and no historical execution/read/export contract is deleted.
-Existing native platform boundaries are retained because Phase 1 already separated
-paths, preferences, file locks, credential vaults and process trees.
-
-The old requirement to define every model in `models.py` and every schema in
-`store.py:init_db()` is superseded by this explicitly authorized refactor. Public imports
-and writable initialization remain compatible. This is an organization change only.
-
-Current documentation replaces accumulated chronological descriptions with architecture,
-invariants, operating instructions and concise state. Exact pre-cleanup files remain in
-[the archive](docs/archive/README.md); historical phase plans retain stable paths.
-`prompts/*.md` remain executable application inputs and are untouched.
-
-## Retained runtime decisions
-
-- [Desktop packaging](docs/archive/pre-phase-2/DECISIONS.md#2026-09-05--phase-1-local-desktop-packaging):
-  Electron, static Next.js, PyInstaller backend, separate locked Node/Wigolo/Chromium;
-  native vaults and portable data paths. The earlier master-only instruction applied
-  to Phase 1; Phase 2 uses the user-requested `codex/` branch.
-- [V2 production cutover](docs/archive/pre-phase-2/DECISIONS.md#2026-08-21---researchassistant-v2-phase-12-production-hardening-and-cutover):
-  fresh website/CLI execution uses v2; all physical attempts count against one budget.
-- [Analyzer Admission](docs/archive/pre-phase-2/DECISIONS.md#2026-08-26---researchassistant-v2-phase-13-analyzer-admission-cutover):
-  one Luna assessment/statement call, deterministic admission and synthesis, no fresh
-  Reviewer call, explicit reduced semantic-verification disclosure.
-- [Conditional Round 4](.agent/plans/phase-v2-14-conditional-round-four.md):
-  bounded Governor authority, stable Gap identities and deterministic reconciliation.
-- Native vault persistence, immutable evidence, exact quotations/provenance, separate
-  score axes, conservative accounting, read-only history/export and exact resume
-  remain mandatory as stated in [ARCHITECTURE.md](ARCHITECTURE.md).
-
-Earlier choices and their supersessions remain in the
-[complete decision history](docs/archive/pre-phase-2/DECISIONS.md). Historical policy
-text describes its original contract; it is not authorization for current changes.
-
-## 2026-09-07 — Phase 3 frontend and provider/model settings
-
-The user's explicit Phase 3 request supersedes the previous prohibition on frontend work.
-Use the existing Electron/static Next.js/Python architecture and native credential vault.
-The ivory/grid presentation and local interactive preview share real workspace components;
-the preview was later refined with curated public report excerpts.
-Support only the established MiMo/Luna role combination; expose roles and conservative
-maintained caps without claiming arbitrary model compatibility. Profile resolution copies
-configuration before startup, and the first planner reservation is validated offline.
-For the Phase 3 frontend/settings scope, no dependency or broader research behavior change
-was needed. The later adaptive-search correction is recorded above.
-
-A denied old-to-new Keychain smoke exposed confusing password guidance. Both frozen backends
-were ad hoc signed with different designated identities; macOS required renewed access and
-returned -128 on cancellation. Clarify the system password versus provider API key in Settings
-and sanitized errors. Preserve OS vault access controls. Cross-version credentials remain
-unverified; stable production signing and user-granted access must be verified separately.
-
-Follow-up 2026-09-08: the explicitly authorized isolated cross-version credential test
-passed unchanged. This supersedes the unverified local upgrade result above; production
-signing and Windows verification remain separate gates.
-
-## 2026-09-18 — Bounded deterministic fresh-v2 source waves
-
-Use a fixed maximum of four source workers in fresh deep analysis. Dispatch only the next
-budget-safe priority prefix; keep the three model-call envelope within each source
-sequential. This reduces idle transport time while preserving deterministic source choice,
-the shared budget lock, per-source caps, restart artifacts and evidence validation.
-
-Version the backfill policy as
-`researchassistant-v2-phase-13-deep-analysis-backfill-analyzer-admission-v2-waves4` because
-worker count can change which source calls reserve first near a constrained boundary.
-Cancellation remains its own exception across `invoke_llm`; a cancelled wave drains but
-cannot write aggregate completion. Use a shared typed bulk reader for physical-call audit
-recovery and reconciliation. No acquisition concurrency, routing/budget/deadline change,
-dependency, schema migration or paid validation is part of this decision.
-
-## 2026-09-19 — Request-scoped SQLite status inspection
-
-Use one validated read-only session per v2 status request, passing its connection through
-progress and terminal reconstruction. Retain one integrity/schema validation each request
-rather than caching validation or connections across requests. This bounds repeated open
-and validation work without relaxing corruption checks or retaining stale read sessions.
-Status polling waits for completion before scheduling its next request and cancels its
-pending work on terminal state, run replacement or unmount.
-
-WAL activation, busy-timeout changes, checkpoint/sidecar management and backup/import
-changes remain a separate storage decision. No schema, dependency, research behavior,
-paid-call allowance or release gate changes are authorized by this phase.
+The current authorized work is [audit maintenance](.agent/plans/audit-maintenance.md). It does not renew paid-test allowance or change research policy, persisted historical data, or the release boundary.

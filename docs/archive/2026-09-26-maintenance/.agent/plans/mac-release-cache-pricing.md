@@ -7,9 +7,8 @@ the configured Luna High request, Mac packaging/verification and release documen
 
 Implementation and unsigned Mac delivery are complete, including the user-authorized
 reliability extension below: 992 Python tests, Ruff, offline evaluation, native/upgrade/
-packaged/installed checks and archive integrity passed for the 2026-09-17 candidate.
-Its generated local artifacts are historical evidence, not a current download location.
-See the current [status](../../STATUS.md) and
+packaged/installed checks and archive integrity pass. Latest app is installed and downloads
+are in `desktop/dist/mac-reliability/`. See
 [delivery evidence](../../docs/verification/planner-scout-reliability.md).
 Live acceptance remains open: the original five-submission allowance is exhausted,
 with no completed final report and $0.178617536 recorded model exposure. Do not run more
