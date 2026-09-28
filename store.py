@@ -47,10 +47,12 @@ from models import (
     RetrievalRecord,
     RunCancellationRequest,
     RunManifest,
+    RunStatus,
     ScoreDecision,
     SearchQuery,
     SegmentOffset,
     SourceSnapshot,
+    Stage,
     StatementDraft,
     StatementReviewResult,
     StrictModel,
@@ -216,6 +218,7 @@ from store_schema import (
 )
 from store_schema import (
     initialize_database,
+    validate_schema_structure,
 )
 
 # ---------------------------------------------------------------------------
@@ -331,7 +334,12 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
             DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
             "schema migration records are unreadable; inspection made no changes",
         ) from exc
-    versions = {int(row["version"]): row["description"] for row in rows}
+    if any(not isinstance(row["version"], int) for row in rows):
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            "schema migration versions are invalid; inspection made no changes",
+        )
+    versions = {row["version"]: row["description"] for row in rows}
     latest = max(versions, default=0)
     if latest > CURRENT_SCHEMA_VERSION:
         raise _compatibility_error(
@@ -436,6 +444,15 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
             f"required schema object is missing or invalid ({detail}); inspection made no changes",
             schema_version=latest,
         )
+    try:
+        validate_schema_structure(conn, latest)
+    except sqlite3.DatabaseError as exc:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            f"database schema or foreign-key integrity check failed: {exc}; "
+            "inspection made no changes",
+            schema_version=latest,
+        ) from exc
     return DatabaseCompatibilityResult(
         compatible=True,
         schema_version=latest,
@@ -641,6 +658,144 @@ def read_portfolio_items(db_path: DatabaseReader, run_id: UUID) -> tuple[Portfol
                 return ()
             raise
     return tuple(PortfolioItem.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_mvp10_portfolio_batch(
+    db_path: str,
+    entries: Sequence[EvidenceTrailEntry],
+    items: Sequence[PortfolioItem],
+) -> None:
+    """Append one portfolio phase atomically, accepting exact historical replay."""
+    conn = _connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for entry in entries:
+            stored_entry = conn.execute(
+                """SELECT payload_json FROM evidence_trail_entries
+                   WHERE run_id = ? AND retrieval_attempt_id = ?""",
+                (str(entry.run_id), str(entry.retrieval_attempt_id)),
+            ).fetchone()
+            prior_entry = (
+                EvidenceTrailEntry.model_validate_json(stored_entry["payload_json"])
+                if stored_entry is not None
+                else None
+            )
+            legacy_missing_provenance = (
+                prior_entry is not None and _legacy_missing_snapshot_projection(prior_entry, entry)
+            )
+            stored_family = conn.execute(
+                """SELECT source_family_id, family_key, identification_basis
+                   FROM source_family_members WHERE run_id = ? AND retrieval_attempt_id = ?""",
+                (str(entry.run_id), str(entry.retrieval_attempt_id)),
+            ).fetchone()
+            if legacy_missing_provenance:
+                if stored_family is not None:
+                    raise sqlite3.IntegrityError(
+                        "legacy evidence trail has conflicting source family membership"
+                    )
+            elif entry.source_family is not None:
+                family = entry.source_family
+                family_values = (
+                    str(family.source_family_id),
+                    family.family_key,
+                    family.identification_basis,
+                )
+                if stored_family is None:
+                    conn.execute(
+                        """INSERT INTO source_family_members
+                           (run_id, retrieval_attempt_id, source_family_id, family_key,
+                            identification_basis, created_at) VALUES (?, ?, ?, ?, ?, ?)""",
+                        (
+                            str(entry.run_id),
+                            str(entry.retrieval_attempt_id),
+                            *family_values,
+                            _dt_to_iso(entry.created_at),
+                        ),
+                    )
+                elif tuple(stored_family) != family_values:
+                    raise sqlite3.IntegrityError(
+                        "source family replay conflicts with immutable data"
+                    )
+            elif stored_family is not None:
+                raise sqlite3.IntegrityError("source family replay conflicts with immutable data")
+            if stored_entry is None:
+                conn.execute(
+                    """INSERT INTO evidence_trail_entries
+                       (trail_entry_id, run_id, retrieval_attempt_id, payload_json, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        str(entry.trail_entry_id),
+                        str(entry.run_id),
+                        str(entry.retrieval_attempt_id),
+                        entry.model_dump_json(),
+                        _dt_to_iso(entry.created_at),
+                    ),
+                )
+            else:
+                assert prior_entry is not None
+                if not legacy_missing_provenance and prior_entry != entry.model_copy(
+                    update={"created_at": prior_entry.created_at}
+                ):
+                    raise sqlite3.IntegrityError(
+                        "evidence trail replay conflicts with immutable data"
+                    )
+        for item in items:
+            stored_item = conn.execute(
+                "SELECT payload_json FROM portfolio_items WHERE run_id = ? AND ledger_claim_id = ?",
+                (str(item.run_id), str(item.ledger_claim_id)),
+            ).fetchone()
+            if stored_item is None:
+                conn.execute(
+                    """INSERT INTO portfolio_items
+                       (run_id, ledger_claim_id, source_family_id, payload_json)
+                       VALUES (?, ?, ?, ?)""",
+                    (
+                        str(item.run_id),
+                        str(item.ledger_claim_id),
+                        str(item.source_family_id),
+                        item.model_dump_json(),
+                    ),
+                )
+            else:
+                prior_item = PortfolioItem.model_validate_json(stored_item["payload_json"])
+                if prior_item != item.model_copy(update={"added_at": prior_item.added_at}):
+                    raise sqlite3.IntegrityError("portfolio replay conflicts with immutable data")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _legacy_missing_snapshot_projection(
+    prior: EvidenceTrailEntry,
+    current: EvidenceTrailEntry,
+) -> bool:
+    """Recognize only the earlier snapshot-ID lookup bug's stored projection."""
+    if (
+        current.source_family is None
+        or current.snapshot_status != "snapshotted"
+        or current.snapshot_sha256 is None
+        or prior.source_family is not None
+        or prior.snapshot_status != "not snapshotted"
+        or prior.snapshot_sha256 is not None
+        or prior.model_attempt_ids
+        or prior.accepted_statement is not None
+        or prior.accepted_quote is not None
+        or prior.cost_incurred
+    ):
+        return False
+    projected = current.model_copy(
+        update={
+            "source_family": None,
+            "snapshot_status": "not snapshotted",
+            "snapshot_sha256": None,
+            "model_attempt_ids": (),
+            "accepted_statement": None,
+            "accepted_quote": None,
+            "cost_incurred": False,
+            "created_at": prior.created_at,
+        }
+    )
+    return prior == projected
 
 
 def insert_portfolio_coverage_assessment(
@@ -2139,6 +2294,22 @@ def insert_v2_artifact(
     created_at: datetime,
 ) -> V2PersistedArtifact:
     """Persist a canonical v2 artifact once, refusing a missing v2 identity or drift."""
+    conn = _connect(db_path)
+    try:
+        persisted = _insert_v2_artifact_on_connection(conn, artifact_key, artifact, created_at)
+        conn.commit()
+        return persisted
+    finally:
+        conn.close()
+
+
+def _insert_v2_artifact_on_connection(
+    conn: sqlite3.Connection,
+    artifact_key: str,
+    artifact: StrictModel,
+    created_at: datetime,
+) -> V2PersistedArtifact:
+    """Apply the existing immutable artifact checks within the caller's transaction."""
     if not artifact_key:
         raise ValueError("artifact_key must not be empty")
     _require_aware_datetime(created_at, "created_at")
@@ -2169,43 +2340,93 @@ def insert_v2_artifact(
         payload_sha256=payload_sha256,
         created_at=created_at,
     )
+    identity = conn.execute(
+        "SELECT pipeline_identity, policy_identity FROM v2_run_identities WHERE run_id = ?",
+        (str(run_id),),
+    ).fetchone()
+    if identity is None:
+        raise ValueError("v2 artifacts require an explicit v2 run identity")
+    if (
+        identity["pipeline_identity"] != V2_PIPELINE_IDENTITY
+        or identity["policy_identity"] != V2_POLICY_IDENTITY
+    ):
+        raise ValueError("v2 run identity is incompatible with this pipeline")
+    existing = conn.execute(
+        "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+        (str(run_id), artifact_key),
+    ).fetchone()
+    if existing is not None:
+        restored = _row_to_v2_artifact(existing)
+        if restored != persisted:
+            raise sqlite3.IntegrityError(
+                f"v2 artifact {artifact_key} already exists with different data"
+            )
+        return restored
+    conn.execute(
+        """INSERT INTO v2_artifacts
+           (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            str(persisted.run_id),
+            persisted.artifact_key,
+            persisted.artifact_type,
+            persisted.payload_json,
+            persisted.payload_sha256,
+            _dt_to_iso(persisted.created_at),
+        ),
+    )
+    return persisted
+
+
+def insert_v2_terminal_artifact(
+    db_path: str,
+    artifact_key: str,
+    artifact: StrictModel,
+    completed_at: datetime,
+    status: RunStatus,
+    stage: Stage,
+) -> V2PersistedArtifact:
+    """Commit an immutable terminal artifact and its mutable run manifest together."""
+    if status not in {
+        RunStatus.COMPLETED,
+        RunStatus.BLOCKED,
+        RunStatus.CANCELLED,
+        RunStatus.FAILED,
+    }:
+        raise ValueError("a terminal artifact requires a terminal run status")
+    _require_aware_datetime(completed_at, "completed_at")
+    run_id = getattr(artifact, "run_id", None)
+    raw_claim = getattr(artifact, "raw_claim", None)
+    if not isinstance(run_id, UUID) or not isinstance(raw_claim, str):
+        raise ValueError("terminal artifact requires a run ID and claim")
     conn = _connect(db_path)
     try:
-        identity = conn.execute(
-            "SELECT pipeline_identity, policy_identity FROM v2_run_identities WHERE run_id = ?",
+        conn.execute("BEGIN IMMEDIATE")
+        persisted = _insert_v2_artifact_on_connection(conn, artifact_key, artifact, completed_at)
+        current = conn.execute(
+            "SELECT raw_claim, status, current_stage, completed_at FROM runs WHERE run_id = ?",
             (str(run_id),),
         ).fetchone()
-        if identity is None:
-            raise ValueError("v2 artifacts require an explicit v2 run identity")
+        if current is None:
+            raise KeyError(f"run {run_id} not found")
+        if current["raw_claim"] != raw_claim:
+            raise ValueError("terminal artifact claim differs from immutable run claim")
         if (
-            identity["pipeline_identity"] != V2_PIPELINE_IDENTITY
-            or identity["policy_identity"] != V2_POLICY_IDENTITY
+            current["status"] != status.value
+            or current["current_stage"] != stage.value
+            or current["completed_at"] is None
         ):
-            raise ValueError("v2 run identity is incompatible with this pipeline")
-        existing = conn.execute(
-            "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
-            (str(run_id), artifact_key),
-        ).fetchone()
-        if existing is not None:
-            restored = _row_to_v2_artifact(existing)
-            if restored != persisted:
-                raise sqlite3.IntegrityError(
-                    f"v2 artifact {artifact_key} already exists with different data"
-                )
-            return restored
-        conn.execute(
-            """INSERT INTO v2_artifacts
-               (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                str(persisted.run_id),
-                persisted.artifact_key,
-                persisted.artifact_type,
-                persisted.payload_json,
-                persisted.payload_sha256,
-                _dt_to_iso(persisted.created_at),
-            ),
-        )
+            conn.execute(
+                """UPDATE runs SET status = ?, current_stage = ?, updated_at = ?,
+                   completed_at = ? WHERE run_id = ?""",
+                (
+                    status.value,
+                    stage.value,
+                    _dt_to_iso(completed_at),
+                    _dt_to_iso(completed_at),
+                    str(run_id),
+                ),
+            )
         conn.commit()
         return persisted
     finally:
@@ -2692,6 +2913,7 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
             """UPDATE model_route_attempts SET
                    status = ?, failure_code = ?, failure_reason = ?, ended_at = ?,
                    latency_ms = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?,
+                   cached_input_tokens = ?, uncached_input_tokens = ?,
                    cost_usd = NULL, cost_usd_exact = ?, output_json = ?
                WHERE attempt_id = ?""",
             (
@@ -2703,6 +2925,8 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
                 usage.input_tokens if usage else None,
                 usage.output_tokens if usage else None,
                 usage.total_tokens if usage else None,
+                usage.cached_input_tokens if usage else None,
+                usage.uncached_input_tokens if usage else None,
                 canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
                 attempt.output_json,
                 str(attempt.attempt_id),
@@ -2746,10 +2970,10 @@ def _insert_model_route_attempt_row(
             pinned_model_snapshot, route_index, attempt_number, input_artifact_ids,
             status, retry_reason, escalation_reason, failure_code, failure_reason,
             started_at, ended_at, latency_ms, reserved_tokens, reserved_cost_usd,
-            reserved_cost_usd_exact, input_tokens, output_tokens, total_tokens, cost_usd,
-            cost_usd_exact, output_json)
+            reserved_cost_usd_exact, input_tokens, output_tokens, total_tokens,
+            cached_input_tokens, uncached_input_tokens, cost_usd, cost_usd_exact, output_json)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL,
-                   ?, ?, ?, ?, NULL, ?, ?)""",
+                   ?, ?, ?, ?, ?, ?, NULL, ?, ?)""",
         (
             str(attempt.attempt_id),
             str(attempt.run_id),
@@ -2776,6 +3000,8 @@ def _insert_model_route_attempt_row(
             usage.input_tokens if usage else None,
             usage.output_tokens if usage else None,
             usage.total_tokens if usage else None,
+            usage.cached_input_tokens if usage else None,
+            usage.uncached_input_tokens if usage else None,
             canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
             attempt.output_json,
         ),
@@ -2783,8 +3009,17 @@ def _insert_model_route_attempt_row(
 
 
 def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
+    row_columns = set(row.keys())
+    cached_input_tokens = (
+        row["cached_input_tokens"] if "cached_input_tokens" in row_columns else None
+    )
+    uncached_input_tokens = (
+        row["uncached_input_tokens"] if "uncached_input_tokens" in row_columns else None
+    )
     usage_values = (
         row["input_tokens"],
+        cached_input_tokens,
+        uncached_input_tokens,
         row["output_tokens"],
         row["total_tokens"],
         row["cost_usd_exact"],
@@ -2794,6 +3029,8 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
     if any(value is not None for value in usage_values):
         usage = ModelUsageMetadata(
             input_tokens=row["input_tokens"],
+            cached_input_tokens=cached_input_tokens,
+            uncached_input_tokens=uncached_input_tokens,
             output_tokens=row["output_tokens"],
             total_tokens=row["total_tokens"],
             cost_usd=(

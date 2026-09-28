@@ -6,12 +6,16 @@ connection; read-only inspection never invokes initialization or migrations.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Callable
+from functools import lru_cache
 
 from money import canonical_usd, parse_canonical_usd, parse_exact_usd
 
-CURRENT_SCHEMA_VERSION = 13
+CURRENT_SCHEMA_VERSION = 14
+
+CACHE_USAGE_SCHEMA_VERSION = 14
 
 RAW_CLAIM_SCHEMA_VERSION = 5
 
@@ -64,6 +68,7 @@ MIGRATION_DESCRIPTIONS = {
     11: "researchassistant-v2 phase-1 artifact foundation",
     12: "researchassistant-v2 phase-3 initial planner and round-1 searches",
     13: "researchassistant-v2 phase-10 reviewer Ledger provenance",
+    14: "persist cached and uncached model input-token usage",
 }
 
 _REQUIRED_TABLES = {
@@ -156,489 +161,496 @@ _REQUIRED_INDEXES = {
 
 
 def initialize_database(db_path: str, *, connect: Callable[[str], sqlite3.Connection]) -> None:
-    """Create every table if it does not already exist."""
+    """Validate existing structure before performing any writable upgrade."""
     conn = connect(db_path)
     try:
-        conn.executescript(
-            """
-            -- schema migrations -------------------------------------------
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version      INTEGER PRIMARY KEY,
-                description  TEXT NOT NULL,
-                applied_at   TEXT NOT NULL
-            );
-
-            INSERT OR IGNORE INTO schema_migrations
-                (version, description, applied_at)
-                VALUES (
-                    1,
-                    'phase-2 initial sqlite schema',
-                    '2026-06-26T00:00:00+00:00'
-                );
-
-            INSERT OR IGNORE INTO schema_migrations
-                (version, description, applied_at)
-                VALUES (
-                    4,
-                    'same-run provenance protection triggers',
-                    '2026-08-01T00:00:00+00:00'
-                );
-
-            INSERT OR IGNORE INTO schema_migrations
-                (version, description, applied_at)
-                VALUES (
-                    2,
-                    'phase-9 orchestration audit and checkpoint schema',
-                    '2026-07-17T00:00:00+00:00'
-                );
-
-            INSERT OR IGNORE INTO schema_migrations
-                (version, description, applied_at)
-                VALUES (
-                    3,
-                    'mvp-3a provider fingerprints and budget reservations',
-                    '2026-07-24T00:00:00+00:00'
-                );
-
-            -- runs --------------------------------------------------------
-            CREATE TABLE IF NOT EXISTS runs (
-                run_id          TEXT PRIMARY KEY,
-                status          TEXT NOT NULL,
-                raw_claim       TEXT NOT NULL,
-                current_stage   TEXT NOT NULL,
-                created_at      TEXT NOT NULL,
-                updated_at      TEXT NOT NULL,
-                completed_at    TEXT
-            );
-
-            -- planner outputs ----------------------------------------------
-            CREATE TABLE IF NOT EXISTS planner_outputs (
-                run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
-                planner_prompt_version  TEXT NOT NULL,
-                planner_model_name      TEXT NOT NULL,
-                planned_at              TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS claim_definitions (
-                run_id                          TEXT PRIMARY KEY REFERENCES planner_outputs(run_id),
-                claim_text                      TEXT NOT NULL,
-                population                      TEXT NOT NULL,
-                jurisdiction                    TEXT NOT NULL,
-                time_period                     TEXT NOT NULL,
-                comparison_baseline             TEXT NOT NULL,
-                intervention_or_exposure        TEXT NOT NULL,
-                causal_or_comparative_meaning   TEXT NOT NULL,
-                created_at                      TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS ambiguities (
-                ambiguity_id    TEXT PRIMARY KEY,
-                run_id          TEXT NOT NULL REFERENCES planner_outputs(run_id),
-                description     TEXT NOT NULL,
-                impact          TEXT NOT NULL,
-                created_at      TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS search_queries (
-                query_id            TEXT PRIMARY KEY,
-                run_id              TEXT NOT NULL REFERENCES planner_outputs(run_id),
-                stance              TEXT NOT NULL,
-                provider            TEXT NOT NULL DEFAULT 'exa',
-                intent              TEXT NOT NULL DEFAULT 'broad_web',
-                query_round         INTEGER NOT NULL,
-                strategy            TEXT NOT NULL,
-                query_text          TEXT NOT NULL,
-                exclusion_parameters TEXT NOT NULL,
-                created_at          TEXT NOT NULL
-            );
-
-            -- retrieval attempts -------------------------------------------
-            CREATE TABLE IF NOT EXISTS retrieval_attempts (
-                retrieval_attempt_id TEXT PRIMARY KEY,
-                run_id               TEXT NOT NULL REFERENCES runs(run_id),
-                query_id             TEXT NOT NULL REFERENCES search_queries(query_id),
-                query_round          INTEGER NOT NULL,
-                query_text           TEXT NOT NULL,
-                search_rank          INTEGER NOT NULL,
-                source_url           TEXT NOT NULL,
-                resolved_url         TEXT NOT NULL,
-                status               TEXT NOT NULL,
-                retrieved_at         TEXT NOT NULL
-            );
-
-            -- snapshots (INSERT-ONLY) --------------------------------------
-            CREATE TABLE IF NOT EXISTS snapshots (
-                snapshot_id           TEXT PRIMARY KEY,
-                run_id                TEXT NOT NULL REFERENCES runs(run_id),
-                retrieval_attempt_id  TEXT NOT NULL
-                    REFERENCES retrieval_attempts(retrieval_attempt_id),
-                source_url            TEXT NOT NULL,
-                retrieved_at          TEXT NOT NULL,
-                normalized_text       TEXT NOT NULL,
-                snapshot_sha256       TEXT NOT NULL,
-                word_count            INTEGER NOT NULL,
-                truncated             INTEGER NOT NULL,
-                created_at            TEXT NOT NULL
-            );
-
-            -- provisional extractions --------------------------------------
-            CREATE TABLE IF NOT EXISTS provisional_extractions (
-                run_id                   TEXT NOT NULL REFERENCES runs(run_id),
-                stance                   TEXT NOT NULL,
-                source_url               TEXT NOT NULL,
-                retrieval_attempt_id     TEXT NOT NULL
-                    REFERENCES retrieval_attempts(retrieval_attempt_id),
-                query_id                 TEXT NOT NULL REFERENCES search_queries(query_id),
-                query_round              INTEGER NOT NULL,
-                search_rank              INTEGER NOT NULL,
-                snapshot_id              TEXT NOT NULL REFERENCES snapshots(snapshot_id),
-                snapshot_sha256          TEXT NOT NULL,
-                extracted_quote_block    TEXT NOT NULL,
-                extraction_prompt_version TEXT NOT NULL,
-                extraction_model_name    TEXT NOT NULL,
-                extracted_at             TEXT NOT NULL
-            );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS
-                provisional_extractions_run_snapshot_stance
-                ON provisional_extractions(run_id, snapshot_id, stance);
-
-            -- candidates ---------------------------------------------------
-            CREATE TABLE IF NOT EXISTS candidates (
-                quote_block_id            TEXT PRIMARY KEY,
-                run_id                    TEXT NOT NULL REFERENCES runs(run_id),
-                stance                    TEXT NOT NULL,
-                source_url                TEXT NOT NULL,
-                retrieval_attempt_id      TEXT NOT NULL
-                    REFERENCES retrieval_attempts(retrieval_attempt_id),
-                query_id                  TEXT NOT NULL REFERENCES search_queries(query_id),
-                query_round               INTEGER NOT NULL,
-                search_rank               INTEGER NOT NULL,
-                retrieved_at              TEXT NOT NULL,
-                snapshot_id               TEXT NOT NULL REFERENCES snapshots(snapshot_id),
-                snapshot_sha256           TEXT NOT NULL,
-                snapshot_created_at       TEXT NOT NULL,
-                extracted_quote_block     TEXT NOT NULL,
-                segment_offsets           TEXT NOT NULL,
-                raw_segment_word_count    INTEGER NOT NULL,
-                has_statistical_markers   INTEGER NOT NULL,
-                claim_keyword_match_count INTEGER NOT NULL,
-                truncated                 INTEGER NOT NULL,
-                extraction_prompt_version TEXT NOT NULL,
-                extraction_model_name     TEXT NOT NULL,
-                extracted_at              TEXT NOT NULL,
-                post_filter_version       TEXT NOT NULL,
-                post_filter_validated_at  TEXT NOT NULL
-            );
-
-            -- analyst decisions --------------------------------------------
-            CREATE TABLE IF NOT EXISTS analyst_decisions (
-                run_id                  TEXT NOT NULL REFERENCES runs(run_id),
-                quote_block_id          TEXT NOT NULL REFERENCES candidates(quote_block_id),
-                evidence_quality        INTEGER NOT NULL,
-                claim_fit               INTEGER NOT NULL,
-                ledger_score            INTEGER,
-                placement               TEXT,
-                approved                INTEGER NOT NULL,
-                rationale               TEXT NOT NULL,
-                analyst_prompt_version  TEXT NOT NULL,
-                analyst_model_name      TEXT NOT NULL,
-                scored_at               TEXT NOT NULL,
-                PRIMARY KEY (run_id, quote_block_id)
-            );
-
-            -- statement review attempts ------------------------------------
-            CREATE TABLE IF NOT EXISTS statement_drafts (
-                statement_draft_id  TEXT PRIMARY KEY,
-                run_id              TEXT NOT NULL REFERENCES runs(run_id),
-                quote_block_id      TEXT NOT NULL REFERENCES candidates(quote_block_id),
-                stance              TEXT NOT NULL,
-                draft_statement     TEXT NOT NULL,
-                claim_fit           INTEGER NOT NULL,
-                analyst_prompt_version TEXT NOT NULL,
-                analyst_model_name  TEXT NOT NULL,
-                drafted_at          TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS statement_review_attempts (
-                run_id                       TEXT NOT NULL REFERENCES runs(run_id),
-                statement_draft_id           TEXT NOT NULL
-                    REFERENCES statement_drafts(statement_draft_id),
-                quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
-                approved                     INTEGER NOT NULL,
-                reviewer_approval_id         TEXT UNIQUE,
-                approved_factual_statement   TEXT,
-                failure_code                 TEXT,
-                rationale                    TEXT NOT NULL,
-                reviewer_prompt_version      TEXT NOT NULL,
-                reviewer_model_name          TEXT NOT NULL,
-                reviewed_at                  TEXT NOT NULL,
-                PRIMARY KEY (run_id, statement_draft_id)
-            );
-
-            -- ledger (INSERT-ONLY) -----------------------------------------
-            CREATE TABLE IF NOT EXISTS ledger_records (
-                ledger_claim_id              TEXT PRIMARY KEY,
-                run_id                       TEXT NOT NULL REFERENCES runs(run_id),
-                quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
-                stance                       TEXT NOT NULL,
-                approved_factual_statement   TEXT NOT NULL,
-                approved_claim_text          TEXT NOT NULL,
-                evidence_quality             INTEGER NOT NULL,
-                claim_fit                    INTEGER NOT NULL,
-                ledger_score                 INTEGER NOT NULL,
-                placement                    TEXT NOT NULL,
-                entailment                   TEXT NOT NULL,
-                source_url                   TEXT NOT NULL,
-                retrieval_attempt_id         TEXT NOT NULL
-                    REFERENCES retrieval_attempts(retrieval_attempt_id),
-                snapshot_id                  TEXT NOT NULL REFERENCES snapshots(snapshot_id),
-                snapshot_sha256              TEXT NOT NULL,
-                segment_offsets              TEXT NOT NULL,
-                analyst_prompt_version       TEXT NOT NULL,
-                analyst_model_name           TEXT NOT NULL,
-                analyst_completed_at         TEXT NOT NULL,
-                reviewer_prompt_version      TEXT NOT NULL,
-                reviewer_model_name          TEXT NOT NULL,
-                reviewed_at                  TEXT NOT NULL,
-                reviewer_approval_id         TEXT NOT NULL
-                    REFERENCES statement_review_attempts(reviewer_approval_id),
-                ledger_validated_at          TEXT NOT NULL
-            );
-
-            -- synthesis attempts -------------------------------------------
-            CREATE TABLE IF NOT EXISTS synthesis_attempts (
-                run_id                        TEXT PRIMARY KEY REFERENCES runs(run_id),
-                synthesizer_prompt_version    TEXT NOT NULL,
-                synthesizer_model_name        TEXT NOT NULL,
-                created_at                    TEXT NOT NULL,
-                title                         TEXT NOT NULL,
-                claim_definition              TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS synthesis_sections (
-                run_id          TEXT NOT NULL REFERENCES synthesis_attempts(run_id),
-                section_type    TEXT NOT NULL,
-                heading         TEXT NOT NULL,
-                section_order   INTEGER NOT NULL,
-                PRIMARY KEY (run_id, section_order)
-            );
-
-            CREATE TABLE IF NOT EXISTS synthesis_items (
-                run_id                       TEXT NOT NULL REFERENCES synthesis_attempts(run_id),
-                section_order                INTEGER NOT NULL,
-                item_order                   INTEGER NOT NULL,
-                connective_template_id       TEXT NOT NULL,
-                ledger_claim_id              TEXT NOT NULL
-                    REFERENCES ledger_records(ledger_claim_id),
-                reviewer_approval_id         TEXT NOT NULL,
-                stance                       TEXT NOT NULL,
-                placement                    TEXT NOT NULL,
-                entailment                   TEXT NOT NULL,
-                approved_factual_statement   TEXT NOT NULL,
-                PRIMARY KEY (run_id, section_order, item_order),
-                FOREIGN KEY (run_id, section_order)
-                    REFERENCES synthesis_sections(run_id, section_order)
-            );
-
-            -- validation runs ----------------------------------------------
-            CREATE TABLE IF NOT EXISTS validation_runs (
-                run_id                    TEXT PRIMARY KEY REFERENCES runs(run_id),
-                valid                     INTEGER NOT NULL,
-                validator_config_version  TEXT NOT NULL,
-                validated_at              TEXT NOT NULL,
-                rendered_brief_hash       TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS validation_errors (
-                run_id          TEXT NOT NULL REFERENCES validation_runs(run_id),
-                error_order     INTEGER NOT NULL,
-                code            TEXT NOT NULL,
-                location        TEXT NOT NULL,
-                message         TEXT NOT NULL,
-                PRIMARY KEY (run_id, error_order)
-            );
-
-            -- model invocations --------------------------------------------
-            CREATE TABLE IF NOT EXISTS model_invocations (
-                invocation_id        TEXT PRIMARY KEY,
-                run_id               TEXT NOT NULL REFERENCES runs(run_id),
-                stage                TEXT NOT NULL,
-                prompt_version       TEXT NOT NULL,
-                model_name           TEXT NOT NULL,
-                input_artifact_id    TEXT NOT NULL,
-                output_artifact_id   TEXT,
-                status               TEXT NOT NULL,
-                invoked_at           TEXT NOT NULL
-            );
-
-            -- Phase 9 orchestration ---------------------------------------
-            CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
-                run_id          TEXT NOT NULL REFERENCES runs(run_id),
-                stage_key       TEXT NOT NULL,
-                status          TEXT NOT NULL,
-                failure_reason  TEXT,
-                updated_at      TEXT NOT NULL,
-                PRIMARY KEY (run_id, stage_key)
-            );
-
-            CREATE TABLE IF NOT EXISTS orchestration_stage_artifacts (
-                run_id          TEXT NOT NULL REFERENCES runs(run_id),
-                artifact_key    TEXT NOT NULL,
-                artifact_type   TEXT NOT NULL,
-                payload_json    TEXT NOT NULL,
-                created_at      TEXT NOT NULL,
-                PRIMARY KEY (run_id, artifact_key)
-            );
-
-            CREATE TABLE IF NOT EXISTS provider_run_contracts (
-                run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
-                fingerprint_sha256      TEXT NOT NULL,
-                provider_identity       TEXT NOT NULL,
-                adapter_identity        TEXT NOT NULL,
-                model_identity          TEXT NOT NULL,
-                prompt_identity         TEXT NOT NULL,
-                schema_identity         TEXT NOT NULL,
-                normalization_identity  TEXT NOT NULL,
-                policy_identity         TEXT NOT NULL,
-                repository_revision     TEXT NOT NULL,
-                payload_json            TEXT NOT NULL,
-                created_at              TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS model_route_attempts (
-                attempt_id              TEXT PRIMARY KEY,
-                run_id                  TEXT NOT NULL REFERENCES runs(run_id),
-                operation_id            TEXT NOT NULL,
-                stage                   TEXT NOT NULL,
-                output_type             TEXT NOT NULL,
-                model_alias             TEXT NOT NULL,
-                pinned_model_snapshot   TEXT,
-                route_index             INTEGER NOT NULL,
-                attempt_number          INTEGER NOT NULL,
-                input_artifact_ids      TEXT NOT NULL,
-                status                  TEXT NOT NULL,
-                retry_reason            TEXT,
-                escalation_reason       TEXT,
-                failure_code            TEXT,
-                failure_reason          TEXT,
-                started_at              TEXT NOT NULL,
-                ended_at                TEXT,
-                latency_ms              REAL,
-                reserved_tokens         INTEGER,
-                reserved_cost_usd       REAL,
-                input_tokens            INTEGER,
-                output_tokens           INTEGER,
-                total_tokens            INTEGER,
-                cost_usd                REAL,
-                output_json             TEXT,
-                UNIQUE (
-                    run_id,
-                    operation_id,
-                    route_index,
-                    attempt_number
-                )
-            );
-
-            CREATE INDEX IF NOT EXISTS model_route_attempts_run_operation
-                ON model_route_attempts(run_id, operation_id, route_index, attempt_number);
-
-            CREATE TABLE IF NOT EXISTS run_cancellations (
-                run_id          TEXT PRIMARY KEY REFERENCES runs(run_id),
-                requested_at    TEXT NOT NULL,
-                reason          TEXT NOT NULL
-            );
-
-            -- Same-run provenance guards ------------------------------------
-            CREATE TRIGGER IF NOT EXISTS retrieval_attempt_same_run
-            BEFORE INSERT ON retrieval_attempts
-            WHEN (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'retrieval query belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS snapshot_same_run
-            BEFORE INSERT ON snapshots
-            WHEN (SELECT run_id FROM retrieval_attempts
-                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'snapshot retrieval belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS provisional_extraction_same_run
-            BEFORE INSERT ON provisional_extractions
-            WHEN (SELECT run_id FROM retrieval_attempts
-                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
-              OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
-              OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'provisional provenance belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS candidate_same_run
-            BEFORE INSERT ON candidates
-            WHEN (SELECT run_id FROM retrieval_attempts
-                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
-              OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
-              OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'candidate provenance belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS analyst_decision_same_run
-            BEFORE INSERT ON analyst_decisions
-            WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
-                 != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'analyst candidate belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS statement_draft_same_run
-            BEFORE INSERT ON statement_drafts
-            WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
-                 != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'draft candidate belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS statement_review_same_run
-            BEFORE INSERT ON statement_review_attempts
-            WHEN (SELECT run_id FROM statement_drafts
-                  WHERE statement_draft_id = NEW.statement_draft_id) != NEW.run_id
-              OR (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
-                 != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'review provenance belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS ledger_record_same_run
-            BEFORE INSERT ON ledger_records
-            WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
-                 != NEW.run_id
-              OR (SELECT run_id FROM retrieval_attempts
-                  WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
-              OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
-              OR (SELECT run_id FROM statement_review_attempts
-                  WHERE reviewer_approval_id = NEW.reviewer_approval_id) != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'Ledger provenance belongs to another run'); END;
-
-            CREATE TRIGGER IF NOT EXISTS synthesis_item_same_run
-            BEFORE INSERT ON synthesis_items
-            WHEN (SELECT run_id FROM ledger_records
-                  WHERE ledger_claim_id = NEW.ledger_claim_id) != NEW.run_id
-            BEGIN SELECT RAISE(ABORT, 'synthesis Ledger record belongs to another run'); END;
-            """
-        )
-        columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
-        }
-        if "reserved_tokens" not in columns:
-            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_tokens INTEGER")
-        if "reserved_cost_usd" not in columns:
-            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd REAL")
-        conn.execute(
-            "UPDATE schema_migrations SET description = ? WHERE version = 4",
-            (MIGRATION_DESCRIPTIONS[4],),
-        )
-        conn.commit()
-        _apply_raw_claim_immutability_migration(conn)
-        _apply_mvp68_integrity_migration(conn)
-        _apply_mvp69_provenance_migration(conn)
-        _apply_mvp10_evidence_portfolio_migration(conn)
-        _apply_mvp11_research_governor_migration(conn)
-        _apply_mlp4_discovery_query_migration(conn)
-        _apply_v2_phase1_artifact_migration(conn)
-        _apply_v2_phase3_initial_planner_migration(conn)
-        _apply_v2_phase10_reviewer_ledger_migration(conn)
+        _validate_before_upgrade(conn)
+        _initialize_schema(conn)
+        validate_schema_structure(conn, CURRENT_SCHEMA_VERSION)
     finally:
         conn.close()
+
+
+def _initialize_schema(conn: sqlite3.Connection) -> None:
+    """Install the canonical schema; callers validate existing databases first."""
+    conn.executescript(
+        """
+        -- schema migrations -------------------------------------------
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version      INTEGER PRIMARY KEY,
+            description  TEXT NOT NULL,
+            applied_at   TEXT NOT NULL
+        );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                1,
+                'phase-2 initial sqlite schema',
+                '2026-06-26T00:00:00+00:00'
+            );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                4,
+                'same-run provenance protection triggers',
+                '2026-08-01T00:00:00+00:00'
+            );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                2,
+                'phase-9 orchestration audit and checkpoint schema',
+                '2026-07-17T00:00:00+00:00'
+            );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                3,
+                'mvp-3a provider fingerprints and budget reservations',
+                '2026-07-24T00:00:00+00:00'
+            );
+
+        -- runs --------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS runs (
+            run_id          TEXT PRIMARY KEY,
+            status          TEXT NOT NULL,
+            raw_claim       TEXT NOT NULL,
+            current_stage   TEXT NOT NULL,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            completed_at    TEXT
+        );
+
+        -- planner outputs ----------------------------------------------
+        CREATE TABLE IF NOT EXISTS planner_outputs (
+            run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
+            planner_prompt_version  TEXT NOT NULL,
+            planner_model_name      TEXT NOT NULL,
+            planned_at              TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS claim_definitions (
+            run_id                          TEXT PRIMARY KEY REFERENCES planner_outputs(run_id),
+            claim_text                      TEXT NOT NULL,
+            population                      TEXT NOT NULL,
+            jurisdiction                    TEXT NOT NULL,
+            time_period                     TEXT NOT NULL,
+            comparison_baseline             TEXT NOT NULL,
+            intervention_or_exposure        TEXT NOT NULL,
+            causal_or_comparative_meaning   TEXT NOT NULL,
+            created_at                      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ambiguities (
+            ambiguity_id    TEXT PRIMARY KEY,
+            run_id          TEXT NOT NULL REFERENCES planner_outputs(run_id),
+            description     TEXT NOT NULL,
+            impact          TEXT NOT NULL,
+            created_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS search_queries (
+            query_id            TEXT PRIMARY KEY,
+            run_id              TEXT NOT NULL REFERENCES planner_outputs(run_id),
+            stance              TEXT NOT NULL,
+            provider            TEXT NOT NULL DEFAULT 'exa',
+            intent              TEXT NOT NULL DEFAULT 'broad_web',
+            query_round         INTEGER NOT NULL,
+            strategy            TEXT NOT NULL,
+            query_text          TEXT NOT NULL,
+            exclusion_parameters TEXT NOT NULL,
+            created_at          TEXT NOT NULL
+        );
+
+        -- retrieval attempts -------------------------------------------
+        CREATE TABLE IF NOT EXISTS retrieval_attempts (
+            retrieval_attempt_id TEXT PRIMARY KEY,
+            run_id               TEXT NOT NULL REFERENCES runs(run_id),
+            query_id             TEXT NOT NULL REFERENCES search_queries(query_id),
+            query_round          INTEGER NOT NULL,
+            query_text           TEXT NOT NULL,
+            search_rank          INTEGER NOT NULL,
+            source_url           TEXT NOT NULL,
+            resolved_url         TEXT NOT NULL,
+            status               TEXT NOT NULL,
+            retrieved_at         TEXT NOT NULL
+        );
+
+        -- snapshots (INSERT-ONLY) --------------------------------------
+        CREATE TABLE IF NOT EXISTS snapshots (
+            snapshot_id           TEXT PRIMARY KEY,
+            run_id                TEXT NOT NULL REFERENCES runs(run_id),
+            retrieval_attempt_id  TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            source_url            TEXT NOT NULL,
+            retrieved_at          TEXT NOT NULL,
+            normalized_text       TEXT NOT NULL,
+            snapshot_sha256       TEXT NOT NULL,
+            word_count            INTEGER NOT NULL,
+            truncated             INTEGER NOT NULL,
+            created_at            TEXT NOT NULL
+        );
+
+        -- provisional extractions --------------------------------------
+        CREATE TABLE IF NOT EXISTS provisional_extractions (
+            run_id                   TEXT NOT NULL REFERENCES runs(run_id),
+            stance                   TEXT NOT NULL,
+            source_url               TEXT NOT NULL,
+            retrieval_attempt_id     TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            query_id                 TEXT NOT NULL REFERENCES search_queries(query_id),
+            query_round              INTEGER NOT NULL,
+            search_rank              INTEGER NOT NULL,
+            snapshot_id              TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+            snapshot_sha256          TEXT NOT NULL,
+            extracted_quote_block    TEXT NOT NULL,
+            extraction_prompt_version TEXT NOT NULL,
+            extraction_model_name    TEXT NOT NULL,
+            extracted_at             TEXT NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            provisional_extractions_run_snapshot_stance
+            ON provisional_extractions(run_id, snapshot_id, stance);
+
+        -- candidates ---------------------------------------------------
+        CREATE TABLE IF NOT EXISTS candidates (
+            quote_block_id            TEXT PRIMARY KEY,
+            run_id                    TEXT NOT NULL REFERENCES runs(run_id),
+            stance                    TEXT NOT NULL,
+            source_url                TEXT NOT NULL,
+            retrieval_attempt_id      TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            query_id                  TEXT NOT NULL REFERENCES search_queries(query_id),
+            query_round               INTEGER NOT NULL,
+            search_rank               INTEGER NOT NULL,
+            retrieved_at              TEXT NOT NULL,
+            snapshot_id               TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+            snapshot_sha256           TEXT NOT NULL,
+            snapshot_created_at       TEXT NOT NULL,
+            extracted_quote_block     TEXT NOT NULL,
+            segment_offsets           TEXT NOT NULL,
+            raw_segment_word_count    INTEGER NOT NULL,
+            has_statistical_markers   INTEGER NOT NULL,
+            claim_keyword_match_count INTEGER NOT NULL,
+            truncated                 INTEGER NOT NULL,
+            extraction_prompt_version TEXT NOT NULL,
+            extraction_model_name     TEXT NOT NULL,
+            extracted_at              TEXT NOT NULL,
+            post_filter_version       TEXT NOT NULL,
+            post_filter_validated_at  TEXT NOT NULL
+        );
+
+        -- analyst decisions --------------------------------------------
+        CREATE TABLE IF NOT EXISTS analyst_decisions (
+            run_id                  TEXT NOT NULL REFERENCES runs(run_id),
+            quote_block_id          TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            evidence_quality        INTEGER NOT NULL,
+            claim_fit               INTEGER NOT NULL,
+            ledger_score            INTEGER,
+            placement               TEXT,
+            approved                INTEGER NOT NULL,
+            rationale               TEXT NOT NULL,
+            analyst_prompt_version  TEXT NOT NULL,
+            analyst_model_name      TEXT NOT NULL,
+            scored_at               TEXT NOT NULL,
+            PRIMARY KEY (run_id, quote_block_id)
+        );
+
+        -- statement review attempts ------------------------------------
+        CREATE TABLE IF NOT EXISTS statement_drafts (
+            statement_draft_id  TEXT PRIMARY KEY,
+            run_id              TEXT NOT NULL REFERENCES runs(run_id),
+            quote_block_id      TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            stance              TEXT NOT NULL,
+            draft_statement     TEXT NOT NULL,
+            claim_fit           INTEGER NOT NULL,
+            analyst_prompt_version TEXT NOT NULL,
+            analyst_model_name  TEXT NOT NULL,
+            drafted_at          TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS statement_review_attempts (
+            run_id                       TEXT NOT NULL REFERENCES runs(run_id),
+            statement_draft_id           TEXT NOT NULL
+                REFERENCES statement_drafts(statement_draft_id),
+            quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            approved                     INTEGER NOT NULL,
+            reviewer_approval_id         TEXT UNIQUE,
+            approved_factual_statement   TEXT,
+            failure_code                 TEXT,
+            rationale                    TEXT NOT NULL,
+            reviewer_prompt_version      TEXT NOT NULL,
+            reviewer_model_name          TEXT NOT NULL,
+            reviewed_at                  TEXT NOT NULL,
+            PRIMARY KEY (run_id, statement_draft_id)
+        );
+
+        -- ledger (INSERT-ONLY) -----------------------------------------
+        CREATE TABLE IF NOT EXISTS ledger_records (
+            ledger_claim_id              TEXT PRIMARY KEY,
+            run_id                       TEXT NOT NULL REFERENCES runs(run_id),
+            quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            stance                       TEXT NOT NULL,
+            approved_factual_statement   TEXT NOT NULL,
+            approved_claim_text          TEXT NOT NULL,
+            evidence_quality             INTEGER NOT NULL,
+            claim_fit                    INTEGER NOT NULL,
+            ledger_score                 INTEGER NOT NULL,
+            placement                    TEXT NOT NULL,
+            entailment                   TEXT NOT NULL,
+            source_url                   TEXT NOT NULL,
+            retrieval_attempt_id         TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            snapshot_id                  TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+            snapshot_sha256              TEXT NOT NULL,
+            segment_offsets              TEXT NOT NULL,
+            analyst_prompt_version       TEXT NOT NULL,
+            analyst_model_name           TEXT NOT NULL,
+            analyst_completed_at         TEXT NOT NULL,
+            reviewer_prompt_version      TEXT NOT NULL,
+            reviewer_model_name          TEXT NOT NULL,
+            reviewed_at                  TEXT NOT NULL,
+            reviewer_approval_id         TEXT NOT NULL
+                REFERENCES statement_review_attempts(reviewer_approval_id),
+            ledger_validated_at          TEXT NOT NULL
+        );
+
+        -- synthesis attempts -------------------------------------------
+        CREATE TABLE IF NOT EXISTS synthesis_attempts (
+            run_id                        TEXT PRIMARY KEY REFERENCES runs(run_id),
+            synthesizer_prompt_version    TEXT NOT NULL,
+            synthesizer_model_name        TEXT NOT NULL,
+            created_at                    TEXT NOT NULL,
+            title                         TEXT NOT NULL,
+            claim_definition              TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS synthesis_sections (
+            run_id          TEXT NOT NULL REFERENCES synthesis_attempts(run_id),
+            section_type    TEXT NOT NULL,
+            heading         TEXT NOT NULL,
+            section_order   INTEGER NOT NULL,
+            PRIMARY KEY (run_id, section_order)
+        );
+
+        CREATE TABLE IF NOT EXISTS synthesis_items (
+            run_id                       TEXT NOT NULL REFERENCES synthesis_attempts(run_id),
+            section_order                INTEGER NOT NULL,
+            item_order                   INTEGER NOT NULL,
+            connective_template_id       TEXT NOT NULL,
+            ledger_claim_id              TEXT NOT NULL
+                REFERENCES ledger_records(ledger_claim_id),
+            reviewer_approval_id         TEXT NOT NULL,
+            stance                       TEXT NOT NULL,
+            placement                    TEXT NOT NULL,
+            entailment                   TEXT NOT NULL,
+            approved_factual_statement   TEXT NOT NULL,
+            PRIMARY KEY (run_id, section_order, item_order),
+            FOREIGN KEY (run_id, section_order)
+                REFERENCES synthesis_sections(run_id, section_order)
+        );
+
+        -- validation runs ----------------------------------------------
+        CREATE TABLE IF NOT EXISTS validation_runs (
+            run_id                    TEXT PRIMARY KEY REFERENCES runs(run_id),
+            valid                     INTEGER NOT NULL,
+            validator_config_version  TEXT NOT NULL,
+            validated_at              TEXT NOT NULL,
+            rendered_brief_hash       TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS validation_errors (
+            run_id          TEXT NOT NULL REFERENCES validation_runs(run_id),
+            error_order     INTEGER NOT NULL,
+            code            TEXT NOT NULL,
+            location        TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            PRIMARY KEY (run_id, error_order)
+        );
+
+        -- model invocations --------------------------------------------
+        CREATE TABLE IF NOT EXISTS model_invocations (
+            invocation_id        TEXT PRIMARY KEY,
+            run_id               TEXT NOT NULL REFERENCES runs(run_id),
+            stage                TEXT NOT NULL,
+            prompt_version       TEXT NOT NULL,
+            model_name           TEXT NOT NULL,
+            input_artifact_id    TEXT NOT NULL,
+            output_artifact_id   TEXT,
+            status               TEXT NOT NULL,
+            invoked_at           TEXT NOT NULL
+        );
+
+        -- Phase 9 orchestration ---------------------------------------
+        CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
+            run_id          TEXT NOT NULL REFERENCES runs(run_id),
+            stage_key       TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            failure_reason  TEXT,
+            updated_at      TEXT NOT NULL,
+            PRIMARY KEY (run_id, stage_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS orchestration_stage_artifacts (
+            run_id          TEXT NOT NULL REFERENCES runs(run_id),
+            artifact_key    TEXT NOT NULL,
+            artifact_type   TEXT NOT NULL,
+            payload_json    TEXT NOT NULL,
+            created_at      TEXT NOT NULL,
+            PRIMARY KEY (run_id, artifact_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS provider_run_contracts (
+            run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
+            fingerprint_sha256      TEXT NOT NULL,
+            provider_identity       TEXT NOT NULL,
+            adapter_identity        TEXT NOT NULL,
+            model_identity          TEXT NOT NULL,
+            prompt_identity         TEXT NOT NULL,
+            schema_identity         TEXT NOT NULL,
+            normalization_identity  TEXT NOT NULL,
+            policy_identity         TEXT NOT NULL,
+            repository_revision     TEXT NOT NULL,
+            payload_json            TEXT NOT NULL,
+            created_at              TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS model_route_attempts (
+            attempt_id              TEXT PRIMARY KEY,
+            run_id                  TEXT NOT NULL REFERENCES runs(run_id),
+            operation_id            TEXT NOT NULL,
+            stage                   TEXT NOT NULL,
+            output_type             TEXT NOT NULL,
+            model_alias             TEXT NOT NULL,
+            pinned_model_snapshot   TEXT,
+            route_index             INTEGER NOT NULL,
+            attempt_number          INTEGER NOT NULL,
+            input_artifact_ids      TEXT NOT NULL,
+            status                  TEXT NOT NULL,
+            retry_reason            TEXT,
+            escalation_reason       TEXT,
+            failure_code            TEXT,
+            failure_reason          TEXT,
+            started_at              TEXT NOT NULL,
+            ended_at                TEXT,
+            latency_ms              REAL,
+            reserved_tokens         INTEGER,
+            reserved_cost_usd       REAL,
+            input_tokens            INTEGER,
+            output_tokens           INTEGER,
+            total_tokens            INTEGER,
+            cost_usd                REAL,
+            output_json             TEXT,
+            UNIQUE (
+                run_id,
+                operation_id,
+                route_index,
+                attempt_number
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS model_route_attempts_run_operation
+            ON model_route_attempts(run_id, operation_id, route_index, attempt_number);
+
+        CREATE TABLE IF NOT EXISTS run_cancellations (
+            run_id          TEXT PRIMARY KEY REFERENCES runs(run_id),
+            requested_at    TEXT NOT NULL,
+            reason          TEXT NOT NULL
+        );
+
+        -- Same-run provenance guards ------------------------------------
+        CREATE TRIGGER IF NOT EXISTS retrieval_attempt_same_run
+        BEFORE INSERT ON retrieval_attempts
+        WHEN (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'retrieval query belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS snapshot_same_run
+        BEFORE INSERT ON snapshots
+        WHEN (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'snapshot retrieval belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS provisional_extraction_same_run
+        BEFORE INSERT ON provisional_extractions
+        WHEN (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+          OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+          OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'provisional provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS candidate_same_run
+        BEFORE INSERT ON candidates
+        WHEN (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+          OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+          OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'candidate provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS analyst_decision_same_run
+        BEFORE INSERT ON analyst_decisions
+        WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'analyst candidate belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS statement_draft_same_run
+        BEFORE INSERT ON statement_drafts
+        WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'draft candidate belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS statement_review_same_run
+        BEFORE INSERT ON statement_review_attempts
+        WHEN (SELECT run_id FROM statement_drafts
+              WHERE statement_draft_id = NEW.statement_draft_id) != NEW.run_id
+          OR (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'review provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS ledger_record_same_run
+        BEFORE INSERT ON ledger_records
+        WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+          OR (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+          OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+          OR (SELECT run_id FROM statement_review_attempts
+              WHERE reviewer_approval_id = NEW.reviewer_approval_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'Ledger provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS synthesis_item_same_run
+        BEFORE INSERT ON synthesis_items
+        WHEN (SELECT run_id FROM ledger_records
+              WHERE ledger_claim_id = NEW.ledger_claim_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'synthesis Ledger record belongs to another run'); END;
+        """
+    )
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+    if "reserved_tokens" not in columns:
+        conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_tokens INTEGER")
+    if "reserved_cost_usd" not in columns:
+        conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd REAL")
+    conn.execute(
+        "UPDATE schema_migrations SET description = ? WHERE version = 4",
+        (MIGRATION_DESCRIPTIONS[4],),
+    )
+    conn.commit()
+    _apply_raw_claim_immutability_migration(conn)
+    _apply_mvp68_integrity_migration(conn)
+    _apply_mvp69_provenance_migration(conn)
+    _apply_mvp10_evidence_portfolio_migration(conn)
+    _apply_mvp11_research_governor_migration(conn)
+    _apply_mlp4_discovery_query_migration(conn)
+    _apply_v2_phase1_artifact_migration(conn)
+    _apply_v2_phase3_initial_planner_migration(conn)
+    _apply_v2_phase10_reviewer_ledger_migration(conn)
+    _apply_cache_usage_migration(conn)
 
 
 def _raw_claim_trigger_sql() -> str:
@@ -653,16 +665,7 @@ def _raw_claim_trigger_sql() -> str:
 def _is_expected_raw_claim_trigger(sql: str | None) -> bool:
     if sql is None:
         return False
-    normalized = " ".join(sql.lower().split())
-    return all(
-        fragment in normalized
-        for fragment in (
-            f"create trigger {RAW_CLAIM_TRIGGER_NAME}",
-            "before update of raw_claim on runs",
-            "when new.raw_claim is not old.raw_claim",
-            f"raise(abort, '{RAW_CLAIM_TRIGGER_ERROR}')",
-        )
-    )
+    return _sql_tokens(sql) == _sql_tokens(_raw_claim_trigger_sql())
 
 
 def _apply_raw_claim_immutability_migration(conn: sqlite3.Connection) -> None:
@@ -727,15 +730,7 @@ def _is_expected_immutable_trigger(
 ) -> bool:
     if sql is None:
         return False
-    normalized = " ".join(sql.lower().split())
-    return all(
-        fragment in normalized
-        for fragment in (
-            f"create trigger {name}",
-            f"before {operation.lower()} on {table}",
-            f"raise(abort, '{error}')",
-        )
-    )
+    return _sql_tokens(sql) == _sql_tokens(_immutable_trigger_sql(name, table, operation, error))
 
 
 def _verify_mvp68_schema(conn: sqlite3.Connection) -> None:
@@ -1321,3 +1316,165 @@ def _apply_v2_phase10_reviewer_ledger_migration(conn: sqlite3.Connection) -> Non
     except Exception:
         conn.rollback()
         raise
+
+
+def _apply_cache_usage_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (CACHE_USAGE_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[CACHE_USAGE_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 14 description is inconsistent")
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)")}
+        for name in ("cached_input_tokens", "uncached_input_tokens"):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE model_route_attempts ADD COLUMN {name} INTEGER")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (
+                CACHE_USAGE_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[CACHE_USAGE_SCHEMA_VERSION],
+                "2026-09-27T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+@lru_cache(maxsize=512)
+def _sql_tokens(sql: str) -> tuple[str, ...]:
+    """Compare complete SQLite definitions while retaining string-literal meaning."""
+    tokens = re.findall(
+        r"'(?:(?:'')|[^'])*'|\"(?:(?:\"\")|[^\"])*\"|`[^`]*`|\[[^\]]*\]|--[^\n]*|/\*.*?\*/|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s]",
+        sql,
+        re.DOTALL,
+    )
+    normalized: list[str] = []
+    for token in tokens:
+        if token.startswith(("--", "/*")):
+            continue
+        if token.startswith("'"):
+            normalized.append(token)
+        elif token.startswith(('"', "`", "[")):
+            normalized.append(token[1:-1].replace('""', '"').lower())
+        else:
+            normalized.append(token.lower())
+    if normalized and normalized[-1] == ";":
+        normalized.pop()
+    return tuple(normalized)
+
+
+@lru_cache(maxsize=128)
+def _table_declarations(sql: str) -> tuple[tuple[str, ...], ...]:
+    tokens = _sql_tokens(sql)
+    start = tokens.index("(")
+    depth = 0
+    declarations: list[tuple[str, ...]] = []
+    current: list[str] = []
+    for token in tokens[start + 1 :]:
+        if token == ")" and depth == 0:
+            if current:
+                declarations.append(tuple(current))
+            break
+        if token == "," and depth == 0:
+            declarations.append(tuple(current))
+            current = []
+            continue
+        current.append(token)
+        depth += (token == "(") - (token == ")")
+    return tuple(declarations)
+
+
+@lru_cache(maxsize=1)
+def _canonical_schema() -> tuple[tuple[str, str, str], ...]:
+    """Cache only executable schema definitions, never a user's validation result."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    try:
+        _initialize_schema(conn)
+        return tuple(
+            (row["type"], row["name"], row["sql"])
+            for row in conn.execute(
+                "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL "
+                "AND name NOT LIKE 'sqlite_%'"
+            )
+        )
+    finally:
+        conn.close()
+
+
+def _column_version(table: str, column: str) -> int:
+    if table == "model_route_attempts":
+        if column in {"cached_input_tokens", "uncached_input_tokens"}:
+            return CACHE_USAGE_SCHEMA_VERSION
+        if column in {"reserved_cost_usd_exact", "cost_usd_exact"}:
+            return MVP68_SCHEMA_VERSION
+        if column in {"reserved_tokens", "reserved_cost_usd"}:
+            return 3
+    if table == "snapshots" and column in _SNAPSHOT_PROVENANCE_COLUMNS:
+        return MVP69_SCHEMA_VERSION
+    if table == "search_queries" and column in {"provider", "intent"}:
+        return MLP4_SCHEMA_VERSION
+    return 0
+
+
+def validate_schema_structure(
+    conn: sqlite3.Connection, version: int, *, pending_migrations: frozenset[int] = frozenset()
+) -> None:
+    """Reject malformed known objects, including constraints and inert triggers."""
+    actual = {
+        (row["type"], row["name"]): row["sql"]
+        for row in conn.execute("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL")
+    }
+    for kind, name, expected_sql in _canonical_schema():
+        sql = actual.get((kind, name))
+        if sql is None:
+            continue  # Version-specific callers verify required object presence.
+        if kind == "table":
+            expected = _table_declarations(expected_sql)
+            present = set(_table_declarations(sql))
+            column_names = {part[0] for part in present}
+            required = (
+                part
+                for part in expected
+                if (
+                    _column_version(name, part[0]) <= version
+                    and _column_version(name, part[0]) not in pending_migrations
+                )
+                or part[0] in column_names
+            )
+            if any(part not in present for part in required) or present - set(expected):
+                raise sqlite3.DatabaseError(f"table {name} has invalid columns or constraints")
+        elif kind in {"trigger", "index"} and _sql_tokens(sql) != _sql_tokens(expected_sql):
+            raise sqlite3.DatabaseError(f"{kind} {name} has an invalid definition")
+    if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise sqlite3.DatabaseError("database foreign-key integrity check failed")
+
+
+def _validate_before_upgrade(conn: sqlite3.Connection) -> None:
+    migration_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'"
+    ).fetchone()
+    latest = 0
+    versions: set[int] = set()
+    if migration_table is not None:
+        latest = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").fetchone()[
+            0
+        ]
+        if not isinstance(latest, int):
+            raise sqlite3.DatabaseError("schema migration version is invalid")
+        if latest > CURRENT_SCHEMA_VERSION:
+            raise sqlite3.DatabaseError(
+                f"database schema version {latest} is newer than supported "
+                f"version {CURRENT_SCHEMA_VERSION}"
+            )
+        versions = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+    validate_schema_structure(
+        conn, latest, pending_migrations=frozenset(set(MIGRATION_DESCRIPTIONS) - versions)
+    )

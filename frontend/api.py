@@ -77,7 +77,7 @@ from providers.model_profiles import (
     profile_environment,
 )
 from providers.v2_factory import V2ProductionFactoryConfig
-from store import open_read_only_store, read_v2_artifact
+from store import DatabaseCompatibilityError, open_read_only_store, read_v2_artifact
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -555,7 +555,7 @@ def create_app(
             raise HTTPException(status_code=409, detail="Wait for active research to finish.")
         try:
             return import_history(Path(source))
-        except (OSError, ValueError) as exc:
+        except (DatabaseCompatibilityError, OSError, ValueError) as exc:
             raise HTTPException(
                 status_code=422,
                 detail="History import failed; check the source database and ensure it is idle.",

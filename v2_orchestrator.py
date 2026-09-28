@@ -119,6 +119,7 @@ from store import (
     insert_run,
     insert_v2_artifact,
     insert_v2_pipeline_identity,
+    insert_v2_terminal_artifact,
     open_read_only_store,
     read_cancellation_request,
     read_provider_run_contract,
@@ -747,7 +748,9 @@ def _run_v2_production_pipeline(
     except KeyError:
         stored = None
     if stored is not None:
-        return V2ProductionPipelineResult.model_validate_json(stored.payload_json)
+        result = V2ProductionPipelineResult.model_validate_json(stored.payload_json)
+        _persist_terminal(path, result, now)
+        return result
 
     budgeted_llm = BudgetedV2LLMProvider(
         db_path=path,
@@ -1383,7 +1386,6 @@ def _persist_terminal(
     result: V2ProductionPipelineResult,
     clock: Callable[[], datetime],
 ) -> None:
-    insert_v2_artifact(path, V2_PRODUCTION_ARTIFACT_KEY, result, result.completed_at)
     status = {
         V2ProductionState.RELEASED: RunStatus.COMPLETED,
         V2ProductionState.BLOCKED: RunStatus.BLOCKED,
@@ -1395,7 +1397,14 @@ def _persist_terminal(
         if result.state is V2ProductionState.RELEASED
         else result.current_stage
     )
-    _set_run_state(path, result.run_id, status, terminal_stage, clock)
+    insert_v2_terminal_artifact(
+        path,
+        V2_PRODUCTION_ARTIFACT_KEY,
+        result,
+        result.completed_at,
+        status,
+        terminal_stage,
+    )
 
 
 def _set_run_state(

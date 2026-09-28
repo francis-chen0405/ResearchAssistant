@@ -1,6 +1,6 @@
 # Development conventions
 
-Follow the [active plan](.agent/plans/audit-maintenance.md) and [current plan index](.agent/PLANS.md). Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
+Follow the [active plan](.agent/plans/database-integrity-fixes.md) and [current plan index](.agent/PLANS.md). Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
 
 ## Contracts and code
 

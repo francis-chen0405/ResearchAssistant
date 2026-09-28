@@ -1,6 +1,10 @@
 # Current plan state
 
-## Latest completed maintenance
+## Latest completed database maintenance
+
+[Database integrity fixes](plans/database-integrity-fixes.md), authorized 2026-09-27, addresses all ten confirmed review findings, including the bounded schema 14 accounting migration. Implemented and verified 2026-09-28: 1,204 tests passed, 2 unchanged skips; see [verification](../docs/verification/database-integrity-fixes.md).
+
+## Prior audit maintenance
 
 [Audit maintenance and follow-up checks](plans/audit-maintenance.md) was implemented, reviewed, and verified on 2026-09-26 for the authorized local commit. Its bounded scope includes upgrade-smoke diagnosis, approved extraction and route-guard work, packaging/test metadata and deprecation cleanup, current documentation, generated-cache tracking, and cleanup of already-merged branch state. The plan records scope; [STATUS.md](../STATUS.md) and [HANDOFF.md](../HANDOFF.md) record actual outcomes. Do not infer that an unresolved check passed.
 

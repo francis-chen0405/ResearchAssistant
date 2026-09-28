@@ -34,7 +34,7 @@ These are current operational constraints for changes to the research pipeline a
 
 ## SQLite, compatibility, and read-only access
 
-- The current writable database remains schema 13 with its existing SQL, migration ordering, transaction/rollback behavior, descriptions, and immutability triggers. `ReadOnlyStore` supports compatible schema 7–13 databases using encoded URI `mode=ro`, foreign keys, and `query_only`, then validates integrity/schema.
+- The database-integrity plan advances writable databases to schema 14 with nullable cache-token usage columns, preserving historical data and earlier migration identities. `ReadOnlyStore` supports compatible schema 7–14 databases using encoded URI `mode=ro`, foreign keys, and `query_only`, then validates integrity/schema.
 - Read-only history/status/export never initializes or migrates, creates a missing file, or falls back to writable access. Do not use `immutable=1` where WAL writers may exist. Intentional writable run/resume is the existing migration boundary.
 - Each v2 status request owns one validated read-only session and passes its connection through all status, progress, diagnostic, budget, provider, and terminal reconstruction readers. The session and validation result do not survive the request. Imported terminal results use the database path the user opened. Later polls see new commits.
 - The browser starts its next poll 1.5 seconds after the preceding request completes, stops after terminal state, and cancels pending work on run replacement or unmount. Journal mode and busy-timeout defaults are unchanged.

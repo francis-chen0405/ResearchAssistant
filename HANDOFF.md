@@ -1,5 +1,13 @@
 # Handoff
 
+## Database integrity fixes — 2026-09-28
+
+The [database integrity plan](.agent/plans/database-integrity-fixes.md) is implemented and verified: **1,204 tests passed, 2 existing skips**, with warnings treated as errors, plus Ruff/format/whitespace checks. See [verification](docs/verification/database-integrity-fixes.md). Schema 14 preserves cache-token usage while historical schemas 7–13 remain inspectable without migration. Reject future databases before writes, keep artifact/manifest terminal commits atomic, and retain conflict detection during portfolio replay. Read-only history derives completed state from saved terminal results even when the old mutable manifest is stale; it does not bypass fingerprint checks or write repairs. Earlier trail rows with the known missing-provenance projection remain byte-for-byte unchanged; recovery can finish the batch but does not retroactively invent their missing provenance or rewrite completed coverage.
+
+No paid calls, real-data migrations, dependency changes, installer rebuilds, or app replacement were performed. A release must rebuild and rerun artifact-specific checks; prior native results are historical. Source identity changes still require new research runs under the existing resume gate.
+
+## Previous maintenance handoff — 2026-09-26
+
 The [audit maintenance](.agent/plans/audit-maintenance.md) is implemented and reviewed. Its local commit includes the remaining code fixes, test harness corrections, documentation rewrite, dependency changes, and generated-cache cleanup. The prior CLI/setup correction remains in `5c66287`. See [STATUS](STATUS.md) and the [verification record](docs/verification/audit-maintenance.md) for exact results.
 
 ## Preserve these changes

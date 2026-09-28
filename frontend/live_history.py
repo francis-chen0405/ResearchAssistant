@@ -43,6 +43,7 @@ from v2_orchestrator import (
     V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
     V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
     V2ProductionPipelineResult,
+    V2ProductionState,
     infer_v2_stage,
 )
 
@@ -69,21 +70,29 @@ def history(db_path: str | Path, *, limit: int = 100) -> tuple[LiveHistoryItem, 
             except (KeyError, ValueError):
                 items.append(_history_item(manifest))
                 continue
+            # A saved terminal result is authoritative even if the old writer crashed
+            # before updating its manifest. Inspection must not require compatible resume.
+            terminal_status = (
+                "completed" if result.state is V2ProductionState.RELEASED else result.state.value
+            )
+            manifest_complete = (
+                manifest.status.value == terminal_status and manifest.completed_at is not None
+            )
+            updated_at = manifest.updated_at if manifest_complete else result.completed_at
+            completed_at = manifest.completed_at if manifest_complete else result.completed_at
             items.append(
                 LiveHistoryItem(
                     run_id=manifest.run_id,
                     raw_claim=manifest.raw_claim,
-                    status=manifest.status.value,
+                    status=terminal_status,
                     stage=infer_v2_stage(
-                        str(path),
+                        store.connection,
                         manifest.run_id,
                         result.current_stage,
                         result.final_output is not None,
                     ).value,
-                    updated_at=manifest.updated_at.isoformat(),
-                    completed_at=(
-                        manifest.completed_at.isoformat() if manifest.completed_at else None
-                    ),
+                    updated_at=updated_at.isoformat(),
+                    completed_at=completed_at.isoformat() if completed_at is not None else None,
                 )
             )
     return tuple(items)

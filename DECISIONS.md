@@ -13,7 +13,7 @@ This file records decisions that still govern current behavior. The exact preced
 ## Evidence, storage, and application boundaries
 
 - Exact quotations, source provenance, separate Evidence Quality and Claim Fit scores, immutable Ledger/output artifacts, and deterministic final validation remain required. Analyzer Admission checks structure and policy; it is not independent proof of entailment.
-- SQLite remains schema 13. History and status inspection use validated read-only access. Each v2 status request owns one validated session; polling does not overlap requests. No WAL, migration, or persistence redesign is inferred. See [SQLite status polling](.agent/plans/sqlite-status-polling.md).
+- The authorized [database integrity plan](.agent/plans/database-integrity-fixes.md) adds schema 14 for nullable cache-token accounting fields; historical schema 7–13 inspection remains supported. History and status inspection use validated read-only access. Each v2 status request owns one validated session; polling does not overlap requests. No WAL or broader persistence redesign is inferred. See [SQLite status polling](.agent/plans/sqlite-status-polling.md).
 - Credentials remain in native macOS Keychain or Windows Credential Manager. Secrets are not placed in browser storage, logs, SQLite, exports, or child arguments; the documented OpenAlex upstream HTTPS query-key exception is the only URL exception. Runtime data remains outside the application bundle and checkout.
 - Package metadata uses the Python distribution name `researchassistant`, version `0.1.0`; user-facing CLI and application copy use `ResearchAssistant`. Streamlit remains outside the base install and is installed only through `requirements-legacy.txt`. The `dev` dependency set includes `httpx2` for Starlette tests; versions are constrained in `desktop/constraints.txt`.
 
@@ -21,4 +21,4 @@ This file records decisions that still govern current behavior. The exact preced
 
 macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).
 
-The current authorized work is [audit maintenance](.agent/plans/audit-maintenance.md). It does not renew paid-test allowance or change research policy, persisted historical data, or the release boundary.
+The current authorized work is [database integrity fixes](.agent/plans/database-integrity-fixes.md). It does not renew paid-test allowance or change research policy, persisted historical data, or the release boundary.

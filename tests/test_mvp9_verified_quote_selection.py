@@ -201,7 +201,7 @@ def test_mvp9_quote_storage_remains_compatible_with_mvp10_additive_migration(
         provisional_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(provisional_extractions)")
         }
-    assert CURRENT_SCHEMA_VERSION == 13
+    assert CURRENT_SCHEMA_VERSION == 14
     assert versions == [
         (1,),
         (2,),
@@ -216,6 +216,7 @@ def test_mvp9_quote_storage_remains_compatible_with_mvp10_additive_migration(
         (11,),
         (12,),
         (13,),
+        (14,),
     ]
     assert "extracted_quote_block" in provisional_columns
     assert "selected_segments" not in provisional_columns

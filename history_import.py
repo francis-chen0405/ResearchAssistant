@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -25,6 +26,7 @@ def import_history(source: Path, *, destination_dir: Path | None = None) -> Hist
     if not lock.acquire():
         raise ValueError("Source database has active research; finish it before importing")
     destination: Path | None = None
+    destination_created = False
     try:
         with open_read_only_store(source) as original:
             before = [
@@ -36,8 +38,8 @@ def import_history(source: Path, *, destination_dir: Path | None = None) -> Hist
             destination = folder / f"history-{uuid4()}.sqlite3"
             # Exclusive creation prevents accidental overwrite even on a name collision.
             with destination.open("xb"):
-                pass
-            with sqlite3.connect(destination) as target:
+                destination_created = True
+            with closing(sqlite3.connect(destination)) as target:
                 original.connection.backup(target)
             with open_read_only_store(destination) as copied:
                 after = [
@@ -51,7 +53,7 @@ def import_history(source: Path, *, destination_dir: Path | None = None) -> Hist
                     raise ValueError("Imported history did not pass verification")
         return HistoryImportResult(db_path=str(destination), run_count=len(after))
     except BaseException:
-        if destination is not None:
+        if destination is not None and destination_created:
             destination.unlink(missing_ok=True)
         raise
     finally:

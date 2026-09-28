@@ -136,11 +136,10 @@ from store import (
     insert_analyst_decision,
     insert_cancellation_request,
     insert_candidate,
-    insert_evidence_trail_entry,
     insert_ledger_record,
+    insert_mvp10_portfolio_batch,
     insert_planner_output,
     insert_portfolio_coverage_assessment,
-    insert_portfolio_item,
     insert_provider_run_contract,
     insert_provisional_extraction,
     insert_research_governor_decision,
@@ -150,7 +149,6 @@ from store import (
     insert_run,
     insert_search_queries,
     insert_snapshot,
-    insert_source_family_member,
     insert_stage_artifact,
     insert_statement_draft,
     insert_statement_review,
@@ -3114,6 +3112,9 @@ def _persist_mvp10_portfolio(
     if existing is not None:
         return existing
     snapshots = _snapshot_lookup(researchers)
+    snapshots_by_attempt = {
+        snapshot.retrieval_attempt_id: snapshot for snapshot in snapshots.values()
+    }
     candidates = {
         candidate.retrieval_attempt_id: candidate
         for side in (researchers.supporting, researchers.opposing)
@@ -3129,7 +3130,7 @@ def _persist_mvp10_portfolio(
             continue
         for item in side.retrieval_batch.outcomes:
             retrieval = item.retrieval
-            snapshot = snapshots.get(retrieval.retrieval_attempt_id)
+            snapshot = snapshots_by_attempt.get(retrieval.retrieval_attempt_id)
             candidate = candidates.get(retrieval.retrieval_attempt_id)
             role = EvidenceRole.SUPPORTING if side.stance == "supporting" else EvidenceRole.OPPOSING
             family = identify_source_family(snapshot) if snapshot is not None else None
@@ -3169,7 +3170,6 @@ def _persist_mvp10_portfolio(
                     cost_incurred=bool(_mvp10_attempt_ids(attempts, snapshot, candidate)),
                     created_at=_aware_phase9_time(clock(), "trail created_at"),
                 )
-                insert_source_family_member(db_path, entry_stub)
             else:
                 entry_stub = EvidenceTrailEntry(
                     trail_entry_id=uuid5(
@@ -3192,14 +3192,13 @@ def _persist_mvp10_portfolio(
                     created_at=_aware_phase9_time(clock(), "trail created_at"),
                 )
             entries.append(entry_stub)
-            insert_evidence_trail_entry(db_path, entry_stub)
+    portfolio_items: list[PortfolioItem] = []
     for ledger in analysis.ledger_records:
         candidate = next(
             item for item in candidates.values() if item.quote_block_id == ledger.quote_block_id
         )
         family = identify_source_family(snapshots[candidate.snapshot_id])
-        insert_portfolio_item(
-            db_path,
+        portfolio_items.append(
             PortfolioItem(
                 run_id=planner.run_id,
                 ledger_claim_id=ledger.ledger_claim_id,
@@ -3213,6 +3212,7 @@ def _persist_mvp10_portfolio(
                 added_at=_aware_phase9_time(clock(), "portfolio added_at"),
             ),
         )
+    insert_mvp10_portfolio_batch(db_path, entries, portfolio_items)
     if not finalize:
         return None
     return _finalize_mvp10_portfolio(
