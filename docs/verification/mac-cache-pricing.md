@@ -1,7 +1,9 @@
 # Mac-first cache-pricing delivery — 2026-09-17
 
-This candidate is superseded by the subsequent
-[planner/Scout reliability build](planner-scout-reliability.md), which is now installed.
+This candidate was superseded by the subsequent
+[planner/Scout reliability build](planner-scout-reliability.md). The checks and source
+identity below apply to this original frozen candidate only; later audit-maintenance and
+database-integrity source changes are not covered by its package verification.
 The live acceptance below deliberately used this original frozen candidate; it does not
 establish the effectiveness of later fixes. Source identity below was checked at build time.
 
@@ -123,4 +125,6 @@ paid acceptance needs a new explicit allowance; this five-submission ledger is e
   test downloads may be blocked by Gatekeeper; no global security bypass is introduced.
 - Clean-machine installation and actual macOS 14 acceptance remain unverified.
 - The package still uses the default Electron icon. Windows acceptance is deferred.
-- Nothing has been published remotely. The installed app contains this verified test build.
+- Nothing had been published remotely. At the time of this record, the installed app
+  contained this verified test build; it was later superseded by the planner/Scout
+  reliability build described above.

@@ -1,8 +1,12 @@
 # Current status
 
+## Documentation audit — 2026-09-28
+
+The documentation-only [audit](.agent/plans/documentation-audit-2026-09-28.md) corrected stale schema-support and credential-transport statements, refreshed the model-guide pricing links, and identified older package-verification and installed-app claims as historical. Read-only inspection supports schemas 7–14; OpenAlex and optional PubMed API keys are sent to their upstream services in HTTPS query strings. Current-document links resolve locally. Full pytest passed with 1,204 tests and 2 existing skips; Ruff lint/format and whitespace checks passed. No source, product behavior, or release evidence changed.
+
 ## Database integrity fixes — 2026-09-28
 
-The [database integrity plan](.agent/plans/database-integrity-fixes.md) implements all ten review findings. Writable initialization rejects newer schemas before mutation; schema validation checks complete known table/trigger/index definitions and foreign keys. Schema 14 adds nullable cached/uncached input-token fields without inventing historical usage; compatible schema 7–13 inspection remains read-only.
+The [database integrity plan](.agent/plans/database-integrity-fixes.md) implements all ten review findings. Writable initialization rejects newer schemas before mutation; schema validation checks complete known table/trigger/index definitions and foreign keys. Schema 14 adds nullable cached/uncached input-token fields without inventing historical usage; read-only inspection supports schemas 7–14 without migration.
 
 Fresh-v2 terminal artifacts and run manifests commit together, and explicit compatible resume repairs previously interrupted current-policy completion metadata from the saved result. Read-only history also projects older terminal results correctly without requiring resume or changing database bytes. Legacy portfolio writes use correct snapshot provenance, atomic batches, conflict-checked replay, and a narrow recovery path for earlier missing-provenance projections; historical rows remain unchanged. Imports return typed input errors, preserve pre-existing destination files, and close backup connections.
 

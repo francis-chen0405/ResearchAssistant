@@ -10,9 +10,11 @@ public-release readiness. The installer declares macOS 14+, but minimum-OS and
 clean-machine acceptance still require tests on those systems.
 
 Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
-Current adaptive-search verification is tracked in
-`docs/verification/adaptive-search-reliability.md`; Phase 2 cleanup and Phase 3 frontend
-records remain available for their historical build and platform context.
+Current source verification is tracked in
+[`docs/verification/database-integrity-fixes.md`](../docs/verification/database-integrity-fixes.md).
+The installed app and previous package checks predate those changes and do not verify a
+build containing them. Earlier adaptive-search, Phase 2, and Phase 3 records are retained
+as historical evidence for their specific builds and checks.
 This is a local application: provider calls run in its bundled Python backend. There
 is no hosted application backend and no automatic paid credential test.
 
@@ -23,11 +25,11 @@ Applications. Windows builds use a per-user NSIS installer. End users do not ins
 Python, Node, pnpm or Docker. Updates replace the application bundle, not its data.
 Unsigned test artifacts are not a signed/notarized public release.
 
-Targets for this phase: Apple Silicon macOS 14+ and x64 Windows 11. Local verification
-is on macOS 26.6.2 arm64. Native Windows build/runtime evidence is tracked in the Phase 2 verification record.
-Clean-machine installation and minimum-OS verification remain release gates until the
-corresponding artifact has actually been installed and tested.
-Intel macOS and Windows ARM64 are not claimed as verified targets.
+The current delivery target is Apple Silicon macOS 14+. The local candidate checks were
+run on macOS 26.6.2 arm64; clean-machine installation and actual macOS 14 verification
+remain open. Windows packaging support exists, but Windows release work is deferred.
+Phase 2 Windows build/runtime evidence is historical and does not verify the current
+version. Intel macOS and Windows ARM64 are not claimed as verified targets.
 
 Persistent data:
 
@@ -37,6 +39,13 @@ Persistent data:
 - `preferences.json`: ordinary UI settings, model route overrides and prices only.
 - `acquisition/`: application-owned Wigolo data; bundled browser resources are read-only.
 - `imports/`: explicitly imported historical databases.
+
+Writable runs and resumes migrate compatible databases to schema 14, which adds nullable
+cached and uncached input-token accounting fields. Existing records retain unknown cache
+usage. History, status inspection, and export are read-only and support schemas 7–14
+without migrating them; incompatible source or executable identity still blocks resume.
+See the [database integrity verification](../docs/verification/database-integrity-fixes.md)
+for the migration and compatibility evidence.
 
 Keys use macOS Keychain or Windows Credential Manager directly. Existing macOS service
 names/account are retained. There is no configurable keyring or plaintext fallback.
@@ -112,10 +121,10 @@ persistence, exact packaged identity, and owned Wigolo startup/health/shutdown. 
 no paid provider calls. The window smoke additionally checks renderer isolation, actual
 page loading and empty password controls. CI runs these before installer creation.
 
-`.github/workflows/desktop.yml` builds on macOS and Windows, retaining unsigned test
-artifacts without publishing releases. Signing/notarization and clean-machine installer
-verification must be performed separately before distribution. Windows execution is not
-inferred from the presence of a workflow or from a successful macOS build.
+`.github/workflows/desktop.yml` defines macOS and Windows builds, retaining unsigned test
+artifacts without publishing releases. Workflow configuration alone is not evidence that
+the current version built or ran on either target. Signing/notarization and clean-machine
+installer verification must be performed separately before distribution.
 
 Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
@@ -123,14 +132,13 @@ Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 
 ## Historical Phase 2 source compatibility
 
-Root contract, schema, fixture and application-runtime modules and the extracted
+At the Phase 2 verification point, root contract, schema, fixture and application-runtime modules and the extracted
 `frontend/live_*` helpers remain covered by the existing recursive packaging and identity
 rules. No new dependency or resource root was introduced. Rebuild the bundle after source
 changes and start a new research run: the exact source/executable fingerprint changes.
-Historical inspection/export is preserved; incompatible resume still fails explicitly.
-See [current verification](../STATUS.md) for actual target results. Phase 3 UI and the
-adaptive-search correction are subsequent work; rebuild after source changes and use the
-current verification records for their checks.
+Historical inspection/export was preserved; incompatible resume failed explicitly.
+This records the Phase 2 result only. Phase 3, adaptive-search, audit-maintenance, and
+database-integrity work followed it; use the dated verification records for each result.
 
 On this OneDrive-backed checkout, macOS disk-image creation returned `Operation not
 supported by device` when output was inside the synced directory. The same unchanged

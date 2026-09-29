@@ -58,7 +58,7 @@ Discovery may use configured OpenAlex, arXiv, PubMed, Exa, and SERP lanes. Cross
 
 Writable databases use schema 14 for nullable cache-token accounting fields, implemented by the [database integrity plan](.agent/plans/database-integrity-fixes.md). Read-only inspection retains compatible schema 7–14 support. Writable run/resume owns the established migration behavior. History, status inspection, and export use validated read-only sessions and never create or migrate a database. Each v2 status request uses one request-scoped validated connection; it does not cache connections or validation results. Subsequent requests observe committed changes.
 
-Credentials use macOS Keychain or Windows Credential Manager. Secrets stay out of logs, SQLite, exports, browser storage, and child-process arguments. The existing OpenAlex integration has one narrow exception: its API key is sent in an upstream HTTPS query string. Automatic `.env` and shell-profile loading are not permitted. The application uses owned process groups/jobs for cleanup.
+Desktop credentials use macOS Keychain or Windows Credential Manager. Secrets stay out of logs, SQLite, exports, browser storage, and child-process arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Automatic `.env` and shell-profile loading are not permitted. The application uses owned process groups/jobs for cleanup.
 
 Detailed current rules for quotations, evidence admission, retry/accounting limits, Round 4 authorization, persistence compatibility, and resume identity are in [Research invariants](docs/research-invariants.md).
 

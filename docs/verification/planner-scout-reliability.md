@@ -42,6 +42,12 @@ for observed truncation, not proof of live improvement; larger calls may take lo
 
 ## Verification and Mac delivery
 
+The checks and artifact hashes in this section refer to the reliability candidate built
+on 2026-09-17 (source changes recorded by `485d652`). They are historical artifact
+evidence. Audit-maintenance changes followed, and the 2026-09-28 database-integrity
+changes require another build; this record does not verify the current source or a
+current installer.
+
 992 Python tests passed, with two existing opt-in skips and the existing Starlette
 warning. Ruff lint/format, diff whitespace and the 38-case frozen evaluation passed.
 Native rebuilt-backend smoke passed: authenticated local UI/API, isolated vault cleanup,
@@ -49,8 +55,9 @@ durable settings and owned service lifecycle. Packaged actual-window smoke and i
 old-to-new upgrade checks passed, preserving credentials/preferences and byte-identical
 historical fixture data. No validation assertion or timeout was weakened.
 
-The packaged frontend matches the previously verified static export; 96 loose Python,
-prompt and project-manifest files match current source byte-for-byte. The bundle declares
+The packaged frontend matches the previously verified static export; at the time of this
+candidate build, 96 loose Python, prompt and project-manifest files matched the candidate
+source byte-for-byte. The bundle declares
 macOS 14.0. DMG verification and ZIP integrity passed. The app was installed while closed,
 with the previous bundle at
 `/private/tmp/ResearchAssistant-before-reliability-x59milnf/ResearchAssistant.app`.

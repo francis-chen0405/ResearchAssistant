@@ -4,8 +4,9 @@ Connections authenticate provider accounts. The configurable research profile se
 models and conservative budget caps; it is stored separately from secret credentials.
 API keys remain in the unchanged macOS Keychain/Windows Credential Manager namespace.
 Password fields are transient and cleared after save attempts. Stored secrets are never
-returned to the renderer. All credentials remain excluded from preferences, SQLite,
-URLs, exports and logs.
+returned to the renderer and are excluded from preferences, SQLite, exports and logs.
+OpenAlex and optional PubMed keys are sent in query parameters to their upstream HTTPS
+APIs; other provider credentials use their configured authorization headers.
 
 ## Configurable research profile
 
@@ -35,11 +36,12 @@ evidence rules and conservative per-call reservations are unchanged. Search and
 acquisition service charges remain separate. CLI overrides use repeated
 `--model STAGE=CHOICE` values with stage and choice IDs from `/api/model-options`.
 
-Pricing and capabilities were reviewed against [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
+Pricing and capabilities were rechecked 2026-09-28 against [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
 [Sol](https://developers.openai.com/api/docs/models/gpt-6-sol),
 [Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra),
-[MiMo API and thinking mode](https://mimo.mi.com/docs/en-US/api/chat/openai-api), and
-[MiMo pricing](https://mimo.mi.com/docs/en-US/price/pay-as-you-go). OpenAI caps cover
+[MiMo API and thinking mode](https://mimo.mi.com/docs/en-US/api/chat/openai-api),
+[MiMo v2.6 Pro pricing](https://mimo.mi.com/models/en-US/mimo-v2.6-pro), and
+[MiMo v2.6 Flash pricing](https://mimo.mi.com/models/en-US/mimo-v2.6-flash). OpenAI caps cover
 cache-write and long-context multipliers without assuming any cache discount. MiMo
 caps round above published miss and output prices. Completed usage uses exact official
 endpoint/model cache rates when usage metadata permits; unknown usage keeps the

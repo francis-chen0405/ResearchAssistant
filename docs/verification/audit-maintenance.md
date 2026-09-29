@@ -28,7 +28,7 @@ These defects are confirmed independently. The two historical startup timeouts d
 | TypeScript and ESLint | Passed |
 | Offline interaction, polling, configuration-race browser smokes | All passed against the existing fresh webpack desktop export |
 | PyInstaller backend rebuild on macOS arm64 | Passed |
-| Packaged root/agent/provider/frontend/prompt identity input comparison | All 100 files match current source bytes |
+| Packaged root/agent/provider/frontend/prompt identity input comparison | All 100 files match the source bytes at this maintenance verification point |
 | Final frozen native smoke | Passed: authenticated API/UI, native vault roundtrip/restart, settings and owned acquisition lifecycle |
 | Final old-to-new upgrade smoke | Three consecutive passes with all original assertions |
 | Diff whitespace and current documentation links | Passed |
@@ -43,7 +43,7 @@ Authenticated-health times for the three final upgrade attempts:
 | 2 | 0.74 s | 5.97 s |
 | 3 | 0.68 s | 3.96 s |
 
-The previous resources came from the preserved pre-GPT-6-Luna app; current resources are the rebuilt ignored `desktop/build/resources`. Executable SHA-256 values:
+The previous resources came from the preserved pre-GPT-6-Luna app; current resources are the rebuilt ignored `desktop/build/resources` from the 2026-09-26 maintenance verification. Executable SHA-256 values:
 
 - Previous: `ec8f4d465f027db6fd5f9e1391c5a4e2d3fd344072152a36970db5926e245905`
 - Current: `54a7845ed904ece6568c73d12c45dac6742fd46280b099246f7bbad0a046636f`
@@ -52,4 +52,4 @@ The previous resources came from the preserved pre-GPT-6-Luna app; current resou
 
 Verified remote `codex/phase-2-cleanup` at `ecf43150d3e84ad2c397899aff39a3ffdb0e3a66` was already an ancestor of master, then deleted it with a lease protecting against a concurrent remote change. The maintenance changes are recorded in the local commit containing this document; source commits were not pushed.
 
-No provider calls, paid research, user-data migration, installed-app replacement, installer publication, or Windows execution occurred. The locally rebuilt backend is a verification artifact. Live-quality acceptance, clean-machine/minimum-OS checks, signing/notarization, and current Windows verification remain outside this maintenance result. The prior paid-test allowance is still exhausted.
+No provider calls, paid research, user-data migration, installed-app replacement, installer publication, or Windows execution occurred. The locally rebuilt backend is a verification artifact for the maintenance source at that point; its 100-file comparison does not describe source added or changed afterward. Live-quality acceptance, clean-machine/minimum-OS checks, signing/notarization, and current Windows verification remain outside this maintenance result. The prior paid-test allowance is still exhausted.

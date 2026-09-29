@@ -1,6 +1,6 @@
 # Development conventions
 
-Follow the [active plan](.agent/plans/database-integrity-fixes.md) and [current plan index](.agent/PLANS.md). Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
+Follow the [active plan](.agent/plans/documentation-audit-2026-09-28.md) and [current plan index](.agent/PLANS.md). Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
 
 ## Contracts and code
 
@@ -18,7 +18,7 @@ Follow the [active plan](.agent/plans/database-integrity-fixes.md) and [current 
 - History, inspection, and export use validated read-only sessions. They never create or migrate databases. Only intentional writable run/resume follows established migration behavior.
 - Costs use finite non-negative `Decimal` values and canonical decimal storage. Unknown physical-call usage retains its reservation; never guess missing precision or issue refunds.
 - Desktop data belongs under `desktop_paths.application_data_dir()`. Preserve process locks and their ownership. Do not use checkout or bundle paths for runtime data.
-- Credentials use macOS Keychain or Windows Credential Manager without plaintext fallback. Secrets must stay out of logs, SQLite, exports, browser storage, and child arguments; only the documented OpenAlex upstream HTTPS query-key exception permits a secret in a URL. Do not load `.env` files or shell profiles automatically.
+- Desktop credentials use macOS Keychain or Windows Credential Manager without plaintext fallback. Secrets must stay out of logs, SQLite, exports, browser storage, and child arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Do not load `.env` files or shell profiles automatically.
 - Keep `prompts/*.md` in place and preserve their bytes unless an authorized plan explicitly changes them; they are executable inputs.
 - Source or executable identity changes require a fresh run under the existing exact compatibility gate. Preserve historical inspection/export and reject incompatible resume.
 

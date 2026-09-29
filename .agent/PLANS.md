@@ -1,5 +1,12 @@
 # Current plan state
 
+## Latest documentation audit
+
+[Documentation audit — 2026-09-28](plans/documentation-audit-2026-09-28.md) corrected
+schema compatibility and credential transport wording, verified current navigation,
+rechecked published model prices, and dated older package-verification claims. No
+product behavior or executable inputs changed.
+
 ## Latest completed database maintenance
 
 [Database integrity fixes](plans/database-integrity-fixes.md), authorized 2026-09-27, addresses all ten confirmed review findings, including the bounded schema 14 accounting migration. Implemented and verified 2026-09-28: 1,204 tests passed, 2 unchanged skips; see [verification](../docs/verification/database-integrity-fixes.md).

@@ -42,6 +42,6 @@ These are current operational constraints for changes to the research pipeline a
 
 ## Security and packaged identity
 
-- Credentials use native macOS Keychain or Windows Credential Manager. They do not enter logs, SQLite, exports, browser storage, or child-process arguments. The existing OpenAlex integration has a narrow upstream HTTPS query-string API-key exception. No automatic `.env` or shell-profile loading is permitted.
+- Credentials use native macOS Keychain or Windows Credential Manager. They do not enter logs, SQLite, exports, browser storage, or child-process arguments. OpenAlex and optional PubMed API keys are sent as query parameters to their upstream HTTPS APIs; other provider credentials use authorization headers. No automatic `.env` or shell-profile loading is permitted.
 - The database-scoped `.mvp5.lock` covers an entire fresh run. The controller transfers ownership explicitly. Application workers use owned process groups/jobs; cancellation is cooperative at existing boundaries and an in-flight provider request may run to its deadline.
 - Packaged identity covers root Python modules, recursive `agents`, `providers`, and `frontend` sources, and `prompts`. Frozen builds also hash executable bytes. Source/executable identity changes require new runs under the exact resume check; historical inspection/export remains available.
