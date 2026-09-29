@@ -4,7 +4,7 @@ ResearchAssistant is a local desktop application for source-backed research on a
 
 ## Install and run
 
-The desktop application bundles its runtime; end users do not install Python, Node, or Docker. macOS is the first release target and the current candidate is unsigned. Live-quality acceptance, clean-machine and minimum-OS checks, signing, and notarization remain open. Current evidence and the Windows deferral are in [STATUS](STATUS.md) and [desktop operations](desktop/README.md).
+The desktop application bundles its runtime; end users do not install Python, Node, or Docker. Download the current Apple Silicon DMG or ZIP from the [unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928). It is a direct download, not a Mac App Store submission. The build is unsigned and unnotarized, so macOS may block its first launch. Clean-machine/macOS 14 checks and Developer ID signing/notarization remain open for a broader release. Current evidence and the Windows deferral are in [STATUS](STATUS.md) and [desktop operations](desktop/README.md).
 
 ## Develop and verify
 

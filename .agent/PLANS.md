@@ -1,5 +1,15 @@
 # Current plan state
 
+## Latest Mac verification
+
+[Current Mac build and release-gate verification — 2026-09-28](plans/mac-current-build-release-verification-2026-09-28.md)
+records the user's selection of the current-build and Mac distribution checks. A fresh
+unsigned DMG/ZIP passed the available source, package, native, window, upgrade, and
+copied-app checks on macOS 26.6.2 and was published as an
+[unsigned Mac test download](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928).
+Actual macOS 14/clean-machine and Developer ID signing/notarization remain open;
+see [verification](../docs/verification/mac-current-build-2026-09-28.md).
+
 ## Latest documentation audit
 
 [Documentation audit — 2026-09-28](plans/documentation-audit-2026-09-28.md) corrected

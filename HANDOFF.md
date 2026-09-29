@@ -1,5 +1,27 @@
 # Handoff
 
+## Current Mac build and release-gate verification — 2026-09-28
+
+The user's selected build and locally available Mac distribution checks are complete.
+The unsigned DMG and ZIP are under `desktop/dist/mac-current-20260928/`; checksums,
+source parity, smoke results, and the test-only schema-13 upgrade-fixture correction
+are recorded in [verification](docs/verification/mac-current-build-2026-09-28.md).
+The four verified files were published in the
+[unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928);
+GitHub's asset sizes and SHA-256 digests match the local files. No real user app was
+replaced.
+
+The user clarified that the target is a downloadable build, not a Mac App Store
+submission. The unsigned test files are now directly downloadable. An actual clean
+macOS 14 installation and Developer ID signing/notarization remain open for broader
+signed public distribution; this macOS
+26.6.2 host has neither a macOS 14 test environment nor a signing identity. The user
+chose not to repeat live acceptance in this work. The five-submission allowance remains
+exhausted, so do not make paid research calls without a new explicit allowance.
+Windows remains deferred. The source tag points to `ac49404`; this documentation and
+test-harness follow-up is recorded afterward. Stop at this boundary without new user
+direction.
+
 ## Documentation audit — 2026-09-28
 
 The documentation-only [audit](.agent/plans/documentation-audit-2026-09-28.md) corrected schema support and provider credential transport claims, refreshed the model-guide pricing links, dated older package-verification and installed-app statements, and updated authority pointers to this plan. Current-document links resolve locally. Full pytest passed with 1,204 tests and 2 existing skips; Ruff lint/format and whitespace checks passed. No code, product behavior, release evidence, or release boundary changed. The documentation audit is complete; stop here unless the user authorizes further work.

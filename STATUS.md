@@ -1,5 +1,27 @@
 # Current status
 
+## Current Mac build and release-gate verification — 2026-09-28
+
+At the user's direction, the current `ac49404` source was rebuilt as an unsigned
+Apple Silicon Mac DMG/ZIP. Full pytest passed with **1,204 tests and 2 existing skips**;
+Ruff, frontend lint/types, offline evaluation, all three browser smokes, frozen and
+packaged backend/window smokes, package integrity, and all 100 packaged source-byte
+comparisons passed. An isolated old-to-new upgrade check passed against a schema-13
+fixture after the test harness gained an explicit historical-fixture option. A copy
+installed from the DMG passed the window smoke on this macOS 26.6.2 host. Exact hashes
+and limitations are in [verification](docs/verification/mac-current-build-2026-09-28.md).
+
+The DMG and ZIP were published as an
+[unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928),
+with SHA-256 checksums and a short readme. GitHub's published asset digests and sizes
+match the verified local files. There is no Developer ID signing identity on this host,
+and no clean macOS 14 machine was available. Signing/notarization and
+actual clean-machine/minimum-OS acceptance remain open for a broadly distributed
+signed release, not for this test download. The installed user app was not
+replaced. The user reports prior live testing and selected build/distribution work
+here; no new paid live run was made. The recorded five-submission allowance remains
+exhausted, and Windows remains deferred.
+
 ## Documentation audit — 2026-09-28
 
 The documentation-only [audit](.agent/plans/documentation-audit-2026-09-28.md) corrected stale schema-support and credential-transport statements, refreshed the model-guide pricing links, and identified older package-verification and installed-app claims as historical. Read-only inspection supports schemas 7–14; OpenAlex and optional PubMed API keys are sent to their upstream services in HTTPS query strings. Current-document links resolve locally. Full pytest passed with 1,204 tests and 2 existing skips; Ruff lint/format and whitespace checks passed. No source, product behavior, or release evidence changed.

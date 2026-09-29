@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -26,7 +27,26 @@ EXPECTED_CONFIGURABLE_STAGE_MODELS = {
 }
 
 
+def _prepare_schema13_fixture(database: Path) -> None:
+    """Make the generated history readable by a pre-schema-14 executable."""
+    with sqlite3.connect(database) as conn:
+        version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+        if version != 14:
+            raise ValueError(f"Expected generated schema 14, found {version}")
+        populated_cache_usage = conn.execute(
+            "SELECT COUNT(*) FROM model_route_attempts "
+            "WHERE cached_input_tokens IS NOT NULL OR uncached_input_tokens IS NOT NULL"
+        ).fetchone()[0]
+        if populated_cache_usage:
+            raise ValueError("Cannot discard recorded cache usage from the upgrade fixture")
+        for name in ("cached_input_tokens", "uncached_input_tokens"):
+            conn.execute(f"ALTER TABLE model_route_attempts DROP COLUMN {name}")
+        conn.execute("DELETE FROM schema_migrations WHERE version = 14")
+
+
 def main() -> None:
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "--previous-schema13"):
+        raise ValueError("Usage: upgrade-smoke.py PREVIOUS CURRENT [--previous-schema13]")
     previous, current = (Path(value).resolve() for value in sys.argv[1:3])
     root = Path(__file__).resolve().parents[1]
     token, vault_secret = (secrets.token_hex(24) for _ in range(2))
@@ -70,6 +90,8 @@ def main() -> None:
             check=True,
         )
         assert result.returncode == 0
+        if len(sys.argv) == 4:
+            _prepare_schema13_fixture(database)
         env = {
             key: os.environ[key]
             for key in (

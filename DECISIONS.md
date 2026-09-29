@@ -21,4 +21,4 @@ This file records decisions that still govern current behavior. The exact preced
 
 macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).
 
-The current authorized work is [database integrity fixes](.agent/plans/database-integrity-fixes.md). It does not renew paid-test allowance or change research policy, persisted historical data, or the release boundary.
+The latest authorized work is [current Mac build and release-gate verification](.agent/plans/mac-current-build-release-verification-2026-09-28.md). It does not renew the paid-test allowance or change research policy, persisted historical data, or the release boundary.
