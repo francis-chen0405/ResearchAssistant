@@ -1,5 +1,15 @@
 # Handoff
 
+## Manual testing continuation — 2026-10-01
+
+The current unsigned Mac build is installed in `/Applications/ResearchAssistant.app`.
+It opened after the verified download's quarantine was cleared, passed an isolated
+offline smoke, and the user saw saved history. Older installed/downloaded copies were
+removed; real app data and project build evidence were preserved. The user plans to
+continue testing and report any bugs in a new chat. Use the
+[testing handoff](docs/testing-handoff-2026-10-01.md) for exact provenance, verified
+checks, boundaries, and the bug workflow. No new paid live-run allowance was granted.
+
 ## Current Mac build and release-gate verification — 2026-09-28
 
 The user's selected build and locally available Mac distribution checks are complete.

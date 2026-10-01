@@ -1,5 +1,17 @@
 # Current status
 
+## Installed Mac app and testing handoff — 2026-10-01
+
+The verified unsigned release was installed at `/Applications/ResearchAssistant.app`
+on 2026-09-29 after a downloaded, quarantined copy triggered a macOS launch warning.
+The downloaded DMG matched its published SHA-256 and passed disk-image verification;
+a fresh copy from it launched after quarantine was cleared on that verified app.
+The installed app and backend stayed running after old mounted images were ejected.
+Its isolated offline smoke passed, and the user confirmed saved history was visible.
+No paid provider call or real-data migration was performed. The user is continuing
+manual testing; no new bug has been reported yet. See the
+[testing handoff](docs/testing-handoff-2026-10-01.md).
+
 ## Current Mac build and release-gate verification — 2026-09-28
 
 At the user's direction, the current `ac49404` source was rebuilt as an unsigned

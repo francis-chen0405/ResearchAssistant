@@ -14,8 +14,9 @@ Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-de
 Current unsigned Mac build verification is tracked in
 [the 2026-09-28 record](../docs/verification/mac-current-build-2026-09-28.md).
 It includes the database-integrity source changes and current GPT-6 model choices.
-The installed user app has not been replaced. Earlier adaptive-search, Phase 2, and
-Phase 3 records remain historical evidence for their specific builds and checks.
+The user app was subsequently replaced with the verified unsigned build on 2026-09-29;
+see the [testing handoff](../docs/testing-handoff-2026-10-01.md). Earlier adaptive-search,
+Phase 2, and Phase 3 records remain historical evidence for their specific builds and checks.
 This is a local application: provider calls run in its bundled Python backend. There
 is no hosted application backend and no automatic paid credential test.
 
