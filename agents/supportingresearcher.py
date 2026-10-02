@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from threading import Lock
+from threading import Event, Lock
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -385,6 +385,7 @@ class DeduplicationState:
     content_hashes: dict[str, UUID] = field(default_factory=dict)
     source_families: dict[UUID, UUID] = field(default_factory=dict)
     resolved_by_original: dict[str, str] = field(default_factory=dict)
+    in_flight_original_urls: dict[str, Event] = field(default_factory=dict)
     lock: Lock = field(default_factory=Lock, repr=False)
 
 
@@ -670,6 +671,106 @@ def _ranking_facets(claim_definition: ClaimDefinition) -> tuple[str, ...]:
 
 
 def _retrieve_result(
+    run_id: UUID,
+    query: SearchQuery,
+    rank: int,
+    original_url: str,
+    scraper_provider: ScraperProvider,
+    retry_policy: RetryPolicy,
+    clock: Clock,
+    deduplication: DeduplicationState,
+    boundary_check: Callable[[], None] | None,
+) -> tuple[RetrievalOutcome, SourceSnapshot | None]:
+    retrieval_attempt_id = uuid5(
+        NAMESPACE_URL,
+        f"phase-7b-retrieval::{run_id}::{query.query_id}::{rank}::{original_url}",
+    )
+    while True:
+        if boundary_check is not None:
+            boundary_check()
+        with deduplication.lock:
+            snapshot_id = deduplication.original_urls.get(original_url)
+            resolved_url = deduplication.resolved_by_original.get(original_url)
+            if snapshot_id is not None and resolved_url is not None:
+                owner_event = None
+                wait_event = None
+            else:
+                wait_event = deduplication.in_flight_original_urls.get(original_url)
+                if wait_event is None:
+                    owner_event = Event()
+                    deduplication.in_flight_original_urls[original_url] = owner_event
+                else:
+                    owner_event = None
+        if snapshot_id is not None and resolved_url is not None:
+            return _duplicate_original_url_outcome(
+                run_id,
+                query,
+                rank,
+                original_url,
+                resolved_url,
+                snapshot_id,
+                retrieval_attempt_id,
+                clock,
+            )
+        if owner_event is not None:
+            break
+        if wait_event is None:
+            raise RuntimeError("URL in-flight coordination lost its event")
+        while not wait_event.wait(timeout=0.05):
+            if boundary_check is not None:
+                boundary_check()
+
+    try:
+        return _retrieve_result_claimed(
+            run_id,
+            query,
+            rank,
+            original_url,
+            scraper_provider,
+            retry_policy,
+            clock,
+            deduplication,
+            boundary_check,
+        )
+    finally:
+        with deduplication.lock:
+            if deduplication.in_flight_original_urls.get(original_url) is owner_event:
+                del deduplication.in_flight_original_urls[original_url]
+            owner_event.set()
+
+
+def _duplicate_original_url_outcome(
+    run_id: UUID,
+    query: SearchQuery,
+    rank: int,
+    original_url: str,
+    resolved_url: str,
+    snapshot_id: UUID,
+    retrieval_attempt_id: UUID,
+    clock: Clock,
+) -> tuple[RetrievalOutcome, None]:
+    record = _retrieval_record(
+        run_id,
+        retrieval_attempt_id,
+        query,
+        rank,
+        original_url,
+        resolved_url,
+        RetrievalStatus.SKIPPED,
+        clock(),
+    )
+    return (
+        RetrievalOutcome(
+            retrieval=record,
+            scrape_status=ScrapeStatus.DUPLICATE_URL,
+            attempts_made=0,
+            duplicate_of_snapshot_id=snapshot_id,
+        ),
+        None,
+    )
+
+
+def _retrieve_result_claimed(
     run_id: UUID,
     query: SearchQuery,
     rank: int,

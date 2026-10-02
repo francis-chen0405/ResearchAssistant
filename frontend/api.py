@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
@@ -28,6 +28,10 @@ from agents.v2_final_output import (
     V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
 )
 from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_ARTIFACT_KEY
+from agents.v2_round_four import (
+    V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
+    V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
+)
 from application_runtime import repository_identity
 from credential_store import (
     KeychainUnavailableError,
@@ -38,6 +42,7 @@ from credential_store import (
     save_credentials,
 )
 from desktop_settings import InterfaceSettings, read_preferences, update_preferences
+from evidence_core import parse_extracted_quote_block, validate_snapshot_integrity
 from frontend.live_service import (
     DEFAULT_LIVE_DB,
     LiveHistoryItem,
@@ -53,15 +58,23 @@ from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
 from history_import import HistoryImportResult, import_history
 from models import (
+    CandidateQuoteBlock,
     DiscoveryProvider,
+    LedgerRecord,
     ResearchControls,
     ResearchDirections,
     ResearchMode,
+    SourceSnapshot,
     StrictModel,
+    V2ClaimCoverageState,
     V2EvidenceAdmissionBatchResult,
+    V2EvidenceAdmissionRecord,
     V2EvidenceAnalystSourceResult,
+    V2EvidenceRelationship,
     V2FinalResearchOutput,
+    V2GapAnalysisOutput,
     V2ReviewerLedgerBatchResult,
+    V2RoundFourGovernorDecision,
 )
 from providers.model_choices import (
     CONFIGURABLE_PROFILE_ID,
@@ -78,6 +91,7 @@ from providers.model_profiles import (
 )
 from providers.v2_factory import V2ProductionFactoryConfig
 from store import DatabaseCompatibilityError, open_read_only_store, read_v2_artifact
+from study_lineage import StudyLineageNotice, build_study_lineage_notices
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -171,7 +185,8 @@ class LoopbackGuardMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         if self._session_token is not None and not secrets.compare_digest(
-            request.headers.get("authorization", ""), f"Bearer {self._session_token}"
+            request.headers.get("authorization", "").encode("utf-8"),
+            f"Bearer {self._session_token}".encode(),
         ):
             return JSONResponse(status_code=401, content={"detail": "Desktop session required."})
         if request.url.hostname not in self._allowed_hosts:
@@ -377,10 +392,13 @@ class V2EvidenceDisplayItem(StrictModel):
     """Read-only evidence detail suitable for the v2 result page."""
 
     source_id: UUID
+    ledger_claim_id: UUID
     title: str | None = None
     source_url: str = Field(min_length=1)
     source_family: str = Field(min_length=1)
     direction: str = Field(min_length=1)
+    relationship_to_claim: V2EvidenceRelationship
+    approved_factual_statement: str = Field(min_length=1)
     recommendation_status: str = Field(min_length=1)
     selection_rationale: str | None = None
     gap_ids: tuple[str, ...] = ()
@@ -391,14 +409,30 @@ class V2EvidenceDisplayItem(StrictModel):
     validation_status: str = Field(min_length=1)
 
 
+class V2ResearchStatusDisplay(StrictModel):
+    """Read-only current governor/coverage summary alongside the frozen brief."""
+
+    reason_code: str = Field(min_length=1)
+    explanation: str = Field(min_length=1)
+    actionable_gap_count: int = Field(ge=0)
+    partial_coverage_count: int = Field(ge=0)
+    unavailable_coverage_count: int = Field(ge=0)
+    source: Literal["persisted_governor", "final_output"]
+
+
 class V2EvidenceDisplay(StrictModel):
     run_id: UUID
     items: tuple[V2EvidenceDisplayItem, ...]
+    study_lineage: tuple[StudyLineageNotice, ...] = ()
+    research_status: V2ResearchStatusDisplay
 
 
 def _build_v2_evidence_display(
     output: V2FinalResearchOutput,
     evidence_result: V2EvidenceAdmissionBatchResult | V2ReviewerLedgerBatchResult,
+    *,
+    gap_analysis: V2GapAnalysisOutput | None = None,
+    governor_decision: V2RoundFourGovernorDecision | None = None,
 ) -> V2EvidenceDisplay:
     """Project persisted v2 evidence into a read-only result-page view."""
     sources = {source.source_id: source for source in output.all_surviving_sources}
@@ -410,10 +444,28 @@ def _build_v2_evidence_display(
         for status in evidence_result.analyst_result.input.queue_result.source_statuses
     }
     items: list[V2EvidenceDisplayItem] = []
+    queued_candidates = {
+        item.source_id: item for item in evidence_result.analyst_result.input.queued_candidates
+    }
     for admission in evidence_result.source_results:
+        record = getattr(admission, "evidence_record", None) or getattr(
+            admission, "ledger_record", None
+        )
+        if record is None:
+            continue
         analyst = analyst_results[admission.source_id]
         if analyst.candidate is None or analyst.assessment is None:
             continue
+        queued = queued_candidates.get(admission.source_id)
+        if queued is None:
+            raise ValueError("admitted source is missing its queued candidate and snapshot")
+        _validate_evidence_display_provenance(
+            run_id=output.run_id,
+            candidate=analyst.candidate,
+            queued_candidate=queued.candidate,
+            snapshot=queued.snapshot,
+            record=record,
+        )
         source = sources[admission.source_id]
         selection = selections[admission.source_id]
         limitations = (
@@ -423,10 +475,13 @@ def _build_v2_evidence_display(
         items.append(
             V2EvidenceDisplayItem(
                 source_id=source.source_id,
+                ledger_claim_id=record.ledger_claim_id,
                 title=source.title,
-                source_url=source.source_url,
+                source_url=record.source_url,
                 source_family=admission.provenance.source_family_id,
                 direction=source.direction.value,
+                relationship_to_claim=analyst.assessment.relationship_to_claim,
+                approved_factual_statement=record.approved_factual_statement,
                 recommendation_status=(
                     "Recommended for deeper analysis"
                     if selection.recommended
@@ -445,7 +500,122 @@ def _build_v2_evidence_display(
                 ),
             )
         )
-    return V2EvidenceDisplay(run_id=output.run_id, items=tuple(items))
+    candidates = evidence_result.analyst_result.input.queue_result.input.survivors
+    research_status = _build_research_status_display(
+        output, gap_analysis=gap_analysis, governor_decision=governor_decision
+    )
+    return V2EvidenceDisplay(
+        run_id=output.run_id,
+        items=tuple(items),
+        study_lineage=build_study_lineage_notices(candidates),
+        research_status=research_status,
+    )
+
+
+def _validate_evidence_display_provenance(
+    *,
+    run_id: UUID,
+    candidate: CandidateQuoteBlock,
+    queued_candidate: CandidateQuoteBlock,
+    snapshot: SourceSnapshot,
+    record: LedgerRecord | V2EvidenceAdmissionRecord,
+) -> None:
+    """Bind displayed quote text to its queued snapshot and admitted Ledger record."""
+    if candidate != queued_candidate:
+        raise ValueError("admitted quote candidate differs from the queued candidate")
+    if candidate.run_id != run_id or record.run_id != run_id or snapshot.run_id != run_id:
+        raise ValueError("admitted quote provenance must match the result run")
+    if (
+        candidate.quote_block_id != record.quote_block_id
+        or candidate.source_url != record.source_url
+        or candidate.snapshot_id != record.snapshot_id
+        or candidate.snapshot_sha256 != record.snapshot_sha256
+        or candidate.retrieval_attempt_id != record.retrieval_attempt_id
+        or tuple(candidate.segment_offsets) != record.segment_offsets
+    ):
+        raise ValueError("admitted quote provenance does not match its Ledger record")
+    if (
+        candidate.source_url != snapshot.source_url
+        or candidate.snapshot_id != snapshot.snapshot_id
+        or candidate.snapshot_sha256 != snapshot.snapshot_sha256
+        or candidate.retrieval_attempt_id != snapshot.retrieval_attempt_id
+    ):
+        raise ValueError("admitted quote provenance does not match its queued snapshot")
+    validate_snapshot_integrity(snapshot)
+    parsed_quote = parse_extracted_quote_block(candidate.extracted_quote_block)
+    if len(parsed_quote.segments) != len(candidate.segment_offsets):
+        raise ValueError("admitted quote segments do not match their snapshot offsets")
+    for segment, offset in zip(parsed_quote.segments, candidate.segment_offsets, strict=True):
+        if snapshot.normalized_text[offset.start_char : offset.end_char] != segment:
+            raise ValueError("admitted quote text does not match its queued snapshot")
+
+
+def _build_research_status_display(
+    output: V2FinalResearchOutput,
+    *,
+    gap_analysis: V2GapAnalysisOutput | None,
+    governor_decision: V2RoundFourGovernorDecision | None,
+) -> V2ResearchStatusDisplay:
+    if gap_analysis is not None:
+        if gap_analysis.run_id != output.run_id or gap_analysis.input.run_id != output.run_id:
+            raise ValueError("latest gap analysis must match the final-output run")
+        if gap_analysis.input.completed_round != 3:
+            raise ValueError("latest gap analysis must describe completed Round 3")
+        if gap_analysis.input.directions != output.directions:
+            raise ValueError("latest gap analysis directions must match the final output")
+    if governor_decision is not None:
+        if governor_decision.run_id != output.run_id:
+            raise ValueError("latest Governor decision must match the final-output run")
+        if gap_analysis is None:
+            raise ValueError("latest Governor decision requires its post-Round-3 gap analysis")
+        if governor_decision.authorized and output.stopping.completed_rounds < 4:
+            raise ValueError("authorized Round 4 cannot precede its completed research round")
+
+    coverage = output.claim_coverage_map
+    decision = governor_decision
+    if decision is None and output.gap_reconciliation is not None:
+        decision = output.gap_reconciliation.round_four_governor_decision
+    if decision is not None and decision.authorized:
+        # Authorization describes a planned round, not the outcome of completed Round 4.
+        decision = None
+    if output.stopping.completed_rounds >= 4:
+        actionable_gap_count = len(output.unresolved_material_gaps)
+    elif gap_analysis is not None and gap_analysis.result is not None:
+        actionable_gap_count = len(gap_analysis.result.material_gaps)
+    else:
+        actionable_gap_count = len(output.unresolved_material_gaps)
+    reason_code = (
+        decision.reason_code.value if decision is not None else output.stopping.reason.value
+    )
+    explanation = decision.explanation if decision is not None else output.stopping.explanation
+    if (
+        decision is not None
+        and decision.reason_code.value == "no_material_gaps"
+        and gap_analysis is not None
+        and gap_analysis.result is not None
+        and not gap_analysis.result.continue_research
+    ):
+        reason_code = "no_productive_search"
+        explanation = gap_analysis.result.stop_reason or (
+            "The latest gap review did not identify an actionable search direction."
+        )
+        explanation += " Research coverage may remain partial or unavailable."
+    return V2ResearchStatusDisplay(
+        reason_code=reason_code,
+        explanation=explanation,
+        actionable_gap_count=actionable_gap_count,
+        partial_coverage_count=sum(
+            item.coverage_state is V2ClaimCoverageState.PARTIAL for item in coverage
+        ),
+        unavailable_coverage_count=sum(
+            item.coverage_state is V2ClaimCoverageState.UNAVAILABLE for item in coverage
+        ),
+        source=(
+            "persisted_governor"
+            if decision is not None and governor_decision is not None
+            else "final_output"
+        ),
+    )
 
 
 def create_default_runtime() -> ApiRuntime:
@@ -825,33 +995,36 @@ def create_app(
         ):
             raise HTTPException(status_code=422, detail="Select at least one research source.")
         database = payload.db_path or str(prepare_default_database())
-        request = LiveRunRequest(
-            model_profile=payload.model_profile,
-            stage_models=payload.stage_models,
-            raw_claim=payload.raw_claim,
-            db_path=database,
-            run_id=payload.run_id,
-            max_tokens=payload.max_tokens,
-            max_cost_usd=payload.max_cost_usd,
-            max_llm_calls=payload.max_llm_calls,
-            research_controls=ResearchControls(
-                research_mode=(
-                    ResearchMode.BALANCED
-                    if payload.directions().challenge_enabled
-                    else ResearchMode.FOCUSED
+        try:
+            request = LiveRunRequest(
+                model_profile=payload.model_profile,
+                stage_models=payload.stage_models,
+                raw_claim=payload.raw_claim,
+                db_path=database,
+                run_id=payload.run_id,
+                max_tokens=payload.max_tokens,
+                max_cost_usd=payload.max_cost_usd,
+                max_llm_calls=payload.max_llm_calls,
+                research_controls=ResearchControls(
+                    research_mode=(
+                        ResearchMode.BALANCED
+                        if payload.directions().challenge_enabled
+                        else ResearchMode.FOCUSED
+                    ),
+                    sources_per_stance_per_round=payload.sources_per_stance_per_round,
+                    discovery_providers=_selected_discovery_providers(
+                        use_serpsearch=payload.use_serpsearch,
+                        use_exa=payload.use_exa,
+                        use_openalex=payload.use_openalex,
+                        use_arxiv=payload.use_arxiv,
+                        use_pubmed=payload.use_pubmed,
+                    ),
                 ),
-                sources_per_stance_per_round=payload.sources_per_stance_per_round,
-                discovery_providers=_selected_discovery_providers(
-                    use_serpsearch=payload.use_serpsearch,
-                    use_exa=payload.use_exa,
-                    use_openalex=payload.use_openalex,
-                    use_arxiv=payload.use_arxiv,
-                    use_pubmed=payload.use_pubmed,
-                ),
-            ),
-            directions=payload.directions(),
-            crossref_enabled=payload.use_crossref,
-        )
+                directions=payload.directions(),
+                crossref_enabled=payload.use_crossref,
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="Invalid request fields.") from exc
         return runtime.controller.start(request)
 
     @app.get("/api/research/{run_id}", response_model=LiveRunSnapshot)
@@ -863,6 +1036,8 @@ def create_app(
             return runtime.controller.snapshot(db_path, run_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Research run not found.") from exc
+        except DatabaseCompatibilityError as exc:
+            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
 
     @app.post("/api/research/{run_id}/cancel", response_model=CancelResponse)
     def cancel_research(run_id: UUID, payload: RunLocator) -> CancelResponse:
@@ -942,9 +1117,36 @@ def create_app(
                         store.connection, run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY
                     )
                     evidence_type = V2ReviewerLedgerBatchResult
+                try:
+                    gap_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY
+                    )
+                except KeyError:
+                    gap_artifact = None
+                try:
+                    governor_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY
+                    )
+                except KeyError:
+                    governor_artifact = None
             output = V2FinalResearchOutput.model_validate_json(final_artifact.payload_json)
             evidence_result = evidence_type.model_validate_json(evidence_artifact.payload_json)
-            return _build_v2_evidence_display(output, evidence_result)
+            gap_analysis = (
+                V2GapAnalysisOutput.model_validate_json(gap_artifact.payload_json)
+                if gap_artifact is not None
+                else None
+            )
+            governor_decision = (
+                V2RoundFourGovernorDecision.model_validate_json(governor_artifact.payload_json)
+                if governor_artifact is not None and gap_analysis is not None
+                else None
+            )
+            return _build_v2_evidence_display(
+                output,
+                evidence_result,
+                gap_analysis=gap_analysis,
+                governor_decision=governor_decision,
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="V2 evidence details not found.") from exc
         except Exception as exc:

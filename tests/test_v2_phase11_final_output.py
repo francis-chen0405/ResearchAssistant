@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,7 +37,11 @@ from models import (
     V2ClaimCoverageDimension,
     V2ClaimCoverageState,
     V2DeepAnalysisBudgetReason,
+    V2FinalResearchOutput,
+    V2GapCoverageReconciliation,
     V2ResultSourceStatus,
+    V2RoundFourDecisionCode,
+    V2RoundFourGovernorDecision,
     V2UnresolvedMaterialGap,
 )
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
@@ -46,6 +51,7 @@ from store import insert_v2_artifact, read_v2_artifact
 def _continuation(
     run_id: object,
     stop_code: V2AdaptiveStopCode = V2AdaptiveStopCode.ROUND_ONE_COMPLETE,
+    completed_rounds: int = 1,
 ) -> V2AdaptiveContinuationResult:
     return V2AdaptiveContinuationResult(
         run_id=run_id,
@@ -53,7 +59,7 @@ def _continuation(
         merged_survivors=V2MergedSurvivorPool(run_id=run_id, sources=()),
         stopping_decision=V2AdaptiveStoppingDecision(
             run_id=run_id,
-            completed_rounds=1,
+            completed_rounds=completed_rounds,
             stop_code=stop_code,
             stopping_reason="The persisted research governor selected this stopping point.",
             decided_at=NOW,
@@ -384,6 +390,140 @@ def test_stopping_reasons_are_exposed(
         created_at=NOW,
     )
     assert output.stopping.reason.value == expected
+
+
+def test_post_round_three_stop_disclosure_preserves_partial_coverage(
+    tmp_path: Path,
+) -> None:
+    _, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    run_id = reviewer_result.run_id
+    governor = V2RoundFourGovernorDecision(
+        run_id=run_id,
+        authorized=False,
+        reason_code=V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH,
+        explanation=(
+            "Round 4 was not started because no productive new search was identified. "
+            "Coverage may remain partial or unavailable."
+        ),
+        reservation=None,
+        decided_at=NOW,
+    )
+    coverage = V2ClaimCoverageAssessment(
+        dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+        claim_component="the exact claim",
+        coverage_state=V2ClaimCoverageState.PARTIAL,
+        evidence_summary="The available evidence does not settle the effect.",
+    )
+    reconciliation = V2GapCoverageReconciliation(
+        run_id=run_id,
+        post_round_three_gap_artifact_key="post-phase-13-gap-analysis-after-round-3-v1",
+        round_four_attempted=False,
+        records=(),
+        claim_coverage_map=(coverage,),
+        round_four_governor_decision=governor,
+        completed_at=NOW,
+    )
+
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=_continuation(
+            run_id, V2AdaptiveStopCode.ROUND_THREE_COMPLETE, completed_rounds=3
+        ),
+        gap_reconciliation=reconciliation,
+        synthesis=_synthesis(reviewer_result),
+        created_at=NOW,
+    )
+    rendered = render_v2_final_output(output)
+
+    assert output.release_validation.valid
+    assert output.stopping.reason.value == "no_productive_new_search"
+    assert output.stopping.explanation == governor.explanation
+    assert "coverage may remain partial or unavailable" in rendered.lower()
+    assert "effect_or_association: partial" in rendered
+    assert "hard_round_limit" not in rendered
+    assert "No unresolved material gaps were recorded." not in rendered
+
+
+def test_declined_round_four_override_requires_three_completed_rounds(
+    tmp_path: Path,
+) -> None:
+    _, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    run_id = reviewer_result.run_id
+    governor = V2RoundFourGovernorDecision(
+        run_id=run_id,
+        authorized=False,
+        reason_code=V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH,
+        explanation="No productive new search was identified.",
+        reservation=None,
+        decided_at=NOW,
+    )
+    reconciliation = V2GapCoverageReconciliation(
+        run_id=run_id,
+        post_round_three_gap_artifact_key="post-phase-13-gap-analysis-after-round-3-v1",
+        round_four_attempted=False,
+        records=(),
+        round_four_governor_decision=governor,
+        completed_at=NOW,
+    )
+    continuation = _continuation(run_id, V2AdaptiveStopCode.ROUND_THREE_COMPLETE).model_copy(
+        update={
+            "stopping_decision": _continuation(
+                run_id, V2AdaptiveStopCode.ROUND_THREE_COMPLETE
+            ).stopping_decision.model_copy(update={"completed_rounds": 2})
+        }
+    )
+
+    with pytest.raises(ValueError, match="requires exactly three completed rounds"):
+        build_v2_final_research_output(
+            reviewer_result=reviewer_result,
+            continuation=continuation,
+            gap_reconciliation=reconciliation,
+            synthesis=_synthesis(reviewer_result),
+            created_at=NOW,
+        )
+
+
+def test_historical_final_output_without_round_four_fact_keeps_recorded_rendering(
+    tmp_path: Path,
+) -> None:
+    _, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    run_id = reviewer_result.run_id
+    coverage = V2ClaimCoverageAssessment(
+        dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+        claim_component="the exact claim",
+        coverage_state=V2ClaimCoverageState.PARTIAL,
+        evidence_summary="The historical coverage map remains partial.",
+    )
+    old_reconciliation_payload = {
+        "run_id": str(run_id),
+        "post_round_three_gap_artifact_key": "post-phase-13-gap-analysis-after-round-3-v1",
+        "round_four_attempted": False,
+        "records": [],
+        "claim_coverage_map": [coverage.model_dump(mode="json")],
+        "completed_at": NOW.isoformat(),
+    }
+    old_reconciliation = V2GapCoverageReconciliation.model_validate_json(
+        json.dumps(old_reconciliation_payload)
+    )
+    assert old_reconciliation.round_four_governor_decision is None
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=_continuation(run_id, V2AdaptiveStopCode.ROUND_THREE_COMPLETE),
+        gap_reconciliation=old_reconciliation,
+        synthesis=_synthesis(reviewer_result),
+        created_at=NOW,
+    )
+    prior_render = render_v2_final_output(output)
+    prior_hash = output.release_validation.rendered_output_hash
+    old_payload = output.model_dump(mode="json")
+    old_payload["release_validation"]["validator_config_version"] = (
+        "researchassistant-v2-post-phase-13-round-four-release-validator-v1"
+    )
+    historical_output = V2FinalResearchOutput.model_validate(old_payload)
+
+    assert historical_output.stopping.reason.value == "hard_round_limit"
+    assert render_v2_final_output(historical_output) == prior_render
+    assert historical_output.release_validation.rendered_output_hash == prior_hash
 
 
 def test_disabled_direction_and_ledger_mismatch_fail_closed(tmp_path: Path) -> None:

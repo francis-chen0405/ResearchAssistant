@@ -43,6 +43,7 @@ from models import (
     ProvisionalCandidate,
     ResearchGovernorDecision,
     ResearchRoundRecord,
+    ResearchRoundStatus,
     ResearchTerminalResult,
     RetrievalRecord,
     RunCancellationRequest,
@@ -842,7 +843,9 @@ def read_portfolio_coverage_assessment(
 
 def insert_research_round_record(db_path: str, record: ResearchRoundRecord) -> None:
     """Append one completed or terminal research round; SQLite enforces its 1..3 bound."""
-    if record.completed_at is None:
+    if record.status in {ResearchRoundStatus.PLANNED, ResearchRoundStatus.RUNNING} or (
+        record.completed_at is None
+    ):
         raise ValueError("only completed or terminal research rounds may be persisted")
     conn = _connect(db_path)
     try:

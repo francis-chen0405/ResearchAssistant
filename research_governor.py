@@ -151,7 +151,9 @@ def _v2_round_four_reason(evaluation: V2RoundFourGovernorInput) -> V2RoundFourDe
         return V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE
     if not evaluation.gap_analysis_usable:
         return V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE
-    if not evaluation.material_gap_remains or not evaluation.luna_recommends_continue:
+    if not evaluation.luna_recommends_continue:
+        return V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH
+    if not evaluation.material_gap_remains:
         return V2RoundFourDecisionCode.NO_MATERIAL_GAPS
     if not evaluation.eligible_provider_exists:
         return V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER
@@ -175,7 +177,13 @@ def _v2_round_four_explanation(reason: V2RoundFourDecisionCode, duplicate_rate: 
             "Round 4 was authorized as one narrow claim-coverage continuation."
         ),
         V2RoundFourDecisionCode.NO_MATERIAL_GAPS: (
-            "Round 4 was not started because no material claim-coverage gap remains."
+            "Round 4 was not started because no actionable material gap was identified. "
+            "Coverage is reported separately and may remain partial or unavailable."
+        ),
+        V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH: (
+            "Round 4 was not started because the post-Round-3 analysis identified no "
+            "productive new search. Coverage is reported separately and may remain "
+            "partial or unavailable."
         ),
         V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE: (
             "Round 4 was not started because post-Round-3 Gap Analysis was unusable."

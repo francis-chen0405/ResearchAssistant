@@ -1,0 +1,207 @@
+file,area,reviewer,evidence
+.env.example,Desktop / build / configuration,Primary,api-native-review.md; desktop-build-review.md
+.gitattributes,Desktop / build / configuration,Primary,api-native-review.md; desktop-build-review.md
+.github/workflows/ci.yml,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+.github/workflows/desktop.yml,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+.gitignore,Desktop / build / configuration,Primary,api-native-review.md; desktop-build-review.md
+Launch ResearchAssistant.command,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+agents/analyst.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/opposingresearcher.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/planner.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/renderer.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/researcher.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/reviewer.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/supportingresearcher.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/synthesizer.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+agents/v2_acquisition.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_adaptive_search.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_coverage.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_deep_analysis.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_discovery.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_evidence_admission.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_evidence_analyst.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_extraction.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_final_output.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_gap_analysis.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_initial_planner.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_reviewer_ledger.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_round_four.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+agents/v2_source_selection.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+application_runtime.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+brief_export.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+cli.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+credential_store.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+desktop/acquisition/package-lock.json,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/acquisition/package.json,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/audit-api-smoke.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/backend.py,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/build.py,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/configuration-race-smoke.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/constraints.txt,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/frontend-poll-smoke.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/frontend-smoke.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/history-race-smoke.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/main.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/package-lock.json,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/package.json,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/requirements-build.txt,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/smoke.py,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/smoke_support.py,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/ui-smoke.cjs,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop/upgrade-smoke.py,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+desktop_paths.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+desktop_settings.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+evaluations/__init__.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+evaluations/evaluator.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+evaluations/run_evaluations.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+evaluations/schema.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+evidence_analysis.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+evidence_browser.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+evidence_core.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+evidence_portfolio.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+file_lock.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+fixture_pipeline.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+frontend/api.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+frontend/evidence_browser_app.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+frontend/live_contracts.py,Live progress,Luna audit_pipeline + primary,live-service-review.md
+frontend/live_history.py,Live progress,Luna audit_pipeline + primary,live-service-review.md
+frontend/live_progress.py,Live progress,Luna audit_pipeline + primary,live-service-review.md
+frontend/live_service.py,Live progress,Luna audit_pipeline + primary,live-service-review.md
+frontend/profile_preflight.py,Providers,Luna audit_providers,providers-review.md
+frontend/provider_connections.py,Providers,Luna audit_providers,providers-review.md
+frontend/security.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+frontend/service_manager.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+frontend/streamlit_app.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+history_import.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+model_contracts.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+model_evidence.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+model_research.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+models.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+money.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+orchestrator.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+pipeline_artifacts.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+pipeline_compatibility.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+provider_contract.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+providers/acquisition.py,Providers,Luna audit_providers,providers-review.md
+providers/arxiv.py,Providers,Luna audit_providers,providers-review.md
+providers/clients.py,Providers,Luna audit_providers,providers-review.md
+providers/composite_search.py,Providers,Luna audit_providers,providers-review.md
+providers/config.py,Providers,Luna audit_providers,providers-review.md
+providers/crossref.py,Providers,Luna audit_providers,providers-review.md
+providers/exa.py,Providers,Luna audit_providers,providers-review.md
+providers/firecrawl.py,Providers,Luna audit_providers,providers-review.md
+providers/llm.py,Providers,Luna audit_providers,providers-review.md
+providers/mimo.py,Providers,Luna audit_providers,providers-review.md
+providers/mimo_factory.py,Providers,Luna audit_providers,providers-review.md
+providers/model_choices.py,Providers,Luna audit_providers,providers-review.md
+providers/model_profiles.py,Providers,Luna audit_providers,providers-review.md
+providers/normalization.py,Providers,Luna audit_providers,providers-review.md
+providers/openalex.py,Providers,Luna audit_providers,providers-review.md
+providers/pricing.py,Providers,Luna audit_providers,providers-review.md
+providers/pubmed.py,Providers,Luna audit_providers,providers-review.md
+providers/ranking.py,Providers,Luna audit_providers,providers-review.md
+providers/scraper.py,Providers,Luna audit_providers,providers-review.md
+providers/search.py,Providers,Luna audit_providers,providers-review.md
+providers/serpsearch.py,Providers,Luna audit_providers,providers-review.md
+providers/v2_budget.py,Providers,Luna audit_providers,providers-review.md
+providers/v2_factory.py,Providers,Luna audit_providers,providers-review.md
+providers/v2_routing.py,Providers,Luna audit_providers,providers-review.md
+providers/wigolo.py,Providers,Luna audit_providers,providers-review.md
+pyproject.toml,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+requirements-legacy.txt,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+requirements.txt,Desktop / build / configuration,Luna audit_providers + primary,desktop-build-review.md; service-manager-review.md; api-native-review.md
+research_governor.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+scripts/mimo_live_smoke.py,Historical pipeline / CLI / evaluation,Luna audit_pipeline,legacy-review.md
+store.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+store_schema.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+tests/mvp4_subprocess_driver.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_adaptive_reliability.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_api_boundaries.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_cli_inspection.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_evidence_provenance.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_legacy_retrieval.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_live_service.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_money.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_provider_budget.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_audit_service_manager.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_cleanup_boundaries.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_database_cache_accounting.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_database_import_failures.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_database_schema_integrity.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_database_transactions.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_desktop.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_desktop_smoke_support.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mlp2_credentials.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mlp3_api.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mlp4_research_quality.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mlp5_provider_selection.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_model_cache_pricing.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp1.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp10_evidence_portfolio.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp11_research_governor.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp3b_mimo.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp4_cli.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp5_live_web.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp6_3_security.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp6_5_read_only_inspection.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp6_6_runtime_integrity.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp6_8_persistence_accounting.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp6_9_acquisition_configuration.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp8_1_controls.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp8_2_evidence_browser.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp8_exports.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_mvp9_verified_quote_selection.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase0_foundation.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase1.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase10.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase2.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase3.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase3_settings.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase4.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase5.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase6.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase7.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase7_frontend.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase8.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_phase9.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_pipeline_selection.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_planner_response_contract.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_post_mvp5_retrieval.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_stage_model_choices.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_status_polling_compatibility.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_type_contracts.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_deep_analysis_concurrency.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_discovery_provider_adapters.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase10_reviewer_ledger.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase11_final_output.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase12_production.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase13_analyzer_admission.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase14_round_four.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase1_contracts.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase2_routing.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase3_initial_planner.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase4_discovery_scout.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase5_acquisition_probe.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase6_gap_analysis.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase7_adaptive_search.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase8_source_selection.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_phase9_luna_evidence_analyst.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+tests/test_v2_problem2_budget_reconciliation.py,Tests,Area owners + primary integration,Full regression and annotation/lint gates; targeted source review (not every test read line-by-line)
+utils.py,Storage / contracts / evidence,Luna audit_storage,storage-review.md
+v2_orchestrator.py,Fresh pipeline,Luna audit_pipeline,pipeline-review.md
+web/app/globals.css,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/app/layout.tsx,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/app/page.tsx,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/components/dialog.tsx,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/components/provider-setup.tsx,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/components/workspace.tsx,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/eslint.config.mjs,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/lib/api.ts,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/lib/preview.ts,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/next.config.ts,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/package.json,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/pnpm-lock.yaml,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/pnpm-workspace.yaml,Renderer,Luna audit_storage + primary,frontend-review.md; api-native-review.md
+web/tsconfig.json,Desktop / build / configuration,Primary,api-native-review.md; desktop-build-review.md
+windows_credentials.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md
+windows_job.py,API / settings / native,Primary + Luna audit_providers,api-native-review.md; service-manager-review.md

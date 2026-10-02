@@ -1017,6 +1017,8 @@ class ResearchRoundRecord(StrictModel):
         }
         if self.status in terminal and self.completed_at is None:
             raise ValueError("terminal research rounds require completed_at")
+        if self.status not in terminal and self.completed_at is not None:
+            raise ValueError("nonterminal research rounds cannot carry completed_at")
         if self.completed_at is not None and self.completed_at < self.started_at:
             raise ValueError("research round completion cannot precede its start")
         if self.completed_query_count > self.planned_query_count:

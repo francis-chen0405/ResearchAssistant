@@ -1534,6 +1534,7 @@ class V2RoundFourDecisionCode(StrEnum):
 
     AUTHORIZED = "authorized"
     NO_MATERIAL_GAPS = "no_material_gaps"
+    NO_PRODUCTIVE_SEARCH = "no_productive_search"
     GAP_ANALYSIS_UNUSABLE = "gap_analysis_unusable"
     NO_NOVEL_QUERY = "no_novel_query"
     NO_ELIGIBLE_PROVIDER = "no_eligible_provider"
@@ -1706,6 +1707,7 @@ class V2GapCoverageReconciliation(StrictModel):
     round_four_attempted: bool
     records: tuple[V2GapCoverageRecord, ...]
     claim_coverage_map: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
+    round_four_governor_decision: V2RoundFourGovernorDecision | None = None
     completed_at: datetime
 
     _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
@@ -1719,6 +1721,11 @@ class V2GapCoverageReconciliation(StrictModel):
             item.state is V2GapCoverageState.COVERED for item in self.records
         ):
             raise ValueError("unattempted Round 4 cannot cover a Gap")
+        if self.round_four_governor_decision is not None:
+            if self.round_four_governor_decision.run_id != self.run_id:
+                raise ValueError("Round-4 Governor decision must match the reconciliation run")
+            if self.round_four_governor_decision.authorized and not self.round_four_attempted:
+                raise ValueError("authorized Round 4 must be recorded as attempted")
         return self
 
 

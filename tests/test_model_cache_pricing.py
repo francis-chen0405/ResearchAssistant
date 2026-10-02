@@ -25,6 +25,7 @@ from providers.clients import ProviderClients
 from providers.llm import V2_LLM_ROUTING, LLMRequest, LLMStage, PromptTemplate
 from providers.mimo import MimoProviderError
 from providers.model_profiles import profile_environment
+from providers.pricing import conservative_token_estimate
 from providers.v2_budget import BudgetedV2LLMProvider, V2RunCeilings
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 
@@ -327,9 +328,14 @@ def test_unknown_usage_retains_reservation_after_restart(tmp_path: Path) -> None
         routing_config=config.routing,
         ceilings=V2RunCeilings(),
     )
+    request = _request(LLMStage.GAP_ANALYSIS, run_id)
     with pytest.raises(MimoProviderError):
-        budget.generate(_request(LLMStage.GAP_ANALYSIS, run_id))
-    reservation = config.routing.preflight().reserve(LLMStage.GAP_ANALYSIS, 4)
+        budget.generate(request)
+    input_tokens = bundle.llm.conservative_input_tokens(
+        request,
+        conservative_token_estimate(request.rendered_prompt),
+    )
+    reservation = config.routing.preflight().reserve(LLMStage.GAP_ANALYSIS, input_tokens)
     assert budget.snapshot().cost_exposure_usd == reservation.reserved_cost_usd
     restored = BudgetedV2LLMProvider(
         db_path=path,

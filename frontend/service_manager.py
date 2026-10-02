@@ -10,7 +10,7 @@ from collections import deque
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from threading import Lock, Thread
-from time import monotonic
+from time import monotonic, sleep
 from typing import Literal, TextIO
 
 import httpx
@@ -60,6 +60,18 @@ class _OwnedProcess:
         self.process = process
         self.started_at = started_at
         self.job: WindowsJob | None = None
+        self.output_readers: list[Thread] = []
+
+
+def _process_group_exists(process_group_id: int) -> bool:
+    """Return whether a recorded owned process group still exists."""
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 class WigoloServiceManager:
@@ -80,6 +92,7 @@ class WigoloServiceManager:
         self._popen = popen
         self._base_environment = os.environ if base_environment is None else base_environment
         self._lock = Lock()
+        self._lifecycle_lock = Lock()
         self._owned: _OwnedProcess | None = None
         self._output: deque[str] = deque(maxlen=40)
         self._launch_error: str | None = None
@@ -168,82 +181,107 @@ class WigoloServiceManager:
 
     def start(self) -> ServiceDiagnostic:
         """Start the approved pinned process without inheriting provider secrets."""
-        existing = self.probe()
-        if existing.wigolo_ready or existing.state == "wrong_service":
-            return existing
-        with self._lock:
-            if self._owned is not None and self._owned.process.poll() is None:
-                return self._starting_diagnostic(self._owned)
-            self._launch_error = None
-            environment = self._child_environment()
-            working = self._launch.data_dir or application_data_dir() / "acquisition"
-            working.mkdir(mode=0o700, parents=True, exist_ok=True)
-            try:
-                process = self._popen(
-                    list(self._launch.command),
-                    cwd=str(working),
-                    env=environment,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    start_new_session=sys.platform != "win32",
-                )
-            except (OSError, ValueError) as exc:
-                self._launch_error = redact_text(exc)
-                return ServiceDiagnostic(
-                    state="launch_failed",
-                    wigolo_ready=False,
-                    searxng_readiness="unavailable",
-                    message=f"Could not launch pinned Wigolo: {self._launch_error}",
-                )
-            owned = _OwnedProcess(process, monotonic())
-            if sys.platform == "win32":
+        with self._lifecycle_lock:
+            existing = self.probe()
+            if existing.wigolo_ready or existing.state == "wrong_service":
+                return existing
+            with self._lock:
+                old_owned = self._owned
+                if old_owned is not None and old_owned.process.poll() is None:
+                    return self._starting_diagnostic(old_owned)
+            if old_owned is not None:
+                self._stop_owned(old_owned)
+            with self._lock:
+                self._launch_error = None
+                environment = self._child_environment()
+                working = self._launch.data_dir or application_data_dir() / "acquisition"
+                working.mkdir(mode=0o700, parents=True, exist_ok=True)
                 try:
-                    owned.job = WindowsJob()
-                    owned.job.attach(int(process._handle))
-                except OSError:
-                    process.kill()
-                    process.wait(timeout=5)
-                    if owned.job is not None:
-                        owned.job.close()
-                    raise
-            self._owned = owned
-            if self._ownership_changed is not None:
-                self._ownership_changed(process.pid, True)
-            self._start_output_reader(process.stdout)
-            self._start_output_reader(process.stderr)
-            return self._starting_diagnostic(owned)
+                    process = self._popen(
+                        list(self._launch.command),
+                        cwd=str(working),
+                        env=environment,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        start_new_session=sys.platform != "win32",
+                    )
+                except (OSError, ValueError) as exc:
+                    self._launch_error = redact_text(exc)
+                    return ServiceDiagnostic(
+                        state="launch_failed",
+                        wigolo_ready=False,
+                        searxng_readiness="unavailable",
+                        message=f"Could not launch pinned Wigolo: {self._launch_error}",
+                    )
+                owned = _OwnedProcess(process, monotonic())
+                if sys.platform == "win32":
+                    try:
+                        owned.job = WindowsJob()
+                        owned.job.attach(int(process._handle))
+                    except OSError:
+                        process.kill()
+                        process.wait(timeout=5)
+                        if owned.job is not None:
+                            owned.job.close()
+                        raise
+                self._owned = owned
+                if self._ownership_changed is not None:
+                    self._ownership_changed(process.pid, True)
+                for stream in (process.stdout, process.stderr):
+                    reader = self._start_output_reader(stream)
+                    if reader is not None:
+                        owned.output_readers.append(reader)
+                return self._starting_diagnostic(owned)
 
     def stop(self) -> ServiceDiagnostic:
         """Stop only the process group created by this manager."""
-        with self._lock:
-            owned = self._owned
-        if owned is None:
-            return ServiceDiagnostic(
-                state="stopped",
-                wigolo_ready=False,
-                searxng_readiness="unavailable",
-                message="No application-owned Wigolo process is running; nothing was stopped.",
-            )
+        with self._lifecycle_lock:
+            with self._lock:
+                owned = self._owned
+            if owned is None:
+                return ServiceDiagnostic(
+                    state="stopped",
+                    wigolo_ready=False,
+                    searxng_readiness="unavailable",
+                    message="No application-owned Wigolo process is running; nothing was stopped.",
+                )
+            return self._stop_owned(owned)
+
+    def _stop_owned(self, owned: _OwnedProcess) -> ServiceDiagnostic:
+        """Retire exactly one recorded owner and its descendants."""
         process = owned.process
         if owned.job is not None:
             owned.job.close()
             process.wait(timeout=5)
-        elif process.poll() is None:
+        else:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
-                process.wait(timeout=5)
             except ProcessLookupError:
                 pass
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
+            deadline = monotonic() + 5
+            while _process_group_exists(process.pid) and monotonic() < deadline:
+                process.poll()
+                sleep(0.05)
+            if _process_group_exists(process.pid):
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            try:
                 process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        for reader in owned.output_readers:
+            reader.join(timeout=5)
         if self._ownership_changed is not None:
             self._ownership_changed(process.pid, False)
         with self._lock:
             if self._owned is owned:
                 self._owned = None
+            recent = tuple(self._output)
         return ServiceDiagnostic(
             state="stopped",
             wigolo_ready=False,
@@ -252,7 +290,7 @@ class WigoloServiceManager:
             owned_process=True,
             pid=process.pid,
             started_at_monotonic=owned.started_at,
-            recent_output=tuple(self._output),
+            recent_output=recent,
         )
 
     def owns_running_process(self) -> bool:
@@ -293,18 +331,23 @@ class WigoloServiceManager:
             environment["PLAYWRIGHT_BROWSERS_PATH"] = str(self._launch.browser_dir)
         return environment
 
-    def _start_output_reader(self, stream: TextIO | None) -> None:
+    def _start_output_reader(self, stream: TextIO | None) -> Thread | None:
         if stream is None:
-            return
+            return None
 
         def read_stream() -> None:
-            for line in stream:
-                safe = redact_text(line.rstrip())
-                if safe:
-                    with self._lock:
-                        self._output.append(safe)
+            try:
+                for line in stream:
+                    safe = redact_text(line.rstrip())
+                    if safe:
+                        with self._lock:
+                            self._output.append(safe)
+            finally:
+                stream.close()
 
-        Thread(target=read_stream, daemon=True).start()
+        reader = Thread(target=read_stream, daemon=True)
+        reader.start()
+        return reader
 
     def _starting_diagnostic(self, owned: _OwnedProcess) -> ServiceDiagnostic:
         return ServiceDiagnostic(

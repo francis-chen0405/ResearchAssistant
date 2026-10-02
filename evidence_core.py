@@ -409,10 +409,20 @@ def verify_candidate_against_snapshot(
     quote_length_policy: QuoteLengthPolicy = CURRENT_QUOTE_LENGTH_POLICY,
 ) -> bool:
     validate_snapshot_integrity(snapshot)
+    if candidate.run_id != snapshot.run_id:
+        raise ValueError("candidate run_id does not match snapshot")
+    if candidate.retrieval_attempt_id != snapshot.retrieval_attempt_id:
+        raise ValueError("candidate retrieval_attempt_id does not match snapshot")
+    if candidate.source_url != snapshot.source_url:
+        raise ValueError("candidate source_url does not match snapshot")
     if candidate.snapshot_id != snapshot.snapshot_id:
         raise ValueError("candidate snapshot_id does not match snapshot")
     if candidate.snapshot_sha256 != snapshot.snapshot_sha256:
         raise ValueError("candidate snapshot hash does not match snapshot")
+    if candidate.retrieved_at != snapshot.retrieved_at:
+        raise ValueError("candidate retrieved_at does not match snapshot")
+    if candidate.snapshot_created_at != snapshot.created_at:
+        raise ValueError("candidate snapshot_created_at does not match snapshot")
     if candidate.truncated != snapshot.truncated:
         raise ValueError("candidate truncated flag does not match snapshot")
 

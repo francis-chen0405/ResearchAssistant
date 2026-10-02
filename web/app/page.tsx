@@ -190,12 +190,15 @@ export default function Home() {
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [activeRun, setActiveRun] = useState<{ id: string; database: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const configurationRequestId = useRef(0);
+  const historyRequestId = useRef(0);
+  const historySelectionRequestId = useRef(0);
 
   useEffect(() => {
     let disposed = false;
@@ -251,16 +254,38 @@ export default function Home() {
 
   const refreshHistory = useCallback(async () => {
     if (!settings.dbPath) return;
-    setBusy(true);
+    const requestId = ++historyRequestId.current;
+    const requestedDatabase = settings.dbPath;
+    setHistoryLoading(true);
     try {
-      const result = await researchApi.history(settings.dbPath);
+      const result = await researchApi.history(requestedDatabase);
+      if (requestId !== historyRequestId.current) return;
       setHistory(result.items);
       setOffline(false);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "History is not available.");
-      setOffline(true);
-    } finally { setBusy(false); }
+      if (requestId === historyRequestId.current) {
+        setNotice(error instanceof Error ? error.message : "History is not available.");
+        setOffline(true);
+      }
+    } finally {
+      if (requestId === historyRequestId.current) setHistoryLoading(false);
+    }
   }, [settings.dbPath]);
+
+  const updateSettings = useCallback((next: Settings) => {
+    if (next.dbPath !== settings.dbPath) {
+      historyRequestId.current += 1;
+      historySelectionRequestId.current += 1;
+      setHistory([]);
+      setHistoryLoading(false);
+      setBusy(false);
+      if (activeRun && activeRun.database !== next.dbPath && snapshot && terminalStates.has(snapshot.classification)) {
+        setActiveRun(null);
+        setSnapshot(null);
+      }
+    }
+    setSettings(next);
+  }, [activeRun, settings.dbPath, snapshot]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -348,19 +373,38 @@ export default function Home() {
   };
 
   const openHistoryRun = async (item: HistoryItem) => {
+    const requestId = ++historySelectionRequestId.current;
+    const requestedDatabase = settings.dbPath;
+    setActiveRun(null);
     setBusy(true); setNotice(null);
     try {
-      const result = await researchApi.snapshot(item.run_id, settings.dbPath);
+      const result = await researchApi.snapshot(item.run_id, requestedDatabase);
+      if (requestId !== historySelectionRequestId.current) return;
       setSnapshot(result);
-      setActiveRun({ id: item.run_id, database: settings.dbPath });
+      setActiveRun({ id: item.run_id, database: requestedDatabase });
       setView("research");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "That research run could not be opened.");
-    } finally { setBusy(false); }
+      if (requestId === historySelectionRequestId.current) {
+        setNotice(error instanceof Error ? error.message : "That research run could not be opened.");
+      }
+    } finally {
+      if (requestId === historySelectionRequestId.current) setBusy(false);
+    }
   };
 
   const newResearch = () => {
+    historySelectionRequestId.current += 1;
+    setBusy(false);
     setActiveRun(null); setSnapshot(null); setClaim(""); setAcknowledged(false); setNotice(null); setView("research");
+  };
+
+  const navigate = (next: MainView) => {
+    if (next !== "history") {
+      historySelectionRequestId.current += 1;
+      setBusy(false);
+    }
+    setView(next);
+    setNotice(null);
   };
 
   const providerState = offline ? "offline" : configuration?.configured ? "ready" : configuration?.saved_credentials.length ? "saved" : "setup";
@@ -368,15 +412,15 @@ export default function Home() {
   return (
     <MotionConfig reducedMotion="user" transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
       <main className="site-shell">
-        <Header view={view} providerState={providerState} onView={(next) => { setView(next); setNotice(null); }} onSetup={() => setSetupOpen(true)} onAdvanced={() => setAdvancedOpen(true)} />
+        <Header view={view} providerState={providerState} onView={navigate} onSetup={() => setSetupOpen(true)} onAdvanced={() => setAdvancedOpen(true)} />
         <AnimatePresence mode="wait">
           {view === "home" ? (
             <WelcomeView key="home" ready={Boolean(configuration?.configured)} onStart={() => setView("research")} onSetup={() => setSetupOpen(true)} />
           ) : view === "history" ? (
-            <HistoryView key="history" items={history} loading={busy} onOpen={openHistoryRun} />
+            <HistoryView key="history" items={history} loading={historyLoading} onOpen={openHistoryRun} />
           ) : snapshot ? (
             terminalStates.has(snapshot.classification) ? (
-              <ResultView key={`result-${snapshot.run_id}`} snapshot={snapshot} onNew={newResearch} />
+              <ResultView key={`result-${snapshot.db_path}-${snapshot.run_id}-${snapshot.classification}`} snapshot={snapshot} onNew={newResearch} />
             ) : (
               <ProgressView key={`progress-${snapshot.run_id}`} snapshot={snapshot} onCancel={async () => {
                 if (!activeRun) return;
@@ -387,13 +431,13 @@ export default function Home() {
           ) : activeRun ? (
             <StartingView key="starting" claim={claim} reduceMotion={Boolean(reduceMotion)} />
           ) : (
-            <ResearchView key="new" settings={settings} modelOptions={modelOptions} onSettings={setSettings} ready={Boolean(configuration?.configured && !offline)} onSetup={() => setSetupOpen(true)} claim={claim} acknowledged={acknowledged} busy={busy} supportEnabled={settings.supportEnabled} challengeEnabled={settings.challengeEnabled} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
+            <ResearchView key="new" settings={settings} modelOptions={modelOptions} onSettings={updateSettings} ready={Boolean(configuration?.configured && !offline)} onSetup={() => setSetupOpen(true)} claim={claim} acknowledged={acknowledged} busy={busy} supportEnabled={settings.supportEnabled} challengeEnabled={settings.challengeEnabled} reduceMotion={Boolean(reduceMotion)} onClaim={setClaim} onAcknowledged={setAcknowledged} onSubmit={beginResearch} />
           )}
         </AnimatePresence>
         <AnimatePresence>
           {notice && <Notice message={notice} onClose={() => setNotice(null)} />}
           {setupOpen && <ProviderSetup key="provider-setup" configuration={configuration} selectedProviders={{ use_serpsearch: settings.useSerpSearch, use_exa: settings.useExa, use_openalex: settings.useOpenAlex, use_arxiv: settings.useArxiv, use_pubmed: settings.usePubmed }} stageModels={settings.stageModels} onClose={() => setSetupOpen(false)} onSaved={async (message) => { setNotice(message); await refreshConfiguration(); }} />}
-          {advancedOpen && <AdvancedPanel key="advanced" settings={settings} configuration={configuration} active={Boolean(activeRun && (!snapshot || !terminalStates.has(snapshot.classification)))} onSettings={setSettings} onClose={() => setAdvancedOpen(false)} onService={async (action) => {
+          {advancedOpen && <AdvancedPanel key="advanced" settings={settings} configuration={configuration} active={Boolean(activeRun && (!snapshot || !terminalStates.has(snapshot.classification)))} onSettings={updateSettings} onClose={() => setAdvancedOpen(false)} onService={async (action) => {
             try {
               const service = action === "start" ? await researchApi.startService() : await researchApi.stopService();
               setConfiguration((current) => current ? { ...current, service } : current);
@@ -465,14 +509,25 @@ function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => v
   };
   useEffect(() => {
     let disposed = false;
+    if (!released) return () => { disposed = true; };
+
     void researchApi.v2Result(snapshot.run_id, snapshot.db_path)
-      .then((result) => { if (!disposed) setV2Result(result.release_validation.valid ? result : null); })
+      .then(async (result) => {
+        if (disposed || !result.release_validation.valid) return;
+        setV2Result(result);
+        try {
+          const evidence = await researchApi.v2Evidence(snapshot.run_id, snapshot.db_path);
+          if (!disposed) setV2Evidence(evidence);
+        } catch {
+          if (!disposed) {
+            setV2Evidence(null);
+            setResultError("Detailed evidence could not be loaded. The validated brief remains available.");
+          }
+        }
+      })
       .catch(() => { if (!disposed) setV2Result(null); });
-    void researchApi.v2Evidence(snapshot.run_id, snapshot.db_path)
-      .then((result) => { if (!disposed) setV2Evidence(result); })
-      .catch(() => { if (!disposed) { setV2Evidence(null); setResultError("Detailed evidence is unavailable. Reopen this saved run to retry; the validated brief remains available."); } });
     return () => { disposed = true; };
-  }, [snapshot.db_path, snapshot.run_id]);
+  }, [released, snapshot.db_path, snapshot.run_id]);
   return <motion.section className={`result-view ${released ? "released" : "unreleased"}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <div className="result-masthead"><div><p className="eyebrow">{released ? "Validated release" : readableStage(snapshot.classification)}</p><motion.h2 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h2></div><div className="release-stamp"><span>{released ? "Released" : "Not released"}</span><small>{released ? "Provenance checked" : "Incomplete result"}</small></div></div>
     {resultError && <p className="setup-status" role="status">{resultError}</p>}<div className="report-layout"><article className="brief-paper">{v2Result ? <V2ResultPaper result={v2Result} evidence={v2Evidence} /> : snapshot.final_brief ? <Brief text={snapshot.final_brief} /> : <div className="empty-brief"><h3>No brief was released.</h3><p>{userStatus}</p>{snapshot.validation_errors.map((error) => <p key={error}>{error}</p>)}</div>}</article><aside className="report-meta"><p>{userStatus}</p><dl><div><dt>Final stage</dt><dd>{readableStage(snapshot.stage)}</dd></div><div><dt>Discovery sources</dt><dd>{(diagnostics?.configured_providers ?? snapshot.research_controls.discovery_providers).map(readableProvider).join(", ") || "Historical run"}</dd></div><div><dt>Model calls</dt><dd>{snapshot.model_calls_used}</dd></div><div><dt>Search attempts</dt><dd>{diagnostics?.search_attempts ?? snapshot.retrieval_attempts_used}</dd></div><div><dt>Sources acquired</dt><dd>{diagnostics?.sources_acquired ?? snapshot.retrieval_attempts_used}</dd></div><div><dt>Estimated model cost</dt><dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd></div><div><dt>Budget status</dt><dd>{!snapshot.cost_usage_complete ? "Usage incomplete; reservations retained" : snapshot.classification === "released" ? "Recorded model usage" : "Research stopped"}</dd></div></dl>{diagnostics && <section className="provider-diagnostics"><span>Provider outcomes</span>{diagnostics.provider_outcomes.map((outcome) => <p key={outcome.provider}><strong>{readableProvider(outcome.provider)}</strong><small>{providerOutcomeLabel(outcome)}</small></p>)}</section>}{snapshot.rendered_brief_hash && <button className="hash-button" type="button" onClick={() => void navigator.clipboard.writeText(snapshot.rendered_brief_hash ?? "")}><span>Release hash</span><code>{snapshot.rendered_brief_hash.slice(0, 12)}…</code><b>Copy</b></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={async () => { try { await navigator.clipboard.writeText(snapshot.final_brief ?? ""); setResultError("Brief copied."); } catch { setResultError("The brief could not be copied. Use Download brief instead."); } }}>Copy brief <span aria-hidden="true">↗</span></button>}{snapshot.final_brief && <button className="download-action" type="button" onClick={() => downloadBrief(snapshot)}><span>Download brief</span><b>↓</b></button>}<button className="trail-action" type="button" onClick={() => void openTrail()}><span>Research trail</span><b>↗</b></button><button className="secondary-action" type="button" onClick={onNew}>Start new research <span aria-hidden="true">↗</span></button></aside></div>
@@ -481,11 +536,30 @@ function ResultView({ snapshot, onNew }: { snapshot: RunSnapshot; onNew: () => v
 }
 
 function V2ResultPaper({ result, evidence }: { result: V2FinalResearchOutput; evidence: V2EvidenceDisplay | null }) {
-  const direction = result.directions.support_enabled && result.directions.challenge_enabled ? "Supporting and challenging evidence" : result.directions.support_enabled ? "Supporting evidence only" : "Challenging evidence only";
-  const analyzerAdmitted = result.synthesis.sections.some((section) => section.items.some((item) => item.admission_method === "analyzer_admitted"));
-  const heading = (section: "supporting" | "opposing" | "limitations") => section === "supporting" ? "Supporting evidence" : section === "opposing" ? "Challenging evidence" : "Evidence qualifications";
-  const sourceCards = (items: V2FinalResearchOutput["all_surviving_sources"]) => items.length ? <div className="source-cards">{items.map((source) => { const details = evidence?.items.find((item) => item.source_id === source.source_id); return <article className="source-card" key={source.source_id}><a href={source.source_url} target="_blank" rel="noreferrer">{source.title || source.source_url}</a><small>{details?.source_family || source.source_type || "Source family unavailable"} · discovered via {source.discovery_providers.join(", ") || "recorded source"} · {details?.recommendation_status || (source.recommended ? "Recommended for deep analysis" : "Survived selection")} · round {source.discovery_round}</small><p>{details?.selection_rationale || (source.recommended ? "Selected for deeper analysis from the surviving source pool." : "Passed selection but was not recommended for deeper analysis.")}</p>{details?.gap_ids.length ? <p><strong>Related research gaps:</strong> {details.gap_ids.length}</p> : null}</article>; })}</div> : <p>No source records are available in this section.</p>;
-  return <><p className="eyebrow">Your research result</p><h1>Research Brief</h1>{(result.unresolved_material_gaps.length > 0 || /budget|limit|failed|incomplete|invalid|degraded/.test(result.stopping.reason)) && <div className="result-limitation" role="status"><strong>Research ended with limitations</strong><p>{result.stopping.explanation}</p><p>{result.unresolved_material_gaps.length} unresolved research gaps. See the qualifications and remaining gaps below.</p></div>}<p>Claim under review: {result.exact_claim}</p><p><strong>Research direction:</strong> {direction}. This result does not imply that disabled directions were examined.</p>{result.synthesis.sections.map((section) => <section key={section.section_type}><h2>{heading(section.section_type)}</h2><div className="overview-items">{section.items.slice(0, 3).map((item, index) => <p className="overview-item" key={index}>{item.approved_factual_statement}</p>)}</div>{section.items.length > 3 && <details className="overview-more"><summary>Show {section.items.length - 3} more findings</summary><div className="overview-items">{section.items.slice(3).map((item, index) => <p className="overview-item" key={index + 3}>{item.approved_factual_statement}</p>)}</div></details>}</section>)}<section><h2>Evidence</h2><p>Each item is limited to the narrow proposition supported by the analyzed passage; {analyzerAdmitted ? "analyzer-admitted evidence is not independently reviewer-approved." : "historical evidence retains its original Reviewer-admission status."}</p>{evidence?.items.length ? <div className="evidence-list">{evidence.items.map((item) => <details className={`evidence-card ${item.direction}`} key={item.source_id}><summary><span className="evidence-card-summary"><StatusPill tone={item.direction}>{item.direction === "support" ? "Supporting" : "Challenging"}</StatusPill><span className="evidence-card-title">{item.supporting_proposition}</span><small className="evidence-card-source">{item.title || item.source_url} · {item.source_family}</small></span><span className="evidence-toggle" aria-hidden="true" /></summary><div className="evidence-card-body"><p>{item.evidence_summary}</p><blockquote>{item.quote_passage}</blockquote><p><span className="evidence-label">Source</span> <a href={item.source_url} target="_blank" rel="noreferrer">{item.title || item.source_url}</a> · {item.source_family}</p><p><span className="evidence-label">Validation</span> {readableStage(item.validation_status)}</p>{item.limitations.length ? <p><span className="evidence-label">Limitations</span> {item.limitations.join(" ")}</p> : <p><span className="evidence-label">Limitations</span> No additional limitations were recorded for this narrow proposition.</p>}</div></details>)}</div> : <p>Detailed passage display is unavailable for this persisted result.</p>}</section><section><h2>Recommended Sources</h2>{sourceCards(result.recommended_sources)}</section><section><h2>Survivor Sources</h2>{sourceCards(result.all_surviving_sources)}</section><section><h2>Remaining Gaps</h2>{result.unresolved_material_gaps.length ? <ul>{result.unresolved_material_gaps.map((gap) => <li key={gap.gap_id}>{gap.direction}: {gap.missing_evidence} </li>)}</ul> : <p>No specific remaining gaps were recorded. This does not establish that the claim is proven.</p>}</section>{!!result.claim_coverage_map?.length && <section><h2>Latest research coverage assessment</h2><p>This assessment guides research; it is not proof that the claim is established.</p><ul>{result.claim_coverage_map.map((item) => <li key={item.dimension}><strong>{readableStage(item.coverage_state)}:</strong> {item.claim_component}<p>{item.evidence_summary}</p></li>)}</ul></section>}<section><h2>Research Status</h2><p><strong>{result.stopping.reason === "sufficient_source_pool" ? "Research stopped" : readableStage(result.stopping.reason)}.</strong> {result.stopping.explanation}</p><p>{result.release_validation.valid ? "Validation completed successfully." : "Validation did not complete successfully."}</p></section></>;
+  const direction = result.directions.support_enabled && result.directions.challenge_enabled ? "Support and challenge research directions" : result.directions.support_enabled ? "Support-directed research only" : "Challenge-directed research only";
+  const heading = (section: "supporting" | "opposing" | "limitations") => section === "supporting" ? "Support-directed findings" : section === "opposing" ? "Challenge-directed findings" : "Evidence qualifications";
+  const admittedFor = (ledgerClaimId: string) => evidence?.items.find((item) => item.ledger_claim_id === ledgerClaimId);
+  const openEvidence = (ledgerClaimId: string) => { const detail = document.getElementById(`evidence-${ledgerClaimId}`); if (detail instanceof HTMLDetailsElement) { detail.open = true; detail.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "center" }); detail.querySelector("summary")?.focus({ preventScroll: true }); } };
+  const sourceOutcome = (status: string) => ({
+    recommended_analyzed: "Recommended · Reviewer-approved",
+    recommended_analyzer_admitted: "Recommended · analyzer-admitted",
+    recommended_analyzer_rejected: "Recommended · analyst-rejected",
+    recommended_analyzer_failed: "Recommended · analysis failed",
+    recommended_no_ledger_evidence: "Recommended · no admitted evidence",
+    surviving_analyzed: "Survived selection · Reviewer-approved",
+    surviving_analyzer_admitted: "Survived selection · analyzer-admitted",
+    surviving_analyzer_rejected: "Survived selection · analyst-rejected",
+    surviving_analyzer_failed: "Survived selection · analysis failed",
+    surviving_not_deeply_analyzed: "Survived selection · not analyzed",
+    budget_prevented_analysis: "Analysis prevented by budget",
+  } as Record<string, string>)[status] ?? readableStage(status);
+  const analysisFailures = result.all_surviving_sources.filter((source) => source.status.endsWith("analyzer_failed")).length;
+  const analystRejections = result.all_surviving_sources.filter((source) => source.status.endsWith("analyzer_rejected")).length;
+  const reviewerApproved = result.all_surviving_sources.filter((source) => source.status.endsWith("_analyzed")).length;
+  const sourceCards = (items: V2FinalResearchOutput["all_surviving_sources"]) => items.length ? <div className="source-cards">{items.map((source) => { const details = evidence?.items.find((item) => item.source_id === source.source_id); return <article className="source-card" key={source.source_id}><a href={source.source_url} target="_blank" rel="noreferrer">{source.title || source.source_url}</a><small>{source.source_type || "Source"} · discovered via {source.discovery_providers.join(", ") || "recorded source"} · {source.recommended ? "Recommended for deeper analysis" : "Survived selection"} · {sourceOutcome(source.status)} · round {source.discovery_round}</small><p>{details?.selection_rationale || (source.recommended ? "Selected for deeper analysis from the surviving source pool." : "Passed selection but was not recommended for deeper analysis.")}</p>{details?.gap_ids.length ? <p><strong>Related research gaps:</strong> {details.gap_ids.length}</p> : null}</article>; })}</div> : <p>No source records are available in this section.</p>;
+  const coverage = evidence?.research_status;
+  const groupedNotices = evidence?.study_lineage ?? [];
+  return <><p className="eyebrow">Your research result</p><h1>Research Brief</h1>{coverage && <div className="result-limitation" role="status"><strong>Latest research status · {readableStage(coverage.reason_code)}</strong><p>{coverage.explanation}</p><p>{coverage.actionable_gap_count} actionable gaps remained for search. The coverage assessment recorded {coverage.partial_coverage_count} partial and {coverage.unavailable_coverage_count} unavailable dimensions; these counts describe research coverage and do not resolve the claim.</p><small>This shows the latest research status. The saved brief and its export are unchanged.</small></div>}<p>Claim under review: {result.exact_claim}</p><p><strong>Research direction:</strong> {direction}. This describes where research was directed, not whether an admitted finding supports or challenges the claim. Disabled directions were not examined.</p>{result.synthesis.sections.map((section) => <section key={section.section_type}><h2>{heading(section.section_type)}</h2><div className="overview-items">{section.items.slice(0, 3).map((item) => <p className="overview-item" key={item.ledger_claim_id}>{item.approved_factual_statement}{admittedFor(item.ledger_claim_id) && <button type="button" className="text-action" onClick={() => openEvidence(item.ledger_claim_id)}>View admitted quote and source</button>}</p>)}</div>{section.items.length > 3 && <details className="overview-more"><summary>Show {section.items.length - 3} more findings</summary><div className="overview-items">{section.items.slice(3).map((item) => <p className="overview-item" key={item.ledger_claim_id}>{item.approved_factual_statement}{admittedFor(item.ledger_claim_id) && <button type="button" className="text-action" onClick={() => openEvidence(item.ledger_claim_id)}>View admitted quote and source</button>}</p>)}</div></details>}</section>)}<section><h2>Admitted evidence</h2><p>Only admitted evidence appears here. Each statement links to its analyzed passage and source. Analyzer-admitted evidence has not been independently Reviewer-approved.</p>{groupedNotices.length > 0 && <aside className="result-limitation"><strong>Source lineage among survivors: separate source links do not establish independent studies.</strong>{groupedNotices.map((notice) => <p key={`${notice.basis}-${notice.source_ids.join("-")}`}>{notice.explanation} {notice.source_ids.map((id, index) => { const source = result.all_surviving_sources.find((item) => item.source_id === id); return <span key={id}>{index > 0 ? " · " : ""}{source ? <a href={source.source_url} target="_blank" rel="noreferrer">{source.title || source.source_url}</a> : "Recorded source"}</span>; })}</p>)}</aside>}{evidence?.items.length ? <><p>{evidence.items.length} admitted evidence item{evidence.items.length === 1 ? "" : "s"}.</p><div className="evidence-list">{evidence.items.map((item) => <details className={`evidence-card ${item.direction}`} id={`evidence-${item.ledger_claim_id}`} key={item.ledger_claim_id}><summary><span className="evidence-card-summary"><StatusPill tone={item.direction}>{item.direction === "support" ? "Support-directed" : "Challenge-directed"}</StatusPill><StatusPill tone="neutral">{readableStage(item.relationship_to_claim)}</StatusPill><span className="evidence-card-title">{item.approved_factual_statement}</span><small className="evidence-card-source">{item.title || item.source_url}</small></span><span className="evidence-toggle" aria-hidden="true" /></summary><div className="evidence-card-body"><p><span className="evidence-label">Ledger ID</span> <code>{item.ledger_claim_id}</code></p><p><span className="evidence-label">Assessment relationship</span> {readableStage(item.relationship_to_claim)}</p><p><span className="evidence-label">Analyzed proposition</span> {item.supporting_proposition}</p><blockquote>{item.quote_passage}</blockquote><p><span className="evidence-label">Source</span> <a href={item.source_url} target="_blank" rel="noreferrer">{item.title || item.source_url}</a></p><p><span className="evidence-label">Analysis</span> {item.evidence_summary}</p><p><span className="evidence-label">Validation</span> {readableStage(item.validation_status)}</p>{item.limitations.length ? <p><span className="evidence-label">Limitations</span> {item.limitations.join(" ")}</p> : <p><span className="evidence-label">Limitations</span> No additional limitations were recorded for this narrow proposition.</p>}</div></details>)}</div></> : <p>Detailed admitted passages are unavailable for this persisted result.</p>}</section><section><h2>Recommended Sources</h2>{result.all_surviving_sources.length > 0 && <p>Final source outcomes: {reviewerApproved} Reviewer-approved, {analysisFailures} analysis failed, and {analystRejections} analyst-rejected; acquisition outcomes are listed in provider diagnostics.</p>}{sourceCards(result.recommended_sources)}</section><section><h2>Survivor Sources</h2>{sourceCards(result.all_surviving_sources)}</section><section><h2>Remaining Gaps</h2>{result.unresolved_material_gaps.length ? <ul>{result.unresolved_material_gaps.map((gap) => <li key={gap.gap_id}>{gap.direction}: {gap.missing_evidence} </li>)}</ul> : <p>No specific remaining gaps were recorded. This does not establish that the claim is proven.</p>}</section>{!!result.claim_coverage_map?.length && <section><h2>Latest research coverage assessment</h2><p>This assessment guides research; it is not proof that the claim is established.</p><ul>{result.claim_coverage_map.map((item) => <li key={item.dimension}><strong>{readableStage(item.coverage_state)}:</strong> {item.claim_component}<p>{item.evidence_summary}</p></li>)}</ul></section>}<section><h2>Released brief status</h2><p>The historical brief passed release validation: {result.release_validation.valid ? "yes" : "no"}. The status above reports the latest saved research decision.</p></section></>;
 }
 
 function ResearchTrailDrawer({ items, error, onClose }: { items: ResearchTrailItem[] | null; error: string | null; onClose: () => void }) {
@@ -538,7 +612,7 @@ function AdvancedPanel({ settings, configuration, active, onSettings, onClose, o
   ] as const;
   const selectedCount = sources.filter(([key]) => settings[key]).length;
   const directionCount = Number(settings.supportEnabled) + Number(settings.challengeEnabled);
-  return <Dialog title="Research preferences" onClose={onClose}><p className="panel-intro">Choose the research direction, discovery providers, and local limits. At least one source is required.</p><section className="research-options"><div className="option-copy"><strong>Support</strong><span>Look for evidence that supports the claim.</span></div><button type="button" role="switch" aria-label="Support research" aria-checked={settings.supportEnabled} className={`switch ${settings.supportEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.supportEnabled)} onClick={() => update("supportEnabled", !settings.supportEnabled)}><i /></button><div className="option-copy"><strong>Challenge</strong><span>Look for evidence that challenges or limits the claim.</span></div><button type="button" role="switch" aria-label="Challenge research" aria-checked={settings.challengeEnabled} className={`switch ${settings.challengeEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.challengeEnabled)} onClick={() => update("challengeEnabled", !settings.challengeEnabled)}><i /></button>{sources.map(([key, label, copy]) => <div className="option-row" key={key}><div className="option-copy"><strong>{label}</strong><span>{copy}</span></div><button type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></div>)}<div className="option-row"><div className="option-copy"><strong>Crossref metadata</strong><span>Verify DOI bibliographic details for discovered sources. Crossref is metadata only, not evidence.</span></div><button type="button" role="switch" aria-label="Crossref metadata enrichment" aria-checked={settings.useCrossref} className={`switch ${settings.useCrossref ? "on" : ""}`} disabled={active} onClick={() => update("useCrossref", !settings.useCrossref)}><i /></button></div><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each enabled direction, with bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><details className="advanced-details"><summary>Advanced limits & history import</summary><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="500000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>Model cost ceiling<select value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)}>{budgetOptions(settings.maxCost).map(value => <option key={value} value={value}>${Number(value).toFixed(2)}</option>)}</select></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} onChange={(event) => update("dbPath", event.target.value)} /></label></div><button type="button" disabled={active || !settings.dbPath} onClick={() => void importDatabase()}>Import this database into app storage</button>{importMessage && <p role="status">{importMessage}</p>}</details><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Directions determine the scope of research. A disabled direction is not searched or inferred in the result.</p></Dialog>;
+  return <Dialog title="Research preferences" onClose={onClose}><p className="panel-intro">Choose the research direction, discovery providers, and local limits. At least one source is required.</p><section className="research-options"><div className="option-copy"><strong>Support</strong><span>Look for evidence that supports the claim.</span></div><button type="button" role="switch" aria-label="Support research" aria-checked={settings.supportEnabled} className={`switch ${settings.supportEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.supportEnabled)} onClick={() => update("supportEnabled", !settings.supportEnabled)}><i /></button><div className="option-copy"><strong>Challenge</strong><span>Look for evidence that challenges or limits the claim.</span></div><button type="button" role="switch" aria-label="Challenge research" aria-checked={settings.challengeEnabled} className={`switch ${settings.challengeEnabled ? "on" : ""}`} disabled={active || (directionCount === 1 && settings.challengeEnabled)} onClick={() => update("challengeEnabled", !settings.challengeEnabled)}><i /></button>{sources.map(([key, label, copy]) => <div className="option-row" key={key}><div className="option-copy"><strong>{label}</strong><span>{copy}</span></div><button type="button" role="switch" aria-label={label} aria-checked={settings[key]} className={`switch ${settings[key] ? "on" : ""}`} disabled={active || (selectedCount === 1 && settings[key])} onClick={() => update(key, !settings[key])}><i /></button></div>)}<div className="option-row"><div className="option-copy"><strong>Crossref metadata</strong><span>Verify DOI bibliographic details for discovered sources. Crossref is metadata only, not evidence.</span></div><button type="button" role="switch" aria-label="Crossref metadata enrichment" aria-checked={settings.useCrossref} className={`switch ${settings.useCrossref ? "on" : ""}`} disabled={active} onClick={() => update("useCrossref", !settings.useCrossref)}><i /></button></div><div className="option-copy"><strong>Sources to examine</strong><span>Use the highest-ranked sources from each enabled direction, with bounded fallbacks.</span></div><div className="source-target" role="group" aria-label="Sources to examine">{([5, 10, 15, 20] as const).map((value) => <button type="button" key={value} className={settings.sourceTarget === value ? "active" : ""} disabled={active} onClick={() => update("sourceTarget", value)}>{value}</button>)}</div></section><details className="advanced-details"><summary>Advanced limits & history import</summary><div className="settings-grid"><label>Token ceiling<input type="number" min="1" max="500000" value={settings.maxTokens} onChange={(event) => update("maxTokens", Number(event.target.value))} /></label><label>Model cost ceiling<select value={settings.maxCost} onChange={(event) => update("maxCost", event.target.value)}>{budgetOptions(settings.maxCost).map(value => <option key={value} value={value}>${Number(value).toFixed(2)}</option>)}</select></label><label>Call ceiling<input type="number" min="1" max="160" value={settings.maxCalls} onChange={(event) => update("maxCalls", Number(event.target.value))} /></label><label>Run ID <span>optional</span><input type="text" value={settings.runId} onChange={(event) => update("runId", event.target.value)} placeholder="Created automatically" /></label><label className="full">SQLite database<input type="text" value={settings.dbPath} disabled={active} onChange={(event) => update("dbPath", event.target.value)} /></label></div><button type="button" disabled={active || !settings.dbPath} onClick={() => void importDatabase()}>Import this database into app storage</button>{importMessage && <p role="status">{importMessage}</p>}</details><ServiceCard service={configuration?.service ?? null} active={active} onService={onService} /><p className="security-note">Directions determine the scope of research. A disabled direction is not searched or inferred in the result.</p></Dialog>;
 }
 
 function ServiceCard({ service, active, onService }: { service: ServiceDiagnostic | null; active: boolean; onService: (action: "start" | "stop") => void }) {

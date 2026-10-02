@@ -1,5 +1,12 @@
 # Desktop application
 
+The audited build was installed in Applications and old local app/installer copies
+were removed on 2026-10-01 at the user's request; see
+[installation verification](../docs/verification/audited-app-install-2026-10-01.md).
+Local `desktop/dist` paths mentioned below are historical; the published September
+download remains available. Saved research, credentials, source, and verification
+logs are preserved.
+
 Current delivery target is a directly downloadable Apple Silicon Mac test build; no
 Mac App Store submission is planned. Windows release work is deferred.
 The [Mac/cache-pricing plan](../.agent/plans/mac-release-cache-pricing.md) tracks this

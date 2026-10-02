@@ -202,7 +202,7 @@ class XiaomiMimoAdapter:
                 f"{self._provider_label} request does not match its configured logical route",
                 retryable=False,
             )
-        input_estimate = conservative_token_estimate(_direct_mimo_prompt(request))
+        input_estimate = self.conservative_input_tokens(request)
         reserved_tokens = input_estimate + self._config.max_completion_tokens
         reserved_cost = self._price_cap.upper_bound(
             input_estimate,
@@ -338,6 +338,10 @@ class XiaomiMimoAdapter:
         )
         self._thread_state.last_failure_usage = None
         return output
+
+    def conservative_input_tokens(self, request: LLMRequest, minimum_tokens: int = 1) -> int:
+        """Estimate the adapter prompt without undercutting a caller's conservative bound."""
+        return max(minimum_tokens, conservative_token_estimate(_direct_mimo_prompt(request)))
 
     def usage_for(
         self,

@@ -89,6 +89,10 @@ class V2PhysicalCallCompletion(StrictModel):
     sequence: int = Field(ge=1, le=160)
     succeeded: bool
     usage_tokens: int | None = Field(default=None, ge=0)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    cached_input_tokens: int | None = Field(default=None, ge=0)
+    uncached_input_tokens: int | None = Field(default=None, ge=0)
     usage_cost_usd: Decimal | None = Field(default=None, ge=0)
     failure: str | None = None
     completed_at: datetime
@@ -99,6 +103,24 @@ class V2PhysicalCallCompletion(StrictModel):
     def validate_failure(self) -> V2PhysicalCallCompletion:
         if self.succeeded == (self.failure is not None):
             raise ValueError("physical-call success and failure fields must agree")
+        if (self.input_tokens is None) != (self.output_tokens is None):
+            raise ValueError("input and output token splits must be recorded together")
+        if self.input_tokens is not None and self.output_tokens is not None:
+            if (
+                self.usage_tokens is None
+                or self.input_tokens + self.output_tokens != self.usage_tokens
+            ):
+                raise ValueError("input and output tokens must add up to usage_tokens")
+        if (self.cached_input_tokens is None) != (self.uncached_input_tokens is None):
+            raise ValueError("cached and uncached input tokens must be recorded together")
+        if self.cached_input_tokens is not None or self.uncached_input_tokens is not None:
+            if (
+                self.input_tokens is None
+                or self.cached_input_tokens is None
+                or self.uncached_input_tokens is None
+                or self.cached_input_tokens + self.uncached_input_tokens != self.input_tokens
+            ):
+                raise ValueError("cached and uncached tokens must partition input_tokens")
         return self
 
 
@@ -173,6 +195,21 @@ class RoutedV2LLMProvider:
         self._thread_state.provider = provider
         return provider.generate(request)
 
+    def conservative_input_tokens(
+        self,
+        request: LLMRequest,
+        minimum_tokens: int,
+    ) -> int:
+        """Keep the larger of the standard and selected transport prompt estimates."""
+        provider = self._providers[request.stage if self._by_stage else request.model_alias]
+        estimator = getattr(provider, "conservative_input_tokens", None)
+        if not callable(estimator):
+            return minimum_tokens
+        estimate = estimator(request)
+        if isinstance(estimate, bool) or not isinstance(estimate, int) or estimate < 1:
+            raise ValueError("provider prompt estimate must be a positive integer")
+        return max(minimum_tokens, estimate)
+
     def usage_for(
         self,
         request: LLMRequest,
@@ -238,10 +275,14 @@ class BudgetedV2LLMProvider:
             raise ValueError("model request does not match the frozen route for its stage")
         if self._cancellation_requested is not None and self._cancellation_requested():
             raise V2CancellationRequested("v2 cancellation was observed before a model call")
-        reservation = self._routing.preflight().reserve(
-            request.stage,
-            conservative_token_estimate(request.rendered_prompt),
+        minimum_input_tokens = conservative_token_estimate(request.rendered_prompt)
+        estimate_input_tokens = getattr(self._provider, "conservative_input_tokens", None)
+        input_tokens = (
+            estimate_input_tokens(request, minimum_input_tokens)
+            if callable(estimate_input_tokens)
+            else minimum_input_tokens
         )
+        reservation = self._routing.preflight().reserve(request.stage, input_tokens)
         with self._lock:
             current = _snapshot(self._starts, self._completions, self._ceilings)
             if current.physical_calls_remaining < 1:
@@ -338,6 +379,34 @@ class BudgetedV2LLMProvider:
             sequence=sequence,
             succeeded=succeeded,
             usage_tokens=_usage_tokens(usage),
+            input_tokens=(
+                usage.input_tokens
+                if usage is not None
+                and usage.input_tokens is not None
+                and usage.output_tokens is not None
+                else None
+            ),
+            output_tokens=(
+                usage.output_tokens
+                if usage is not None
+                and usage.input_tokens is not None
+                and usage.output_tokens is not None
+                else None
+            ),
+            cached_input_tokens=(
+                usage.cached_input_tokens
+                if usage is not None
+                and usage.input_tokens is not None
+                and usage.output_tokens is not None
+                else None
+            ),
+            uncached_input_tokens=(
+                usage.uncached_input_tokens
+                if usage is not None
+                and usage.input_tokens is not None
+                and usage.output_tokens is not None
+                else None
+            ),
             usage_cost_usd=(usage.cost_usd if usage is not None else None),
             failure=failure,
             completed_at=_aware(self._clock()),

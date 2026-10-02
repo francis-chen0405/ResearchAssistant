@@ -30,6 +30,7 @@ from models import (
     V2ResultSource,
     V2ResultSourceStatus,
     V2ReviewerLedgerBatchResult,
+    V2RoundFourDecisionCode,
     V2SourceSelectionGap,
     V2SynthesizerInput,
     V2SynthesizerLedgerItem,
@@ -55,9 +56,9 @@ from store import insert_v2_artifact, read_v2_artifact
 V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY = "phase-11-final-research-output"
 V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY = "phase-13-final-research-output-analyzer-admission"
 V2_FINAL_OUTPUT_ARTIFACT_KEY = "post-phase-13-round-four-final-output-v1"
-V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-final-output-v1"
+V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-final-output-v2"
 V2_FINAL_VALIDATOR_CONFIG_VERSION = (
-    "researchassistant-v2-post-phase-13-round-four-release-validator-v1"
+    "researchassistant-v2-post-phase-13-round-four-release-validator-v2"
 )
 
 V2EvidenceInputResult = V2EvidenceAdmissionBatchResult | V2ReviewerLedgerBatchResult
@@ -205,7 +206,7 @@ def build_v2_synthesizer_input(
         )
         for status in selection.source_statuses
     )
-    stopping = _stopping_disclosure(continuation)
+    stopping = _stopping_disclosure(continuation, gap_reconciliation)
     return V2SynthesizerInput(
         run_id=evidence_result.run_id,
         exact_claim=selection.input.exact_claim,
@@ -238,7 +239,7 @@ def build_v2_final_research_output(
         for source in evidence_result.source_results
         if _source_record(source) is not None
     )
-    stopping = _stopping_disclosure(continuation)
+    stopping = _stopping_disclosure(continuation, gap_reconciliation)
     all_sources = _result_sources(evidence_result)
     recommended_ids = selection.recommended_source_ids
     by_id = {item.source_id: item for item in all_sources}
@@ -458,7 +459,11 @@ def _v2_integrity_errors(
             _error("recommended_source_ids", "Recommendation IDs do not match source selection.")
         )
     stopping = output_fields.get("stopping")
-    if stopping != _stopping_disclosure(continuation):
+    reconciliation = output_fields.get("gap_reconciliation")
+    if reconciliation is not None and not isinstance(reconciliation, V2GapCoverageReconciliation):
+        errors.append(_error("gap_reconciliation", "Gap reconciliation is malformed."))
+        reconciliation = None
+    if stopping != _stopping_disclosure(continuation, reconciliation):
         errors.append(_error("stopping", "Stopping disclosure does not match continuation state."))
     return errors
 
@@ -596,8 +601,27 @@ def _unresolved_gaps(
 
 def _stopping_disclosure(
     continuation: V2AdaptiveContinuationResult,
+    gap_reconciliation: V2GapCoverageReconciliation | None = None,
 ) -> V2ResearchStoppingDisclosure:
     decision = continuation.stopping_decision
+    round_four = (
+        gap_reconciliation.round_four_governor_decision if gap_reconciliation is not None else None
+    )
+    if gap_reconciliation is not None and gap_reconciliation.run_id != continuation.run_id:
+        raise ValueError("Round-4 reconciliation must match the continuation run")
+    if (
+        decision.stop_code is V2AdaptiveStopCode.ROUND_THREE_COMPLETE
+        and round_four is not None
+        and not round_four.authorized
+    ):
+        if decision.completed_rounds != 3:
+            raise ValueError("declined Round-4 disclosure requires exactly three completed rounds")
+        reason = _round_four_stopping_reason(round_four.reason_code)
+        return V2ResearchStoppingDisclosure(
+            reason=reason,
+            explanation=round_four.explanation,
+            completed_rounds=decision.completed_rounds,
+        )
     direct_reasons = {
         V2AdaptiveStopCode.ROUND_ONE_COMPLETE: V2ResearchStoppingReason.SUFFICIENT_SOURCE_POOL,
         V2AdaptiveStopCode.ROUND_TWO_COMPLETE: V2ResearchStoppingReason.SUFFICIENT_SOURCE_POOL,
@@ -629,6 +653,33 @@ def _stopping_disclosure(
         explanation=decision.stopping_reason,
         completed_rounds=decision.completed_rounds,
     )
+
+
+def _round_four_stopping_reason(
+    reason_code: V2RoundFourDecisionCode,
+) -> V2ResearchStoppingReason:
+    if reason_code is V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH:
+        return V2ResearchStoppingReason.NO_PRODUCTIVE_NEW_SEARCH
+    if reason_code is V2RoundFourDecisionCode.NO_MATERIAL_GAPS:
+        return V2ResearchStoppingReason.NO_ACTIONABLE_MATERIAL_GAP
+    if reason_code in {
+        V2RoundFourDecisionCode.NO_NOVEL_QUERY,
+        V2RoundFourDecisionCode.UNPRODUCTIVE,
+    }:
+        return V2ResearchStoppingReason.NO_USEFUL_NEW_DIRECTION
+    if reason_code is V2RoundFourDecisionCode.DUPLICATE_HEAVY:
+        return V2ResearchStoppingReason.DUPLICATE_HEAVY
+    if reason_code is V2RoundFourDecisionCode.NO_ELIGIBLE_PROVIDER:
+        return V2ResearchStoppingReason.PROVIDER_ELIGIBILITY_EXHAUSTED
+    if reason_code is V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION:
+        return V2ResearchStoppingReason.BUDGET
+    if reason_code is V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE:
+        return V2ResearchStoppingReason.DEGRADED_GAP_SEARCH_AGENT
+    if reason_code is V2RoundFourDecisionCode.TERMINAL_FAILURE:
+        return V2ResearchStoppingReason.PROVIDER_ELIGIBILITY_EXHAUSTED
+    if reason_code is V2RoundFourDecisionCode.CANCELLED:
+        return V2ResearchStoppingReason.CANCELLED
+    raise ValueError("authorized Round 4 cannot be a post-Round-3 stopping reason")
 
 
 def _governor_stopping_reason(
@@ -759,7 +810,17 @@ def _render_v2_components(
             raise ValueError("v2 final output gap is malformed")
         lines.append(f"- {gap.direction.value}: {gap.missing_evidence}")
     if not unresolved_material_gaps:
-        if stopping.completed_rounds == 4:
+        if stopping.reason is V2ResearchStoppingReason.NO_PRODUCTIVE_NEW_SEARCH:
+            lines.append(
+                "- No productive new search was identified after Round 3; see Claim Coverage "
+                "for dimensions that remain partial or unavailable."
+            )
+        elif stopping.reason is V2ResearchStoppingReason.NO_ACTIONABLE_MATERIAL_GAP:
+            lines.append(
+                "- No actionable material gap was identified for another search; see Claim "
+                "Coverage for dimensions that remain partial or unavailable."
+            )
+        elif stopping.completed_rounds == 4:
             lines.append(
                 "- No unresolved research gaps identified after the targeted fourth-round search; "
                 "this addresses only gaps identified after Round 3."

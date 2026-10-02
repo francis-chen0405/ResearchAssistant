@@ -768,6 +768,35 @@ def test_disabled_direction_relationship_is_retried_then_fails_without_ledger(
     )
 
 
+def test_semantic_analyst_failure_retains_returned_provider_usage(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    invalid_assessment = _assessment().model_copy(update={"canonical_factual_statement": None})
+    provider = FakeLunaAnalyst([invalid_assessment])
+    db_path = _prepare_db(tmp_path, run_id)
+
+    result = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=batch,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert result.source_results[0].state is V2EvidenceAnalystState.FAILED
+    attempts = read_model_route_attempts(db_path, run_id)
+    assert len(attempts) == 1
+    assert attempts[0].status is ModelAttemptStatus.FAILED
+    assert attempts[0].usage == ModelUsageMetadata(
+        input_tokens=100,
+        output_tokens=20,
+        total_tokens=120,
+        cost_usd=Decimal("0.0012"),
+    )
+
+
 def test_transient_analyst_failure_is_terminal_after_one_attempt(tmp_path: Path) -> None:
     run_id = uuid4()
     batch = _batch_input(run_id)

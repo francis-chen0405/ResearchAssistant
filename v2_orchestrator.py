@@ -94,7 +94,7 @@ from models import (
     V2SynthesizerInput,
     V2VerbatimQuoteSelection,
 )
-from providers.llm import LLMProvider, LLMStage
+from providers.llm import LLMProvider
 from providers.scraper import ScraperProvider
 from providers.search import (
     SearchFailureCode,
@@ -1291,8 +1291,9 @@ def _run_round_one_search(
 def _adaptive_budget(
     snapshot: V2BudgetSnapshot, routing_config: V2RoutingConfig
 ) -> V2AdaptiveBudgetState:
+    preflight = routing_config.preflight()
     downstream_reservations = tuple(
-        routing_config.preflight().reserve(stage, 1) for stage in LLMStage
+        preflight.reserve(stage, 1) for stage, _route in preflight.routing
     )
     protected_tokens = V2_MANDATORY_DOWNSTREAM_CALL_RESERVE * max(
         item.reserved_tokens for item in downstream_reservations

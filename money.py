@@ -52,7 +52,16 @@ def parse_canonical_usd(value: object) -> Decimal:
 def add_usd(*values: Decimal) -> Decimal:
     """Add USD values without rounding through the process Decimal context."""
     parsed = tuple(parse_exact_usd(value) for value in values)
-    precision = max(50, sum(len(value.as_tuple().digits) for value in parsed) + 10)
+    nonzero = tuple(value for value in parsed if not value.is_zero())
+    if not nonzero:
+        return Decimal("0")
+
+    minimum_exponent = min(value.as_tuple().exponent for value in nonzero)
+    aligned_digits = sum(
+        len(value.as_tuple().digits) + value.as_tuple().exponent - minimum_exponent
+        for value in nonzero
+    )
+    precision = max(50, aligned_digits + len(str(len(nonzero))) + 1)
     with localcontext() as context:
         context.prec = precision
         return sum(parsed, Decimal("0"))

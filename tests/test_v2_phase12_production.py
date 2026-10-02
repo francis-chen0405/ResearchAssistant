@@ -77,6 +77,7 @@ from models import (
 )
 from orchestrator import request_run_cancellation
 from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
+from providers.model_choices import DEFAULT_STAGE_MODELS, ModelChoice, StageModelSelections
 from providers.scraper import ScrapeRequest, ScrapeResponse
 from providers.search import SearchRequest, SearchResponse, SearchResult
 from providers.v2_budget import (
@@ -511,6 +512,35 @@ class _TwoSameDirectionRoundFourGapModel(_V2Model):
         return output
 
 
+class _RoundThreeOverlapModel(_V2Model):
+    def generate(self, request: LLMRequest) -> object:
+        response = super().generate(request)
+        if (
+            request.requested_output_type.__name__ == "V2GapAnalysisModelOutput"
+            and request.input_artifact.completed_round == 3
+            and isinstance(response, V2GapAnalysisModelOutput)
+        ):
+            partial_coverage = tuple(
+                item.model_copy(update={"coverage_state": V2ClaimCoverageState.PARTIAL})
+                if item.searchable
+                else item
+                for item in response.claim_coverage_map
+            )
+            return response.model_copy(
+                update={
+                    "coverage_summary": (
+                        "Coverage remains partial; another support search would overlap."
+                    ),
+                    "claim_coverage_map": partial_coverage,
+                    "stop_reason": (
+                        "Round 3 pursued the available source families; another support "
+                        "search would likely overlap and estimates remain incomplete."
+                    ),
+                }
+            )
+        return response
+
+
 class _MalformedRoundFourSearchAgentModel(_V2Model):
     def generate(self, request: LLMRequest) -> object:
         if (
@@ -656,6 +686,17 @@ def _routing() -> V2RoutingConfig:
     )
 
 
+def _selected_routing(stage_models: StageModelSelections) -> V2RoutingConfig:
+    return V2RoutingConfig.from_environment(
+        {
+            "MIMO_API_KEY": "mimo-secret",
+            "LUNA_API_KEY": "luna-secret",
+        },
+        repository_revision="v2-phase12-selected-tests",
+        stage_models=stage_models,
+    )
+
+
 def _run(
     db_path: Path,
     model: _V2Model,
@@ -666,6 +707,7 @@ def _run(
     directions: ResearchDirections | None = None,
     ceilings: V2RunCeilings | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
+    routing_config: V2RoutingConfig | None = None,
 ) -> V2ProductionPipelineResult:
     return run_v2_production_pipeline(
         "The regional program increases course completion.",
@@ -675,7 +717,7 @@ def _run(
         search_providers={DiscoveryProvider.EXA: search},
         wigolo_provider=scraper,
         llm_provider=model,
-        routing_config=_routing(),
+        routing_config=routing_config or _routing(),
         ceilings=ceilings
         or V2RunCeilings(
             max_physical_calls=40,
@@ -872,6 +914,79 @@ def test_reconciliation_rejects_semantic_gap_identity_collision(
         )
 
 
+@pytest.mark.parametrize("mixed", (False, True))
+@pytest.mark.parametrize(("calls_remaining", "round_three_reservable"), ((16, False), (17, True)))
+def test_adaptive_budget_protects_selected_downstream_routes_and_call_threshold(
+    mixed: bool, calls_remaining: int, round_three_reservable: bool
+) -> None:
+    stage_models = (
+        DEFAULT_STAGE_MODELS.model_copy(update={"extractor": ModelChoice.GPT_6_SOL_HIGH})
+        if mixed
+        else DEFAULT_STAGE_MODELS
+    )
+    routing = _selected_routing(stage_models)
+    budget = V2BudgetSnapshot(
+        physical_calls_used=4,
+        token_exposure=0,
+        cost_exposure_usd=Decimal("0"),
+        physical_calls_remaining=calls_remaining,
+        tokens_remaining=100_000,
+        cost_remaining_usd=Decimal("1"),
+    )
+
+    adaptive_budget = v2_orchestrator._adaptive_budget(budget, routing)
+
+    assert adaptive_budget.protected_downstream_model_calls == 8
+    preflight = routing.preflight()
+    for stage in (LLMStage.SOURCE_SELECTION, LLMStage.EXTRACTOR, LLMStage.ANALYST):
+        reservation = preflight.reserve(stage, 1)
+        assert adaptive_budget.protected_downstream_tokens >= 8 * reservation.reserved_tokens
+        assert adaptive_budget.protected_downstream_cost_usd >= 8 * reservation.reserved_cost_usd
+    assert adaptive_budget.round_three_complete_workload_reservable is round_three_reservable
+
+
+@pytest.mark.parametrize("routing_kind", ("historical", "selected-default", "selected-mixed"))
+def test_adaptive_rounds_use_configured_routes_without_requesting_reviewer(
+    tmp_path: Path, routing_kind: str
+) -> None:
+    routing = None
+    if routing_kind == "selected-default":
+        routing = _selected_routing(DEFAULT_STAGE_MODELS)
+    elif routing_kind == "selected-mixed":
+        mixed_models = DEFAULT_STAGE_MODELS.model_copy(
+            update={"search_agent": ModelChoice.GPT_6_SOL_HIGH}
+        )
+        routing = _selected_routing(mixed_models)
+
+    model = _V2Model(completed_rounds=4)
+    result = _run(
+        tmp_path / f"adaptive-{routing_kind}.sqlite3",
+        model,
+        _Search(unique_results=True),
+        _Scraper(),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+        routing_config=routing,
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert model.search_agent_calls >= 1
+    assert all(request.stage is not LLMStage.REVIEWER for request in model.requests)
+    assert result.budget.physical_calls_used == len(model.requests)
+    assert any(
+        request.stage is LLMStage.SEARCH_AGENT and request.input_artifact.round_number == 4
+        for request in model.requests
+    )
+    if routing_kind == "selected-mixed":
+        search_agent_request = next(
+            request for request in model.requests if request.stage is LLMStage.SEARCH_AGENT
+        )
+        assert search_agent_request.model_alias == ModelChoice.GPT_6_SOL_HIGH.value
+
+
 def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
     tmp_path: Path,
 ) -> None:
@@ -1005,6 +1120,44 @@ def test_round_four_reconciliation_preserves_exact_targeted_gap_provenance(
     assert untargeted.source_id is None
     assert untargeted.query_id is None
     assert untargeted.ledger_claim_id is None
+
+
+def test_post_round_three_overlap_discloses_partial_coverage_without_round_four(
+    tmp_path: Path,
+) -> None:
+    result = _run(
+        tmp_path / "phase14-no-productive-search.sqlite3",
+        _RoundThreeOverlapModel(completed_rounds=4),
+        _Search(unique_results=True),
+        _Scraper(),
+        run_id=uuid4(),
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+        ceilings=V2RunCeilings(
+            max_physical_calls=80,
+            max_total_tokens=500_000,
+            max_total_cost_usd=Decimal("5"),
+        ),
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    reconciliation = result.final_output.gap_reconciliation
+    assert reconciliation is not None
+    decision = reconciliation.round_four_governor_decision
+    assert decision is not None
+    assert decision.reason_code.value == "no_productive_search"
+    assert not decision.authorized
+    assert not reconciliation.round_four_attempted
+    assert any(
+        item.coverage_state is V2ClaimCoverageState.PARTIAL
+        for item in result.final_output.claim_coverage_map
+    )
+    assert result.final_output.stopping.reason.value == "no_productive_new_search"
+    assert result.final_output.stopping.explanation == decision.explanation
+    rendered = v2_final_output.render_v2_final_output(result.final_output)
+    assert "No productive new search was identified after Round 3" in rendered
+    assert "hard_round_limit" not in rendered
+    assert "No unresolved material gaps were recorded." not in rendered
 
 
 def test_round_four_authorization_is_persisted_before_search_agent_execution(
@@ -1705,7 +1858,7 @@ def test_running_v2_snapshot_reuses_one_validated_read_only_connection(
     original_open = live_service_module.open_read_only_store
     original_progress_read = live_progress_module.read_v2_artifact
     original_orchestrator_read = v2_orchestrator.read_v2_artifact
-    original_read_run = live_service_module.read_run
+    original_read_run = live_progress_module.read_run
     original_read_contract = live_service_module.read_provider_run_contract
 
     def trace_statement(statement: str) -> None:
@@ -1779,7 +1932,7 @@ def test_running_v2_snapshot_reuses_one_validated_read_only_connection(
     monkeypatch.setattr(live_service_module, "open_read_only_store", tracked_open)
     monkeypatch.setattr(live_progress_module, "read_v2_artifact", tracked_progress_read)
     monkeypatch.setattr(v2_orchestrator, "read_v2_artifact", tracked_orchestrator_read)
-    monkeypatch.setattr(live_service_module, "read_run", tracked_read_run)
+    monkeypatch.setattr(live_progress_module, "read_run", tracked_read_run)
     monkeypatch.setattr(live_service_module, "read_provider_run_contract", tracked_read_contract)
 
     snapshot = LiveResearchController(environment={}).snapshot(db_path, run_id)

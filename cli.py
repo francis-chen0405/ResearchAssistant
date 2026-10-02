@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 from collections.abc import Callable, Mapping
 from decimal import Decimal, InvalidOperation
@@ -14,7 +15,10 @@ import application_runtime
 from agents.v2_final_output import render_v2_final_output
 from application_runtime import CLIExitCode as CLIExitCode
 from brief_export import BriefExportFormat, export_released_brief
+from frontend.live_progress import snapshot_from_v2_progress, snapshot_from_v2_result
 from models import (
+    V2_PIPELINE_IDENTITY,
+    V2_POLICY_IDENTITY,
     DiscoveryProvider,
     PresentationTone,
     ReportLength,
@@ -47,10 +51,14 @@ from providers.mimo_factory import MimoProviderFactoryConfig
 from providers.model_choices import ACTIVE_MODEL_STAGES, ModelChoice, StageModelSelections
 from providers.v2_budget import V2RunCeilings
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
-from store import open_read_only_store, read_provider_run_contract
+from store import open_read_only_store, read_provider_run_contract, read_v2_artifact
 from v2_orchestrator import (
+    V2_PRODUCTION_ARTIFACT_KEY,
+    V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+    V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
     V2ProductionPipelineResult,
     V2ProductionState,
+    configured_v2_providers,
     run_v2_production_pipeline,
     v2_cancellation_requested,
 )
@@ -472,6 +480,23 @@ def _run_fixture_command(fixture_dir: Path, output_dir: Path | None) -> int:
 
 def _inspect_run_command(db_path: Path, run_id: UUID) -> int:
     try:
+        with open_read_only_store(db_path) as store:
+            try:
+                identity = store.connection.execute(
+                    "SELECT pipeline_identity, policy_identity FROM v2_run_identities "
+                    "WHERE run_id = ?",
+                    (str(run_id),),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                identity = None
+            if identity is not None and identity["pipeline_identity"] == V2_PIPELINE_IDENTITY:
+                if identity["policy_identity"] != V2_POLICY_IDENTITY:
+                    raise ValueError("persisted v2 run identity is incompatible with this pipeline")
+                return _inspect_v2_run_command(db_path, run_id, store.connection)
+    except Exception as exc:
+        print(f"run inspection error: {exc}", file=sys.stderr)
+        return CLIExitCode.INVALID_INPUT
+    try:
         result = inspect_provider_run(db_path, run_id)
         try:
             with open_read_only_store(db_path) as store:
@@ -595,6 +620,92 @@ def _inspect_run_command(db_path: Path, run_id: UUID) -> int:
         print("final brief:")
         print(result.final_brief, end="" if result.final_brief.endswith("\n") else "\n")
     return _exit_for_status(result.status)
+
+
+def _inspect_v2_run_command(db_path: Path, run_id: UUID, source: sqlite3.Connection) -> int:
+    """Render a persisted v2 run from its read-only artifacts and physical-call audit."""
+    try:
+        result_artifact = None
+        for artifact_key in (
+            V2_PRODUCTION_ARTIFACT_KEY,
+            V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+            V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+        ):
+            try:
+                result_artifact = read_v2_artifact(source, run_id, artifact_key)
+            except KeyError:
+                continue
+            break
+        if result_artifact is not None:
+            result = V2ProductionPipelineResult.model_validate_json(result_artifact.payload_json)
+            snapshot = snapshot_from_v2_result(
+                result, source=source, db_path=str(db_path.resolve())
+            )
+        else:
+            providers = configured_v2_providers(source, run_id)
+            snapshot = snapshot_from_v2_progress(
+                str(db_path.resolve()), run_id, providers, source=source
+            )
+        contract = None
+        try:
+            contract = read_provider_run_contract(source, run_id)
+        except KeyError:
+            pass
+    except Exception as exc:
+        print(f"run inspection error: {exc}", file=sys.stderr)
+        return CLIExitCode.INVALID_INPUT
+
+    print(f"database: {db_path.resolve()}")
+    print(f"run_id: {run_id}")
+    print(f"claim: {snapshot.raw_claim}")
+    print(f"status: {snapshot.classification}")
+    print(f"current stage: {snapshot.stage}")
+    print("checkpoints:")
+    print(f"- {snapshot.latest_checkpoint}: {snapshot.classification}")
+    print("retrieval attempts:")
+    retrieval_count = snapshot.retrieval_attempts_used
+    print(f"- count: {retrieval_count}")
+    print("model attempts:")
+    print(f"- physical model calls: {snapshot.model_calls_used}")
+    print("researcher failures:")
+    if snapshot.classification in {"failed", "blocked", "cancelled"}:
+        print(f"- {snapshot.message}")
+    else:
+        print("- none")
+    print("validation errors:")
+    if snapshot.validation_errors:
+        for error in snapshot.validation_errors:
+            print(f"- {error}")
+    else:
+        print("- none")
+    print("usage:")
+    print(f"- physical model calls: {snapshot.model_calls_used}")
+    print(f"- retrieval attempts: {retrieval_count}")
+    if snapshot.token_usage_complete:
+        print(f"- exact total tokens: {snapshot.total_tokens}")
+    else:
+        print("- exact total tokens: unknown (usage incomplete)")
+        print(f"- known token subtotal: {snapshot.known_token_subtotal}")
+    if snapshot.cost_usage_complete:
+        print(f"- exact total cost usd: {snapshot.total_cost_usd}")
+    else:
+        print("- exact total cost usd: unknown (usage incomplete)")
+        print(f"- known cost subtotal usd: {snapshot.known_cost_subtotal_usd}")
+    print(f"- conservative token exposure: {snapshot.conservative_reserved_tokens}")
+    print(f"- conservative cost exposure usd: {snapshot.conservative_reserved_cost_usd}")
+    if contract is None:
+        print("provider identity: unavailable")
+    else:
+        print(f"provider identity: {contract.provider_identity}")
+        print(f"model identity: {contract.model_identity}")
+        print(f"fingerprint: {contract.fingerprint_sha256}")
+    if snapshot.classification in {"failed", "blocked", "cancelled"}:
+        print(f"reason: {snapshot.message}")
+    print(f"rendered hash: {snapshot.rendered_brief_hash or 'none'}")
+    if snapshot.final_brief is not None:
+        print("final brief:")
+        print(snapshot.final_brief, end="" if snapshot.final_brief.endswith("\n") else "\n")
+    return snapshot.exit_code if snapshot.exit_code is not None else CLIExitCode.RUNNING
 
 
 def _cancel_run_command(db_path: Path, run_id: UUID, reason: str) -> int:

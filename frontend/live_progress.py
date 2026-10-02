@@ -15,19 +15,27 @@ from agents.v2_evidence_analyst import (
     V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
     V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
 )
+from agents.v2_final_output import render_v2_final_output
 from agents.v2_source_selection import (
     V2_SOURCE_SELECTION_COMPLETION_KEY,
     V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
 )
 from application_runtime import CLIExitCode
 from frontend.live_contracts import (
+    LiveClassification,
+    LiveRunSnapshot,
     ResearchProgress,
 )
 from models import (
+    DEFAULT_RESEARCH_CONTROLS,
+    DiscoveryProvider,
+    ResearchControls,
     ResearchDirection,
     ResearchDirections,
+    ResearchMode,
     RunStatus,
     Stage,
+    StrictModel,
     V2AcquisitionProbeOutput,
     V2EvidenceAnalystSourceResult,
     V2PersistedArtifact,
@@ -43,19 +51,40 @@ from orchestrator import (
 )
 from providers.v2_budget import (
     V2BudgetSnapshot,
-    V2PhysicalCallCompletion,
-    V2PhysicalCallStart,
     V2RunCeilings,
+    read_v2_physical_call_audit,
 )
 from store import (
+    read_provider_run_contract,
+    read_run,
     read_v2_artifact,
 )
 from v2_orchestrator import (
+    V2_PRODUCTION_ARTIFACT_KEY,
     V2_PRODUCTION_FINGERPRINT_KEY,
     V2_PRODUCTION_LEGACY_FINGERPRINT_KEY,
     V2_PRODUCTION_PHASE13_FINGERPRINT_KEY,
     V2ProductionFingerprint,
+    V2ProductionPipelineResult,
+    V2ProductionState,
+    build_v2_run_diagnostics_or_empty,
+    configured_v2_providers,
+    infer_v2_stage,
 )
+
+
+class V2LiveUsageSummary(StrictModel):
+    """Exact known usage and conservative exposure from one physical-call audit."""
+
+    physical_calls_used: int
+    total_tokens: int | None
+    total_cost_usd: Decimal | None
+    known_token_subtotal: int
+    known_cost_subtotal_usd: Decimal
+    token_usage_complete: bool
+    cost_usage_complete: bool
+    conservative_reserved_tokens: int
+    conservative_reserved_cost_usd: Decimal
 
 
 def _read_first_v2_artifact(
@@ -184,6 +213,81 @@ def _read_v2_budget_snapshot(
     db_path: str | Path | Connection,
     run_id: UUID,
 ) -> V2BudgetSnapshot:
+    """Return conservative budget exposure from the authoritative call audit."""
+    ceilings = _read_v2_ceilings(db_path, run_id)
+    audit = read_v2_physical_call_audit(db_path, run_id)
+    token_exposure = 0
+    cost_exposure = Decimal("0")
+    for start, completion in zip(audit.starts, audit.completions, strict=True):
+        token_exposure += (
+            completion.usage_tokens
+            if completion is not None and completion.usage_tokens is not None
+            else start.reserved_tokens
+        )
+        cost_exposure = add_usd(
+            cost_exposure,
+            (
+                completion.usage_cost_usd
+                if completion is not None and completion.usage_cost_usd is not None
+                else start.reserved_cost_usd
+            ),
+        )
+    return V2BudgetSnapshot(
+        physical_calls_used=len(audit.starts),
+        token_exposure=token_exposure,
+        cost_exposure_usd=cost_exposure,
+        physical_calls_remaining=max(0, ceilings.max_physical_calls - len(audit.starts)),
+        tokens_remaining=max(0, ceilings.max_total_tokens - token_exposure),
+        cost_remaining_usd=max(Decimal("0"), ceilings.max_total_cost_usd - cost_exposure),
+    )
+
+
+def _read_v2_usage_summary(
+    db_path: str | Path | Connection,
+    run_id: UUID,
+    *,
+    terminal: bool,
+) -> V2LiveUsageSummary:
+    """Summarize known usage separately from reserved exposure for live presentation."""
+    audit = read_v2_physical_call_audit(db_path, run_id)
+    known_tokens = 0
+    known_cost = Decimal("0")
+    token_complete = True
+    cost_complete = True
+    token_exposure = 0
+    cost_exposure = Decimal("0")
+    for start, completion in zip(audit.starts, audit.completions, strict=True):
+        if completion is None or completion.usage_tokens is None:
+            token_complete = False
+            token_exposure += start.reserved_tokens
+        else:
+            known_tokens += completion.usage_tokens
+            token_exposure += completion.usage_tokens
+        if completion is None or completion.usage_cost_usd is None:
+            cost_complete = False
+            cost_exposure = add_usd(cost_exposure, start.reserved_cost_usd)
+        else:
+            known_cost = add_usd(known_cost, completion.usage_cost_usd)
+            cost_exposure = add_usd(cost_exposure, completion.usage_cost_usd)
+    token_complete = token_complete and terminal
+    cost_complete = cost_complete and terminal
+    return V2LiveUsageSummary(
+        physical_calls_used=len(audit.starts),
+        total_tokens=known_tokens if token_complete else None,
+        total_cost_usd=known_cost if cost_complete else None,
+        known_token_subtotal=known_tokens,
+        known_cost_subtotal_usd=known_cost,
+        token_usage_complete=token_complete,
+        cost_usage_complete=cost_complete,
+        conservative_reserved_tokens=token_exposure,
+        conservative_reserved_cost_usd=cost_exposure,
+    )
+
+
+def _read_v2_ceilings(
+    db_path: str | Path | Connection,
+    run_id: UUID,
+) -> V2RunCeilings:
     ceilings = V2RunCeilings()
     try:
         artifact = _read_first_v2_artifact(
@@ -200,63 +304,7 @@ def _read_v2_budget_snapshot(
         ceilings = V2RunCeilings.model_validate(payload["ceilings"])
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         pass
-
-    starts: list[V2PhysicalCallStart] = []
-    completions: dict[int, V2PhysicalCallCompletion] = {}
-    for sequence in range(1, ceilings.max_physical_calls + 1):
-        try:
-            start_artifact = _read_first_v2_artifact(
-                db_path,
-                run_id,
-                (
-                    f"phase-13-physical-call-{sequence:03d}-start",
-                    f"phase-12-physical-call-{sequence:03d}-start",
-                ),
-            )
-        except KeyError:
-            break
-        start = V2PhysicalCallStart.model_validate_json(start_artifact.payload_json)
-        starts.append(start)
-        try:
-            completion_artifact = _read_first_v2_artifact(
-                db_path,
-                run_id,
-                (
-                    f"phase-13-physical-call-{sequence:03d}-completion",
-                    f"phase-12-physical-call-{sequence:03d}-completion",
-                ),
-            )
-        except KeyError:
-            continue
-        completions[sequence] = V2PhysicalCallCompletion.model_validate_json(
-            completion_artifact.payload_json
-        )
-
-    token_exposure = 0
-    cost_exposure = Decimal("0")
-    for start in starts:
-        completion = completions.get(start.sequence)
-        token_exposure += (
-            completion.usage_tokens
-            if completion is not None and completion.usage_tokens is not None
-            else start.reserved_tokens
-        )
-        cost_exposure = add_usd(
-            cost_exposure,
-            (
-                completion.usage_cost_usd
-                if completion is not None and completion.usage_cost_usd is not None
-                else start.reserved_cost_usd
-            ),
-        )
-    return V2BudgetSnapshot(
-        physical_calls_used=len(starts),
-        token_exposure=token_exposure,
-        cost_exposure_usd=cost_exposure,
-        physical_calls_remaining=max(0, ceilings.max_physical_calls - len(starts)),
-        tokens_remaining=max(0, ceilings.max_total_tokens - token_exposure),
-        cost_remaining_usd=max(Decimal("0"), ceilings.max_total_cost_usd - cost_exposure),
-    )
+    return ceilings
 
 
 def _v2_current_round(db_path: str | Path | Connection, run_id: UUID) -> int:
@@ -283,6 +331,7 @@ def _read_v2_directional_progress(
     run_id: UUID,
     directions: ResearchDirections,
     status: RunStatus,
+    terminal_status: str | None = None,
 ) -> tuple[ResearchProgress, ResearchProgress]:
     acquired: dict[ResearchDirection, int] = {
         ResearchDirection.SUPPORT: 0,
@@ -363,9 +412,14 @@ def _read_v2_directional_progress(
     def build_progress(direction: ResearchDirection) -> ResearchProgress:
         enabled = directions.permits(direction)
         terminal = status is not RunStatus.RUNNING
+        direction_status = (
+            terminal_status
+            if terminal and terminal_status is not None
+            else ("completed" if terminal else "running")
+        )
         return ResearchProgress(
             stance="supporting" if direction is ResearchDirection.SUPPORT else "opposing",
-            status=("disabled" if not enabled else "completed" if terminal else "running"),
+            status="disabled" if not enabled else direction_status,
             model_attempts=analyzed[direction],
             retrieval_attempts=acquired[direction],
             usable_snapshots=len(survivors[direction]),
@@ -496,3 +550,203 @@ def _diagnostic_component(result: ProviderPipelineResult) -> str:
     if "validat" in reason:
         return "validation"
     return result.current_stage.value
+
+
+def snapshot_from_v2_progress(
+    db_path: str,
+    run_id: UUID,
+    providers: tuple[DiscoveryProvider, ...],
+    *,
+    source: str | Path | Connection | None = None,
+) -> LiveRunSnapshot:
+    """Build a v2 live snapshot using only persisted run data."""
+    read_source = source if source is not None else db_path
+    manifest = read_run(read_source, run_id)
+    directions = _read_v2_directions(read_source, run_id)
+    diagnostics = build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
+    budget = _read_v2_budget_snapshot(read_source, run_id)
+    terminal = manifest.status is not RunStatus.RUNNING
+    usage = _read_v2_usage_summary(read_source, run_id, terminal=terminal)
+    stage = infer_v2_stage(read_source, run_id, manifest.current_stage, False)
+    current_round = _v2_current_round(read_source, run_id)
+    contract = None
+    try:
+        contract = read_provider_run_contract(read_source, run_id)
+    except KeyError:
+        pass
+    classification: LiveClassification = {
+        RunStatus.PLANNED: "starting",
+        RunStatus.RUNNING: "running",
+        RunStatus.COMPLETED: "released",
+        RunStatus.BLOCKED: "blocked",
+        RunStatus.CANCELLED: "cancelled",
+        RunStatus.FAILED: "failed",
+    }[manifest.status]
+    exit_code = CLIExitCode.RUNNING if manifest.status is RunStatus.RUNNING else None
+    if manifest.status is RunStatus.FAILED:
+        exit_code = CLIExitCode.FAILED
+    elif manifest.status is RunStatus.BLOCKED:
+        exit_code = CLIExitCode.BLOCKED
+    elif manifest.status is RunStatus.CANCELLED:
+        exit_code = CLIExitCode.CANCELLED
+    elif manifest.status is RunStatus.COMPLETED:
+        exit_code = CLIExitCode.RELEASED
+    supporting, opposing = _read_v2_directional_progress(
+        read_source,
+        run_id,
+        directions,
+        manifest.status,
+        terminal_status=classification if terminal else None,
+    )
+    return LiveRunSnapshot(
+        run_id=run_id,
+        db_path=db_path,
+        raw_claim=manifest.raw_claim,
+        classification=classification,
+        exit_code=int(exit_code) if exit_code is not None else None,
+        stage=stage.value,
+        latest_checkpoint=stage.value,
+        completed_checkpoints=0,
+        total_checkpoints=10,
+        current_research_round=current_round,
+        progress_percent=_v2_progress_percent(
+            stage, current_round, diagnostics, budget, supporting, opposing
+        ),
+        message=(
+            adaptive_planning_message(read_source, run_id, stage)
+            if manifest.status is RunStatus.RUNNING
+            else f"Research is {classification}."
+        ),
+        diagnostic_component="v2-production",
+        model_calls_used=usage.physical_calls_used,
+        retrieval_attempts_used=diagnostics.acquisition_attempts,
+        total_tokens=usage.total_tokens,
+        total_cost_usd=usage.total_cost_usd,
+        known_token_subtotal=usage.known_token_subtotal,
+        known_cost_subtotal_usd=usage.known_cost_subtotal_usd,
+        token_usage_complete=usage.token_usage_complete,
+        cost_usage_complete=usage.cost_usage_complete,
+        conservative_reserved_tokens=usage.conservative_reserved_tokens,
+        conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
+        supporting=supporting,
+        opposing=opposing,
+        provider_identity=contract.provider_identity if contract is not None else None,
+        model_identity=contract.model_identity if contract is not None else None,
+        fingerprint=contract.fingerprint_sha256 if contract is not None else None,
+        research_controls=ResearchControls(
+            research_mode=(
+                ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+            ),
+            discovery_providers=providers,
+        ),
+    )
+
+
+def snapshot_from_v2_result(
+    result: V2ProductionPipelineResult,
+    *,
+    source: str | Path | Connection | None = None,
+    db_path: str | None = None,
+) -> LiveRunSnapshot:
+    """Build a terminal v2 live snapshot without constructing runtime services."""
+    read_source = source if source is not None else result.db_path
+    displayed_db_path = db_path if db_path is not None else result.db_path
+    output = result.final_output
+    directions = (
+        output.directions if output is not None else _read_v2_directions(read_source, result.run_id)
+    )
+    sources = output.all_surviving_sources if output is not None else ()
+    terminal_status = {
+        V2ProductionState.RELEASED: RunStatus.COMPLETED,
+        V2ProductionState.BLOCKED: RunStatus.BLOCKED,
+        V2ProductionState.FAILED: RunStatus.FAILED,
+        V2ProductionState.CANCELLED: RunStatus.CANCELLED,
+    }[result.state]
+    classification: LiveClassification = result.state.value
+    usage = _read_v2_usage_summary(read_source, result.run_id, terminal=True)
+    diagnostics = result.diagnostics
+    if diagnostics is None:
+        providers = configured_v2_providers(read_source, result.run_id)
+        if providers:
+            diagnostics = build_v2_run_diagnostics_or_empty(
+                read_source, result.run_id, providers, final_output=output
+            )
+    stage = infer_v2_stage(read_source, result.run_id, result.current_stage, output is not None)
+    if output is None:
+        supporting, opposing = _read_v2_directional_progress(
+            read_source,
+            result.run_id,
+            directions,
+            terminal_status,
+            terminal_status=classification,
+        )
+    else:
+        supporting = _v2_research_progress(sources, "supporting", directions.support_enabled)
+        opposing = _v2_research_progress(sources, "opposing", directions.challenge_enabled)
+    exit_code = {
+        V2ProductionState.RELEASED: CLIExitCode.RELEASED,
+        V2ProductionState.BLOCKED: CLIExitCode.BLOCKED,
+        V2ProductionState.FAILED: CLIExitCode.FAILED,
+        V2ProductionState.CANCELLED: CLIExitCode.CANCELLED,
+    }[result.state]
+    return LiveRunSnapshot(
+        run_id=result.run_id,
+        db_path=displayed_db_path,
+        raw_claim=result.raw_claim,
+        classification=classification,
+        exit_code=int(exit_code),
+        stage=stage.value,
+        latest_checkpoint=V2_PRODUCTION_ARTIFACT_KEY,
+        completed_checkpoints=10,
+        total_checkpoints=10,
+        current_research_round=(
+            output.stopping.completed_rounds
+            if output is not None
+            else _v2_current_round(read_source, result.run_id)
+        ),
+        progress_percent=100,
+        message=(
+            "Research completed and passed release validation."
+            if result.state is V2ProductionState.RELEASED
+            else result.failure_reason or "Research stopped before release."
+        ),
+        diagnostic_component="v2-production",
+        model_calls_used=usage.physical_calls_used,
+        retrieval_attempts_used=(
+            diagnostics.acquisition_attempts if diagnostics is not None else len(sources)
+        ),
+        total_tokens=usage.total_tokens,
+        total_cost_usd=usage.total_cost_usd,
+        known_token_subtotal=usage.known_token_subtotal,
+        known_cost_subtotal_usd=usage.known_cost_subtotal_usd,
+        token_usage_complete=usage.token_usage_complete,
+        cost_usage_complete=usage.cost_usage_complete,
+        conservative_reserved_tokens=usage.conservative_reserved_tokens,
+        conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
+        supporting=supporting,
+        opposing=opposing,
+        validation_errors=(
+            tuple(error.message for error in output.release_validation.errors)
+            if output is not None
+            else ()
+        ),
+        final_brief=(
+            render_v2_final_output(output)
+            if output is not None and output.release_validation.valid
+            else None
+        ),
+        rendered_brief_hash=(
+            output.release_validation.rendered_output_hash if output is not None else None
+        ),
+        research_controls=ResearchControls(
+            research_mode=(
+                ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+            ),
+            discovery_providers=(
+                diagnostics.configured_providers
+                if diagnostics is not None
+                else DEFAULT_RESEARCH_CONTROLS.discovery_providers
+            ),
+        ),
+        v2_diagnostics=diagnostics,
+    )

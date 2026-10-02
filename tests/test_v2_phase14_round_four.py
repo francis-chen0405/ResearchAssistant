@@ -24,6 +24,7 @@ from agents.v2_round_four import (
     _plan_round_four,
     _representative_families,
     _representative_round_rows,
+    _validate_round_four_decision_against_gap,
 )
 from models import (
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
@@ -52,6 +53,8 @@ from models import (
     V2GapSourceFamily,
     V2MaterialGap,
     V2ProviderSearchBudget,
+    V2RoundFourDecisionCode,
+    V2RoundFourGovernorDecision,
     V2RoundFourReservation,
     V2SearchAgentInput,
     V2SourceSelectionCandidate,
@@ -531,6 +534,45 @@ def test_reconciliation_requires_admitted_evidence_links_for_covered_gap() -> No
     assert reconciliation.records[0].state is V2GapCoverageState.UNRESOLVED
 
 
+def test_no_productive_search_decision_must_match_post_round_three_gap_fact() -> None:
+    gap = _continuity_output((), _identity_gap())
+    decision = V2RoundFourGovernorDecision(
+        run_id=gap.run_id,
+        authorized=False,
+        reason_code=V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH,
+        explanation="No productive new search was identified.",
+        reservation=None,
+        decided_at=NOW,
+    )
+
+    with pytest.raises(ValueError, match="requires a usable Gap Analysis result that declines"):
+        _validate_round_four_decision_against_gap(gap=gap, decision=decision)
+
+
+def test_historical_no_material_gaps_decision_accepts_noncontinuing_empty_gaps() -> None:
+    gap = _continuity_output((), _identity_gap())
+    assert gap.result is not None
+    stopped_result = gap.result.model_copy(
+        update={
+            "material_gaps": (),
+            "continue_research": False,
+            "stop_reason": "No material gaps were recorded by the prior governor.",
+            "new_search_directions": (),
+        }
+    )
+    stopped_gap = gap.model_copy(update={"result": stopped_result})
+    decision = V2RoundFourGovernorDecision(
+        run_id=gap.run_id,
+        authorized=False,
+        reason_code=V2RoundFourDecisionCode.NO_MATERIAL_GAPS,
+        explanation="No material gaps were recorded.",
+        reservation=None,
+        decided_at=NOW,
+    )
+
+    _validate_round_four_decision_against_gap(gap=stopped_gap, decision=decision)
+
+
 def _reservation() -> V2RoundFourReservation:
     return V2RoundFourReservation(
         protected_downstream_calls=1,
@@ -559,6 +601,7 @@ def _reservation() -> V2RoundFourReservation:
         ({}, "authorized"),
         ({"gap_analysis_usable": False}, "gap_analysis_unusable"),
         ({"material_gap_remains": False}, "no_material_gaps"),
+        ({"luna_recommends_continue": False}, "no_productive_search"),
         ({"eligible_provider_exists": False}, "no_eligible_provider"),
         ({"round_three_duplicate_rate": 0.70}, "duplicate_heavy"),
         ({"productive_opportunity": False}, "unproductive"),

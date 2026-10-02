@@ -10,6 +10,10 @@ This file records decisions that still govern current behavior. The exact preced
 - Each of seven active model stages has an explicit selectable route. A selected choice, route settings, price cap, stage allowance, and run configuration participate in frozen identity. Defaults and the historical Standard profile remain distinct. See [per-step model choices](.agent/plans/per-step-model-choices.md) and [model settings](docs/model-settings.md).
 - Physical provider attempts reserve their calls, tokens, and conservative cost before transport. Unknown or missing usage does not erase exposure. Historical costs and run identities are not rewritten.
 
+## ALPR review fixes — 2026-10-01
+
+The user-approved [A–G fixes](.agent/plans/alpr-run-fixes-2026-10-01.md) preserve immutable historical artifacts. Result presentation is derived read-only: admitted statements retain Ledger-bound citations, research direction and evidence relationship have separate labels, final source dispositions are distinct from selection history, and current stopping/coverage disclosures may supplement historical rendered text without regenerating it. Future physical completions may retain optional input/output/cache splits; unknown historical splits remain unknown. Study-lineage warnings disclose shared DOI metadata or possible title matches; they do not merge source-family IDs, count independence, change scoring, or infer verified identity from titles alone.
+
 ## Evidence, storage, and application boundaries
 
 - Exact quotations, source provenance, separate Evidence Quality and Claim Fit scores, immutable Ledger/output artifacts, and deterministic final validation remain required. Analyzer Admission checks structure and policy; it is not independent proof of entailment.
@@ -21,4 +25,14 @@ This file records decisions that still govern current behavior. The exact preced
 
 macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).
 
-The latest authorized work is [current Mac build and release-gate verification](.agent/plans/mac-current-build-release-verification-2026-09-28.md). It does not renew the paid-test allowance or change research policy, persisted historical data, or the release boundary.
+The preceding authorized release work is [current Mac build and release-gate verification](.agent/plans/mac-current-build-release-verification-2026-09-28.md). It does not renew the paid-test allowance or change research policy, persisted historical data, or the release boundary.
+
+The preceding testing fix is [adaptive budget route failure](.agent/plans/reviewer-route-testing-fix-2026-10-01.md). It preserves deterministic final review, historical routing, and conservative budget protection.
+
+The completed [comprehensive code audit](.agent/plans/comprehensive-code-audit-2026-10-01.md)
+preserves those boundaries and adds verified integrity, accounting, lifecycle, and
+UI repairs. Physical prompt reservations include adapter-added instructions;
+presented actual usage comes from independently complete physical-call audits;
+desktop exports use same-origin API requests. The [report](docs/audits/2026-10-01/README.md)
+records verified local artifacts and coverage limits. Installation, live quality,
+and signed-release acceptance remain separate from offline audit completion.

@@ -9,7 +9,6 @@ from sqlite3 import Connection
 from threading import Event, Lock
 from uuid import UUID, uuid4
 
-from agents.v2_final_output import render_v2_final_output
 from application_runtime import CLIExitCode, repository_identity
 from desktop_paths import application_data_dir
 from file_lock import FileLock
@@ -47,6 +46,9 @@ from frontend.live_progress import (
     _read_v2_directions as _read_v2_directions,
 )
 from frontend.live_progress import (
+    _read_v2_usage_summary as _read_v2_usage_summary,
+)
+from frontend.live_progress import (
     _research_progress as _research_progress,
 )
 from frontend.live_progress import (
@@ -65,10 +67,11 @@ from frontend.live_progress import (
     _v2_research_progress as _v2_research_progress,
 )
 from frontend.live_progress import (
-    adaptive_planning_message,
+    exit_code_for_status as exit_code_for_status,
 )
 from frontend.live_progress import (
-    exit_code_for_status as exit_code_for_status,
+    snapshot_from_v2_progress,
+    snapshot_from_v2_result,
 )
 from frontend.profile_preflight import check_start_reservation
 from frontend.security import redact_text
@@ -76,9 +79,6 @@ from models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
     ResearchControls,
-    ResearchDirections,
-    ResearchMode,
-    RunStatus,
 )
 from orchestrator import (
     ClaimMismatchError,
@@ -103,17 +103,13 @@ from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_
 from store import (
     open_read_only_store,
     read_provider_run_contract,
-    read_run,
 )
 from v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
     V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
     V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
     V2ProductionPipelineResult,
-    V2ProductionState,
-    build_v2_run_diagnostics_or_empty,
     configured_v2_providers,
-    infer_v2_stage,
     run_v2_production_pipeline,
     v2_cancellation_requested,
 )
@@ -356,7 +352,7 @@ class LiveResearchController:
         key = (resolved, run_id)
         with self._lock:
             active = self._active.get(key)
-            early = self._early_results.pop(key, None)
+            early = self._early_results.get(key)
         if Path(resolved).is_file():
             try:
                 with open_read_only_store(resolved) as store:
@@ -373,6 +369,7 @@ class LiveResearchController:
                     except KeyError:
                         v2_providers = configured_v2_providers(store.connection, run_id)
                         if v2_providers:
+                            self._discard_early_result(key)
                             return self._snapshot_from_v2_progress(
                                 resolved,
                                 run_id,
@@ -380,6 +377,7 @@ class LiveResearchController:
                                 source=store.connection,
                             )
                     else:
+                        self._discard_early_result(key)
                         return self._snapshot_from_v2_result(
                             V2ProductionPipelineResult.model_validate_json(artifact.payload_json),
                             source=store.connection,
@@ -389,6 +387,7 @@ class LiveResearchController:
                 pass
             try:
                 result = self._inspector(resolved, run_id)
+                self._discard_early_result(key)
                 return self._snapshot_from_result(result)
             except KeyError:
                 pass
@@ -414,11 +413,13 @@ class LiveResearchController:
                 "Worker is starting; no provider call is claimed until persistence records it.",
             )
         if early is not None:
+            if not Path(resolved).is_file():
+                self._discard_early_result(key)
             return early
         raise KeyError(f"run {run_id} not found")
 
     def _evict_completed_run(self, key: tuple[str, UUID], future: Future[LiveRunSnapshot]) -> None:
-        """Release completed worker state while preserving only unpersisted failures."""
+        """Release worker state while keeping its result pollable until persistence appears."""
         try:
             snapshot = future.result()
         except Exception:
@@ -428,18 +429,23 @@ class LiveResearchController:
             if active is None or active.future is not future:
                 return
             del self._active[key]
-            if snapshot is not None and not Path(snapshot.db_path).is_file():
+            if snapshot is not None:
                 self._remember_early_result_locked(key, snapshot)
 
     def _remember_early_result_locked(
         self, key: tuple[str, UUID], snapshot: LiveRunSnapshot
     ) -> None:
-        """Keep a bounded one-shot cache for results produced before SQLite persistence."""
+        """Keep bounded early outcomes until persistence or a one-shot no-DB poll."""
         self._early_results.pop(key, None)
         self._early_results[key] = snapshot
         while len(self._early_results) > _MAX_EARLY_RESULTS:
             oldest_key = next(iter(self._early_results))
             del self._early_results[oldest_key]
+
+    def _discard_early_result(self, key: tuple[str, UUID]) -> None:
+        """Drop a cached worker outcome once a persisted run becomes authoritative."""
+        with self._lock:
+            self._early_results.pop(key, None)
 
     def cancel(self, db_path: str | Path, run_id: UUID) -> str:
         try:
@@ -627,88 +633,7 @@ class LiveResearchController:
         *,
         source: str | Path | Connection | None = None,
     ) -> LiveRunSnapshot:
-        read_source = source if source is not None else db_path
-        manifest = read_run(read_source, run_id)
-        directions = _read_v2_directions(read_source, run_id)
-        diagnostics = build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
-        budget = _read_v2_budget_snapshot(read_source, run_id)
-        stage = infer_v2_stage(read_source, run_id, manifest.current_stage, False)
-        current_round = _v2_current_round(read_source, run_id)
-        supporting, opposing = _read_v2_directional_progress(
-            read_source,
-            run_id,
-            directions,
-            manifest.status,
-        )
-        contract = None
-        try:
-            contract = read_provider_run_contract(read_source, run_id)
-        except KeyError:
-            pass
-        classification: LiveClassification = {
-            RunStatus.PLANNED: "starting",
-            RunStatus.RUNNING: "running",
-            RunStatus.COMPLETED: "released",
-            RunStatus.BLOCKED: "blocked",
-            RunStatus.CANCELLED: "cancelled",
-            RunStatus.FAILED: "failed",
-        }[manifest.status]
-        exit_code = CLIExitCode.RUNNING if manifest.status is RunStatus.RUNNING else None
-        if manifest.status is RunStatus.FAILED:
-            exit_code = CLIExitCode.FAILED
-        elif manifest.status is RunStatus.BLOCKED:
-            exit_code = CLIExitCode.BLOCKED
-        elif manifest.status is RunStatus.CANCELLED:
-            exit_code = CLIExitCode.CANCELLED
-        elif manifest.status is RunStatus.COMPLETED:
-            exit_code = CLIExitCode.RELEASED
-        return LiveRunSnapshot(
-            run_id=run_id,
-            db_path=db_path,
-            raw_claim=manifest.raw_claim,
-            classification=classification,
-            exit_code=int(exit_code) if exit_code is not None else None,
-            stage=stage.value,
-            latest_checkpoint=stage.value,
-            completed_checkpoints=0,
-            total_checkpoints=10,
-            current_research_round=current_round,
-            progress_percent=_v2_progress_percent(
-                stage,
-                current_round,
-                diagnostics,
-                budget,
-                supporting,
-                opposing,
-            ),
-            message=(
-                adaptive_planning_message(read_source, run_id, stage)
-                if manifest.status is RunStatus.RUNNING
-                else f"Research is {classification}."
-            ),
-            diagnostic_component="v2-production",
-            model_calls_used=budget.physical_calls_used,
-            retrieval_attempts_used=diagnostics.acquisition_attempts,
-            total_tokens=budget.token_exposure,
-            total_cost_usd=budget.cost_exposure_usd,
-            known_token_subtotal=budget.token_exposure,
-            known_cost_subtotal_usd=budget.cost_exposure_usd,
-            token_usage_complete=False,
-            cost_usage_complete=False,
-            conservative_reserved_tokens=budget.token_exposure,
-            conservative_reserved_cost_usd=budget.cost_exposure_usd,
-            supporting=supporting,
-            opposing=opposing,
-            provider_identity=contract.provider_identity if contract is not None else None,
-            model_identity=contract.model_identity if contract is not None else None,
-            fingerprint=contract.fingerprint_sha256 if contract is not None else None,
-            research_controls=ResearchControls(
-                research_mode=(
-                    ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
-                ),
-                discovery_providers=providers,
-            ),
-        )
+        return snapshot_from_v2_progress(db_path, run_id, providers, source=source)
 
     def _snapshot_from_v2_result(
         self,
@@ -717,91 +642,7 @@ class LiveResearchController:
         source: str | Path | Connection | None = None,
         db_path: str | None = None,
     ) -> LiveRunSnapshot:
-        read_source = source if source is not None else result.db_path
-        displayed_db_path = db_path if db_path is not None else result.db_path
-        output = result.final_output
-        directions = output.directions if output is not None else ResearchDirections()
-        sources = output.all_surviving_sources if output is not None else ()
-        diagnostics = result.diagnostics
-        if diagnostics is None:
-            providers = configured_v2_providers(read_source, result.run_id)
-            if providers:
-                diagnostics = build_v2_run_diagnostics_or_empty(
-                    read_source,
-                    result.run_id,
-                    providers,
-                    final_output=output,
-                )
-        stage = infer_v2_stage(
-            read_source,
-            result.run_id,
-            result.current_stage,
-            output is not None,
-        )
-        classification: LiveClassification = result.state.value
-        exit_code = {
-            V2ProductionState.RELEASED: CLIExitCode.RELEASED,
-            V2ProductionState.BLOCKED: CLIExitCode.BLOCKED,
-            V2ProductionState.FAILED: CLIExitCode.FAILED,
-            V2ProductionState.CANCELLED: CLIExitCode.CANCELLED,
-        }[result.state]
-        return LiveRunSnapshot(
-            run_id=result.run_id,
-            db_path=displayed_db_path,
-            raw_claim=result.raw_claim,
-            classification=classification,
-            exit_code=int(exit_code),
-            stage=stage.value,
-            latest_checkpoint=V2_PRODUCTION_ARTIFACT_KEY,
-            completed_checkpoints=10,
-            total_checkpoints=10,
-            current_research_round=(output.stopping.completed_rounds if output else 1),
-            progress_percent=100,
-            message=(
-                "Research completed and passed release validation."
-                if result.state is V2ProductionState.RELEASED
-                else result.failure_reason or "Research stopped before release."
-            ),
-            diagnostic_component="v2-production",
-            model_calls_used=result.budget.physical_calls_used,
-            retrieval_attempts_used=(
-                diagnostics.sources_acquired if diagnostics is not None else len(sources)
-            ),
-            total_tokens=result.budget.token_exposure,
-            total_cost_usd=result.budget.cost_exposure_usd,
-            known_token_subtotal=result.budget.token_exposure,
-            known_cost_subtotal_usd=result.budget.cost_exposure_usd,
-            token_usage_complete=True,
-            cost_usage_complete=True,
-            conservative_reserved_tokens=result.budget.token_exposure,
-            conservative_reserved_cost_usd=result.budget.cost_exposure_usd,
-            supporting=_v2_research_progress(sources, "supporting", directions.support_enabled),
-            opposing=_v2_research_progress(sources, "opposing", directions.challenge_enabled),
-            validation_errors=(
-                tuple(error.message for error in output.release_validation.errors)
-                if output is not None
-                else ()
-            ),
-            final_brief=(
-                render_v2_final_output(output)
-                if output is not None and output.release_validation.valid
-                else None
-            ),
-            rendered_brief_hash=(
-                output.release_validation.rendered_output_hash if output is not None else None
-            ),
-            research_controls=ResearchControls(
-                research_mode=(
-                    ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
-                ),
-                discovery_providers=(
-                    diagnostics.configured_providers
-                    if diagnostics is not None
-                    else DEFAULT_RESEARCH_CONTROLS.discovery_providers
-                ),
-            ),
-            v2_diagnostics=diagnostics,
-        )
+        return snapshot_from_v2_result(result, source=source, db_path=db_path)
 
     def _early_snapshot(
         self,

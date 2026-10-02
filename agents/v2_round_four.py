@@ -1046,13 +1046,21 @@ def reconcile_post_round_three_gaps(
     )
     persisted = _read(path, post_round_three_gap.run_id, V2_POST13_GAP_RECONCILIATION_KEY)
     if persisted is not None:
-        return V2GapCoverageReconciliation.model_validate_json(persisted)
+        reconciliation = V2GapCoverageReconciliation.model_validate_json(persisted)
+        if reconciliation.round_four_governor_decision is not None:
+            _validate_round_four_decision_against_gap(
+                gap=post_round_three_gap,
+                decision=reconciliation.round_four_governor_decision,
+            )
+        return reconciliation
     governor_payload = _read(path, post_round_three_gap.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
     governor = (
         V2RoundFourGovernorDecision.model_validate_json(governor_payload)
         if governor_payload is not None
         else None
     )
+    if governor is not None:
+        _validate_round_four_decision_against_gap(gap=post_round_three_gap, decision=governor)
     round_four_attempted = bool(governor and governor.authorized)
     unavailable = bool(
         governor
@@ -1127,10 +1135,48 @@ def reconcile_post_round_three_gaps(
             if post_round_three_gap.result is not None
             else ()
         ),
+        round_four_governor_decision=governor,
         completed_at=now(),
     )
     insert_v2_artifact(path, V2_POST13_GAP_RECONCILIATION_KEY, result, result.completed_at)
     return result
+
+
+def _validate_round_four_decision_against_gap(
+    *,
+    gap: V2GapAnalysisOutput,
+    decision: V2RoundFourGovernorDecision,
+) -> None:
+    """Reject a persisted governor reason that contradicts its post-Round-3 Gap result."""
+    if decision.run_id != gap.run_id:
+        raise ValueError("Round-4 Governor decision must match the post-Round-3 Gap run")
+    result = gap.result
+    reason = decision.reason_code
+    if reason is V2RoundFourDecisionCode.NO_PRODUCTIVE_SEARCH:
+        if result is None or result.continue_research:
+            raise ValueError(
+                "NO_PRODUCTIVE_SEARCH requires a usable Gap Analysis result that declines search"
+            )
+        return
+    if reason is V2RoundFourDecisionCode.NO_MATERIAL_GAPS:
+        if result is None or result.material_gaps:
+            raise ValueError("NO_MATERIAL_GAPS requires a usable result with no material gaps")
+        return
+    if reason is V2RoundFourDecisionCode.GAP_ANALYSIS_UNUSABLE:
+        if result is not None:
+            raise ValueError("GAP_ANALYSIS_UNUSABLE cannot carry a usable Gap Analysis result")
+        return
+    if reason is V2RoundFourDecisionCode.INSUFFICIENT_RESERVATION and result is None:
+        return
+    if reason in {
+        V2RoundFourDecisionCode.CANCELLED,
+        V2RoundFourDecisionCode.TERMINAL_FAILURE,
+    }:
+        return
+    if result is None or not result.continue_research or not result.material_gaps:
+        raise ValueError(
+            f"{reason.value} requires a usable Gap Analysis result with a continuing material gap"
+        )
 
 
 def _build_round_four_search_agent_request(

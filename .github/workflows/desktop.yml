@@ -64,6 +64,8 @@ jobs:
           node desktop/frontend-smoke.cjs
           node desktop/frontend-poll-smoke.cjs
           node desktop/configuration-race-smoke.cjs
+          node desktop/audit-api-smoke.cjs
+          node desktop/history-race-smoke.cjs
       - name: Exercise frozen bundle without developer tools
         run: python desktop/smoke.py desktop/build/resources
       - name: Exercise desktop window

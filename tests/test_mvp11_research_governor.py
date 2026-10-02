@@ -159,6 +159,59 @@ def test_research_round_model_never_accepts_a_round_outside_one_through_three(
         )
 
 
+@pytest.mark.parametrize("status", (ResearchRoundStatus.PLANNED, ResearchRoundStatus.RUNNING))
+def test_nonterminal_research_round_cannot_carry_completion_time(
+    status: ResearchRoundStatus,
+) -> None:
+    with pytest.raises(ValidationError, match="nonterminal research rounds"):
+        ResearchRoundRecord(
+            run_id=RUN_ID,
+            research_round=1,
+            status=status,
+            planned_query_count=6,
+            planned_discovery_count=30,
+            completed_query_count=0,
+            completed_discovery_count=0,
+            started_at=NOW,
+            completed_at=NOW,
+            stopping_reason="Round is still in progress.",
+        )
+
+
+def test_round_store_rejects_nonterminal_record_even_if_model_validation_was_bypassed(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nonterminal-round.sqlite3"
+    init_db(str(db_path))
+    insert_run(
+        str(db_path),
+        RunManifest(
+            run_id=RUN_ID,
+            status=RunStatus.RUNNING,
+            raw_claim="A public claim under review.",
+            current_stage=Stage.CLAIM_PLANNER,
+            created_at=NOW,
+            updated_at=NOW,
+        ),
+    )
+    invalid = ResearchRoundRecord.model_construct(
+        run_id=RUN_ID,
+        research_round=1,
+        status=ResearchRoundStatus.RUNNING,
+        planned_query_count=6,
+        planned_discovery_count=30,
+        completed_query_count=0,
+        completed_discovery_count=0,
+        started_at=NOW,
+        completed_at=NOW,
+        stopping_reason="Round is still in progress.",
+    )
+
+    with pytest.raises(ValueError, match="only completed or terminal"):
+        insert_research_round_record(str(db_path), invalid)
+    assert read_research_round_records(str(db_path), RUN_ID) == ()
+
+
 @pytest.mark.parametrize(
     ("families", "cancelled", "failed", "expected"),
     (

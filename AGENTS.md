@@ -2,7 +2,30 @@
 
 ## Current authority
 
-The latest authorized work is [Current Mac build and release-gate verification — 2026-09-28](.agent/plans/mac-current-build-release-verification-2026-09-28.md). Its unsigned test download is published; actual macOS 14/clean-machine and Developer ID signing/notarization remain open. The completed [Documentation audit — 2026-09-28](.agent/plans/documentation-audit-2026-09-28.md) and [Database integrity fixes](.agent/plans/database-integrity-fixes.md) precede it; the preceding [audit maintenance](.agent/plans/audit-maintenance.md) is also complete. The completed [per-step model choices plan](.agent/plans/per-step-model-choices.md) remains the latest product implementation. The [Mac-first release plan](.agent/plans/mac-release-cache-pricing.md) records the release boundary: Windows release work is deferred and the five-submission live-test allowance is exhausted.
+The user subsequently authorized a final obsolete-app rescan, opening the verified new app, and committing and pushing all pending changes on 2026-10-01. This supersedes only the preceding commit/push boundary; paid research, real-data mutation and public-release gates remain unchanged.
+
+The latest authority is [Approved ALPR run fixes](.agent/plans/alpr-run-fixes-2026-10-01.md). The user approved all A–G findings from the preceding read-only review. All A–G fixes, offline verification, installed Mac replacement and obsolete-copy cleanup are complete; see [verification](docs/verification/alpr-run-fixes-2026-10-01.md). Preserve immutable saved runs, existing work, and paid-call/data/publication boundaries. Stop at manual testing unless the user gives new direction. Earlier plans below describe historical authority.
+
+The user has now authorized [installation and obsolete-app cleanup — 2026-10-01](.agent/plans/install-audited-mac-app-2026-10-01.md).
+It supersedes the audit's installation boundary and old generated-artifact retention,
+while preserving source, saved research, credentials, and verification records.
+Installation and cleanup are complete; see [verification](docs/verification/audited-app-install-2026-10-01.md).
+Stop at the manual-testing boundary unless the user gives new direction.
+
+The preceding completed audit is [Comprehensive code audit and confirmed-defect fixes —
+2026-10-01](.agent/plans/comprehensive-code-audit-2026-10-01.md), explicitly requested
+by the user with Luna subagents. Codewide review, confirmed defect fixes, and final
+local checks are complete; see the [report](docs/audits/2026-10-01/README.md).
+Existing real-data, paid-call, installation, and publication boundaries remain.
+The single-bug task below is the verified starting state.
+
+The preceding bug task is [Installed Mac testing: adaptive budget route failure —
+2026-10-01](.agent/plans/reviewer-route-testing-fix-2026-10-01.md). It authorizes the
+reported routing/UI fix, offline regressions, and a locally verified rebuilt app;
+installation, publication, paid calls, and real-data changes remain outside scope.
+The release work described below is the preceding authority.
+
+The preceding release work is [Current Mac build and release-gate verification — 2026-09-28](.agent/plans/mac-current-build-release-verification-2026-09-28.md). Its unsigned test download is published; actual macOS 14/clean-machine and Developer ID signing/notarization remain open. The completed [Documentation audit — 2026-09-28](.agent/plans/documentation-audit-2026-09-28.md) and [Database integrity fixes](.agent/plans/database-integrity-fixes.md) precede it; the preceding [audit maintenance](.agent/plans/audit-maintenance.md) is also complete. The completed [per-step model choices plan](.agent/plans/per-step-model-choices.md) remains the latest product implementation. The [Mac-first release plan](.agent/plans/mac-release-cache-pricing.md) records the release boundary: Windows release work is deferred and the five-submission live-test allowance is exhausted.
 
 Read [architecture](ARCHITECTURE.md), [conventions](CONVENTIONS.md), [decisions](DECISIONS.md), [status](STATUS.md), [handoff](HANDOFF.md), [.agent/PLANS.md](.agent/PLANS.md), the applicable plan, and [desktop operations](desktop/README.md) before editing. Follow more specific nested instructions where they apply. The exact preceding root documents are preserved in the [archive index](docs/archive/INDEX.md); this file replaces their stale current-scope narrative.
 

@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  ...(process.env.RESEARCHASSISTANT_DESKTOP === "1" ? { output: "export" as const } : {}),
+  ...(process.env.RESEARCHASSISTANT_DESKTOP === "1" ? {
+    output: "export" as const,
+    env: { NEXT_PUBLIC_RESEARCH_API_URL: "" },
+  } : {}),
 };
 
 export default config;

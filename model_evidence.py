@@ -138,6 +138,14 @@ class V2EvidenceAnalystCandidateInput(StrictModel):
             raise ValueError("Phase-9 candidate and snapshot IDs must match")
         if self.candidate.snapshot_sha256 != self.snapshot.snapshot_sha256:
             raise ValueError("Phase-9 candidate and snapshot hashes must match")
+        if self.candidate.retrieval_attempt_id != self.snapshot.retrieval_attempt_id:
+            raise ValueError("Phase-9 candidate retrieval attempt must match the snapshot")
+        if self.candidate.source_url != self.snapshot.source_url:
+            raise ValueError("Phase-9 candidate source URL must match the snapshot")
+        if self.candidate.retrieved_at != self.snapshot.retrieved_at:
+            raise ValueError("Phase-9 candidate retrieval time must match the snapshot")
+        if self.candidate.snapshot_created_at != self.snapshot.created_at:
+            raise ValueError("Phase-9 candidate snapshot time must match the snapshot")
         expected_stance = (
             Stance.SUPPORTING if self.direction is ResearchDirection.SUPPORT else Stance.OPPOSING
         )
@@ -919,9 +927,12 @@ class V2UnresolvedMaterialGap(StrictModel):
 class V2ResearchStoppingReason(StrEnum):
     SUFFICIENT_SOURCE_POOL = "sufficient_source_pool"
     NO_USEFUL_NEW_DIRECTION = "no_useful_new_direction"
+    NO_ACTIONABLE_MATERIAL_GAP = "no_actionable_material_gap"
+    NO_PRODUCTIVE_NEW_SEARCH = "no_productive_new_search"
     DUPLICATE_HEAVY = "duplicate_heavy"
     PROVIDER_ELIGIBILITY_EXHAUSTED = "provider_eligibility_exhausted"
     BUDGET = "budget"
+    CANCELLED = "cancelled"
     HARD_ROUND_LIMIT = "hard_round_limit"
     DEGRADED_GAP_SEARCH_AGENT = "degraded_gap_search_agent"
     INVALID_SEARCH_AGENT_PLAN = "invalid_search_agent_plan"

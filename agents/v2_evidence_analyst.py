@@ -497,6 +497,7 @@ def _invoke_bounded_analyst(
             raise V2EvidenceAnalystFailure(str(exc)) from exc
         attempt_ids.append(attempt_id)
         timer = monotonic()
+        usage: ModelUsageMetadata | None = None
         try:
             invocation = invoke_llm(
                 llm_provider,
@@ -510,9 +511,14 @@ def _invoke_bounded_analyst(
                 clock=clock,
                 invocation_id_factory=lambda attempt_id=attempt_id: attempt_id,
             )
+            usage = _provider_usage(
+                llm_provider,
+                request,
+                invocation.output_artifact,
+                invocation.record,
+            )
             output = output_type.model_validate(invocation.output_artifact)
             objective_validator(output)
-            usage = _provider_usage(llm_provider, request, output, invocation.record)
             completed = running.model_copy(
                 update={
                     "status": ModelAttemptStatus.COMPLETED,
@@ -535,7 +541,9 @@ def _invoke_bounded_analyst(
                     "failure_reason": str(exc)[:1000],
                     "ended_at": _aware_now(clock),
                     "latency_ms": max(0.0, (monotonic() - timer) * 1000),
-                    "usage": _provider_failure_usage(llm_provider),
+                    "usage": (
+                        usage if usage is not None else _provider_failure_usage(llm_provider)
+                    ),
                 }
             )
             finish_model_route_attempt(db_path, failed)

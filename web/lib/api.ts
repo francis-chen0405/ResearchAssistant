@@ -155,7 +155,7 @@ export type V2FinalResearchOutput = {
   run_id: string;
   exact_claim: string;
   directions: { support_enabled: boolean; challenge_enabled: boolean };
-  synthesis: { sections: { section_type: "supporting" | "opposing" | "limitations"; items: { approved_factual_statement: string; admission_method: "analyzer_admitted" | "reviewer_approved" }[] }[] };
+  synthesis: { sections: { section_type: "supporting" | "opposing" | "limitations"; items: { ledger_claim_id: string; approved_factual_statement: string; admission_method: "analyzer_admitted" | "reviewer_approved" }[] }[] };
   recommended_source_ids: string[];
   recommended_sources: V2ResultSource[];
   all_surviving_sources: V2ResultSource[];
@@ -167,12 +167,24 @@ export type V2FinalResearchOutput = {
 
 export type V2EvidenceDisplay = {
   run_id: string;
+  research_status: {
+    reason_code: string;
+    explanation: string;
+    actionable_gap_count: number;
+    partial_coverage_count: number;
+    unavailable_coverage_count: number;
+    source: "persisted_governor" | "final_output";
+  };
+  study_lineage: { source_ids: string[]; basis: "matching_doi" | "matching_title"; explanation: string }[];
   items: {
     source_id: string;
+    ledger_claim_id: string;
     title: string | null;
     source_url: string;
     source_family: string;
     direction: "support" | "challenge";
+    relationship_to_claim: "supports" | "challenges" | "qualifies" | "unrelated";
+    approved_factual_statement: string;
     recommendation_status: string;
     selection_rationale: string | null;
     gap_ids: string[];
@@ -301,6 +313,33 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function startService(): Promise<ServiceDiagnostic> {
+  const deadline = Date.now() + 30_000;
+  const timedRequest = (path: string, init?: RequestInit) => request<ServiceDiagnostic>(path, {
+    ...init,
+    signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+  });
+  let service = await timedRequest("/api/service/start", { method: "POST" });
+  while (!service.wigolo_ready && service.state === "starting") {
+    if (Date.now() >= deadline) throw new Error("Research tools did not start in time. Open Settings to retry.");
+    await new Promise<void>((resolve) => setTimeout(resolve, Math.min(500, deadline - Date.now())));
+    if (Date.now() >= deadline) throw new Error("Research tools did not start in time. Open Settings to retry.");
+    service = await timedRequest("/api/service");
+  }
+  return service;
+}
+
+let preferencesSaveQueue: Promise<unknown> = Promise.resolve();
+
+function savePreferences(settings: InterfaceSettings): Promise<InterfaceSettings> {
+  const body = JSON.stringify(settings);
+  const operation = preferencesSaveQueue.then(() => request<InterfaceSettings>("/api/preferences", {
+    method: "POST", body,
+  }));
+  preferencesSaveQueue = operation.catch(() => undefined);
+  return operation;
+}
+
 export const researchApi = {
   profiles: () => request<ModelProfile[]>("/api/model-profiles"),
   modelOptions: () => request<ModelOptions>("/api/model-options"),
@@ -310,7 +349,7 @@ export const researchApi = {
   }),
   importHistory: (source: string) => request<{ db_path: string; run_count: number }>(`/api/history/import?source=${encodeURIComponent(source)}`, { method: "POST" }),
   preferences: () => request<InterfaceSettings>("/api/preferences"),
-  savePreferences: (settings: InterfaceSettings) => request<InterfaceSettings>("/api/preferences", { method: "POST", body: JSON.stringify(settings) }),
+  savePreferences,
   removeCredential: (name: string) => request<{ removed: boolean }>(`/api/credentials/${encodeURIComponent(name)}/remove`, { method: "POST" }),
   configuration: (stageModels: StageModels, selection: ProviderSelection, signal?: AbortSignal) =>
     request<Configuration>("/api/configuration/check", {
@@ -358,7 +397,7 @@ export const researchApi = {
   v2Evidence: (runId: string, database: string) =>
     request<V2EvidenceDisplay>(`/api/research/${runId}/v2-evidence?db_path=${encodeURIComponent(database)}`),
   service: () => request<ServiceDiagnostic>("/api/service"),
-  startService: () => request<ServiceDiagnostic>("/api/service/start", { method: "POST" }),
+  startService,
   stopService: () => request<ServiceDiagnostic>("/api/service/stop", { method: "POST" }),
 };
 
