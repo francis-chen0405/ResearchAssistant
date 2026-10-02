@@ -33,7 +33,9 @@ from agents.v2_gap_analysis import run_v2_gap_analysis
 from evidence_portfolio import identify_source_family
 from models import (
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
     V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
     V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
     V2_SOURCE_SELECTION_POLICY_IDENTITY,
@@ -801,13 +803,19 @@ def _validate_reconciliation_admission(
     """Validate every typed identity used by post-Round-3 coverage claims."""
     if admission_result.run_id != run_id:
         raise ValueError("evidence admission batch run_id must match the Gap run")
-    if admission_result.policy_identity != V2_EVIDENCE_ADMISSION_POLICY_IDENTITY:
+    policy_pairs = {
+        V2_EVIDENCE_ADMISSION_POLICY_IDENTITY: V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+        V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY: (
+            V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY
+        ),
+    }
+    if admission_result.policy_identity not in policy_pairs:
         raise ValueError("evidence admission batch uses an unexpected policy identity")
 
     analyst_result = admission_result.analyst_result
     if analyst_result.run_id != run_id:
         raise ValueError("nested Evidence Analyst batch run_id must match the Gap run")
-    if analyst_result.policy_identity != V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+    if analyst_result.policy_identity != policy_pairs[admission_result.policy_identity]:
         raise ValueError("nested Evidence Analyst batch uses an unexpected policy identity")
     analyst_input = analyst_result.input
     if analyst_input.run_id != run_id:
@@ -979,6 +987,8 @@ def _validate_reconciliation_admission(
                 raise ValueError("nested evidence record run_id must match the Gap run")
             if record.admission_method is not V2AdmissionMethod.ANALYZER_ADMITTED:
                 raise ValueError("Round-4 reconciliation requires analyzer-admitted evidence")
+            if record.admission_policy_identity != admission_result.policy_identity:
+                raise ValueError("evidence record admission policy must match its batch")
             if record.quote_block_id != candidate.quote_block_id:
                 raise ValueError(
                     "evidence record quote_block_id does not match the Analyst candidate"
@@ -1015,7 +1025,7 @@ def _validate_reconciliation_admission(
                 raise ValueError("evidence record scoring does not match the Analyst decision")
             expected_ledger_claim_id = uuid5(
                 NAMESPACE_URL,
-                f"{V2_EVIDENCE_ADMISSION_POLICY_IDENTITY}::{run_id}::"
+                f"{admission_result.policy_identity}::{run_id}::"
                 f"{survivor.source_id}::{analyst_source.statement_draft.draft_statement}",
             )
             if record.ledger_claim_id != expected_ledger_claim_id:

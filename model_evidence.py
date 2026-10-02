@@ -5,10 +5,18 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from model_contracts import (
     ApprovedScore,
@@ -32,6 +40,7 @@ from model_contracts import (
     StrictModel,
     SynthesisOutput,
     V2AdmissionMethod,
+    V2PostAnalysisAssessment,
     ValidationError,
     ValidationResult,
     _derive_ledger_score,
@@ -44,8 +53,12 @@ from model_contracts import (
 from model_research import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+    V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
     V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
     V2_REVIEWER_LEDGER_POLICY_IDENTITY,
     ResearchDirection,
     ResearchDirections,
@@ -198,6 +211,12 @@ class V2EvidenceAnalystBatchInput(StrictModel):
             raise ValueError("Phase-9 exact claim must match Phase-8")
         if self.queue_result.input.directions != self.directions:
             raise ValueError("Phase-9 directions must match Phase-8")
+        if self.policy_identity not in {
+            V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+            V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
+            V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+        }:
+            raise ValueError("Phase-9 input has an unsupported Analyst policy identity")
         source_ids = tuple(item.source_id for item in self.queued_candidates)
         expected_order = tuple(
             source_id
@@ -218,6 +237,13 @@ class V2EvidenceAnalystBatchInput(StrictModel):
             if item.candidate.run_id != self.run_id:
                 raise ValueError("Phase-9 candidates must match the run")
             self.directions.require_permitted(item.direction)
+            survivor = next(
+                survivor
+                for survivor in self.queue_result.input.survivors
+                if survivor.source_id == item.source_id
+            )
+            if item.direction is not survivor.direction:
+                raise ValueError("Phase-9 candidate direction must match its queued survivor")
         return self
 
 
@@ -321,7 +347,10 @@ class V2EvidenceAnalystSourceResult(StrictModel):
         if self.failure is not None or self.assessment is None or self.score_decision is None:
             raise ValueError("completed Analyst results require assessment and score decision")
         if self.state is V2EvidenceAnalystState.REJECTED:
-            if self.score_decision.approved or self.statement_draft is not None:
+            unrelated = self.assessment.relationship_to_claim is V2EvidenceRelationship.UNRELATED
+            if self.score_decision.approved and not unrelated:
+                raise ValueError("only unrelated evidence may be score-approved and rejected")
+            if self.statement_draft is not None:
                 raise ValueError("rejected Analyst results cannot carry a statement draft")
         elif not self.score_decision.approved or self.statement_draft is None:
             raise ValueError("Reviewer-ready results require an approved score and draft")
@@ -345,6 +374,8 @@ class V2EvidenceAnalystBatchResult(StrictModel):
     def validate_complete_survivor_output(self) -> V2EvidenceAnalystBatchResult:
         if self.input.run_id != self.run_id:
             raise ValueError("Phase-9 result must match its input run")
+        if self.policy_identity != self.input.policy_identity:
+            raise ValueError("Phase-9 result policy identity must match its input")
         expected = tuple(item.source_id for item in self.input.queue_result.input.survivors)
         actual = tuple(item.source_id for item in self.source_results)
         if actual != expected or len(actual) != len(set(actual)):
@@ -506,10 +537,30 @@ class V2EvidenceAdmissionBatchResult(StrictModel):
     def validate_complete_results(self) -> V2EvidenceAdmissionBatchResult:
         if self.analyst_result.run_id != self.run_id:
             raise ValueError("evidence admission must match its Analyst result")
+        analyst_identity = self.analyst_result.policy_identity
+        if analyst_identity != self.analyst_result.input.policy_identity:
+            raise ValueError("Analyst result policy identity must match its input")
+        expected_admission_identity = {
+            V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY: (
+                V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY
+            ),
+            V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY: (
+                V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY
+            ),
+            V2_EVIDENCE_ANALYST_POLICY_IDENTITY: V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+        }.get(analyst_identity)
+        if expected_admission_identity != self.policy_identity:
+            raise ValueError("admission policy identity must match its Analyst input policy")
         expected = tuple(item.source_id for item in self.analyst_result.source_results)
         actual = tuple(item.source_id for item in self.source_results)
         if actual != expected or len(actual) != len(set(actual)):
             raise ValueError("evidence admission must retain every survivor in order")
+        if any(
+            item.evidence_record is not None
+            and item.evidence_record.admission_policy_identity != self.policy_identity
+            for item in self.source_results
+        ):
+            raise ValueError("admitted record policy identity must match its admission batch")
         return self
 
 
@@ -597,6 +648,7 @@ class V2DeepAnalysisSourceExecutionState(StrEnum):
     ADMITTED = "admitted"
     ANALYZER_ADMITTED = "analyzer_admitted"
     BUDGET_EXHAUSTED = "budget_exhausted"
+    SOURCE_BUDGET_BLOCKED = "source_budget_blocked"
     EXTRACTION_FAILED = "extraction_failed"
     ANALYST_REJECTED = "analyst_rejected"
     ANALYST_FAILED = "analyst_failed"
@@ -990,13 +1042,26 @@ class V2FinalResearchOutput(StrictModel):
     stopping: V2ResearchStoppingDisclosure
     created_at: datetime
     release_validation: V2ReleaseValidation
+    post_analysis_assessment: V2PostAnalysisAssessment | None = None
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_serializer(mode="wrap")
+    def serialize_final_output(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        data = handler(self)
+        if self.post_analysis_assessment is None:
+            data.pop("post_analysis_assessment", None)
+        return data
 
     @model_validator(mode="after")
     def validate_final_output(self) -> V2FinalResearchOutput:
         if self.synthesis.run_id != self.run_id:
             raise ValueError("v2 final output synthesis must match the run")
+        if self.post_analysis_assessment is not None:
+            if self.post_analysis_assessment.run_id != self.run_id:
+                raise ValueError("post-analysis assessment must match final-output run")
         all_ids = tuple(item.source_id for item in self.all_surviving_sources)
         if len(all_ids) != len(set(all_ids)):
             raise ValueError("v2 final output sources must be unique")

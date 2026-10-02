@@ -1,6 +1,6 @@
 # Development conventions
 
-Follow the [latest authorized plan](.agent/plans/alpr-run-fixes-2026-10-01.md) and [current plan index](.agent/PLANS.md). Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
+Follow the [latest authorized plan](.agent/plans/private-surveillance-run-fixes-2026-10-02.md) and [current plan index](.agent/PLANS.md). Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
 
 ## Contracts and code
 

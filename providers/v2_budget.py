@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+    ModelUsageCostBasis,
     ModelUsageMetadata,
     StrictModel,
     V2PersistedArtifact,
@@ -93,7 +94,9 @@ class V2PhysicalCallCompletion(StrictModel):
     output_tokens: int | None = Field(default=None, ge=0)
     cached_input_tokens: int | None = Field(default=None, ge=0)
     uncached_input_tokens: int | None = Field(default=None, ge=0)
+    cache_write_tokens: int | None = Field(default=None, ge=0)
     usage_cost_usd: Decimal | None = Field(default=None, ge=0)
+    usage_cost_basis: ModelUsageCostBasis | None = None
     failure: str | None = None
     completed_at: datetime
 
@@ -121,6 +124,20 @@ class V2PhysicalCallCompletion(StrictModel):
                 or self.cached_input_tokens + self.uncached_input_tokens != self.input_tokens
             ):
                 raise ValueError("cached and uncached tokens must partition input_tokens")
+        if self.cache_write_tokens is not None:
+            if self.uncached_input_tokens is None:
+                raise ValueError("cache write tokens require a complete input cache split")
+            if self.cache_write_tokens > self.uncached_input_tokens:
+                raise ValueError("cache write tokens cannot exceed uncached input tokens")
+        if self.usage_cost_basis is ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_REPORTED_WRITES:
+            if self.cache_write_tokens is None:
+                raise ValueError("reported-write cost basis requires a known cache write count")
+        elif (
+            self.usage_cost_basis
+            is ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_ASSUMED_ALL_UNCACHED_WRITES
+            and self.cache_write_tokens is not None
+        ):
+            raise ValueError("assumed-write cost basis cannot claim a reported cache write count")
         return self
 
 
@@ -159,6 +176,10 @@ class V2BudgetSnapshot(StrictModel):
 
 class V2BudgetExceededError(RuntimeError):
     """Raised before a physical call whose conservative exposure cannot fit."""
+
+
+class V2SourceBudgetExceededError(V2BudgetExceededError):
+    """A per-source cap rejected a call while run-wide budget remains available."""
 
 
 class RoutedV2LLMProvider:
@@ -301,11 +322,11 @@ class BudgetedV2LLMProvider:
                     request.source_physical_call_cap or V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
                 )
                 if len(source_starts) >= source_call_cap:
-                    raise V2BudgetExceededError(
+                    raise V2SourceBudgetExceededError(
                         f"source {request.source_id} physical-call cap is exhausted"
                     )
                 if source_tokens + reservation.reserved_tokens > source_token_cap:
-                    raise V2BudgetExceededError(
+                    raise V2SourceBudgetExceededError(
                         f"source {request.source_id} token cap cannot cover this call"
                     )
             sequence = len(self._starts) + 1
@@ -407,7 +428,17 @@ class BudgetedV2LLMProvider:
                 and usage.output_tokens is not None
                 else None
             ),
+            cache_write_tokens=(
+                usage.cache_write_tokens
+                if usage is not None
+                and usage.input_tokens is not None
+                and usage.output_tokens is not None
+                and usage.cached_input_tokens is not None
+                and usage.uncached_input_tokens is not None
+                else None
+            ),
             usage_cost_usd=(usage.cost_usd if usage is not None else None),
+            usage_cost_basis=(usage.usage_cost_basis if usage is not None else None),
             failure=failure,
             completed_at=_aware(self._clock()),
         )

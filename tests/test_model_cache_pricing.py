@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 from test_v2_phase7_adaptive_search import _db
 
 from models import (
@@ -273,6 +273,33 @@ def test_luna_cache_writes_are_disjoint_and_missing_counts_are_conservative(
         cache_prices=cache_prices_for_route(config.luna.base_url, config.luna.model),
     )
     assert usage.cost_usd == Decimal(expected)
+    if isinstance(writes, int) and not isinstance(writes, bool) and 0 <= writes <= 1000 - cached:
+        assert usage.cache_write_tokens == writes
+        assert usage.usage_cost_basis == "published_cache_prices_reported_writes"
+    else:
+        assert usage.cache_write_tokens is None
+        assert usage.usage_cost_basis == "published_cache_prices_assumed_all_uncached_writes"
+
+
+def test_missing_luna_cache_write_count_is_unknown_and_uses_conservative_cost() -> None:
+    from providers.mimo import _usage
+    from providers.pricing import cache_prices_for_route
+
+    config = _config().routing
+    usage = _usage(
+        {
+            "prompt_tokens": 1000,
+            "completion_tokens": 100,
+            "total_tokens": 1100,
+            "prompt_tokens_details": {"cached_tokens": 800},
+        },
+        config.luna_price_cap,
+        cache_prices=cache_prices_for_route(config.luna.base_url, config.luna.model),
+    )
+
+    assert usage.cache_write_tokens is None
+    assert usage.usage_cost_basis == "published_cache_prices_assumed_all_uncached_writes"
+    assert usage.cost_usd == Decimal("0.000186000")
 
 
 @pytest.mark.parametrize(
@@ -297,12 +324,46 @@ def test_custom_route_never_inherits_another_models_cache_discount(
             "prompt_tokens": 1000,
             "completion_tokens": 100,
             "total_tokens": 1100,
-            "prompt_tokens_details": {"cached_tokens": 800},
+            "prompt_tokens_details": {"cached_tokens": 800, "cache_write_tokens": 100},
         },
         cap,
         cache_prices=cache_prices_for_route(base_url, model),
     )
     assert usage.cost_usd == Decimal("0.012")
+    assert usage.cache_write_tokens == 100
+    assert usage.usage_cost_basis == "configured_price_cap"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"cache_write_tokens": 1},
+        {
+            "input_tokens": 100,
+            "cached_input_tokens": 30,
+            "uncached_input_tokens": 70,
+            "cache_write_tokens": 71,
+        },
+        {
+            "input_tokens": 100,
+            "cached_input_tokens": 30,
+            "uncached_input_tokens": 70,
+            "usage_cost_basis": "published_cache_prices_reported_writes",
+        },
+        {
+            "input_tokens": 100,
+            "cached_input_tokens": 30,
+            "uncached_input_tokens": 70,
+            "cache_write_tokens": 10,
+            "usage_cost_basis": "published_cache_prices_assumed_all_uncached_writes",
+        },
+    ],
+)
+def test_model_usage_rejects_inconsistent_cache_write_telemetry(values: dict[str, object]) -> None:
+    from models import ModelUsageMetadata
+
+    with pytest.raises(ValidationError):
+        ModelUsageMetadata(**values)
 
 
 def test_unknown_usage_retains_reservation_after_restart(tmp_path: Path) -> None:

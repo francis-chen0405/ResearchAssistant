@@ -1341,13 +1341,23 @@ class ModelUsageAccounting(StrictModel):
         return self
 
 
+class ModelUsageCostBasis(StrEnum):
+    PUBLISHED_CACHE_PRICES_REPORTED_WRITES = "published_cache_prices_reported_writes"
+    PUBLISHED_CACHE_PRICES_ASSUMED_ALL_UNCACHED_WRITES = (
+        "published_cache_prices_assumed_all_uncached_writes"
+    )
+    CONFIGURED_PRICE_CAP = "configured_price_cap"
+
+
 class ModelUsageMetadata(StrictModel):
     input_tokens: NonNegativeInt | None = None
     cached_input_tokens: NonNegativeInt | None = None
     uncached_input_tokens: NonNegativeInt | None = None
+    cache_write_tokens: NonNegativeInt | None = None
     output_tokens: NonNegativeInt | None = None
     total_tokens: NonNegativeInt | None = None
     cost_usd: ExactUSD | None = None
+    usage_cost_basis: ModelUsageCostBasis | None = None
 
     @model_validator(mode="after")
     def validate_token_total(self) -> ModelUsageMetadata:
@@ -1368,6 +1378,20 @@ class ModelUsageMetadata(StrictModel):
                 raise ValueError(
                     "cached and uncached input tokens must exactly partition input_tokens"
                 )
+        if self.cache_write_tokens is not None:
+            if self.uncached_input_tokens is None:
+                raise ValueError("cache write tokens require a complete input cache split")
+            if self.cache_write_tokens > self.uncached_input_tokens:
+                raise ValueError("cache write tokens cannot exceed uncached input tokens")
+        if self.usage_cost_basis is ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_REPORTED_WRITES:
+            if self.cache_write_tokens is None:
+                raise ValueError("reported-write cost basis requires a known cache write count")
+        elif (
+            self.usage_cost_basis
+            is ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_ASSUMED_ALL_UNCACHED_WRITES
+            and self.cache_write_tokens is not None
+        ):
+            raise ValueError("assumed-write cost basis cannot claim a reported cache write count")
         return self
 
 
@@ -1455,3 +1479,42 @@ class ModelInvocationRecord(StrictModel):
     invoked_at: datetime
 
     _invoked_at_is_aware = field_validator("invoked_at")(_validate_aware_datetime)
+
+
+class V2PostAnalysisAssessment(StrictModel):
+    """Observed admitted findings and limitations; no claim-truth verdict is inferred."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    policy_identity: Literal["researchassistant-v2-post-analysis-evidence-v1"] = (
+        "researchassistant-v2-post-analysis-evidence-v1"
+    )
+    assessed_after_analysis: Literal[True] = True
+    claim_established: Literal[False] = False
+    admitted_source_ids: tuple[UUID, ...]
+    supporting_count: int = Field(ge=0)
+    challenging_count: int = Field(ge=0)
+    qualifying_count: int = Field(ge=0)
+    unrelated_count: int = Field(ge=0)
+    unadmitted_source_count: int = Field(ge=0)
+    partial_coverage_count: int = Field(ge=0)
+    unavailable_coverage_count: int = Field(ge=0)
+    unresolved_gap_count: int = Field(ge=0)
+    claim_support_observed: bool
+    limitations: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> V2PostAnalysisAssessment:
+        if len(set(self.admitted_source_ids)) != len(self.admitted_source_ids):
+            raise ValueError("post-analysis admitted source IDs must be unique")
+        if len(self.admitted_source_ids) != (
+            self.supporting_count
+            + self.challenging_count
+            + self.qualifying_count
+            + self.unrelated_count
+        ):
+            raise ValueError("post-analysis relationship totals must match admitted sources")
+        if self.claim_support_observed != (self.supporting_count > 0):
+            raise ValueError("observed claim support must match supporting findings")
+        return self

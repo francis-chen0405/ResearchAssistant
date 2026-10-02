@@ -2,9 +2,17 @@
 
 ## Current authority
 
+The user subsequently requested committing the verified changes and redelivering the corrected app; see the [current plan’s delivery authorization](.agent/plans/private-surveillance-run-fixes-2026-10-02.md). Commit delivery and fresh local installer/reinstallation are complete; the new app is open for manual testing. This supersedes the preceding uncommitted boundary. Paid calls, saved-data edits, signing and public release remain outside scope.
+
+The completed implementation authority is [Approved private-surveillance run fixes](.agent/plans/private-surveillance-run-fixes-2026-10-02.md), approved by the user with “Fix all issues.” Implementation, offline verification, installed Mac replacement and obsolete-copy cleanup are complete; see [verification](docs/verification/private-surveillance-run-fixes-2026-10-02.md). The new app is open for manual testing. Preserve immutable history and budgets; no new paid allowance, real-data mutation, automatic commit/push or public release is included. The preceding completed phases below remain historical.
+
+The latest authority is the completed [Approved discrimination run fixes](.agent/plans/discrimination-run-fixes-2026-10-01.md). A–G implementation, offline verification, installed Mac replacement and obsolete-copy cleanup are complete; see [verification](docs/verification/discrimination-run-fixes-2026-10-02.md). The app is open for manual testing. Preserve immutable history and existing budgets. No new paid allowance, real-data mutation, automatic commit/push or public release is authorized. Stop at manual testing unless the user gives new direction. The sections below are historical.
+
+The preceding request authorized [read-only discrimination run review](.agent/plans/discrimination-run-review-2026-10-01.md), completed in the [findings](docs/verification/discrimination-run-review-2026-10-01.md). Its proposed-fix selection boundary is superseded by the latest approval.
+
 The user subsequently authorized a final obsolete-app rescan, opening the verified new app, and committing and pushing all pending changes on 2026-10-01. This supersedes only the preceding commit/push boundary; paid research, real-data mutation and public-release gates remain unchanged.
 
-The latest authority is [Approved ALPR run fixes](.agent/plans/alpr-run-fixes-2026-10-01.md). The user approved all A–G findings from the preceding read-only review. All A–G fixes, offline verification, installed Mac replacement and obsolete-copy cleanup are complete; see [verification](docs/verification/alpr-run-fixes-2026-10-01.md). Preserve immutable saved runs, existing work, and paid-call/data/publication boundaries. Stop at manual testing unless the user gives new direction. Earlier plans below describe historical authority.
+The preceding implementation authority is [Approved ALPR run fixes](.agent/plans/alpr-run-fixes-2026-10-01.md). The user approved all A–G findings from the preceding read-only review. All A–G fixes, offline verification, installed Mac replacement and obsolete-copy cleanup are complete; see [verification](docs/verification/alpr-run-fixes-2026-10-01.md). Preserve immutable saved runs, existing work, and paid-call/data/publication boundaries. Stop at manual testing unless the user gives new direction. Earlier plans below describe historical authority.
 
 The user has now authorized [installation and obsolete-app cleanup — 2026-10-01](.agent/plans/install-audited-mac-app-2026-10-01.md).
 It supersedes the audit's installation boundary and old generated-artifact retention,

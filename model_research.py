@@ -48,11 +48,25 @@ V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY = (
     "researchassistant-v2-phase-13-deep-analysis-queue-analyzer-admission-v1"
 )
 
-V2_EVIDENCE_ANALYST_POLICY_IDENTITY = (
+V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY = (
     "researchassistant-v2-phase-13-luna-evidence-analyst-analyzer-admission-v1"
 )
 
-V2_EVIDENCE_ADMISSION_POLICY_IDENTITY = "researchassistant-v2-phase-13-analyzer-admission-v1"
+V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-13-luna-evidence-analyst-analyzer-admission-v2"
+)
+
+V2_EVIDENCE_ANALYST_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-13-luna-evidence-analyst-analyzer-admission-v3"
+)
+
+V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY = "researchassistant-v2-phase-13-analyzer-admission-v1"
+
+V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY = (
+    "researchassistant-v2-phase-13-analyzer-admission-v2"
+)
+
+V2_EVIDENCE_ADMISSION_POLICY_IDENTITY = "researchassistant-v2-phase-13-analyzer-admission-v3"
 
 V2_REVIEWER_LEDGER_POLICY_IDENTITY = "researchassistant-v2-phase-10-reviewer-ledger-v2"
 

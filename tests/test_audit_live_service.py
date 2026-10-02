@@ -19,6 +19,7 @@ from frontend.live_service import (
 )
 from models import (
     DiscoveryProvider,
+    ModelUsageCostBasis,
     ResearchDirections,
     RunManifest,
     RunStatus,
@@ -282,7 +283,13 @@ def test_terminal_v2_snapshot_tracks_token_and_cost_completeness_independently(
             sequence=sequence,
             succeeded=True,
             usage_tokens=tokens,
+            input_tokens=tokens - 2,
+            output_tokens=2,
+            cached_input_tokens=tokens - 2 - 7,
+            uncached_input_tokens=7,
+            cache_write_tokens=sequence - 1,
             usage_cost_usd=cost,
+            usage_cost_basis=ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_REPORTED_WRITES,
             completed_at=NOW,
         )
         insert_v2_artifact(str(db_path), f"phase-13-physical-call-{sequence:03d}-start", start, NOW)
@@ -321,6 +328,125 @@ def test_terminal_v2_snapshot_tracks_token_and_cost_completeness_independently(
     assert snapshot.conservative_reserved_tokens == 27
     assert snapshot.conservative_reserved_cost_usd == (
         expected_cost if expected_cost_complete else Decimal("0.023")
+    )
+    assert snapshot.model_usage_details is not None
+    assert snapshot.model_usage_details.input_tokens.total == 23
+    assert snapshot.model_usage_details.input_tokens.complete is True
+    assert snapshot.model_usage_details.output_tokens.total == 4
+    assert snapshot.model_usage_details.cached_input_tokens.total == 9
+    assert snapshot.model_usage_details.cache_write_tokens.total == 1
+
+
+def test_live_usage_details_keep_partial_splits_and_cost_basis_provenance(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "usage-details.sqlite3"
+    run_id = uuid4()
+    _initialize_run(
+        db_path,
+        status=RunStatus.FAILED,
+        directions=ResearchDirections(support_enabled=False, challenge_enabled=True),
+        run_id=run_id,
+    )
+    cases = (
+        (
+            1,
+            V2PhysicalCallCompletion(
+                run_id=run_id,
+                sequence=1,
+                succeeded=True,
+                usage_tokens=12,
+                input_tokens=10,
+                output_tokens=2,
+                cached_input_tokens=4,
+                uncached_input_tokens=6,
+                cache_write_tokens=0,
+                usage_cost_usd=Decimal("0.003"),
+                usage_cost_basis=ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_REPORTED_WRITES,
+                completed_at=NOW,
+            ),
+        ),
+        (
+            2,
+            V2PhysicalCallCompletion(
+                run_id=run_id,
+                sequence=2,
+                succeeded=False,
+                usage_tokens=6,
+                input_tokens=5,
+                output_tokens=1,
+                cached_input_tokens=2,
+                uncached_input_tokens=3,
+                cache_write_tokens=1,
+                usage_cost_usd=Decimal("0.005"),
+                usage_cost_basis=ModelUsageCostBasis.CONFIGURED_PRICE_CAP,
+                failure="semantic output validation failed",
+                completed_at=NOW,
+            ),
+        ),
+        (
+            4,
+            V2PhysicalCallCompletion(
+                run_id=run_id,
+                sequence=4,
+                succeeded=True,
+                usage_tokens=5,
+                input_tokens=4,
+                output_tokens=1,
+                cached_input_tokens=1,
+                uncached_input_tokens=3,
+                usage_cost_usd=Decimal("0.002"),
+                usage_cost_basis=(
+                    ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_ASSUMED_ALL_UNCACHED_WRITES
+                ),
+                completed_at=NOW,
+            ),
+        ),
+    )
+    for sequence, completion in cases:
+        start = V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=sequence,
+            stage="analyst",
+            model_alias="gpt-6-luna-xhigh",
+            reserved_tokens=20,
+            reserved_cost_usd=Decimal("0.01"),
+            started_at=NOW,
+        )
+        insert_v2_artifact(str(db_path), f"phase-13-physical-call-{sequence:03d}-start", start, NOW)
+        insert_v2_artifact(
+            str(db_path),
+            f"phase-13-physical-call-{sequence:03d}-completion",
+            completion,
+            NOW,
+        )
+    missing_start = V2PhysicalCallStart(
+        run_id=run_id,
+        sequence=3,
+        stage="analyst",
+        model_alias="gpt-6-luna-xhigh",
+        reserved_tokens=20,
+        reserved_cost_usd=Decimal("0.01"),
+        started_at=NOW,
+    )
+    insert_v2_artifact(str(db_path), "phase-13-physical-call-003-start", missing_start, NOW)
+
+    snapshot = LiveResearchController(environment={}).snapshot(db_path, run_id)
+
+    assert snapshot.model_usage_details is not None
+    details = snapshot.model_usage_details
+    assert details.input_tokens.known_subtotal == 19
+    assert details.input_tokens.total is None
+    assert details.input_tokens.complete is False
+    assert details.output_tokens.known_subtotal == 4
+    assert details.cached_input_tokens.known_subtotal == 7
+    assert details.cache_write_tokens.known_subtotal == 1
+    assert details.cache_write_tokens.complete is False
+    assert tuple((item.basis, item.physical_calls) for item in details.cost_basis_counts) == (
+        (None, 1),
+        (ModelUsageCostBasis.CONFIGURED_PRICE_CAP, 1),
+        (ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_ASSUMED_ALL_UNCACHED_WRITES, 1),
+        (ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_REPORTED_WRITES, 1),
     )
 
 

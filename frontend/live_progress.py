@@ -23,12 +23,16 @@ from agents.v2_source_selection import (
 from application_runtime import CLIExitCode
 from frontend.live_contracts import (
     LiveClassification,
+    LiveCostBasisCount,
+    LiveModelUsageDetails,
     LiveRunSnapshot,
+    LiveTokenCount,
     ResearchProgress,
 )
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
+    ModelUsageCostBasis,
     ResearchControls,
     ResearchDirection,
     ResearchDirections,
@@ -85,6 +89,15 @@ class V2LiveUsageSummary(StrictModel):
     cost_usage_complete: bool
     conservative_reserved_tokens: int
     conservative_reserved_cost_usd: Decimal
+    model_usage_details: LiveModelUsageDetails
+
+
+def _live_token_count(subtotal: int, complete: bool) -> LiveTokenCount:
+    return LiveTokenCount(
+        total=subtotal if complete else None,
+        known_subtotal=subtotal,
+        complete=complete,
+    )
 
 
 def _read_first_v2_artifact(
@@ -256,7 +269,23 @@ def _read_v2_usage_summary(
     cost_complete = True
     token_exposure = 0
     cost_exposure = Decimal("0")
+    detail_subtotals = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+    }
+    detail_complete = {field: True for field in detail_subtotals}
+    basis_counts: dict[ModelUsageCostBasis | None, int] = {}
     for start, completion in zip(audit.starts, audit.completions, strict=True):
+        basis = completion.usage_cost_basis if completion is not None else None
+        basis_counts[basis] = basis_counts.get(basis, 0) + 1
+        for field in detail_subtotals:
+            value = getattr(completion, field) if completion is not None else None
+            if value is None:
+                detail_complete[field] = False
+            else:
+                detail_subtotals[field] += value
         if completion is None or completion.usage_tokens is None:
             token_complete = False
             token_exposure += start.reserved_tokens
@@ -271,6 +300,29 @@ def _read_v2_usage_summary(
             cost_exposure = add_usd(cost_exposure, completion.usage_cost_usd)
     token_complete = token_complete and terminal
     cost_complete = cost_complete and terminal
+    details = LiveModelUsageDetails(
+        input_tokens=_live_token_count(
+            detail_subtotals["input_tokens"], terminal and detail_complete["input_tokens"]
+        ),
+        output_tokens=_live_token_count(
+            detail_subtotals["output_tokens"], terminal and detail_complete["output_tokens"]
+        ),
+        cached_input_tokens=_live_token_count(
+            detail_subtotals["cached_input_tokens"],
+            terminal and detail_complete["cached_input_tokens"],
+        ),
+        cache_write_tokens=_live_token_count(
+            detail_subtotals["cache_write_tokens"],
+            terminal and detail_complete["cache_write_tokens"],
+        ),
+        cost_basis_counts=tuple(
+            LiveCostBasisCount(basis=basis, physical_calls=count)
+            for basis, count in sorted(
+                basis_counts.items(),
+                key=lambda item: (item[0] is not None, item[0].value if item[0] else ""),
+            )
+        ),
+    )
     return V2LiveUsageSummary(
         physical_calls_used=len(audit.starts),
         total_tokens=known_tokens if token_complete else None,
@@ -281,6 +333,7 @@ def _read_v2_usage_summary(
         cost_usage_complete=cost_complete,
         conservative_reserved_tokens=token_exposure,
         conservative_reserved_cost_usd=cost_exposure,
+        model_usage_details=details,
     )
 
 
@@ -628,6 +681,7 @@ def snapshot_from_v2_progress(
         cost_usage_complete=usage.cost_usage_complete,
         conservative_reserved_tokens=usage.conservative_reserved_tokens,
         conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
+        model_usage_details=usage.model_usage_details,
         supporting=supporting,
         opposing=opposing,
         provider_identity=contract.provider_identity if contract is not None else None,
@@ -723,6 +777,7 @@ def snapshot_from_v2_result(
         cost_usage_complete=usage.cost_usage_complete,
         conservative_reserved_tokens=usage.conservative_reserved_tokens,
         conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
+        model_usage_details=usage.model_usage_details,
         supporting=supporting,
         opposing=opposing,
         validation_errors=(

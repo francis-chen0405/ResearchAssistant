@@ -1,5 +1,58 @@
 # Current status
 
+## Commit and installer redelivery — 2026-10-02
+
+The user authorized committing the verified pending changes and redelivering the corrected app. The fresh Downloads installer passed checksum/CRC and all 30,931 payload comparisons; reinstallation, actual-window and normal-launch checks passed. Temporary copies are retired and the new app is open. All verified pending changes are included in this local commit under the [plan](.agent/plans/private-surveillance-run-fixes-2026-10-02.md). Earlier uncommitted boundaries below are superseded for this commit; paid, data and public-release boundaries remain unchanged.
+
+
+## Private-surveillance fixes delivered — 2026-10-02
+
+The user-approved [plan](.agent/plans/private-surveillance-run-fixes-2026-10-02.md) is complete; the [verification report](docs/verification/private-surveillance-run-fixes-2026-10-02.md) records the repairs and limits. Three Luna helpers supported independent evidence relationships, typed relevance rejection, exact-offset segmentation and presentation. Post-analysis evidence assessment is now part of fresh final artifacts and exports; historical views disclose a supplemental assessment without rewriting old briefs. Legal scope, shared websites and policy-chain identities have explicit safeguards.
+
+Final verification passed **1,346 tests with 2 unchanged skips**, warnings treated as errors; Ruff lint/format (178 files), frontend lint/types/export, offline evaluation, API/browser checks and frozen/packaged/installed native/window checks passed. All six historical releases and 1,111 saved artifact hashes verify unchanged. Real preferences and database hashes remained unchanged after installed tests.
+
+The new app is installed at `/Applications/ResearchAssistant.app` and open; normal launch confirmed its owned backend and 401 unauthenticated health. All 30,931 payload entries, 103 source inputs and 27 frontend tree entries match. The superseded rollback and redundant Mac package/build copies are retired. Stop at manual testing. Source remains uncommitted; no automatic commit/push, paid calls, real-data mutation or public release is included. Clean-machine/macOS 14, signing/notarization and live-quality gates remain open. Earlier phase states below are historical.
+
+
+## Discrimination fixes delivered — 2026-10-02
+
+The approved [A–G plan](.agent/plans/discrimination-run-fixes-2026-10-01.md) is complete; the [verification report](docs/verification/discrimination-run-fixes-2026-10-02.md) records the repairs and actual checks. Three Luna helpers supported admission/qualification, source presentation/lineage and usage telemetry. Full pytest passed **1,320 tests / 2 unchanged skips** with warnings as errors; Ruff lint/format (176 files), frontend lint/types/export, offline evaluation, API/browser races and frozen/packaged/installed native/window checks passed.
+
+The new app is installed at `/Applications/ResearchAssistant.app` and open. All 30,929 payload entries, 101 source inputs and 22 frontend files match the tested build. The superseded rollback and redundant mac-arm64/build copies are removed; source, saved research, real credentials and verification records remain. All 280 saved-run artifact hashes and the released hash verify unchanged. The derived result now shows one mirror warning and six token-cap blocks; future unrelated evidence is excluded under versioned policy.
+
+The first normal-launch observer missed its 40-second deadline; a later check confirmed the running app's owned backend and 401 unauthenticated health. The delay cause is unconfirmed. The native test escalation was approved after verifying its fabricated credentials use an isolated test namespace; no real credential edits occurred.
+
+Stop at user manual testing. Source changes remain uncommitted in this phase; no automatic commit/push, paid provider calls, real-data mutation or public release is included. Actual clean-machine/macOS 14, live quality, signing and notarization remain open. New runs must obey the existing identity gate; saved runs remain inspectable/exportable. Earlier sections below preserve historical phase states and boundaries.
+
+
+## Approved discrimination fixes in progress — 2026-10-01
+
+The user approved A–G with “fix.” The [active plan](.agent/plans/discrimination-run-fixes-2026-10-01.md) supersedes the review’s selection boundary. Implementation and offline verification are underway with three Luna helpers, preserving saved artifacts, strict gates and budget limits. No provider calls or real-data/credential edits are authorized. The verified Mac replacement will follow the prior installation preference; this phase remains uncommitted and is not a new public release. Earlier sections are historical.
+
+
+## Discrimination run review complete — 2026-10-01
+
+The user requested review of their next run and bugs. The [read-only findings](docs/verification/discrimination-run-review-2026-10-01.md)
+record a cautious disparity summary with unresolved ALPR-specific causal attribution,
+10 admitted sources (8 qualifies / 2 unrelated), 12 analysis failures and 8 rejections.
+All 280 artifact hashes, the released output hash and ten exact Ledger/quote bindings
+verify; 23 focused regressions pass. Three Luna helpers cross-checked the result.
+
+Confirmed repairs to consider: an aggregate omitting analyzer-admitted totals, a
+missed Louisville mirror notice, and three lexical qualification false rejections.
+Separate proposals cover unrelated-admission policy, six source token-cap blocks,
+fresh-run/stopping copy and missing cache-write telemetry. All 57 physical calls
+retain complete input/output/cache-read usage and costs. The recorded 209,356 input
+and 62,618 output tokens cost $0.057158320 under the catalog's cache-aware estimate;
+there is no confirmed sum/rounding bug. Account-total scope remains unverified.
+
+No product code, app, prompt, test behavior, real data or credentials changed, and
+no provider calls occurred. Only review documentation/ignored diagnostics were added.
+The preceding source is committed and pushed at `fdc9dc6`; this review's documentation
+is not yet committed. Stop at the proposed-fix selection boundary. The installed app
+and existing paid/release limits remain unchanged.
+
+
 ## Repository delivery authorization — 2026-10-01
 
 The user explicitly requested a final obsolete-app cleanup, opening the new app,

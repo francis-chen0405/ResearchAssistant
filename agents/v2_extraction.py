@@ -15,7 +15,7 @@ from evidence_core import (
     CURRENT_QUOTE_LENGTH_POLICY,
     assemble_quote_block_from_selected_segments,
     filter_provisional_candidate,
-    numbered_source_text,
+    fresh_numbered_source_text,
     validate_snapshot_integrity,
 )
 from models import (
@@ -43,14 +43,18 @@ from providers.llm import (
     load_prompt,
     render_stage_prompt,
 )
-from providers.v2_budget import V2CancellationRequested
+from providers.v2_budget import (
+    V2BudgetExceededError,
+    V2CancellationRequested,
+    V2SourceBudgetExceededError,
+)
 from providers.v2_routing import V2RoutingConfig
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_EXTRACTION_LEGACY_ARTIFACT_KEY = "phase-12-exact-extraction"
 V2_EXTRACTION_ARTIFACT_KEY = "phase-13-exact-extraction-analyzer-admission"
 V2_EXTRACTION_POLICY_IDENTITY = (
-    "researchassistant-v2-phase-13-exact-extraction-analyzer-admission-v1"
+    "researchassistant-v2-phase-13-exact-extraction-analyzer-admission-v3"
 )
 V2_EXTRACTION_FILTER_VERSION = "researchassistant-v2-phase-12-post-filter-v1"
 V2_EXTRACTION_MAX_ATTEMPTS = 2
@@ -73,6 +77,8 @@ def _aware(value: datetime) -> datetime:
 class V2ExtractionState(StrEnum):
     EXTRACTED = "extracted"
     FAILED = "failed"
+    SOURCE_BUDGET_BLOCKED = "source_budget_blocked"
+    BUDGET_EXHAUSTED = "budget_exhausted"
 
 
 class V2ExtractionLLMInput(StrictModel):
@@ -89,6 +95,27 @@ class V2ExtractionLLMInput(StrictModel):
     truncated: bool
     untrusted_source_text: str = Field(min_length=1)
     selectable_source_text: str = Field(min_length=1)
+
+
+class V2NumberedUntrustedSource(StrictModel):
+    """One complete numbered source, treated as data rather than instructions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    selectable_source_text: str = Field(min_length=1)
+
+
+class V2ExtractionPromptInput(StrictModel):
+    """Render the full source once while retaining its immutable identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    run_id: UUID
+    source_id: UUID
+    direction: ResearchDirection
+    exact_claim: str = Field(min_length=1)
+    snapshot_id: UUID
+    snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    truncated: bool
+    UNTRUSTED_SOURCE_TEXT: V2NumberedUntrustedSource
 
 
 class V2ExtractionSourceResult(StrictModel):
@@ -254,10 +281,22 @@ def _extract_source(
         snapshot_sha256=snapshot.snapshot_sha256,
         truncated=snapshot.truncated,
         untrusted_source_text=snapshot.normalized_text,
-        selectable_source_text=numbered_source_text(snapshot.normalized_text),
+        selectable_source_text=fresh_numbered_source_text(snapshot.normalized_text),
     )
     prompt = load_prompt(LLMStage.EXTRACTOR)
-    base_rendered_prompt = render_stage_prompt(prompt, input_artifact, V2VerbatimQuoteSelection)
+    prompt_input = V2ExtractionPromptInput(
+        run_id=input_artifact.run_id,
+        source_id=input_artifact.source_id,
+        direction=input_artifact.direction,
+        exact_claim=input_artifact.exact_claim,
+        snapshot_id=input_artifact.snapshot_id,
+        snapshot_sha256=input_artifact.snapshot_sha256,
+        truncated=input_artifact.truncated,
+        UNTRUSTED_SOURCE_TEXT=V2NumberedUntrustedSource(
+            selectable_source_text=input_artifact.selectable_source_text,
+        ),
+    )
+    base_rendered_prompt = render_stage_prompt(prompt, prompt_input, V2VerbatimQuoteSelection)
     last_failure = "Extractor did not return a valid selection."
     for attempt in range(1, V2_EXTRACTION_MAX_ATTEMPTS + 1):
         rendered_prompt = base_rendered_prompt
@@ -286,6 +325,19 @@ def _extract_source(
         except V2CancellationRequested:
             raise
         except Exception as exc:
+            budget_failure = _budget_failure(exc)
+            if budget_failure is not None:
+                return V2ExtractionSourceResult(
+                    source_id=source_id,
+                    direction=direction,
+                    state=(
+                        V2ExtractionState.SOURCE_BUDGET_BLOCKED
+                        if isinstance(budget_failure, V2SourceBudgetExceededError)
+                        else V2ExtractionState.BUDGET_EXHAUSTED
+                    ),
+                    attempts=attempt,
+                    failure=f"{type(budget_failure).__name__}: {budget_failure}"[:1000],
+                )
             last_failure = f"{type(exc).__name__}: {exc}"[:1000]
             if attempt < V2_EXTRACTION_MAX_ATTEMPTS:
                 continue
@@ -357,6 +409,18 @@ def _extract_source(
                 failure=f"{type(exc).__name__}: {exc}"[:1000],
             )
     raise AssertionError("bounded extraction loop did not return")
+
+
+def _budget_failure(exc: Exception) -> V2BudgetExceededError | None:
+    """Recover a typed preflight rejection through the provider exception wrapper."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, V2BudgetExceededError):
+            return current
+        current = current.__cause__
+    return None
 
 
 def _is_retryable_quote_length_failure(message: str) -> bool:

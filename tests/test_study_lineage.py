@@ -25,6 +25,65 @@ def test_possible_mirror_is_disclosed_without_merging_families() -> None:
     assert (first.source_family_id, second.source_family_id) == ("exa-family", "pdf-family")
 
 
+def test_same_dated_slug_and_publisher_suffix_disclose_possible_mirror() -> None:
+    title = "In Louisville, half of the people charged last year were Black"
+    first = _candidate(uuid4(), family="lpm-family", probe_score=7).model_copy(
+        update={
+            "title": title,
+            "source_url": "https://lpm.org/investigate/2026-01-27/in-louisville-people-charged-last-year",
+        }
+    )
+    second = _candidate(uuid4(), family="afro-family", probe_score=7).model_copy(
+        update={
+            "title": f"{title} - Afro-Conscious Media",
+            "source_url": "https://afroconsciousmedia.com/2026/01/27/in-louisville-people-charged-last-year",
+        }
+    )
+
+    notices = build_study_lineage_notices((first, second))
+
+    assert len(notices) == 1
+    assert notices[0].source_ids == (first.source_id, second.source_id)
+    assert "may be mirrors" in notices[0].explanation.casefold()
+    assert (first.source_family_id, second.source_family_id) == ("lpm-family", "afro-family")
+
+
+def test_matching_headline_without_matching_dated_slug_is_not_a_mirror_notice() -> None:
+    title = "In Louisville, half of the people charged last year were Black"
+    first = _candidate(uuid4(), family="lpm-family", probe_score=7).model_copy(
+        update={
+            "title": title,
+            "source_url": "https://lpm.org/investigate/2026-01-27/in-louisville-people-charged-last-year",
+        }
+    )
+    second = _candidate(uuid4(), family="independent-family", probe_score=7).model_copy(
+        update={
+            "title": f"{title} - Afro-Conscious Media",
+            "source_url": "https://other.test/reports/louisville-arrests",
+        }
+    )
+
+    assert build_study_lineage_notices((first, second)) == ()
+
+
+def test_unverified_publisher_suffix_is_not_stripped_for_mirror_matching() -> None:
+    title = "In Louisville, half of the people charged last year were Black"
+    first = _candidate(uuid4(), family="lpm-family", probe_score=7).model_copy(
+        update={
+            "title": title,
+            "source_url": "https://lpm.org/investigate/2026-01-27/in-louisville-people-charged-last-year",
+        }
+    )
+    second = _candidate(uuid4(), family="unrelated-host-family", probe_score=7).model_copy(
+        update={
+            "title": f"{title} - A Different Publisher",
+            "source_url": "https://other.test/2026/01/27/in-louisville-people-charged-last-year",
+        }
+    )
+
+    assert build_study_lineage_notices((first, second)) == ()
+
+
 def test_matching_normalized_doi_discloses_shared_identifier() -> None:
     first = _candidate(uuid4(), family="a", probe_score=7).model_copy(
         update={"doi": "https://doi.org/10.1007/S11292-011-9133-9"}

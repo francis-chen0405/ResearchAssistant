@@ -75,6 +75,13 @@ export type RunSnapshot = {
   known_cost_subtotal_usd: string | number;
   token_usage_complete: boolean;
   cost_usage_complete: boolean;
+  model_usage_details?: {
+    input_tokens: UsageTokenCount;
+    output_tokens: UsageTokenCount;
+    cached_input_tokens: UsageTokenCount;
+    cache_write_tokens: UsageTokenCount;
+    cost_basis_counts: { basis: ModelUsageCostBasis | null; physical_calls: number }[];
+  } | null;
   conservative_reserved_tokens: number | null;
   conservative_reserved_cost_usd: string | number | null;
   supporting: ResearchProgress;
@@ -92,6 +99,17 @@ export type RunSnapshot = {
   };
   v2_diagnostics: V2RunDiagnostics | null;
 };
+
+export type UsageTokenCount = {
+  total: number | null;
+  known_subtotal: number;
+  complete: boolean;
+};
+
+export type ModelUsageCostBasis =
+  | "published_cache_prices_reported_writes"
+  | "published_cache_prices_assumed_all_uncached_writes"
+  | "configured_price_cap";
 
 export type HistoryItem = {
   run_id: string;
@@ -161,6 +179,7 @@ export type V2FinalResearchOutput = {
   all_surviving_sources: V2ResultSource[];
   unresolved_material_gaps: { gap_id: string; direction: "support" | "challenge"; missing_evidence: string; assessed_after_round: number }[];
   claim_coverage_map?: { dimension: string; claim_component: string; coverage_state: string; evidence_summary: string }[];
+  post_analysis_assessment?: V2EvidenceDisplay["post_analysis_assessment"];
   stopping: { reason: string; explanation: string; completed_rounds: number };
   release_validation: { valid: boolean; rendered_output_hash: string | null };
 };
@@ -176,11 +195,34 @@ export type V2EvidenceDisplay = {
     source: "persisted_governor" | "final_output";
   };
   study_lineage: { source_ids: string[]; basis: "matching_doi" | "matching_title"; explanation: string }[];
+  shared_website_groups: { host: string; source_ids: string[]; explanation: string }[];
+  post_analysis_assessment: {
+    run_id: string;
+    assessed_after_analysis: true;
+    claim_established: false;
+    admitted_source_ids: string[];
+    supporting_count: number;
+    challenging_count: number;
+    qualifying_count: number;
+    unrelated_count: number;
+    unadmitted_source_count: number;
+    partial_coverage_count: number;
+    unavailable_coverage_count: number;
+    unresolved_gap_count: number;
+    claim_support_observed: boolean;
+    limitations: string[];
+  } | null;
+  source_budget_outcomes: {
+    source_id: string;
+    outcome: "source_budget_blocked" | "token_cap_blocked" | "physical_call_cap_blocked";
+  }[];
   items: {
     source_id: string;
     ledger_claim_id: string;
     title: string | null;
     source_url: string;
+    source_type: string | null;
+    source_context_notice: string | null;
     source_family: string;
     direction: "support" | "challenge";
     relationship_to_claim: "supports" | "challenges" | "qualifies" | "unrelated";

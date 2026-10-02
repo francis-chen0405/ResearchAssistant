@@ -14,7 +14,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict
 
-from evidence_core import build_source_snapshot
+from evidence_core import build_source_snapshot, fresh_sentence_spans
 from models import (
     ResearchDirection,
     SourceCluster,
@@ -36,10 +36,17 @@ from providers.v2_budget import V2CancellationRequested
 from store import insert_v2_artifact, read_v2_artifact
 
 V2_ACQUISITION_PROBE_ARTIFACT_KEY = "phase-5-acquisition-probe"
-_SENTENCE_RE = re.compile(r"[^.!?\n]+(?:[.!?]+|$)", re.DOTALL)
 _CONCLUSION_RE = re.compile(r"\b(conclusion|conclude|summary|in summary|overall|therefore)\b", re.I)
 _CITATION_RE = re.compile(r"\[[0-9,;\- ]+\]|\b(references?|citations?)\b", re.I)
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?%?\b")
+_URL_TEXT_RE = re.compile(r"(?:https?://|www\.)\S+", re.I)
+_PAGE_CHROME_RE = re.compile(
+    r"\b(?:skip to content|table of contents|cookie settings|sign in|log in|"
+    r"next page|previous page|share this page|page\s+\d+\s+of\s+\d+|"
+    r"click here to (?:read|view|continue)|contact us|about us|privacy policy|"
+    r"terms of use|accessibility statement|all rights reserved|powered by)\b",
+    re.I,
+)
 _FALLBACK_FAILURE_CODES = frozenset(
     {
         AcquisitionFailureCode.WIGOLO_CONNECTION,
@@ -195,7 +202,7 @@ def _discovery_round(output: V2DiscoveryScoutOutput) -> int:
 
 def probe_snapshot(*, snapshot: SourceSnapshot, cluster_id: UUID) -> V2ProbeResult:
     """Return two to five exact, cheaply ranked snapshot passages when text permits."""
-    spans = _sentence_spans(snapshot.normalized_text)
+    spans = fresh_sentence_spans(snapshot.normalized_text)
     if not spans:
         return V2ProbeResult(
             cluster_id=cluster_id,
@@ -205,9 +212,14 @@ def probe_snapshot(*, snapshot: SourceSnapshot, cluster_id: UUID) -> V2ProbeResu
         )
     candidates = [
         (score, start, end, text, signals)
-        for index, (start, end, text) in enumerate(spans)
+        for index, (start, end, text) in enumerate(
+            (span.start_char, span.end_char, span.text) for span in spans
+        )
         for score, signals in (_passage_score(text=text, index=index, total=len(spans)),)
     ]
+    substantive_candidates = [item for item in candidates if _is_substantive_passage(item[3])]
+    if substantive_candidates:
+        candidates = substantive_candidates
     candidates.sort(key=lambda item: (-item[0], item[1], item[2]))
     selected = sorted(candidates[: min(5, len(candidates))], key=lambda item: item[1])
     passages = tuple(
@@ -432,17 +444,18 @@ def _can_fallback(
     )
 
 
-def _sentence_spans(text: str) -> tuple[tuple[int, int, str], ...]:
-    spans: list[tuple[int, int, str]] = []
-    for match in _SENTENCE_RE.finditer(text):
-        start, end = match.span()
-        while start < end and text[start].isspace():
-            start += 1
-        while end > start and text[end - 1].isspace():
-            end -= 1
-        if start < end:
-            spans.append((start, end, text[start:end]))
-    return tuple(spans)
+def _is_substantive_passage(text: str) -> bool:
+    if _PAGE_CHROME_RE.search(text):
+        return False
+    without_urls = _URL_TEXT_RE.sub(" ", text)
+    words = re.findall(r"\b[\w'-]+\b", without_urls)
+    if len(words) < 5:
+        return False
+    if re.fullmatch(
+        r"\s*(?:home|menu|search|print|close|back|next|previous)\s*[.!]?\s*", text, re.I
+    ):
+        return False
+    return any(character.isalpha() for character in without_urls)
 
 
 def _passage_score(*, text: str, index: int, total: int) -> tuple[int, tuple[str, ...]]:

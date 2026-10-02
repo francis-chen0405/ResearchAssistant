@@ -38,6 +38,7 @@ from providers.v2_budget import (
     V2PhysicalCallCompletion,
     V2PhysicalCallStart,
     V2RunCeilings,
+    V2SourceBudgetExceededError,
     _snapshot,
     read_v2_physical_call_audit,
 )
@@ -280,7 +281,7 @@ def test_physical_call_audit_preserves_provider_usage_split(
         "total_tokens": 120,
     }
     if include_cache_details:
-        usage["prompt_tokens_details"] = {"cached_tokens": 30}
+        usage["prompt_tokens_details"] = {"cached_tokens": 30, "cache_write_tokens": 20}
 
     def record_transport(http_request: httpx.Request) -> httpx.Response:
         payload = json.loads(http_request.content)
@@ -320,6 +321,12 @@ def test_physical_call_audit_preserves_provider_usage_split(
     assert completion.output_tokens == 20
     assert completion.cached_input_tokens == (30 if include_cache_details else None)
     assert completion.uncached_input_tokens == (70 if include_cache_details else None)
+    assert completion.cache_write_tokens == (20 if include_cache_details else None)
+    assert completion.usage_cost_basis == (
+        "published_cache_prices_reported_writes"
+        if include_cache_details
+        else "configured_price_cap"
+    )
 
 
 def test_physical_call_audit_reads_legacy_combined_only_payload(tmp_path: Path) -> None:
@@ -385,6 +392,8 @@ def test_physical_call_audit_reads_legacy_combined_only_payload(tmp_path: Path) 
     assert restored.output_tokens is None
     assert restored.cached_input_tokens is None
     assert restored.uncached_input_tokens is None
+    assert restored.cache_write_tokens is None
+    assert restored.usage_cost_basis is None
 
 
 @pytest.mark.parametrize(
@@ -405,6 +414,37 @@ def test_physical_call_audit_reads_legacy_combined_only_payload(tmp_path: Path) 
             "output_tokens": 20,
             "usage_tokens": 120,
             "cached_input_tokens": 30,
+        },
+        {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "usage_tokens": 120,
+            "cache_write_tokens": 10,
+        },
+        {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "usage_tokens": 120,
+            "cached_input_tokens": 30,
+            "uncached_input_tokens": 70,
+            "cache_write_tokens": 71,
+        },
+        {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "usage_tokens": 120,
+            "cached_input_tokens": 30,
+            "uncached_input_tokens": 70,
+            "usage_cost_basis": "published_cache_prices_reported_writes",
+        },
+        {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "usage_tokens": 120,
+            "cached_input_tokens": 30,
+            "uncached_input_tokens": 70,
+            "cache_write_tokens": 10,
+            "usage_cost_basis": "published_cache_prices_assumed_all_uncached_writes",
         },
     ],
 )
@@ -454,3 +494,61 @@ def test_unknown_provider_usage_keeps_reserved_exposure() -> None:
 
     assert snapshot.token_exposure == 12_500
     assert snapshot.cost_exposure_usd == Decimal("0.25")
+
+
+def test_source_physical_call_cap_has_a_distinct_budget_error(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    source_id = uuid4()
+    ceilings = V2RunCeilings(max_total_cost_usd=Decimal("1.00"))
+    routing = V2RoutingConfig.from_environment(
+        {"LUNA_API_KEY": "offline-test-key"},
+        repository_revision="offline-source-budget-error-test",
+        stage_models=StageModelSelections(),
+    )
+    request = _request(run_id, routing).model_copy(
+        update={
+            "source_id": source_id,
+            "source_token_cap": 60_000,
+            "source_physical_call_cap": 3,
+        }
+    )
+    path = _database(tmp_path, run_id)
+    for sequence in range(1, 4):
+        insert_v2_artifact(
+            path,
+            f"phase-13-physical-call-{sequence:03d}-start",
+            V2PhysicalCallStart(
+                run_id=run_id,
+                sequence=sequence,
+                stage="extractor",
+                model_alias="gpt-6-luna-xhigh",
+                reserved_tokens=1,
+                reserved_cost_usd=Decimal("0.000001"),
+                source_id=source_id,
+                source_token_cap=60_000,
+                source_physical_call_cap=3,
+                started_at=_NOW,
+            ),
+            _NOW,
+        )
+
+    requests: list[httpx.Request] = []
+
+    def record_transport(http_request: httpx.Request) -> httpx.Response:
+        requests.append(http_request)
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(record_transport)) as client:
+        provider = BudgetedV2LLMProvider(
+            db_path=path,
+            run_id=run_id,
+            provider=_routed_provider(routing, ceilings, client),
+            routing_config=routing,
+            ceilings=ceilings,
+        )
+        with pytest.raises(V2SourceBudgetExceededError, match="source .* physical-call cap"):
+            provider.generate(request)
+
+    assert requests == []

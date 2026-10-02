@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
+from pydantic import ValidationError
 from test_v2_phase9_luna_evidence_analyst import (
     NOW,
     FakeLunaAnalyst,
@@ -25,19 +26,198 @@ from agents.v2_evidence_analyst import (
 from agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
     _result_sources,
+    _validate_chain,
     build_v2_synthesizer_input,
     run_v2_final_research_output,
 )
+from evidence_analysis import create_statement_draft, score_candidate
 from models import (
+    V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
     V2AdmissionMethod,
     V2DeepAnalysisBudgetReason,
+    V2EvidenceAdmissionBatchResult,
     V2EvidenceAdmissionState,
     V2EvidenceAnalystBatchInput,
+    V2EvidenceAnalystBatchResult,
     V2EvidenceAnalystCandidateInput,
+    V2EvidenceAnalystSourceResult,
     V2EvidenceAnalystState,
+    V2EvidenceRelationship,
     V2SourceSelectionRecommendation,
 )
 from store import read_v2_artifact, read_v2_evidence_admission
+
+
+def test_admission_rejects_injected_unrelated_ready_result(tmp_path: Path) -> None:
+    run_id = uuid4()
+    batch = _batch_input(
+        run_id,
+        policy_identity=V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+    )
+    queued = batch.queued_candidates[0]
+    assessment = _assessment(
+        relationship=V2EvidenceRelationship.UNRELATED,
+        claim_fit=2,
+    )
+    score = score_candidate(
+        run_id=run_id,
+        quote_block_id=queued.candidate.quote_block_id,
+        evidence_quality=assessment.evidence_quality,
+        claim_fit=assessment.claim_fit,
+        rationale="synthetic admission-boundary fixture",
+        analyst_prompt_version="fixture-v1",
+        analyst_model_name="fixture-model",
+        scored_at=NOW,
+    )
+    draft = create_statement_draft(
+        candidate=queued.candidate,
+        score_decision=score,
+        statement_draft_id=uuid5(NAMESPACE_URL, f"unrelated-admission-regression::{run_id}"),
+        draft_statement=assessment.canonical_factual_statement,
+        drafted_at=NOW,
+    )
+    analyst_source = V2EvidenceAnalystSourceResult(
+        run_id=run_id,
+        source_id=queued.source_id,
+        direction=queued.direction,
+        state=V2EvidenceAnalystState.READY_FOR_ADMISSION,
+        candidate=queued.candidate,
+        assessment=assessment,
+        score_decision=score,
+        statement_draft=draft,
+    )
+    analyst_result = V2EvidenceAnalystBatchResult(
+        run_id=run_id,
+        input=batch,
+        source_results=(analyst_source,),
+        completed_at=NOW,
+        policy_identity=V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+    )
+
+    result = run_v2_evidence_admission(
+        db_path=_prepare_db(tmp_path, run_id),
+        analyst_result=analyst_result,
+        clock=lambda: NOW,
+    )
+
+    assert result.policy_identity == V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY
+    assert result.source_results[0].state is V2EvidenceAdmissionState.ANALYST_FAILED
+    assert result.source_results[0].evidence_record is None
+    assert result.source_results[0].failure is not None
+    assert "unrelated evidence cannot be admitted" in result.source_results[0].failure
+    historical_result = result.model_copy(
+        update={"policy_identity": V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY}
+    )
+    reparsed_historical_result = V2EvidenceAdmissionBatchResult.model_validate_json(
+        historical_result.model_dump_json()
+    )
+    assert reparsed_historical_result.policy_identity == (
+        V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY
+    )
+
+
+def test_admission_batch_policy_must_match_nested_analyst_policy(tmp_path: Path) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    db_path = _prepare_db(tmp_path, run_id)
+    analyst = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=batch,
+        llm_provider=FakeLunaAnalyst([_assessment()]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    admission = run_v2_evidence_admission(
+        db_path=db_path,
+        analyst_result=analyst,
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(ValidationError, match="policy identity must match its Analyst input"):
+        V2EvidenceAdmissionBatchResult.model_validate(
+            {
+                **admission.model_dump(mode="python"),
+                "policy_identity": V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("analyst_policy", "admission_policy"),
+    (
+        (
+            V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+            V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
+        ),
+        (
+            V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
+            V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
+        ),
+        (V2_EVIDENCE_ANALYST_POLICY_IDENTITY, V2_EVIDENCE_ADMISSION_POLICY_IDENTITY),
+    ),
+)
+def test_admission_pair_preserves_captured_analyst_policy(
+    tmp_path: Path,
+    analyst_policy: str,
+    admission_policy: str,
+) -> None:
+    run_id = uuid4()
+    db_path = _prepare_db(tmp_path, run_id)
+    analyst = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=_batch_input(run_id, policy_identity=analyst_policy),
+        llm_provider=FakeLunaAnalyst([_assessment()]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    admission = run_v2_evidence_admission(
+        db_path=db_path,
+        analyst_result=analyst,
+        clock=lambda: NOW,
+    )
+
+    assert analyst.policy_identity == analyst_policy
+    assert analyst.input.policy_identity == analyst_policy
+    assert admission.policy_identity == admission_policy
+    assert all(
+        source.evidence_record is None
+        or source.evidence_record.admission_policy_identity == admission_policy
+        for source in admission.source_results
+    )
+
+
+def test_final_chain_rejects_cross_version_nested_analyst_result(tmp_path: Path) -> None:
+    run_id = uuid4()
+    db_path = _prepare_db(tmp_path, run_id)
+    analyst = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=_batch_input(run_id),
+        llm_provider=FakeLunaAnalyst([_assessment()]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    admission = run_v2_evidence_admission(
+        db_path=db_path,
+        analyst_result=analyst,
+        clock=lambda: NOW,
+    )
+    mismatched_analyst = analyst.model_copy(
+        update={
+            "policy_identity": V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
+            "input": analyst.input.model_copy(
+                update={"policy_identity": V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY}
+            ),
+        }
+    )
+    mismatched_admission = admission.model_copy(update={"analyst_result": mismatched_analyst})
+
+    with pytest.raises(ValueError, match="Analyst and admission policy identities must pair"):
+        _validate_chain(mismatched_admission, _continuation(run_id))
 
 
 def test_analyzer_admission_has_no_reviewer_metadata_and_enters_synthesis(
@@ -84,6 +264,76 @@ def test_analyzer_admission_has_no_reviewer_metadata_and_enters_synthesis(
         V2AdmissionMethod.ANALYZER_ADMITTED
     )
     assert synthesis_input.approved_ledger_items[0].reviewer_approval_id is None
+
+
+def test_scoped_exemption_context_survives_admission_without_broadening(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    statement = (
+        "For personal use in a private home, the GDPR household exemption may apply, but it "
+        "does not establish that private surveillance is free of other restrictions."
+    )
+    assessment = _assessment().model_copy(
+        update={
+            "narrowest_supported_proposition": statement,
+            "canonical_factual_statement": statement,
+            "relationship_to_claim": V2EvidenceRelationship.QUALIFIES,
+            "claim_fit": 4,
+        }
+    )
+    db_path = _prepare_db(tmp_path, run_id)
+    analyst = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=batch,
+        llm_provider=FakeLunaAnalyst([assessment]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    admission = run_v2_evidence_admission(
+        db_path=db_path,
+        analyst_result=analyst,
+        clock=lambda: NOW,
+    )
+
+    record = admission.source_results[0].evidence_record
+    assert record is not None
+    assert record.approved_factual_statement == statement
+    assert "personal use in a private home" in record.approved_factual_statement
+    assert "does not establish" in record.approved_factual_statement
+    assert analyst.source_results[0].direction is batch.queued_candidates[0].direction
+
+
+def test_valid_unrelated_decision_maps_to_typed_admission_rejection(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    batch = _batch_input(run_id)
+    unrelated = _assessment(
+        relationship=V2EvidenceRelationship.UNRELATED,
+        claim_fit=2,
+    ).model_copy(update={"canonical_factual_statement": None})
+    db_path = _prepare_db(tmp_path, run_id)
+    analyst = run_v2_evidence_analyst(
+        db_path=db_path,
+        batch_input=batch,
+        llm_provider=FakeLunaAnalyst([unrelated]),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    admission = run_v2_evidence_admission(
+        db_path=db_path,
+        analyst_result=analyst,
+        clock=lambda: NOW,
+    )
+
+    rejected = admission.source_results[0]
+    assert rejected.state is V2EvidenceAdmissionState.ANALYST_REJECTED
+    assert rejected.evidence_record is None
+    assert rejected.failure is None
 
 
 def test_fresh_v2_synthesis_is_deterministic_and_preserves_admission_method(

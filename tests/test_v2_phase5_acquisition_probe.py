@@ -18,6 +18,12 @@ from agents.v2_discovery import (
     cluster_discovery_items,
     normalize_discovery_responses,
 )
+from evidence_core import (
+    fresh_numbered_source_text,
+    fresh_sentence_spans,
+    selected_segments_from_selection,
+)
+from model_contracts import SelectedSentenceRange
 from models import (
     DiscoveryProvider,
     ResearchDirection,
@@ -32,6 +38,7 @@ from models import (
     V2PipelineIdentity,
     V2ProbePassage,
     V2RoundOneSearchQuery,
+    V2VerbatimQuoteSelection,
 )
 from providers.acquisition import AcquisitionFailureCode
 from providers.scraper import (
@@ -258,6 +265,70 @@ def test_probe_low_overlap_fallback_is_stable() -> None:
     assert {"claim_fit", "evidence_quality", "factual_claim", "ledger_record_id"}.isdisjoint(
         V2ProbePassage.model_fields
     )
+
+
+def test_fresh_sentence_segmentation_keeps_numbers_abbreviations_and_urls_intact() -> None:
+    text = (
+        "The threshold was 1.6 percent in the U.S. under current rules. "
+        "Web 2.0 changed access. "
+        "See https://doi.org/10.1000/example.42 for details. The rule remains."
+    )
+
+    spans = fresh_sentence_spans(text)
+
+    assert [span.text for span in spans] == [
+        "The threshold was 1.6 percent in the U.S. under current rules.",
+        "Web 2.0 changed access.",
+        "See https://doi.org/10.1000/example.42 for details.",
+        "The rule remains.",
+    ]
+    assert all(text[span.start_char : span.end_char] == span.text for span in spans)
+
+
+def test_v2_sentence_range_selection_uses_fresh_exact_boundaries() -> None:
+    text = (
+        "The threshold was 1.6 percent in the U.S. under current rules. "
+        "The second sentence follows."
+    )
+    selection = V2VerbatimQuoteSelection(
+        selected_sentence_ranges=(SelectedSentenceRange(start_sentence=1, end_sentence=1),)
+    )
+
+    assert selected_segments_from_selection(text, selection) == [
+        "The threshold was 1.6 percent in the U.S. under current rules."
+    ]
+    assert fresh_numbered_source_text(text) == (
+        "[1] The threshold was 1.6 percent in the U.S. under current rules.\n"
+        "[2] The second sentence follows."
+    )
+
+
+def test_probe_does_not_select_page_controls_or_url_when_substantive_text_exists() -> None:
+    text = (
+        "Home. Page 1 of 4. https://example.org/report. Cookie settings and sign in. "
+        "The Swedish authority states that household camera use is exempt only in narrow "
+        "circumstances, depending on the purpose, area monitored, and people recorded. "
+        "The guidance explains that public spaces and commercial purposes fall outside "
+        "the exemption and require a separate assessment."
+    )
+    snapshot = build_source_snapshot(
+        run_id=uuid4(),
+        retrieval_attempt_id=uuid4(),
+        snapshot_id=uuid4(),
+        source_url="https://example.org/report",
+        retrieved_at=NOW,
+        normalized_text=text,
+        truncated=False,
+        created_at=NOW,
+    )
+
+    result = probe_snapshot(snapshot=snapshot, cluster_id=uuid4())
+
+    assert result.succeeded
+    assert result.passages
+    assert all("https://" not in passage.text for passage in result.passages)
+    assert all("Page 1 of 4" not in passage.text for passage in result.passages)
+    assert all("Cookie settings" not in passage.text for passage in result.passages)
 
 
 def test_probe_failure_preserves_snapshot_and_excludes_source_from_survivors(

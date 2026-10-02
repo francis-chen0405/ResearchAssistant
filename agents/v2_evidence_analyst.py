@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,6 +20,10 @@ from evidence_analysis import (
 )
 from evidence_core import parse_extracted_quote_block, verify_candidate_against_snapshot
 from models import (
+    V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
+    CandidateQuoteBlock,
     ModelAttemptStatus,
     ModelRouteAttempt,
     ModelUsageMetadata,
@@ -50,7 +55,11 @@ from providers.llm import (
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
-from providers.v2_budget import V2CancellationRequested
+from providers.v2_budget import (
+    V2BudgetExceededError,
+    V2CancellationRequested,
+    V2SourceBudgetExceededError,
+)
 from providers.v2_routing import V2RoutingConfig
 from store import (
     ModelAttemptBudgetError,
@@ -68,7 +77,10 @@ V2_EVIDENCE_ANALYST_MAX_ATTEMPTS = 1
 _PHASE9_OUTPUT_TYPES = frozenset(
     {V2EvidenceAnalystModelOutput.__name__, V2CanonicalStatementModelOutput.__name__}
 )
-_V2_ANALYST_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts/v2_evidence_analyst.md"
+_V2_ANALYST_PROMPT_V8_PATH = Path(__file__).resolve().parents[1] / "prompts/v2_evidence_analyst.md"
+_V2_ANALYST_PROMPT_V9_PATH = (
+    Path(__file__).resolve().parents[1] / "prompts/v2_evidence_analyst_v9.md"
+)
 _CANONICAL_STATEMENT_RETRY_GUIDANCE = (
     "The prior attempt failed validation. Copy the input assessment's "
     "narrowest_supported_proposition character-for-character into the output "
@@ -80,14 +92,18 @@ _CLAIM_FIT_2_RETRY_GUIDANCE = (
     "Because Claim Fit is 2, the canonical_factual_statement must explicitly scope "
     "the evidence to the source's population, sample, setting, time period, or "
     "reported association. Use a concrete scope marker such as 'among', 'within', "
-    "'according to', 'reported', 'in this sample', or 'may'. Do not state the "
-    "evidence as a universal claim."
+    "'according to', 'reported', 'in this sample', 'in this study', 'the paper reports', "
+    "'the article reports', or 'may'. Do not state the evidence as a universal claim."
 )
 _OutputT = TypeVar("_OutputT", bound=BaseModel)
 
 
 class V2EvidenceAnalystFailure(RuntimeError):
     """Raised internally when one bounded Analyst logical operation is exhausted."""
+
+
+class _RetryableAssessmentValidationError(ValueError):
+    """Combined assessment output needs the bounded validation repair attempt."""
 
 
 def run_v2_evidence_analyst(
@@ -162,6 +178,7 @@ def run_v2_evidence_analyst(
         input=batch_input,
         source_results=tuple(results),
         completed_at=completed_at,
+        policy_identity=batch_input.policy_identity,
     )
     insert_v2_artifact(path, artifact_key, output, completed_at)
     return output
@@ -313,14 +330,20 @@ def _analyze_source(
             routing_config=routing_config,
             clock=clock,
             objective_validator=lambda output: _validate_assessment(
-                output, source_input.direction, semantic_input.targeted_gap_ids
+                output,
+                source_input.direction,
+                semantic_input.targeted_gap_ids,
+                batch_input.policy_identity,
+                _candidate_context_text(candidate),
             ),
-            retry_guidance=None,
+            retry_guidance=_canonical_statement_retry_guidance(2),
+            max_attempts=2,
+            retry_validation_only=True,
         )
         attempt_ids.extend(score_attempts)
         route = routing_config.preflight().for_stage(LLMStage.ANALYST)
         prompt = load_prompt_file(
-            _V2_ANALYST_PROMPT_PATH,
+            _analyst_prompt_path(batch_input.policy_identity),
             expected_stage=LLMStage.ANALYST,
         )
         score_decision = score_candidate(
@@ -333,7 +356,10 @@ def _analyze_source(
             analyst_model_name=route.physical_model,
             scored_at=_aware_now(clock),
         )
-        if not score_decision.approved:
+        if (
+            assessment.relationship_to_claim is V2EvidenceRelationship.UNRELATED
+            or not score_decision.approved
+        ):
             return V2EvidenceAnalystSourceResult(
                 run_id=batch_input.run_id,
                 source_id=source_input.source_id,
@@ -398,10 +424,11 @@ def _invoke_bounded_analyst(
     objective_validator: Callable[[_OutputT], None],
     retry_guidance: str | None = None,
     max_attempts: int | None = None,
+    retry_validation_only: bool = False,
 ) -> tuple[_OutputT, tuple[UUID, ...]]:
     route = routing_config.preflight().for_stage(LLMStage.ANALYST)
     prompt = load_prompt_file(
-        _V2_ANALYST_PROMPT_PATH,
+        _analyst_prompt_path(batch_input.policy_identity),
         expected_stage=LLMStage.ANALYST,
     )
     base_rendered_prompt = render_stage_prompt(prompt, input_artifact, output_type)
@@ -549,6 +576,16 @@ def _invoke_bounded_analyst(
             finish_model_route_attempt(db_path, failed)
             if isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc):
                 raise
+            budget_failure = _budget_failure(exc)
+            if budget_failure is not None:
+                if isinstance(budget_failure, V2SourceBudgetExceededError):
+                    raise V2SourceBudgetExceededError(str(budget_failure)) from exc
+                raise V2BudgetExceededError(str(budget_failure)) from exc
+            if retry_validation_only and not isinstance(exc, _RetryableAssessmentValidationError):
+                raise V2EvidenceAnalystFailure(
+                    f"{operation} failed without a retryable assessment validation error: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
     raise V2EvidenceAnalystFailure(
         f"{operation} exhausted bounded Analyst retry: {'; '.join(failures)}"
     )
@@ -557,7 +594,18 @@ def _invoke_bounded_analyst(
 def _validate_assessment_direction(
     assessment: V2EvidenceAnalystModelOutput,
     direction: ResearchDirection,
+    policy_identity: str,
 ) -> None:
+    if assessment.relationship_to_claim is V2EvidenceRelationship.UNRELATED:
+        if policy_identity == V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+            if assessment.addressed_gap_ids:
+                raise ValueError("unrelated evidence cannot claim targeted gap coverage")
+            if assessment.canonical_factual_statement is not None:
+                raise ValueError("unrelated evidence must not draft claim-evidence text")
+            return
+        raise _RetryableAssessmentValidationError(
+            "unrelated evidence cannot enter claim-evidence statement drafting"
+        )
     if assessment.canonical_factual_statement is None:
         raise ValueError("combined Analyst output requires a final factual statement")
     forbidden = (
@@ -565,19 +613,121 @@ def _validate_assessment_direction(
         if direction is ResearchDirection.SUPPORT
         else V2EvidenceRelationship.SUPPORTS
     )
-    if assessment.relationship_to_claim is forbidden:
+    if (
+        policy_identity != V2_EVIDENCE_ANALYST_POLICY_IDENTITY
+        and assessment.relationship_to_claim is forbidden
+    ):
         raise ValueError("Analyst relationship cannot cross the queued evidence direction")
+
+
+def _budget_failure(exc: BaseException) -> V2BudgetExceededError | None:
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, V2BudgetExceededError):
+            return current
+        current = current.__cause__
+    return None
 
 
 def _validate_assessment(
     assessment: V2EvidenceAnalystModelOutput,
     direction: ResearchDirection,
     targeted_gap_ids: tuple[str, ...],
+    policy_identity: str,
+    source_context_text: str,
 ) -> None:
     """Validate direction and restrict claimed coverage to the source's Round-4 Gap links."""
-    _validate_assessment_direction(assessment, direction)
+    _validate_assessment_direction(assessment, direction, policy_identity)
+    if assessment.relationship_to_claim is V2EvidenceRelationship.UNRELATED:
+        return
+    if policy_identity == V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+        _validate_contextual_exception_scope(assessment, source_context_text)
+    if assessment.claim_fit == 2 and not statement_has_required_qualification(
+        assessment.canonical_factual_statement or ""
+    ):
+        raise _RetryableAssessmentValidationError(
+            "Claim Fit 2 statements require an explicit scope qualification"
+        )
     if not set(assessment.addressed_gap_ids).issubset(targeted_gap_ids):
         raise ValueError("Analyst cannot claim coverage for an unrelated Gap")
+
+
+def _candidate_context_text(candidate: CandidateQuoteBlock) -> str:
+    """Return exact quote text plus its preserved local context for narrow validation."""
+    parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+    return " ".join((parsed.preceding_context, " ".join(parsed.segments), parsed.following_context))
+
+
+def _validate_contextual_exception_scope(
+    assessment: V2EvidenceAnalystModelOutput,
+    source_context_text: str,
+) -> None:
+    """Prevent a statement from turning a stated exemption into an unrestricted rule."""
+    exception_context = re.search(
+        r"\b(?:exempt(?:ion|ions|ed)?|exceptions?)\b",
+        source_context_text,
+        flags=re.IGNORECASE,
+    )
+    conditional_rule = re.search(
+        r"\b(?:does not apply|not applicable|subject to|unless|provided that)\b",
+        source_context_text,
+        flags=re.IGNORECASE,
+    )
+    legal_context = re.search(
+        r"\b(?:law|legal|statutory|statute|regulation|regulatory|gdpr|data protection)\b",
+        source_context_text,
+        flags=re.IGNORECASE,
+    )
+    if exception_context is None and conditional_rule is not None and legal_context is not None:
+        exception_context = conditional_rule
+    if exception_context is None:
+        return
+    statement = assessment.canonical_factual_statement or ""
+    scoped_statement = re.search(
+        r"\b(?:only|may|where|when|if|unless|subject to|provided that|limited to|"
+        r"for personal use|personal use|household|domestic|exemption|does not establish|"
+        r"does not mean|not establish|not mean)\b",
+        statement,
+        flags=re.IGNORECASE,
+    )
+    overbroad_statements = tuple(
+        re.finditer(
+            r"\b(?:no restrictions?|without restrictions?|unrestricted|free of (?:any )?"
+            r"restrictions?|no legal constraints?)\b",
+            statement,
+            flags=re.IGNORECASE,
+        )
+    )
+    affirmative_overclaim = any(
+        not _overbroad_statement_is_negated(statement, match) for match in overbroad_statements
+    )
+    if scoped_statement is None or affirmative_overclaim:
+        raise _RetryableAssessmentValidationError(
+            "statement must preserve the source's stated exemption scope and cannot imply "
+            "that one exemption removes all restrictions"
+        )
+
+
+def _overbroad_statement_is_negated(statement: str, match: re.Match[str]) -> bool:
+    """Recognize a directly governed conclusion without borrowing distant negation."""
+    prefix = statement[max(0, match.start() - 110) : match.start()]
+    prefix = re.split(
+        r"\b(?:and|but|or|however|although|yet)\b",
+        prefix,
+        flags=re.IGNORECASE,
+    )[-1]
+    return (
+        re.search(
+            r"\b(?:does not establish|does not mean|does not imply|does not show|"
+            r"cannot establish|cannot imply|cannot show|is not evidence that)\s+"
+            r"(?:that|there are)\s+(?:[\w'-]+\s+){0,7}$",
+            prefix,
+            flags=re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 def _validate_statement_output(
@@ -607,6 +757,18 @@ def _assessment_rationale(assessment: V2EvidenceAnalystModelOutput) -> str:
         f"{assessment.reasoning} Relationship: {assessment.relationship_to_claim.value}. "
         f"Material limitations: {limitations}. Inferential boundaries: {boundaries}."
     )
+
+
+def _analyst_prompt_path(policy_identity: str) -> Path:
+    """Select the versioned prompt that implements the captured Analyst policy."""
+    if policy_identity in {
+        V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+        V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
+    }:
+        return _V2_ANALYST_PROMPT_V8_PATH
+    if policy_identity == V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+        return _V2_ANALYST_PROMPT_V9_PATH
+    raise ValueError(f"unsupported v2 Analyst policy identity: {policy_identity}")
 
 
 def _attempt_budget_ceilings(

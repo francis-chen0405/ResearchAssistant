@@ -64,6 +64,7 @@ from providers.v2_budget import (
     V2PhysicalCallAudit,
     V2PhysicalCallCompletion,
     V2PhysicalCallStart,
+    V2SourceBudgetExceededError,
     read_v2_physical_call_audit,
 )
 from providers.v2_routing import V2RoutingConfig
@@ -182,8 +183,18 @@ def run_v2_deep_analysis_with_backfill(
         )
         if not wave_candidates:
             source_id = pending[cursor].candidate.source_id
-            reason = "V2BudgetExceededError: remaining budget cannot cover the next source envelope"
             attempted_source_ids.append(source_id)
+            if not pending[cursor].source_cap_reservable:
+                reason = "V2SourceBudgetExceededError: source cap prevents further calls"
+                executions[source_id] = V2DeepAnalysisSourceExecution(
+                    source_id=source_id,
+                    state=V2DeepAnalysisSourceExecutionState.SOURCE_BUDGET_BLOCKED,
+                    failure_reason=reason,
+                )
+                terminal_reasons.append(reason)
+                cursor += 1
+                continue
+            reason = "V2BudgetExceededError: remaining budget cannot cover the next source envelope"
             executions[source_id] = V2DeepAnalysisSourceExecution(
                 source_id=source_id,
                 state=V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED,
@@ -496,15 +507,37 @@ def _execute_source_batch(
 
 def _worker_failure(source_id: UUID, exc: Exception) -> V2DeepAnalysisWorkerResult:
     reason = f"{type(exc).__name__}: {exc}"[:1000]
+    budget_failure = _budget_failure(exc)
     return V2DeepAnalysisWorkerResult(
         source_id=source_id,
         failure_state=(
-            V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
-            if isinstance(exc, V2BudgetExceededError)
+            V2DeepAnalysisSourceExecutionState.SOURCE_BUDGET_BLOCKED
+            if isinstance(budget_failure, V2SourceBudgetExceededError)
+            else V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
+            if budget_failure is not None
             else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
         ),
         failure_reason=reason,
     )
+
+
+def _budget_failure(exc: BaseException) -> V2BudgetExceededError | None:
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, V2BudgetExceededError):
+            return current
+        current = current.__cause__
+    return None
+
+
+def _failure_is_source_budget_blocked(failure: str) -> bool:
+    return failure.startswith("V2SourceBudgetExceededError:")
+
+
+def _failure_is_run_budget_exhausted(failure: str) -> bool:
+    return failure.startswith("V2BudgetExceededError:")
 
 
 def _run_source_wave(
@@ -699,15 +732,21 @@ def _execution_from_wave(
     if admission is None:
         raise ValueError("fresh deep-analysis waves require an evidence admission result")
     admitted = next(item for item in admission.source_results if item.source_id == wave.source_id)
-    if extraction.state is V2ExtractionState.FAILED:
+    if extraction.state in {
+        V2ExtractionState.FAILED,
+        V2ExtractionState.SOURCE_BUDGET_BLOCKED,
+        V2ExtractionState.BUDGET_EXHAUSTED,
+    }:
         extraction_failure = extraction.failure or "exact extraction failed"
+        if extraction.state is V2ExtractionState.SOURCE_BUDGET_BLOCKED:
+            execution_state = V2DeepAnalysisSourceExecutionState.SOURCE_BUDGET_BLOCKED
+        elif extraction.state is V2ExtractionState.BUDGET_EXHAUSTED:
+            execution_state = V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
+        else:
+            execution_state = V2DeepAnalysisSourceExecutionState.EXTRACTION_FAILED
         return V2DeepAnalysisSourceExecution(
             source_id=wave.source_id,
-            state=(
-                V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
-                if "V2BudgetExceededError" in extraction_failure
-                else V2DeepAnalysisSourceExecutionState.EXTRACTION_FAILED
-            ),
+            state=execution_state,
             physical_call_sequences=sequences,
             failure_reason=extraction_failure,
         )
@@ -720,11 +759,18 @@ def _execution_from_wave(
         )
     if analyst.state is V2EvidenceAnalystState.FAILED:
         analyst_failure = analyst.failure or "Analyst failed"
+        if _failure_is_source_budget_blocked(analyst_failure):
+            return V2DeepAnalysisSourceExecution(
+                source_id=wave.source_id,
+                state=V2DeepAnalysisSourceExecutionState.SOURCE_BUDGET_BLOCKED,
+                physical_call_sequences=sequences,
+                failure_reason=analyst_failure,
+            )
         return V2DeepAnalysisSourceExecution(
             source_id=wave.source_id,
             state=(
                 V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
-                if "V2BudgetExceededError" in analyst_failure
+                if _failure_is_run_budget_exhausted(analyst_failure)
                 else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
             ),
             physical_call_sequences=sequences,
@@ -747,8 +793,10 @@ def _execution_from_wave(
     return V2DeepAnalysisSourceExecution(
         source_id=wave.source_id,
         state=(
-            V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
-            if "V2BudgetExceededError" in admission_failure
+            V2DeepAnalysisSourceExecutionState.SOURCE_BUDGET_BLOCKED
+            if _failure_is_source_budget_blocked(admission_failure)
+            else V2DeepAnalysisSourceExecutionState.BUDGET_EXHAUSTED
+            if _failure_is_run_budget_exhausted(admission_failure)
             else V2DeepAnalysisSourceExecutionState.ANALYST_FAILED
         ),
         physical_call_sequences=sequences,

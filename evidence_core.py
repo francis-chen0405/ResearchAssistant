@@ -86,6 +86,34 @@ class UntrustedSourceText(StrictModel):
 
 _ELLIPSIS_RE = re.compile(r"\s*\.\.\.\s*")
 _SENTENCE_RE = re.compile(r"[^.!?]+[.!?]+|[^.!?]+$", re.DOTALL)
+FRESH_SENTENCE_SEGMENTATION_POLICY = "researchassistant-fresh-sentence-spans-v2"
+_FRESH_URL_RE = re.compile(
+    r"(?:https?://|www\.)[^\s<>\"']+|(?:doi\.org/|doi:\s*|10\.\d{4,9}/)[^\s<>\"']+",
+    re.IGNORECASE,
+)
+_INITIALISM_RE = re.compile(r"(?:[a-z]\.){2,}", re.IGNORECASE)
+_ABBREVIATIONS = frozenset(
+    {
+        "approx.",
+        "dept.",
+        "dr.",
+        "e.g.",
+        "etc.",
+        "fig.",
+        "i.e.",
+        "inc.",
+        "jr.",
+        "mr.",
+        "mrs.",
+        "ms.",
+        "no.",
+        "prof.",
+        "ref.",
+        "sr.",
+        "vs.",
+    }
+)
+_URL_TRAILING_PUNCTUATION = ".,;:!?)]}"
 
 
 class ParsedQuoteBlock(StrictModel):
@@ -251,6 +279,50 @@ def numbered_source_text(normalized_text: str) -> str:
     return "\n".join(f"[{index}] {span.text}" for index, span in enumerate(spans, start=1))
 
 
+def fresh_sentence_spans(text: str) -> tuple[_SentenceSpan, ...]:
+    """Segment fresh-run text while keeping exact offsets into its immutable snapshot."""
+    url_spans = tuple(
+        (
+            match.start(),
+            match.end()
+            - len(match.group(0))
+            + len(match.group(0).rstrip(_URL_TRAILING_PUNCTUATION)),
+        )
+        for match in _FRESH_URL_RE.finditer(text)
+    )
+    spans: list[_SentenceSpan] = []
+    sentence_start = 0
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "\n":
+            _append_fresh_sentence(spans, text, sentence_start, index)
+            sentence_start = index + 1
+            index += 1
+            continue
+        if character not in ".!?" or not _is_fresh_sentence_boundary(text, index, url_spans):
+            index += 1
+            continue
+
+        boundary_end = index + 1
+        while boundary_end < len(text) and text[boundary_end] in ".!?\"'”’)]}":
+            boundary_end += 1
+        _append_fresh_sentence(spans, text, sentence_start, boundary_end)
+        sentence_start = boundary_end
+        index = boundary_end
+
+    _append_fresh_sentence(spans, text, sentence_start, len(text))
+    return tuple(spans)
+
+
+def fresh_numbered_source_text(normalized_text: str) -> str:
+    """Expose fresh-run sentences with stable one-based identifiers and exact source offsets."""
+    spans = fresh_sentence_spans(normalized_text)
+    if not spans:
+        raise ValueError("snapshot has no selectable sentences")
+    return "\n".join(f"[{index}] {span.text}" for index, span in enumerate(spans, start=1))
+
+
 def selected_segments_from_selection(
     normalized_text: str,
     selection: VerbatimQuoteSelection | V2VerbatimQuoteSelection,
@@ -258,7 +330,11 @@ def selected_segments_from_selection(
     """Turn a model's source sentence references into exact immutable snapshot text."""
     if isinstance(selection, VerbatimQuoteSelection) and selection.selected_segments:
         return list(selection.selected_segments)
-    spans = _sentence_spans(normalized_text)
+    spans = (
+        fresh_sentence_spans(normalized_text)
+        if isinstance(selection, V2VerbatimQuoteSelection)
+        else _sentence_spans(normalized_text)
+    )
     selected_segments: list[str] = []
     for selection_range in selection.selected_sentence_ranges:
         if selection_range.end_sentence > len(spans):
@@ -566,6 +642,48 @@ def _sentence_spans(text: str) -> list[_SentenceSpan]:
         if start < end:
             spans.append(_SentenceSpan(start_char=start, end_char=end, text=text[start:end]))
     return spans
+
+
+def _append_fresh_sentence(spans: list[_SentenceSpan], text: str, start: int, end: int) -> None:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    if start < end:
+        spans.append(_SentenceSpan(start_char=start, end_char=end, text=text[start:end]))
+
+
+def _is_fresh_sentence_boundary(
+    text: str, index: int, url_spans: tuple[tuple[int, int], ...]
+) -> bool:
+    character = text[index]
+    if character == ".":
+        if index > 0 and index + 1 < len(text):
+            if text[index - 1].isdigit() and text[index + 1].isdigit():
+                return False
+        if any(start <= index < end for start, end in url_spans):
+            return False
+        if index + 1 < len(text) and text[index + 1] == ".":
+            return False
+        if _is_abbreviation_period(text, index):
+            return False
+
+    next_index = index + 1
+    while next_index < len(text) and text[next_index] in ".!?\"'”’)]}":
+        next_index += 1
+    return next_index == len(text) or text[next_index].isspace()
+
+
+def _is_abbreviation_period(text: str, period_index: int) -> bool:
+    token_start = period_index - 1
+    while token_start >= 0 and (text[token_start].isalpha() or text[token_start] == "."):
+        token_start -= 1
+    token = text[token_start + 1 : period_index + 1].casefold()
+    if token in _ABBREVIATIONS:
+        return True
+    if _INITIALISM_RE.fullmatch(token):
+        return True
+    return len(token) == 2 and token[0].isalpha() and token[1] == "."
 
 
 def _previous_sentence(text: str, offset: int) -> _SentenceSpan | None:

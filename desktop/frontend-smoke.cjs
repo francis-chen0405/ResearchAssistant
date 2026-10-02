@@ -26,10 +26,11 @@ async function main() {
     const errors = []; page.on('pageerror', e=>errors.push(e.message));
     let preferences = {modelProfile:'configurable-2026-09',stageModels:{planner:'gpt-6-luna-xhigh',scout:'gpt-6-luna-high',gap_analysis:'gpt-6-luna-xhigh',search_agent:'gpt-6-luna-xhigh',source_selection:'gpt-6-luna-xhigh',extractor:'gpt-6-luna-high',analyst:'gpt-6-luna-xhigh'},dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
     let serviceReady = false; let serviceProbes = 0; let serviceStarts = 0;
-    let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false; let invalidPlan = false; let invalidRelease = false; let evidenceFailure = false; let v2ResultRequests = 0; let v2EvidenceRequests = 0;
+    let assessmentPersisted = false;
+    let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false; let invalidPlan = false; let sufficientSourcePool = false; let invalidRelease = false; let evidenceFailure = false; let v2ResultRequests = 0; let v2EvidenceRequests = 0;
     const id='11111111-1111-4111-8111-111111111111';
     const progress = {status:'running',model_attempts:1,retrieval_attempts:2,usable_snapshots:1,candidates:1};
-    const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
+    const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',model_usage_details:{input_tokens:{total:null,known_subtotal:123,complete:false},output_tokens:{total:44,known_subtotal:44,complete:true},cached_input_tokens:{total:null,known_subtotal:0,complete:false},cache_write_tokens:{total:null,known_subtotal:4,complete:false},cost_basis_counts:[{basis:'published_cache_prices_reported_writes',physical_calls:1},{basis:'published_cache_prices_assumed_all_uncached_writes',physical_calls:1},{basis:null,physical_calls:1}]},supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
     await page.route('**/api/**', async route => {
       const req=route.request(); const url=new URL(req.url()); const p=url.pathname; let body={}; let status=200;
       assert.equal(url.origin, `http://127.0.0.1:${server.address().port}`, 'Desktop API requests must use the exported app origin');
@@ -54,6 +55,17 @@ async function main() {
       else if(p.endsWith('/trail')) body={run_id:id,items:[]};
       else if(p===`/api/research/${id}`) body=snapshot();
       else { status=404; body={detail:'Unknown mocked API'}; }
+      if(p.endsWith('/v2-result') && detailed && body.release_validation) {
+        body.all_surviving_sources[1].status='surviving_analyzer_admitted';
+        body.all_surviving_sources.push({...body.all_surviving_sources[1],source_id:'33333333-3333-4333-8333-333333333333',source_url:'https://example.org/failed',title:'Illustrative failed analysis',recommended:false,status:'surviving_analyzer_failed',ledger_claim_ids:[]});
+        body.all_surviving_sources.push({...body.all_surviving_sources[1],source_id:'44444444-4444-4444-8444-444444444444',source_url:'https://example.org/rejected',title:'Illustrative rejected analysis',recommended:false,status:'surviving_analyzer_rejected',ledger_claim_ids:[]});
+        body.all_surviving_sources.push({...body.all_surviving_sources[1],source_id:'55555555-5555-4555-8555-555555555555',source_url:'https://example.org/not-analyzed',title:'Illustrative not analyzed',recommended:false,status:'surviving_not_deeply_analyzed',ledger_claim_ids:[]});
+        if(assessmentPersisted) body.post_analysis_assessment={run_id:id,policy_identity:'researchassistant-v2-post-analysis-evidence-v1',assessed_after_analysis:true,claim_established:false,admitted_source_ids:['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222'],supporting_count:0,challenging_count:0,qualifying_count:2,unrelated_count:0,unadmitted_source_count:3,partial_coverage_count:1,unavailable_coverage_count:1,unresolved_gap_count:1,claim_support_observed:false,limitations:['No admitted finding was classified as supporting the claim. This does not establish that the claim is false.','Research coverage remains limited.']};
+      }
+      if(p.endsWith('/v2-evidence') && sufficientSourcePool && !evidenceFailure) {
+        body.research_status={reason_code:'sufficient_source_pool',explanation:'Further searches overlap with the existing source families and are unlikely to add useful evidence.',actionable_gap_count:1,partial_coverage_count:1,unavailable_coverage_count:0,source:'final_output'};
+      }
+      if(p.endsWith('/v2-evidence') && detailed && body.run_id) body.source_budget_outcomes=[{source_id:'33333333-3333-4333-8333-333333333333',outcome:'token_cap_blocked'}]; if(p.endsWith('/v2-evidence') && detailed && body.run_id) { body.post_analysis_assessment={run_id:id,assessed_after_analysis:true,claim_established:false,admitted_source_ids:body.items.map(item=>item.source_id),supporting_count:0,challenging_count:0,qualifying_count:2,unrelated_count:0,unadmitted_source_count:3,partial_coverage_count:1,unavailable_coverage_count:1,unresolved_gap_count:1,claim_support_observed:false,limitations:['No admitted finding was classified as supporting the claim. This does not establish that the claim is false.','Research coverage remains limited.']}; body.shared_website_groups=[{host:'imy.se',source_ids:body.items.map(item=>item.source_id),explanation:'These 2 admitted pages share the imy.se website. A shared website alone does not establish independent corroboration. This does not show they are duplicates.'}]; body.items[0].source_type='general_web'; body.items[0].source_context_notice='Legal scope has not been independently verified; check jurisdiction, dates and exceptions against primary sources. The all-50-states statement has not been independently verified; check whether its scope and conditions apply in each jurisdiction.'; body.items.forEach(item=>{item.relationship_to_claim='qualifies';}); }
       await route.fulfill({status,json:body});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
@@ -122,6 +134,13 @@ async function main() {
     await page.screenshot({path:path.join(shots,'composer.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Begin research',exact:true}).click();
     await page.getByRole('button',{name:'Cancel run',exact:true}).waitFor();
+    await page.getByText('Recorded token usage and cost basis',{exact:true}).click();
+    await page.getByText('at least 123 known; total incomplete',{exact:true}).waitFor();
+    await page.getByText('44',{exact:true}).waitFor();
+    await page.getByText('unavailable; total incomplete',{exact:true}).waitFor();
+    await page.getByText(/pricing basis not recorded/).waitFor();
+    await page.getByText(/all uncached input assumed to incur cache-write charges/).waitFor();
+    await page.getByText(/not an invoice/).waitFor();
     assert.equal(started.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(started.stage_models),Array(7).fill('mimo-v2.6-flash')); assert.equal(started.max_cost_usd,'0.50'); assert.equal(started.challenge_enabled,true);
     await page.screenshot({path:path.join(shots,'research-active.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Cancel run',exact:true}).click();
@@ -157,14 +176,31 @@ async function main() {
     await page.locator('.evidence-card').first().waitFor();
     await page.getByRole('button',{name:'View admitted quote and source'}).first().click();
     assert.equal(await page.locator('.evidence-card').first().evaluate(node=>node.open),true,'Brief findings open the exact admitted Ledger record');
-    await page.getByText('Assessment relationship Qualifies',{exact:false}).waitFor();
-    await page.getByText(/separate source links do not establish independent studies/i).waitFor();
+    await page.locator('.evidence-card').first().getByText('Assessment relationship Adds a qualification',{exact:false}).waitFor();
+    await page.getByText('Claim status · Inconclusive: no admitted supporting finding',{exact:false}).waitFor();
+    await page.getByText('This is an additional assessment of saved evidence. The saved brief and export are unchanged.',{exact:true}).waitFor();
+    await page.getByText(/2 qualifying/).waitFor();
+    await page.getByRole('heading',{name:'Shared publisher/website',exact:true}).waitFor();
+    assert.ok(await page.getByText(/does not establish independent corroboration/i).count() >= 1,'Shared website pages are not presented as independent corroboration');
+    await page.getByText(/all-50-states statement has not been independently verified/i).waitFor();
+    await page.getByText(/separate links do not establish independent studies/i).waitFor();
     assert.equal(await page.getByText('Recommended · analyzer-admitted',{exact:false}).count(),2,'Recommended source status appears consistently in both source lists');
+    await page.getByText('Recommended outcomes: 1 analyzer-admitted',{exact:true}).waitFor();
+    await page.getByText('Outcomes among all 5 surviving sources: 2 analyzer-admitted, 1 source token-cap blocked, 1 analyst-rejected, 1 not analyzed',{exact:true}).waitFor();
+    await page.getByText('Survived selection · source token-cap blocked',{exact:false}).waitFor();
+    await page.getByRole('heading',{name:'Source lineage',exact:true}).waitFor();
+    assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');
     assert.equal(await page.getByText('family-raw-id-should-not-render',{exact:true}).count(),0,'Internal family identifiers are not shown in ordinary cards');
     await page.getByText('This is an exact illustrative quotation for the offline test.',{exact:true}).first().waitFor();
     assert.equal(await page.locator('.evidence-card.support').count(),1);
     assert.equal(await page.locator('.evidence-card.challenge').count(),1);
     assert.equal(await page.getByText('internal-gap-example',{exact:true}).count(),0);
+    await page.getByRole('heading',{name:'Unresolved evidence gaps',exact:true}).waitFor();
+    await page.getByText('1 gap remains unresolved.',{exact:true}).waitFor();
+    await page.getByText(/The latest search assessment counted 0 unresolved evidence gaps for possible follow-up/).waitFor();
+    await page.getByText(/Release validation passed: yes\./).waitFor();
+    await page.getByText('Recorded token usage and cost basis',{exact:true}).click();
+    await page.getByText(/published cache prices and reported cache-write tokens/).waitFor();
     await page.screenshot({path:path.join(shots,'research-evidence.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('heading',{name:'Latest research coverage assessment',exact:true}).waitFor();
     await page.getByText('Direct evidence remains incomplete.',{exact:true}).waitFor();
@@ -174,6 +210,20 @@ async function main() {
     await page.locator('.result-limitation').getByText(/Follow-up search stopped after two invalid plans/).waitFor();
     await page.getByText('Long-term air temperature data is unavailable.',{exact:false}).waitFor();
     await page.screenshot({path:path.join(shots,'adaptive-search-limitations.png'),fullPage:true,animations:'disabled'});
+    invalidPlan=false; sufficientSourcePool=true;
+    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await page.locator('.result-limitation').getByText('Latest research status · Search stopped after the source pool was considered sufficient',{exact:true}).waitFor();
+    await page.locator('.result-limitation').getByText(/Further searches overlap with the existing source families/).waitFor();
+    await page.locator('.result-limitation').getByText(/counted 1 unresolved evidence gap for possible follow-up/).waitFor();
+    sufficientSourcePool=false;
+    assessmentPersisted=true;
+    await page.getByRole('button',{name:'Home',exact:true}).click();
+    await page.locator('.welcome-view').waitFor();
+    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await page.getByText('This assessment is included in the saved brief and export.',{exact:true}).waitFor();
+    assessmentPersisted=false;
     invalidRelease=true; v2ResultRequests=0; v2EvidenceRequests=0;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();

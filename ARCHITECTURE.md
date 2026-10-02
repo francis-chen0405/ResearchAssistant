@@ -24,6 +24,8 @@ The model contract modules depend in one direction: shared contracts, then resea
 
 ## Research execution
 
+The approved [private-surveillance repair](.agent/plans/private-surveillance-run-fixes-2026-10-02.md) versions fresh Analyst/admission behavior so evidence relationship is independent of search direction, while enabled-lane provenance remains mandatory. A deterministic post-analysis assessment supplements the pre-analysis search decision; it does not prove the claim or automatically extend research budgets. Historical policies and artifacts retain their original meanings.
+
 Fresh website and CLI requests follow this pipeline:
 
 ```text
@@ -53,6 +55,7 @@ Discovery may use configured OpenAlex, arXiv, PubMed, Exa, and SERP lanes. Cross
 - Source snapshots, Ledger records, and final artifacts are immutable. Acquisition preserves original/final/canonical URL and independently verified media provenance; unknown historical provenance is not invented.
 - Quotes must be exact ordered passages from stored normalized text with verified hashes, offsets, context, and boundary markers. No fuzzy repair, paraphrase, padding, or source substitution is allowed.
 - Evidence Quality and Claim Fit are separate 1–5 axes. Both must pass admission policy. Admission checks structure, provenance, and policy; it does not independently prove entailment. Fresh synthesis and final validation are deterministic and do not call a Reviewer.
+- The approved discrimination-run repair versions new Analyst/admission policy to exclude unrelated material from claim evidence. Historical unrelated records retain their original policy and remain readable. Exact extraction renders one complete numbered snapshot under the untrusted-source boundary; quotation assembly still uses the original immutable text. Per-source cap blocks are distinct from run-wide budget exhaustion and allow analysis of remaining sources.
 - Round 4 requires completed non-degraded Round 3 and typed Governor authorization. It is bounded to two provider lanes and two queries per lane per enabled direction; there is no Round 5.
 - A database-scoped `.mvp5.lock` covers the fresh run. Cancellation is cooperative at existing stage/provider boundaries; an in-flight provider request may reach its deadline and remains conservatively accounted.
 
@@ -61,6 +64,8 @@ Writable databases use schema 14 for nullable cache-token accounting fields, imp
 Desktop credentials use macOS Keychain or Windows Credential Manager. Secrets stay out of logs, SQLite, exports, browser storage, and child-process arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Automatic `.env` and shell-profile loading are not permitted. The application uses owned process groups/jobs for cleanup.
 
 Detailed current rules for quotations, evidence admission, retry/accounting limits, Round 4 authorization, persistence compatibility, and resume identity are in [Research invariants](docs/research-invariants.md).
+
+Future physical-call completion JSON optionally records cache-write tokens and the cost estimate basis. Read-only live views distinguish known input/output/cache subtotals from incomplete totals; absent historical write counts or pricing bases remain unknown. This adds no SQL migration and does not regenerate saved briefs or release hashes.
 
 ## Current release boundary
 

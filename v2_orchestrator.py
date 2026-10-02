@@ -44,6 +44,7 @@ from agents.v2_final_output import (
 )
 from agents.v2_gap_analysis import build_v2_gap_analysis_input, run_v2_gap_analysis
 from agents.v2_initial_planner import run_v2_initial_planner
+from agents.v2_post_analysis import V2_POST_ANALYSIS_ASSESSMENT_POLICY
 from agents.v2_round_four import (
     reconcile_post_round_three_gaps,
     run_v2_round_four_continuation,
@@ -54,13 +55,14 @@ from agents.v2_source_selection import (
     build_v2_source_selection_input,
     run_v2_source_selection_and_queue,
 )
-from evidence_core import EVIDENCE_POLICY_VERSION
+from evidence_core import EVIDENCE_POLICY_VERSION, FRESH_SENTENCE_SEGMENTATION_POLICY
 from file_lock import FileLock
 from models import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
     CrossrefIdentityMetadata,
     DiscoveryProvider,
     ResearchDirections,
@@ -136,7 +138,7 @@ V2_PRODUCTION_ARTIFACT_KEY = "post-phase-13-round-four-production-result-v1"
 V2_PRODUCTION_FINGERPRINT_KEY = "post-phase-13-round-four-production-fingerprint-v1"
 V2_ROUND_ONE_LEGACY_SEARCH_KEY = "phase-12-round-1-search"
 V2_ROUND_ONE_SEARCH_KEY = "phase-13-round-1-search"
-V2_PRODUCTION_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-production-v1"
+V2_PRODUCTION_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-production-v2"
 V2_DEEP_ANALYSIS_BACKFILL_LEGACY_ARTIFACT_KEY = "phase-12-deep-analysis-backfill-v1"
 V2_MANDATORY_DOWNSTREAM_CALL_RESERVE = 8
 V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE = 8
@@ -1141,6 +1143,7 @@ def _semantic_policy_payload() -> dict[str, object]:
             "v2_initial_planner.md",
             "v2_scout.md",
             "v2_evidence_analyst.md",
+            "v2_evidence_analyst_v9.md",
             "gap_analysis.md",
             "search_agent.md",
         )
@@ -1192,7 +1195,10 @@ def _semantic_policy_payload() -> dict[str, object]:
         "schema_sha256": hashlib.sha256(schemas.encode()).hexdigest(),
         "evidence_policy": EVIDENCE_POLICY_VERSION,
         "extraction_policy": V2_EXTRACTION_POLICY_IDENTITY,
+        "sentence_segmentation_policy": FRESH_SENTENCE_SEGMENTATION_POLICY,
+        "post_analysis_evidence_policy": V2_POST_ANALYSIS_ASSESSMENT_POLICY,
         "evidence_admission_policy": V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+        "evidence_analyst_policy": V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
         "final_output_policy": V2_FINAL_OUTPUT_POLICY_IDENTITY,
         "release_validator": V2_FINAL_VALIDATOR_CONFIG_VERSION,
         "research_governor": DEFAULT_RESEARCH_GOVERNOR_POLICY.model_dump(mode="json"),

@@ -23,6 +23,7 @@ from models import (
     AmbiguityRecord,
     ClaimDefinition,
     DiscoveryProvider,
+    ModelUsageCostBasis,
     ModelUsageMetadata,
     PlannerOutput,
     Score,
@@ -747,18 +748,26 @@ def _usage(
     cached = _cached_prompt_tokens(raw, prompt)
     uncached = prompt - cached if cached is not None else None
     cost = cap.upper_bound(prompt, completion)
+    writes = _cache_write_tokens(raw, uncached) if uncached is not None else None
+    cost_basis = ModelUsageCostBasis.CONFIGURED_PRICE_CAP
     if cached is not None and cache_prices is not None:
-        writes = _cache_write_tokens(raw, prompt - cached)
         cost = cache_prices.estimate(
             prompt=prompt, cached=cached, output=completion, cache_writes=writes
+        )
+        cost_basis = (
+            ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_REPORTED_WRITES
+            if writes is not None
+            else ModelUsageCostBasis.PUBLISHED_CACHE_PRICES_ASSUMED_ALL_UNCACHED_WRITES
         )
     return ModelUsageMetadata(
         input_tokens=prompt,
         cached_input_tokens=cached,
         uncached_input_tokens=uncached,
+        cache_write_tokens=writes,
         output_tokens=completion,
         total_tokens=total,
         cost_usd=cost,
+        usage_cost_basis=cost_basis,
     )
 
 

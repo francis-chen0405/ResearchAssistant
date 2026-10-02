@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 from collections.abc import AsyncIterator, Callable, MutableMapping
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Protocol
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import uvicorn
@@ -21,11 +23,16 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from agents.v2_deep_analysis import V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY
 from agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
 from agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
     V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
     V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
+)
+from agents.v2_post_analysis import (
+    V2PostAnalysisAssessment,
+    build_v2_post_analysis_assessment,
 )
 from agents.v2_reviewer_ledger import V2_REVIEWER_LEDGER_ARTIFACT_KEY
 from agents.v2_round_four import (
@@ -67,6 +74,9 @@ from models import (
     SourceSnapshot,
     StrictModel,
     V2ClaimCoverageState,
+    V2DeepAnalysisBackfillResult,
+    V2DeepAnalysisSourceExecution,
+    V2DeepAnalysisSourceExecutionState,
     V2EvidenceAdmissionBatchResult,
     V2EvidenceAdmissionRecord,
     V2EvidenceAnalystSourceResult,
@@ -395,6 +405,8 @@ class V2EvidenceDisplayItem(StrictModel):
     ledger_claim_id: UUID
     title: str | None = None
     source_url: str = Field(min_length=1)
+    source_type: str | None = None
+    source_context_notice: str | None = None
     source_family: str = Field(min_length=1)
     direction: str = Field(min_length=1)
     relationship_to_claim: V2EvidenceRelationship
@@ -420,11 +432,83 @@ class V2ResearchStatusDisplay(StrictModel):
     source: Literal["persisted_governor", "final_output"]
 
 
+class V2SourceBudgetOutcomeDisplay(StrictModel):
+    """Read-only source-local budget outcome from persisted execution evidence."""
+
+    source_id: UUID
+    outcome: Literal["source_budget_blocked", "token_cap_blocked", "physical_call_cap_blocked"]
+
+
+class V2SharedWebsiteGroup(StrictModel):
+    """Admitted sources sharing a website host, without implying source identity."""
+
+    host: str = Field(min_length=1)
+    source_ids: tuple[UUID, ...] = Field(min_length=2)
+    explanation: str = Field(min_length=1)
+
+
 class V2EvidenceDisplay(StrictModel):
     run_id: UUID
     items: tuple[V2EvidenceDisplayItem, ...]
     study_lineage: tuple[StudyLineageNotice, ...] = ()
+    source_budget_outcomes: tuple[V2SourceBudgetOutcomeDisplay, ...] = ()
+    shared_website_groups: tuple[V2SharedWebsiteGroup, ...] = ()
     research_status: V2ResearchStatusDisplay
+    post_analysis_assessment: V2PostAnalysisAssessment | None = None
+
+
+def _build_shared_website_groups(
+    items: tuple[V2EvidenceDisplayItem, ...],
+) -> tuple[V2SharedWebsiteGroup, ...]:
+    by_host: dict[str, list[UUID]] = {}
+    for item in items:
+        parsed = urlsplit(item.source_url)
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+            continue
+        host = parsed.hostname.lower().rstrip(".")
+        if host.startswith("www."):
+            host = host[4:]
+        by_host.setdefault(host, []).append(item.source_id)
+    return tuple(
+        V2SharedWebsiteGroup(
+            host=host,
+            source_ids=tuple(source_ids),
+            explanation=(
+                f"These {len(source_ids)} admitted pages share the {host} website. "
+                "A shared website alone does not establish independent corroboration. "
+                "This does not show they are duplicates."
+            ),
+        )
+        for host, source_ids in sorted(by_host.items())
+        if len(source_ids) > 1
+    )
+
+
+def _source_context_notice(
+    *, source_type: str | None, exact_claim: str, title: str | None, statement: str
+) -> str | None:
+    context = " ".join((exact_claim, title or "", statement)).casefold()
+    legal_topic = any(
+        re.search(rf"\b{term}\b", context)
+        for term in ("law", "legal", "illegal", "gdpr", "statute")
+    )
+    broad_state_assertion = "all 50 states" in statement.casefold() or "all fifty states" in (
+        statement.casefold()
+    )
+    legal_web_context = source_type == "general_web" and legal_topic
+    untyped_legal_context = source_type is None and legal_topic
+    if not (legal_web_context or untyped_legal_context or broad_state_assertion):
+        return None
+    notice = (
+        "Legal scope has not been independently verified; check jurisdiction, dates and "
+        "exceptions against primary sources."
+    )
+    if broad_state_assertion:
+        notice += (
+            " The all-50-states statement has not been independently verified; check "
+            "whether its scope and conditions apply in each jurisdiction."
+        )
+    return notice
 
 
 def _build_v2_evidence_display(
@@ -433,6 +517,7 @@ def _build_v2_evidence_display(
     *,
     gap_analysis: V2GapAnalysisOutput | None = None,
     governor_decision: V2RoundFourGovernorDecision | None = None,
+    backfill: V2DeepAnalysisBackfillResult | None = None,
 ) -> V2EvidenceDisplay:
     """Project persisted v2 evidence into a read-only result-page view."""
     sources = {source.source_id: source for source in output.all_surviving_sources}
@@ -478,6 +563,13 @@ def _build_v2_evidence_display(
                 ledger_claim_id=record.ledger_claim_id,
                 title=source.title,
                 source_url=record.source_url,
+                source_type=source.source_type,
+                source_context_notice=_source_context_notice(
+                    source_type=source.source_type,
+                    exact_claim=output.exact_claim,
+                    title=source.title,
+                    statement=record.approved_factual_statement,
+                ),
                 source_family=admission.provenance.source_family_id,
                 direction=source.direction.value,
                 relationship_to_claim=analyst.assessment.relationship_to_claim,
@@ -504,12 +596,66 @@ def _build_v2_evidence_display(
     research_status = _build_research_status_display(
         output, gap_analysis=gap_analysis, governor_decision=governor_decision
     )
+    source_budget_outcomes = _build_source_budget_outcomes(output, backfill)
+    post_analysis_assessment = (
+        build_v2_post_analysis_assessment(
+            admission_result=evidence_result,
+            coverage=output.claim_coverage_map,
+            unresolved_gap_count=len(output.unresolved_material_gaps),
+        )
+        if isinstance(evidence_result, V2EvidenceAdmissionBatchResult)
+        else None
+    )
     return V2EvidenceDisplay(
         run_id=output.run_id,
         items=tuple(items),
         study_lineage=build_study_lineage_notices(candidates),
+        source_budget_outcomes=source_budget_outcomes,
+        shared_website_groups=_build_shared_website_groups(tuple(items)),
         research_status=research_status,
+        post_analysis_assessment=post_analysis_assessment,
     )
+
+
+def _build_source_budget_outcomes(
+    output: V2FinalResearchOutput,
+    backfill: V2DeepAnalysisBackfillResult | None,
+) -> tuple[V2SourceBudgetOutcomeDisplay, ...]:
+    if backfill is None:
+        return ()
+    if backfill.run_id != output.run_id:
+        raise ValueError("source execution backfill must match the result run")
+    source_ids = {source.source_id for source in output.all_surviving_sources}
+    results: list[V2SourceBudgetOutcomeDisplay] = []
+    for execution in backfill.source_executions:
+        if execution.source_id not in source_ids:
+            raise ValueError("source execution backfill contains an unknown result source")
+        outcome = _source_budget_outcome(execution)
+        if outcome is not None:
+            results.append(
+                V2SourceBudgetOutcomeDisplay(source_id=execution.source_id, outcome=outcome)
+            )
+    return tuple(results)
+
+
+def _source_budget_outcome(
+    execution: V2DeepAnalysisSourceExecution,
+) -> Literal["source_budget_blocked", "token_cap_blocked", "physical_call_cap_blocked"] | None:
+    if execution.state is V2DeepAnalysisSourceExecutionState.SOURCE_BUDGET_BLOCKED:
+        return "source_budget_blocked"
+    reason = execution.failure_reason
+    if (
+        execution.state is not V2DeepAnalysisSourceExecutionState.EXTRACTION_FAILED
+        or reason is None
+    ):
+        return None
+    source = re.escape(str(execution.source_id))
+    prefix = r"(?:LLMProviderExecutionError: LLM provider failed: )?"
+    if re.fullmatch(rf"{prefix}source {source} token cap cannot cover this call", reason):
+        return "token_cap_blocked"
+    if re.fullmatch(rf"{prefix}source {source} physical-call cap is exhausted", reason):
+        return "physical_call_cap_blocked"
+    return None
 
 
 def _validate_evidence_display_provenance(
@@ -1129,6 +1275,12 @@ def create_app(
                     )
                 except KeyError:
                     governor_artifact = None
+                try:
+                    backfill_artifact = read_v2_artifact(
+                        store.connection, run_id, V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY
+                    )
+                except KeyError:
+                    backfill_artifact = None
             output = V2FinalResearchOutput.model_validate_json(final_artifact.payload_json)
             evidence_result = evidence_type.model_validate_json(evidence_artifact.payload_json)
             gap_analysis = (
@@ -1141,11 +1293,17 @@ def create_app(
                 if governor_artifact is not None and gap_analysis is not None
                 else None
             )
+            backfill = (
+                V2DeepAnalysisBackfillResult.model_validate_json(backfill_artifact.payload_json)
+                if backfill_artifact is not None
+                else None
+            )
             return _build_v2_evidence_display(
                 output,
                 evidence_result,
                 gap_analysis=gap_analysis,
                 governor_decision=governor_decision,
+                backfill=backfill,
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="V2 evidence details not found.") from exc

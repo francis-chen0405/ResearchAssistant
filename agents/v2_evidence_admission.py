@@ -10,7 +10,12 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from evidence_analysis import statement_has_required_qualification
 from evidence_core import verify_candidate_against_snapshot
 from models import (
+    V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
     Placement,
     V2AdmissionMethod,
     V2DeepAnalysisSourceStatus,
@@ -21,6 +26,7 @@ from models import (
     V2EvidenceAnalystBatchResult,
     V2EvidenceAnalystSourceResult,
     V2EvidenceAnalystState,
+    V2EvidenceRelationship,
     V2LedgerProvenance,
     V2SourceSelectionCandidate,
     entailment_for_claim_fit,
@@ -88,6 +94,7 @@ def run_v2_evidence_admission(
         analyst_result=analyst_result,
         source_results=tuple(output),
         completed_at=_aware(now()),
+        policy_identity=_admission_policy_identity(analyst_result.input.policy_identity),
     )
     insert_v2_artifact(path, artifact_key, result, result.completed_at)
     return result
@@ -191,6 +198,8 @@ def _build_record(
     score = source.score_decision
     assessment = source.assessment
     statement = source.statement_draft
+    if assessment.relationship_to_claim is V2EvidenceRelationship.UNRELATED:
+        raise ValueError("unrelated evidence cannot be admitted as claim evidence")
     if not score.approved or score.ledger_score is None or score.placement is None:
         raise ValueError("only an approved score decision may enter evidence")
     if assessment.canonical_factual_statement != statement.draft_statement:
@@ -204,7 +213,8 @@ def _build_record(
             raise ValueError("qualified evidence requires an explicit scope qualification")
     claim_id = uuid5(
         NAMESPACE_URL,
-        f"{V2_EVIDENCE_ADMISSION_POLICY_IDENTITY}::{analyst_result.run_id}::"
+        f"{_admission_policy_identity(analyst_result.input.policy_identity)}::"
+        f"{analyst_result.run_id}::"
         f"{source.source_id}::{statement.draft_statement}",
     )
     admitted_at = _aware(clock())
@@ -229,7 +239,7 @@ def _build_record(
         analyst_model_name=score.analyst_model_name,
         analyst_completed_at=score.scored_at,
         admission_method=V2AdmissionMethod.ANALYZER_ADMITTED,
-        admission_policy_identity=V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+        admission_policy_identity=_admission_policy_identity(analyst_result.input.policy_identity),
         admitted_at=admitted_at,
         ledger_validated_at=admitted_at,
     )
@@ -247,6 +257,17 @@ def _provenance(
         recommended=status.recommended,
         relevant_gap_ids=status.gap_ids,
     )
+
+
+def _admission_policy_identity(analyst_policy_identity: str) -> str:
+    """Keep the deterministic admission identity aligned with captured Analyst policy."""
+    if analyst_policy_identity == V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY:
+        return V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY
+    if analyst_policy_identity == V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY:
+        return V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY
+    if analyst_policy_identity == V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+        return V2_EVIDENCE_ADMISSION_POLICY_IDENTITY
+    raise ValueError(f"unsupported Analyst policy identity: {analyst_policy_identity}")
 
 
 def _source_artifact_key(source_id: UUID) -> str:

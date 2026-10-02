@@ -13,6 +13,7 @@ from pydantic import Field, field_validator
 from models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
+    ModelUsageCostBasis,
     ResearchControls,
     ResearchDirections,
     StrictModel,
@@ -40,6 +41,25 @@ LiveClassification = Literal[
     "invalid_input",
     "duplicate_active",
 ]
+
+
+class LiveTokenCount(StrictModel):
+    total: int | None = Field(default=None, ge=0)
+    known_subtotal: int = Field(ge=0)
+    complete: bool
+
+
+class LiveCostBasisCount(StrictModel):
+    basis: ModelUsageCostBasis | None
+    physical_calls: int = Field(ge=0)
+
+
+class LiveModelUsageDetails(StrictModel):
+    input_tokens: LiveTokenCount
+    output_tokens: LiveTokenCount
+    cached_input_tokens: LiveTokenCount
+    cache_write_tokens: LiveTokenCount
+    cost_basis_counts: tuple[LiveCostBasisCount, ...]
 
 
 class LiveRunRequest(StrictModel):
@@ -112,6 +132,7 @@ class LiveRunSnapshot(StrictModel):
     cost_usage_complete: bool = True
     conservative_reserved_tokens: int | None = Field(default=0, ge=0)
     conservative_reserved_cost_usd: ExactUSD | None = Decimal("0")
+    model_usage_details: LiveModelUsageDetails | None = None
     supporting: ResearchProgress
     opposing: ResearchProgress
     validation_errors: tuple[str, ...] = ()

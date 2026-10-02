@@ -11,7 +11,14 @@ from uuid import UUID
 from agents.renderer import APPROVED_CONNECTIVE_TEMPLATES, validate_final_release
 from agents.synthesizer import build_v2_synthesis_output
 from agents.v2_adaptive_search import V2AdaptiveContinuationResult, V2AdaptiveStopCode
+from agents.v2_post_analysis import build_v2_post_analysis_assessment
 from models import (
+    V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+    V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
+    V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY,
     Placement,
     ResearchDirection,
     Stance,
@@ -24,6 +31,7 @@ from models import (
     V2FinalResearchOutput,
     V2GapCoverageReconciliation,
     V2GapCoverageState,
+    V2PostAnalysisAssessment,
     V2ReleaseValidation,
     V2ResearchStoppingDisclosure,
     V2ResearchStoppingReason,
@@ -56,9 +64,9 @@ from store import insert_v2_artifact, read_v2_artifact
 V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY = "phase-11-final-research-output"
 V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY = "phase-13-final-research-output-analyzer-admission"
 V2_FINAL_OUTPUT_ARTIFACT_KEY = "post-phase-13-round-four-final-output-v1"
-V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-final-output-v2"
+V2_FINAL_OUTPUT_POLICY_IDENTITY = "researchassistant-v2-post-phase-13-round-four-final-output-v3"
 V2_FINAL_VALIDATOR_CONFIG_VERSION = (
-    "researchassistant-v2-post-phase-13-round-four-release-validator-v2"
+    "researchassistant-v2-post-phase-13-round-four-release-validator-v3"
 )
 
 V2EvidenceInputResult = V2EvidenceAdmissionBatchResult | V2ReviewerLedgerBatchResult
@@ -273,6 +281,11 @@ def build_v2_final_research_output(
         "stopping": stopping,
         "created_at": _aware(created_at),
     }
+    output_without_validation["post_analysis_assessment"] = _post_analysis_assessment(
+        evidence_result,
+        output_without_validation["claim_coverage_map"],
+        len(output_without_validation["unresolved_material_gaps"]),
+    )
     validation = validate_v2_final_release(
         synthesis=synthesis,
         ledger_records=records,
@@ -322,6 +335,7 @@ def validate_v2_final_release(
         unresolved_material_gaps=output_fields["unresolved_material_gaps"],
         claim_coverage_map=output_fields.get("claim_coverage_map", ()),
         stopping=output_fields["stopping"],
+        post_analysis_assessment=output_fields.get("post_analysis_assessment"),
     )
     return V2ReleaseValidation(
         evidence_validation=evidence,
@@ -346,6 +360,7 @@ def render_v2_final_output(output: V2FinalResearchOutput) -> str:
         unresolved_material_gaps=output.unresolved_material_gaps,
         claim_coverage_map=output.claim_coverage_map,
         stopping=output.stopping,
+        post_analysis_assessment=output.post_analysis_assessment,
     )
 
 
@@ -357,6 +372,21 @@ def _v2_integrity_errors(
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     selection = evidence_result.analyst_result.input.queue_result
+    try:
+        _validate_chain(evidence_result, continuation)
+    except ValueError as exc:
+        errors.append(_error("evidence_policy", str(exc)))
+    actual_post_analysis = output_fields.get("post_analysis_assessment")
+    try:
+        coverage = output_fields.get("claim_coverage_map", ())
+        gaps = output_fields.get("unresolved_material_gaps", ())
+        if not isinstance(gaps, tuple):
+            raise ValueError("post-analysis gap disclosure must be a tuple")
+        expected_post_analysis = _post_analysis_assessment(evidence_result, coverage, len(gaps))
+        if actual_post_analysis != expected_post_analysis:
+            raise ValueError("post-analysis assessment must exactly match admitted evidence")
+    except ValueError as exc:
+        errors.append(_error("post_analysis_assessment", str(exc)))
     if (
         selection.input.gap_reporting_policy == "conservative-v1"
         and output_fields.get("gap_reconciliation") is None
@@ -724,6 +754,27 @@ def _validate_chain(
         raise ValueError("v2 final output selection must match the same run")
     if continuation.merged_survivors.run_id != evidence_result.run_id:
         raise ValueError("v2 final output survivor pool must match the same run")
+    analyst = evidence_result.analyst_result
+    if analyst.policy_identity != analyst.input.policy_identity:
+        raise ValueError("Analyst batch and input policy identities must match")
+    if isinstance(evidence_result, V2EvidenceAdmissionBatchResult):
+        expected_admission_identity = {
+            V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY: (
+                V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY
+            ),
+            V2_EVIDENCE_ANALYST_PREVIOUS_POLICY_IDENTITY: (
+                V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY
+            ),
+            V2_EVIDENCE_ANALYST_POLICY_IDENTITY: V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
+        }.get(analyst.policy_identity)
+        if evidence_result.policy_identity != expected_admission_identity:
+            raise ValueError("Analyst and admission policy identities must pair")
+        for source in evidence_result.source_results:
+            record = source.evidence_record
+            if record is not None and (
+                record.admission_policy_identity != evidence_result.policy_identity
+            ):
+                raise ValueError("admitted record policy must match the evidence batch policy")
 
 
 def _validate_persisted_output(
@@ -758,6 +809,30 @@ def _validate_persisted_output(
     )
     if output.claim_coverage_map != expected_coverage:
         raise ValueError("persisted v2 final output coverage disclosure does not match inputs")
+    if output.post_analysis_assessment != _post_analysis_assessment(
+        evidence_result, expected_coverage, len(expected_gaps)
+    ):
+        raise ValueError("persisted post-analysis assessment does not match admitted evidence")
+
+
+def _post_analysis_assessment(
+    evidence_result: V2EvidenceInputResult,
+    coverage: object,
+    unresolved_gap_count: int,
+) -> V2PostAnalysisAssessment | None:
+    if not isinstance(evidence_result, V2EvidenceAdmissionBatchResult) or (
+        evidence_result.policy_identity != V2_EVIDENCE_ADMISSION_POLICY_IDENTITY
+    ):
+        return None
+    if not isinstance(coverage, tuple) or any(
+        not isinstance(item, V2ClaimCoverageAssessment) for item in coverage
+    ):
+        raise ValueError("post-analysis coverage must be typed assessments")
+    return build_v2_post_analysis_assessment(
+        admission_result=evidence_result,
+        coverage=coverage,
+        unresolved_gap_count=unresolved_gap_count,
+    )
 
 
 def _render_v2_components(
@@ -770,6 +845,7 @@ def _render_v2_components(
     unresolved_material_gaps: object,
     claim_coverage_map: object,
     stopping: object,
+    post_analysis_assessment: object = None,
 ) -> str:
     if not isinstance(recommended_sources, tuple) or not isinstance(all_surviving_sources, tuple):
         raise ValueError("v2 final output source lists must be tuples")
@@ -782,7 +858,26 @@ def _render_v2_components(
     if not isinstance(support, bool) or not isinstance(challenge, bool):
         raise ValueError("v2 final output directions are malformed")
     lines = ["# Research Brief", "", f"Claim under review: {exact_claim}", ""]
-    lines.append(f"Research direction: {_direction_label(support, challenge)}")
+    if post_analysis_assessment is not None:
+        if not isinstance(post_analysis_assessment, V2PostAnalysisAssessment):
+            raise ValueError("post-analysis assessment must be typed")
+        direction = (
+            "support and challenge"
+            if support and challenge
+            else ("support" if support else "challenge")
+        )
+        lines.append(f"Research direction: {direction}-directed searches.")
+        lines.append("Search direction does not determine a finding's relationship to the claim.")
+        lines.extend(("", "## Evidence assessment after source analysis"))
+        lines.append("The claim is not established by release validation.")
+        lines.append(
+            f"Admitted relationships: {post_analysis_assessment.supporting_count} supports, "
+            f"{post_analysis_assessment.challenging_count} challenges, "
+            f"{post_analysis_assessment.qualifying_count} qualifies."
+        )
+        lines.extend(f"- {note}" for note in post_analysis_assessment.limitations)
+    else:
+        lines.append(f"Research direction: {_direction_label(support, challenge)}")
     if any(
         item.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED
         for section in synthesis.sections
@@ -791,9 +886,15 @@ def _render_v2_components(
         lines.append("Evidence admission: Analyzer-admitted; not independently reviewed.")
     for section in synthesis.sections:
         if section.section_type.value == "supporting":
-            heading = "Supporting Evidence"
+            heading = (
+                "Support-directed Findings" if post_analysis_assessment else "Supporting Evidence"
+            )
         elif section.section_type.value == "opposing":
-            heading = "Challenging Evidence"
+            heading = (
+                "Challenge-directed Findings"
+                if post_analysis_assessment
+                else "Challenging Evidence"
+            )
         else:
             heading = "Evidence Qualifications"
         lines.extend(("", f"## {heading}"))
