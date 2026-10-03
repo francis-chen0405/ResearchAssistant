@@ -9,10 +9,11 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from evidence_core import verify_candidate_against_snapshot
-from model_contracts import SourceSnapshot
-from model_evidence import V2EvidenceAnalystCandidateInput
-from model_research import ResearchDirection
+from researchassistant.common.utils import derive_quote_block_id
+from researchassistant.contracts.model_contracts import SourceSnapshot
+from researchassistant.contracts.model_evidence import V2EvidenceAnalystCandidateInput
+from researchassistant.contracts.model_research import ResearchDirection
+from researchassistant.evidence.evidence_core import verify_candidate_against_snapshot
 from tests.test_phase4 import (
     _admission_request,
     _admit,
@@ -21,7 +22,6 @@ from tests.test_phase4 import (
     _draft,
     _snapshot_and_candidate,
 )
-from utils import derive_quote_block_id
 
 
 @pytest.mark.parametrize(

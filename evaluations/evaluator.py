@@ -57,7 +57,8 @@ from evaluations.schema import (
     SafetyMetrics,
     StageRouteMetrics,
 )
-from models import (
+from providers.llm import DEFAULT_LLM_ROUTING, LLMStage
+from researchassistant.contracts.models import (
     AmbiguityRecord,
     ClaimDefinition,
     Entailment,
@@ -72,7 +73,6 @@ from models import (
     SynthesisOutput,
     SynthesisSection,
 )
-from providers.llm import DEFAULT_LLM_ROUTING, LLMStage
 
 EVALUATION_VERSION = "phase10-offline-evaluation-v1"
 MIMO_NORMAL = MIMO_NORMAL_ALIAS

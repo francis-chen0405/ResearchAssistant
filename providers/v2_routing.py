@@ -15,8 +15,6 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, SecretStr, model_validator
 
-from models import ProviderRunContract, StrictModel
-from provider_contract import canonical_provider_contract_payload
 from providers.config import (
     LunaConfig,
     MimoChoiceConfig,
@@ -36,6 +34,8 @@ from providers.pricing import (
     ModelPriceCap,
     price_cap_from_environment,
 )
+from researchassistant.contracts.models import ProviderRunContract, StrictModel
+from researchassistant.contracts.provider_contract import canonical_provider_contract_payload
 
 V2_ROUTING_FINGERPRINT_VERSION = "researchassistant-v2-phase-2-routing-v1"
 V2_ROUTING_POLICY_VERSION = "researchassistant-v2-routing-policy-v1"

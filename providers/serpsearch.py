@@ -8,7 +8,6 @@ from uuid import UUID
 import httpx
 from pydantic import ValidationError
 
-from models import DiscoveryProvider
 from providers.config import SerpSearchConfig
 from providers.search import (
     SearchDiscoveryMetadata,
@@ -19,6 +18,7 @@ from providers.search import (
     SearchResult,
     SearchTimeoutError,
 )
+from researchassistant.contracts.models import DiscoveryProvider
 
 
 class SerpSearchAdapter:

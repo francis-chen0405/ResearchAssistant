@@ -7,7 +7,11 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import ConfigDict, Field, model_validator
 
-from models import MediaTypeProvenance, StrictModel, SupportedOriginMediaType
+from researchassistant.contracts.models import (
+    MediaTypeProvenance,
+    StrictModel,
+    SupportedOriginMediaType,
+)
 
 
 class ScraperProviderError(RuntimeError):

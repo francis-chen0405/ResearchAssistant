@@ -25,7 +25,7 @@ from pydantic import (
 )
 
 from agents.reviewer import ReviewerDecision
-from models import (
+from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     GapAnalysisResult,

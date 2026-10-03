@@ -61,7 +61,7 @@ def test_frontend_summary_contains_structured_display_information(tmp_path: Path
     assert summary.counts.snapshots == 2
     assert summary.counts.provisional_candidates == 2
     assert summary.counts.audit_entries == len(summary.audit_trail)
-    assert summary.metadata.db_path.endswith("fixture_pipeline.sqlite3")
+    assert summary.metadata.db_path.endswith("researchassistant.research.fixture_pipeline.sqlite3")
     assert summary.metadata.audit_path.endswith("audit.json")
     assert summary.metadata.result_path.endswith("result.json")
     assert summary.validation.validator_config_version

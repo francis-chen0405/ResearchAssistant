@@ -11,7 +11,21 @@ from uuid import UUID
 
 from pydantic import ConfigDict
 
-from models import (
+from providers.llm import (
+    V2_LLM_ROUTING,
+    LLMInvocationError,
+    LLMInvocationRecord,
+    LLMProvider,
+    LLMRequest,
+    LLMStage,
+    invoke_llm,
+    is_non_retryable_provider_error,
+    load_prompt,
+    render_stage_prompt,
+)
+from providers.pricing import conservative_token_estimate
+from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import (
     ResearchDirection,
     V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
@@ -34,21 +48,7 @@ from models import (
     V2MaterialGap,
     validate_v2_gap_identity_continuity,
 )
-from providers.llm import (
-    V2_LLM_ROUTING,
-    LLMInvocationError,
-    LLMInvocationRecord,
-    LLMProvider,
-    LLMRequest,
-    LLMStage,
-    invoke_llm,
-    is_non_retryable_provider_error,
-    load_prompt,
-    render_stage_prompt,
-)
-from providers.pricing import conservative_token_estimate
-from providers.v2_routing import V2RoutingConfig
-from store import insert_v2_artifact, read_v2_artifact
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_GAP_ANALYSIS_ARTIFACT_KEY = "phase-6-gap-analysis"
 V2_GAP_ANALYSIS_MAX_ATTEMPTS = 2

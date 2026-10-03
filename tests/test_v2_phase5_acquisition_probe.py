@@ -18,13 +18,19 @@ from agents.v2_discovery import (
     cluster_discovery_items,
     normalize_discovery_responses,
 )
-from evidence_core import (
-    fresh_numbered_source_text,
-    fresh_sentence_spans,
-    selected_segments_from_selection,
+from providers.acquisition import AcquisitionFailureCode
+from providers.scraper import (
+    ScrapeRequest,
+    ScrapeResponse,
+    ScraperProviderError,
+    VerifiedAcquisitionPreflight,
 )
-from model_contracts import SelectedSentenceRange
-from models import (
+from providers.search import SearchResult
+from researchassistant.common.utils import count_words
+from researchassistant.contracts.model_contracts import SelectedSentenceRange
+from researchassistant.contracts.models import (
+    V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
+    V2_ACQUISITION_PROBE_POLICY_IDENTITY,
     DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
@@ -34,21 +40,22 @@ from models import (
     ScoutBatchAudit,
     ScoutItem,
     Stage,
+    V2AcquisitionPolicy,
+    V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
     V2PipelineIdentity,
     V2ProbePassage,
     V2RoundOneSearchQuery,
     V2VerbatimQuoteSelection,
 )
-from providers.acquisition import AcquisitionFailureCode
-from providers.scraper import (
-    ScrapeRequest,
-    ScrapeResponse,
-    ScraperProviderError,
-    VerifiedAcquisitionPreflight,
+from researchassistant.evidence.evidence_core import (
+    CURRENT_QUOTE_LENGTH_POLICY,
+    fresh_numbered_source_text,
+    fresh_sentence_spans,
+    has_statistical_markers,
+    selected_segments_from_selection,
 )
-from providers.search import SearchResult
-from store import init_db, insert_run, insert_v2_pipeline_identity
+from researchassistant.storage.store import init_db, insert_run, insert_v2_pipeline_identity
 
 NOW = datetime(2026, 8, 20, tzinfo=UTC)
 
@@ -164,8 +171,10 @@ def test_acquisition_routes_wigolo_then_verified_firecrawl_and_persists_survivor
         {
             url: _response(
                 url,
-                "Opening evidence has 42% support. [1] References establish the method. "
-                "In conclusion, the evidence remains useful.",
+                "The study sampled 640 plate reads and reported a 42% increase in correct matches "
+                "across departments. Analysts compared the records over three years and describe "
+                "how a published method controls for missing records. In conclusion, these "
+                "findings support careful evaluation and transparent reporting.",
             )
         }
     )
@@ -253,7 +262,11 @@ def test_probe_low_overlap_fallback_is_stable() -> None:
         source_url="https://example.org/source",
         retrieved_at=NOW,
         normalized_text=(
-            "Abstract opening. Plain unrelated material. Final conclusion without shared keywords."
+            "Abstract opening. Plain unrelated material. Final conclusion without shared keywords. "
+            "Researchers reviewed administrative records from several regional departments, "
+            "comparing source documents with policy archives over a six-year interval. The report "
+            "outlines study design, limitations, and future analysis without addressing the "
+            "current question directly."
         ),
         truncated=False,
         created_at=NOW,
@@ -329,6 +342,197 @@ def test_probe_does_not_select_page_controls_or_url_when_substantive_text_exists
     assert all("https://" not in passage.text for passage in result.passages)
     assert all("Page 1 of 4" not in passage.text for passage in result.passages)
     assert all("Cookie settings" not in passage.text for passage in result.passages)
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "OSF",
+        "A required part of this site couldn’t load. This may be due to a browser extension, "
+        "network issues, or browser settings. Please check your connection, disable any ad "
+        "blockers, or try using a different browser.",
+    ),
+)
+def test_probe_rejects_non_substantive_and_error_shell_only_snapshots(text: str) -> None:
+    snapshot = build_source_snapshot(
+        run_id=uuid4(),
+        retrieval_attempt_id=uuid4(),
+        snapshot_id=uuid4(),
+        source_url="https://example.org/source",
+        retrieved_at=NOW,
+        normalized_text=text,
+        truncated=False,
+        created_at=NOW,
+    )
+
+    result = probe_snapshot(snapshot=snapshot, cluster_id=uuid4())
+
+    assert result.succeeded is False
+    assert result.passages == ()
+    assert result.failure is not None
+
+
+@pytest.mark.parametrize(
+    ("text", "should_probe_succeed"),
+    (
+        (
+            "The report describes unequal camera deployment in neighborhoods across the city, "
+            "but does not compare outcomes for residents or explain intent.",
+            False,
+        ),
+        (
+            "The study found a 12% higher rate of stops involving Black drivers using ALPR "
+            "alerts across three cities after accounting for population differences.",
+            True,
+        ),
+    ),
+)
+def test_probe_v2_respects_the_possible_quote_length_floor(
+    text: str, should_probe_succeed: bool
+) -> None:
+    minimum_words = (
+        CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
+        if has_statistical_markers(text)
+        else CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words
+    )
+    snapshot = build_source_snapshot(
+        run_id=uuid4(),
+        retrieval_attempt_id=uuid4(),
+        snapshot_id=uuid4(),
+        source_url="https://example.org/source",
+        retrieved_at=NOW,
+        normalized_text=text,
+        truncated=False,
+        created_at=NOW,
+    )
+
+    result = probe_snapshot(snapshot=snapshot, cluster_id=uuid4())
+
+    assert (count_words(text) >= minimum_words) is should_probe_succeed
+    assert result.succeeded is should_probe_succeed
+    assert bool(result.passages) is should_probe_succeed
+
+
+def test_probe_v2_keeps_substantive_text_beside_a_page_error_banner() -> None:
+    error_banner = (
+        "A required part of this site couldn’t load. This may be due to a browser extension, "
+        "network issues, or browser settings. Please check your connection, disable any ad "
+        "blockers, or try using a different browser."
+    )
+    report_text = (
+        "The study compares the distribution of automated plate reader cameras with "
+        "neighborhood population and income measures across the region. Its findings describe "
+        "unequal deployment patterns, but the analysis does not measure stops or enforcement "
+        "outcomes for individual residents."
+    )
+    snapshot = build_source_snapshot(
+        run_id=uuid4(),
+        retrieval_attempt_id=uuid4(),
+        snapshot_id=uuid4(),
+        source_url="https://example.org/source",
+        retrieved_at=NOW,
+        normalized_text=f"{error_banner}\n{report_text}",
+        truncated=False,
+        created_at=NOW,
+    )
+
+    result = probe_snapshot(snapshot=snapshot, cluster_id=uuid4())
+
+    assert result.succeeded
+    assert result.passages
+    assert any("study compares" in passage.text for passage in result.passages)
+    assert all("couldn’t load" not in passage.text for passage in result.passages)
+    assert all("browser extension" not in passage.text for passage in result.passages)
+
+
+def test_probe_v2_marks_snapshots_without_sentence_spans_unusable() -> None:
+    snapshot = build_source_snapshot(
+        run_id=uuid4(),
+        retrieval_attempt_id=uuid4(),
+        snapshot_id=uuid4(),
+        source_url="https://example.org/source",
+        retrieved_at=NOW,
+        normalized_text="\n",
+        truncated=False,
+        created_at=NOW,
+    )
+
+    result = probe_snapshot(snapshot=snapshot, cluster_id=uuid4())
+
+    assert result.succeeded is False
+    assert result.passages == ()
+    assert result.failure is not None
+    legacy_result = probe_snapshot(
+        snapshot=snapshot,
+        cluster_id=result.cluster_id,
+        policy_identity=V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
+    )
+    assert legacy_result.succeeded
+    assert legacy_result.passages == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "OSF",
+        "The report describes unequal camera deployment in neighborhoods across the city, "
+        "but does not compare outcomes for residents or explain intent.",
+        "A required part of this site couldn’t load. This may be due to a browser extension, "
+        "network issues, or browser settings. Please check your connection, disable any ad "
+        "blockers, or try using a different browser.",
+    ),
+)
+def test_probe_shell_capture_never_becomes_an_acquisition_survivor(
+    tmp_path: Path, text: str
+) -> None:
+    run_id = uuid4()
+    url = "https://example.org/source"
+    output = _discovery(run_id, (url,), ("retrieve",))
+    db_path = _prepare_db(tmp_path, run_id)
+    scraper = FixtureScraper({url: _response(url, text)})
+
+    result = run_v2_acquisition_probe(
+        db_path=db_path,
+        discovery_output=output,
+        wigolo_provider=scraper,
+        clock=lambda: NOW,
+    )
+
+    assert len(result.output.acquisitions) == 1
+    assert result.output.policy_identity == V2_ACQUISITION_PROBE_POLICY_IDENTITY
+    assert result.output.probes[0].succeeded is False
+    assert result.output.probes[0].passages == ()
+    assert result.output.survivors == ()
+
+
+def test_explicit_legacy_probe_policy_preserves_fallback_survivor(tmp_path: Path) -> None:
+    run_id = uuid4()
+    url = "https://example.org/source"
+    output = _discovery(run_id, (url,), ("retrieve",))
+    db_path = _prepare_db(tmp_path, run_id)
+    scraper = FixtureScraper({url: _response(url, "OSF")})
+
+    result = run_v2_acquisition_probe(
+        db_path=db_path,
+        discovery_output=output,
+        wigolo_provider=scraper,
+        policy=V2AcquisitionPolicy(policy_identity=V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY),
+        clock=lambda: NOW,
+    )
+
+    assert result.output.policy_identity == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY
+    assert result.output.probes[0].succeeded
+    assert result.output.survivors
+    assert (
+        V2AcquisitionProbeOutput.model_validate_json(
+            result.output.model_dump_json()
+        ).policy_identity
+        == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY
+    )
+
+
+def test_probe_v2_identity_is_the_default_policy() -> None:
+    assert V2AcquisitionPolicy().policy_identity == V2_ACQUISITION_PROBE_POLICY_IDENTITY
 
 
 def test_probe_failure_preserves_snapshot_and_excludes_source_from_survivors(

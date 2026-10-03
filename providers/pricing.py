@@ -7,8 +7,8 @@ from decimal import ROUND_UP, Decimal
 
 from pydantic import ConfigDict, Field
 
-from models import StrictModel
 from providers.model_choices import MODEL_OPTIONS
+from researchassistant.contracts.models import StrictModel
 
 DIRECT_MIMO_PRICING_POLICY_VERSION = "xiaomi-mimo-price-cap-2026-08-10-v2"
 

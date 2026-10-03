@@ -21,7 +21,7 @@ from frontend.api import (
     _source_budget_outcome,
     _source_context_notice,
 )
-from models import (
+from researchassistant.contracts.models import (
     CandidateQuoteBlock,
     SynthesisOutput,
     V2DeepAnalysisSourceExecution,
@@ -72,9 +72,40 @@ def test_admitted_detail_links_to_exact_record_and_preserves_relationship(
     assert item.ledger_claim_id == record.ledger_claim_id
     assert item.approved_factual_statement == record.approved_factual_statement
     assert item.source_url == record.source_url
+    assert item.claim_fit == record.claim_fit
     assert item.relationship_to_claim is analyst.assessment.relationship_to_claim
     assert item.direction == "support"
     assert display.research_status.source == "final_output"
+
+
+def test_source_title_projection_uses_readable_fallback_and_retains_captured_title(
+    tmp_path: Path,
+) -> None:
+    _path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=_continuation(reviewer_result.run_id),
+        synthesis=_synthesis(reviewer_result),
+        created_at=reviewer_result.completed_at,
+    )
+    source = output.all_surviving_sources[0]
+    captured_title = "S2056608520000082jra 1..28"
+    source_with_citation_heading = source.model_copy(
+        update={
+            "title": captured_title,
+            "source_url": "https://example.org/paper.pdf",
+        }
+    )
+    titled_output = output.model_copy(
+        update={"all_surviving_sources": (source_with_citation_heading,)}
+    )
+
+    display = _build_v2_evidence_display(titled_output, reviewer_result)
+
+    title = display.source_titles[0]
+    assert title.source_id == source.source_id
+    assert title.display_title == "PDF file: paper.pdf (example.org)"
+    assert title.captured_title == captured_title
 
 
 def test_projection_rejects_candidate_quote_forged_away_from_ledger_record(

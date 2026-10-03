@@ -9,9 +9,9 @@ from zipfile import ZipFile
 
 import pytest
 
-import brief_export
-from brief_export import BriefExportFormat, export_released_brief
-from orchestrator import ProviderRunStatus
+import researchassistant.evidence.brief_export as brief_export
+from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
+from researchassistant.research.orchestrator import ProviderRunStatus
 
 RUN_ID = UUID("11111111-1111-4111-8111-111111111111")
 BRIEF = (

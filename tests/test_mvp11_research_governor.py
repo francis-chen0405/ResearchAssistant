@@ -11,7 +11,7 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from models import (
+from researchassistant.contracts.models import (
     ResearchGovernorBudgetState,
     ResearchGovernorDecisionOutcome,
     ResearchGovernorEvaluationInput,
@@ -23,8 +23,11 @@ from models import (
     RunStatus,
     Stage,
 )
-from research_governor import classify_terminal_outcome, evaluate_round_three_authorization
-from store import (
+from researchassistant.research.research_governor import (
+    classify_terminal_outcome,
+    evaluate_round_three_authorization,
+)
+from researchassistant.storage.store import (
     init_db,
     insert_research_governor_decision,
     insert_research_round_record,

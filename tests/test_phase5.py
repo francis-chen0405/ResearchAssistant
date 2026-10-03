@@ -18,7 +18,7 @@ from agents.renderer import (
     validate_final_release,
 )
 from agents.synthesizer import build_synthesis_output
-from models import (
+from researchassistant.contracts.models import (
     Entailment,
     LedgerRecord,
     Placement,

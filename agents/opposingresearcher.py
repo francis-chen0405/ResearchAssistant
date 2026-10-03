@@ -12,9 +12,9 @@ from agents.supportingresearcher import (
     SnapshotConsumer,
     _retrieve_stance,
 )
-from models import PlannerOutput, Stance
 from providers.scraper import RetryPolicy, ScraperProvider
 from providers.search import SearchProvider
+from researchassistant.contracts.models import PlannerOutput, Stance
 
 
 def retrieve_opposing(

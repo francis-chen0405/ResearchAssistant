@@ -44,12 +44,14 @@ jobs:
           pnpm --dir web install --frozen-lockfile
           npm ci --prefix desktop --no-audit --no-fund
           node desktop/node_modules/electron/install.js
-      - name: Python regressions and quality
-        run: |
-          python -m pytest
-          python -m ruff check .
-          python -m ruff format --check .
-          git diff --check
+      - name: Python regressions
+        run: python -m pytest
+      - name: Ruff lint
+        run: python -m ruff check .
+      - name: Ruff format
+        run: python -m ruff format --check .
+      - name: Whitespace check
+        run: git diff --check
       - name: Frontend lint and type check
         working-directory: web
         run: |

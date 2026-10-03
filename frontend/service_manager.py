@@ -16,13 +16,13 @@ from typing import Literal, TextIO
 import httpx
 from pydantic import Field
 
-from desktop_paths import application_data_dir
 from frontend.security import redact_text
-from models import StrictModel
 from providers.config import WigoloConfig
 from providers.search import SearchProviderError
 from providers.wigolo import WigoloSearchAdapter
-from windows_job import WindowsJob
+from researchassistant.contracts.models import StrictModel
+from researchassistant.platform_support.desktop_paths import application_data_dir
+from researchassistant.platform_support.windows_job import WindowsJob
 
 ServiceState = Literal[
     "healthy",

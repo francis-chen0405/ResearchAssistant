@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from models import (
+from researchassistant.contracts.models import (
     REQUIRED_QUERY_EXCLUSIONS,
     AmbiguityRecord,
     CandidateQuoteBlock,

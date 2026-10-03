@@ -26,7 +26,7 @@ from agents.v2_round_four import (
     _representative_round_rows,
     _validate_round_four_decision_against_gap,
 )
-from models import (
+from researchassistant.contracts.models import (
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
     DiscoveryProvider,
     ResearchDirection,
@@ -62,7 +62,10 @@ from models import (
     V2SourceSelectionProbePassage,
     V2SourceSelectionSearchProvenance,
 )
-from research_governor import V2RoundFourGovernorInput, evaluate_v2_round_four_authorization
+from researchassistant.research.research_governor import (
+    V2RoundFourGovernorInput,
+    evaluate_v2_round_four_authorization,
+)
 
 NOW = datetime(2026, 8, 28, tzinfo=UTC)
 

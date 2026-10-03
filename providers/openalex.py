@@ -11,8 +11,6 @@ from uuid import UUID
 import httpx
 from pydantic import ValidationError
 
-from models import DiscoveryProvider
-from money import add_usd, parse_exact_usd
 from providers.config import OpenAlexConfig
 from providers.search import (
     SearchDiscoveryMetadata,
@@ -23,6 +21,8 @@ from providers.search import (
     SearchResult,
     SearchTimeoutError,
 )
+from researchassistant.common.money import add_usd, parse_exact_usd
+from researchassistant.contracts.models import DiscoveryProvider
 
 OPENALEX_SELECT = ",".join(
     (

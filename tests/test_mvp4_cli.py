@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from cli import CLIExitCode
+from researchassistant.runtime.cli import CLIExitCode
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "tests" / "mvp4_subprocess_driver.py"
@@ -247,7 +247,13 @@ def test_inspect_run_reports_authoritative_audit_and_release(tmp_path: Path) -> 
     assert run.returncode == CLIExitCode.RELEASED
 
     inspected = subprocess.run(
-        [sys.executable, "cli.py", "inspect-run", str(tmp_path / "mvp4.sqlite3"), str(run_id)],
+        [
+            sys.executable,
+            "cli.py",
+            "inspect-run",
+            str(tmp_path / "mvp4.sqlite3"),
+            str(run_id),
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,

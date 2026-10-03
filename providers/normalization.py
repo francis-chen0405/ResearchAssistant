@@ -15,7 +15,7 @@ from pydantic import ConfigDict, Field, field_validator
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from models import SegmentOffset, StrictModel
+from researchassistant.contracts.models import SegmentOffset, StrictModel
 
 NORMALIZATION_VERSION = "ra-normalization-v1"
 PDF_POLICY_VERSION = "ra-digital-pdf-v1"

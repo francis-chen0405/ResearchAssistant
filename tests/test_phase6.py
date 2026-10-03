@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from models import (
+from researchassistant.contracts.models import (
     CandidateBatch,
     CandidateQuoteBlock,
     LedgerRecord,
@@ -24,8 +24,8 @@ from models import (
     SynthesisOutput,
     ValidationErrorCode,
 )
-from orchestrator import FixturePipelineError, run_fixture_pipeline
-from store import read_ledger_record, read_synthesis, read_validation
+from researchassistant.research.orchestrator import FixturePipelineError, run_fixture_pipeline
+from researchassistant.storage.store import read_ledger_record, read_synthesis, read_validation
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _VALID_FIXTURE = _REPO_ROOT / "tests" / "fixtures" / "basic_valid_run"
@@ -178,7 +178,7 @@ def test_pipeline_does_not_touch_network_or_provider_surfaces(
     assert result.status == "released"
     source_text = "\n".join(
         [
-            (_REPO_ROOT / "orchestrator.py").read_text(encoding="utf-8"),
+            (_REPO_ROOT / "researchassistant/research/orchestrator.py").read_text(encoding="utf-8"),
             (_REPO_ROOT / "cli.py").read_text(encoding="utf-8"),
         ]
     )

@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 
-from models import MediaTypeProvenance
 from providers.acquisition import (
     ACQUISITION_VERSION,
     AcquisitionFailureCode,
@@ -23,6 +22,7 @@ from providers.scraper import (
     ScraperProviderError,
     ScraperTimeoutError,
 )
+from researchassistant.contracts.models import MediaTypeProvenance
 
 _FALLBACK_CODES = frozenset(
     {

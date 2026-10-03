@@ -12,7 +12,10 @@ from agents.v2_gap_analysis import (
     build_v2_gap_analysis_input,
     run_v2_gap_analysis,
 )
-from models import (
+from providers.llm import LLMProviderCapabilities, LLMProviderExecutionError, ModelAlias
+from providers.mimo import MimoFailureCode, MimoProviderError
+from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
@@ -38,10 +41,12 @@ from models import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
 )
-from providers.llm import LLMProviderCapabilities, LLMProviderExecutionError, ModelAlias
-from providers.mimo import MimoFailureCode, MimoProviderError
-from providers.v2_routing import V2RoutingConfig
-from store import init_db, insert_run, insert_v2_pipeline_identity, read_v2_artifact
+from researchassistant.storage.store import (
+    init_db,
+    insert_run,
+    insert_v2_pipeline_identity,
+    read_v2_artifact,
+)
 
 NOW = datetime(2026, 8, 20, tzinfo=UTC)
 
@@ -249,7 +254,7 @@ def test_gap_result_accepts_only_enabled_directions(directions: ResearchDirectio
     if len(directions.enabled_directions) == 2:
         return
     with pytest.raises(ValidationError, match="disabled research direction"):
-        from models import V2GapAnalysisResult
+        from researchassistant.contracts.models import V2GapAnalysisResult
 
         payload = result.model_dump()
         payload["material_gaps"] = (

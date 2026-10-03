@@ -8,8 +8,12 @@ from uuid import uuid4
 
 import pytest
 
-from store import DatabaseCompatibilityError, init_db, open_read_only_store
-from store_schema import CURRENT_SCHEMA_VERSION
+from researchassistant.storage.store import (
+    DatabaseCompatibilityError,
+    init_db,
+    open_read_only_store,
+)
+from researchassistant.storage.store_schema import CURRENT_SCHEMA_VERSION
 
 
 def _connection(path: Path) -> sqlite3.Connection:

@@ -3,9 +3,13 @@ from hashlib import sha256
 from uuid import UUID, uuid4
 
 from agents.v2_extraction import V2ExtractionState, _extract_source
-from models import ResearchDirection, SourceSnapshot, V2VerbatimQuoteSelection
 from providers.llm import LLMProviderCapabilities, LLMRequest
 from providers.v2_budget import V2BudgetExceededError, V2SourceBudgetExceededError
+from researchassistant.contracts.models import (
+    ResearchDirection,
+    SourceSnapshot,
+    V2VerbatimQuoteSelection,
+)
 
 NOW = datetime(2026, 10, 2, tzinfo=UTC)
 PASSAGE = (

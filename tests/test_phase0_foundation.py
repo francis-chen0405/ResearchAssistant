@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 import tomllib
 
-from cli import _build_parser
+from researchassistant.runtime.cli import _build_parser
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 

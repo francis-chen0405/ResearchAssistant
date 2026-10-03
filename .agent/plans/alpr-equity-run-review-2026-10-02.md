@@ -1,0 +1,11 @@
+# ALPR equity run review — 2026-10-02
+
+Status: read-only review complete; proposed repairs await user direction.
+
+The user requested review of the latest result, “ALPRs discriminate against people of color and impoverished people,” after supplying cumulative token counts. Review saved run `2518837c-fc8e-41f8-ad48-25ccb372b7ab`, result quality, failed/rejected/budget-blocked sources, token/cost accounting and associated presentation or policy issues. Two Luna helpers independently inspect pipeline outcomes and UI/evidence projections; the primary agent verifies immutable hashes, final reconstruction, accounting and primary-source metadata.
+
+The real database is opened only with SQLite `mode=ro`. Pure projections and temporary offline fixtures are permitted; no application/provider submissions, saved-data writes, source/prompt changes, app replacement, commit/push or publication are included. Record confirmed defects separately from expected limits and proposed quality improvements, with evidence and uncertainty. Source repair requires subsequent user direction.
+
+Verify every saved artifact hash and the released hash, exact quotation/Ledger bindings, source outcome totals, post-analysis/coverage counts and complete physical-call usage. Run focused existing tests relevant to the findings, Ruff lint/format and whitespace checks; the preceding complete source suite remains historical evidence. Preserve current documents by adding a dated review summary and actual next boundary.
+
+Completed findings are recorded in [the review](../../docs/verification/alpr-equity-run-review-2026-10-02.md). All 263 saved artifact hashes, the original release hash and seven unique quotation bindings verify. The 25 outcomes reconcile to seven admitted, eight rejected, six extraction failures, two Analyst failures and two source-local cap blocks. Exact cache-aware cost is $0.063218505 from 232,658 input / 73,309 output tokens. Existing focused tests passed 72 tests; Ruff lint/format and whitespace checks passed. No source/app/saved-data changes, new application/provider calls, commit or push occurred. The prior full suite remains historical. Continue only on new user direction; proposed priorities include stop timing, capture/extraction quality, a missed OSF/RePEc shared-work notice and clearer labels/context grouping.

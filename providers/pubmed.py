@@ -7,7 +7,6 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from models import DiscoveryProvider
 from providers.config import PubMedConfig
 from providers.search import (
     SearchDiscoveryMetadata,
@@ -18,6 +17,7 @@ from providers.search import (
     SearchResult,
     SearchTimeoutError,
 )
+from researchassistant.contracts.models import DiscoveryProvider
 
 
 class PubMedSearchAdapter:

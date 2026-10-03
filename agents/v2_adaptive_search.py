@@ -18,32 +18,6 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from agents.v2_acquisition import run_v2_acquisition_probe
 from agents.v2_discovery import V2DiscoveryResponse, run_v2_discovery_and_scout
 from agents.v2_gap_analysis import V2GapAnalysisRunResult, run_v2_gap_analysis
-from models import (
-    CrossrefIdentityMetadata,
-    DiscoveryProvider,
-    ResearchDirection,
-    SourceCluster,
-    StrictModel,
-    V2AcquisitionProbeOutput,
-    V2AdaptiveRoundPlan,
-    V2AdaptiveSearchModelOutput,
-    V2AdaptiveSearchQuery,
-    V2DiscoveryScoutOutput,
-    V2GapAcquisitionFailure,
-    V2GapAnalysisInput,
-    V2GapAnalysisOutput,
-    V2GapAttemptedQuery,
-    V2GapBudgetState,
-    V2GapDuplicatePattern,
-    V2GapProbePassage,
-    V2GapSourceFamily,
-    V2GapSurvivingSourceMetadata,
-    V2InitialPlannerOutput,
-    V2ProviderSearchBudget,
-    V2SearchAgentInput,
-    V2SurvivingSource,
-)
-from money import add_usd
 from providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -68,13 +42,39 @@ from providers.search import (
     SearchResult,
 )
 from providers.v2_routing import V2RoutingConfig
-from research_governor import (
+from researchassistant.common.money import add_usd
+from researchassistant.contracts.models import (
+    CrossrefIdentityMetadata,
+    DiscoveryProvider,
+    ResearchDirection,
+    SourceCluster,
+    StrictModel,
+    V2AcquisitionProbeOutput,
+    V2AdaptiveRoundPlan,
+    V2AdaptiveSearchModelOutput,
+    V2AdaptiveSearchQuery,
+    V2DiscoveryScoutOutput,
+    V2GapAcquisitionFailure,
+    V2GapAnalysisInput,
+    V2GapAnalysisOutput,
+    V2GapAttemptedQuery,
+    V2GapBudgetState,
+    V2GapDuplicatePattern,
+    V2GapProbePassage,
+    V2GapSourceFamily,
+    V2GapSurvivingSourceMetadata,
+    V2InitialPlannerOutput,
+    V2ProviderSearchBudget,
+    V2SearchAgentInput,
+    V2SurvivingSource,
+)
+from researchassistant.research.research_governor import (
     V2RoundThreeGovernorDecision,
     V2RoundThreeGovernorInput,
     V2RoundThreeReasonCode,
     evaluate_v2_round_three_authorization,
 )
-from store import insert_v2_artifact, read_v2_artifact
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_ADAPTIVE_COMPLETION_KEY = "phase-7-adaptive-search-completion"
 _TOKEN_RE = re.compile(r"[a-z0-9]+")

@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 import httpx
 from pydantic import ConfigDict
 
-from models import StrictModel
+from researchassistant.contracts.models import StrictModel
 
 
 class ProviderClients(StrictModel):

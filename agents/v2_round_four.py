@@ -30,8 +30,23 @@ from agents.v2_adaptive_search import (
 from agents.v2_coverage import claim_component_focus
 from agents.v2_discovery import V2_SCOUT_BATCH_SIZE
 from agents.v2_gap_analysis import run_v2_gap_analysis
-from evidence_portfolio import identify_source_family
-from models import (
+from providers.llm import (
+    V2_LLM_ROUTING,
+    LLMProvider,
+    LLMProviderExecutionError,
+    LLMRequest,
+    LLMResponseValidationError,
+    LLMStage,
+    invoke_llm,
+    load_prompt,
+    render_stage_prompt,
+)
+from providers.pricing import conservative_token_estimate
+from providers.scraper import ScraperProvider
+from providers.search import SearchProvider
+from providers.v2_budget import V2CancellationRequested
+from providers.v2_routing import V2ModelReservation, V2RoutingConfig
+from researchassistant.contracts.models import (
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
     V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
@@ -84,24 +99,12 @@ from models import (
     V2SourceSelectionCandidate,
     validate_v2_gap_history_against_material_gaps,
 )
-from providers.llm import (
-    V2_LLM_ROUTING,
-    LLMProvider,
-    LLMProviderExecutionError,
-    LLMRequest,
-    LLMResponseValidationError,
-    LLMStage,
-    invoke_llm,
-    load_prompt,
-    render_stage_prompt,
+from researchassistant.evidence.evidence_portfolio import identify_source_family
+from researchassistant.research.research_governor import (
+    V2RoundFourGovernorInput,
+    evaluate_v2_round_four_authorization,
 )
-from providers.pricing import conservative_token_estimate
-from providers.scraper import ScraperProvider
-from providers.search import SearchProvider
-from providers.v2_budget import V2CancellationRequested
-from providers.v2_routing import V2ModelReservation, V2RoutingConfig
-from research_governor import V2RoundFourGovernorInput, evaluate_v2_round_four_authorization
-from store import insert_v2_artifact, read_v2_artifact
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_POST13_GAP_AFTER_ROUND_THREE_KEY = "post-phase-13-gap-analysis-after-round-3-v1"
 V2_POST13_ROUND_FOUR_GOVERNOR_KEY = "post-phase-13-round-4-governor-decision-v1"

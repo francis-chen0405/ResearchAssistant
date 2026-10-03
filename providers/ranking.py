@@ -10,7 +10,8 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, model_validator
 
-from models import (
+from providers.search import SearchResult
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     RetrievalRecord,
     SearchIntent,
@@ -18,7 +19,6 @@ from models import (
     SourceSnapshot,
     StrictModel,
 )
-from providers.search import SearchResult
 
 DISCOVERY_POLICY_VERSION = "mlp4-expanded-retrieval-yield-v1"
 DISCARD_SCORE_FLOOR = 5

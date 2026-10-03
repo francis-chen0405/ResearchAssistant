@@ -15,14 +15,14 @@ from agents.reviewer import (
     build_statement_review_result,
     derive_reviewer_approval_id,
 )
-from models import (
+from researchassistant.contracts.models import (
     ReviewerFailureCode,
     RunStatus,
     StatementDraft,
     SynthesisOutput,
 )
-from orchestrator import run_fixture_pipeline
-from store import read_run, read_synthesis
+from researchassistant.research.orchestrator import run_fixture_pipeline
+from researchassistant.storage.store import read_run, read_synthesis
 
 NOW = datetime(2026, 7, 19, 12, 0, tzinfo=UTC)
 FIXTURES = Path(__file__).parent / "fixtures"

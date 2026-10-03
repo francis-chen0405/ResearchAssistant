@@ -1,6 +1,7 @@
 """Historical import facade for the neutral source-evidence helpers."""
 
-from evidence_core import (
+from researchassistant.common.utils import derive_quote_block_id
+from researchassistant.evidence.evidence_core import (
     CURRENT_QUOTE_LENGTH_POLICY,
     END_MARKER,
     EVIDENCE_POLICY_VERSION,
@@ -31,7 +32,6 @@ from evidence_core import (
     validate_snapshot_integrity,
     verify_candidate_against_snapshot,
 )
-from utils import derive_quote_block_id
 
 __all__ = [
     "CURRENT_QUOTE_LENGTH_POLICY",

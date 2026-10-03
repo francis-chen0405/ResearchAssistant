@@ -1,0 +1,44 @@
+# Current decisions
+
+This file records decisions that still govern current behavior. The exact preceding decision history is preserved in the [2026-09-26 archive](docs/archive/2026-09-26-maintenance/DECISIONS.md); older complete records are indexed in [the archive guide](docs/archive/INDEX.md). Completed plan files remain authoritative evidence for their implementation details.
+
+## Research execution
+
+- The approved [ALPR equity fixes](.agent/plans/alpr-equity-run-fixes-2026-10-02.md) require usable substantive content before fresh selection/extraction, preserving explicit legacy Probe-v1. Fresh assessment-v2 binds a terminal evidence/coverage status after analysis into the rendered release; incomplete/missing coverage or low evidence yield remains limited regardless of the earlier search stop. Historical assessment-v1 serialization and exports remain unchanged. No automatic additional paid research follows reassessment. Recognized OSF/RePEc archive identifiers produce conservative related-work notices with DOI/version safeguards; readable title fallbacks and contextual relevance labels are derived presentation and do not rewrite snapshots, source families or admitted statements.
+
+- The approved [private-surveillance repair](.agent/plans/private-surveillance-run-fixes-2026-10-02.md) separates new-policy evidence relationship from search provenance. Support-directed search may encounter challenging evidence and vice versa; disabled search lanes remain disabled. Valid unrelated assessments are relevance rejections. Legacy policy meanings, immutable artifacts and existing quote/quality/budget gates are preserved. Post-analysis evidence sufficiency is assessed separately from the earlier search-yield decision.
+
+- Fresh website, API, and ordinary CLI requests select the v2 pipeline. Historical provider execution remains available only through the explicit `legacy_runner` dependency. See [explicit pipeline selection](.agent/plans/explicit-pipeline-selection.md).
+- Fresh v2 stages import neutral source-evidence and Analyst helpers. Historical agent imports and the historical orchestrator remain supported compatibility surfaces. See [neutral evidence ownership](.agent/plans/neutral-evidence-ownership.md).
+- Fresh deep analysis uses deterministic priority waves of at most four sources. Dispatch only a budget-safe priority prefix, do not share SQLite connections or mutable handoffs across workers, and drain in-flight work on cancellation. See [deep-analysis concurrency](.agent/plans/deep-analysis-deterministic-concurrency.md).
+- Each of seven active model stages has an explicit selectable route. A selected choice, route settings, price cap, stage allowance, and run configuration participate in frozen identity. Defaults and the historical Standard profile remain distinct. See [per-step model choices](.agent/plans/per-step-model-choices.md) and [model settings](docs/model-settings.md).
+- Physical provider attempts reserve their calls, tokens, and conservative cost before transport. Unknown or missing usage does not erase exposure. Historical costs and run identities are not rewritten.
+
+## ALPR review fixes — 2026-10-01
+
+The user-approved [A–G fixes](.agent/plans/alpr-run-fixes-2026-10-01.md) preserve immutable historical artifacts. Result presentation is derived read-only: admitted statements retain Ledger-bound citations, research direction and evidence relationship have separate labels, final source dispositions are distinct from selection history, and current stopping/coverage disclosures may supplement historical rendered text without regenerating it. Future physical completions may retain optional input/output/cache splits; unknown historical splits remain unknown. Study-lineage warnings disclose shared DOI metadata or possible title matches; they do not merge source-family IDs, count independence, change scoring, or infer verified identity from titles alone.
+
+## Evidence, storage, and application boundaries
+
+The user-approved [discrimination-run fixes](.agent/plans/discrimination-run-fixes-2026-10-01.md) exclude unrelated findings from new claim admission under versioned policy. Ordinary attributed/scoped statements pass the existing qualification gate; a qualification repair stays within the bounded Analyst allowance. Extraction retains the complete source once in the rendered input and uses the original snapshot for exact quotations. Oversized sources remain subject to existing caps; source cap blocks may be skipped while run-wide exhaustion still stops work. No passage truncation or increased allowance is introduced. Optional cache-write telemetry distinguishes reported counts from conservative pricing assumptions; historical unknown values remain unknown. UI source counts and stopping disclosures are derived read-only, and conservative mirror warnings never merge immutable source families or imply independent replication.
+
+- Exact quotations, source provenance, separate Evidence Quality and Claim Fit scores, immutable Ledger/output artifacts, and deterministic final validation remain required. Analyzer Admission checks structure and policy; it is not independent proof of entailment.
+- The completed [database integrity plan](.agent/plans/database-integrity-fixes.md) adds schema 14 for nullable cache-token accounting fields. Read-only inspection supports schemas 7–14, including historical schemas 7–13. History and status inspection use validated read-only access. Each v2 status request owns one validated session; polling does not overlap requests. No WAL or broader persistence redesign is inferred. See [SQLite status polling](.agent/plans/sqlite-status-polling.md).
+- Desktop credentials remain in native macOS Keychain or Windows Credential Manager. Secrets are not placed in browser storage, logs, SQLite, exports, or child arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Runtime data remains outside the application bundle and checkout.
+- Package metadata uses the Python distribution name `researchassistant`, version `0.1.0`; user-facing CLI and application copy use `ResearchAssistant`. Streamlit remains outside the base install and is installed only through `requirements-legacy.txt`. The `dev` dependency set includes `httpx2` for Starlette tests; versions are constrained in `desktop/constraints.txt`.
+
+## Release boundary
+
+macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).
+
+The preceding authorized release work is [current Mac build and release-gate verification](.agent/plans/mac-current-build-release-verification-2026-09-28.md). It does not renew the paid-test allowance or change research policy, persisted historical data, or the release boundary.
+
+The preceding testing fix is [adaptive budget route failure](.agent/plans/reviewer-route-testing-fix-2026-10-01.md). It preserves deterministic final review, historical routing, and conservative budget protection.
+
+The completed [comprehensive code audit](.agent/plans/comprehensive-code-audit-2026-10-01.md)
+preserves those boundaries and adds verified integrity, accounting, lifecycle, and
+UI repairs. Physical prompt reservations include adapter-added instructions;
+presented actual usage comes from independently complete physical-call audits;
+desktop exports use same-origin API requests. The [report](docs/audits/2026-10-01/README.md)
+records verified local artifacts and coverage limits. Installation, live quality,
+and signed-release acceptance remain separate from offline audit completion.

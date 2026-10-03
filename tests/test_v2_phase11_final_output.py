@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from test_v2_phase9_luna_evidence_analyst import _routing
@@ -22,10 +23,13 @@ from agents.v2_final_output import (
     build_v2_synthesizer_input,
     render_v2_final_output,
     run_v2_final_research_output,
+    validate_v2_final_release,
 )
-from brief_export import BriefExportFormat, export_released_brief
 from frontend.api import ApiRuntime, create_app
-from models import (
+from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
+from researchassistant.contracts.model_contracts import DiscoveryProvider
+from researchassistant.contracts.model_evidence import V2ReviewerLedgerState
+from researchassistant.contracts.models import (
     ModelUsageMetadata,
     ResearchDirection,
     ResearchDirections,
@@ -44,8 +48,8 @@ from models import (
     V2RoundFourGovernorDecision,
     V2UnresolvedMaterialGap,
 )
-from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
-from store import insert_v2_artifact, read_v2_artifact
+from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 
 def _continuation(
@@ -200,6 +204,215 @@ def test_renderer_does_not_claim_no_gaps_when_coverage_has_unresolved_gaps(tmp_p
 
     assert "A directly relevant study remains missing." in rendered
     assert "No unresolved material gaps were recorded." not in rendered
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (
+        ("source_url", "https://substituted.example/article"),
+        ("title", "Substituted source title"),
+        ("source_type", "Substituted source type"),
+        ("publication_date", "2099-12-31"),
+        ("discovery_providers", (DiscoveryProvider.PUBMED,)),
+        ("discovery_round", 4),
+    ),
+)
+def test_final_release_rejects_substituted_recommended_source_metadata(
+    tmp_path: Path, field: str, replacement: object
+) -> None:
+    _path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    continuation = _continuation(reviewer_result.run_id)
+    synthesis = _synthesis(reviewer_result)
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        synthesis=synthesis,
+        created_at=NOW,
+    )
+    assert output.release_validation.valid
+    altered_source = output.all_surviving_sources[0].model_copy(update={field: replacement})
+    output_fields = dict(output)
+    output_fields["recommended_sources"] = (altered_source,)
+
+    validation = validate_v2_final_release(
+        synthesis=synthesis,
+        ledger_records=tuple(
+            source.ledger_record
+            for source in reviewer_result.source_results
+            if source.ledger_record is not None
+        ),
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        output_fields=output_fields,
+        validated_at=NOW,
+    )
+
+    assert not validation.valid
+    assert any(error.location.startswith("recommended_sources") for error in validation.errors), (
+        validation.errors
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (
+        ("source_url", "https://substituted.example/article"),
+        ("title", "Substituted source title"),
+    ),
+)
+def test_final_release_rejects_substituted_all_survivor_metadata(
+    tmp_path: Path, field: str, replacement: object
+) -> None:
+    _path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    continuation = _continuation(reviewer_result.run_id)
+    synthesis = _synthesis(reviewer_result)
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        synthesis=synthesis,
+        created_at=NOW,
+    )
+    altered_source = output.all_surviving_sources[0].model_copy(update={field: replacement})
+    output_fields = dict(output)
+    output_fields["all_surviving_sources"] = (altered_source,)
+
+    validation = validate_v2_final_release(
+        synthesis=synthesis,
+        ledger_records=tuple(
+            source.ledger_record
+            for source in reviewer_result.source_results
+            if source.ledger_record is not None
+        ),
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        output_fields=output_fields,
+        validated_at=NOW,
+    )
+
+    assert not validation.valid
+    assert any(error.location.startswith("all_surviving_sources") for error in validation.errors)
+
+
+def test_resume_rejects_persisted_source_metadata_substitution(tmp_path: Path) -> None:
+    path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    continuation = _continuation(reviewer_result.run_id)
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        synthesis=_synthesis(reviewer_result),
+        created_at=NOW,
+    )
+    altered_source = output.all_surviving_sources[0].model_copy(
+        update={"title": "Persisted substituted source title"}
+    )
+    tampered = output.model_copy(
+        update={
+            "all_surviving_sources": (altered_source,),
+            "recommended_sources": (altered_source,),
+        }
+    )
+    insert_v2_artifact(path, V2_FINAL_OUTPUT_ARTIFACT_KEY, tampered, NOW)
+
+    with pytest.raises(ValueError, match="persisted v2 final output source disclosures"):
+        run_v2_final_research_output(
+            db_path=path,
+            reviewer_result=reviewer_result,
+            continuation=continuation,
+            llm_provider=_SynthesizerProvider(),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+
+
+def test_recommended_source_order_may_differ_from_survivor_order_on_build_and_resume(
+    tmp_path: Path,
+) -> None:
+    path, initial = _run(tmp_path, Phase10Provider([_approved()]))
+    original_candidate = initial.analyst_result.input.queue_result.input.survivors[0]
+    second_source_id = uuid4()
+    second_candidate = original_candidate.model_copy(
+        update={
+            "source_id": second_source_id,
+            "source_family_id": "distinct-source-family",
+            "source_url": "https://second.example/article",
+            "title": "Second source",
+        }
+    )
+    selection = initial.analyst_result.input.queue_result
+    selection_input = selection.input.model_copy(
+        update={"survivors": (original_candidate, second_candidate)}
+    )
+    original_status = selection.source_statuses[0]
+    first_status = original_status.model_copy(update={"recommendation_rank": 2, "queue_rank": 2})
+    second_status = original_status.model_copy(
+        update={
+            "source_id": second_source_id,
+            "recommendation_rank": 1,
+            "queue_rank": 1,
+        }
+    )
+    selection = selection.model_copy(
+        update={
+            "input": selection_input,
+            "recommended_source_ids": (second_source_id, original_candidate.source_id),
+            "source_statuses": (second_status, first_status),
+            "priority_source_ids": (second_source_id, original_candidate.source_id),
+            "queued_source_ids": (second_source_id, original_candidate.source_id),
+        }
+    )
+    analyst_input = initial.analyst_result.input.model_copy(update={"queue_result": selection})
+    analyst_result = initial.analyst_result.model_copy(update={"input": analyst_input})
+    original_result = initial.source_results[0]
+    second_result = original_result.model_copy(
+        update={
+            "source_id": second_source_id,
+            "state": V2ReviewerLedgerState.NOT_QUEUED,
+            "provenance": original_result.provenance.model_copy(
+                update={
+                    "source_id": second_source_id,
+                    "source_family_id": "distinct-source-family",
+                    "recommended": True,
+                }
+            ),
+            "review_results": (),
+            "ledger_record": None,
+        }
+    )
+    reviewer_result = initial.model_copy(
+        update={
+            "analyst_result": analyst_result,
+            "source_results": (original_result, second_result),
+        }
+    )
+    continuation = _continuation(reviewer_result.run_id)
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        synthesis=_synthesis(initial),
+        created_at=NOW,
+    )
+
+    assert output.release_validation.valid
+    assert tuple(source.source_id for source in output.all_surviving_sources) == (
+        original_candidate.source_id,
+        second_source_id,
+    )
+    assert tuple(source.source_id for source in output.recommended_sources) == (
+        second_source_id,
+        original_candidate.source_id,
+    )
+    insert_v2_artifact(path, V2_FINAL_OUTPUT_ARTIFACT_KEY, output, NOW)
+    resumed = run_v2_final_research_output(
+        db_path=path,
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        llm_provider=_SynthesizerProvider(),
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert resumed.resumed
+    assert resumed.final_output.recommended_sources == output.recommended_sources
 
 
 def test_phase11_invokes_mimo_and_persists_restartable_output(tmp_path: Path) -> None:

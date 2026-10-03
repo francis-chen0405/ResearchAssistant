@@ -12,7 +12,6 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 from pydantic import ConfigDict, Field
 
-from models import MediaTypeProvenance, StrictModel, SupportedOriginMediaType
 from providers.config import WigoloConfig
 from providers.normalization import (
     NormalizationError,
@@ -26,6 +25,11 @@ from providers.scraper import (
     ScraperProviderError,
     ScraperTimeoutError,
     VerifiedAcquisitionPreflight,
+)
+from researchassistant.contracts.models import (
+    MediaTypeProvenance,
+    StrictModel,
+    SupportedOriginMediaType,
 )
 
 ACQUISITION_VERSION = "mvp6.9-acquisition-provenance-v3"

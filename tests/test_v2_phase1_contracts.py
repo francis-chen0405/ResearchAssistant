@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from models import (
+from researchassistant.contracts.models import (
     V2_POLICY_IDENTITY,
     ProviderRunContract,
     ResearchControls,
@@ -25,8 +25,11 @@ from models import (
     canonical_v2_artifact_json,
     v2_artifact_fingerprint,
 )
-from provider_contract import canonical_provider_contract_payload, provider_contract_fingerprint
-from store import (
+from researchassistant.contracts.provider_contract import (
+    canonical_provider_contract_payload,
+    provider_contract_fingerprint,
+)
+from researchassistant.storage.store import (
     CURRENT_SCHEMA_VERSION,
     init_db,
     insert_provider_run_contract,

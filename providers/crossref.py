@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import httpx
 
-from models import CrossrefIdentityMetadata
+from researchassistant.contracts.models import CrossrefIdentityMetadata
 
 
 class CrossrefEnrichmentError(RuntimeError):

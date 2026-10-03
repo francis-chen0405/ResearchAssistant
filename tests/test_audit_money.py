@@ -6,7 +6,7 @@ from decimal import Decimal, localcontext
 
 import pytest
 
-from money import add_usd, canonical_usd, parse_exact_usd
+from researchassistant.common.money import add_usd, canonical_usd, parse_exact_usd
 
 
 @pytest.mark.parametrize(

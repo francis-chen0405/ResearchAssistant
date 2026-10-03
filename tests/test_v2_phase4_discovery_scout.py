@@ -16,7 +16,12 @@ from agents.v2_discovery import (
     run_v2_discovery_and_scout,
     scout_ordered_item_ids,
 )
-from models import (
+from providers.crossref import CrossrefEnricher, CrossrefEnrichmentError
+from providers.llm import LLMProviderCapabilities
+from providers.search import SearchDiscoveryMetadata, SearchResult
+from providers.v2_budget import V2CancellationRequested
+from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryProvider,
     ResearchDirection,
@@ -30,12 +35,7 @@ from models import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
 )
-from providers.crossref import CrossrefEnricher, CrossrefEnrichmentError
-from providers.llm import LLMProviderCapabilities
-from providers.search import SearchDiscoveryMetadata, SearchResult
-from providers.v2_budget import V2CancellationRequested
-from providers.v2_routing import V2RoutingConfig
-from store import init_db, insert_run, insert_v2_pipeline_identity
+from researchassistant.storage.store import init_db, insert_run, insert_v2_pipeline_identity
 
 NOW = datetime(2026, 8, 20, tzinfo=UTC)
 

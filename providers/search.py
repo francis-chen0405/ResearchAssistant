@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from models import DiscoveryProvider, SearchIntent, StrictModel
+from researchassistant.contracts.models import DiscoveryProvider, SearchIntent, StrictModel
 
 
 class SearchFailureCode(StrEnum):

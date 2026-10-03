@@ -10,8 +10,8 @@ from agents.researcher import (
     assemble_quote_block_from_selected_segments,
     parse_extracted_quote_block,
 )
-from models import VerbatimQuoteSelection
-from store import CURRENT_SCHEMA_VERSION, init_db
+from researchassistant.contracts.models import VerbatimQuoteSelection
+from researchassistant.storage.store import CURRENT_SCHEMA_VERSION, init_db
 
 
 def test_selection_contract_rejects_formatting_and_extra_fields() -> None:

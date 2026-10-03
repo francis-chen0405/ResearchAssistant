@@ -10,7 +10,13 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from models import (
+from providers.model_choices import (
+    DEFAULT_STAGE_MODELS,
+    StageModelSelections,
+)
+from providers.model_profiles import ProfileId
+from researchassistant.common.money import ExactUSD
+from researchassistant.contracts.models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
     ModelUsageCostBasis,
@@ -19,12 +25,6 @@ from models import (
     StrictModel,
     V2RunDiagnostics,
 )
-from money import ExactUSD
-from providers.model_choices import (
-    DEFAULT_STAGE_MODELS,
-    StageModelSelections,
-)
-from providers.model_profiles import ProfileId
 
 LEGACY_LIVE_RESEARCH_CONTROLS = ResearchControls(
     discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)

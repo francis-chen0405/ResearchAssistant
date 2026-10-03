@@ -8,7 +8,6 @@ from collections.abc import Mapping
 
 from pydantic import ConfigDict, model_validator
 
-from models import DiscoveryProvider, StrictModel
 from providers.acquisition import WigoloAcquisitionAdapter
 from providers.arxiv import ArxivSearchAdapter
 from providers.clients import ProviderClients
@@ -35,6 +34,7 @@ from providers.search import SearchProvider
 from providers.serpsearch import SerpSearchAdapter
 from providers.v2_budget import RoutedV2LLMProvider, V2RunCeilings
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import DiscoveryProvider, StrictModel
 
 
 class V2ProductionFactoryConfig(StrictModel):

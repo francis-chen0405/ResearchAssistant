@@ -11,7 +11,7 @@ from typing import TypeVar
 from pydantic import ConfigDict, Field, field_validator
 from pydantic import ValidationError as PydanticValidationError
 
-from models import (
+from researchassistant.contracts.models import (
     BRIEF_TITLE,
     CLAIM_LABEL,
     RELEASE_SECTION_HEADINGS,

@@ -1,6 +1,10 @@
 """Application-owned exact-claim focus for fresh planning, without claim inference."""
 
-from models import V2ClaimCoverageDimension, V2ClaimCoverageFocus, V2ClaimCoverageKind
+from researchassistant.contracts.models import (
+    V2ClaimCoverageDimension,
+    V2ClaimCoverageFocus,
+    V2ClaimCoverageKind,
+)
 
 
 def claim_component_focus(

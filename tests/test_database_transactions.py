@@ -12,8 +12,10 @@ import pytest
 
 from agents.supportingresearcher import ResearcherRetrievalBatch, RetrievalOutcome
 from frontend.live_history import history
-from model_contracts import RetrievalStatus
-from models import (
+from providers.scraper import ScrapeStatus
+from providers.v2_budget import V2BudgetSnapshot
+from researchassistant.contracts.model_contracts import RetrievalStatus
+from researchassistant.contracts.models import (
     EvidenceRole,
     EvidenceTrailEntry,
     EvidenceTrailOutcome,
@@ -29,16 +31,22 @@ from models import (
     Stance,
     V2PipelineIdentity,
 )
-from orchestrator import (
+from researchassistant.research.orchestrator import (
     AnalysisStageResult,
     ResearcherPairResult,
     ResearcherSideStatus,
     ResearcherStageResult,
     _persist_mvp10_portfolio,
 )
-from providers.scraper import ScrapeStatus
-from providers.v2_budget import V2BudgetSnapshot
-from store import (
+from researchassistant.research.v2_orchestrator import (
+    V2_PRODUCTION_ARTIFACT_KEY,
+    V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+    V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+    V2ProductionPipelineResult,
+    V2ProductionState,
+    _persist_terminal,
+)
+from researchassistant.storage.store import (
     init_db,
     insert_mvp10_portfolio_batch,
     insert_run,
@@ -50,14 +58,6 @@ from store import (
     update_run,
 )
 from tests.test_v2_phase12_production import _run, _Scraper, _Search, _V2Model
-from v2_orchestrator import (
-    V2_PRODUCTION_ARTIFACT_KEY,
-    V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
-    V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
-    V2ProductionPipelineResult,
-    V2ProductionState,
-    _persist_terminal,
-)
 
 NOW = datetime(2026, 9, 27, 12, tzinfo=UTC)
 

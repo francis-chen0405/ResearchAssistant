@@ -10,8 +10,8 @@ from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, SecretStr, field_validator
 
-from models import StrictModel
-from money import ExactUSD
+from researchassistant.common.money import ExactUSD
+from researchassistant.contracts.models import StrictModel
 
 OFFICIAL_OPENAI_BASE_URL = "https://api.openai.com/v1"
 

@@ -6,23 +6,27 @@ ResearchAssistant is a local desktop application for research on a precise claim
 
 | Area | Owner |
 | --- | --- |
-| Fresh research orchestration | `v2_orchestrator.py`, `agents/v2_*.py` |
+| Fresh research orchestration | `researchassistant.research.v2_orchestrator`, `agents/v2_*.py` |
 | Model catalogs and provider routing | `providers/model_profiles.py`, `providers/v2_routing.py`, `providers/v2_budget.py` |
-| Historical provider execution | `orchestrator.py` |
-| Source snapshots, quotations, and trust boundary | `evidence_core.py` |
-| Analyst scoring, drafting, and admission | `evidence_analysis.py` |
-| Shared research, evidence, and run contracts | `model_contracts.py`, `model_research.py`, `model_evidence.py`, exported by `models.py` |
-| Typed persistence and read-only inspection | `store.py`; schema and migration ownership is `store_schema.py` |
+| Historical provider execution | `researchassistant.research.orchestrator` |
+| Source snapshots, quotations, and trust boundary | `researchassistant.evidence.evidence_core` |
+| Analyst scoring, drafting, and admission | `researchassistant.evidence.evidence_analysis` |
+| Shared research, evidence, and run contracts | `researchassistant.contracts.model_contracts`, `model_research`, and `model_evidence`, exported by `researchassistant.contracts.models` |
+| Typed persistence and read-only inspection | `researchassistant.storage.store`; schema and migration ownership is `researchassistant.storage.store_schema` |
 | Desktop request lifecycle and views | `frontend/live_service.py`, `frontend/live_contracts.py`, `frontend/live_progress.py`, `frontend/live_history.py` |
 | Local API and renderer | `frontend/api.py`, `web/` |
 | Desktop shell and backend lifecycle | `desktop/main.cjs`, `desktop/backend.py`, `frontend/service_manager.py` |
-| Native paths, settings, credentials, and locks | `desktop_paths.py`, `desktop_settings.py`, `credential_store.py`, `file_lock.py`, platform process helpers |
+| Native paths, settings, credentials, and locks | `researchassistant.platform_support.desktop_paths`, `desktop_settings`, `credential_store`, `file_lock`, and platform process helpers |
 
-`models.py`, `store.py`, `orchestrator.py`, and controller entry points preserve stable public imports. Historical researcher and analyst paths remain compatibility facades where neutral evidence helpers now live; `agents.supportingresearcher` retains historical retrieval. Ordinary CLI and API construction select v2. Historical execution requires the explicit typed `legacy_runner` dependency; the controller's older `runner` name remains a compatibility alias.
+Backend modules are organized under `researchassistant/`: `contracts/` holds shared contracts, `research/` owns pipeline execution, `evidence/` owns source and result handling, `storage/` owns persistence, `platform_support/` owns host integration, `runtime/` owns application and CLI entry logic, and `common/` holds shared helpers. Provider adapters, research agents, `frontend/`, and `desktop/` remain separate top-level packages.
+
+The root `models.py`, `store.py`, and `orchestrator.py` entries preserve historical import paths by aliasing their canonical package modules. Root `cli.py` preserves the script launcher; new imports use `researchassistant.runtime.cli`. Historical researcher and analyst paths remain compatibility facades where neutral evidence helpers now live; `agents.supportingresearcher` retains historical retrieval. Ordinary CLI and API construction select v2. Historical execution requires the explicit typed `legacy_runner` dependency; the controller's older `runner` name remains a compatibility alias.
 
 The model contract modules depend in one direction: shared contracts, then research contracts, then evidence/result contracts. Fresh v2 stages use the neutral evidence modules directly. Model-facing output schemas remain narrow; application identity and provenance travel in typed envelopes.
 
 ## Research execution
+
+The approved [ALPR equity repair](.agent/plans/alpr-equity-run-fixes-2026-10-02.md) versions fresh Probe usability and post-analysis terminal status. Unusable captures do not enter source selection. The final evidence/coverage outcome is computed after admission and included in new releases; an earlier source-pool search decision does not establish evidence sufficiency. Historical Probe-v1 and assessment-v1 artifacts retain their parsing, rendering and hash behavior. Reassessment does not automatically extend search or budgets. Display-only archive lineage and PDF-title fallbacks preserve source identity and captured metadata.
 
 The approved [private-surveillance repair](.agent/plans/private-surveillance-run-fixes-2026-10-02.md) versions fresh Analyst/admission behavior so evidence relationship is independent of search direction, while enabled-lane provenance remains mandatory. A deterministic post-analysis assessment supplements the pre-analysis search decision; it does not prove the claim or automatically extend research budgets. Historical policies and artifacts retain their original meanings.
 

@@ -8,8 +8,8 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from models import StrictModel
 from providers.llm import LLMStage
+from researchassistant.contracts.models import StrictModel
 
 CONFIGURABLE_PROFILE_ID = "configurable-2026-09"
 

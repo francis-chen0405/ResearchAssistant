@@ -7,12 +7,16 @@ from uuid import UUID
 
 from agents.v2_initial_planner import V2_INITIAL_PLANNER_PROMPT_PATH
 from frontend.live_contracts import LiveRunRequest
-from models import V2InitialPlannerInput, V2InitialPlannerModelOutput, V2InitialPlannerPolicy
 from providers.llm import LLMStage, load_prompt_file, render_stage_prompt
 from providers.model_choices import CONFIGURABLE_PROFILE_ID
 from providers.model_profiles import profile_environment
 from providers.pricing import conservative_token_estimate
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
+from researchassistant.contracts.models import (
+    V2InitialPlannerInput,
+    V2InitialPlannerModelOutput,
+    V2InitialPlannerPolicy,
+)
 
 
 def check_start_reservation(

@@ -10,9 +10,6 @@ import httpx
 import pytest
 from pydantic import ConfigDict, ValidationError
 
-from cli import _build_parser, _parse_run_ceilings, _parse_stage_models
-from desktop_settings import InterfaceSettings
-from models import DiscoveryProvider, StrictModel
 from providers.clients import ProviderClients
 from providers.config import ProviderConfigurationError
 from providers.llm import (
@@ -36,6 +33,9 @@ from providers.pricing import cache_prices_for_route
 from providers.v2_budget import V2RunCeilings
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import DiscoveryProvider, StrictModel
+from researchassistant.platform_support.desktop_settings import InterfaceSettings
+from researchassistant.runtime.cli import _build_parser, _parse_run_ceilings, _parse_stage_models
 
 
 class ChoiceFixture(StrictModel):

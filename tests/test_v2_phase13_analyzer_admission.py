@@ -30,8 +30,7 @@ from agents.v2_final_output import (
     build_v2_synthesizer_input,
     run_v2_final_research_output,
 )
-from evidence_analysis import create_statement_draft, score_candidate
-from models import (
+from researchassistant.contracts.models import (
     V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
@@ -50,7 +49,8 @@ from models import (
     V2EvidenceRelationship,
     V2SourceSelectionRecommendation,
 )
-from store import read_v2_artifact, read_v2_evidence_admission
+from researchassistant.evidence.evidence_analysis import create_statement_draft, score_candidate
+from researchassistant.storage.store import read_v2_artifact, read_v2_evidence_admission
 
 
 def test_admission_rejects_injected_unrelated_ready_result(tmp_path: Path) -> None:

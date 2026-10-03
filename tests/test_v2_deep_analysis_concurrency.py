@@ -29,7 +29,15 @@ from agents.v2_deep_analysis import (
 )
 from agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
 from agents.v2_source_selection import V2_SOURCE_SELECTION_COMPLETION_KEY
-from models import (
+from providers.llm import LLMStage
+from providers.v2_budget import (
+    V2BudgetSnapshot,
+    V2PhysicalCallAudit,
+    V2PhysicalCallStart,
+    V2RunCeilings,
+    read_v2_physical_call_audit,
+)
+from researchassistant.contracts.models import (
     SelectedSentenceRange,
     V2DeepAnalysisBackfillResult,
     V2DeepAnalysisSourceExecutionState,
@@ -40,16 +48,8 @@ from models import (
     V2SourceSelectionQueueResult,
     V2VerbatimQuoteSelection,
 )
-from providers.llm import LLMStage
-from providers.v2_budget import (
-    V2BudgetSnapshot,
-    V2PhysicalCallAudit,
-    V2PhysicalCallStart,
-    V2RunCeilings,
-    read_v2_physical_call_audit,
-)
-from store import insert_v2_artifact, read_v2_artifact
-from v2_orchestrator import V2ProductionPipelineResult, V2ProductionState
+from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult, V2ProductionState
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 
 class _BlockingDeepModel(_V2Model):

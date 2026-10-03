@@ -7,9 +7,9 @@ from typing import Literal
 
 import httpx
 
-from models import StrictModel
 from providers.model_choices import ACTIVE_MODEL_STAGES, StageModelSelections, option_for
 from providers.model_profiles import STANDARD_PROFILE, ProfileId
+from researchassistant.contracts.models import StrictModel
 
 
 class ConnectionCheck(StrictModel):

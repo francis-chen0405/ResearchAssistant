@@ -13,9 +13,8 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from cli import CLIExitCode, _exit_for_status, _print_provider_result, main
 from frontend.live_service import LiveResearchController, exit_code_for_status
-from models import (
+from researchassistant.contracts.models import (
     ModelAttemptStatus,
     ModelRouteAttempt,
     ModelUsageMetadata,
@@ -24,13 +23,19 @@ from models import (
     RunStatus,
     Stage,
 )
-from orchestrator import (
+from researchassistant.contracts.provider_contract import canonical_provider_contract_payload
+from researchassistant.research.orchestrator import (
     ProviderPipelineResult,
     ProviderRunStatus,
     summarize_model_usage,
 )
-from provider_contract import canonical_provider_contract_payload
-from store import (
+from researchassistant.runtime.cli import (
+    CLIExitCode,
+    _exit_for_status,
+    _print_provider_result,
+    main,
+)
+from researchassistant.storage.store import (
     ModelAttemptBudgetError,
     finish_model_route_attempt,
     init_db,
@@ -150,7 +155,13 @@ def test_active_inspection_subprocess_returns_running_exit_code(tmp_path: Path) 
     insert_run(str(db_path), _manifest())
 
     result = subprocess.run(
-        [sys.executable, str(ROOT / "cli.py"), "inspect-run", str(db_path), str(RUN_ID)],
+        [
+            sys.executable,
+            str(ROOT / "cli.py"),
+            "inspect-run",
+            str(db_path),
+            str(RUN_ID),
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,

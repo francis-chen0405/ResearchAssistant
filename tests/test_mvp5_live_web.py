@@ -16,7 +16,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 import frontend.service_manager as service_manager_module
-from cli import CLIExitCode
 from frontend.api import ApiRuntime, create_app
 from frontend.live_service import (
     LiveResearchController,
@@ -25,7 +24,8 @@ from frontend.live_service import (
 )
 from frontend.security import redact_text
 from frontend.service_manager import WigoloServiceManager
-from models import (
+from providers.search import SearchFailureCode, SearchProviderError
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     PresentationTone,
     ReportLength,
@@ -35,9 +35,9 @@ from models import (
     RunStatus,
     Stage,
 )
-from orchestrator import ProviderPipelineResult, ProviderRunStatus
-from providers.search import SearchFailureCode, SearchProviderError
-from store import init_db, insert_run
+from researchassistant.research.orchestrator import ProviderPipelineResult, ProviderRunStatus
+from researchassistant.runtime.cli import CLIExitCode
+from researchassistant.storage.store import init_db, insert_run
 
 CLAIM = "The fixture policy improves student outcomes."
 SECRET = "mvp5-secret-value-that-must-never-appear"

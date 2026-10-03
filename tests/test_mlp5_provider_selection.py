@@ -6,10 +6,10 @@ import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from models import DiscoveryProvider, ResearchControls, SearchIntent
 from providers.config import SerpSearchConfig
 from providers.search import SearchFailureCode, SearchProviderError, SearchRequest
 from providers.serpsearch import SerpSearchAdapter
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, SearchIntent
 
 
 def test_source_controls_default_to_all_three_and_require_one() -> None:

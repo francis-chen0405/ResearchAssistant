@@ -9,7 +9,6 @@ from xml.etree import ElementTree
 import httpx
 from pydantic import ValidationError
 
-from models import DiscoveryProvider
 from providers.config import ArxivConfig
 from providers.search import (
     SearchDiscoveryMetadata,
@@ -20,6 +19,7 @@ from providers.search import (
     SearchResult,
     SearchTimeoutError,
 )
+from researchassistant.contracts.models import DiscoveryProvider
 
 _ATOM = "{http://www.w3.org/2005/Atom}"
 _ARXIV = "{http://arxiv.org/schemas/atom}"

@@ -4,8 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from agents.v2_coverage import claim_component_focus
-from models import V2ClaimCoverageFocus, V2ClaimCoverageKind, V2InitialPlannerModelOutput
 from providers.mimo import _schema_diagnostics
+from researchassistant.contracts.models import (
+    V2ClaimCoverageFocus,
+    V2ClaimCoverageKind,
+    V2InitialPlannerModelOutput,
+)
 
 
 def test_planner_omitted_kind_has_valid_application_owned_default() -> None:

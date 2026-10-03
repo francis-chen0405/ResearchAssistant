@@ -22,7 +22,17 @@ from agents.v2_discovery import (
     cluster_discovery_items,
     normalize_discovery_responses,
 )
-from models import (
+from providers.llm import LLMProviderCapabilities, LLMStage
+from providers.scraper import ScrapeRequest, ScrapeResponse
+from providers.search import (
+    SearchFailureCode,
+    SearchProviderError,
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+)
+from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
@@ -54,22 +64,12 @@ from models import (
     V2RoundOneSearchQuery,
     V2SearchAgentInput,
 )
-from providers.llm import LLMProviderCapabilities, LLMStage
-from providers.scraper import ScrapeRequest, ScrapeResponse
-from providers.search import (
-    SearchFailureCode,
-    SearchProviderError,
-    SearchRequest,
-    SearchResponse,
-    SearchResult,
-)
-from providers.v2_routing import V2RoutingConfig
-from research_governor import (
+from researchassistant.research.research_governor import (
     V2RoundThreeGovernorInput,
     V2RoundThreeReasonCode,
     evaluate_v2_round_three_authorization,
 )
-from store import init_db, insert_run, insert_v2_pipeline_identity
+from researchassistant.storage.store import init_db, insert_run, insert_v2_pipeline_identity
 
 NOW = datetime(2026, 8, 20, tzinfo=UTC)
 
@@ -494,7 +494,7 @@ def _proposal_batch(
 
 
 def _luna_stop() -> object:
-    from models import V2GapAnalysisModelOutput
+    from researchassistant.contracts.models import V2GapAnalysisModelOutput
 
     return V2GapAnalysisModelOutput(
         coverage_summary="Round two resolved the material gap.",
@@ -507,7 +507,7 @@ def _luna_stop() -> object:
 
 
 def _luna_continue() -> object:
-    from models import V2GapAnalysisModelOutput
+    from researchassistant.contracts.models import V2GapAnalysisModelOutput
 
     gap = V2MaterialGap(
         gap_id="gap-outcome",

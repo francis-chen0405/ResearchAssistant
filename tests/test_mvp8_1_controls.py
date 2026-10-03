@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from agents.planner import PlannerLLMInput
-from models import (
+from researchassistant.contracts.models import (
     DEFAULT_RESEARCH_CONTROLS,
     PresentationTone,
     ReportLength,

@@ -8,8 +8,6 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from credential_store import ProviderCredentials
-from desktop_settings import InterfaceSettings, Preferences
 from frontend.api import ApiRuntime, ConnectionCheck, create_app
 from frontend.live_service import (
     LiveHistoryItem,
@@ -20,13 +18,15 @@ from frontend.live_service import (
     ResearchTrail,
 )
 from frontend.service_manager import ServiceDiagnostic
-from models import DiscoveryProvider
 from providers.model_choices import (
     CONFIGURABLE_PROFILE_ID,
     DEFAULT_STAGE_MODELS,
     ModelChoice,
     StageModelSelections,
 )
+from researchassistant.contracts.models import DiscoveryProvider
+from researchassistant.platform_support.credential_store import ProviderCredentials
+from researchassistant.platform_support.desktop_settings import InterfaceSettings, Preferences
 
 
 class FakeController:
@@ -768,7 +768,7 @@ def test_phase3_credentials_cannot_change_during_active_research() -> None:
 
 
 def test_phase3_denied_vault_access_explains_system_password_without_echoing_key() -> None:
-    from credential_store import KeychainUnavailableError
+    from researchassistant.platform_support.credential_store import KeychainUnavailableError
 
     environment: dict[str, str] = {}
 

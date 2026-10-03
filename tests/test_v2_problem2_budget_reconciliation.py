@@ -8,14 +8,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from models import (
-    RunManifest,
-    RunStatus,
-    Stage,
-    V2DeepAnalysisSourceReconciliation,
-    V2PipelineIdentity,
-    v2_payload_fingerprint,
-)
 from providers.v2_budget import (
     V2PhysicalCallCompletion,
     V2PhysicalCallStart,
@@ -24,7 +16,20 @@ from providers.v2_budget import (
     _snapshot,
     read_v2_physical_call_audit,
 )
-from store import init_db, insert_run, insert_v2_artifact, insert_v2_pipeline_identity
+from researchassistant.contracts.models import (
+    RunManifest,
+    RunStatus,
+    Stage,
+    V2DeepAnalysisSourceReconciliation,
+    V2PipelineIdentity,
+    v2_payload_fingerprint,
+)
+from researchassistant.storage.store import (
+    init_db,
+    insert_run,
+    insert_v2_artifact,
+    insert_v2_pipeline_identity,
+)
 
 NOW = datetime(2026, 8, 24, tzinfo=UTC)
 
@@ -194,7 +199,7 @@ def test_bulk_physical_audit_uses_one_select_and_validates_payload_identity(
     statements: list[str] = []
     connection.set_trace_callback(statements.append)
     try:
-        from store import read_v2_physical_call_artifacts
+        from researchassistant.storage.store import read_v2_physical_call_artifacts
 
         rows = read_v2_physical_call_artifacts(connection, run_id)
     finally:

@@ -10,7 +10,6 @@ from pydantic import SecretStr
 
 import providers.v2_routing as v2_routing
 from agents.planner import PlannerLLMInput
-from models import PlannerOutput
 from providers.config import LunaConfig, MimoRouteConfig, ProviderConfigurationError
 from providers.llm import (
     DIRECT_MIMO_ROUTING,
@@ -23,6 +22,7 @@ from providers.llm import (
 from providers.mimo import MimoFailureCode, MimoProviderError, XiaomiMimoAdapter
 from providers.pricing import ModelPriceCap
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import PlannerOutput
 
 
 def _environment() -> dict[str, str]:

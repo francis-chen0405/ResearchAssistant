@@ -12,7 +12,14 @@ import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 from test_v2_phase7_adaptive_search import _db
 
-from models import (
+from providers.clients import ProviderClients
+from providers.llm import V2_LLM_ROUTING, LLMRequest, LLMStage, PromptTemplate
+from providers.mimo import MimoProviderError
+from providers.model_profiles import profile_environment
+from providers.pricing import conservative_token_estimate
+from providers.v2_budget import BudgetedV2LLMProvider, V2RunCeilings
+from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     ScoutBatch,
     ScoutDecision,
@@ -21,13 +28,6 @@ from models import (
     V2GapAnalysisModelOutput,
     V2InitialPlannerModelOutput,
 )
-from providers.clients import ProviderClients
-from providers.llm import V2_LLM_ROUTING, LLMRequest, LLMStage, PromptTemplate
-from providers.mimo import MimoProviderError
-from providers.model_profiles import profile_environment
-from providers.pricing import conservative_token_estimate
-from providers.v2_budget import BudgetedV2LLMProvider, V2RunCeilings
-from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
 
 
 class PricingFixture(StrictModel):
@@ -360,7 +360,7 @@ def test_custom_route_never_inherits_another_models_cache_discount(
     ],
 )
 def test_model_usage_rejects_inconsistent_cache_write_telemetry(values: dict[str, object]) -> None:
-    from models import ModelUsageMetadata
+    from researchassistant.contracts.models import ModelUsageMetadata
 
     with pytest.raises(ValidationError):
         ModelUsageMetadata(**values)

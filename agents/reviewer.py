@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import Field, model_validator
 
 from agents.researcher import parse_extracted_quote_block
-from models import (
+from researchassistant.contracts.models import (
     CandidateQuoteBlock,
     ReviewerFailureCode,
     Score,

@@ -11,28 +11,6 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from evidence_core import (
-    CURRENT_QUOTE_LENGTH_POLICY,
-    assemble_quote_block_from_selected_segments,
-    filter_provisional_candidate,
-    fresh_numbered_source_text,
-    validate_snapshot_integrity,
-)
-from models import (
-    CandidateQuoteBlock,
-    ProvisionalCandidate,
-    ResearchDirection,
-    SourceSnapshot,
-    Stance,
-    StrictModel,
-    V2AcquisitionProbeOutput,
-    V2DiscoveryScoutOutput,
-    V2EvidenceAnalystBatchInput,
-    V2EvidenceAnalystCandidateInput,
-    V2EvidenceAnalystExtractionFailure,
-    V2SourceSelectionQueueResult,
-    V2VerbatimQuoteSelection,
-)
 from providers.llm import (
     V2_LLM_ROUTING,
     LLMProvider,
@@ -49,7 +27,29 @@ from providers.v2_budget import (
     V2SourceBudgetExceededError,
 )
 from providers.v2_routing import V2RoutingConfig
-from store import insert_v2_artifact, read_v2_artifact
+from researchassistant.contracts.models import (
+    CandidateQuoteBlock,
+    ProvisionalCandidate,
+    ResearchDirection,
+    SourceSnapshot,
+    Stance,
+    StrictModel,
+    V2AcquisitionProbeOutput,
+    V2DiscoveryScoutOutput,
+    V2EvidenceAnalystBatchInput,
+    V2EvidenceAnalystCandidateInput,
+    V2EvidenceAnalystExtractionFailure,
+    V2SourceSelectionQueueResult,
+    V2VerbatimQuoteSelection,
+)
+from researchassistant.evidence.evidence_core import (
+    CURRENT_QUOTE_LENGTH_POLICY,
+    assemble_quote_block_from_selected_segments,
+    filter_provisional_candidate,
+    fresh_numbered_source_text,
+    validate_snapshot_integrity,
+)
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_EXTRACTION_LEGACY_ARTIFACT_KEY = "phase-12-exact-extraction"
 V2_EXTRACTION_ARTIFACT_KEY = "phase-13-exact-extraction-analyzer-admission"

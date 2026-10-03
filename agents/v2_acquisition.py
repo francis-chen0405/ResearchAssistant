@@ -10,12 +10,18 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict
 
-from evidence_core import build_source_snapshot, fresh_sentence_spans
-from models import (
+from providers.acquisition import AcquisitionFailureCode
+from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProvider, ScraperProviderError
+from providers.v2_budget import V2CancellationRequested
+from researchassistant.common.utils import count_words
+from researchassistant.contracts.models import (
+    V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
+    V2_ACQUISITION_PROBE_POLICY_IDENTITY,
     ResearchDirection,
     SourceCluster,
     SourceSnapshot,
@@ -30,10 +36,13 @@ from models import (
     V2ProbeResult,
     V2SurvivingSource,
 )
-from providers.acquisition import AcquisitionFailureCode
-from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProvider, ScraperProviderError
-from providers.v2_budget import V2CancellationRequested
-from store import insert_v2_artifact, read_v2_artifact
+from researchassistant.evidence.evidence_core import (
+    CURRENT_QUOTE_LENGTH_POLICY,
+    build_source_snapshot,
+    fresh_sentence_spans,
+    has_statistical_markers,
+)
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_ACQUISITION_PROBE_ARTIFACT_KEY = "phase-5-acquisition-probe"
 _CONCLUSION_RE = re.compile(r"\b(conclusion|conclude|summary|in summary|overall|therefore)\b", re.I)
@@ -45,6 +54,16 @@ _PAGE_CHROME_RE = re.compile(
     r"next page|previous page|share this page|page\s+\d+\s+of\s+\d+|"
     r"click here to (?:read|view|continue)|contact us|about us|privacy policy|"
     r"terms of use|accessibility statement|all rights reserved|powered by)\b",
+    re.I,
+)
+_PAGE_ERROR_RE = re.compile(
+    r"\b(?:required part of (?:this|the) site (?:couldn[’']t|could not) load|"
+    r"this may be due to a browser extension.{0,100}network issues.{0,100}browser settings|"
+    r"error loading (?:the )?(?:page|site|content)|"
+    r"failed to load (?:the )?(?:page|site|content)|"
+    r"couldn[’']t load (?:the )?(?:page|site|content)|"
+    r"please check your connection.{0,160}disable (?:any )?ad blockers.{0,160}"
+    r"(?:try using|use) a different browser)\b",
     re.I,
 )
 _FALLBACK_FAILURE_CODES = frozenset(
@@ -152,10 +171,17 @@ def run_v2_acquisition_probe(
         )
         acquired.append(source)
         try:
-            probe = probe_snapshot(
-                snapshot=source.snapshot,
-                cluster_id=cluster.cluster_id,
-            )
+            if policy.policy_identity == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY:
+                probe = probe_snapshot(
+                    snapshot=source.snapshot,
+                    cluster_id=cluster.cluster_id,
+                    policy_identity=policy.policy_identity,
+                )
+            else:
+                probe = probe_snapshot(
+                    snapshot=source.snapshot,
+                    cluster_id=cluster.cluster_id,
+                )
         except Exception as exc:
             probe = V2ProbeResult(
                 cluster_id=cluster.cluster_id,
@@ -182,6 +208,7 @@ def run_v2_acquisition_probe(
         attempts=tuple(attempts),
         probes=tuple(probes),
         survivors=tuple(survivors),
+        policy_identity=policy.policy_identity,
         completed_at=completed_at,
     )
     insert_v2_artifact(db_path, artifact_key, output, completed_at)
@@ -200,15 +227,33 @@ def _discovery_round(output: V2DiscoveryScoutOutput) -> int:
     return round_number
 
 
-def probe_snapshot(*, snapshot: SourceSnapshot, cluster_id: UUID) -> V2ProbeResult:
+def probe_snapshot(
+    *,
+    snapshot: SourceSnapshot,
+    cluster_id: UUID,
+    policy_identity: Literal[
+        "researchassistant-v2-phase-5-acquisition-probe-v1",
+        "researchassistant-v2-phase-5-acquisition-probe-v2",
+    ] = V2_ACQUISITION_PROBE_POLICY_IDENTITY,
+) -> V2ProbeResult:
     """Return two to five exact, cheaply ranked snapshot passages when text permits."""
+    if policy_identity not in {
+        V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
+        V2_ACQUISITION_PROBE_POLICY_IDENTITY,
+    }:
+        raise ValueError("unsupported v2 acquisition Probe policy identity")
     spans = fresh_sentence_spans(snapshot.normalized_text)
     if not spans:
         return V2ProbeResult(
             cluster_id=cluster_id,
             snapshot_id=snapshot.snapshot_id,
             snapshot_sha256=snapshot.snapshot_sha256,
-            succeeded=True,
+            succeeded=policy_identity == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
+            failure=(
+                None
+                if policy_identity == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY
+                else "acquired snapshot has no selectable sentences"
+            ),
         )
     candidates = [
         (score, start, end, text, signals)
@@ -217,9 +262,36 @@ def probe_snapshot(*, snapshot: SourceSnapshot, cluster_id: UUID) -> V2ProbeResu
         )
         for score, signals in (_passage_score(text=text, index=index, total=len(spans)),)
     ]
-    substantive_candidates = [item for item in candidates if _is_substantive_passage(item[3])]
+    substantive_candidates = [
+        item
+        for item in candidates
+        if _is_substantive_passage(item[3], policy_identity=policy_identity)
+    ]
     if substantive_candidates:
         candidates = substantive_candidates
+    elif policy_identity != V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY:
+        return V2ProbeResult(
+            cluster_id=cluster_id,
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_sha256=snapshot.snapshot_sha256,
+            succeeded=False,
+            failure="acquired snapshot contains no substantive passages",
+        )
+    if policy_identity == V2_ACQUISITION_PROBE_POLICY_IDENTITY:
+        quoteable_text = " ".join(item[3] for item in substantive_candidates)
+        minimum_words = (
+            CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
+            if has_statistical_markers(quoteable_text)
+            else CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words
+        )
+        if count_words(quoteable_text) < minimum_words:
+            return V2ProbeResult(
+                cluster_id=cluster_id,
+                snapshot_id=snapshot.snapshot_id,
+                snapshot_sha256=snapshot.snapshot_sha256,
+                succeeded=False,
+                failure="acquired snapshot cannot meet the minimum quote length",
+            )
     candidates.sort(key=lambda item: (-item[0], item[1], item[2]))
     selected = sorted(candidates[: min(5, len(candidates))], key=lambda item: item[1])
     passages = tuple(
@@ -444,8 +516,10 @@ def _can_fallback(
     )
 
 
-def _is_substantive_passage(text: str) -> bool:
+def _is_substantive_passage(text: str, *, policy_identity: str) -> bool:
     if _PAGE_CHROME_RE.search(text):
+        return False
+    if policy_identity == V2_ACQUISITION_PROBE_POLICY_IDENTITY and _PAGE_ERROR_RE.search(text):
         return False
     without_urls = _URL_TEXT_RE.sub(" ", text)
     words = re.findall(r"\b[\w'-]+\b", without_urls)

@@ -1,11 +1,11 @@
 # Desktop application
 
-The audited build was installed in Applications and old local app/installer copies
-were removed on 2026-10-01 at the user's request; see
-[installation verification](../docs/verification/audited-app-install-2026-10-01.md).
-Local `desktop/dist` paths mentioned below are historical; the published September
-download remains available. Saved research, credentials, source, and verification
-logs are preserved.
+The app was replaced with a verified local build on 2026-10-02; see the
+[private-surveillance fix verification](../docs/verification/private-surveillance-run-fixes-2026-10-02.md)
+and [redelivery verification](../docs/verification/committed-app-redelivery-2026-10-02.md).
+The latest public download is still the September 28 test release built from `ac49404`;
+it does not contain the October fixes. The older `desktop/dist` paths below describe
+historical artifacts. Saved research and credentials were preserved.
 
 Current delivery target is a directly downloadable Apple Silicon Mac test build; no
 Mac App Store submission is planned. Windows release work is deferred.
@@ -18,9 +18,9 @@ signed, notarized public release. The installer declares macOS 14+, but minimum-
 and clean-machine acceptance still require tests on those systems.
 
 Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
-Current unsigned Mac build verification is tracked in
+Historical September unsigned Mac build verification is tracked in
 [the 2026-09-28 record](../docs/verification/mac-current-build-2026-09-28.md).
-It includes the database-integrity source changes and current GPT-6 model choices.
+That build includes the then-current database-integrity changes and GPT-6 model choices.
 The user app was subsequently replaced with the verified unsigned build on 2026-09-29;
 see the [testing handoff](../docs/testing-handoff-2026-10-01.md). Earlier adaptive-search,
 Phase 2, and Phase 3 records remain historical evidence for their specific builds and checks.
@@ -33,10 +33,12 @@ The macOS test build is a DMG/ZIP containing ResearchAssistant.app. Copy the app
 Applications. Windows builds use a per-user NSIS installer. End users do not install
 Python, Node, pnpm or Docker. Updates replace the application bundle, not its data.
 Unsigned test artifacts are not a signed/notarized public release.
-The current DMG and ZIP are saved under `desktop/dist/mac-current-20260928/` with
-checksums and a short readme. All four files are available from the
+The September 28 DMG and ZIP were saved under `desktop/dist/mac-current-20260928/`
+with checksums and a short readme. All four files are available from the
 [unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928).
-A recipient of an unsigned download may encounter Gatekeeper restrictions.
+That public release was built from `ac49404` and lacks the October source fixes; it is
+not the current local app. A recipient of an unsigned download may encounter Gatekeeper
+restrictions.
 
 The current delivery target is Apple Silicon macOS 14+. The local candidate checks were
 run on macOS 26.6.2 arm64; clean-machine installation and actual macOS 14 verification
@@ -146,10 +148,12 @@ Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 
 ## Historical Phase 2 source compatibility
 
-At the Phase 2 verification point, root contract, schema, fixture and application-runtime modules and the extracted
-`frontend/live_*` helpers remain covered by the existing recursive packaging and identity
-rules. No new dependency or resource root was introduced. Rebuild the bundle after source
-changes and start a new research run: the exact source/executable fingerprint changes.
+At the Phase 2 verification point, contract, schema, fixture and application-runtime modules
+were root-level files, with extracted `frontend/live_*` helpers covered by the then-current
+recursive packaging and identity rules. The current organization is under `researchassistant/`;
+see [architecture](../ARCHITECTURE.md) for canonical imports and ownership. Rebuild the bundle
+after source changes. A changed source/executable fingerprint requires a new research run under
+the exact compatibility gate; historical records remain available for inspection and export.
 Historical inspection/export was preserved; incompatible resume failed explicitly.
 This records the Phase 2 result only. Phase 3, adaptive-search, audit-maintenance, and
 database-integrity work followed it; use the dated verification records for each result.

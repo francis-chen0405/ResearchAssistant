@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
-from models import (
+from researchassistant.contracts.models import (
     V2ClaimCoverageAssessment,
     V2ClaimCoverageState,
     V2EvidenceAdmissionBatchResult,
@@ -13,7 +14,8 @@ from models import (
     V2PostAnalysisAssessment,
 )
 
-V2_POST_ANALYSIS_ASSESSMENT_POLICY = "researchassistant-v2-post-analysis-evidence-v1"
+V2_POST_ANALYSIS_ASSESSMENT_LEGACY_POLICY = "researchassistant-v2-post-analysis-evidence-v1"
+V2_POST_ANALYSIS_ASSESSMENT_POLICY = "researchassistant-v2-post-analysis-evidence-v2"
 
 
 def build_v2_post_analysis_assessment(
@@ -21,6 +23,10 @@ def build_v2_post_analysis_assessment(
     admission_result: V2EvidenceAdmissionBatchResult,
     coverage: tuple[V2ClaimCoverageAssessment, ...],
     unresolved_gap_count: int,
+    policy_identity: Literal[
+        "researchassistant-v2-post-analysis-evidence-v1",
+        "researchassistant-v2-post-analysis-evidence-v2",
+    ] = V2_POST_ANALYSIS_ASSESSMENT_POLICY,
 ) -> V2PostAnalysisAssessment:
     """Reassess admitted evidence without altering strategy decisions or evidence text.
 
@@ -65,6 +71,23 @@ def build_v2_post_analysis_assessment(
     partial = sum(item.coverage_state is V2ClaimCoverageState.PARTIAL for item in coverage)
     unavailable = sum(item.coverage_state is V2ClaimCoverageState.UNAVAILABLE for item in coverage)
     unadmitted = len(source_ids) - len(admitted_ids)
+    legacy = policy_identity == V2_POST_ANALYSIS_ASSESSMENT_LEGACY_POLICY
+    coverage_incomplete = (
+        bool(unresolved_gap_count)
+        or not coverage
+        or any(
+            item.coverage_state
+            not in {V2ClaimCoverageState.COVERED, V2ClaimCoverageState.NOT_APPLICABLE}
+            for item in coverage
+        )
+    )
+    search_outcome: Literal["incomplete_coverage", "limited_evidence", "analysis_complete"] = (
+        "incomplete_coverage"
+        if coverage_incomplete
+        else (
+            "limited_evidence" if unadmitted or not (support + challenge) else "analysis_complete"
+        )
+    )
     limitations: list[str] = []
     if support == 0:
         limitations.append(
@@ -75,8 +98,16 @@ def build_v2_post_analysis_assessment(
         limitations.append("The admitted findings provide qualifications, not proof of the claim.")
     if unadmitted:
         limitations.append(
-            f"{unadmitted} selected source(s) produced no admitted evidence; "
-            "selection is not evidence sufficiency."
+            (
+                f"{unadmitted} selected source(s) produced no admitted evidence; "
+                "selection is not evidence sufficiency."
+            )
+            if legacy
+            else (
+                f"{unadmitted} of {len(source_ids)} surviving sources "
+                "produced no admitted evidence; "
+                "surviving selection is not evidence sufficiency."
+            )
         )
     if unresolved_gap_count or any(
         item.coverage_state
@@ -98,6 +129,7 @@ def build_v2_post_analysis_assessment(
         limitations.append("Historical unrelated items do not provide evidence for this claim.")
     return V2PostAnalysisAssessment(
         run_id=run_id,
+        policy_identity=policy_identity,
         admitted_source_ids=tuple(admitted_ids),
         supporting_count=support,
         challenging_count=challenge,
@@ -109,4 +141,6 @@ def build_v2_post_analysis_assessment(
         unresolved_gap_count=unresolved_gap_count,
         claim_support_observed=support > 0,
         limitations=tuple(limitations),
+        search_outcome=None if legacy else search_outcome,
+        coverage_incomplete=None if legacy else coverage_incomplete,
     )

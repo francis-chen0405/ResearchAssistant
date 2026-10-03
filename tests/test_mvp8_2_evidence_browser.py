@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from evidence_browser import (
+from researchassistant.evidence.evidence_browser import (
     EvidenceBrowserError,
     EvidenceBrowserFilter,
     EvidenceStage,
@@ -12,7 +12,7 @@ from evidence_browser import (
     browse_evidence_run,
     trace_released_statement,
 )
-from orchestrator import run_fixture_pipeline
+from researchassistant.research.orchestrator import run_fixture_pipeline
 
 _ROOT = Path(__file__).resolve().parents[1]
 _VALID = _ROOT / "tests" / "fixtures" / "basic_valid_run"

@@ -15,21 +15,6 @@ from agents.researcher import EVIDENCE_POLICY_VERSION
 from agents.reviewer import ReviewerDecision
 from agents.supportingresearcher import AcquisitionPolicy
 from agents.synthesizer import SynthesizerLLMInput
-from models import (
-    DEFAULT_RESEARCH_CONTROLS,
-    DiscoveryProvider,
-    PlannerOutput,
-    ProviderRunContract,
-    ProvisionalCandidate,
-    ResearchControls,
-    ResearchDepth,
-    ScoreDecision,
-    StatementDraft,
-    StrictModel,
-    SynthesisOutput,
-    VerbatimQuoteSelection,
-)
-from provider_contract import canonical_provider_contract_payload, parse_provider_contract_payload
 from providers.acquisition import ACQUISITION_VERSION, WigoloAcquisitionAdapter
 from providers.clients import ProviderClients
 from providers.composite_search import CompositeSearchProvider
@@ -55,6 +40,24 @@ from providers.pricing import (
 )
 from providers.ranking import DISCOVERY_POLICY_VERSION
 from providers.serpsearch import SerpSearchAdapter
+from researchassistant.contracts.models import (
+    DEFAULT_RESEARCH_CONTROLS,
+    DiscoveryProvider,
+    PlannerOutput,
+    ProviderRunContract,
+    ProvisionalCandidate,
+    ResearchControls,
+    ResearchDepth,
+    ScoreDecision,
+    StatementDraft,
+    StrictModel,
+    SynthesisOutput,
+    VerbatimQuoteSelection,
+)
+from researchassistant.contracts.provider_contract import (
+    canonical_provider_contract_payload,
+    parse_provider_contract_payload,
+)
 
 MIMO_FACTORY_VERSION = "mlp5-provider-selection-factory-v1"
 MIMO_RETRY_POLICY_VERSION = "mvp9-nonretryable-exact-selection-v1"

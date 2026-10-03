@@ -14,14 +14,16 @@ from uuid import UUID
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import cli  # noqa: E402
-from models import ProviderRunContract, ResearchControls  # noqa: E402
-from orchestrator import ProviderPipelineResult  # noqa: E402
-from pipeline_compatibility import LegacyPipelineRunner  # noqa: E402
-from provider_contract import canonical_provider_contract_payload  # noqa: E402
+import researchassistant.runtime.cli as cli  # noqa: E402
 from providers.llm import DEFAULT_LLM_ROUTING  # noqa: E402
 from providers.mimo_factory import MimoProviderFactoryConfig  # noqa: E402
-from store import read_cancellation_request  # noqa: E402
+from researchassistant.contracts.models import ProviderRunContract, ResearchControls  # noqa: E402
+from researchassistant.contracts.provider_contract import (  # noqa: E402
+    canonical_provider_contract_payload,
+)
+from researchassistant.research.orchestrator import ProviderPipelineResult  # noqa: E402
+from researchassistant.research.pipeline_compatibility import LegacyPipelineRunner  # noqa: E402
+from researchassistant.storage.store import read_cancellation_request  # noqa: E402
 
 
 def _load_provider_test_helpers() -> dict[str, object]:

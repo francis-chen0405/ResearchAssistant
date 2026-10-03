@@ -13,14 +13,26 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 import pytest
 from pydantic import BaseModel
 
-import orchestrator as orchestrator_module
+import researchassistant.research.orchestrator as orchestrator_module
 from agents.analyst import AnalystLLMInput
 from agents.planner import PlannerLLMInput
 from agents.researcher import parse_extracted_quote_block
 from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import MVP3A_ACQUISITION_POLICY, ExtractionLLMInput
 from agents.synthesizer import SynthesizerLLMInput, build_synthesis_output
-from models import (
+from providers.llm import (
+    LLMProviderCapabilities,
+    LLMRequest,
+    LLMStage,
+    ModelAlias,
+)
+from providers.scraper import (
+    ScrapeRequest,
+    ScrapeResponse,
+    ScraperProviderError,
+)
+from providers.search import SearchRequest, SearchResponse, SearchResult
+from researchassistant.contracts.models import (
     REQUIRED_QUERY_EXCLUSIONS,
     AmbiguityRecord,
     ClaimDefinition,
@@ -37,7 +49,7 @@ from models import (
     StatementDraft,
     VerbatimQuoteSelection,
 )
-from orchestrator import (
+from researchassistant.research.orchestrator import (
     OrchestrationBudget,
     PinnedModelSnapshot,
     ProviderOrchestrationConfig,
@@ -48,19 +60,7 @@ from orchestrator import (
     request_run_cancellation,
     run_provider_pipeline,
 )
-from providers.llm import (
-    LLMProviderCapabilities,
-    LLMRequest,
-    LLMStage,
-    ModelAlias,
-)
-from providers.scraper import (
-    ScrapeRequest,
-    ScrapeResponse,
-    ScraperProviderError,
-)
-from providers.search import SearchRequest, SearchResponse, SearchResult
-from store import read_research_round_records, read_run
+from researchassistant.storage.store import read_research_round_records, read_run
 
 NOW = datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
 RUN_ID = UUID("90000000-0000-0000-0000-000000000001")
@@ -981,7 +981,7 @@ def test_worker_threads_never_share_sqlite_connections(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import store
+    import researchassistant.storage.store as store
 
     original_connect = store._connect
     connections_by_thread: defaultdict[str, list[sqlite3.Connection]] = defaultdict(list)

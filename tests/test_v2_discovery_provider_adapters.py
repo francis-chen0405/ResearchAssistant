@@ -4,11 +4,11 @@ from uuid import uuid4
 
 import httpx
 
-from models import DiscoveryProvider, SearchIntent
 from providers.arxiv import ArxivSearchAdapter
 from providers.config import ArxivConfig, PubMedConfig
 from providers.pubmed import PubMedSearchAdapter
 from providers.search import SearchRequest
+from researchassistant.contracts.models import DiscoveryProvider, SearchIntent
 
 
 def test_arxiv_adapter_normalizes_atom_metadata_without_an_api_key() -> None:

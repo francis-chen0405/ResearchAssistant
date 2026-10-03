@@ -10,12 +10,15 @@ ownership, cancellation and immutable snapshots. `live_contracts.py` owns strict
 contracts; `live_progress.py` projects persisted progress and conservative usage;
 `live_history.py` reads history and research trails through validated read-only sessions.
 Controller entry points and contract imports remain compatible. Shared executable identity
-comes from `application_runtime.py`; no service needs to import the CLI to compute it.
+comes from `researchassistant.runtime.application_runtime`; no service needs to import the
+CLI to compute it.
 
 `api.py` retains transport validation and desktop authentication. `service_manager.py`
 owns acquisition-service lifecycle. The existing evidence viewer, fixture tooling and
 historical export adapters remain available; they do not select a new research policy.
-Fresh research uses `v2_orchestrator.py` and current configured discovery/model routes.
+Fresh research uses `researchassistant.research.v2_orchestrator` and current configured
+discovery/model routes. Use canonical `researchassistant.*` paths for backend imports;
+the root `models.py`, `store.py`, and `orchestrator.py` modules remain compatibility aliases.
 
 See [architecture](../ARCHITECTURE.md) for exact evidence, persistence, accounting and
 credential invariants. The Phase 3 workspace, settings and history workflows are implemented;

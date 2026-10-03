@@ -11,16 +11,6 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from model_research import v2_payload_fingerprint
-from models import (
-    RunManifest,
-    RunStatus,
-    SelectedSentenceRange,
-    Stage,
-    StrictModel,
-    V2PipelineIdentity,
-    V2VerbatimQuoteSelection,
-)
 from providers.llm import (
     GenerationSettings,
     LLMRequest,
@@ -43,7 +33,22 @@ from providers.v2_budget import (
     read_v2_physical_call_audit,
 )
 from providers.v2_routing import V2RoutingConfig
-from store import init_db, insert_run, insert_v2_artifact, insert_v2_pipeline_identity
+from researchassistant.contracts.model_research import v2_payload_fingerprint
+from researchassistant.contracts.models import (
+    RunManifest,
+    RunStatus,
+    SelectedSentenceRange,
+    Stage,
+    StrictModel,
+    V2PipelineIdentity,
+    V2VerbatimQuoteSelection,
+)
+from researchassistant.storage.store import (
+    init_db,
+    insert_run,
+    insert_v2_artifact,
+    insert_v2_pipeline_identity,
+)
 
 _NOW = datetime(2026, 10, 1, tzinfo=UTC)
 

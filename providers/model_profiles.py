@@ -8,7 +8,6 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from models import StrictModel
 from providers.config import ProviderConfigurationError
 from providers.model_choices import (
     CONFIGURABLE_PROFILE_ID,
@@ -16,6 +15,7 @@ from providers.model_choices import (
     MODEL_OPTIONS,
     StageModelSelections,
 )
+from researchassistant.contracts.models import StrictModel
 
 ProfileId = Literal["standard-2026-09", "configurable-2026-09"]
 

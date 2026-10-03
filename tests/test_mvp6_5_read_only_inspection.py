@@ -9,12 +9,12 @@ from uuid import uuid4
 
 import pytest
 
-import store as store_module
-from cli import CLIExitCode, main
+import researchassistant.storage.store as store_module
 from frontend.live_service import LiveResearchController
-from models import RunManifest, RunStatus, Stage
-from orchestrator import ProviderRunStatus, inspect_provider_run
-from store import (
+from researchassistant.contracts.models import RunManifest, RunStatus, Stage
+from researchassistant.research.orchestrator import ProviderRunStatus, inspect_provider_run
+from researchassistant.runtime.cli import CLIExitCode, main
+from researchassistant.storage.store import (
     RAW_CLAIM_TRIGGER_NAME,
     DatabaseCompatibilityError,
     DatabaseCompatibilityIssue,

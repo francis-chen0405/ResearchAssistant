@@ -31,6 +31,7 @@ from agents.v2_final_output import (
     V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
 )
 from agents.v2_post_analysis import (
+    V2_POST_ANALYSIS_ASSESSMENT_POLICY,
     V2PostAnalysisAssessment,
     build_v2_post_analysis_assessment,
 )
@@ -39,17 +40,6 @@ from agents.v2_round_four import (
     V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
     V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
 )
-from application_runtime import repository_identity
-from credential_store import (
-    KeychainUnavailableError,
-    ProviderCredentials,
-    apply_credentials_to_environment,
-    load_saved_credentials_into_environment,
-    remove_credential,
-    save_credentials,
-)
-from desktop_settings import InterfaceSettings, read_preferences, update_preferences
-from evidence_core import parse_extracted_quote_block, validate_snapshot_integrity
 from frontend.live_service import (
     DEFAULT_LIVE_DB,
     LiveHistoryItem,
@@ -63,8 +53,21 @@ from frontend.live_service import (
 from frontend.provider_connections import ConnectionCheck, check_connection
 from frontend.security import redact_text
 from frontend.service_manager import ServiceDiagnostic, WigoloServiceManager
-from history_import import HistoryImportResult, import_history
-from models import (
+from providers.model_choices import (
+    CONFIGURABLE_PROFILE_ID,
+    DEFAULT_STAGE_MODELS,
+    StageModelSelections,
+    model_options_payload,
+)
+from providers.model_profiles import (
+    CONFIGURABLE_PROFILE,
+    STANDARD_PROFILE,
+    ModelProfile,
+    ProfileId,
+    profile_environment,
+)
+from providers.v2_factory import V2ProductionFactoryConfig
+from researchassistant.contracts.models import (
     CandidateQuoteBlock,
     DiscoveryProvider,
     LedgerRecord,
@@ -86,22 +89,32 @@ from models import (
     V2ReviewerLedgerBatchResult,
     V2RoundFourGovernorDecision,
 )
-from providers.model_choices import (
-    CONFIGURABLE_PROFILE_ID,
-    DEFAULT_STAGE_MODELS,
-    StageModelSelections,
-    model_options_payload,
+from researchassistant.evidence.evidence_core import (
+    parse_extracted_quote_block,
+    validate_snapshot_integrity,
 )
-from providers.model_profiles import (
-    CONFIGURABLE_PROFILE,
-    STANDARD_PROFILE,
-    ModelProfile,
-    ProfileId,
-    profile_environment,
+from researchassistant.evidence.source_display import display_source_title
+from researchassistant.evidence.study_lineage import StudyLineageNotice, build_study_lineage_notices
+from researchassistant.platform_support.credential_store import (
+    KeychainUnavailableError,
+    ProviderCredentials,
+    apply_credentials_to_environment,
+    load_saved_credentials_into_environment,
+    remove_credential,
+    save_credentials,
 )
-from providers.v2_factory import V2ProductionFactoryConfig
-from store import DatabaseCompatibilityError, open_read_only_store, read_v2_artifact
-from study_lineage import StudyLineageNotice, build_study_lineage_notices
+from researchassistant.platform_support.desktop_settings import (
+    InterfaceSettings,
+    read_preferences,
+    update_preferences,
+)
+from researchassistant.runtime.application_runtime import repository_identity
+from researchassistant.storage.history_import import HistoryImportResult, import_history
+from researchassistant.storage.store import (
+    DatabaseCompatibilityError,
+    open_read_only_store,
+    read_v2_artifact,
+)
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -406,6 +419,7 @@ class V2EvidenceDisplayItem(StrictModel):
     title: str | None = None
     source_url: str = Field(min_length=1)
     source_type: str | None = None
+    claim_fit: int | None = Field(default=None, ge=1, le=5)
     source_context_notice: str | None = None
     source_family: str = Field(min_length=1)
     direction: str = Field(min_length=1)
@@ -447,9 +461,18 @@ class V2SharedWebsiteGroup(StrictModel):
     explanation: str = Field(min_length=1)
 
 
+class V2SourceTitleDisplay(StrictModel):
+    """Readable source heading plus the captured title for expanded provenance."""
+
+    source_id: UUID
+    display_title: str = Field(min_length=1)
+    captured_title: str | None = None
+
+
 class V2EvidenceDisplay(StrictModel):
     run_id: UUID
     items: tuple[V2EvidenceDisplayItem, ...]
+    source_titles: tuple[V2SourceTitleDisplay, ...] = ()
     study_lineage: tuple[StudyLineageNotice, ...] = ()
     source_budget_outcomes: tuple[V2SourceBudgetOutcomeDisplay, ...] = ()
     shared_website_groups: tuple[V2SharedWebsiteGroup, ...] = ()
@@ -564,6 +587,7 @@ def _build_v2_evidence_display(
                 title=source.title,
                 source_url=record.source_url,
                 source_type=source.source_type,
+                claim_fit=record.claim_fit,
                 source_context_notice=_source_context_notice(
                     source_type=source.source_type,
                     exact_claim=output.exact_claim,
@@ -602,6 +626,11 @@ def _build_v2_evidence_display(
             admission_result=evidence_result,
             coverage=output.claim_coverage_map,
             unresolved_gap_count=len(output.unresolved_material_gaps),
+            policy_identity=(
+                output.post_analysis_assessment.policy_identity
+                if output.post_analysis_assessment is not None
+                else V2_POST_ANALYSIS_ASSESSMENT_POLICY
+            ),
         )
         if isinstance(evidence_result, V2EvidenceAdmissionBatchResult)
         else None
@@ -609,6 +638,17 @@ def _build_v2_evidence_display(
     return V2EvidenceDisplay(
         run_id=output.run_id,
         items=tuple(items),
+        source_titles=tuple(
+            V2SourceTitleDisplay(
+                source_id=source.source_id,
+                display_title=display_source_title(
+                    title=source.title,
+                    source_url=source.source_url,
+                ),
+                captured_title=source.title,
+            )
+            for source in output.all_surviving_sources
+        ),
         study_lineage=build_study_lineage_notices(candidates),
         source_budget_outcomes=source_budget_outcomes,
         shared_website_groups=_build_shared_website_groups(tuple(items)),

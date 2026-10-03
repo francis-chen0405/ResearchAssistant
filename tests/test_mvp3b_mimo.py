@@ -11,16 +11,6 @@ from pydantic import SecretStr
 from agents.planner import PlannerLLMInput
 from agents.reviewer import ReviewerDecision, ReviewerInput
 from agents.supportingresearcher import ExtractionLLMInput, UntrustedSourceText
-from models import (
-    ClaimDefinition,
-    PlannerOutput,
-    PortfolioExpansionRequest,
-    RetrievalRecord,
-    RetrievalStatus,
-    ScoreDecision,
-    Stance,
-    VerbatimQuoteSelection,
-)
 from providers.config import LunaConfig, MimoConfig, ProviderConfigurationError
 from providers.llm import DIRECT_MIMO_ROUTING, LLMStage, ModelAlias, build_stage_request
 from providers.mimo import (
@@ -33,6 +23,16 @@ from providers.mimo import (
     _direct_mimo_prompt,
 )
 from providers.pricing import DIRECT_MIMO_PRICE_CAP, ModelPriceCap
+from researchassistant.contracts.models import (
+    ClaimDefinition,
+    PlannerOutput,
+    PortfolioExpansionRequest,
+    RetrievalRecord,
+    RetrievalStatus,
+    ScoreDecision,
+    Stance,
+    VerbatimQuoteSelection,
+)
 
 
 def _request() -> object:

@@ -13,7 +13,7 @@ from agents.renderer import (
     SUPPORTING_EVIDENCE_TEMPLATE_ID,
     WEAK_ENTAILMENT_TEMPLATE_ID,
 )
-from models import (
+from researchassistant.contracts.models import (
     Entailment,
     LedgerRecord,
     Placement,

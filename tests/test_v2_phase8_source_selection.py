@@ -12,7 +12,9 @@ from agents.v2_source_selection import (
     calculate_v2_deep_analysis_queue,
     run_v2_source_selection_and_queue,
 )
-from models import (
+from providers.llm import LLMProviderCapabilities, LLMStage
+from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
@@ -26,9 +28,7 @@ from models import (
     V2SourceSelectionModelOutput,
     V2SourceSelectionRecommendation,
 )
-from providers.llm import LLMProviderCapabilities, LLMStage
-from providers.v2_routing import V2RoutingConfig
-from store import (
+from researchassistant.storage.store import (
     init_db,
     insert_run,
     insert_v2_artifact,

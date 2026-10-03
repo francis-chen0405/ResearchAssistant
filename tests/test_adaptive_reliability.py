@@ -18,8 +18,8 @@ from agents.v2_adaptive_search import (
     _plan_round,
 )
 from agents.v2_initial_planner import run_v2_initial_planner
-from models import DiscoveryProvider, ResearchDirections
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import DiscoveryProvider, ResearchDirections
 
 
 def _planning_fixture(
@@ -104,7 +104,7 @@ def test_relevance_does_not_resolve_gap_and_legacy_is_preserved(tmp_path: Path) 
     from test_v2_phase10_reviewer_ledger import _run as evidence_run
 
     from agents.v2_final_output import _unresolved_gaps
-    from models import ResearchDirection, V2SourceSelectionGap
+    from researchassistant.contracts.models import ResearchDirection, V2SourceSelectionGap
 
     _, evidence = evidence_run(tmp_path, Phase10Provider([_approved()]))
     source = evidence.source_results[0].model_copy(
@@ -138,7 +138,7 @@ def test_relevance_does_not_resolve_gap_and_legacy_is_preserved(tmp_path: Path) 
 
 def test_planning_resume_reuses_accepted_repair(tmp_path: Path) -> None:
     from agents.v2_adaptive_search import V2PlanningOutcome
-    from store import read_v2_artifact
+    from researchassistant.storage.store import read_v2_artifact
 
     llm = FakeAdaptiveLLM(
         search_outputs=[
@@ -217,7 +217,7 @@ def test_crash_after_call_never_reissues_the_call(
     from datetime import datetime
 
     import agents.v2_adaptive_search as adaptive
-    from models import StrictModel, V2PersistedArtifact
+    from researchassistant.contracts.models import StrictModel, V2PersistedArtifact
 
     llm = FakeAdaptiveLLM(
         search_outputs=[_proposal("independent cohort outcome instrument evaluation")],
@@ -268,7 +268,7 @@ def test_support_only_production_preserves_gaps_and_audits_physical_attempts(
     from agents.v2_final_output import render_v2_final_output
     from providers.llm import LLMRequest, LLMStage
     from providers.v2_budget import V2PhysicalCallStart, V2RunCeilings
-    from store import read_v2_artifact
+    from researchassistant.storage.store import read_v2_artifact
 
     class RepairModel(_V2Model):
         def generate(self, request: LLMRequest) -> object:
@@ -303,7 +303,8 @@ def test_support_only_production_preserves_gaps_and_audits_physical_attempts(
     from agents.v2_adaptive_search import V2_ADAPTIVE_COMPLETION_KEY, V2AdaptiveContinuationResult
     from agents.v2_deep_analysis import V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY
     from agents.v2_final_output import _v2_integrity_errors, _validate_persisted_output
-    from models import V2DeepAnalysisBackfillResult
+    from agents.v2_post_analysis import V2_POST_ANALYSIS_ASSESSMENT_POLICY
+    from researchassistant.contracts.models import V2DeepAnalysisBackfillResult
 
     backfill = V2DeepAnalysisBackfillResult.model_validate_json(
         read_v2_artifact(
@@ -318,7 +319,13 @@ def test_support_only_production_preserves_gaps_and_audits_physical_attempts(
     _validate_persisted_output(output, admission, continuation, gap_reconciliation=None)
     fields = {name: getattr(output, name) for name in type(output).model_fields}
     fields["unresolved_material_gaps"] = ()
-    errors = _v2_integrity_errors(output.synthesis, admission, continuation, fields)
+    errors = _v2_integrity_errors(
+        output.synthesis,
+        admission,
+        continuation,
+        fields,
+        V2_POST_ANALYSIS_ASSESSMENT_POLICY,
+    )
     assert any("Known gaps require" in error.message for error in errors)
     starts = [
         V2PhysicalCallStart.model_validate_json(

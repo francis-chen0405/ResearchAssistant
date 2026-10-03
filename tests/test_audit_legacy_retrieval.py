@@ -8,7 +8,6 @@ from threading import Barrier, Event, Lock
 from uuid import UUID, uuid4
 
 from agents.supportingresearcher import DeduplicationState, _retrieve_result
-from models import REQUIRED_QUERY_EXCLUSIONS, SearchQuery, Stance
 from providers.scraper import (
     RetryPolicy,
     ScrapeRequest,
@@ -16,6 +15,7 @@ from providers.scraper import (
     ScraperProviderError,
     ScrapeStatus,
 )
+from researchassistant.contracts.models import REQUIRED_QUERY_EXCLUSIONS, SearchQuery, Stance
 
 NOW = datetime(2026, 10, 1, tzinfo=UTC)
 SHARED_URL = "https://example.org/shared-source"

@@ -11,19 +11,6 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 
-from models import (
-    ClaimDefinition,
-    MediaTypeProvenance,
-    PlannerOutput,
-    RetrievalRecord,
-    RetrievalStatus,
-    RunManifest,
-    RunStatus,
-    SearchQuery,
-    SourceSnapshot,
-    Stage,
-    Stance,
-)
 from providers.acquisition import (
     ACQUISITION_VERSION,
     AcquisitionFailureCode,
@@ -38,7 +25,21 @@ from providers.config import (
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.mimo_factory import MIMO_FINGERPRINT_VERSION
 from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProviderError
-from store import (
+from researchassistant.common.utils import compute_sha256
+from researchassistant.contracts.models import (
+    ClaimDefinition,
+    MediaTypeProvenance,
+    PlannerOutput,
+    RetrievalRecord,
+    RetrievalStatus,
+    RunManifest,
+    RunStatus,
+    SearchQuery,
+    SourceSnapshot,
+    Stage,
+    Stance,
+)
+from researchassistant.storage.store import (
     CURRENT_SCHEMA_VERSION,
     init_db,
     insert_planner_output,
@@ -47,7 +48,6 @@ from store import (
     insert_snapshot,
     read_snapshot,
 )
-from utils import compute_sha256
 
 NOW = datetime(2026, 8, 10, tzinfo=UTC)
 PUBLIC_IP = ("93.184.216.34",)

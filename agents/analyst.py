@@ -1,6 +1,6 @@
 """Historical import facade for neutral Analyst contracts and validators."""
 
-from evidence_analysis import (
+from researchassistant.evidence.evidence_analysis import (
     CURRENT_QUOTE_LENGTH_POLICY,
     QUALIFICATION_MARKERS,
     SCORE_PAIR_TABLE,

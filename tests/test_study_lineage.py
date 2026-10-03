@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from study_lineage import build_study_lineage_notices
+from researchassistant.evidence.study_lineage import build_study_lineage_notices
 from tests.test_v2_phase8_source_selection import _candidate
 
 
@@ -116,4 +116,127 @@ def test_conflicting_dois_override_matching_title_hint() -> None:
     second = _candidate(uuid4(), family="b", probe_score=7).model_copy(
         update={"title": title, "doi": "10.1000/second"}
     )
+    assert build_study_lineage_notices((first, second)) == ()
+
+
+def test_same_socarxiv_archive_id_discloses_possible_cross_host_version() -> None:
+    repec = _candidate(uuid4(), family="repec-family", probe_score=7).model_copy(
+        update={
+            "title": "Surveillance Inequality: Race, Poverty, and ALPR Deployment",
+            "source_url": "https://ideas.repec.org/p/osf/socarx/5ckgv_v1.html",
+        }
+    )
+    osf = _candidate(uuid4(), family="osf-family", probe_score=7).model_copy(
+        update={
+            "title": "Race, Poverty, and ALPR Deployment ...",
+            "source_url": "https://osf.io/preprints/socarxiv/5ckgv_v1?utm_source=example",
+        }
+    )
+
+    notices = build_study_lineage_notices((repec, osf))
+
+    assert len(notices) == 1
+    assert notices[0].basis == "matching_archive_id"
+    assert notices[0].source_ids == (repec.source_id, osf.source_id)
+    assert "5ckgv" in notices[0].explanation
+    assert "v1" in notices[0].explanation
+    assert "may" in notices[0].explanation
+    assert "do not establish" in notices[0].explanation
+    assert (repec.source_family_id, osf.source_family_id) == ("repec-family", "osf-family")
+
+
+def test_different_archive_versions_are_disclosed_with_version_caveat() -> None:
+    repec = _candidate(uuid4(), family="repec-family", probe_score=7).model_copy(
+        update={"title": None, "source_url": "https://ideas.repec.org/p/osf/socarx/5ckgv_v1.html"}
+    )
+    osf = _candidate(uuid4(), family="osf-family", probe_score=7).model_copy(
+        update={"title": None, "source_url": "https://osf.io/preprints/socarxiv/5ckgv_v2"}
+    )
+
+    notices = build_study_lineage_notices((repec, osf))
+
+    assert len(notices) == 1
+    assert notices[0].basis == "matching_archive_id"
+    assert "v1" in notices[0].explanation
+    assert "v2" in notices[0].explanation
+    assert "different versions" in notices[0].explanation.casefold()
+
+
+@pytest.mark.parametrize(
+    ("repec_url", "osf_url"),
+    [
+        (
+            "https://ideas.repec.org.evil.test/p/osf/socarx/5ckgv_v1.html",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "https://ideas.repec.org/p/osf/socarx/5ckgv_v1.html",
+            "https://osf.io.evil.test/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "http://ideas.repec.org/p/osf/socarx/5ckgv_v1.html",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "https://user@ideas.repec.org/p/osf/socarx/5ckgv_v1.html",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "https://ideas.repec.org:443/p/osf/socarx/5ckgv_v1.html",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "https://ideas.repec.org/p/other/socarx/5ckgv_v1.html",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "https://ideas.repec.org/p/osf/socarx/5ckgv_v1.html/extra",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        ),
+        (
+            "https://ideas.repec.org/p/osf/socarx/5ckgv_v1.html",
+            "https://osf.io/preprints/socarxiv/5ckgv_v1/extra",
+        ),
+    ],
+)
+def test_archive_notice_requires_exact_recognized_hosts_and_paths(
+    repec_url: str, osf_url: str
+) -> None:
+    repec = _candidate(uuid4(), family="repec-family", probe_score=7).model_copy(
+        update={"title": None, "source_url": repec_url}
+    )
+    osf = _candidate(uuid4(), family="osf-family", probe_score=7).model_copy(
+        update={"title": None, "source_url": osf_url}
+    )
+
+    assert build_study_lineage_notices((repec, osf)) == ()
+
+
+def test_conflicting_dois_override_archive_id_hint() -> None:
+    repec = _candidate(uuid4(), family="repec-family", probe_score=7).model_copy(
+        update={
+            "title": None,
+            "doi": "10.1000/repec-record",
+            "source_url": "https://ideas.repec.org/p/osf/socarx/5ckgv_v1.html",
+        }
+    )
+    osf = _candidate(uuid4(), family="osf-family", probe_score=7).model_copy(
+        update={
+            "title": None,
+            "doi": "10.1000/osf-record",
+            "source_url": "https://osf.io/preprints/socarxiv/5ckgv_v1",
+        }
+    )
+
+    assert build_study_lineage_notices((repec, osf)) == ()
+
+
+def test_same_archive_on_osf_only_is_not_cross_host_notice() -> None:
+    first = _candidate(uuid4(), family="osf-first", probe_score=7).model_copy(
+        update={"title": None, "source_url": "https://osf.io/preprints/socarxiv/5ckgv_v1"}
+    )
+    second = _candidate(uuid4(), family="osf-second", probe_score=7).model_copy(
+        update={"title": None, "source_url": "https://osf.io/preprints/socarxiv/5ckgv_v1/"}
+    )
+
     assert build_study_lineage_notices((first, second)) == ()

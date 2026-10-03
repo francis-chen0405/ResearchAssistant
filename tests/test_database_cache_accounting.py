@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 
-from models import (
+from researchassistant.contracts.models import (
     ModelAttemptStatus,
     ModelRouteAttempt,
     ModelUsageMetadata,
@@ -16,7 +16,7 @@ from models import (
     RunStatus,
     Stage,
 )
-from store import (
+from researchassistant.storage.store import (
     finish_model_route_attempt,
     init_db,
     insert_run,

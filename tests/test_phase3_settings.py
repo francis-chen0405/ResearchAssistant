@@ -9,12 +9,10 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from desktop_settings import InterfaceSettings, read_preferences, update_preferences
 from frontend.api import ResearchStartInput
 from frontend.live_contracts import LiveRunRequest
 from frontend.profile_preflight import check_start_reservation
 from frontend.provider_connections import check_connection
-from models import DiscoveryProvider, ResearchControls
 from providers.config import ProviderConfigurationError
 from providers.llm import LLMStage
 from providers.model_choices import (
@@ -25,6 +23,12 @@ from providers.model_choices import (
 )
 from providers.model_profiles import STANDARD_PROFILE, profile_environment
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.platform_support.desktop_settings import (
+    InterfaceSettings,
+    read_preferences,
+    update_preferences,
+)
 
 
 def test_profile_preserves_credentials_defaults_and_frozen_run_routes() -> None:

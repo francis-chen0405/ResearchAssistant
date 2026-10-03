@@ -5,8 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from evidence_portfolio import assess_portfolio, coverage_rating
-from models import (
+from researchassistant.contracts.models import (
     CoverageRating,
     EvidenceRole,
     EvidenceTrailEntry,
@@ -14,6 +13,7 @@ from models import (
     ResearchRound,
     SourceFamilyIdentity,
 )
+from researchassistant.evidence.evidence_portfolio import assess_portfolio, coverage_rating
 
 RUN_ID = UUID("71000000-0000-0000-0000-000000000001")
 NOW = datetime(2026, 8, 11, tzinfo=UTC)

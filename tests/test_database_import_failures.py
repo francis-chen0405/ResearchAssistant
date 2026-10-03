@@ -8,11 +8,11 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-import history_import as history_import_module
-from file_lock import FileLock
+import researchassistant.storage.history_import as history_import_module
 from frontend.api import create_app, create_default_runtime
-from models import RunManifest, RunStatus, Stage
-from store import CURRENT_SCHEMA_VERSION, init_db, insert_run, read_run
+from researchassistant.contracts.models import RunManifest, RunStatus, Stage
+from researchassistant.platform_support.file_lock import FileLock
+from researchassistant.storage.store import CURRENT_SCHEMA_VERSION, init_db, insert_run, read_run
 
 
 def _source_database(path: Path) -> RunManifest:

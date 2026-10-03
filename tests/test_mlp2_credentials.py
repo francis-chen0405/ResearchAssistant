@@ -3,8 +3,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-import credential_store
-from credential_store import ProviderCredentials, load_saved_credentials, save_credentials
+import researchassistant.platform_support.credential_store as credential_store
+from researchassistant.platform_support.credential_store import (
+    ProviderCredentials,
+    load_saved_credentials,
+    save_credentials,
+)
 
 
 def test_provider_credentials_are_strict_and_secret_safe() -> None:
@@ -56,9 +60,9 @@ def test_keychain_save_uses_the_in_process_native_boundary(
         ("MIMO_API_KEY", "mimo-secret"),
         ("EXA_API_KEY", "exa-secret"),
     ]
-    source = credential_store.PROJECT_ROOT.joinpath("credential_store.py").read_text(
-        encoding="utf-8"
-    )
+    source = credential_store.PROJECT_ROOT.joinpath(
+        "researchassistant/platform_support/credential_store.py"
+    ).read_text(encoding="utf-8")
     assert "subprocess.run" not in source
 
 

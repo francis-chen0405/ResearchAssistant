@@ -7,7 +7,6 @@ from hashlib import sha256
 import httpx
 import pytest
 
-from models import DiscoveryProvider, ResearchControls
 from providers.acquisition import (
     ACQUISITION_VERSION,
     AcquisitionFailureCode,
@@ -18,6 +17,7 @@ from providers.config import ExaConfig, FirecrawlConfig, MimoConfig, WigoloConfi
 from providers.firecrawl import FallbackAcquisitionAdapter, FirecrawlAcquisitionAdapter
 from providers.mimo_factory import MimoProviderFactoryConfig, build_mimo_provider_bundle
 from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProviderError
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
 
 PUBLIC_IP = "93.184.216.34"
 

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -21,6 +22,19 @@ NODE_VERSION = "24.18.0"
 
 def run(args: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> None:
     subprocess.run(args, cwd=cwd, env=env, check=True)
+
+
+def replace_tree(source: Path, destination: Path) -> None:
+    """Replace generated resources from a complete fresh source tree."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=f".{destination.name}.", dir=destination.parent
+    ) as temp_dir:
+        staged = Path(temp_dir) / destination.name
+        shutil.copytree(source, staged)
+        if destination.exists():
+            shutil.rmtree(destination)
+        staged.replace(destination)
 
 
 def stage_node() -> Path:
@@ -105,14 +119,13 @@ def main() -> None:
     for path in sorted(ROOT.glob("*.py")):
         command.extend(["--add-data", f"{path}{os.pathsep}."])
     command.extend(["--add-data", f"{ROOT / 'pyproject.toml'}{os.pathsep}."])
-    for name in ("agents", "providers", "frontend", "prompts"):
+    for name in ("agents", "providers", "frontend", "prompts", "researchassistant"):
         command.extend(["--add-data", f"{ROOT / name}{os.pathsep}{name}"])
     command.append(str(DESKTOP / "backend.py"))
     run(command)
-    shutil.copytree(
+    replace_tree(
         DESKTOP / "build/python/researchassistant-backend",
         RESOURCES / "backend",
-        dirs_exist_ok=True,
     )
     print(f"Desktop resources prepared: {RESOURCES}")
 

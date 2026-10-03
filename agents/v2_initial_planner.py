@@ -10,7 +10,18 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from pydantic import ConfigDict
 
 from agents.v2_coverage import claim_component_focus
-from models import (
+from providers.llm import (
+    V2_LLM_ROUTING,
+    LLMInvocationRecord,
+    LLMProvider,
+    LLMRequest,
+    LLMStage,
+    invoke_llm,
+    load_prompt_file,
+    render_stage_prompt,
+)
+from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.models import (
     DiscoveryProvider,
     ProviderRunContract,
     ResearchDirections,
@@ -25,18 +36,7 @@ from models import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
 )
-from providers.llm import (
-    V2_LLM_ROUTING,
-    LLMInvocationRecord,
-    LLMProvider,
-    LLMRequest,
-    LLMStage,
-    invoke_llm,
-    load_prompt_file,
-    render_stage_prompt,
-)
-from providers.v2_routing import V2RoutingConfig
-from store import (
+from researchassistant.storage.store import (
     init_db,
     insert_provider_run_contract,
     insert_run,

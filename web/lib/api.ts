@@ -194,10 +194,13 @@ export type V2EvidenceDisplay = {
     unavailable_coverage_count: number;
     source: "persisted_governor" | "final_output";
   };
-  study_lineage: { source_ids: string[]; basis: "matching_doi" | "matching_title"; explanation: string }[];
+  source_titles?: { source_id: string; display_title: string; captured_title: string | null }[];
+  study_lineage: { source_ids: string[]; basis: "matching_doi" | "matching_title" | "matching_archive_id"; explanation: string }[];
   shared_website_groups: { host: string; source_ids: string[]; explanation: string }[];
   post_analysis_assessment: {
     run_id: string;
+    search_outcome?: "incomplete_coverage" | "limited_evidence" | "analysis_complete" | null;
+    coverage_incomplete?: boolean | null;
     assessed_after_analysis: true;
     claim_established: false;
     admitted_source_ids: string[];
@@ -223,6 +226,7 @@ export type V2EvidenceDisplay = {
     source_url: string;
     source_type: string | null;
     source_context_notice: string | null;
+    claim_fit?: number | null;
     source_family: string;
     direction: "support" | "challenge";
     relationship_to_claim: "supports" | "challenges" | "qualifies" | "unrelated";

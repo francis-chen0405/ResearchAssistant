@@ -19,7 +19,24 @@ from agents.v2_discovery import (
     normalize_discovery_responses,
 )
 from frontend.live_service import LiveResearchController
-from models import (
+from providers.composite_search import CompositeSearchProvider
+from providers.config import OpenAlexConfig
+from providers.openalex import OpenAlexSearchAdapter
+from providers.ranking import (
+    DISCARD_SCORE_FLOOR,
+    DiscoveryDecision,
+    rank_acquired_sources,
+    rank_discovery_pool,
+)
+from providers.search import (
+    SearchDiscoveryMetadata,
+    SearchFailureCode,
+    SearchProviderError,
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+)
+from researchassistant.contracts.models import (
     AmbiguityRecord,
     ClaimDefinition,
     DiscoveryProvider,
@@ -46,30 +63,13 @@ from models import (
     V2RoundOneSearchQuery,
     validate_planner_provider_selection,
 )
-from orchestrator import (
+from researchassistant.research.orchestrator import (
     PHASE9_RESEARCHERS_ARTIFACT,
     ResearcherPairResult,
     ResearcherSideStatus,
     ResearcherStageResult,
 )
-from providers.composite_search import CompositeSearchProvider
-from providers.config import OpenAlexConfig
-from providers.openalex import OpenAlexSearchAdapter
-from providers.ranking import (
-    DISCARD_SCORE_FLOOR,
-    DiscoveryDecision,
-    rank_acquired_sources,
-    rank_discovery_pool,
-)
-from providers.search import (
-    SearchDiscoveryMetadata,
-    SearchFailureCode,
-    SearchProviderError,
-    SearchRequest,
-    SearchResponse,
-    SearchResult,
-)
-from store import (
+from researchassistant.storage.store import (
     init_db,
     insert_planner_output,
     insert_run,

@@ -14,13 +14,13 @@ import uvicorn
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field, SecretStr
 
-import credential_store
-from application_runtime import repository_identity
-from desktop_paths import application_data_dir
+import researchassistant.platform_support.credential_store as credential_store
 from frontend.api import create_app, create_default_runtime
 from frontend.service_manager import WigoloLaunchConfig, WigoloServiceManager
-from models import StrictModel
 from providers.config import WigoloConfig
+from researchassistant.contracts.models import StrictModel
+from researchassistant.platform_support.desktop_paths import application_data_dir
+from researchassistant.runtime.application_runtime import repository_identity
 
 
 class Bootstrap(StrictModel):

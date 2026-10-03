@@ -9,9 +9,6 @@ from sqlite3 import Connection
 from threading import Event, Lock
 from uuid import UUID, uuid4
 
-from application_runtime import CLIExitCode, repository_identity
-from desktop_paths import application_data_dir
-from file_lock import FileLock
 from frontend.live_contracts import (
     LEGACY_LIVE_RESEARCH_CONTROLS,
     AcquiredSourceScoreBreakdown,
@@ -75,19 +72,6 @@ from frontend.live_progress import (
 )
 from frontend.profile_preflight import check_start_reservation
 from frontend.security import redact_text
-from models import (
-    DEFAULT_RESEARCH_CONTROLS,
-    DiscoveryProvider,
-    ResearchControls,
-)
-from orchestrator import (
-    ClaimMismatchError,
-    FingerprintMismatchError,
-    ProviderPipelineResult,
-    inspect_provider_run,
-    request_run_cancellation,
-)
-from pipeline_compatibility import LegacyPipelineRunner
 from providers.config import ProviderConfigurationError, RunCeilings, WigoloConfig
 from providers.mimo_factory import MimoProviderFactoryConfig
 from providers.model_choices import (
@@ -100,11 +84,22 @@ from providers.v2_budget import (
     V2RunCeilings,
 )
 from providers.v2_factory import V2ProductionFactoryConfig, build_v2_production_bundle
-from store import (
-    open_read_only_store,
-    read_provider_run_contract,
+from researchassistant.contracts.models import (
+    DEFAULT_RESEARCH_CONTROLS,
+    DiscoveryProvider,
+    ResearchControls,
 )
-from v2_orchestrator import (
+from researchassistant.platform_support.desktop_paths import application_data_dir
+from researchassistant.platform_support.file_lock import FileLock
+from researchassistant.research.orchestrator import (
+    ClaimMismatchError,
+    FingerprintMismatchError,
+    ProviderPipelineResult,
+    inspect_provider_run,
+    request_run_cancellation,
+)
+from researchassistant.research.pipeline_compatibility import LegacyPipelineRunner
+from researchassistant.research.v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
     V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
     V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
@@ -112,6 +107,11 @@ from v2_orchestrator import (
     configured_v2_providers,
     run_v2_production_pipeline,
     v2_cancellation_requested,
+)
+from researchassistant.runtime.application_runtime import CLIExitCode, repository_identity
+from researchassistant.storage.store import (
+    open_read_only_store,
+    read_provider_run_contract,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

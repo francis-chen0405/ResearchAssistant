@@ -1,0 +1,3113 @@
+"""SQLite persistence layer for the Debate Research Agent System.
+
+All functions accept an explicit *db_path* (or an already-open connection
+via internal helpers).  No global connections are used.  Foreign keys are
+enabled on every connection.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from decimal import Decimal
+from enum import StrEnum
+from pathlib import Path
+from urllib.parse import quote
+from uuid import UUID
+
+from researchassistant.common.money import (
+    add_usd,
+    canonical_usd,
+    parse_canonical_usd,
+    parse_exact_usd,
+)
+from researchassistant.contracts.models import (
+    BRIEF_TITLE,
+    CLAIM_LABEL,
+    RELEASE_SECTION_HEADINGS,
+    V2_PIPELINE_IDENTITY,
+    V2_POLICY_IDENTITY,
+    AmbiguityRecord,
+    CandidateQuoteBlock,
+    ClaimDefinition,
+    EvidenceTrailEntry,
+    LedgerRecord,
+    MediaTypeProvenance,
+    ModelAttemptStatus,
+    ModelInvocationRecord,
+    ModelRouteAttempt,
+    ModelUsageMetadata,
+    OrchestrationCheckpoint,
+    PersistedStageArtifact,
+    PlannerOutput,
+    PortfolioCoverageAssessment,
+    PortfolioItem,
+    ProviderRunContract,
+    ProvisionalCandidate,
+    ResearchGovernorDecision,
+    ResearchRoundRecord,
+    ResearchRoundStatus,
+    ResearchTerminalResult,
+    RetrievalRecord,
+    RunCancellationRequest,
+    RunManifest,
+    RunStatus,
+    ScoreDecision,
+    SearchQuery,
+    SegmentOffset,
+    SourceSnapshot,
+    Stage,
+    StatementDraft,
+    StatementReviewResult,
+    StrictModel,
+    SynthesisItem,
+    SynthesisOutput,
+    SynthesisSection,
+    V2EvidenceAdmissionRecord,
+    V2InitialPlannerOutput,
+    V2LedgerProvenance,
+    V2PersistedArtifact,
+    V2PipelineIdentity,
+    ValidationError,
+    ValidationResult,
+    canonical_v2_artifact_json,
+    v2_artifact_fingerprint,
+    v2_payload_fingerprint,
+)
+from researchassistant.contracts.provider_contract import parse_provider_contract_payload
+from researchassistant.storage.store_schema import (
+    _MVP10_TABLES as _MVP10_TABLES,
+)
+from researchassistant.storage.store_schema import (
+    _MVP11_TABLES as _MVP11_TABLES,
+)
+from researchassistant.storage.store_schema import (
+    _MVP11_TRIGGERS as _MVP11_TRIGGERS,
+)
+from researchassistant.storage.store_schema import (
+    _REQUIRED_INDEXES as _REQUIRED_INDEXES,
+)
+from researchassistant.storage.store_schema import (
+    _REQUIRED_TABLES as _REQUIRED_TABLES,
+)
+from researchassistant.storage.store_schema import (
+    _REQUIRED_TRIGGERS as _REQUIRED_TRIGGERS,
+)
+from researchassistant.storage.store_schema import (
+    _SNAPSHOT_PROVENANCE_COLUMNS as _SNAPSHOT_PROVENANCE_COLUMNS,
+)
+from researchassistant.storage.store_schema import (
+    _V2_PHASE1_TABLES as _V2_PHASE1_TABLES,
+)
+from researchassistant.storage.store_schema import (
+    _V2_PHASE1_TRIGGERS as _V2_PHASE1_TRIGGERS,
+)
+from researchassistant.storage.store_schema import (
+    _V2_PHASE3_TABLES as _V2_PHASE3_TABLES,
+)
+from researchassistant.storage.store_schema import (
+    _V2_PHASE3_TRIGGERS as _V2_PHASE3_TRIGGERS,
+)
+from researchassistant.storage.store_schema import (
+    _V2_PHASE10_TABLES as _V2_PHASE10_TABLES,
+)
+from researchassistant.storage.store_schema import (
+    _V2_PHASE10_TRIGGERS as _V2_PHASE10_TRIGGERS,
+)
+from researchassistant.storage.store_schema import (
+    CURRENT_SCHEMA_VERSION as CURRENT_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    IMMUTABLE_ARTIFACT_TRIGGERS as IMMUTABLE_ARTIFACT_TRIGGERS,
+)
+from researchassistant.storage.store_schema import (
+    MIGRATION_DESCRIPTIONS as MIGRATION_DESCRIPTIONS,
+)
+from researchassistant.storage.store_schema import (
+    MLP4_SCHEMA_VERSION as MLP4_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    MVP10_SCHEMA_VERSION as MVP10_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    MVP11_SCHEMA_VERSION as MVP11_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    MVP68_SCHEMA_VERSION as MVP68_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    MVP69_SCHEMA_VERSION as MVP69_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    RAW_CLAIM_SCHEMA_VERSION as RAW_CLAIM_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    RAW_CLAIM_TRIGGER_ERROR as RAW_CLAIM_TRIGGER_ERROR,
+)
+from researchassistant.storage.store_schema import (
+    RAW_CLAIM_TRIGGER_NAME as RAW_CLAIM_TRIGGER_NAME,
+)
+from researchassistant.storage.store_schema import (
+    V2_PHASE1_SCHEMA_VERSION as V2_PHASE1_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    V2_PHASE3_SCHEMA_VERSION as V2_PHASE3_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    V2_PHASE10_SCHEMA_VERSION as V2_PHASE10_SCHEMA_VERSION,
+)
+from researchassistant.storage.store_schema import (
+    _apply_mlp4_discovery_query_migration as _apply_mlp4_discovery_query_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_mvp10_evidence_portfolio_migration as _apply_mvp10_evidence_portfolio_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_mvp11_research_governor_migration as _apply_mvp11_research_governor_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_mvp68_integrity_migration as _apply_mvp68_integrity_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_mvp69_provenance_migration as _apply_mvp69_provenance_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_raw_claim_immutability_migration as _apply_raw_claim_immutability_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_v2_phase1_artifact_migration as _apply_v2_phase1_artifact_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_v2_phase3_initial_planner_migration as _apply_v2_phase3_initial_planner_migration,
+)
+from researchassistant.storage.store_schema import (
+    _apply_v2_phase10_reviewer_ledger_migration as _apply_v2_phase10_reviewer_ledger_migration,
+)
+from researchassistant.storage.store_schema import (
+    _immutable_trigger_sql as _immutable_trigger_sql,
+)
+from researchassistant.storage.store_schema import (
+    _is_expected_immutable_trigger as _is_expected_immutable_trigger,
+)
+from researchassistant.storage.store_schema import (
+    _is_expected_raw_claim_trigger as _is_expected_raw_claim_trigger,
+)
+from researchassistant.storage.store_schema import (
+    _raw_claim_trigger_sql as _raw_claim_trigger_sql,
+)
+from researchassistant.storage.store_schema import (
+    _verify_mlp4_discovery_query_schema as _verify_mlp4_discovery_query_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_mvp10_schema as _verify_mvp10_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_mvp11_schema as _verify_mvp11_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_mvp68_schema as _verify_mvp68_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_mvp69_schema as _verify_mvp69_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_v2_phase1_artifact_schema as _verify_v2_phase1_artifact_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_v2_phase3_initial_planner_schema as _verify_v2_phase3_initial_planner_schema,
+)
+from researchassistant.storage.store_schema import (
+    _verify_v2_phase10_reviewer_ledger_schema as _verify_v2_phase10_reviewer_ledger_schema,
+)
+from researchassistant.storage.store_schema import (
+    initialize_database,
+    validate_schema_structure,
+)
+
+# ---------------------------------------------------------------------------
+# Connection helpers
+# ---------------------------------------------------------------------------
+
+
+class DatabaseCompatibilityIssue(StrEnum):
+    MISSING_FILE = "missing_file"
+    INVALID_SQLITE = "invalid_sqlite"
+    OLDER_SCHEMA = "older_schema"
+    NEWER_SCHEMA = "newer_schema"
+    CORRUPT_SCHEMA = "corrupt_schema"
+    OPEN_FAILED = "open_failed"
+
+
+class DatabaseCompatibilityResult(StrictModel):
+    compatible: bool
+    issue: DatabaseCompatibilityIssue | None = None
+    schema_version: int | None = None
+    message: str
+
+
+class DatabaseCompatibilityError(RuntimeError):
+    """An inspection database cannot be opened without modifying it."""
+
+    def __init__(self, result: DatabaseCompatibilityResult) -> None:
+        self.result = result
+        super().__init__(result.message)
+
+
+DatabaseReader = str | Path | sqlite3.Connection
+
+
+def _connect(db_path: str) -> sqlite3.Connection:
+    """Open a connection with foreign keys enabled."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@contextmanager
+def _read_connection(source: DatabaseReader) -> Iterator[sqlite3.Connection]:
+    if isinstance(source, sqlite3.Connection):
+        yield source
+        return
+    conn = _connect(str(source))
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def _compatibility_error(
+    issue: DatabaseCompatibilityIssue,
+    message: str,
+    *,
+    schema_version: int | None = None,
+) -> DatabaseCompatibilityError:
+    return DatabaseCompatibilityError(
+        DatabaseCompatibilityResult(
+            compatible=False,
+            issue=issue,
+            schema_version=schema_version,
+            message=message,
+        )
+    )
+
+
+def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilityResult:
+    try:
+        integrity_rows = conn.execute("PRAGMA quick_check").fetchall()
+        if [row[0] for row in integrity_rows] != ["ok"]:
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+                "database integrity check failed; inspection made no changes",
+            )
+        objects = {
+            (row["type"], row["name"]): row["sql"]
+            for row in conn.execute(
+                """SELECT type, name, sql FROM sqlite_master
+                   WHERE name NOT LIKE 'sqlite_%'"""
+            ).fetchall()
+        }
+    except DatabaseCompatibilityError:
+        raise
+    except sqlite3.DatabaseError as exc:
+        message = str(exc).lower()
+        issue = (
+            DatabaseCompatibilityIssue.INVALID_SQLITE
+            if "not a database" in message or "file is encrypted" in message
+            else DatabaseCompatibilityIssue.CORRUPT_SCHEMA
+        )
+        raise _compatibility_error(
+            issue,
+            "file is not a valid ResearchAssistant SQLite database; inspection made no changes",
+        ) from exc
+
+    if ("table", "schema_migrations") not in objects:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.OLDER_SCHEMA,
+            "database schema is older or uninitialized; a writable run or resume is required "
+            "to initialize or migrate it",
+            schema_version=0,
+        )
+    try:
+        rows = conn.execute(
+            "SELECT version, description FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            "schema migration records are unreadable; inspection made no changes",
+        ) from exc
+    if any(not isinstance(row["version"], int) for row in rows):
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            "schema migration versions are invalid; inspection made no changes",
+        )
+    versions = {row["version"]: row["description"] for row in rows}
+    latest = max(versions, default=0)
+    if latest > CURRENT_SCHEMA_VERSION:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.NEWER_SCHEMA,
+            f"database schema version {latest} is newer than supported version "
+            f"{CURRENT_SCHEMA_VERSION}; use compatible ResearchAssistant code",
+            schema_version=latest,
+        )
+    if latest < MVP69_SCHEMA_VERSION:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.OLDER_SCHEMA,
+            f"database schema version {latest} requires migration to version "
+            f"{CURRENT_SCHEMA_VERSION}; a writable run or resume is required",
+            schema_version=latest,
+        )
+    expected_migrations = {
+        version: description
+        for version, description in MIGRATION_DESCRIPTIONS.items()
+        if version <= latest
+    }
+    if versions != expected_migrations:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            "schema migration records are incomplete or inconsistent; inspection made no changes",
+            schema_version=latest,
+        )
+    tables = {name for object_type, name in objects if object_type == "table"}
+    triggers = {name for object_type, name in objects if object_type == "trigger"}
+    indexes = {name for object_type, name in objects if object_type == "index"}
+    required_tables = _REQUIRED_TABLES
+    required_triggers = _REQUIRED_TRIGGERS
+    if latest == MVP69_SCHEMA_VERSION:
+        required_tables = _REQUIRED_TABLES - _MVP10_TABLES - _MVP11_TABLES
+    elif latest == MVP10_SCHEMA_VERSION:
+        required_tables = _REQUIRED_TABLES - _MVP11_TABLES
+    else:
+        required_triggers = _REQUIRED_TRIGGERS | _MVP11_TRIGGERS
+    if latest >= V2_PHASE1_SCHEMA_VERSION:
+        required_tables = required_tables | _V2_PHASE1_TABLES
+        required_triggers = required_triggers | _V2_PHASE1_TRIGGERS
+    if latest >= V2_PHASE3_SCHEMA_VERSION:
+        required_tables = required_tables | _V2_PHASE3_TABLES
+        required_triggers = required_triggers | _V2_PHASE3_TRIGGERS
+    if latest >= V2_PHASE10_SCHEMA_VERSION:
+        required_tables = required_tables | _V2_PHASE10_TABLES
+        required_triggers = required_triggers | _V2_PHASE10_TRIGGERS
+    missing = sorted(
+        (required_tables - tables) | (required_triggers - triggers) | (_REQUIRED_INDEXES - indexes)
+    )
+    trigger_sql = objects.get(("trigger", RAW_CLAIM_TRIGGER_NAME))
+    invalid_immutable = [
+        name
+        for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items()
+        if not _is_expected_immutable_trigger(
+            objects.get(("trigger", name)), name, table, operation, error
+        )
+    ]
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+    missing_cost_columns = sorted({"reserved_cost_usd_exact", "cost_usd_exact"} - columns)
+    snapshot_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(snapshots)").fetchall()
+    }
+    missing_snapshot_provenance_columns = sorted(
+        {
+            "original_url",
+            "canonical_url",
+            "normalization_version",
+            "acquisition_version",
+            "provider_name",
+            "provider_version",
+            "media_type_provenance_json",
+        }
+        - snapshot_columns
+    )
+    search_query_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+    }
+    missing_mlp4_query_columns = (
+        sorted({"provider", "intent"} - search_query_columns)
+        if latest >= MLP4_SCHEMA_VERSION
+        else []
+    )
+    if (
+        missing
+        or not _is_expected_raw_claim_trigger(trigger_sql)
+        or invalid_immutable
+        or missing_cost_columns
+        or missing_snapshot_provenance_columns
+        or missing_mlp4_query_columns
+    ):
+        invalid = (
+            invalid_immutable
+            + missing_cost_columns
+            + missing_snapshot_provenance_columns
+            + missing_mlp4_query_columns
+        )
+        detail = ", ".join(missing + invalid) if missing or invalid else RAW_CLAIM_TRIGGER_NAME
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            f"required schema object is missing or invalid ({detail}); inspection made no changes",
+            schema_version=latest,
+        )
+    try:
+        validate_schema_structure(conn, latest)
+    except sqlite3.DatabaseError as exc:
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
+            f"database schema or foreign-key integrity check failed: {exc}; "
+            "inspection made no changes",
+            schema_version=latest,
+        ) from exc
+    return DatabaseCompatibilityResult(
+        compatible=True,
+        schema_version=latest,
+        message=f"ResearchAssistant schema version {latest} is compatible",
+    )
+
+
+class ReadOnlyStore:
+    """One cohesive read-only SQLite session for inspection and history."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        path = Path(db_path).expanduser().resolve()
+        self.path = path
+        self.connection: sqlite3.Connection
+        self.compatibility: DatabaseCompatibilityResult
+        try:
+            if not path.exists():
+                raise _compatibility_error(
+                    DatabaseCompatibilityIssue.MISSING_FILE,
+                    f"inspection database does not exist: {path}",
+                )
+            if not path.is_file():
+                raise _compatibility_error(
+                    DatabaseCompatibilityIssue.OPEN_FAILED,
+                    f"inspection database is not a regular file: {path}",
+                )
+            encoded_path = quote(path.as_posix(), safe="/")
+            self.connection = sqlite3.connect(f"file:{encoded_path}?mode=ro", uri=True)
+            self.connection.row_factory = sqlite3.Row
+            self.connection.execute("PRAGMA foreign_keys = ON")
+            self.connection.execute("PRAGMA query_only = ON")
+            self.compatibility = _validate_read_only_schema(self.connection)
+        except DatabaseCompatibilityError:
+            if hasattr(self, "connection"):
+                self.connection.close()
+            raise
+        except (OSError, sqlite3.Error) as exc:
+            if hasattr(self, "connection"):
+                self.connection.close()
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.OPEN_FAILED,
+                f"could not open inspection database read-only: {path}",
+            ) from exc
+
+    def __enter__(self) -> ReadOnlyStore:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self.connection.close()
+
+    def read_run(self, run_id: UUID) -> RunManifest:
+        return read_run(self.connection, run_id)
+
+
+def open_read_only_store(db_path: str | Path) -> ReadOnlyStore:
+    """Open an existing compatible database without creating or migrating it."""
+    return ReadOnlyStore(db_path)
+
+
+# ---------------------------------------------------------------------------
+# Schema initialisation
+# ---------------------------------------------------------------------------
+
+
+def init_db(db_path: str) -> None:
+    """Create/validate schema through the intentional writable initialization path."""
+    initialize_database(db_path, connect=_connect)
+
+
+# ---------------------------------------------------------------------------
+# Serialisation helpers
+# ---------------------------------------------------------------------------
+
+
+def _dt_to_iso(dt: datetime) -> str:
+    """Convert a timezone-aware datetime to an ISO-8601 string."""
+    return dt.astimezone(UTC).isoformat()
+
+
+def _require_aware_datetime(value: datetime, field_name: str) -> None:
+    """Reject naive timestamps at a store boundary before SQLite serialization."""
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+
+
+def _iso_to_dt(value: str) -> datetime:
+    """Parse an ISO-8601 string back to a timezone-aware datetime."""
+    return datetime.fromisoformat(value)
+
+
+def _offsets_to_json(offsets: Sequence[SegmentOffset]) -> str:
+    return json.dumps([{"start_char": o.start_char, "end_char": o.end_char} for o in offsets])
+
+
+def _json_to_offsets(raw: str) -> list[SegmentOffset]:
+    return [
+        SegmentOffset(start_char=d["start_char"], end_char=d["end_char"]) for d in json.loads(raw)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# MVP-10 Evidence Portfolio and Trail (append-only)
+# ---------------------------------------------------------------------------
+
+
+def insert_source_family_member(db_path: str, entry: EvidenceTrailEntry) -> None:
+    """Persist one immutable family assignment when a source has an identified family."""
+    if entry.source_family is None:
+        return
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO source_family_members
+               (run_id, retrieval_attempt_id, source_family_id, family_key,
+                identification_basis, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                str(entry.run_id),
+                str(entry.retrieval_attempt_id),
+                str(entry.source_family.source_family_id),
+                entry.source_family.family_key,
+                entry.source_family.identification_basis,
+                _dt_to_iso(entry.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def insert_evidence_trail_entry(db_path: str, entry: EvidenceTrailEntry) -> None:
+    """Persist one complete source outcome without rewriting source history."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO evidence_trail_entries
+               (trail_entry_id, run_id, retrieval_attempt_id, payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                str(entry.trail_entry_id),
+                str(entry.run_id),
+                str(entry.retrieval_attempt_id),
+                entry.model_dump_json(),
+                _dt_to_iso(entry.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_evidence_trail_entries(
+    db_path: DatabaseReader, run_id: UUID
+) -> tuple[EvidenceTrailEntry, ...]:
+    """Read appended source outcomes; a pre-MVP-10 database has no such rows."""
+    with _read_connection(db_path) as conn:
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM evidence_trail_entries WHERE run_id = ? "
+                "ORDER BY created_at, trail_entry_id",
+                (str(run_id),),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+    return tuple(EvidenceTrailEntry.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_portfolio_item(db_path: str, item: PortfolioItem) -> None:
+    """Append one approved Ledger statement to the portfolio."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO portfolio_items (run_id, ledger_claim_id, source_family_id, payload_json)
+               VALUES (?, ?, ?, ?)""",
+            (
+                str(item.run_id),
+                str(item.ledger_claim_id),
+                str(item.source_family_id),
+                item.model_dump_json(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_portfolio_items(db_path: DatabaseReader, run_id: UUID) -> tuple[PortfolioItem, ...]:
+    """Read the immutable portfolio, or an empty portfolio for historical runs."""
+    with _read_connection(db_path) as conn:
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM portfolio_items WHERE run_id = ? "
+                "ORDER BY ledger_claim_id",
+                (str(run_id),),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+    return tuple(PortfolioItem.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_mvp10_portfolio_batch(
+    db_path: str,
+    entries: Sequence[EvidenceTrailEntry],
+    items: Sequence[PortfolioItem],
+) -> None:
+    """Append one portfolio phase atomically, accepting exact historical replay."""
+    conn = _connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for entry in entries:
+            stored_entry = conn.execute(
+                """SELECT payload_json FROM evidence_trail_entries
+                   WHERE run_id = ? AND retrieval_attempt_id = ?""",
+                (str(entry.run_id), str(entry.retrieval_attempt_id)),
+            ).fetchone()
+            prior_entry = (
+                EvidenceTrailEntry.model_validate_json(stored_entry["payload_json"])
+                if stored_entry is not None
+                else None
+            )
+            legacy_missing_provenance = (
+                prior_entry is not None and _legacy_missing_snapshot_projection(prior_entry, entry)
+            )
+            stored_family = conn.execute(
+                """SELECT source_family_id, family_key, identification_basis
+                   FROM source_family_members WHERE run_id = ? AND retrieval_attempt_id = ?""",
+                (str(entry.run_id), str(entry.retrieval_attempt_id)),
+            ).fetchone()
+            if legacy_missing_provenance:
+                if stored_family is not None:
+                    raise sqlite3.IntegrityError(
+                        "legacy evidence trail has conflicting source family membership"
+                    )
+            elif entry.source_family is not None:
+                family = entry.source_family
+                family_values = (
+                    str(family.source_family_id),
+                    family.family_key,
+                    family.identification_basis,
+                )
+                if stored_family is None:
+                    conn.execute(
+                        """INSERT INTO source_family_members
+                           (run_id, retrieval_attempt_id, source_family_id, family_key,
+                            identification_basis, created_at) VALUES (?, ?, ?, ?, ?, ?)""",
+                        (
+                            str(entry.run_id),
+                            str(entry.retrieval_attempt_id),
+                            *family_values,
+                            _dt_to_iso(entry.created_at),
+                        ),
+                    )
+                elif tuple(stored_family) != family_values:
+                    raise sqlite3.IntegrityError(
+                        "source family replay conflicts with immutable data"
+                    )
+            elif stored_family is not None:
+                raise sqlite3.IntegrityError("source family replay conflicts with immutable data")
+            if stored_entry is None:
+                conn.execute(
+                    """INSERT INTO evidence_trail_entries
+                       (trail_entry_id, run_id, retrieval_attempt_id, payload_json, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        str(entry.trail_entry_id),
+                        str(entry.run_id),
+                        str(entry.retrieval_attempt_id),
+                        entry.model_dump_json(),
+                        _dt_to_iso(entry.created_at),
+                    ),
+                )
+            else:
+                assert prior_entry is not None
+                if not legacy_missing_provenance and prior_entry != entry.model_copy(
+                    update={"created_at": prior_entry.created_at}
+                ):
+                    raise sqlite3.IntegrityError(
+                        "evidence trail replay conflicts with immutable data"
+                    )
+        for item in items:
+            stored_item = conn.execute(
+                "SELECT payload_json FROM portfolio_items WHERE run_id = ? AND ledger_claim_id = ?",
+                (str(item.run_id), str(item.ledger_claim_id)),
+            ).fetchone()
+            if stored_item is None:
+                conn.execute(
+                    """INSERT INTO portfolio_items
+                       (run_id, ledger_claim_id, source_family_id, payload_json)
+                       VALUES (?, ?, ?, ?)""",
+                    (
+                        str(item.run_id),
+                        str(item.ledger_claim_id),
+                        str(item.source_family_id),
+                        item.model_dump_json(),
+                    ),
+                )
+            else:
+                prior_item = PortfolioItem.model_validate_json(stored_item["payload_json"])
+                if prior_item != item.model_copy(update={"added_at": prior_item.added_at}):
+                    raise sqlite3.IntegrityError("portfolio replay conflicts with immutable data")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _legacy_missing_snapshot_projection(
+    prior: EvidenceTrailEntry,
+    current: EvidenceTrailEntry,
+) -> bool:
+    """Recognize only the earlier snapshot-ID lookup bug's stored projection."""
+    if (
+        current.source_family is None
+        or current.snapshot_status != "snapshotted"
+        or current.snapshot_sha256 is None
+        or prior.source_family is not None
+        or prior.snapshot_status != "not snapshotted"
+        or prior.snapshot_sha256 is not None
+        or prior.model_attempt_ids
+        or prior.accepted_statement is not None
+        or prior.accepted_quote is not None
+        or prior.cost_incurred
+    ):
+        return False
+    projected = current.model_copy(
+        update={
+            "source_family": None,
+            "snapshot_status": "not snapshotted",
+            "snapshot_sha256": None,
+            "model_attempt_ids": (),
+            "accepted_statement": None,
+            "accepted_quote": None,
+            "cost_incurred": False,
+            "created_at": prior.created_at,
+        }
+    )
+    return prior == projected
+
+
+def insert_portfolio_coverage_assessment(
+    db_path: str, assessment: PortfolioCoverageAssessment
+) -> None:
+    """Persist the single terminal deterministic coverage assessment."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO portfolio_coverage_assessments (run_id, payload_json, assessed_at)
+               VALUES (?, ?, ?)""",
+            (
+                str(assessment.run_id),
+                assessment.model_dump_json(),
+                _dt_to_iso(assessment.assessed_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_portfolio_coverage_assessment(
+    db_path: DatabaseReader, run_id: UUID
+) -> PortfolioCoverageAssessment | None:
+    """Read terminal coverage when present, without fabricating it for history."""
+    with _read_connection(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT payload_json FROM portfolio_coverage_assessments WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return None
+            raise
+    return PortfolioCoverageAssessment.model_validate_json(row["payload_json"]) if row else None
+
+
+# ---------------------------------------------------------------------------
+# MVP-11 Research Governor (append-only)
+# ---------------------------------------------------------------------------
+
+
+def insert_research_round_record(db_path: str, record: ResearchRoundRecord) -> None:
+    """Append one completed or terminal research round; SQLite enforces its 1..3 bound."""
+    if record.status in {ResearchRoundStatus.PLANNED, ResearchRoundStatus.RUNNING} or (
+        record.completed_at is None
+    ):
+        raise ValueError("only completed or terminal research rounds may be persisted")
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO research_round_records
+               (run_id, research_round, payload_json, completed_at) VALUES (?, ?, ?, ?)""",
+            (
+                str(record.run_id),
+                record.research_round,
+                record.model_dump_json(),
+                _dt_to_iso(record.completed_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_research_round_records(
+    db_path: DatabaseReader, run_id: UUID
+) -> tuple[ResearchRoundRecord, ...]:
+    """Read persisted bounded rounds, returning no synthetic rows for historical runs."""
+    with _read_connection(db_path) as conn:
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM research_round_records WHERE run_id = ? "
+                "ORDER BY research_round",
+                (str(run_id),),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+    return tuple(ResearchRoundRecord.model_validate_json(row["payload_json"]) for row in rows)
+
+
+def insert_research_governor_decision(db_path: str, decision: ResearchGovernorDecision) -> None:
+    """Append the single deterministic post-Round-2 authorization decision for a run."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO research_governor_decisions (run_id, payload_json, decided_at)
+               VALUES (?, ?, ?)""",
+            (
+                str(decision.run_id),
+                decision.model_dump_json(),
+                _dt_to_iso(decision.decided_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_research_governor_decision(
+    db_path: DatabaseReader, run_id: UUID
+) -> ResearchGovernorDecision | None:
+    """Read the immutable Governor decision without creating one for a historical run."""
+    with _read_connection(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT payload_json FROM research_governor_decisions WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return None
+            raise
+    return ResearchGovernorDecision.model_validate_json(row["payload_json"]) if row else None
+
+
+def insert_research_terminal_result(db_path: str, result: ResearchTerminalResult) -> None:
+    """Append the terminal evidence classification after the final permitted round."""
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO research_terminal_results (run_id, payload_json, finalized_at)
+               VALUES (?, ?, ?)""",
+            (
+                str(result.run_id),
+                result.model_dump_json(),
+                _dt_to_iso(result.finalized_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_research_terminal_result(
+    db_path: DatabaseReader, run_id: UUID
+) -> ResearchTerminalResult | None:
+    """Read a persisted terminal classification without fabricating historical evidence."""
+    with _read_connection(db_path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT payload_json FROM research_terminal_results WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return None
+            raise
+    return ResearchTerminalResult.model_validate_json(row["payload_json"]) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Runs
+# ---------------------------------------------------------------------------
+
+
+def insert_run(db_path: str, manifest: RunManifest) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO runs
+               (run_id, status, raw_claim, current_stage, created_at, updated_at, completed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(manifest.run_id),
+                manifest.status.value,
+                manifest.raw_claim,
+                manifest.current_stage.value,
+                _dt_to_iso(manifest.created_at),
+                _dt_to_iso(manifest.updated_at),
+                _dt_to_iso(manifest.completed_at) if manifest.completed_at else None,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_run(db_path: DatabaseReader, run_id: UUID) -> RunManifest:
+    with _read_connection(db_path) as conn:
+        row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (str(run_id),)).fetchone()
+        if row is None:
+            raise KeyError(f"run {run_id} not found")
+        return _row_to_run(row)
+
+
+def list_runs(db_path: DatabaseReader, *, limit: int = 100) -> list[RunManifest]:
+    """Return the most recently updated runs for local inspection."""
+    if limit < 1 or limit > 1000:
+        raise ValueError("run history limit must be between 1 and 1000")
+    with _read_connection(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM runs ORDER BY updated_at DESC, run_id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_row_to_run(row) for row in rows]
+
+
+def update_run(db_path: str, manifest: RunManifest) -> None:
+    """Update mutable run state while leaving insert-only evidence tables untouched."""
+    conn = _connect(db_path)
+    try:
+        existing = conn.execute(
+            "SELECT raw_claim FROM runs WHERE run_id = ?", (str(manifest.run_id),)
+        ).fetchone()
+        if existing is None:
+            raise KeyError(f"run {manifest.run_id} not found")
+        if existing["raw_claim"] != manifest.raw_claim:
+            raise ValueError("raw_claim is immutable after run creation")
+        cursor = conn.execute(
+            """UPDATE runs
+               SET status = ?, current_stage = ?, updated_at = ?, completed_at = ?
+               WHERE run_id = ?""",
+            (
+                manifest.status.value,
+                manifest.current_stage.value,
+                _dt_to_iso(manifest.updated_at),
+                _dt_to_iso(manifest.completed_at) if manifest.completed_at else None,
+                str(manifest.run_id),
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise KeyError(f"run {manifest.run_id} not found")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _row_to_run(row: sqlite3.Row) -> RunManifest:
+    completed = _iso_to_dt(row["completed_at"]) if row["completed_at"] else None
+    return RunManifest(
+        run_id=UUID(row["run_id"]),
+        status=row["status"],
+        raw_claim=row["raw_claim"],
+        current_stage=row["current_stage"],
+        created_at=_iso_to_dt(row["created_at"]),
+        updated_at=_iso_to_dt(row["updated_at"]),
+        completed_at=completed,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Planner outputs
+# ---------------------------------------------------------------------------
+
+
+def insert_planner_output(db_path: str, planner: PlannerOutput) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO planner_outputs
+               (run_id, planner_prompt_version, planner_model_name, planned_at)
+               VALUES (?, ?, ?, ?)""",
+            (
+                str(planner.run_id),
+                planner.planner_prompt_version,
+                planner.planner_model_name,
+                _dt_to_iso(planner.planned_at),
+            ),
+        )
+        cd = planner.claim_definition
+        conn.execute(
+            """INSERT INTO claim_definitions
+               (run_id, claim_text, population, jurisdiction, time_period,
+                comparison_baseline, intervention_or_exposure,
+                causal_or_comparative_meaning, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(cd.run_id),
+                cd.claim_text,
+                cd.population,
+                cd.jurisdiction,
+                cd.time_period,
+                cd.comparison_baseline,
+                cd.intervention_or_exposure,
+                cd.causal_or_comparative_meaning,
+                _dt_to_iso(cd.created_at),
+            ),
+        )
+        for amb in planner.ambiguities:
+            conn.execute(
+                """INSERT INTO ambiguities
+                   (ambiguity_id, run_id, description, impact, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    str(amb.ambiguity_id),
+                    str(amb.run_id),
+                    amb.description,
+                    amb.impact,
+                    _dt_to_iso(amb.created_at),
+                ),
+            )
+        for q in planner.search_queries:
+            conn.execute(
+                """INSERT INTO search_queries
+                   (query_id, run_id, stance, provider, intent, query_round, strategy,
+                    query_text, exclusion_parameters, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(q.query_id),
+                    str(q.run_id),
+                    q.stance.value,
+                    q.provider.value,
+                    q.intent.value,
+                    q.query_round,
+                    q.strategy,
+                    q.query_text,
+                    q.exclusion_parameters,
+                    _dt_to_iso(q.created_at),
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def insert_search_queries(db_path: str, queries: tuple[SearchQuery, ...]) -> None:
+    """Append a distinct Planner round's queries without rewriting the initial plan."""
+    conn = _connect(db_path)
+    try:
+        for query in queries:
+            conn.execute(
+                """INSERT INTO search_queries
+                   (query_id, run_id, stance, provider, intent, query_round, strategy,
+                    query_text, exclusion_parameters, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(query.query_id),
+                    str(query.run_id),
+                    query.stance.value,
+                    query.provider.value,
+                    query.intent.value,
+                    query.query_round,
+                    query.strategy,
+                    query.query_text,
+                    query.exclusion_parameters,
+                    _dt_to_iso(query.created_at),
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
+    with _read_connection(db_path) as conn:
+        po_row = conn.execute(
+            "SELECT * FROM planner_outputs WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if po_row is None:
+            raise KeyError(f"planner output for run {run_id} not found")
+
+        cd_row = conn.execute(
+            "SELECT * FROM claim_definitions WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        claim_def = ClaimDefinition(
+            run_id=UUID(cd_row["run_id"]),
+            claim_text=cd_row["claim_text"],
+            population=cd_row["population"],
+            jurisdiction=cd_row["jurisdiction"],
+            time_period=cd_row["time_period"],
+            comparison_baseline=cd_row["comparison_baseline"],
+            intervention_or_exposure=cd_row["intervention_or_exposure"],
+            causal_or_comparative_meaning=cd_row["causal_or_comparative_meaning"],
+            created_at=_iso_to_dt(cd_row["created_at"]),
+        )
+
+        amb_rows = conn.execute(
+            "SELECT * FROM ambiguities WHERE run_id = ? ORDER BY created_at", (str(run_id),)
+        ).fetchall()
+        ambiguities = [
+            AmbiguityRecord(
+                run_id=UUID(r["run_id"]),
+                ambiguity_id=UUID(r["ambiguity_id"]),
+                description=r["description"],
+                impact=r["impact"],
+                created_at=_iso_to_dt(r["created_at"]),
+            )
+            for r in amb_rows
+        ]
+
+        query_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+        }
+        provider_specific = {"provider", "intent"} <= query_columns
+        partition = "stance, provider, query_round" if provider_specific else "stance, query_round"
+        provider_order = ", provider" if provider_specific else ""
+        q_rows = conn.execute(
+            f"""SELECT * FROM (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY {partition}
+                               ORDER BY rowid
+                           ) AS planner_position
+                    FROM search_queries
+                    WHERE run_id = ?
+                )
+                WHERE planner_position = 1
+                ORDER BY CASE stance WHEN 'supporting' THEN 0 ELSE 1 END
+                         {provider_order}, query_round""",
+            (str(run_id),),
+        ).fetchall()
+        queries = [
+            SearchQuery(
+                run_id=UUID(r["run_id"]),
+                query_id=UUID(r["query_id"]),
+                stance=r["stance"],
+                provider=r["provider"] if provider_specific else "exa",
+                intent=r["intent"] if provider_specific else "broad_web",
+                query_round=r["query_round"],
+                strategy=r["strategy"],
+                query_text=r["query_text"],
+                exclusion_parameters=r["exclusion_parameters"],
+                created_at=_iso_to_dt(r["created_at"]),
+            )
+            for r in q_rows
+        ]
+
+        return PlannerOutput(
+            run_id=UUID(po_row["run_id"]),
+            claim_definition=claim_def,
+            ambiguities=ambiguities,
+            search_queries=queries,
+            planner_prompt_version=po_row["planner_prompt_version"],
+            planner_model_name=po_row["planner_model_name"],
+            planned_at=_iso_to_dt(po_row["planned_at"]),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Retrieval attempts
+# ---------------------------------------------------------------------------
+
+
+def insert_retrieval_attempt(db_path: str, record: RetrievalRecord) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO retrieval_attempts
+               (retrieval_attempt_id, run_id, query_id, query_round, query_text,
+                search_rank, source_url, resolved_url, status, retrieved_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.retrieval_attempt_id),
+                str(record.run_id),
+                str(record.query_id),
+                record.query_round,
+                record.query_text,
+                record.search_rank,
+                record.source_url,
+                record.resolved_url,
+                record.status.value,
+                _dt_to_iso(record.retrieved_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_retrieval_attempt(db_path: str, retrieval_attempt_id: UUID) -> RetrievalRecord:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM retrieval_attempts WHERE retrieval_attempt_id = ?",
+            (str(retrieval_attempt_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"retrieval attempt {retrieval_attempt_id} not found")
+        return RetrievalRecord(
+            run_id=UUID(row["run_id"]),
+            retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
+            query_id=UUID(row["query_id"]),
+            query_round=row["query_round"],
+            query_text=row["query_text"],
+            search_rank=row["search_rank"],
+            source_url=row["source_url"],
+            resolved_url=row["resolved_url"],
+            status=row["status"],
+            retrieved_at=_iso_to_dt(row["retrieved_at"]),
+        )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Snapshots (INSERT-ONLY — no update / delete)
+# ---------------------------------------------------------------------------
+
+
+def insert_snapshot(db_path: str, snapshot: SourceSnapshot) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO snapshots
+               (snapshot_id, run_id, retrieval_attempt_id, source_url, retrieved_at,
+                normalized_text, snapshot_sha256, word_count, truncated, created_at,
+                original_url, canonical_url, normalization_version, acquisition_version,
+                provider_name, provider_version, media_type_provenance_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(snapshot.snapshot_id),
+                str(snapshot.run_id),
+                str(snapshot.retrieval_attempt_id),
+                snapshot.source_url,
+                _dt_to_iso(snapshot.retrieved_at),
+                snapshot.normalized_text,
+                snapshot.snapshot_sha256,
+                snapshot.word_count,
+                int(snapshot.truncated),
+                _dt_to_iso(snapshot.created_at),
+                snapshot.original_url,
+                snapshot.canonical_url,
+                snapshot.normalization_version,
+                snapshot.acquisition_version,
+                snapshot.provider_name,
+                snapshot.provider_version,
+                json.dumps(
+                    snapshot.media_type_provenance.model_dump(mode="json"),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_snapshot(db_path: str, snapshot_id: UUID) -> SourceSnapshot:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM snapshots WHERE snapshot_id = ?", (str(snapshot_id),)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"snapshot {snapshot_id} not found")
+        return _row_to_snapshot(row)
+    finally:
+        conn.close()
+
+
+def _row_to_snapshot(row: sqlite3.Row) -> SourceSnapshot:
+    return SourceSnapshot(
+        run_id=UUID(row["run_id"]),
+        retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
+        snapshot_id=UUID(row["snapshot_id"]),
+        source_url=row["source_url"],
+        original_url=row["original_url"],
+        canonical_url=row["canonical_url"],
+        retrieved_at=_iso_to_dt(row["retrieved_at"]),
+        normalized_text=row["normalized_text"],
+        snapshot_sha256=row["snapshot_sha256"],
+        word_count=row["word_count"],
+        truncated=bool(row["truncated"]),
+        normalization_version=row["normalization_version"],
+        acquisition_version=row["acquisition_version"],
+        provider_name=row["provider_name"],
+        provider_version=row["provider_version"],
+        media_type_provenance=(
+            MediaTypeProvenance.model_validate_json(row["media_type_provenance_json"])
+            if row["media_type_provenance_json"] is not None
+            else MediaTypeProvenance()
+        ),
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Provisional extractions
+# ---------------------------------------------------------------------------
+
+
+def insert_provisional_extraction(db_path: str, prov: ProvisionalCandidate) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO provisional_extractions
+               (run_id, stance, source_url, retrieval_attempt_id, query_id,
+                query_round, search_rank, snapshot_id, snapshot_sha256,
+                extracted_quote_block, extraction_prompt_version,
+                extraction_model_name, extracted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(prov.run_id),
+                prov.stance.value,
+                prov.source_url,
+                str(prov.retrieval_attempt_id),
+                str(prov.query_id),
+                prov.query_round,
+                prov.search_rank,
+                str(prov.snapshot_id),
+                prov.snapshot_sha256,
+                prov.extracted_quote_block,
+                prov.extraction_prompt_version,
+                prov.extraction_model_name,
+                _dt_to_iso(prov.extracted_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_provisional_extractions(db_path: str, run_id: UUID) -> list[ProvisionalCandidate]:
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM provisional_extractions WHERE run_id = ? ORDER BY extracted_at",
+            (str(run_id),),
+        ).fetchall()
+        return [
+            ProvisionalCandidate(
+                run_id=UUID(r["run_id"]),
+                stance=r["stance"],
+                source_url=r["source_url"],
+                retrieval_attempt_id=UUID(r["retrieval_attempt_id"]),
+                query_id=UUID(r["query_id"]),
+                query_round=r["query_round"],
+                search_rank=r["search_rank"],
+                snapshot_id=UUID(r["snapshot_id"]),
+                snapshot_sha256=r["snapshot_sha256"],
+                extracted_quote_block=r["extracted_quote_block"],
+                extraction_prompt_version=r["extraction_prompt_version"],
+                extraction_model_name=r["extraction_model_name"],
+                extracted_at=_iso_to_dt(r["extracted_at"]),
+            )
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Candidates
+# ---------------------------------------------------------------------------
+
+
+def insert_candidate(db_path: str, candidate: CandidateQuoteBlock) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO candidates
+               (quote_block_id, run_id, stance, source_url, retrieval_attempt_id,
+                query_id, query_round, search_rank, retrieved_at, snapshot_id,
+                snapshot_sha256, snapshot_created_at, extracted_quote_block,
+                segment_offsets, raw_segment_word_count, has_statistical_markers,
+                claim_keyword_match_count, truncated, extraction_prompt_version,
+                extraction_model_name, extracted_at, post_filter_version,
+                post_filter_validated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(candidate.quote_block_id),
+                str(candidate.run_id),
+                candidate.stance.value,
+                candidate.source_url,
+                str(candidate.retrieval_attempt_id),
+                str(candidate.query_id),
+                candidate.query_round,
+                candidate.search_rank,
+                _dt_to_iso(candidate.retrieved_at),
+                str(candidate.snapshot_id),
+                candidate.snapshot_sha256,
+                _dt_to_iso(candidate.snapshot_created_at),
+                candidate.extracted_quote_block,
+                _offsets_to_json(candidate.segment_offsets),
+                candidate.raw_segment_word_count,
+                int(candidate.has_statistical_markers),
+                candidate.claim_keyword_match_count,
+                int(candidate.truncated),
+                candidate.extraction_prompt_version,
+                candidate.extraction_model_name,
+                _dt_to_iso(candidate.extracted_at),
+                candidate.post_filter_version,
+                _dt_to_iso(candidate.post_filter_validated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_candidate(db_path: str, quote_block_id: UUID) -> CandidateQuoteBlock:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM candidates WHERE quote_block_id = ?", (str(quote_block_id),)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"candidate {quote_block_id} not found")
+        return _row_to_candidate(row)
+    finally:
+        conn.close()
+
+
+def _row_to_candidate(row: sqlite3.Row) -> CandidateQuoteBlock:
+    return CandidateQuoteBlock(
+        run_id=UUID(row["run_id"]),
+        stance=row["stance"],
+        quote_block_id=UUID(row["quote_block_id"]),
+        source_url=row["source_url"],
+        retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
+        query_id=UUID(row["query_id"]),
+        query_round=row["query_round"],
+        search_rank=row["search_rank"],
+        retrieved_at=_iso_to_dt(row["retrieved_at"]),
+        snapshot_id=UUID(row["snapshot_id"]),
+        snapshot_sha256=row["snapshot_sha256"],
+        snapshot_created_at=_iso_to_dt(row["snapshot_created_at"]),
+        extracted_quote_block=row["extracted_quote_block"],
+        segment_offsets=_json_to_offsets(row["segment_offsets"]),
+        raw_segment_word_count=row["raw_segment_word_count"],
+        has_statistical_markers=bool(row["has_statistical_markers"]),
+        claim_keyword_match_count=row["claim_keyword_match_count"],
+        truncated=bool(row["truncated"]),
+        extraction_prompt_version=row["extraction_prompt_version"],
+        extraction_model_name=row["extraction_model_name"],
+        extracted_at=_iso_to_dt(row["extracted_at"]),
+        post_filter_version=row["post_filter_version"],
+        post_filter_validated_at=_iso_to_dt(row["post_filter_validated_at"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Analyst decisions
+# ---------------------------------------------------------------------------
+
+
+def insert_analyst_decision(db_path: str, decision: ScoreDecision) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO analyst_decisions
+               (run_id, quote_block_id, evidence_quality, claim_fit, ledger_score, placement,
+                approved, rationale, analyst_prompt_version, analyst_model_name, scored_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(decision.run_id),
+                str(decision.quote_block_id),
+                decision.evidence_quality,
+                decision.claim_fit,
+                decision.ledger_score,
+                decision.placement.value if decision.placement else None,
+                int(decision.approved),
+                decision.rationale,
+                decision.analyst_prompt_version,
+                decision.analyst_model_name,
+                _dt_to_iso(decision.scored_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_analyst_decision(db_path: str, run_id: UUID, quote_block_id: UUID) -> ScoreDecision:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM analyst_decisions WHERE run_id = ? AND quote_block_id = ?",
+            (str(run_id), str(quote_block_id)),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"analyst decision for run={run_id} quote={quote_block_id} not found")
+        return _row_to_score_decision(row)
+    finally:
+        conn.close()
+
+
+def _row_to_score_decision(row: sqlite3.Row) -> ScoreDecision:
+    return ScoreDecision(
+        run_id=UUID(row["run_id"]),
+        quote_block_id=UUID(row["quote_block_id"]),
+        evidence_quality=row["evidence_quality"],
+        claim_fit=row["claim_fit"],
+        ledger_score=row["ledger_score"],
+        placement=row["placement"],
+        approved=bool(row["approved"]),
+        rationale=row["rationale"],
+        analyst_prompt_version=row["analyst_prompt_version"],
+        analyst_model_name=row["analyst_model_name"],
+        scored_at=_iso_to_dt(row["scored_at"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Statement drafts and review attempts
+# ---------------------------------------------------------------------------
+
+
+def insert_statement_draft(db_path: str, draft: StatementDraft) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO statement_drafts
+               (statement_draft_id, run_id, quote_block_id, stance, draft_statement,
+                claim_fit, analyst_prompt_version, analyst_model_name, drafted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(draft.statement_draft_id),
+                str(draft.run_id),
+                str(draft.quote_block_id),
+                draft.stance.value,
+                draft.draft_statement,
+                draft.claim_fit,
+                draft.analyst_prompt_version,
+                draft.analyst_model_name,
+                _dt_to_iso(draft.drafted_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_statement_draft(db_path: str, statement_draft_id: UUID) -> StatementDraft:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM statement_drafts WHERE statement_draft_id = ?",
+            (str(statement_draft_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"statement draft {statement_draft_id} not found")
+        return _row_to_statement_draft(row)
+    finally:
+        conn.close()
+
+
+def _row_to_statement_draft(row: sqlite3.Row) -> StatementDraft:
+    return StatementDraft(
+        run_id=UUID(row["run_id"]),
+        statement_draft_id=UUID(row["statement_draft_id"]),
+        quote_block_id=UUID(row["quote_block_id"]),
+        stance=row["stance"],
+        draft_statement=row["draft_statement"],
+        claim_fit=row["claim_fit"],
+        analyst_prompt_version=row["analyst_prompt_version"],
+        analyst_model_name=row["analyst_model_name"],
+        drafted_at=_iso_to_dt(row["drafted_at"]),
+    )
+
+
+def insert_statement_review(db_path: str, review: StatementReviewResult) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO statement_review_attempts
+               (run_id, statement_draft_id, quote_block_id, approved,
+                reviewer_approval_id, approved_factual_statement, failure_code,
+                rationale, reviewer_prompt_version, reviewer_model_name, reviewed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(review.run_id),
+                str(review.statement_draft_id),
+                str(review.quote_block_id),
+                int(review.approved),
+                str(review.reviewer_approval_id) if review.reviewer_approval_id else None,
+                review.approved_factual_statement,
+                review.failure_code.value if review.failure_code else None,
+                review.rationale,
+                review.reviewer_prompt_version,
+                review.reviewer_model_name,
+                _dt_to_iso(review.reviewed_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_statement_review(
+    db_path: str, run_id: UUID, statement_draft_id: UUID
+) -> StatementReviewResult:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """SELECT * FROM statement_review_attempts
+               WHERE run_id = ? AND statement_draft_id = ?""",
+            (str(run_id), str(statement_draft_id)),
+        ).fetchone()
+        if row is None:
+            raise KeyError(
+                f"statement review for run={run_id} draft={statement_draft_id} not found"
+            )
+        return _row_to_review_result(row)
+    finally:
+        conn.close()
+
+
+def _row_to_review_result(row: sqlite3.Row) -> StatementReviewResult:
+    return StatementReviewResult(
+        run_id=UUID(row["run_id"]),
+        statement_draft_id=UUID(row["statement_draft_id"]),
+        quote_block_id=UUID(row["quote_block_id"]),
+        approved=bool(row["approved"]),
+        reviewer_approval_id=row["reviewer_approval_id"],
+        approved_factual_statement=row["approved_factual_statement"],
+        failure_code=row["failure_code"],
+        rationale=row["rationale"],
+        reviewer_prompt_version=row["reviewer_prompt_version"],
+        reviewer_model_name=row["reviewer_model_name"],
+        reviewed_at=_iso_to_dt(row["reviewed_at"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Ledger records (INSERT-ONLY — no update / delete)
+# ---------------------------------------------------------------------------
+
+
+def insert_ledger_record(db_path: str, record: LedgerRecord) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO ledger_records
+               (ledger_claim_id, run_id, quote_block_id, stance,
+                approved_factual_statement, approved_claim_text,
+                evidence_quality, claim_fit, ledger_score, placement, entailment,
+                source_url, retrieval_attempt_id, snapshot_id, snapshot_sha256,
+                segment_offsets, analyst_prompt_version, analyst_model_name,
+                analyst_completed_at, reviewer_prompt_version, reviewer_model_name,
+                reviewed_at, reviewer_approval_id, ledger_validated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.ledger_claim_id),
+                str(record.run_id),
+                str(record.quote_block_id),
+                record.stance.value,
+                record.approved_factual_statement,
+                record.approved_claim_text,
+                record.evidence_quality,
+                record.claim_fit,
+                record.ledger_score,
+                record.placement.value,
+                record.entailment.value,
+                record.source_url,
+                str(record.retrieval_attempt_id),
+                str(record.snapshot_id),
+                record.snapshot_sha256,
+                _offsets_to_json(record.segment_offsets),
+                record.analyst_prompt_version,
+                record.analyst_model_name,
+                _dt_to_iso(record.analyst_completed_at),
+                record.reviewer_prompt_version,
+                record.reviewer_model_name,
+                _dt_to_iso(record.reviewed_at),
+                str(record.reviewer_approval_id),
+                _dt_to_iso(record.ledger_validated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_ledger_record(db_path: str, ledger_claim_id: UUID) -> LedgerRecord:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM ledger_records WHERE ledger_claim_id = ?",
+            (str(ledger_claim_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"ledger record {ledger_claim_id} not found")
+        return _row_to_ledger_record(row)
+    finally:
+        conn.close()
+
+
+def _row_to_ledger_record(row: sqlite3.Row) -> LedgerRecord:
+    return LedgerRecord(
+        run_id=UUID(row["run_id"]),
+        ledger_claim_id=UUID(row["ledger_claim_id"]),
+        quote_block_id=UUID(row["quote_block_id"]),
+        stance=row["stance"],
+        approved_factual_statement=row["approved_factual_statement"],
+        approved_claim_text=row["approved_claim_text"],
+        evidence_quality=row["evidence_quality"],
+        claim_fit=row["claim_fit"],
+        ledger_score=row["ledger_score"],
+        placement=row["placement"],
+        entailment=row["entailment"],
+        source_url=row["source_url"],
+        retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
+        snapshot_id=UUID(row["snapshot_id"]),
+        snapshot_sha256=row["snapshot_sha256"],
+        segment_offsets=_json_to_offsets(row["segment_offsets"]),
+        analyst_prompt_version=row["analyst_prompt_version"],
+        analyst_model_name=row["analyst_model_name"],
+        analyst_completed_at=_iso_to_dt(row["analyst_completed_at"]),
+        reviewer_prompt_version=row["reviewer_prompt_version"],
+        reviewer_model_name=row["reviewer_model_name"],
+        reviewed_at=_iso_to_dt(row["reviewed_at"]),
+        reviewer_approval_id=row["reviewer_approval_id"],
+        ledger_validated_at=_iso_to_dt(row["ledger_validated_at"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Synthesis attempts
+# ---------------------------------------------------------------------------
+
+
+def insert_synthesis(db_path: str, synthesis: SynthesisOutput) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO synthesis_attempts
+               (run_id, synthesizer_prompt_version, synthesizer_model_name,
+                created_at, title, claim_definition)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                str(synthesis.run_id),
+                synthesis.synthesizer_prompt_version,
+                synthesis.synthesizer_model_name,
+                _dt_to_iso(synthesis.created_at),
+                BRIEF_TITLE,
+                CLAIM_LABEL,
+            ),
+        )
+        for sec_idx, section in enumerate(synthesis.sections):
+            conn.execute(
+                """INSERT INTO synthesis_sections
+                   (run_id, section_type, heading, section_order)
+                   VALUES (?, ?, ?, ?)""",
+                (
+                    str(synthesis.run_id),
+                    section.section_type.value,
+                    RELEASE_SECTION_HEADINGS.get(section.section_type, section.section_type.value),
+                    sec_idx,
+                ),
+            )
+            for item_idx, item in enumerate(section.items):
+                conn.execute(
+                    """INSERT INTO synthesis_items
+                       (run_id, section_order, item_order, connective_template_id,
+                        ledger_claim_id, reviewer_approval_id, stance, placement,
+                        entailment, approved_factual_statement)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        str(synthesis.run_id),
+                        sec_idx,
+                        item_idx,
+                        item.connective_template_id,
+                        str(item.ledger_claim_id),
+                        str(item.reviewer_approval_id),
+                        item.stance.value,
+                        item.placement.value,
+                        item.entailment.value,
+                        item.approved_factual_statement,
+                    ),
+                )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def read_synthesis(db_path: DatabaseReader, run_id: UUID) -> SynthesisOutput:
+    with _read_connection(db_path) as conn:
+        sa_row = conn.execute(
+            "SELECT * FROM synthesis_attempts WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if sa_row is None:
+            raise KeyError(f"synthesis for run {run_id} not found")
+
+        sec_rows = conn.execute(
+            "SELECT * FROM synthesis_sections WHERE run_id = ? ORDER BY section_order",
+            (str(run_id),),
+        ).fetchall()
+        sections: list[SynthesisSection] = []
+        for sec_row in sec_rows:
+            item_rows = conn.execute(
+                """SELECT * FROM synthesis_items
+                   WHERE run_id = ? AND section_order = ? ORDER BY item_order""",
+                (str(run_id), sec_row["section_order"]),
+            ).fetchall()
+            items = [
+                SynthesisItem(
+                    connective_template_id=r["connective_template_id"],
+                    ledger_claim_id=UUID(r["ledger_claim_id"]),
+                    reviewer_approval_id=r["reviewer_approval_id"],
+                    stance=r["stance"],
+                    placement=r["placement"],
+                    entailment=r["entailment"],
+                    approved_factual_statement=r["approved_factual_statement"],
+                )
+                for r in item_rows
+            ]
+            sections.append(
+                SynthesisSection(
+                    section_type=sec_row["section_type"],
+                    items=items,
+                )
+            )
+
+        return SynthesisOutput(
+            run_id=UUID(sa_row["run_id"]),
+            synthesizer_prompt_version=sa_row["synthesizer_prompt_version"],
+            synthesizer_model_name=sa_row["synthesizer_model_name"],
+            created_at=_iso_to_dt(sa_row["created_at"]),
+            sections=sections,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Validation runs
+# ---------------------------------------------------------------------------
+
+
+def insert_validation(db_path: str, result: ValidationResult) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO validation_runs
+               (run_id, valid, validator_config_version, validated_at, rendered_brief_hash)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                str(result.run_id),
+                int(result.valid),
+                result.validator_config_version,
+                _dt_to_iso(result.validated_at),
+                result.rendered_brief_hash,
+            ),
+        )
+        for err_idx, err in enumerate(result.errors):
+            conn.execute(
+                """INSERT INTO validation_errors
+                   (run_id, error_order, code, location, message)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (str(result.run_id), err_idx, err.code.value, err.location, err.message),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def read_validation(db_path: DatabaseReader, run_id: UUID) -> ValidationResult:
+    with _read_connection(db_path) as conn:
+        vr_row = conn.execute(
+            "SELECT * FROM validation_runs WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if vr_row is None:
+            raise KeyError(f"validation for run {run_id} not found")
+
+        err_rows = conn.execute(
+            "SELECT * FROM validation_errors WHERE run_id = ? ORDER BY error_order",
+            (str(run_id),),
+        ).fetchall()
+        errors = [
+            ValidationError(code=r["code"], location=r["location"], message=r["message"])
+            for r in err_rows
+        ]
+
+        return ValidationResult(
+            run_id=UUID(vr_row["run_id"]),
+            valid=bool(vr_row["valid"]),
+            errors=errors,
+            validator_config_version=vr_row["validator_config_version"],
+            validated_at=_iso_to_dt(vr_row["validated_at"]),
+            rendered_brief_hash=vr_row["rendered_brief_hash"],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Model invocations
+# ---------------------------------------------------------------------------
+
+
+def insert_model_invocation(db_path: str, record: ModelInvocationRecord) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO model_invocations
+               (invocation_id, run_id, stage, prompt_version, model_name,
+                input_artifact_id, output_artifact_id, status, invoked_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.invocation_id),
+                str(record.run_id),
+                record.stage.value,
+                record.prompt_version,
+                record.model_name,
+                str(record.input_artifact_id),
+                str(record.output_artifact_id) if record.output_artifact_id else None,
+                record.status,
+                _dt_to_iso(record.invoked_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_model_invocation(db_path: str, invocation_id: UUID) -> ModelInvocationRecord:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM model_invocations WHERE invocation_id = ?",
+            (str(invocation_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"model invocation {invocation_id} not found")
+        return ModelInvocationRecord(
+            run_id=UUID(row["run_id"]),
+            invocation_id=UUID(row["invocation_id"]),
+            stage=row["stage"],
+            prompt_version=row["prompt_version"],
+            model_name=row["model_name"],
+            input_artifact_id=UUID(row["input_artifact_id"]),
+            output_artifact_id=(
+                UUID(row["output_artifact_id"]) if row["output_artifact_id"] else None
+            ),
+            status=row["status"],
+            invoked_at=_iso_to_dt(row["invoked_at"]),
+        )
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 orchestration checkpoints and route-attempt audit
+# ---------------------------------------------------------------------------
+
+
+class ModelAttemptBudgetError(RuntimeError):
+    """Raised before a provider call when its persisted run budget is exhausted."""
+
+
+def insert_provider_run_contract(db_path: str, contract: ProviderRunContract) -> None:
+    """Insert one immutable provider compatibility contract or verify exact identity."""
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM provider_run_contracts WHERE run_id = ?",
+            (str(contract.run_id),),
+        ).fetchone()
+        if row is not None:
+            existing = _row_to_provider_run_contract(row)
+            if existing != contract:
+                raise sqlite3.IntegrityError(
+                    f"provider run contract for {contract.run_id} is immutable"
+                )
+            return
+        conn.execute(
+            """INSERT INTO provider_run_contracts
+               (run_id, fingerprint_sha256, provider_identity, adapter_identity,
+                model_identity, prompt_identity, schema_identity,
+                normalization_identity, policy_identity, repository_revision,
+                payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(contract.run_id),
+                contract.fingerprint_sha256,
+                contract.provider_identity,
+                contract.adapter_identity,
+                contract.model_identity,
+                contract.prompt_identity,
+                contract.schema_identity,
+                contract.normalization_identity,
+                contract.policy_identity,
+                contract.repository_revision,
+                contract.payload_json,
+                _dt_to_iso(contract.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_provider_run_contract(db_path: DatabaseReader, run_id: UUID) -> ProviderRunContract:
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM provider_run_contracts WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"provider run contract for {run_id} not found")
+        return _row_to_provider_run_contract(row)
+
+
+def _row_to_provider_run_contract(row: sqlite3.Row) -> ProviderRunContract:
+    return ProviderRunContract(
+        run_id=UUID(row["run_id"]),
+        fingerprint_sha256=row["fingerprint_sha256"],
+        provider_identity=row["provider_identity"],
+        adapter_identity=row["adapter_identity"],
+        model_identity=row["model_identity"],
+        prompt_identity=row["prompt_identity"],
+        schema_identity=row["schema_identity"],
+        normalization_identity=row["normalization_identity"],
+        policy_identity=row["policy_identity"],
+        repository_revision=row["repository_revision"],
+        payload_json=row["payload_json"],
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
+def upsert_orchestration_checkpoint(
+    db_path: str,
+    checkpoint: OrchestrationCheckpoint,
+) -> None:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT INTO orchestration_checkpoints
+               (run_id, stage_key, status, failure_reason, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(run_id, stage_key) DO UPDATE SET
+                   status = excluded.status,
+                   failure_reason = excluded.failure_reason,
+                   updated_at = excluded.updated_at""",
+            (
+                str(checkpoint.run_id),
+                checkpoint.stage_key,
+                checkpoint.status.value,
+                checkpoint.failure_reason,
+                _dt_to_iso(checkpoint.updated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_orchestration_checkpoint(
+    db_path: str,
+    run_id: UUID,
+    stage_key: str,
+) -> OrchestrationCheckpoint:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """SELECT * FROM orchestration_checkpoints
+               WHERE run_id = ? AND stage_key = ?""",
+            (str(run_id), stage_key),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"checkpoint {stage_key} for run {run_id} not found")
+        return OrchestrationCheckpoint(
+            run_id=UUID(row["run_id"]),
+            stage_key=row["stage_key"],
+            status=row["status"],
+            failure_reason=row["failure_reason"],
+            updated_at=_iso_to_dt(row["updated_at"]),
+        )
+    finally:
+        conn.close()
+
+
+def read_orchestration_checkpoints(
+    db_path: DatabaseReader,
+    run_id: UUID,
+) -> list[OrchestrationCheckpoint]:
+    with _read_connection(db_path) as conn:
+        rows = conn.execute(
+            """SELECT * FROM orchestration_checkpoints
+               WHERE run_id = ? ORDER BY updated_at, stage_key""",
+            (str(run_id),),
+        ).fetchall()
+        return [
+            OrchestrationCheckpoint(
+                run_id=UUID(row["run_id"]),
+                stage_key=row["stage_key"],
+                status=row["status"],
+                failure_reason=row["failure_reason"],
+                updated_at=_iso_to_dt(row["updated_at"]),
+            )
+            for row in rows
+        ]
+
+
+def insert_stage_artifact(db_path: str, artifact: PersistedStageArtifact) -> None:
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            """SELECT * FROM orchestration_stage_artifacts
+               WHERE run_id = ? AND artifact_key = ?""",
+            (str(artifact.run_id), artifact.artifact_key),
+        ).fetchone()
+        if row is not None:
+            existing = _row_to_stage_artifact(row)
+            if (
+                existing.artifact_type != artifact.artifact_type
+                or existing.payload_json != artifact.payload_json
+            ):
+                raise sqlite3.IntegrityError(
+                    f"stage artifact {artifact.artifact_key} already exists with different data"
+                )
+            return
+        conn.execute(
+            """INSERT INTO orchestration_stage_artifacts
+               (run_id, artifact_key, artifact_type, payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                str(artifact.run_id),
+                artifact.artifact_key,
+                artifact.artifact_type,
+                artifact.payload_json,
+                _dt_to_iso(artifact.created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_stage_artifact(
+    db_path: DatabaseReader,
+    run_id: UUID,
+    artifact_key: str,
+) -> PersistedStageArtifact:
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            """SELECT * FROM orchestration_stage_artifacts
+               WHERE run_id = ? AND artifact_key = ?""",
+            (str(run_id), artifact_key),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"stage artifact {artifact_key} for run {run_id} not found")
+        return _row_to_stage_artifact(row)
+
+
+def _row_to_stage_artifact(row: sqlite3.Row) -> PersistedStageArtifact:
+    return PersistedStageArtifact(
+        run_id=UUID(row["run_id"]),
+        artifact_key=row["artifact_key"],
+        artifact_type=row["artifact_type"],
+        payload_json=row["payload_json"],
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
+def insert_v2_pipeline_identity(
+    db_path: str,
+    run_id: UUID,
+    identity: V2PipelineIdentity,
+    created_at: datetime,
+) -> None:
+    """Explicitly identify a new run as v2; historical provider contracts cannot be relabeled."""
+    _require_aware_datetime(created_at, "created_at")
+    conn = _connect(db_path)
+    try:
+        contract = conn.execute(
+            "SELECT policy_identity, payload_json FROM provider_run_contracts WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if contract is not None and contract["policy_identity"] != V2_POLICY_IDENTITY:
+            payload = parse_provider_contract_payload(contract["payload_json"])
+            if not payload["fingerprint_version"].startswith("researchassistant-v2-"):
+                raise ValueError("a pre-v2 provider run cannot be resumed as a v2 run")
+        existing = conn.execute(
+            "SELECT * FROM v2_run_identities WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["pipeline_identity"] != identity.pipeline_identity
+                or existing["policy_identity"] != identity.policy_identity
+            ):
+                raise sqlite3.IntegrityError("v2 run identity already exists with different data")
+            return
+        conn.execute(
+            """INSERT INTO v2_run_identities
+               (run_id, pipeline_identity, policy_identity, created_at) VALUES (?, ?, ?, ?)""",
+            (
+                str(run_id),
+                identity.pipeline_identity,
+                identity.policy_identity,
+                _dt_to_iso(created_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def insert_v2_artifact(
+    db_path: str,
+    artifact_key: str,
+    artifact: StrictModel,
+    created_at: datetime,
+) -> V2PersistedArtifact:
+    """Persist a canonical v2 artifact once, refusing a missing v2 identity or drift."""
+    conn = _connect(db_path)
+    try:
+        persisted = _insert_v2_artifact_on_connection(conn, artifact_key, artifact, created_at)
+        conn.commit()
+        return persisted
+    finally:
+        conn.close()
+
+
+def _insert_v2_artifact_on_connection(
+    conn: sqlite3.Connection,
+    artifact_key: str,
+    artifact: StrictModel,
+    created_at: datetime,
+) -> V2PersistedArtifact:
+    """Apply the existing immutable artifact checks within the caller's transaction."""
+    if not artifact_key:
+        raise ValueError("artifact_key must not be empty")
+    _require_aware_datetime(created_at, "created_at")
+    run_id = getattr(artifact, "run_id", None)
+    if not isinstance(run_id, UUID):
+        raise ValueError("v2 artifacts must carry a UUID run_id")
+    artifact_type = type(artifact).__name__
+    if not (
+        artifact_type.startswith("V2")
+        or artifact_type
+        in {
+            "ScoutBatch",
+            "ProbeResult",
+            "GapAnalysisResult",
+            "SurvivingSourceRecord",
+            "SourceRecommendationResult",
+            "DeepAnalysisStatus",
+        }
+    ):
+        raise ValueError("only v2 artifact schemas may be persisted through the v2 boundary")
+    payload_json = canonical_v2_artifact_json(artifact)
+    payload_sha256 = v2_artifact_fingerprint(artifact)
+    persisted = V2PersistedArtifact(
+        run_id=run_id,
+        artifact_key=artifact_key,
+        artifact_type=artifact_type,
+        payload_json=payload_json,
+        payload_sha256=payload_sha256,
+        created_at=created_at,
+    )
+    identity = conn.execute(
+        "SELECT pipeline_identity, policy_identity FROM v2_run_identities WHERE run_id = ?",
+        (str(run_id),),
+    ).fetchone()
+    if identity is None:
+        raise ValueError("v2 artifacts require an explicit v2 run identity")
+    if (
+        identity["pipeline_identity"] != V2_PIPELINE_IDENTITY
+        or identity["policy_identity"] != V2_POLICY_IDENTITY
+    ):
+        raise ValueError("v2 run identity is incompatible with this pipeline")
+    existing = conn.execute(
+        "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+        (str(run_id), artifact_key),
+    ).fetchone()
+    if existing is not None:
+        restored = _row_to_v2_artifact(existing)
+        if restored != persisted:
+            raise sqlite3.IntegrityError(
+                f"v2 artifact {artifact_key} already exists with different data"
+            )
+        return restored
+    conn.execute(
+        """INSERT INTO v2_artifacts
+           (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            str(persisted.run_id),
+            persisted.artifact_key,
+            persisted.artifact_type,
+            persisted.payload_json,
+            persisted.payload_sha256,
+            _dt_to_iso(persisted.created_at),
+        ),
+    )
+    return persisted
+
+
+def insert_v2_terminal_artifact(
+    db_path: str,
+    artifact_key: str,
+    artifact: StrictModel,
+    completed_at: datetime,
+    status: RunStatus,
+    stage: Stage,
+) -> V2PersistedArtifact:
+    """Commit an immutable terminal artifact and its mutable run manifest together."""
+    if status not in {
+        RunStatus.COMPLETED,
+        RunStatus.BLOCKED,
+        RunStatus.CANCELLED,
+        RunStatus.FAILED,
+    }:
+        raise ValueError("a terminal artifact requires a terminal run status")
+    _require_aware_datetime(completed_at, "completed_at")
+    run_id = getattr(artifact, "run_id", None)
+    raw_claim = getattr(artifact, "raw_claim", None)
+    if not isinstance(run_id, UUID) or not isinstance(raw_claim, str):
+        raise ValueError("terminal artifact requires a run ID and claim")
+    conn = _connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        persisted = _insert_v2_artifact_on_connection(conn, artifact_key, artifact, completed_at)
+        current = conn.execute(
+            "SELECT raw_claim, status, current_stage, completed_at FROM runs WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if current is None:
+            raise KeyError(f"run {run_id} not found")
+        if current["raw_claim"] != raw_claim:
+            raise ValueError("terminal artifact claim differs from immutable run claim")
+        if (
+            current["status"] != status.value
+            or current["current_stage"] != stage.value
+            or current["completed_at"] is None
+        ):
+            conn.execute(
+                """UPDATE runs SET status = ?, current_stage = ?, updated_at = ?,
+                   completed_at = ? WHERE run_id = ?""",
+                (
+                    status.value,
+                    stage.value,
+                    _dt_to_iso(completed_at),
+                    _dt_to_iso(completed_at),
+                    str(run_id),
+                ),
+            )
+        conn.commit()
+        return persisted
+    finally:
+        conn.close()
+
+
+def read_v2_artifact(
+    db_path: DatabaseReader,
+    run_id: UUID,
+    artifact_key: str,
+) -> V2PersistedArtifact:
+    """Read a persisted v2 envelope without converting it into a mutable handoff."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+            (str(run_id), artifact_key),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 artifact {artifact_key} for run {run_id} not found")
+        return _row_to_v2_artifact(row)
+
+
+def read_v2_physical_call_artifacts(
+    db_path: DatabaseReader,
+    run_id: UUID,
+) -> tuple[V2PersistedArtifact, ...]:
+    """Read every current or legacy physical-call envelope in one query."""
+    with _read_connection(db_path) as conn:
+        rows = conn.execute(
+            """SELECT * FROM v2_artifacts
+               WHERE run_id = ?
+                 AND (
+                     artifact_key LIKE 'phase-13-physical-call-%'
+                     OR artifact_key LIKE 'phase-12-physical-call-%'
+                 )
+               ORDER BY artifact_key
+               LIMIT 641""",
+            (str(run_id),),
+        ).fetchall()
+        if len(rows) > 640:
+            raise sqlite3.IntegrityError("v2 physical-call audit exceeds its bounded row count")
+        return tuple(_row_to_v2_artifact(row) for row in rows)
+
+
+def insert_v2_ledger_admission(
+    db_path: str,
+    record: LedgerRecord,
+    provenance: V2LedgerProvenance,
+) -> None:
+    """Append one v2-approved Ledger record with immutable discovery provenance."""
+    record_json = record.model_dump_json()
+    provenance_json = provenance.model_dump_json()
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(record.run_id),),
+        ).fetchone()
+        if identity is None or identity["pipeline_identity"] != V2_PIPELINE_IDENTITY:
+            raise ValueError("v2 Ledger admissions require an explicit v2 run identity")
+        existing = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(record.ledger_claim_id),),
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["ledger_record_json"] != record_json
+                or existing["provenance_json"] != provenance_json
+            ):
+                raise sqlite3.IntegrityError("v2 Ledger admission is immutable")
+            return
+        conn.execute(
+            """INSERT INTO v2_ledger_admissions
+               (ledger_claim_id, run_id, source_id, research_direction, discovery_round,
+                source_family_id, recommended, relevant_gap_ids_json, ledger_record_json,
+                provenance_json, admitted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.ledger_claim_id),
+                str(record.run_id),
+                str(provenance.source_id),
+                provenance.research_direction.value,
+                provenance.discovery_round,
+                provenance.source_family_id,
+                int(provenance.recommended),
+                json.dumps(provenance.relevant_gap_ids, ensure_ascii=False, separators=(",", ":")),
+                record_json,
+                provenance_json,
+                _dt_to_iso(record.ledger_validated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_v2_ledger_admission(
+    db_path: DatabaseReader, ledger_claim_id: UUID
+) -> tuple[LedgerRecord, V2LedgerProvenance]:
+    """Read one immutable v2 Ledger admission and its separate provenance context."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(ledger_claim_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 Ledger admission {ledger_claim_id} not found")
+        return (
+            LedgerRecord.model_validate_json(row["ledger_record_json"]),
+            V2LedgerProvenance.model_validate_json(row["provenance_json"]),
+        )
+
+
+def insert_v2_evidence_admission(
+    db_path: str,
+    record: V2EvidenceAdmissionRecord,
+    provenance: V2LedgerProvenance,
+) -> None:
+    """Append one immutable analyzer-admitted evidence record."""
+    if record.admission_method.value != "analyzer_admitted":
+        raise ValueError("fresh evidence admissions must use analyzer_admitted")
+    record_json = record.model_dump_json()
+    provenance_json = provenance.model_dump_json()
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(record.run_id),),
+        ).fetchone()
+        if identity is None or identity["pipeline_identity"] != V2_PIPELINE_IDENTITY:
+            raise ValueError("v2 evidence admissions require an explicit v2 run identity")
+        existing = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(record.ledger_claim_id),),
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["ledger_record_json"] != record_json
+                or existing["provenance_json"] != provenance_json
+            ):
+                raise sqlite3.IntegrityError("v2 evidence admission is immutable")
+            return
+        conn.execute(
+            """INSERT INTO v2_ledger_admissions
+               (ledger_claim_id, run_id, source_id, research_direction, discovery_round,
+                source_family_id, recommended, relevant_gap_ids_json, ledger_record_json,
+                provenance_json, admitted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(record.ledger_claim_id),
+                str(record.run_id),
+                str(provenance.source_id),
+                provenance.research_direction.value,
+                provenance.discovery_round,
+                provenance.source_family_id,
+                int(provenance.recommended),
+                json.dumps(provenance.relevant_gap_ids, ensure_ascii=False, separators=(",", ":")),
+                record_json,
+                provenance_json,
+                _dt_to_iso(record.ledger_validated_at),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_v2_evidence_admission(
+    db_path: DatabaseReader, ledger_claim_id: UUID
+) -> tuple[V2EvidenceAdmissionRecord, V2LedgerProvenance]:
+    """Read one immutable analyzer admission and its discovery provenance."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
+            "WHERE ledger_claim_id = ?",
+            (str(ledger_claim_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 evidence admission {ledger_claim_id} not found")
+        return (
+            V2EvidenceAdmissionRecord.model_validate_json(row["ledger_record_json"]),
+            V2LedgerProvenance.model_validate_json(row["provenance_json"]),
+        )
+
+
+def insert_v2_initial_planner_output(
+    db_path: str,
+    output: V2InitialPlannerOutput,
+) -> None:
+    """Append one validated fresh-v2 initial plan and exactly its Round-1 search queries."""
+    conn = _connect(db_path)
+    try:
+        identity = conn.execute(
+            "SELECT pipeline_identity FROM v2_run_identities WHERE run_id = ?",
+            (str(output.run_id),),
+        ).fetchone()
+        if identity is None or identity["pipeline_identity"] != V2_PIPELINE_IDENTITY:
+            raise ValueError("v2 initial planner output requires an explicit v2 run identity")
+        existing = conn.execute(
+            "SELECT run_id FROM v2_initial_planner_outputs WHERE run_id = ?", (str(output.run_id),)
+        ).fetchone()
+        if existing is not None:
+            if read_v2_initial_planner_output(db_path, output.run_id) != output:
+                raise sqlite3.IntegrityError("v2 initial planner output is immutable")
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            """INSERT INTO v2_initial_planner_outputs
+               (run_id, raw_claim, directions_json, discovery_providers_json, policy_identity,
+                scope_interpretations_json, planner_prompt_version, planner_model_name, planned_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(output.run_id),
+                output.raw_claim,
+                json.dumps(
+                    output.directions.model_dump(mode="json"),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                json.dumps([provider.value for provider in output.discovery_providers]),
+                output.policy_identity,
+                json.dumps(
+                    [item.model_dump(mode="json") for item in output.scope_interpretations],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                output.planner_prompt_version,
+                output.planner_model_name,
+                _dt_to_iso(output.planned_at),
+            ),
+        )
+        for search in output.searches:
+            conn.execute(
+                """INSERT INTO v2_round_one_search_queries
+                   (query_id, run_id, direction, provider, round_number, strategy, query_text,
+                    policy_identity, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(search.query_id),
+                    str(search.run_id),
+                    search.direction.value,
+                    search.provider.value,
+                    search.round_number,
+                    search.strategy,
+                    search.query_text,
+                    search.policy_identity,
+                    _dt_to_iso(search.created_at),
+                ),
+            )
+        # Keep the complete typed handoff in the same transaction as its relational
+        # projection. Coverage fields have no columns in the historical schema.
+        conn.execute(
+            """INSERT INTO v2_artifacts
+               (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                str(output.run_id),
+                "phase-3-initial-round-1-plan",
+                type(output).__name__,
+                canonical_v2_artifact_json(output),
+                v2_artifact_fingerprint(output),
+                _dt_to_iso(output.planned_at),
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def read_v2_initial_planner_output(
+    db_path: DatabaseReader,
+    run_id: UUID,
+) -> V2InitialPlannerOutput:
+    """Reconstruct a typed fresh-v2 Round-1 plan without creating later-round searches."""
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM v2_initial_planner_outputs WHERE run_id = ?", (str(run_id),)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"v2 initial planner output for run {run_id} not found")
+        searches = conn.execute(
+            "SELECT * FROM v2_round_one_search_queries WHERE run_id = ? ORDER BY rowid",
+            (str(run_id),),
+        ).fetchall()
+        relational = V2InitialPlannerOutput.model_validate(
+            {
+                "run_id": run_id,
+                "raw_claim": row["raw_claim"],
+                "directions": json.loads(row["directions_json"]),
+                "discovery_providers": json.loads(row["discovery_providers_json"]),
+                "policy_identity": row["policy_identity"],
+                "scope_interpretations": json.loads(row["scope_interpretations_json"]),
+                "searches": [
+                    {
+                        "run_id": item["run_id"],
+                        "query_id": item["query_id"],
+                        "direction": item["direction"],
+                        "provider": item["provider"],
+                        "round_number": item["round_number"],
+                        "strategy": item["strategy"],
+                        "query_text": item["query_text"],
+                        "policy_identity": item["policy_identity"],
+                        "created_at": _iso_to_dt(item["created_at"]),
+                    }
+                    for item in searches
+                ],
+                "planner_prompt_version": row["planner_prompt_version"],
+                "planner_model_name": row["planner_model_name"],
+                "planned_at": _iso_to_dt(row["planned_at"]),
+            }
+        )
+        artifact_row = conn.execute(
+            "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
+            (str(run_id), "phase-3-initial-round-1-plan"),
+        ).fetchone()
+        if artifact_row is None:
+            return relational
+        complete = V2InitialPlannerOutput.model_validate_json(
+            _row_to_v2_artifact(artifact_row).payload_json
+        )
+        if complete.model_copy(update={"claim_coverage_focus": ()}) != relational:
+            raise sqlite3.IntegrityError("Initial planner artifact disagrees with stored queries")
+        return complete
+
+
+def _row_to_v2_artifact(row: sqlite3.Row) -> V2PersistedArtifact:
+    payload_json = row["payload_json"]
+    payload_sha256 = row["payload_sha256"]
+    if not isinstance(payload_json, str) or not isinstance(payload_sha256, str):
+        raise sqlite3.IntegrityError("v2 artifact payload integrity data is not valid text")
+    expected_sha256 = v2_payload_fingerprint(payload_json)
+    if payload_sha256 != expected_sha256:
+        raise sqlite3.IntegrityError(f"v2 artifact {row['artifact_key']} payload SHA-256 mismatch")
+    return V2PersistedArtifact(
+        run_id=UUID(row["run_id"]),
+        artifact_key=row["artifact_key"],
+        artifact_type=row["artifact_type"],
+        payload_json=payload_json,
+        payload_sha256=payload_sha256,
+        created_at=_iso_to_dt(row["created_at"]),
+    )
+
+
+def reserve_model_route_attempt(
+    db_path: str,
+    attempt: ModelRouteAttempt,
+    *,
+    max_model_calls: int,
+    max_total_tokens: int | None = None,
+    max_total_cost_usd: Decimal | None = None,
+) -> ModelRouteAttempt:
+    if attempt.status is not ModelAttemptStatus.RUNNING:
+        raise ValueError("only running model attempts may be reserved")
+    exact_cost_ceiling = (
+        parse_exact_usd(max_total_cost_usd) if max_total_cost_usd is not None else None
+    )
+    conn = _connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT * FROM model_route_attempts WHERE attempt_id = ?",
+            (str(attempt.attempt_id),),
+        ).fetchone()
+        if row is not None:
+            conn.commit()
+            return _row_to_model_route_attempt(row)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM model_route_attempts WHERE run_id = ?",
+            (str(attempt.run_id),),
+        ).fetchone()[0]
+        if count >= max_model_calls:
+            raise ModelAttemptBudgetError(
+                f"model call budget {max_model_calls} exhausted for run {attempt.run_id}"
+            )
+        if max_total_tokens is not None:
+            reserved_tokens = attempt.reserved_tokens
+            if reserved_tokens is None:
+                raise ModelAttemptBudgetError(
+                    "token budget requires a conservative reservation before every call"
+                )
+            rows = conn.execute(
+                """SELECT attempt_id, input_tokens, output_tokens, total_tokens,
+                          reserved_tokens
+                   FROM model_route_attempts WHERE run_id = ?""",
+                (str(attempt.run_id),),
+            ).fetchall()
+            used_tokens = 0
+            for existing_attempt in rows:
+                actual_tokens = existing_attempt["total_tokens"]
+                if (
+                    actual_tokens is None
+                    and existing_attempt["input_tokens"] is not None
+                    and existing_attempt["output_tokens"] is not None
+                ):
+                    actual_tokens = (
+                        existing_attempt["input_tokens"] + existing_attempt["output_tokens"]
+                    )
+                exposure = (
+                    actual_tokens
+                    if actual_tokens is not None
+                    else existing_attempt["reserved_tokens"]
+                )
+                if exposure is None:
+                    raise ModelAttemptBudgetError(
+                        "model usage is incomplete and the remaining token budget cannot be "
+                        f"proven after attempt {existing_attempt['attempt_id']}"
+                    )
+                used_tokens += exposure
+            if used_tokens + reserved_tokens > max_total_tokens:
+                raise ModelAttemptBudgetError(
+                    f"model token budget {max_total_tokens} cannot reserve the next call"
+                )
+        if exact_cost_ceiling is not None:
+            reserved_cost = attempt.reserved_cost_usd
+            if reserved_cost is None:
+                raise ModelAttemptBudgetError(
+                    "cost budget requires a conservative reservation before every call"
+                )
+            rows = conn.execute(
+                """SELECT attempt_id, cost_usd, reserved_cost_usd,
+                          cost_usd_exact, reserved_cost_usd_exact
+                   FROM model_route_attempts WHERE run_id = ?""",
+                (str(attempt.run_id),),
+            ).fetchall()
+            used_cost = Decimal("0")
+            for existing_attempt in rows:
+                cost_text = existing_attempt["cost_usd_exact"]
+                reserved_text = existing_attempt["reserved_cost_usd_exact"]
+                exposure = None
+                if cost_text is not None:
+                    exposure = parse_canonical_usd(cost_text)
+                elif existing_attempt["cost_usd"] is not None:
+                    exposure = parse_exact_usd(existing_attempt["cost_usd"])
+                elif reserved_text is not None:
+                    exposure = parse_canonical_usd(reserved_text)
+                elif existing_attempt["reserved_cost_usd"] is not None:
+                    exposure = parse_exact_usd(existing_attempt["reserved_cost_usd"])
+                if exposure is None:
+                    raise ModelAttemptBudgetError(
+                        "model usage is incomplete and the remaining cost budget cannot be "
+                        f"proven after attempt {existing_attempt['attempt_id']}"
+                    )
+                used_cost = add_usd(used_cost, exposure)
+            if add_usd(used_cost, reserved_cost) > exact_cost_ceiling:
+                raise ModelAttemptBudgetError(
+                    f"model cost budget {exact_cost_ceiling} cannot reserve the next call"
+                )
+        _insert_model_route_attempt_row(conn, attempt)
+        conn.commit()
+        return attempt
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None:
+    if attempt.status is ModelAttemptStatus.RUNNING:
+        raise ValueError("finished model attempt cannot remain running")
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT * FROM model_route_attempts WHERE attempt_id = ?",
+            (str(attempt.attempt_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"model attempt {attempt.attempt_id} not found")
+        existing = _row_to_model_route_attempt(row)
+        if existing.status is not ModelAttemptStatus.RUNNING:
+            if existing.model_dump(mode="json") != attempt.model_dump(mode="json"):
+                raise sqlite3.IntegrityError(
+                    f"model attempt {attempt.attempt_id} already finished differently"
+                )
+            return
+        usage = attempt.usage
+        conn.execute(
+            """UPDATE model_route_attempts SET
+                   status = ?, failure_code = ?, failure_reason = ?, ended_at = ?,
+                   latency_ms = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?,
+                   cached_input_tokens = ?, uncached_input_tokens = ?,
+                   cost_usd = NULL, cost_usd_exact = ?, output_json = ?
+               WHERE attempt_id = ?""",
+            (
+                attempt.status.value,
+                attempt.failure_code,
+                attempt.failure_reason,
+                _dt_to_iso(attempt.ended_at),
+                attempt.latency_ms,
+                usage.input_tokens if usage else None,
+                usage.output_tokens if usage else None,
+                usage.total_tokens if usage else None,
+                usage.cached_input_tokens if usage else None,
+                usage.uncached_input_tokens if usage else None,
+                canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
+                attempt.output_json,
+                str(attempt.attempt_id),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def read_model_route_attempts(
+    db_path: DatabaseReader,
+    run_id: UUID,
+    operation_id: UUID | None = None,
+) -> list[ModelRouteAttempt]:
+    with _read_connection(db_path) as conn:
+        if operation_id is None:
+            rows = conn.execute(
+                """SELECT * FROM model_route_attempts WHERE run_id = ?
+                   ORDER BY started_at, operation_id, route_index, attempt_number""",
+                (str(run_id),),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT * FROM model_route_attempts
+                   WHERE run_id = ? AND operation_id = ?
+                   ORDER BY route_index, attempt_number""",
+                (str(run_id), str(operation_id)),
+            ).fetchall()
+        return [_row_to_model_route_attempt(row) for row in rows]
+
+
+def _insert_model_route_attempt_row(
+    conn: sqlite3.Connection,
+    attempt: ModelRouteAttempt,
+) -> None:
+    usage = attempt.usage
+    conn.execute(
+        """INSERT INTO model_route_attempts
+           (attempt_id, run_id, operation_id, stage, output_type, model_alias,
+            pinned_model_snapshot, route_index, attempt_number, input_artifact_ids,
+            status, retry_reason, escalation_reason, failure_code, failure_reason,
+            started_at, ended_at, latency_ms, reserved_tokens, reserved_cost_usd,
+            reserved_cost_usd_exact, input_tokens, output_tokens, total_tokens,
+            cached_input_tokens, uncached_input_tokens, cost_usd, cost_usd_exact, output_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL,
+                   ?, ?, ?, ?, ?, ?, NULL, ?, ?)""",
+        (
+            str(attempt.attempt_id),
+            str(attempt.run_id),
+            str(attempt.operation_id),
+            attempt.stage,
+            attempt.output_type,
+            attempt.model_alias,
+            attempt.pinned_model_snapshot,
+            attempt.route_index,
+            attempt.attempt_number,
+            json.dumps([str(item) for item in attempt.input_artifact_ids]),
+            attempt.status.value,
+            attempt.retry_reason,
+            attempt.escalation_reason,
+            attempt.failure_code,
+            attempt.failure_reason,
+            _dt_to_iso(attempt.started_at),
+            _dt_to_iso(attempt.ended_at) if attempt.ended_at else None,
+            attempt.latency_ms,
+            attempt.reserved_tokens,
+            canonical_usd(attempt.reserved_cost_usd)
+            if attempt.reserved_cost_usd is not None
+            else None,
+            usage.input_tokens if usage else None,
+            usage.output_tokens if usage else None,
+            usage.total_tokens if usage else None,
+            usage.cached_input_tokens if usage else None,
+            usage.uncached_input_tokens if usage else None,
+            canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
+            attempt.output_json,
+        ),
+    )
+
+
+def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
+    row_columns = set(row.keys())
+    cached_input_tokens = (
+        row["cached_input_tokens"] if "cached_input_tokens" in row_columns else None
+    )
+    uncached_input_tokens = (
+        row["uncached_input_tokens"] if "uncached_input_tokens" in row_columns else None
+    )
+    usage_values = (
+        row["input_tokens"],
+        cached_input_tokens,
+        uncached_input_tokens,
+        row["output_tokens"],
+        row["total_tokens"],
+        row["cost_usd_exact"],
+        row["cost_usd"],
+    )
+    usage = None
+    if any(value is not None for value in usage_values):
+        usage = ModelUsageMetadata(
+            input_tokens=row["input_tokens"],
+            cached_input_tokens=cached_input_tokens,
+            uncached_input_tokens=uncached_input_tokens,
+            output_tokens=row["output_tokens"],
+            total_tokens=row["total_tokens"],
+            cost_usd=(
+                parse_canonical_usd(row["cost_usd_exact"])
+                if row["cost_usd_exact"] is not None
+                else parse_exact_usd(row["cost_usd"])
+                if row["cost_usd"] is not None
+                else None
+            ),
+        )
+    return ModelRouteAttempt(
+        run_id=UUID(row["run_id"]),
+        operation_id=UUID(row["operation_id"]),
+        attempt_id=UUID(row["attempt_id"]),
+        stage=row["stage"],
+        output_type=row["output_type"],
+        model_alias=row["model_alias"],
+        pinned_model_snapshot=row["pinned_model_snapshot"],
+        route_index=row["route_index"],
+        attempt_number=row["attempt_number"],
+        input_artifact_ids=tuple(UUID(value) for value in json.loads(row["input_artifact_ids"])),
+        status=row["status"],
+        retry_reason=row["retry_reason"],
+        escalation_reason=row["escalation_reason"],
+        failure_code=row["failure_code"],
+        failure_reason=row["failure_reason"],
+        started_at=_iso_to_dt(row["started_at"]),
+        ended_at=_iso_to_dt(row["ended_at"]) if row["ended_at"] else None,
+        latency_ms=row["latency_ms"],
+        reserved_tokens=row["reserved_tokens"],
+        reserved_cost_usd=(
+            parse_canonical_usd(row["reserved_cost_usd_exact"])
+            if row["reserved_cost_usd_exact"] is not None
+            else parse_exact_usd(row["reserved_cost_usd"])
+            if row["reserved_cost_usd"] is not None
+            else None
+        ),
+        usage=usage,
+        output_json=row["output_json"],
+    )
+
+
+def insert_cancellation_request(
+    db_path: str,
+    request: RunCancellationRequest,
+) -> RunCancellationRequest:
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO run_cancellations (run_id, requested_at, reason)
+               VALUES (?, ?, ?)""",
+            (str(request.run_id), _dt_to_iso(request.requested_at), request.reason),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return read_cancellation_request(db_path, request.run_id)
+
+
+def read_cancellation_request(db_path: DatabaseReader, run_id: UUID) -> RunCancellationRequest:
+    with _read_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM run_cancellations WHERE run_id = ?",
+            (str(run_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"cancellation request for run {run_id} not found")
+        return RunCancellationRequest(
+            run_id=UUID(row["run_id"]),
+            requested_at=_iso_to_dt(row["requested_at"]),
+            reason=row["reason"],
+        )

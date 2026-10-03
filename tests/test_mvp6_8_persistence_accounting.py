@@ -8,7 +8,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from models import (
+from providers.mimo import _usage as parse_mimo_usage
+from providers.pricing import DIRECT_MIMO_PRICE_CAP
+from researchassistant.common.money import parse_canonical_usd
+from researchassistant.contracts.models import (
     ModelAttemptStatus,
     ModelRouteAttempt,
     ModelUsageMetadata,
@@ -16,11 +19,8 @@ from models import (
     RunStatus,
     Stage,
 )
-from money import parse_canonical_usd
-from orchestrator import summarize_model_usage
-from providers.mimo import _usage as parse_mimo_usage
-from providers.pricing import DIRECT_MIMO_PRICE_CAP
-from store import (
+from researchassistant.research.orchestrator import summarize_model_usage
+from researchassistant.storage.store import (
     CURRENT_SCHEMA_VERSION,
     ModelAttemptBudgetError,
     finish_model_route_attempt,
@@ -79,7 +79,7 @@ def _attempt(
 
 
 def _fixture_database(tmp_path: Path) -> Path:
-    from orchestrator import run_fixture_pipeline
+    from researchassistant.research.orchestrator import run_fixture_pipeline
 
     fixture = Path(__file__).parent / "fixtures" / "basic_valid_run"
     result = run_fixture_pipeline(fixture, output_dir=tmp_path / "fixture-output")

@@ -9,10 +9,17 @@ from pathlib import Path
 
 import pytest
 
-from application_runtime import repository_identity
+from researchassistant.runtime.application_runtime import repository_identity
 
 
-@pytest.mark.parametrize("first_import", ["model_evidence", "model_research", "model_contracts"])
+@pytest.mark.parametrize(
+    "first_import",
+    [
+        "researchassistant.contracts.model_evidence",
+        "researchassistant.contracts.model_research",
+        "researchassistant.contracts.model_contracts",
+    ],
+)
 def test_contract_modules_load_independently_and_keep_public_exports(first_import: str) -> None:
     # A fresh interpreter avoids hiding forward-reference/import-cycle failures behind
     # pytest's already-populated module cache. Generate schemas without model_rebuild.
@@ -35,14 +42,17 @@ for name in models.__all__:
 @pytest.mark.parametrize(
     "relative",
     [
-        "model_contracts.py",
-        "model_research.py",
-        "model_evidence.py",
-        "store_schema.py",
-        "fixture_pipeline.py",
-        "pipeline_artifacts.py",
-        "pipeline_compatibility.py",
-        "application_runtime.py",
+        "researchassistant/contracts/model_contracts.py",
+        "researchassistant/contracts/model_research.py",
+        "researchassistant/contracts/model_evidence.py",
+        "researchassistant/storage/store_schema.py",
+        "researchassistant/research/fixture_pipeline.py",
+        "researchassistant/research/pipeline_artifacts.py",
+        "researchassistant/research/pipeline_compatibility.py",
+        "researchassistant/runtime/application_runtime.py",
+        "researchassistant/runtime/cli.py",
+        "researchassistant/research/v2_orchestrator.py",
+        "researchassistant/platform_support/credential_store.py",
         "frontend/live_contracts.py",
         "frontend/live_history.py",
         "frontend/live_progress.py",
@@ -51,7 +61,12 @@ for name in models.__all__:
 def test_extracted_source_changes_invalidate_execution_identity(
     tmp_path: Path, relative: str
 ) -> None:
-    (tmp_path / "v2_orchestrator.py").write_text("# engine\n", encoding="utf-8")
+    engine = tmp_path / "researchassistant/research/v2_orchestrator.py"
+    engine.parent.mkdir(parents=True)
+    engine.write_text("# engine\n", encoding="utf-8")
+    identity_anchor = tmp_path / "researchassistant/contracts/models.py"
+    identity_anchor.parent.mkdir(parents=True)
+    identity_anchor.write_text("# stable package source\n", encoding="utf-8")
     source = tmp_path / relative
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("# original\n", encoding="utf-8")
@@ -67,23 +82,44 @@ def test_extracted_source_changes_invalidate_execution_identity(
 
 
 def test_fixture_and_exit_contracts_keep_compatibility_imports() -> None:
-    import cli
-    import fixture_pipeline
-    import orchestrator
-    from application_runtime import CLIExitCode
-    from pipeline_artifacts import FixturePipelineError
+    import cli as legacy_cli
+    import models as legacy_models
+    import orchestrator as legacy_orchestrator
+    import researchassistant.contracts.models as canonical_models
+    import researchassistant.research.fixture_pipeline as fixture_pipeline
+    import researchassistant.research.orchestrator as orchestrator
+    import researchassistant.runtime.cli as canonical_cli
+    import researchassistant.runtime.cli as cli
+    import researchassistant.storage.store as canonical_store
+    import store as legacy_store
+    from researchassistant.research.pipeline_artifacts import FixturePipelineError
+    from researchassistant.runtime.application_runtime import CLIExitCode
 
+    assert legacy_models is canonical_models
+    assert legacy_models.RunManifest is canonical_models.RunManifest
+    assert legacy_store is canonical_store
+    assert legacy_store.init_db is canonical_store.init_db
+    assert legacy_orchestrator is orchestrator
+    assert legacy_cli is canonical_cli
     assert cli.CLIExitCode is CLIExitCode
     assert orchestrator.run_fixture_pipeline is fixture_pipeline.run_fixture_pipeline
     assert orchestrator.FixturePipelineResult is fixture_pipeline.FixturePipelineResult
     assert orchestrator.FixturePipelineError is FixturePipelineError
     assert fixture_pipeline.FixturePipelineError is FixturePipelineError
 
+    repository_root = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        [sys.executable, str(repository_root / "cli.py"), "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
 
 def test_fresh_v2_modules_do_not_import_legacy_agent_helpers() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     fresh_modules = [
-        repository_root / "v2_orchestrator.py",
+        repository_root / "researchassistant/research/v2_orchestrator.py",
         *sorted((repository_root / "agents").glob("v2_*.py")),
     ]
     forbidden = {
@@ -106,8 +142,8 @@ def test_historical_evidence_paths_reexport_neutral_implementations() -> None:
     import agents.analyst as historical_analyst
     import agents.researcher as historical_researcher
     import agents.supportingresearcher as historical_supporting
-    import evidence_analysis
-    import evidence_core
+    import researchassistant.evidence.evidence_analysis as evidence_analysis
+    import researchassistant.evidence.evidence_core as evidence_core
 
     assert historical_researcher.build_source_snapshot is evidence_core.build_source_snapshot
     assert historical_researcher.verify_candidate_against_snapshot is (

@@ -12,30 +12,6 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import Field, model_validator
 
-from evidence_core import (
-    UNTRUSTED_SOURCE_INSTRUCTION_POLICY,  # noqa: F401
-    UNTRUSTED_SOURCE_LABEL,  # noqa: F401
-    UntrustedSourceText,
-    assemble_quote_block_from_selected_segments,
-    build_source_snapshot,
-    numbered_source_text,
-    validate_snapshot_integrity,
-)
-from evidence_portfolio import identify_source_family
-from models import (
-    ClaimDefinition,
-    MediaTypeProvenance,
-    PlannerOutput,
-    ProvisionalCandidate,
-    RetrievalRecord,
-    RetrievalStatus,
-    SearchQuery,
-    SourceSnapshot,
-    Stance,
-    StrictModel,
-    VerbatimQuoteSelection,
-    missing_required_query_exclusions,
-)
 from providers.ranking import (
     DiscoveryDecision,
     RankedAcquiredSource,
@@ -60,7 +36,31 @@ from providers.search import (
     SearchResponse,
     SearchResult,
 )
-from utils import compute_sha256
+from researchassistant.common.utils import compute_sha256
+from researchassistant.contracts.models import (
+    ClaimDefinition,
+    MediaTypeProvenance,
+    PlannerOutput,
+    ProvisionalCandidate,
+    RetrievalRecord,
+    RetrievalStatus,
+    SearchQuery,
+    SourceSnapshot,
+    Stance,
+    StrictModel,
+    VerbatimQuoteSelection,
+    missing_required_query_exclusions,
+)
+from researchassistant.evidence.evidence_core import (
+    UNTRUSTED_SOURCE_INSTRUCTION_POLICY,  # noqa: F401
+    UNTRUSTED_SOURCE_LABEL,  # noqa: F401
+    UntrustedSourceText,
+    assemble_quote_block_from_selected_segments,
+    build_source_snapshot,
+    numbered_source_text,
+    validate_snapshot_integrity,
+)
+from researchassistant.evidence.evidence_portfolio import identify_source_family
 
 RESULTS_PER_QUERY = 3
 QUERIES_PER_STANCE = 3

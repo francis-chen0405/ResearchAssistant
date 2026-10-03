@@ -5,8 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID
 
-from evidence_browser import EvidenceBrowserFilter, EvidenceStage, browse_evidence_run
-from models import EvidenceRole, EvidenceTrailOutcome, ResearchRound
+from researchassistant.contracts.models import EvidenceRole, EvidenceTrailOutcome, ResearchRound
+from researchassistant.evidence.evidence_browser import (
+    EvidenceBrowserFilter,
+    EvidenceStage,
+    browse_evidence_run,
+)
 
 
 def _load_streamlit() -> object:

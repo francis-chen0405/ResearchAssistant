@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from models import (
+from researchassistant.contracts.models import (
     AmbiguityRecord,
     CandidateQuoteBlock,
     ClaimDefinition,
@@ -42,7 +42,7 @@ from models import (
     ValidationError,
     ValidationResult,
 )
-from store import (
+from researchassistant.storage.store import (
     init_db,
     insert_analyst_decision,
     insert_candidate,
@@ -642,7 +642,7 @@ class TestSnapshotImmutability:
 
     def test_no_update_function_exists(self) -> None:
         """The store module must not expose update_snapshot or delete_snapshot."""
-        import store
+        import researchassistant.storage.store as store
 
         assert not hasattr(store, "update_snapshot")
         assert not hasattr(store, "delete_snapshot")
@@ -669,7 +669,7 @@ class TestLedgerImmutability:
             insert_ledger_record(db_path, ledger)
 
     def test_no_update_function_exists(self) -> None:
-        import store
+        import researchassistant.storage.store as store
 
         assert not hasattr(store, "update_ledger_record")
         assert not hasattr(store, "delete_ledger_record")

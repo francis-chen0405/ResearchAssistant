@@ -16,7 +16,7 @@ from agents.v2_adaptive_search import (
 )
 from agents.v2_final_output import build_v2_final_research_output, render_v2_final_output
 from frontend.api import _build_research_status_display
-from models import (
+from researchassistant.contracts.models import (
     ResearchDirection,
     ResearchDirections,
     V2ClaimCoverageAssessment,

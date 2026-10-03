@@ -7,9 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from evidence_analysis import statement_has_required_qualification
-from evidence_core import verify_candidate_against_snapshot
-from models import (
+from researchassistant.contracts.models import (
     V2_EVIDENCE_ADMISSION_LEGACY_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
@@ -31,7 +29,13 @@ from models import (
     V2SourceSelectionCandidate,
     entailment_for_claim_fit,
 )
-from store import insert_v2_artifact, insert_v2_evidence_admission, read_v2_artifact
+from researchassistant.evidence.evidence_analysis import statement_has_required_qualification
+from researchassistant.evidence.evidence_core import verify_candidate_against_snapshot
+from researchassistant.storage.store import (
+    insert_v2_artifact,
+    insert_v2_evidence_admission,
+    read_v2_artifact,
+)
 
 V2_EVIDENCE_ADMISSION_ARTIFACT_KEY = "phase-13-evidence-admission"
 V2_EVIDENCE_ADMISSION_SOURCE_ARTIFACT_PREFIX = "phase-13-evidence-admission-source-v2"

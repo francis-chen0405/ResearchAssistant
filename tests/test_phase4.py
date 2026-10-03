@@ -18,7 +18,8 @@ from agents.analyst import (
 )
 from agents.researcher import build_source_snapshot, filter_provisional_candidate
 from agents.reviewer import ReviewChecks, ReviewerInput, build_reviewer_input, review_statement
-from models import (
+from researchassistant.common.utils import derive_quote_block_id
+from researchassistant.contracts.models import (
     AmbiguityRecord,
     CandidateQuoteBlock,
     ClaimDefinition,
@@ -41,7 +42,7 @@ from models import (
     StatementReviewResult,
     entailment_for_claim_fit,
 )
-from store import (
+from researchassistant.storage.store import (
     init_db,
     insert_candidate,
     insert_ledger_record,
@@ -53,7 +54,6 @@ from store import (
     insert_statement_review,
     read_ledger_record,
 )
-from utils import derive_quote_block_id
 
 _NOW = datetime(2026, 7, 3, 12, 0, tzinfo=UTC)
 _RUN_ID = UUID("40000000-0000-0000-0000-000000000001")

@@ -8,28 +8,28 @@ from uuid import UUID, uuid4
 
 import pytest
 
-import cli
 import frontend.live_service as live_service
-from cli import CLIExitCode
+import researchassistant.runtime.cli as cli
 from frontend.live_contracts import LiveRunRequest
-from model_evidence import V2ProviderRunDiagnostics, V2RunDiagnostics
-from models import (
-    DiscoveryProvider,
-    ResearchControls,
-    ResearchDirections,
-    Stage,
-)
-from orchestrator import ProviderPipelineResult, ProviderRunStatus
 from providers.config import RunCeilings
 from providers.llm import LLMStage
 from providers.mimo_factory import MimoProviderFactoryConfig
 from providers.model_choices import ACTIVE_MODEL_STAGES, DEFAULT_STAGE_MODELS
 from providers.v2_budget import V2BudgetSnapshot
 from providers.v2_factory import V2ProductionFactoryConfig
-from v2_orchestrator import (
+from researchassistant.contracts.model_evidence import V2ProviderRunDiagnostics, V2RunDiagnostics
+from researchassistant.contracts.models import (
+    DiscoveryProvider,
+    ResearchControls,
+    ResearchDirections,
+    Stage,
+)
+from researchassistant.research.orchestrator import ProviderPipelineResult, ProviderRunStatus
+from researchassistant.research.v2_orchestrator import (
     V2ProductionPipelineResult,
     V2ProductionState,
 )
+from researchassistant.runtime.cli import CLIExitCode
 
 CLAIM = "The offline selection fixture is deterministic."
 IDENTITY = "source-sha256:" + "a" * 64
@@ -164,7 +164,7 @@ def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
 
     run_id = uuid4()
     result = cli.main(
-        _cli_argv(tmp_path / "cli.sqlite3", run_id),
+        _cli_argv(tmp_path / "researchassistant.runtime.cli.sqlite3", run_id),
         identity_provider=lambda: IDENTITY,
     )
 

@@ -11,8 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from models import StrictModel  # noqa: E402
-from orchestrator import FixturePipelineResult, run_fixture_pipeline  # noqa: E402
+from researchassistant.contracts.models import StrictModel  # noqa: E402
+from researchassistant.research.orchestrator import (  # noqa: E402
+    FixturePipelineResult,
+    run_fixture_pipeline,
+)
 
 REPO_ROOT = PROJECT_ROOT
 DEFAULT_FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"

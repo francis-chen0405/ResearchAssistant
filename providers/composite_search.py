@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-from models import DiscoveryProvider
 from providers.exa import ExaSearchAdapter
 from providers.openalex import OpenAlexSearchAdapter
 from providers.search import (
@@ -15,6 +14,7 @@ from providers.search import (
     SearchResponse,
 )
 from providers.serpsearch import SerpSearchAdapter
+from researchassistant.contracts.models import DiscoveryProvider
 
 _DEGRADABLE_OPENALEX_FAILURES = frozenset(
     {

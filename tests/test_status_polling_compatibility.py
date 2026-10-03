@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 
 import frontend.live_service as live_service
-from store import (
+from researchassistant.storage.store import (
     RAW_CLAIM_TRIGGER_NAME,
     DatabaseCompatibilityError,
     DatabaseCompatibilityIssue,

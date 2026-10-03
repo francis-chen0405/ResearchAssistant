@@ -18,8 +18,14 @@ from agents.researcher import (
     filter_provisional_candidate,
     verify_candidate_against_snapshot,
 )
-from models import CandidateQuoteBlock, ProvisionalCandidate, SegmentOffset, SourceSnapshot, Stance
-from utils import compute_sha256, count_words
+from researchassistant.common.utils import compute_sha256, count_words
+from researchassistant.contracts.models import (
+    CandidateQuoteBlock,
+    ProvisionalCandidate,
+    SegmentOffset,
+    SourceSnapshot,
+    Stance,
+)
 
 _NOW = datetime(2026, 6, 27, 12, 0, tzinfo=UTC)
 _RUN_ID = UUID("10000000-0000-0000-0000-000000000001")

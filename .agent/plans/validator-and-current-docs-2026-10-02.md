@@ -1,0 +1,44 @@
+# Validator integrity, repository organization and current documentation — 2026-10-02
+
+Status: source repairs, organization and local verification complete; Windows diagnosis awaits restricted logs, and manual research/distribution acceptance remains open.
+
+The user requested fixing the reported final-source metadata validator gap, investigating the Windows quality failure, and simplifying accumulated documentation. Luna helpers handle focused code/CI discovery and documentation; the primary integrates and verifies. Preserve all pre-existing ALPR equity work in this checkout.
+
+The subsequent request authorizes grouping the loose Python/runtime files into folders. Organize modules under `researchassistant/` by contracts, research, evidence, storage, platform support, runtime and shared helpers. Retain the documented `models`, `store`, `orchestrator` and CLI compatibility entry points, update all other imports and executable path assumptions, and extend recursive package/source-identity coverage. Preserve behavior, historical artifacts, budgets, prompt bytes and the pre-existing changes. Update current architecture/navigation and verify the moved sources; a temporary pre-move source snapshot preserves the integrated baseline.
+
+## Authorized work and boundary
+
+- Reproduce substituted final URLs/titles with failing regressions, bind final metadata to authoritative source records, and preserve exact quotation/admission and immutable-history contracts.
+- Investigate the failed Windows regression/quality step and repair a confirmed bounded cause if accessible. Windows release remains deferred; a Mac test does not establish a Windows pass.
+- Replace accumulated root chronology with current state, next actions and compact navigation. Archive exact replaced documents, retain stable plan/verification paths, and identify superseded commit/delivery statements as historical.
+- Clearly date the public September download and distinguish it from October local source/app delivery. Record outstanding live-quality, signing/notarization, clean-machine and actual macOS 14 checks.
+- Use this record for both scope and verification, rather than adding a separate verification file. Update existing evidence records when appropriate.
+
+No paid research, saved-data/credential edits, new dependencies, automatic commit/push, signing or public release is authorized. Earlier local-app replacement preferences remain, but this maintenance does not claim delivery of the in-progress ALPR equity work. Manual research and unavailable native/release gates must remain explicit open checks.
+
+## Verification
+
+Run focused failing-then-passing validator regressions; full pytest with warnings as errors; Ruff lint and formatting; whitespace and documentation-link checks. Check relevant historical-policy/export compatibility with offline fixtures. Run appropriate offline frontend/API checks for the pre-existing integrated changes, and report their scope separately from actual installed-app evidence. Preserve skips and assertions. Record CI retrieval limits rather than guessing the Windows cause.
+
+## Results
+
+### Verified pre-reorganization baseline
+
+- Final source URL, title, type, publication date, discovery providers and discovery round bind to authoritative survivor metadata. Recommended disclosures bind to the same records in recommendation-ID order; persisted resume rejects substituted disclosures. Seven recommendation/resume regression cases failed before the remaining gap was fixed. Independent survivor metadata and two-source ordering regressions also pass.
+- Full pytest: **1,396 passed, 2 unchanged skips**, warnings as errors. Ruff lint and format pass (180 files); whitespace checks pass. Frontend lint/types/static export, offline evaluation, API and all four browser checks pass. Browser interaction checks explicitly open collapsed search/evidence/provenance disclosures; assertions remain intact. The initial full run caught metadata-ordering and new coverage-validation precedence issues; both were repaired with existing assertions retained.
+- Windows failure repeats in [run 37075607007](https://github.com/francis-chen0405/ResearchAssistant/actions/runs/37075607007) at `4a1d1cc` and [run 36956935434](https://github.com/francis-chen0405/ResearchAssistant/actions/runs/36956935434) at `fdc9dc6`; [run 36937200534](https://github.com/francis-chen0405/ResearchAssistant/actions/runs/36937200534) passed at `0c493385`. Windows job `111064698744` failed at the combined Python regression/quality step; later desktop checks skipped. The public API returns 403 (admin rights required) for logs, so the failing command and cause remain unknown. A focused portability review found no demonstrated cause. User was asked for failure lines. Four separately named CI steps now retain pytest, Ruff lint, formatting and whitespace checks, without bypassing any gate; YAML parsing and command/platform preservation checked locally. No current Windows pass is claimed.
+- Current STATUS/HANDOFF/plan-index chronology reduced from **705 lines to 58**; all 80 plans and 19 verification records are linked from `docs/history.md`. All 200 current local documentation links resolve; nine exact pre-rewrite snapshots are retained. README and desktop guide clearly identify the September `ac49404` public download as lacking October fixes. `AGENTS.md` contains only the user's replacement graph instructions.
+- No app replacement, publication, commit/push, paid provider call, saved-data/credential edit or dependency installation occurred. Native distribution and manual research gates remain open. The package-manager lint/type invocation aborted at its dependency check; the existing installed ESLint/TypeScript/Next tools passed directly without changing dependencies. Browser tests use isolated mocked APIs; loopback access required approved sandbox escalation.
+
+### Repository reorganization
+
+- Moved **31 implementations** into seven groups under `researchassistant/`: contracts, research, evidence, storage, platform support, runtime and common helpers. Four small root compatibility files preserve `models`, `store`, `orchestrator` and `python cli.py` entry points. Updated internal imports, subprocess/patch targets, prompt/repository-root paths and recursive source fingerprints. Existing module identities and shared state remain intact; no dependencies or prompt changes were introduced.
+- Desktop packaging includes the whole package. Generated resource trees are staged and replaced so obsolete root modules cannot survive a rebuild. Tests cover compatibility identity, nested source/frozen fingerprints and removal of stale generated resources. A temporary pre-move archive preserves 190 source/test/document files; all 31 moved implementations were checked for preserved non-import syntax before intentional path fixes.
+- Final full pytest: **1,400 passed, 2 unchanged skips**, warnings as errors. Ruff lint passes and all **192 Python files** are formatted; whitespace checks pass. Offline evaluations, canonical CLI help and API smoke pass after the moves. The pre-move frontend export and all four browser checks also passed.
+- Rebuilt the frozen backend and refreshed its frontend resources from the verified static export. All **116 packaged source/manifest/prompt inputs** and **22 frontend files** match byte-for-byte; the bundled root Python files contain only the four compatibility entries. The isolated frozen/native smoke passes authentication, settings persistence, test-vault cleanup and acquisition lifecycle. An actual Electron development-shell window passes authenticated rendering, empty password fields, renderer isolation, duplicate-launch exclusion and normal shutdown. These checks required approved local sandbox escalation and used isolated test data/credentials.
+- Updated current architecture and developer guides. All **205 current local documentation links** resolve. Re-indexed the codebase graph after reorganization (5,447 nodes and 37,014 edges); live files and tests remain authoritative.
+- No installer delivery or installed-app replacement occurred. The existing installed app and September public download do not contain this work. Windows, fresh manual research, clean-machine/macOS 14 installation, signing and notarization retain the limits recorded above and in STATUS.
+
+### User-authorized commit and local redelivery
+
+The subsequent request, “commit and redownload new app, delete outdated,” authorizes committing the verified working tree, creating a fresh local Mac installer, replacing `/Applications/ResearchAssistant.app` and deleting superseded local app/build/download copies after verification. This supersedes the preceding uncommitted/no-replacement boundary. Preserve saved research, preferences and real credentials. No push or public publication was requested. Delivery results will replace this pending note.

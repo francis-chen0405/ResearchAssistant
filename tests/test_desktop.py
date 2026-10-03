@@ -11,15 +11,38 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-import credential_store
-import desktop_paths
-from desktop_settings import InterfaceSettings, Preferences, read_preferences, update_preferences
-from file_lock import FileLock
+import researchassistant.platform_support.credential_store as credential_store
+import researchassistant.platform_support.desktop_paths as desktop_paths
 from frontend.api import create_app, create_default_runtime
 from frontend.live_service import LiveResearchController, LiveRunRequest
-from history_import import import_history
-from models import RunManifest, RunStatus, Stage
-from store import init_db, insert_run, open_read_only_store, read_run
+from researchassistant.contracts.models import RunManifest, RunStatus, Stage
+from researchassistant.platform_support.desktop_settings import (
+    InterfaceSettings,
+    Preferences,
+    read_preferences,
+    update_preferences,
+)
+from researchassistant.platform_support.file_lock import FileLock
+from researchassistant.storage.history_import import import_history
+from researchassistant.storage.store import init_db, insert_run, open_read_only_store, read_run
+
+
+def test_generated_backend_replacement_removes_obsolete_source_copies(tmp_path: Path) -> None:
+    from desktop.build import replace_tree
+
+    source = tmp_path / "fresh-backend"
+    (source / "researchassistant/contracts").mkdir(parents=True)
+    (source / "researchassistant/contracts/models.py").write_text("# current package source")
+    destination = tmp_path / "resources/backend"
+    (destination / "researchassistant/contracts").mkdir(parents=True)
+    (destination / "model_evidence.py").write_text("# obsolete root source copy")
+
+    replace_tree(source, destination)
+
+    assert (destination / "researchassistant/contracts/models.py").read_text() == (
+        "# current package source"
+    )
+    assert not (destination / "model_evidence.py").exists()
 
 
 def test_database_lock_excludes_another_process_and_releases(tmp_path: Path) -> None:
@@ -27,7 +50,8 @@ def test_database_lock_excludes_another_process_and_releases(tmp_path: Path) -> 
     lock = FileLock(path)
     assert lock.acquire()
     code = (
-        "from file_lock import FileLock; from pathlib import Path; import sys; "
+        "from researchassistant.platform_support.file_lock import FileLock; "
+        "from pathlib import Path; import sys; "
         "lock=FileLock(Path(sys.argv[1])); acquired=lock.acquire(); "
         "lock.release(); sys.exit(0 if acquired else 3)"
     )
@@ -225,32 +249,57 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import cli
+    import researchassistant.runtime.application_runtime as application_runtime
+    import researchassistant.runtime.cli as cli
 
-    (tmp_path / "cli.py").write_text("# cli")
-    engine = tmp_path / "v2_orchestrator.py"
-    engine.write_text("# engine one")
-    (tmp_path / "pyproject.toml").write_text("# dependencies")
-    (tmp_path / "prompts").mkdir()
-    prompt = tmp_path / "prompts/analyst.md"
-    prompt.write_text("exact prompt one")
-    monkeypatch.setattr(cli, "__file__", str(tmp_path / "cli.py"))
+    source_root = tmp_path / "source"
+    source_engine = source_root / "researchassistant/research/v2_orchestrator.py"
+    source_engine.parent.mkdir(parents=True)
+    source_engine.write_text("# engine one")
+    source_cli = source_root / "researchassistant/runtime/cli.py"
+    source_cli.parent.mkdir(parents=True)
+    source_cli.write_text("# cli one")
+    (source_root / "pyproject.toml").write_text("# dependencies")
+    (source_root / "prompts").mkdir()
+    source_prompt = source_root / "prompts/analyst.md"
+    source_prompt.write_text("exact prompt one")
+    monkeypatch.setattr(
+        application_runtime,
+        "__file__",
+        str(source_root / "researchassistant/runtime/application_runtime.py"),
+    )
     original = cli.repository_identity()
-    engine.write_text("# engine two")
+    source_engine.write_text("# engine two")
     changed_engine = cli.repository_identity()
     assert changed_engine != original
-    prompt.write_text("exact prompt two")
+    source_prompt.write_text("exact prompt two")
     changed_prompt = cli.repository_identity()
     assert changed_prompt != changed_engine
-    (tmp_path / "history.sqlite3").write_bytes(b"runtime data")
+    (source_root / "history.sqlite3").write_bytes(b"runtime data")
     assert cli.repository_identity() == changed_prompt
-    executable = tmp_path / "backend"
+
+    internal_root = tmp_path / "dist/_internal"
+    for relative, payload in (
+        ("researchassistant/research/v2_orchestrator.py", "# packaged engine"),
+        ("researchassistant/runtime/cli.py", "# packaged cli one"),
+        ("researchassistant/contracts/models.py", "# packaged contracts"),
+        ("prompts/analyst.md", "packaged prompt"),
+        ("pyproject.toml", "packaged dependencies"),
+    ):
+        path = internal_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(payload)
+    monkeypatch.setattr(application_runtime.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(application_runtime.sys, "_MEIPASS", str(internal_root), raising=False)
+    executable = tmp_path / "dist/researchassistant-backend"
     executable.write_bytes(b"frozen executable one")
-    monkeypatch.setattr(cli.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(cli.sys, "executable", str(executable))
+    monkeypatch.setattr(application_runtime.sys, "executable", str(executable))
+    frozen = cli.repository_identity()
+    (internal_root / "researchassistant/runtime/cli.py").write_text("# packaged cli two")
+    assert cli.repository_identity() != frozen
     frozen = cli.repository_identity()
     executable.write_bytes(b"frozen executable two")
     assert cli.repository_identity() != frozen
-    engine.unlink()
+    (internal_root / "researchassistant/research/v2_orchestrator.py").unlink()
     with pytest.raises(Exception, match="identity surface is incomplete"):
         cli.repository_identity()

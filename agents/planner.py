@@ -6,7 +6,11 @@ from uuid import UUID
 
 from pydantic import Field
 
-from models import PortfolioExpansionRequest, ResearchControls, StrictModel
+from researchassistant.contracts.models import (
+    PortfolioExpansionRequest,
+    ResearchControls,
+    StrictModel,
+)
 
 
 class PlannerLLMInput(StrictModel):
