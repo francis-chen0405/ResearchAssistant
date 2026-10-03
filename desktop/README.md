@@ -1,8 +1,9 @@
 # Desktop application
 
-The app was replaced with a verified local build on 2026-10-02; see the
-[private-surveillance fix verification](../docs/verification/private-surveillance-run-fixes-2026-10-02.md)
-and [redelivery verification](../docs/verification/committed-app-redelivery-2026-10-02.md).
+The app was replaced with a verified local build from `20bf6a2` on 2026-10-02, including
+the ALPR equity, validator and repository-organization changes; see the
+[current task's delivery results](../.agent/plans/validator-and-current-docs-2026-10-02.md#user-authorized-commit-and-local-redelivery).
+The current local installer is `~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`.
 The latest public download is still the September 28 test release built from `ac49404`;
 it does not contain the October fixes. The older `desktop/dist` paths below describe
 historical artifacts. Saved research and credentials were preserved.
@@ -120,8 +121,9 @@ Artifacts are written under `desktop/dist/`; intermediate runtimes under `deskto
 are ignored by Git. The build downloads a checksum-verified standalone Node distribution,
 installs Wigolo 0.2.1 from its npm lock, and includes its exact Playwright Chromium build.
 It exports the existing Next.js page and freezes Python with source files and prompts.
-Python source hashing includes the complete root/agents/providers/frontend surface and
-prompts, plus the frozen executable bytes. Runtime data/credentials are never build inputs.
+Python source hashing includes the root compatibility entries and complete
+researchassistant/agents/providers/frontend surface and prompts, plus the frozen executable
+bytes. Runtime data/credentials are never build inputs.
 
 Wigolo uses native better-sqlite3/sqlite-vec/embedding dependencies and Playwright. It
 runs under bundled standalone Node to preserve the native ABI, not Electron's Node ABI.

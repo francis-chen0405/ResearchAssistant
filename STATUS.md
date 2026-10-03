@@ -2,13 +2,13 @@
 
 ## Source and delivery
 
-- The user requested committing the verified ALPR equity, validator, repository-organization and documentation changes, installing a fresh Mac app and deleting outdated local builds. Commit and local redelivery are in progress; no push or public release was requested.
-- `/Applications/ResearchAssistant.app` is the locally verified app from the private-surveillance delivery on 2026-10-02. It does not include the current ALPR equity, validator or repository-organization changes.
+- Runtime source is committed as `20bf6a2`; subsequent delivery-documentation changes do not change the tested runtime. No push or public release was requested.
+- `/Applications/ResearchAssistant.app` was replaced on 2026-10-02 with the verified build from `20bf6a2`, including ALPR equity, validator and repository-organization changes. The new installer is `~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`. The superseded app and installer were deleted; saved application files were preserved. OneDrive repeatedly restores placeholders for the obsolete ignored `desktop/dist/private-surveillance-fixes-20261002/` folder, so that folder's cleanup remains incomplete.
 - The public [September 28 unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928) was built from `ac49404`; it does not contain the October fixes. Do not describe it as the current-source build.
 
 ## Active work
 
-The [current task](.agent/plans/validator-and-current-docs-2026-10-02.md) completed the metadata-validator repair, documentation cleanup and organization of 31 runtime modules into seven `researchassistant/` groups. Final verification: **1,400 tests passed, two unchanged skips**, lint/formatting, offline evaluations and API checks. The rebuilt development bundle passed isolated native and desktop-window checks; its 116 source inputs and 22 frontend files match the verified source/export. This verifies the development bundle, not installation or public distribution. The task record retains exact results and investigation limits.
+The [current task](.agent/plans/validator-and-current-docs-2026-10-02.md) completed the metadata-validator repair, documentation cleanup, organization of 31 runtime modules into seven `researchassistant/` groups, commit and local app redelivery. Verification: **1,400 tests passed, two unchanged skips**, lint/formatting, offline evaluations and API checks. Packaged and installed native/window checks and old-to-new history/settings/test-credential compatibility passed. All 116 source inputs, 22 frontend files and 30,982 installed payload entries match the verified candidate; installer CRC/checksum checks passed. The task record retains exact results and investigation limits.
 
 ## Open acceptance gates
 
