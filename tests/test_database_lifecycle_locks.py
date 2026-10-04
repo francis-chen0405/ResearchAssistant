@@ -45,6 +45,8 @@ _MIGRATIONS = (
     store_schema._apply_v2_phase3_initial_planner_migration,
     store_schema._apply_v2_phase10_reviewer_ledger_migration,
     store_schema._apply_cache_usage_migration,
+    store_schema._apply_complete_usage_migration,
+    store_schema._apply_update_provenance_migration,
 )
 
 
@@ -362,8 +364,8 @@ def _historical_database(path: Path, version: int, run_id: UUID) -> None:
         connection.close()
 
 
-@pytest.mark.parametrize("version", range(7, 14))
-def test_cancellation_preserves_historical_schema_seven_through_thirteen(
+@pytest.mark.parametrize("version", range(7, store_schema.CURRENT_SCHEMA_VERSION + 1))
+def test_cancellation_preserves_supported_read_only_schema_versions(
     tmp_path: Path, version: int
 ) -> None:
     database = tmp_path / f"historical-{version}.sqlite3"

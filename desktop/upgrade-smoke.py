@@ -27,21 +27,110 @@ EXPECTED_CONFIGURABLE_STAGE_MODELS = {
 }
 
 
+_SCHEMA13_MIGRATION_DESCRIPTIONS = {
+    14: "persist cached and uncached model input-token usage",
+    15: "persist model cache-write tokens and usage cost basis",
+    16: "protect same-run provenance ownership and keys on update",
+}
+_SCHEMA13_PROVENANCE_GUARD_TABLES = (
+    "analyst_decisions",
+    "candidates",
+    "ledger_records",
+    "provisional_extractions",
+    "retrieval_attempts",
+    "search_queries",
+    "snapshots",
+    "statement_drafts",
+    "statement_review_attempts",
+    "synthesis_items",
+)
+_SCHEMA13_USAGE_COLUMNS = (
+    "cached_input_tokens",
+    "uncached_input_tokens",
+    "cache_write_tokens",
+    "usage_cost_basis",
+)
+
+
+def _remove_post_schema13_objects(conn: sqlite3.Connection, version: int) -> None:
+    """Remove only schema 14–16 objects from an isolated compatibility fixture."""
+    if version >= 16:
+        for table in _SCHEMA13_PROVENANCE_GUARD_TABLES:
+            conn.execute(f"DROP TRIGGER {table}_provenance_immutable_update")
+    for column in _SCHEMA13_USAGE_COLUMNS:
+        if column in _schema13_attempt_columns(conn):
+            conn.execute(f"ALTER TABLE model_route_attempts DROP COLUMN {column}")
+    conn.execute("DELETE FROM schema_migrations WHERE version > 13")
+
+
+def _schema13_attempt_columns(conn: sqlite3.Connection) -> set[str]:
+    return {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+
+
 def _prepare_schema13_fixture(database: Path) -> None:
-    """Make the generated history readable by a pre-schema-14 executable."""
-    with sqlite3.connect(database) as conn:
-        version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
-        if version != 14:
-            raise ValueError(f"Expected generated schema 14, found {version}")
-        populated_cache_usage = conn.execute(
-            "SELECT COUNT(*) FROM model_route_attempts "
-            "WHERE cached_input_tokens IS NOT NULL OR uncached_input_tokens IS NOT NULL"
-        ).fetchone()[0]
-        if populated_cache_usage:
+    """Convert a recognized generated schema 14–16 DB into a schema-13 fixture."""
+    conn = sqlite3.connect(database)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            "SELECT version, description FROM schema_migrations ORDER BY version"
+        ).fetchall()
+        if not rows:
+            raise ValueError("Cannot make a schema-13 fixture without migration records")
+        versions = [row[0] for row in rows]
+        version = versions[-1]
+        if version not in (14, 15, 16) or versions != list(range(1, version + 1)):
+            raise ValueError(
+                f"Expected a complete recognized schema 14, 15, or 16; found {version}"
+            )
+        descriptions = {row[0]: row[1] for row in rows}
+        for introduced_version, expected in _SCHEMA13_MIGRATION_DESCRIPTIONS.items():
+            if introduced_version <= version and descriptions.get(introduced_version) != expected:
+                raise ValueError(f"Migration {introduced_version} description is inconsistent")
+
+        columns = _schema13_attempt_columns(conn)
+        expected_usage_columns = set(_SCHEMA13_USAGE_COLUMNS[:2])
+        if version >= 15:
+            expected_usage_columns.update(_SCHEMA13_USAGE_COLUMNS[2:])
+        if not expected_usage_columns <= columns:
+            raise ValueError("Generated schema is missing recognized model usage columns")
+        if version == 14 and columns.intersection(_SCHEMA13_USAGE_COLUMNS[2:]):
+            raise ValueError("Schema 14 contains usage columns from a later migration")
+
+        if version >= 16:
+            trigger_rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            ).fetchall()
+            trigger_names = {row[0] for row in trigger_rows}
+            expected_triggers = {
+                f"{table}_provenance_immutable_update"
+                for table in _SCHEMA13_PROVENANCE_GUARD_TABLES
+            }
+            if not expected_triggers <= trigger_names:
+                raise ValueError("Schema 16 is missing recognized provenance update guards")
+        else:
+            trigger_rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            ).fetchall()
+            if any(str(row[0]).endswith("_provenance_immutable_update") for row in trigger_rows):
+                raise ValueError("Schema has unrecorded schema-16 provenance update guards")
+
+        existing_usage_columns = sorted(expected_usage_columns)
+        populated_terms = " OR ".join(f"{column} IS NOT NULL" for column in existing_usage_columns)
+        if conn.execute(
+            f"SELECT 1 FROM model_route_attempts WHERE {populated_terms} LIMIT 1"
+        ).fetchone():
             raise ValueError("Cannot discard recorded cache usage from the upgrade fixture")
-        for name in ("cached_input_tokens", "uncached_input_tokens"):
-            conn.execute(f"ALTER TABLE model_route_attempts DROP COLUMN {name}")
-        conn.execute("DELETE FROM schema_migrations WHERE version = 14")
+
+        _remove_post_schema13_objects(conn, version)
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def main() -> None:

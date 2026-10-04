@@ -466,8 +466,15 @@ def summarize_model_usage(attempts: Sequence[ModelRouteAttempt]) -> ModelUsageAc
     token_exposure_provable = True
     cost_exposure_provable = True
     for attempt in attempts:
-        usage_tokens = _usage_token_total(attempt.usage) if attempt.usage is not None else None
-        usage_cost = attempt.usage.cost_usd if attempt.usage is not None else None
+        usage_is_final = attempt.status is not ModelAttemptStatus.RUNNING
+        usage_tokens = (
+            _usage_token_total(attempt.usage)
+            if usage_is_final and attempt.usage is not None
+            else None
+        )
+        usage_cost = (
+            attempt.usage.cost_usd if usage_is_final and attempt.usage is not None else None
+        )
         if usage_tokens is None:
             missing_token_ids.append(attempt.attempt_id)
             if attempt.reserved_tokens is None:
@@ -3515,50 +3522,6 @@ def _invoke_routed(
     while route_index < len(aliases):
         _raise_if_cancelled(db_path, resolved_run_id)
         alias = aliases[route_index]
-        attempts = read_model_route_attempts(db_path, resolved_run_id, operation_id)
-        existing = next(
-            (
-                item
-                for item in attempts
-                if item.route_index == route_index and item.attempt_number == attempt_number
-            ),
-            None,
-        )
-        if existing is not None and existing.status is ModelAttemptStatus.RUNNING:
-            existing = _fail_interrupted_attempt(db_path, existing, clock)
-        if existing is not None and existing.status is ModelAttemptStatus.COMPLETED:
-            if existing.output_type != requested_output_type.__name__:
-                raise Phase9OrchestrationError(
-                    _agent_stage(stage),
-                    "cached route attempt output type does not match the requested schema",
-                )
-            output = requested_output_type.model_validate_json(existing.output_json)
-            validated = objective_validator(output, alias)
-            _enforce_usage_budget(db_path, resolved_run_id, config, stage)
-            return requested_output_type.model_validate(
-                validated.model_dump(mode="python", round_trip=True)
-            )
-        if existing is not None:
-            previous_failure = existing
-            next_position = _next_route_position(
-                stage,
-                route_index,
-                attempt_number,
-                existing.failure_code or "non_retryable_failure",
-                len(aliases),
-                config.retries.max_attempts_per_alias,
-            )
-            if next_position is None:
-                raise Phase9OrchestrationError(
-                    _agent_stage(stage),
-                    (
-                        f"{stage.value} exhausted configured route after "
-                        f"{existing.failure_code}: {existing.failure_reason}"
-                    ),
-                )
-            route_index, attempt_number = next_position
-            continue
-
         retry_reason = None
         escalation_reason = None
         if previous_failure is not None:
@@ -3585,6 +3548,66 @@ def _invoke_routed(
             run_id=resolved_run_id,
         )
         reserved_tokens, reserved_cost = _conservative_reservation(request, alias, config)
+        attempts = read_model_route_attempts(db_path, resolved_run_id, operation_id)
+        existing = next(
+            (
+                item
+                for item in attempts
+                if item.route_index == route_index and item.attempt_number == attempt_number
+            ),
+            None,
+        )
+        if existing is not None:
+            _require_route_attempt_identity(
+                existing,
+                run_id=resolved_run_id,
+                operation_id=operation_id,
+                stage=stage,
+                output_type=requested_output_type.__name__,
+                model_alias=alias,
+                pinned_model_snapshot=config.pinned_snapshot_for(alias),
+                route_index=route_index,
+                attempt_number=attempt_number,
+                input_artifact_ids=input_artifact_ids,
+                retry_reason=retry_reason,
+                escalation_reason=escalation_reason,
+                reserved_tokens=reserved_tokens,
+                reserved_cost_usd=reserved_cost,
+            )
+        if existing is not None and existing.status is ModelAttemptStatus.RUNNING:
+            existing = _fail_interrupted_attempt(db_path, existing, clock)
+        if existing is not None and existing.status is ModelAttemptStatus.COMPLETED:
+            return _reuse_completed_route_attempt(
+                existing,
+                requested_output_type=requested_output_type,
+                alias=alias,
+                objective_validator=objective_validator,
+                db_path=db_path,
+                run_id=resolved_run_id,
+                config=config,
+                stage=stage,
+            )
+        if existing is not None:
+            previous_failure = existing
+            next_position = _next_route_position(
+                stage,
+                route_index,
+                attempt_number,
+                existing.failure_code or "non_retryable_failure",
+                len(aliases),
+                config.retries.max_attempts_per_alias,
+            )
+            if next_position is None:
+                raise Phase9OrchestrationError(
+                    _agent_stage(stage),
+                    (
+                        f"{stage.value} exhausted configured route after "
+                        f"{existing.failure_code}: {existing.failure_reason}"
+                    ),
+                )
+            route_index, attempt_number = next_position
+            continue
+
         started_at = _aware_phase9_time(clock(), "attempt started_at")
         reservation = ModelRouteAttempt(
             run_id=resolved_run_id,
@@ -3619,7 +3642,51 @@ def _invoke_routed(
         except ModelAttemptBudgetError as exc:
             raise Phase9OrchestrationError(_agent_stage(stage), str(exc)) from exc
         if reserved.status is not ModelAttemptStatus.RUNNING:
+            _require_route_attempt_identity(
+                reserved,
+                run_id=resolved_run_id,
+                operation_id=operation_id,
+                stage=stage,
+                output_type=requested_output_type.__name__,
+                model_alias=alias,
+                pinned_model_snapshot=config.pinned_snapshot_for(alias),
+                route_index=route_index,
+                attempt_number=attempt_number,
+                input_artifact_ids=input_artifact_ids,
+                retry_reason=retry_reason,
+                escalation_reason=escalation_reason,
+                reserved_tokens=reserved_tokens,
+                reserved_cost_usd=reserved_cost,
+            )
+            if reserved.status is ModelAttemptStatus.COMPLETED:
+                return _reuse_completed_route_attempt(
+                    reserved,
+                    requested_output_type=requested_output_type,
+                    alias=alias,
+                    objective_validator=objective_validator,
+                    db_path=db_path,
+                    run_id=resolved_run_id,
+                    config=config,
+                    stage=stage,
+                )
             previous_failure = reserved
+            next_position = _next_route_position(
+                stage,
+                route_index,
+                attempt_number,
+                reserved.failure_code or "non_retryable_failure",
+                len(aliases),
+                config.retries.max_attempts_per_alias,
+            )
+            if next_position is None:
+                raise Phase9OrchestrationError(
+                    _agent_stage(stage),
+                    (
+                        f"{stage.value} exhausted configured route after "
+                        f"{reserved.failure_code}: {reserved.failure_reason}"
+                    ),
+                )
+            route_index, attempt_number = next_position
             continue
         output: _ModelT | None = None
         usage: ModelUsageMetadata | None = None
@@ -3704,6 +3771,76 @@ def _invoke_routed(
         route_index, attempt_number = next_position
 
     raise Phase9OrchestrationError(_agent_stage(stage), f"{stage.value} route is exhausted")
+
+
+def _require_route_attempt_identity(
+    attempt: ModelRouteAttempt,
+    *,
+    run_id: UUID,
+    operation_id: UUID,
+    stage: LLMStage,
+    output_type: str,
+    model_alias: ModelAlias,
+    pinned_model_snapshot: str | None,
+    route_index: int,
+    attempt_number: int,
+    input_artifact_ids: tuple[UUID, ...],
+    retry_reason: str | None,
+    escalation_reason: str | None,
+    reserved_tokens: int | None,
+    reserved_cost_usd: Decimal | None,
+) -> None:
+    expected_attempt_id = _attempt_id(
+        run_id,
+        operation_id,
+        model_alias,
+        route_index,
+        attempt_number,
+    )
+    if (
+        attempt.run_id != run_id
+        or attempt.operation_id != operation_id
+        or attempt.attempt_id != expected_attempt_id
+        or attempt.stage != stage.value
+        or attempt.output_type != output_type
+        or attempt.model_alias != model_alias.value
+        or attempt.pinned_model_snapshot != pinned_model_snapshot
+        or attempt.route_index != route_index
+        or attempt.attempt_number != attempt_number
+        or attempt.input_artifact_ids != input_artifact_ids
+        or attempt.retry_reason != retry_reason
+        or attempt.escalation_reason != escalation_reason
+        or attempt.reserved_tokens != reserved_tokens
+        or attempt.reserved_cost_usd != reserved_cost_usd
+    ):
+        raise Phase9OrchestrationError(
+            _agent_stage(stage),
+            "cached route attempt identity does not match the requested operation",
+        )
+
+
+def _reuse_completed_route_attempt(
+    attempt: ModelRouteAttempt,
+    *,
+    requested_output_type: type[_ModelT],
+    alias: ModelAlias,
+    objective_validator: _ObjectiveValidator,
+    db_path: str,
+    run_id: UUID,
+    config: ProviderOrchestrationConfig,
+    stage: LLMStage,
+) -> _ModelT:
+    if attempt.output_json is None:
+        raise Phase9OrchestrationError(
+            _agent_stage(stage),
+            "completed route attempt has no serialized output",
+        )
+    output = requested_output_type.model_validate_json(attempt.output_json)
+    validated = objective_validator(output, alias)
+    _enforce_usage_budget(db_path, run_id, config, stage)
+    return requested_output_type.model_validate(
+        validated.model_dump(mode="python", round_trip=True)
+    )
 
 
 def _next_route_position(
@@ -3806,7 +3943,7 @@ def _conservative_reservation(
     request: LLMRequest,
     alias: ModelAlias,
     config: ProviderOrchestrationConfig,
-) -> tuple[int | None, float | None]:
+) -> tuple[int | None, Decimal | None]:
     if not config.require_budget_reservations:
         return None, None
     if config.budget.max_total_tokens is None or config.budget.max_total_cost_usd is None:
@@ -3832,7 +3969,7 @@ def _conservative_reservation(
     output_tokens = config.reserved_output_tokens_per_call
     return (
         input_tokens + output_tokens,
-        float(cap.upper_bound(input_tokens, output_tokens)),
+        cap.upper_bound(input_tokens, output_tokens),
     )
 
 

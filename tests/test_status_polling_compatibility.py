@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 
 import frontend.live_service as live_service
+from researchassistant.storage import store_schema
 from researchassistant.storage.store import (
     RAW_CLAIM_TRIGGER_NAME,
     DatabaseCompatibilityError,
@@ -33,12 +35,14 @@ def test_snapshot_rejects_incompatible_database_without_changes(
     path = tmp_path / "incompatible.sqlite3"
     if issue is DatabaseCompatibilityIssue.INVALID_SQLITE:
         path.write_bytes(b"not a SQLite database\x00")
+    elif issue is DatabaseCompatibilityIssue.OLDER_SCHEMA:
+        with closing(sqlite3.connect(path)) as connection:
+            connection.row_factory = sqlite3.Row
+            store_schema._initialize_schema(connection, target_version=6)
     else:
         init_db(str(path))
         with sqlite3.connect(path) as connection:
-            if issue is DatabaseCompatibilityIssue.OLDER_SCHEMA:
-                connection.execute("DELETE FROM schema_migrations")
-            elif issue is DatabaseCompatibilityIssue.NEWER_SCHEMA:
+            if issue is DatabaseCompatibilityIssue.NEWER_SCHEMA:
                 connection.execute(
                     "INSERT INTO schema_migrations VALUES (99, 'future', '2026-09-19')"
                 )
@@ -51,6 +55,28 @@ def test_snapshot_rejects_incompatible_database_without_changes(
         controller.snapshot(path, uuid4())
 
     assert caught.value.result.issue is issue
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    assert not path.with_name(path.name + "-journal").exists()
+
+
+@pytest.mark.parametrize("remove_migration_table", [False, True])
+def test_snapshot_rejects_nonempty_database_without_migration_records_unchanged(
+    tmp_path: Path, remove_migration_table: bool
+) -> None:
+    path = tmp_path / "missing-migration-records.sqlite3"
+    init_db(str(path))
+    with sqlite3.connect(path) as connection:
+        if remove_migration_table:
+            connection.execute("DROP TABLE schema_migrations")
+        else:
+            connection.execute("DELETE FROM schema_migrations")
+    before = path.read_bytes(), path.stat().st_mtime_ns
+    controller = live_service.LiveResearchController(environment={})
+
+    with pytest.raises(DatabaseCompatibilityError) as caught:
+        controller.snapshot(path, uuid4())
+
+    assert caught.value.result.issue is DatabaseCompatibilityIssue.CORRUPT_SCHEMA
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
     assert not path.with_name(path.name + "-journal").exists()
 

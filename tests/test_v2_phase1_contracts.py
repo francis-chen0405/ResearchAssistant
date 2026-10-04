@@ -172,8 +172,8 @@ def test_v2_migration_is_additive_idempotent_and_persists_canonical_artifacts(
             row[0]
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
-    assert CURRENT_SCHEMA_VERSION == 14
-    assert versions == list(range(1, 15))
+    assert CURRENT_SCHEMA_VERSION == 16
+    assert versions == list(range(1, 17))
     assert {"v2_run_identities", "v2_artifacts"} <= tables
     assert persisted.payload_json == canonical_v2_artifact_json(plan)
     assert persisted.payload_sha256 == v2_artifact_fingerprint(plan)

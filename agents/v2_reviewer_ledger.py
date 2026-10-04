@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -11,6 +12,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from agents.reviewer import (
     ReviewerDecision,
+    ReviewerInput,
     build_reviewer_input,
     build_statement_review_result,
     validate_reviewer_decision,
@@ -61,6 +63,7 @@ from researchassistant.storage.store import (
     read_model_route_attempts,
     read_v2_artifact,
     reserve_model_route_attempt,
+    validate_model_route_attempt_identity,
 )
 
 V2_REVIEWER_LEDGER_ARTIFACT_KEY = "phase-10-reviewer-ledger"
@@ -275,26 +278,12 @@ def _review_once(
     operation_id = uuid5(
         NAMESPACE_URL, f"v2-phase10::{batch.run_id}::{source_id}::reviewer::{revision_number}"
     )
-    attempts = read_model_route_attempts(path, batch.run_id, operation_id)
-    if attempts:
-        attempt = attempts[0]
-        if attempt.status is ModelAttemptStatus.COMPLETED and attempt.output_json is not None:
-            decision = ReviewerDecision.model_validate_json(attempt.output_json)
-            validate_reviewer_decision(draft, reviewer_input, decision)
-            return build_statement_review_result(
-                draft,
-                reviewer_input,
-                decision,
-                reviewer_prompt_version=prompt.version,
-                reviewer_model_name=route.physical_model,
-                reviewed_at=_aware_now(clock),
-            ), None
-        return None, "Reviewer attempt was already exhausted before restart"
     reservation = routing.preflight().reserve(
         LLMStage.REVIEWER, conservative_token_estimate(request.rendered_prompt)
     )
+    attempts = read_model_route_attempts(path, batch.run_id, operation_id)
     attempt_id = uuid5(NAMESPACE_URL, f"v2-phase10-attempt::{operation_id}::1")
-    running = ModelRouteAttempt(
+    expected = ModelRouteAttempt(
         run_id=batch.run_id,
         operation_id=operation_id,
         attempt_id=attempt_id,
@@ -306,13 +295,28 @@ def _review_once(
         attempt_number=1,
         input_artifact_ids=(draft.statement_draft_id, candidate.quote_block_id),
         status=ModelAttemptStatus.RUNNING,
-        started_at=_aware_now(clock),
+        started_at=attempts[0].started_at if attempts else _aware_now(clock),
         reserved_tokens=reservation.reserved_tokens,
         reserved_cost_usd=reservation.reserved_cost_usd,
     )
+    if attempts:
+        attempt = attempts[0]
+        _validate_reviewer_attempt_identity(attempt, expected)
+        if attempt.status is ModelAttemptStatus.COMPLETED and attempt.output_json is not None:
+            return _reuse_completed_reviewer_attempt(
+                attempt,
+                draft=draft,
+                reviewer_input=reviewer_input,
+                prompt_version=prompt.version,
+                model_name=route.physical_model,
+                clock=clock,
+            )
+        return None, "Reviewer attempt was already exhausted before restart"
+    running = expected
+    ceiling: tuple[int, int, Decimal]
     try:
         ceiling = _budget_ceiling(path, batch)
-        reserve_model_route_attempt(
+        reserved = reserve_model_route_attempt(
             path,
             running,
             max_model_calls=ceiling[0],
@@ -321,6 +325,21 @@ def _review_once(
         )
     except ModelAttemptBudgetError as exc:
         return None, str(exc)
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("persisted Reviewer attempt identity does not match this request") from exc
+    _validate_reviewer_attempt_identity(reserved, expected)
+    if reserved.status is ModelAttemptStatus.COMPLETED:
+        return _reuse_completed_reviewer_attempt(
+            reserved,
+            draft=draft,
+            reviewer_input=reviewer_input,
+            prompt_version=prompt.version,
+            model_name=route.physical_model,
+            clock=clock,
+        )
+    if reserved.status is not ModelAttemptStatus.RUNNING:
+        return None, "Reviewer attempt was already exhausted before restart"
+    running = reserved
     timer = monotonic()
     try:
         invocation = invoke_llm(
@@ -371,6 +390,42 @@ def _review_once(
         return None, f"{type(exc).__name__}: {exc}"[:1000]
 
 
+def _validate_reviewer_attempt_identity(
+    existing: ModelRouteAttempt,
+    expected: ModelRouteAttempt,
+) -> None:
+    try:
+        validate_model_route_attempt_identity(existing, expected)
+    except (sqlite3.IntegrityError, ValueError) as exc:
+        raise ValueError("persisted Reviewer attempt identity does not match this request") from exc
+
+
+def _reuse_completed_reviewer_attempt(
+    attempt: ModelRouteAttempt,
+    *,
+    draft: StatementDraft,
+    reviewer_input: ReviewerInput,
+    prompt_version: str,
+    model_name: str,
+    clock: Callable[[], datetime],
+) -> tuple[StatementReviewResult, None]:
+    if attempt.output_json is None:
+        raise ValueError("completed Reviewer attempt has no serialized decision")
+    decision = ReviewerDecision.model_validate_json(attempt.output_json)
+    validate_reviewer_decision(draft, reviewer_input, decision)
+    return (
+        build_statement_review_result(
+            draft,
+            reviewer_input,
+            decision,
+            reviewer_prompt_version=prompt_version,
+            reviewer_model_name=model_name,
+            reviewed_at=_aware_now(clock),
+        ),
+        None,
+    )
+
+
 def _derive_v2_ledger_claim_id(payload: ValidatedLedgerPayload) -> UUID:
     review = payload.approved_review
     if review.reviewer_approval_id is None:
@@ -384,21 +439,35 @@ def _derive_v2_ledger_claim_id(payload: ValidatedLedgerPayload) -> UUID:
 def _budget_ceiling(path: str, batch: V2EvidenceAnalystBatchResult) -> tuple[int, int, Decimal]:
     attempts = read_model_route_attempts(path, batch.run_id)
     initial = batch.input.queue_result.initial_budget
-    token_exposure = sum(
-        item.usage.total_tokens
-        if item.usage is not None and item.usage.total_tokens is not None
-        else item.reserved_tokens or 0
-        for item in attempts
-    )
-    cost_exposure = sum(
-        (
-            item.usage.cost_usd
-            if item.usage is not None and item.usage.cost_usd is not None
-            else item.reserved_cost_usd or Decimal("0")
-            for item in attempts
-        ),
-        Decimal("0"),
-    )
+    token_exposure = 0
+    cost_exposure = Decimal("0")
+    for item in attempts:
+        usage_is_final = item.status is not ModelAttemptStatus.RUNNING
+        used_tokens = None
+        used_cost = None
+        if usage_is_final and item.usage is not None:
+            used_tokens = item.usage.total_tokens
+            if (
+                used_tokens is None
+                and item.usage.input_tokens is not None
+                and item.usage.output_tokens is not None
+            ):
+                used_tokens = item.usage.input_tokens + item.usage.output_tokens
+            used_cost = item.usage.cost_usd
+        if used_tokens is None:
+            if item.reserved_tokens is None:
+                raise ModelAttemptBudgetError(
+                    f"model token exposure cannot be proven after attempt {item.attempt_id}"
+                )
+            used_tokens = item.reserved_tokens
+        if used_cost is None:
+            if item.reserved_cost_usd is None:
+                raise ModelAttemptBudgetError(
+                    f"model cost exposure cannot be proven after attempt {item.attempt_id}"
+                )
+            used_cost = item.reserved_cost_usd
+        token_exposure += used_tokens
+        cost_exposure = add_usd(cost_exposure, used_cost)
     return (
         len(attempts) + initial.physical_call_ceiling - initial.physical_calls_used,
         token_exposure + initial.tokens_remaining,

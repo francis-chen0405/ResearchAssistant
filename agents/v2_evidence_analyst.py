@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -71,6 +72,7 @@ from researchassistant.storage.store import (
     read_model_route_attempts,
     read_v2_artifact,
     reserve_model_route_attempt,
+    validate_model_route_attempt_identity,
 )
 
 V2_EVIDENCE_ANALYST_ARTIFACT_KEY = "phase-13-luna-evidence-analyst-analyzer-admission"
@@ -429,7 +431,8 @@ def _invoke_bounded_analyst(
     max_attempts: int | None = None,
     retry_validation_only: bool = False,
 ) -> tuple[_OutputT, tuple[UUID, ...]]:
-    route = routing_config.preflight().for_stage(LLMStage.ANALYST)
+    preflight = routing_config.preflight()
+    route = preflight.for_stage(LLMStage.ANALYST)
     prompt = load_prompt_file(
         _analyst_prompt_path(batch_input.policy_identity),
         expected_stage=LLMStage.ANALYST,
@@ -439,68 +442,25 @@ def _invoke_bounded_analyst(
     operation_id = uuid5(
         NAMESPACE_URL, f"v2-phase13::{batch_input.run_id}::{source_id}::{operation}"
     )
-    attempts = read_model_route_attempts(db_path, batch_input.run_id, operation_id)
-    attempt_ids = [item.attempt_id for item in attempts]
-    for attempt in attempts:
-        if attempt.status is ModelAttemptStatus.COMPLETED:
-            if attempt.output_type != output_type.__name__ or attempt.output_json is None:
-                raise V2EvidenceAnalystFailure("persisted Analyst output type is incompatible")
-            output = output_type.model_validate_json(attempt.output_json)
-            objective_validator(output)
-            return output, tuple(attempt_ids)
-        if attempt.status is ModelAttemptStatus.RUNNING:
-            ended_at = _aware_now(clock)
-            finish_model_route_attempt(
-                db_path,
-                attempt.model_copy(
-                    update={
-                        "status": ModelAttemptStatus.FAILED,
-                        "failure_code": "interrupted_attempt",
-                        "failure_reason": "unfinished Analyst attempt recovered on restart",
-                        "ended_at": ended_at,
-                        "latency_ms": max(
-                            0.0, (ended_at - attempt.started_at).total_seconds() * 1000
-                        ),
-                    }
-                ),
-            )
-    if len(attempts) >= attempt_limit:
-        raise V2EvidenceAnalystFailure(f"{operation} exhausted bounded Analyst retry")
 
-    failures: list[str] = []
-    for attempt_number in range(len(attempts) + 1, attempt_limit + 1):
-        started_at = _aware_now(clock)
-        rendered_prompt = base_rendered_prompt
+    def rendered_for_attempt(attempt_number: int) -> str:
         if attempt_number > 1 and retry_guidance is not None:
-            rendered_prompt = (
-                f"{rendered_prompt}\n\n<RETRY_VALIDATION_GUIDANCE>\n"
+            return (
+                f"{base_rendered_prompt}\n\n<RETRY_VALIDATION_GUIDANCE>\n"
                 f"{retry_guidance}\n</RETRY_VALIDATION_GUIDANCE>"
             )
-        request = LLMRequest(
-            run_id=batch_input.run_id,
-            stage=LLMStage.ANALYST,
-            prompt=prompt,
-            rendered_prompt=rendered_prompt,
-            input_artifact=input_artifact,
-            input_artifact_ids=(source_id,),
-            requested_output_type=output_type,
-            pinned_model_snapshot=route.physical_model,
-            model_alias=route.logical_alias,
-            configured_fallbacks=(),
-            generation=V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).generation,
-            source_id=source_id,
+        return base_rendered_prompt
+
+    def running_for_attempt(attempt_number: int, started_at: datetime) -> ModelRouteAttempt:
+        reservation = preflight.reserve(
+            LLMStage.ANALYST, conservative_token_estimate(rendered_for_attempt(attempt_number))
         )
-        reservation = routing_config.preflight().reserve(
-            LLMStage.ANALYST, conservative_token_estimate(request.rendered_prompt)
-        )
-        attempt_id = uuid5(
-            NAMESPACE_URL,
-            f"v2-phase13-attempt::{operation_id}::{attempt_number}",
-        )
-        running = ModelRouteAttempt(
+        return ModelRouteAttempt(
             run_id=batch_input.run_id,
             operation_id=operation_id,
-            attempt_id=attempt_id,
+            attempt_id=uuid5(
+                NAMESPACE_URL, f"v2-phase13-attempt::{operation_id}::{attempt_number}"
+            ),
             stage=LLMStage.ANALYST.value,
             output_type=output_type.__name__,
             model_alias=route.logical_alias.value,
@@ -514,18 +474,83 @@ def _invoke_bounded_analyst(
             reserved_tokens=reservation.reserved_tokens,
             reserved_cost_usd=reservation.reserved_cost_usd,
         )
+
+    def reuse_completion(attempt: ModelRouteAttempt) -> _OutputT:
+        if attempt.output_json is None:
+            raise V2EvidenceAnalystFailure("persisted Analyst output is missing")
+        output = output_type.model_validate_json(attempt.output_json)
+        objective_validator(output)
+        return output
+
+    attempts = read_model_route_attempts(db_path, batch_input.run_id, operation_id)
+    attempt_ids = [item.attempt_id for item in attempts]
+    for attempt_number, attempt in enumerate(attempts, start=1):
+        try:
+            validate_model_route_attempt_identity(
+                attempt, running_for_attempt(attempt_number, attempt.started_at)
+            )
+        except (ValueError, sqlite3.IntegrityError) as exc:
+            raise V2EvidenceAnalystFailure("persisted Analyst attempt identity conflicts") from exc
+        if attempt.status is ModelAttemptStatus.COMPLETED:
+            return reuse_completion(attempt), tuple(attempt_ids)
+        if attempt.status is ModelAttemptStatus.RUNNING:
+            ended_at = _aware_now(clock)
+            finish_model_route_attempt(
+                db_path,
+                attempt.model_copy(
+                    update={
+                        "status": ModelAttemptStatus.FAILED,
+                        "failure_code": "interrupted_attempt",
+                        "failure_reason": "unfinished Analyst attempt recovered on restart",
+                        "usage": None,
+                        "ended_at": ended_at,
+                        "latency_ms": max(
+                            0.0, (ended_at - attempt.started_at).total_seconds() * 1000
+                        ),
+                    }
+                ),
+            )
+    if len(attempts) >= attempt_limit:
+        raise V2EvidenceAnalystFailure(f"{operation} exhausted bounded Analyst retry")
+
+    failures: list[str] = []
+    for attempt_number in range(len(attempts) + 1, attempt_limit + 1):
+        running = running_for_attempt(attempt_number, _aware_now(clock))
+        attempt_id = running.attempt_id
+        request = LLMRequest(
+            run_id=batch_input.run_id,
+            stage=LLMStage.ANALYST,
+            prompt=prompt,
+            rendered_prompt=rendered_for_attempt(attempt_number),
+            input_artifact=input_artifact,
+            input_artifact_ids=(source_id,),
+            requested_output_type=output_type,
+            pinned_model_snapshot=route.physical_model,
+            model_alias=route.logical_alias,
+            configured_fallbacks=(),
+            generation=V2_LLM_ROUTING.for_stage(LLMStage.ANALYST).generation,
+            source_id=source_id,
+        )
         ceilings = _attempt_budget_ceilings(db_path, batch_input)
         try:
-            reserve_model_route_attempt(
+            reserved = reserve_model_route_attempt(
                 db_path,
                 running,
                 max_model_calls=ceilings[0],
                 max_total_tokens=ceilings[1],
                 max_total_cost_usd=ceilings[2],
             )
+            validate_model_route_attempt_identity(reserved, running)
         except ModelAttemptBudgetError as exc:
             raise V2EvidenceAnalystFailure(str(exc)) from exc
+        except (ValueError, sqlite3.IntegrityError) as exc:
+            raise V2EvidenceAnalystFailure("persisted Analyst attempt identity conflicts") from exc
         attempt_ids.append(attempt_id)
+        if reserved.status is ModelAttemptStatus.COMPLETED:
+            return reuse_completion(reserved), tuple(attempt_ids)
+        if reserved.status is not ModelAttemptStatus.RUNNING:
+            failures.append(reserved.failure_reason or "persisted Analyst attempt was exhausted")
+            continue
         timer = monotonic()
         usage: ModelUsageMetadata | None = None
         try:
@@ -792,15 +817,22 @@ def _attempt_budget_ceilings(
 
 
 def _token_exposure(attempt: ModelRouteAttempt) -> int:
-    if attempt.usage is not None and attempt.usage.total_tokens is not None:
-        return attempt.usage.total_tokens
+    if attempt.status is not ModelAttemptStatus.RUNNING and attempt.usage is not None:
+        if attempt.usage.total_tokens is not None:
+            return attempt.usage.total_tokens
+        if attempt.usage.input_tokens is not None and attempt.usage.output_tokens is not None:
+            return attempt.usage.input_tokens + attempt.usage.output_tokens
     if attempt.reserved_tokens is not None:
         return attempt.reserved_tokens
     raise V2EvidenceAnalystFailure("existing model attempt has unprovable token exposure")
 
 
 def _cost_exposure(attempt: ModelRouteAttempt) -> Decimal:
-    if attempt.usage is not None and attempt.usage.cost_usd is not None:
+    if (
+        attempt.status is not ModelAttemptStatus.RUNNING
+        and attempt.usage is not None
+        and attempt.usage.cost_usd is not None
+    ):
         return attempt.usage.cost_usd
     if attempt.reserved_cost_usd is not None:
         return attempt.reserved_cost_usd

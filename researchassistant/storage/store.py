@@ -8,6 +8,7 @@ enabled on every connection.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -164,6 +165,11 @@ from researchassistant.storage.store_schema import (
     V2_PHASE10_SCHEMA_VERSION as V2_PHASE10_SCHEMA_VERSION,
 )
 from researchassistant.storage.store_schema import (
+    RecordedSchemaError,
+    initialize_database,
+    validate_recorded_database,
+)
+from researchassistant.storage.store_schema import (
     _apply_mlp4_discovery_query_migration as _apply_mlp4_discovery_query_migration,
 )
 from researchassistant.storage.store_schema import (
@@ -227,8 +233,7 @@ from researchassistant.storage.store_schema import (
     _verify_v2_phase10_reviewer_ledger_schema as _verify_v2_phase10_reviewer_ledger_schema,
 )
 from researchassistant.storage.store_schema import (
-    initialize_database,
-    validate_schema_structure,
+    validate_schema_structure as validate_schema_structure,
 )
 
 # ---------------------------------------------------------------------------
@@ -301,63 +306,19 @@ def _compatibility_error(
 
 def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilityResult:
     try:
-        integrity_rows = conn.execute("PRAGMA quick_check").fetchall()
-        if [row[0] for row in integrity_rows] != ["ok"]:
-            raise _compatibility_error(
-                DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
-                "database integrity check failed; inspection made no changes",
-            )
-        objects = {
-            (row["type"], row["name"]): row["sql"]
-            for row in conn.execute(
-                """SELECT type, name, sql FROM sqlite_master
-                   WHERE name NOT LIKE 'sqlite_%'"""
-            ).fetchall()
-        }
-    except DatabaseCompatibilityError:
-        raise
+        latest = validate_recorded_database(conn, allow_pending=False)
     except sqlite3.DatabaseError as exc:
-        message = str(exc).lower()
-        issue = (
-            DatabaseCompatibilityIssue.INVALID_SQLITE
-            if "not a database" in message or "file is encrypted" in message
-            else DatabaseCompatibilityIssue.CORRUPT_SCHEMA
-        )
+        message = str(exc)
+        issue = DatabaseCompatibilityIssue.CORRUPT_SCHEMA
+        version = None
+        if isinstance(exc, RecordedSchemaError):
+            issue = DatabaseCompatibilityIssue(exc.issue)
+            version = exc.version
+        elif "not a database" in message.lower() or "file is encrypted" in message.lower():
+            issue = DatabaseCompatibilityIssue.INVALID_SQLITE
         raise _compatibility_error(
-            issue,
-            "file is not a valid ResearchAssistant SQLite database; inspection made no changes",
+            issue, f"{message}; inspection made no changes", schema_version=version
         ) from exc
-
-    if ("table", "schema_migrations") not in objects:
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.OLDER_SCHEMA,
-            "database schema is older or uninitialized; a writable run or resume is required "
-            "to initialize or migrate it",
-            schema_version=0,
-        )
-    try:
-        rows = conn.execute(
-            "SELECT version, description FROM schema_migrations ORDER BY version"
-        ).fetchall()
-    except sqlite3.DatabaseError as exc:
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
-            "schema migration records are unreadable; inspection made no changes",
-        ) from exc
-    if any(not isinstance(row["version"], int) for row in rows):
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
-            "schema migration versions are invalid; inspection made no changes",
-        )
-    versions = {row["version"]: row["description"] for row in rows}
-    latest = max(versions, default=0)
-    if latest > CURRENT_SCHEMA_VERSION:
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.NEWER_SCHEMA,
-            f"database schema version {latest} is newer than supported version "
-            f"{CURRENT_SCHEMA_VERSION}; use compatible ResearchAssistant code",
-            schema_version=latest,
-        )
     if latest < MVP69_SCHEMA_VERSION:
         raise _compatibility_error(
             DatabaseCompatibilityIssue.OLDER_SCHEMA,
@@ -365,104 +326,6 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
             f"{CURRENT_SCHEMA_VERSION}; a writable run or resume is required",
             schema_version=latest,
         )
-    expected_migrations = {
-        version: description
-        for version, description in MIGRATION_DESCRIPTIONS.items()
-        if version <= latest
-    }
-    if versions != expected_migrations:
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
-            "schema migration records are incomplete or inconsistent; inspection made no changes",
-            schema_version=latest,
-        )
-    tables = {name for object_type, name in objects if object_type == "table"}
-    triggers = {name for object_type, name in objects if object_type == "trigger"}
-    indexes = {name for object_type, name in objects if object_type == "index"}
-    required_tables = _REQUIRED_TABLES
-    required_triggers = _REQUIRED_TRIGGERS
-    if latest == MVP69_SCHEMA_VERSION:
-        required_tables = _REQUIRED_TABLES - _MVP10_TABLES - _MVP11_TABLES
-    elif latest == MVP10_SCHEMA_VERSION:
-        required_tables = _REQUIRED_TABLES - _MVP11_TABLES
-    else:
-        required_triggers = _REQUIRED_TRIGGERS | _MVP11_TRIGGERS
-    if latest >= V2_PHASE1_SCHEMA_VERSION:
-        required_tables = required_tables | _V2_PHASE1_TABLES
-        required_triggers = required_triggers | _V2_PHASE1_TRIGGERS
-    if latest >= V2_PHASE3_SCHEMA_VERSION:
-        required_tables = required_tables | _V2_PHASE3_TABLES
-        required_triggers = required_triggers | _V2_PHASE3_TRIGGERS
-    if latest >= V2_PHASE10_SCHEMA_VERSION:
-        required_tables = required_tables | _V2_PHASE10_TABLES
-        required_triggers = required_triggers | _V2_PHASE10_TRIGGERS
-    missing = sorted(
-        (required_tables - tables) | (required_triggers - triggers) | (_REQUIRED_INDEXES - indexes)
-    )
-    trigger_sql = objects.get(("trigger", RAW_CLAIM_TRIGGER_NAME))
-    invalid_immutable = [
-        name
-        for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items()
-        if not _is_expected_immutable_trigger(
-            objects.get(("trigger", name)), name, table, operation, error
-        )
-    ]
-    columns = {
-        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
-    }
-    missing_cost_columns = sorted({"reserved_cost_usd_exact", "cost_usd_exact"} - columns)
-    snapshot_columns = {
-        row["name"] for row in conn.execute("PRAGMA table_info(snapshots)").fetchall()
-    }
-    missing_snapshot_provenance_columns = sorted(
-        {
-            "original_url",
-            "canonical_url",
-            "normalization_version",
-            "acquisition_version",
-            "provider_name",
-            "provider_version",
-            "media_type_provenance_json",
-        }
-        - snapshot_columns
-    )
-    search_query_columns = {
-        row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()
-    }
-    missing_mlp4_query_columns = (
-        sorted({"provider", "intent"} - search_query_columns)
-        if latest >= MLP4_SCHEMA_VERSION
-        else []
-    )
-    if (
-        missing
-        or not _is_expected_raw_claim_trigger(trigger_sql)
-        or invalid_immutable
-        or missing_cost_columns
-        or missing_snapshot_provenance_columns
-        or missing_mlp4_query_columns
-    ):
-        invalid = (
-            invalid_immutable
-            + missing_cost_columns
-            + missing_snapshot_provenance_columns
-            + missing_mlp4_query_columns
-        )
-        detail = ", ".join(missing + invalid) if missing or invalid else RAW_CLAIM_TRIGGER_NAME
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
-            f"required schema object is missing or invalid ({detail}); inspection made no changes",
-            schema_version=latest,
-        )
-    try:
-        validate_schema_structure(conn, latest)
-    except sqlite3.DatabaseError as exc:
-        raise _compatibility_error(
-            DatabaseCompatibilityIssue.CORRUPT_SCHEMA,
-            f"database schema or foreign-key integrity check failed: {exc}; "
-            "inspection made no changes",
-            schema_version=latest,
-        ) from exc
     return DatabaseCompatibilityResult(
         compatible=True,
         schema_version=latest,
@@ -2792,6 +2655,69 @@ def _row_to_v2_artifact(row: sqlite3.Row) -> V2PersistedArtifact:
     )
 
 
+_RESERVATION_IDENTITY_FIELDS = (
+    "attempt_id",
+    "run_id",
+    "operation_id",
+    "stage",
+    "output_type",
+    "model_alias",
+    "pinned_model_snapshot",
+    "route_index",
+    "attempt_number",
+    "input_artifact_ids",
+    "started_at",
+    "reserved_tokens",
+    "reserved_cost_usd",
+    "retry_reason",
+    "escalation_reason",
+)
+
+
+def _validated_route_attempt(attempt: ModelRouteAttempt) -> ModelRouteAttempt:
+    # Pydantic deliberately trusts existing instances and model_copy updates.
+    # Rebuild both levels from raw fields to re-run every persistence invariant.
+    values = dict(attempt.__dict__)
+    if isinstance(attempt.usage, ModelUsageMetadata):
+        values["usage"] = dict(attempt.usage.__dict__)
+    validated = ModelRouteAttempt.model_validate(values)
+    if validated.latency_ms is not None and not math.isfinite(validated.latency_ms):
+        raise ValueError("model attempt latency must be finite")
+    if validated.output_json is not None:
+        try:
+            json.loads(validated.output_json)
+        except ValueError as exc:
+            raise ValueError("model attempt output must be serialized JSON") from exc
+    if validated.usage is not None and all(
+        value is None for value in validated.usage.__dict__.values()
+    ):
+        validated = validated.model_copy(update={"usage": None})
+    return validated
+
+
+def _check_reservation_identity(existing: ModelRouteAttempt, incoming: ModelRouteAttempt) -> None:
+    if any(
+        getattr(existing, field) != getattr(incoming, field)
+        for field in _RESERVATION_IDENTITY_FIELDS
+    ):
+        raise sqlite3.IntegrityError(
+            f"model attempt {incoming.attempt_id} reservation identity conflicts"
+        )
+
+
+def validate_model_route_attempt_identity(
+    existing: ModelRouteAttempt, expected: ModelRouteAttempt
+) -> None:
+    """Bind caller replay to its expected reservation without changing storage.
+
+    A caller intentionally resuming a stored attempt supplies its original start
+    in `expected`; all other identity and reservation fields come from the request.
+    """
+    _check_reservation_identity(
+        _validated_route_attempt(existing), _validated_route_attempt(expected)
+    )
+
+
 def reserve_model_route_attempt(
     db_path: str,
     attempt: ModelRouteAttempt,
@@ -2800,6 +2726,7 @@ def reserve_model_route_attempt(
     max_total_tokens: int | None = None,
     max_total_cost_usd: Decimal | None = None,
 ) -> ModelRouteAttempt:
+    attempt = _validated_route_attempt(attempt)
     if attempt.status is not ModelAttemptStatus.RUNNING:
         raise ValueError("only running model attempts may be reserved")
     exact_cost_ceiling = (
@@ -2813,8 +2740,10 @@ def reserve_model_route_attempt(
             (str(attempt.attempt_id),),
         ).fetchone()
         if row is not None:
+            existing = _row_to_model_route_attempt(row)
+            _check_reservation_identity(existing, attempt)
             conn.commit()
-            return _row_to_model_route_attempt(row)
+            return existing
         count = conn.execute(
             "SELECT COUNT(*) FROM model_route_attempts WHERE run_id = ?",
             (str(attempt.run_id),),
@@ -2830,16 +2759,18 @@ def reserve_model_route_attempt(
                     "token budget requires a conservative reservation before every call"
                 )
             rows = conn.execute(
-                """SELECT attempt_id, input_tokens, output_tokens, total_tokens,
+                """SELECT attempt_id, status, input_tokens, output_tokens, total_tokens,
                           reserved_tokens
                    FROM model_route_attempts WHERE run_id = ?""",
                 (str(attempt.run_id),),
             ).fetchall()
             used_tokens = 0
             for existing_attempt in rows:
-                actual_tokens = existing_attempt["total_tokens"]
+                terminal = existing_attempt["status"] != ModelAttemptStatus.RUNNING.value
+                actual_tokens = existing_attempt["total_tokens"] if terminal else None
                 if (
-                    actual_tokens is None
+                    terminal
+                    and actual_tokens is None
                     and existing_attempt["input_tokens"] is not None
                     and existing_attempt["output_tokens"] is not None
                 ):
@@ -2868,19 +2799,20 @@ def reserve_model_route_attempt(
                     "cost budget requires a conservative reservation before every call"
                 )
             rows = conn.execute(
-                """SELECT attempt_id, cost_usd, reserved_cost_usd,
+                """SELECT attempt_id, status, cost_usd, reserved_cost_usd,
                           cost_usd_exact, reserved_cost_usd_exact
                    FROM model_route_attempts WHERE run_id = ?""",
                 (str(attempt.run_id),),
             ).fetchall()
             used_cost = Decimal("0")
             for existing_attempt in rows:
+                terminal = existing_attempt["status"] != ModelAttemptStatus.RUNNING.value
                 cost_text = existing_attempt["cost_usd_exact"]
                 reserved_text = existing_attempt["reserved_cost_usd_exact"]
                 exposure = None
-                if cost_text is not None:
+                if terminal and cost_text is not None:
                     exposure = parse_canonical_usd(cost_text)
-                elif existing_attempt["cost_usd"] is not None:
+                elif terminal and existing_attempt["cost_usd"] is not None:
                     exposure = parse_exact_usd(existing_attempt["cost_usd"])
                 elif reserved_text is not None:
                     exposure = parse_canonical_usd(reserved_text)
@@ -2899,7 +2831,7 @@ def reserve_model_route_attempt(
         _insert_model_route_attempt_row(conn, attempt)
         conn.commit()
         return attempt
-    except Exception:
+    except BaseException:
         conn.rollback()
         raise
     finally:
@@ -2907,10 +2839,12 @@ def reserve_model_route_attempt(
 
 
 def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None:
+    attempt = _validated_route_attempt(attempt)
     if attempt.status is ModelAttemptStatus.RUNNING:
         raise ValueError("finished model attempt cannot remain running")
     conn = _connect(db_path)
     try:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT * FROM model_route_attempts WHERE attempt_id = ?",
             (str(attempt.attempt_id),),
@@ -2918,11 +2852,13 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
         if row is None:
             raise KeyError(f"model attempt {attempt.attempt_id} not found")
         existing = _row_to_model_route_attempt(row)
+        _check_reservation_identity(existing, attempt)
         if existing.status is not ModelAttemptStatus.RUNNING:
-            if existing.model_dump(mode="json") != attempt.model_dump(mode="json"):
+            if existing != attempt:
                 raise sqlite3.IntegrityError(
                     f"model attempt {attempt.attempt_id} already finished differently"
                 )
+            conn.commit()
             return
         usage = attempt.usage
         conn.execute(
@@ -2930,6 +2866,7 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
                    status = ?, failure_code = ?, failure_reason = ?, ended_at = ?,
                    latency_ms = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?,
                    cached_input_tokens = ?, uncached_input_tokens = ?,
+                   cache_write_tokens = ?, usage_cost_basis = ?,
                    cost_usd = NULL, cost_usd_exact = ?, output_json = ?
                WHERE attempt_id = ?""",
             (
@@ -2943,12 +2880,17 @@ def finish_model_route_attempt(db_path: str, attempt: ModelRouteAttempt) -> None
                 usage.total_tokens if usage else None,
                 usage.cached_input_tokens if usage else None,
                 usage.uncached_input_tokens if usage else None,
+                usage.cache_write_tokens if usage else None,
+                usage.usage_cost_basis.value if usage and usage.usage_cost_basis else None,
                 canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
                 attempt.output_json,
                 str(attempt.attempt_id),
             ),
         )
         conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -2987,9 +2929,10 @@ def _insert_model_route_attempt_row(
             status, retry_reason, escalation_reason, failure_code, failure_reason,
             started_at, ended_at, latency_ms, reserved_tokens, reserved_cost_usd,
             reserved_cost_usd_exact, input_tokens, output_tokens, total_tokens,
-            cached_input_tokens, uncached_input_tokens, cost_usd, cost_usd_exact, output_json)
+            cached_input_tokens, uncached_input_tokens, cache_write_tokens, usage_cost_basis,
+            cost_usd, cost_usd_exact, output_json)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL,
-                   ?, ?, ?, ?, ?, ?, NULL, ?, ?)""",
+                   ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)""",
         (
             str(attempt.attempt_id),
             str(attempt.run_id),
@@ -3018,6 +2961,8 @@ def _insert_model_route_attempt_row(
             usage.total_tokens if usage else None,
             usage.cached_input_tokens if usage else None,
             usage.uncached_input_tokens if usage else None,
+            usage.cache_write_tokens if usage else None,
+            usage.usage_cost_basis.value if usage and usage.usage_cost_basis else None,
             canonical_usd(usage.cost_usd) if usage and usage.cost_usd is not None else None,
             attempt.output_json,
         ),
@@ -3032,10 +2977,14 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
     uncached_input_tokens = (
         row["uncached_input_tokens"] if "uncached_input_tokens" in row_columns else None
     )
+    cache_write_tokens = row["cache_write_tokens"] if "cache_write_tokens" in row_columns else None
+    usage_cost_basis = row["usage_cost_basis"] if "usage_cost_basis" in row_columns else None
     usage_values = (
         row["input_tokens"],
         cached_input_tokens,
         uncached_input_tokens,
+        cache_write_tokens,
+        usage_cost_basis,
         row["output_tokens"],
         row["total_tokens"],
         row["cost_usd_exact"],
@@ -3047,6 +2996,8 @@ def _row_to_model_route_attempt(row: sqlite3.Row) -> ModelRouteAttempt:
             input_tokens=row["input_tokens"],
             cached_input_tokens=cached_input_tokens,
             uncached_input_tokens=uncached_input_tokens,
+            cache_write_tokens=cache_write_tokens,
+            usage_cost_basis=usage_cost_basis,
             output_tokens=row["output_tokens"],
             total_tokens=row["total_tokens"],
             cost_usd=(

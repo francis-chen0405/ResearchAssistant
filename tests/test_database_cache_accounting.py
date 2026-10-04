@@ -107,9 +107,16 @@ def test_historical_attempt_without_cache_columns_reads_unknown_values(tmp_path:
     db_path, run_id, attempt = _database(tmp_path)
     finish_model_route_attempt(str(db_path), _finished(attempt))
     with sqlite3.connect(db_path) as connection:
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger'"
+        ).fetchall():
+            if row[0].endswith("_provenance_immutable_update"):
+                connection.execute(f'DROP TRIGGER "{row[0]}"')
         connection.execute("ALTER TABLE model_route_attempts DROP COLUMN cached_input_tokens")
         connection.execute("ALTER TABLE model_route_attempts DROP COLUMN uncached_input_tokens")
-        connection.execute("DELETE FROM schema_migrations WHERE version = 14")
+        connection.execute("ALTER TABLE model_route_attempts DROP COLUMN cache_write_tokens")
+        connection.execute("ALTER TABLE model_route_attempts DROP COLUMN usage_cost_basis")
+        connection.execute("DELETE FROM schema_migrations WHERE version >= 14")
         connection.execute("PRAGMA user_version = 13")
         connection.commit()
 

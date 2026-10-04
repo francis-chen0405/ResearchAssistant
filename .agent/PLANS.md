@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Database review implementation — 2026-10-03](plans/database-review-2026-10-03.md) is the shared four-phase record. Prompt 1 covers lifecycle, private copies, pre-upgrade backups, explicit restore and shared worker locks; its review and full-suite verification passed. Prompts 2–4 and final cross-phase/performance verification remain separate sequential work.
+- [Database review implementation — 2026-10-03](plans/database-review-2026-10-03.md) is the shared four-phase record. Phases 1–2 cover lifecycle, recovery/locks, strict schema preflight, complete usage persistence and atomic identity/provenance protection; both passed conditional-commit review. The current full suite passes. Prompts 3–4, cross-phase acceptance and measured performance verification remain separate sequential work.
 
 ## State and delivery
 

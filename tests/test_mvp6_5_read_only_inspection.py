@@ -52,6 +52,12 @@ def _remove_mvp68_schema_records(connection: sqlite3.Connection) -> None:
     connection.execute("DELETE FROM schema_migrations WHERE version >= 6")
     for trigger_name in store_module.IMMUTABLE_ARTIFACT_TRIGGERS:
         connection.execute(f'DROP TRIGGER IF EXISTS "{trigger_name}"')
+    update_triggers = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='trigger'"
+    ).fetchall()
+    for (trigger_name,) in update_triggers:
+        if trigger_name.endswith("_provenance_immutable_update"):
+            connection.execute(f'DROP TRIGGER IF EXISTS "{trigger_name}"')
 
 
 def _schema_objects(path: Path) -> list[tuple[str, str, str | None]]:
@@ -136,7 +142,7 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
 
     assert read_run(str(path), manifest.run_id).raw_claim.encode() == original
     rows = _migration_rows(path)
-    assert rows[-11:] == [
+    assert rows[-13:] == [
         (4, "same-run provenance protection triggers"),
         (5, "database-enforced immutable runs.raw_claim"),
         (6, "immutable snapshots and Ledger with exact decimal model costs"),
@@ -148,6 +154,8 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
         (12, "researchassistant-v2 phase-3 initial planner and round-1 searches"),
         (13, "researchassistant-v2 phase-10 reviewer Ledger provenance"),
         (14, "persist cached and uncached model input-token usage"),
+        (15, "persist model cache-write tokens and usage cost basis"),
+        (16, "protect same-run provenance ownership and keys on update"),
     ]
 
 

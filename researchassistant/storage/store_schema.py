@@ -19,7 +19,11 @@ from researchassistant.common.money import canonical_usd, parse_canonical_usd, p
 if TYPE_CHECKING:
     from researchassistant.storage.database_recovery import BackupPolicy
 
-CURRENT_SCHEMA_VERSION = 14
+CURRENT_SCHEMA_VERSION = 16
+
+COMPLETE_USAGE_SCHEMA_VERSION = 15
+
+UPDATE_PROVENANCE_SCHEMA_VERSION = 16
 
 CACHE_USAGE_SCHEMA_VERSION = 14
 
@@ -75,7 +79,48 @@ MIGRATION_DESCRIPTIONS = {
     12: "researchassistant-v2 phase-3 initial planner and round-1 searches",
     13: "researchassistant-v2 phase-10 reviewer Ledger provenance",
     14: "persist cached and uncached model input-token usage",
+    15: "persist model cache-write tokens and usage cost basis",
+    16: "protect same-run provenance ownership and keys on update",
 }
+
+# Every relationship protected by a migration-4 insert guard. Ownership and
+# referenced keys are stable; scores, statuses and completion data stay mutable.
+_SAME_RUN_RELATIONSHIPS = (
+    ("retrieval_attempts", "query_id", "search_queries", "query_id"),
+    ("snapshots", "retrieval_attempt_id", "retrieval_attempts", "retrieval_attempt_id"),
+    (
+        "provisional_extractions",
+        "retrieval_attempt_id",
+        "retrieval_attempts",
+        "retrieval_attempt_id",
+    ),
+    ("provisional_extractions", "query_id", "search_queries", "query_id"),
+    ("provisional_extractions", "snapshot_id", "snapshots", "snapshot_id"),
+    ("candidates", "retrieval_attempt_id", "retrieval_attempts", "retrieval_attempt_id"),
+    ("candidates", "query_id", "search_queries", "query_id"),
+    ("candidates", "snapshot_id", "snapshots", "snapshot_id"),
+    ("analyst_decisions", "quote_block_id", "candidates", "quote_block_id"),
+    ("statement_drafts", "quote_block_id", "candidates", "quote_block_id"),
+    ("statement_review_attempts", "statement_draft_id", "statement_drafts", "statement_draft_id"),
+    ("statement_review_attempts", "quote_block_id", "candidates", "quote_block_id"),
+    ("ledger_records", "quote_block_id", "candidates", "quote_block_id"),
+    ("ledger_records", "retrieval_attempt_id", "retrieval_attempts", "retrieval_attempt_id"),
+    ("ledger_records", "snapshot_id", "snapshots", "snapshot_id"),
+    ("ledger_records", "reviewer_approval_id", "statement_review_attempts", "reviewer_approval_id"),
+    ("synthesis_items", "ledger_claim_id", "ledger_records", "ledger_claim_id"),
+)
+
+
+class RecordedSchemaError(sqlite3.DatabaseError):
+    """Shared non-mutating preflight diagnostic, translated by public readers."""
+
+    def __init__(
+        self, message: str, *, version: int | None = None, issue: str = "corrupt_schema"
+    ) -> None:
+        self.version = version
+        self.issue = issue
+        super().__init__(message)
+
 
 _REQUIRED_TABLES = {
     "schema_migrations",
@@ -229,7 +274,7 @@ def initialize_database(
                 logging.getLogger(__name__).warning("Recovery retention cleanup failed")
 
 
-def _initialize_schema(conn: sqlite3.Connection) -> None:
+def _initialize_schema(conn: sqlite3.Connection, *, target_version: int | None = None) -> None:
     """Install the canonical schema; callers validate existing databases first."""
     conn.executescript(
         """
@@ -695,21 +740,35 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_tokens INTEGER")
     if "reserved_cost_usd" not in columns:
         conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd REAL")
+    # Only the explicitly recognized pre-v5 metadata is converted during its
+    # upgrade. A committed current description must never be repaired here.
     conn.execute(
-        "UPDATE schema_migrations SET description = ? WHERE version = 4",
-        (MIGRATION_DESCRIPTIONS[4],),
+        "UPDATE schema_migrations SET description = ? WHERE version = 4 "
+        "AND description = ? AND NOT EXISTS "
+        "(SELECT 1 FROM schema_migrations WHERE version = 5)",
+        (MIGRATION_DESCRIPTIONS[4], "same-run provenance triggers and immutable raw claim"),
     )
     conn.commit()
-    _apply_raw_claim_immutability_migration(conn)
-    _apply_mvp68_integrity_migration(conn)
-    _apply_mvp69_provenance_migration(conn)
-    _apply_mvp10_evidence_portfolio_migration(conn)
-    _apply_mvp11_research_governor_migration(conn)
-    _apply_mlp4_discovery_query_migration(conn)
-    _apply_v2_phase1_artifact_migration(conn)
-    _apply_v2_phase3_initial_planner_migration(conn)
-    _apply_v2_phase10_reviewer_ledger_migration(conn)
-    _apply_cache_usage_migration(conn)
+    for version, migration in _migration_steps():
+        if target_version is None or version <= target_version:
+            migration(conn)
+
+
+def _migration_steps() -> tuple[tuple[int, Callable[[sqlite3.Connection], None]], ...]:
+    return (
+        (5, _apply_raw_claim_immutability_migration),
+        (6, _apply_mvp68_integrity_migration),
+        (7, _apply_mvp69_provenance_migration),
+        (8, _apply_mvp10_evidence_portfolio_migration),
+        (9, _apply_mvp11_research_governor_migration),
+        (10, _apply_mlp4_discovery_query_migration),
+        (11, _apply_v2_phase1_artifact_migration),
+        (12, _apply_v2_phase3_initial_planner_migration),
+        (13, _apply_v2_phase10_reviewer_ledger_migration),
+        (14, _apply_cache_usage_migration),
+        (15, _apply_complete_usage_migration),
+        (16, _apply_update_provenance_migration),
+    )
 
 
 def _raw_claim_trigger_sql() -> str:
@@ -1406,6 +1465,89 @@ def _apply_cache_usage_migration(conn: sqlite3.Connection) -> None:
         raise
 
 
+def _apply_complete_usage_migration(conn: sqlite3.Connection) -> None:
+    if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 15").fetchone():
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)")}
+        for name, declaration in (("cache_write_tokens", "INTEGER"), ("usage_cost_basis", "TEXT")):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE model_route_attempts ADD COLUMN {name} {declaration}")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (15, MIGRATION_DESCRIPTIONS[15], "2026-10-04T00:00:00+00:00"),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def _provenance_update_definitions() -> tuple[tuple[str, str], ...]:
+    fields: dict[str, set[str]] = {}
+    for child, reference, parent, key in _SAME_RUN_RELATIONSHIPS:
+        fields.setdefault(child, set()).update(("run_id", reference))
+        fields.setdefault(parent, set()).update(("run_id", key))
+    definitions: list[tuple[str, str]] = []
+    for table, columns in sorted(fields.items()):
+        name = f"{table}_provenance_immutable_update"
+        changed = " OR ".join(f"NEW.{column} IS NOT OLD.{column}" for column in sorted(columns))
+        definitions.append(
+            (
+                name,
+                f"""CREATE TRIGGER {name}
+            BEFORE UPDATE OF {", ".join(sorted(columns))} ON {table}
+            WHEN {changed}
+            BEGIN
+                SELECT RAISE(ABORT, '{table} provenance ownership and keys are immutable');
+            END""",
+            )
+        )
+    return tuple(definitions)
+
+
+def validate_same_run_provenance(conn: sqlite3.Connection, versions: set[int]) -> None:
+    if 4 not in versions:
+        return
+    for child, reference, parent, key in _SAME_RUN_RELATIONSHIPS:
+        if (
+            conn.execute(
+                f"SELECT 1 FROM {child} AS child JOIN {parent} AS parent "
+                f"ON child.{reference} = parent.{key} "
+                "WHERE child.run_id IS NOT parent.run_id LIMIT 1"
+            ).fetchone()
+            is not None
+        ):
+            raise sqlite3.DatabaseError(
+                f"same-run provenance integrity check failed: {child}.{reference}"
+            )
+
+
+def _apply_update_provenance_migration(conn: sqlite3.Connection) -> None:
+    if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 16").fetchone():
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        validate_same_run_provenance(conn, {4})
+        for name, definition in _provenance_update_definitions():
+            installed = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
+            ).fetchone()
+            if installed is None:
+                conn.execute(definition)
+            elif _sql_tokens(installed["sql"]) != _sql_tokens(definition):
+                raise sqlite3.DatabaseError(f"trigger {name} has an invalid definition")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (16, MIGRATION_DESCRIPTIONS[16], "2026-10-04T00:00:00+00:00"),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
 @lru_cache(maxsize=512)
 def _sql_tokens(sql: str) -> tuple[str, ...]:
     """Compare complete SQLite definitions while retaining string-literal meaning."""
@@ -1450,26 +1592,60 @@ def _table_declarations(sql: str) -> tuple[tuple[str, ...], ...]:
     return tuple(declarations)
 
 
+@lru_cache(maxsize=128)
+def _table_options(sql: str) -> tuple[str, ...]:
+    """Retain constraints such as STRICT and WITHOUT ROWID after the body."""
+    tokens = _sql_tokens(sql)
+    start = tokens.index("(")
+    depth = 0
+    for index in range(start, len(tokens)):
+        depth += (tokens[index] == "(") - (tokens[index] == ")")
+        if depth == 0:
+            return tokens[index + 1 :]
+    raise sqlite3.DatabaseError("table definition has an incomplete body")
+
+
 @lru_cache(maxsize=1)
-def _canonical_schema() -> tuple[tuple[str, str, str], ...]:
-    """Cache only executable schema definitions, never a user's validation result."""
+def _canonical_boundaries() -> dict[int, tuple[tuple[str, str, str], ...]]:
+    """Derive introduction requirements by executing migrations on an empty DB."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     try:
-        _initialize_schema(conn)
-        return tuple(
-            (row["type"], row["name"], row["sql"])
-            for row in conn.execute(
-                "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL "
-                "AND name NOT LIKE 'sqlite_%'"
+        _initialize_schema(conn, target_version=4)
+
+        def snapshot() -> tuple[tuple[str, str, str], ...]:
+            return tuple(
+                (row["type"], row["name"], row["sql"])
+                for row in conn.execute(
+                    "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL "
+                    "AND name NOT LIKE 'sqlite_%'"
+                )
             )
-        )
+
+        baseline = snapshot()
+        boundaries = {
+            version: tuple(
+                item for item in baseline if _baseline_object_version(item[0], item[1]) <= version
+            )
+            for version in range(1, 5)
+        }
+        for version, migration in _migration_steps():
+            migration(conn)
+            boundaries[version] = snapshot()
+        return boundaries
     finally:
         conn.close()
 
 
+def _canonical_schema() -> tuple[tuple[str, str, str], ...]:
+    """Only static definitions are cached; source validation always runs afresh."""
+    return _canonical_boundaries()[CURRENT_SCHEMA_VERSION]
+
+
 def _column_version(table: str, column: str) -> int:
     if table == "model_route_attempts":
+        if column in {"cache_write_tokens", "usage_cost_basis"}:
+            return COMPLETE_USAGE_SCHEMA_VERSION
         if column in {"cached_input_tokens", "uncached_input_tokens"}:
             return CACHE_USAGE_SCHEMA_VERSION
         if column in {"reserved_cost_usd_exact", "cost_usd_exact"}:
@@ -1496,6 +1672,8 @@ def validate_schema_structure(
         if sql is None:
             continue  # Version-specific callers verify required object presence.
         if kind == "table":
+            if _table_options(sql) != _table_options(expected_sql):
+                raise sqlite3.DatabaseError(f"table {name} has invalid options or constraints")
             expected = _table_declarations(expected_sql)
             present = set(_table_declarations(sql))
             column_names = {part[0] for part in present}
@@ -1520,22 +1698,8 @@ def _validate_before_upgrade(conn: sqlite3.Connection) -> None:
     validate_recorded_database(conn)
 
 
-def _object_version(kind: str, name: str) -> int:
-    """Object introduction boundaries from the executable schema definitions."""
-    if name in _V2_PHASE10_TABLES | _V2_PHASE10_TRIGGERS:
-        return 13
-    if name in _V2_PHASE3_TABLES | _V2_PHASE3_TRIGGERS:
-        return 12
-    if name in _V2_PHASE1_TABLES | _V2_PHASE1_TRIGGERS:
-        return 11
-    if name in _MVP11_TABLES | _MVP11_TRIGGERS:
-        return 9
-    if name in _MVP10_TABLES:
-        return 8
-    if name in IMMUTABLE_ARTIFACT_TRIGGERS:
-        return 6
-    if name == RAW_CLAIM_TRIGGER_NAME:
-        return 5
+def _baseline_object_version(kind: str, name: str) -> int:
+    """The retained baseline installs migrations 1–4 in one executable script."""
     if kind == "trigger":
         return 4
     if name in {
@@ -1550,7 +1714,19 @@ def _object_version(kind: str, name: str) -> int:
     return 1
 
 
-def validate_recorded_database(conn: sqlite3.Connection) -> int:
+@lru_cache(maxsize=128)
+def _object_version(kind: str, name: str) -> int:
+    """Find introduction from executable snapshots, including future migrators."""
+    for version, definitions in _canonical_boundaries().items():
+        if any(
+            object_kind == kind and object_name == name
+            for object_kind, object_name, _ in definitions
+        ):
+            return version
+    return 1  # Unknown extension objects are not part of required schema checks.
+
+
+def validate_recorded_database(conn: sqlite3.Connection, *, allow_pending: bool = True) -> int:
     """Read-only upgrade preflight, including recognized pre-schema-7 inputs.
 
     Historical migration-boundary fixtures may retain later additive objects or
@@ -1565,19 +1741,22 @@ def validate_recorded_database(conn: sqlite3.Connection) -> int:
     latest = 0
     versions: set[int] = set()
     if migration_table is not None:
-        latest = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").fetchone()[
-            0
-        ]
-        if not isinstance(latest, int):
-            raise sqlite3.DatabaseError("schema migration version is invalid")
+        try:
+            rows = list(conn.execute("SELECT version, description FROM schema_migrations"))
+        except sqlite3.DatabaseError as exc:
+            raise RecordedSchemaError("schema migration records are unreadable") from exc
+        if any(type(row[0]) is not int for row in rows):
+            raise RecordedSchemaError("schema migration versions are invalid")
+        latest = max((row[0] for row in rows), default=0)
         if latest > CURRENT_SCHEMA_VERSION:
-            raise sqlite3.DatabaseError(
+            raise RecordedSchemaError(
                 f"database schema version {latest} is newer than supported "
-                f"version {CURRENT_SCHEMA_VERSION}"
+                f"version {CURRENT_SCHEMA_VERSION}",
+                version=latest,
+                issue="newer_schema",
             )
-        rows = list(conn.execute("SELECT version, description FROM schema_migrations"))
-        if any(not isinstance(row[0], int) or row[0] not in MIGRATION_DESCRIPTIONS for row in rows):
-            raise sqlite3.DatabaseError("schema migration version is invalid")
+        if any(row[0] not in MIGRATION_DESCRIPTIONS for row in rows):
+            raise RecordedSchemaError("schema migration versions are invalid")
         versions = {row[0] for row in rows}
         for version, description in rows:
             # This exact pre-v5 description is covered by the retained v4 fixture.
@@ -1587,7 +1766,9 @@ def validate_recorded_database(conn: sqlite3.Connection) -> int:
                 and description == "same-run provenance triggers and immutable raw claim"
             )
             if description != MIGRATION_DESCRIPTIONS[version] and not historical_v4:
-                raise sqlite3.DatabaseError(f"migration {version} description is inconsistent")
+                raise RecordedSchemaError(
+                    f"migration {version} description is inconsistent", version=latest
+                )
     objects = {
         (row[0], row[1])
         for row in conn.execute(
@@ -1595,20 +1776,53 @@ def validate_recorded_database(conn: sqlite3.Connection) -> int:
         )
     }
     if latest == 0:
-        if objects:
-            raise sqlite3.DatabaseError("nonempty database has no recognized migration records")
+        # Dropping every user object does not make a previously used database
+        # a fresh bootstrap. VACUUM can remove its free pages, but it retains
+        # the schema cookie. Also reject unrelated application/version markers.
+        fresh_layout = (
+            conn.execute("PRAGMA page_count").fetchone()[0] <= 1
+            and conn.execute("PRAGMA freelist_count").fetchone()[0] == 0
+            and conn.execute("PRAGMA schema_version").fetchone()[0] == 0
+            and conn.execute("PRAGMA user_version").fetchone()[0] == 0
+            and conn.execute("PRAGMA application_id").fetchone()[0] == 0
+        )
+        if objects or not fresh_layout:
+            raise RecordedSchemaError("nonempty database has no recognized migration records")
         return 0
-    required = {
-        (kind, name)
-        for kind, name, _ in _canonical_schema()
-        if _object_version(kind, name) in versions
-    }
+    pending = set(range(1, latest + 1)) - versions
+    # Retained legacy accounting fixtures represent migration 6 pending while
+    # later additive migrations are recorded. Recognize only its whole absent
+    # boundary, never a dropped ledger row on an otherwise committed schema.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)")}
+    sparse_six = (
+        pending == {6}
+        and not ({"cost_usd_exact", "reserved_cost_usd_exact"} & columns)
+        and not any(("trigger", name) in objects for name in IMMUTABLE_ARTIFACT_TRIGGERS)
+    )
+    if pending and not sparse_six:
+        raise RecordedSchemaError(
+            "schema migration records are incomplete or inconsistent", version=latest
+        )
+    if sparse_six and not allow_pending:
+        raise RecordedSchemaError(
+            "database requires migration 6; a writable run or resume is required",
+            version=latest,
+            issue="older_schema",
+        )
+    required = {(kind, name) for kind, name, _ in _canonical_boundaries()[latest]}
+    if sparse_six:
+        required -= {("trigger", name) for name in IMMUTABLE_ARTIFACT_TRIGGERS}
     missing = required - objects
     if missing:
-        raise sqlite3.DatabaseError(
-            "required schema object is missing: " + ", ".join(sorted(name for _, name in missing))
+        raise RecordedSchemaError(
+            "required schema object is missing: " + ", ".join(sorted(name for _, name in missing)),
+            version=latest,
         )
-    validate_schema_structure(
-        conn, latest, pending_migrations=frozenset(set(MIGRATION_DESCRIPTIONS) - versions)
-    )
+    try:
+        validate_schema_structure(
+            conn, latest, pending_migrations=frozenset(set(MIGRATION_DESCRIPTIONS) - versions)
+        )
+        validate_same_run_provenance(conn, versions)
+    except sqlite3.DatabaseError as exc:
+        raise RecordedSchemaError(str(exc), version=latest) from exc
     return latest

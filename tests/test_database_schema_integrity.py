@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 
+from researchassistant.storage import store_schema
 from researchassistant.storage.store import (
     DatabaseCompatibilityError,
     init_db,
@@ -120,11 +121,16 @@ def test_malformed_future_table_does_not_record_its_migration(tmp_path: Path) ->
 def test_cache_migration_preserves_old_unknowns_and_rolls_back_on_failure(tmp_path: Path) -> None:
     path = tmp_path / "upgrade.db"
     init_db(str(path))
-    assert CURRENT_SCHEMA_VERSION == 14
+    assert CURRENT_SCHEMA_VERSION == 16
     with _connection(path) as conn:
-        conn.execute("DELETE FROM schema_migrations WHERE version = 14")
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall():
+            if store_schema._object_version("trigger", row["name"]) > 13:
+                conn.execute(f'DROP TRIGGER "{row["name"]}"')
+        conn.execute("DELETE FROM schema_migrations WHERE version >= 14")
         conn.execute("ALTER TABLE model_route_attempts DROP COLUMN cached_input_tokens")
         conn.execute("ALTER TABLE model_route_attempts DROP COLUMN uncached_input_tokens")
+        conn.execute("ALTER TABLE model_route_attempts DROP COLUMN cache_write_tokens")
+        conn.execute("ALTER TABLE model_route_attempts DROP COLUMN usage_cost_basis")
         conn.execute(
             "CREATE TRIGGER reject_upgrade BEFORE INSERT ON schema_migrations "
             "WHEN NEW.version = 14 BEGIN SELECT RAISE(ABORT, 'injected failure'); END"
@@ -140,37 +146,28 @@ def test_cache_migration_preserves_old_unknowns_and_rolls_back_on_failure(tmp_pa
         conn.execute("DROP TRIGGER reject_upgrade")
     init_db(str(path))
     with open_read_only_store(path) as reader:
-        assert reader.compatibility.schema_version == 14
+        assert reader.compatibility.schema_version == CURRENT_SCHEMA_VERSION
 
 
-@pytest.mark.parametrize("version", range(7, 14))
+@pytest.mark.parametrize("version", range(7, CURRENT_SCHEMA_VERSION + 1))
 def test_supported_historical_schema_reads_unchanged_and_upgrades(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / "historical.db"
     init_db(str(path))
-    introduced_tables = {
-        13: ("v2_ledger_admissions",),
-        12: ("v2_round_one_search_queries", "v2_initial_planner_outputs"),
-        11: ("v2_artifacts", "v2_run_identities"),
-        9: ("research_terminal_results", "research_governor_decisions", "research_round_records"),
-        8: (
-            "portfolio_coverage_assessments",
-            "portfolio_items",
-            "evidence_trail_entries",
-            "source_family_members",
-        ),
-    }
     with _connection(path) as conn:
-        for migration, tables in introduced_tables.items():
-            if migration > version:
-                for table in tables:
-                    conn.execute(f'DROP TABLE "{table}"')
-        conn.execute("ALTER TABLE model_route_attempts DROP COLUMN cached_input_tokens")
-        conn.execute("ALTER TABLE model_route_attempts DROP COLUMN uncached_input_tokens")
-        if version < 10:
-            conn.execute("ALTER TABLE search_queries DROP COLUMN provider")
-            conn.execute("ALTER TABLE search_queries DROP COLUMN intent")
+        conn.execute("PRAGMA foreign_keys = OFF")
+        for kind, name, _sql in reversed(store_schema._canonical_schema()):
+            if store_schema._object_version(kind, name) > version and kind in {"trigger", "index"}:
+                conn.execute(f'DROP {kind.upper()} IF EXISTS "{name}"')
+        for kind, name, _sql in reversed(store_schema._canonical_schema()):
+            if kind == "table" and store_schema._object_version(kind, name) > version:
+                conn.execute(f'DROP TABLE IF EXISTS "{name}"')
+        for table in ("model_route_attempts", "snapshots", "search_queries"):
+            columns = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+            for column in columns:
+                if store_schema._column_version(table, column["name"]) > version:
+                    conn.execute(f'ALTER TABLE "{table}" DROP COLUMN "{column["name"]}"')
         conn.execute("DELETE FROM schema_migrations WHERE version > ?", (version,))
     before = path.read_bytes()
     with open_read_only_store(path) as reader:
@@ -178,7 +175,7 @@ def test_supported_historical_schema_reads_unchanged_and_upgrades(
     assert path.read_bytes() == before
     init_db(str(path))
     with open_read_only_store(path) as reader:
-        assert reader.compatibility.schema_version == 14
+        assert reader.compatibility.schema_version == CURRENT_SCHEMA_VERSION
 
 
 @pytest.mark.parametrize("fragment", ["NOT NULL", "PRIMARY KEY (run_id, ledger_claim_id)"])
