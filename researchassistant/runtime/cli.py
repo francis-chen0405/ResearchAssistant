@@ -62,6 +62,7 @@ from researchassistant.research.v2_orchestrator import (
 )
 from researchassistant.runtime.application_runtime import CLIExitCode as CLIExitCode
 from researchassistant.storage.store import (
+    DatabaseCompatibilityError,
     open_read_only_store,
     read_provider_run_contract,
     read_v2_artifact,
@@ -105,6 +106,12 @@ def main(
         return _inspect_run_command(args.db_path, args.run_id)
     if args.command == "cancel-run":
         return _cancel_run_command(args.db_path, args.run_id, args.reason)
+    if args.command == "list-backups":
+        return _list_backups_command(args.db_path)
+    if args.command == "restore-backup":
+        return _restore_backup_command(args.backup_path, args.output_path)
+    if args.command == "import-history":
+        return _import_history_command(args.source_path, args.destination_dir)
     if args.command == "export-brief":
         return _export_brief_command(args.db_path, args.run_id, args.output_path, args.format)
     parser.print_help()
@@ -165,6 +172,23 @@ def _build_parser() -> argparse.ArgumentParser:
     cancel_run.add_argument("db_path", type=Path)
     cancel_run.add_argument("run_id", type=UUID)
     cancel_run.add_argument("--reason", default="cancellation requested by user")
+    list_backups = subparsers.add_parser(
+        "list-backups",
+        help="List verified recovery backups for a database.",
+    )
+    list_backups.add_argument("--db-path", type=Path, required=True)
+    restore_backup = subparsers.add_parser(
+        "restore-backup",
+        help="Restore a verified backup to a new database path.",
+    )
+    restore_backup.add_argument("--backup-path", type=Path, required=True)
+    restore_backup.add_argument("--output-path", type=Path, required=True)
+    import_history = subparsers.add_parser(
+        "import-history",
+        help="Copy history from an existing database into application storage.",
+    )
+    import_history.add_argument("--source-path", type=Path, required=True)
+    import_history.add_argument("--destination-dir", type=Path, default=None)
     export_brief = subparsers.add_parser(
         "export-brief",
         help="Export a released brief locally as Markdown, PDF, or Word DOCX.",
@@ -271,13 +295,16 @@ def _run_live_command(
         if isinstance(factory_config, MimoProviderFactoryConfig):
             if legacy_runner is None:
                 raise TypeError("legacy factory requires an explicitly selected legacy runner")
-            result = legacy_runner(
-                claim,
-                db_path=db_path,
-                factory_config=factory_config,
-                run_id=run_id,
-                research_controls=controls,
-            )
+            from researchassistant.storage.database_lock import database_lock
+
+            with database_lock(db_path):
+                result = legacy_runner(
+                    claim,
+                    db_path=db_path,
+                    factory_config=factory_config,
+                    run_id=run_id,
+                    research_controls=controls,
+                )
         else:
             bundle = build_v2_production_bundle(factory_config)
             v2_result = run_v2_production_pipeline(
@@ -724,6 +751,71 @@ def _cancel_run_command(db_path: Path, run_id: UUID, reason: str) -> int:
     print(f"reason: {request.reason}")
     print("The request will be observed cooperatively; an active call may run to its deadline.")
     return CLIExitCode.RELEASED
+
+
+def _list_backups_command(db_path: Path) -> int:
+    try:
+        from researchassistant.storage.database_recovery import list_backups
+
+        backups = list_backups(db_path)
+    except Exception as exc:
+        return _database_maintenance_error("backup listing", exc)
+    print(f"database: {db_path.resolve()}")
+    print(f"backup_count: {len(backups)}")
+    for backup in backups:
+        print(f"backup: {backup.path}")
+        print(f"schema_version: {backup.schema_version}")
+        print(f"created_at: {backup.created_at}")
+    if not backups:
+        print("No verified backups are available.")
+    return CLIExitCode.RELEASED
+
+
+def _restore_backup_command(backup_path: Path, output_path: Path) -> int:
+    try:
+        from researchassistant.storage.database_recovery import restore_backup
+
+        restored_path = restore_backup(backup_path, output_path)
+    except Exception as exc:
+        return _database_maintenance_error("backup restore", exc)
+    print(f"restored_database: {restored_path}")
+    return CLIExitCode.RELEASED
+
+
+def _import_history_command(source_path: Path, destination_dir: Path | None) -> int:
+    try:
+        from researchassistant.storage.history_import import import_history
+
+        result = import_history(source_path, destination_dir=destination_dir)
+    except Exception as exc:
+        return _database_maintenance_error("history import", exc)
+    print(f"database: {result.db_path}")
+    print(f"imported_runs: {result.run_count}")
+    return CLIExitCode.RELEASED
+
+
+def _database_maintenance_error(action: str, error: Exception) -> int:
+    if isinstance(error, FileExistsError):
+        print(
+            f"{action} error: the destination already exists; choose a new database path.",
+            file=sys.stderr,
+        )
+        return CLIExitCode.INVALID_INPUT
+    expected_input_error = isinstance(
+        error,
+        (DatabaseCompatibilityError, OSError, ValueError, sqlite3.Error),
+    )
+    if expected_input_error:
+        print(
+            f"{action} error: the database path or contents could not be used.",
+            file=sys.stderr,
+        )
+        return CLIExitCode.INVALID_INPUT
+    print(
+        f"{action} failed: an unexpected error prevented completion.",
+        file=sys.stderr,
+    )
+    return CLIExitCode.FAILED
 
 
 def _export_brief_command(

@@ -10,8 +10,14 @@ import re
 import sqlite3
 from collections.abc import Callable
 from functools import lru_cache
+from pathlib import Path
+from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from researchassistant.common.money import canonical_usd, parse_canonical_usd, parse_exact_usd
+
+if TYPE_CHECKING:
+    from researchassistant.storage.database_recovery import BackupPolicy
 
 CURRENT_SCHEMA_VERSION = 14
 
@@ -160,21 +166,74 @@ _REQUIRED_INDEXES = {
 }
 
 
-def initialize_database(db_path: str, *, connect: Callable[[str], sqlite3.Connection]) -> None:
+def initialize_database(
+    db_path: str,
+    *,
+    connect: Callable[[str], sqlite3.Connection],
+    lock_owned: bool = False,
+    backup_policy: BackupPolicy | None = None,
+) -> None:
     """Validate existing structure before performing any writable upgrade."""
-    conn = connect(db_path)
-    try:
-        _validate_before_upgrade(conn)
-        _initialize_schema(conn)
-        validate_schema_structure(conn, CURRENT_SCHEMA_VERSION)
-    finally:
-        conn.close()
+    from researchassistant.storage import database_recovery
+    from researchassistant.storage.database_lock import database_lock
+
+    path = Path(db_path).expanduser().resolve()
+    with database_lock(path, lock_owned=lock_owned):
+        recovery_path: Path | None = None
+        if path.exists():
+            uri = f"file:{quote(path.as_posix(), safe='/')}?mode=ro"
+            source = sqlite3.connect(uri, uri=True)
+            source.row_factory = sqlite3.Row
+            try:
+                source.execute("PRAGMA query_only=ON")
+                source.execute("BEGIN")
+                version = validate_recorded_database(source)
+                versions = (
+                    {row[0] for row in source.execute("SELECT version FROM schema_migrations")}
+                    if version
+                    else set()
+                )
+                if versions == set(MIGRATION_DESCRIPTIONS):
+                    return  # No DDL, ledger update, backup, or write-capable open.
+                if version:
+                    recovery_path = database_recovery.create_upgrade_backup(
+                        path, source, version, policy=backup_policy
+                    ).path
+            finally:
+                source.close()
+        try:
+            conn = connect(str(path))
+            try:
+                _validate_before_upgrade(conn)
+                _initialize_schema(conn)
+                validate_recorded_database(conn)
+            finally:
+                conn.close()
+        except BaseException as exc:
+            if recovery_path is not None:
+                recovery_message = (
+                    f"Verified recovery backup retained at {recovery_path}; "
+                    "use restore-backup to restore into a new database path"
+                )
+                exc.add_note(recovery_message)
+                if isinstance(exc, Exception):
+                    exc.args = (f"{exc}; {recovery_message}",)
+            raise
+        if recovery_path is not None:
+            try:
+                database_recovery.prune_backups(path, policy=backup_policy)
+            except (OSError, ValueError, sqlite3.Error):
+                # A cleanup failure never invalidates the committed upgrade.
+                import logging
+
+                logging.getLogger(__name__).warning("Recovery retention cleanup failed")
 
 
 def _initialize_schema(conn: sqlite3.Connection) -> None:
     """Install the canonical schema; callers validate existing databases first."""
     conn.executescript(
         """
+        BEGIN IMMEDIATE;
         -- schema migrations -------------------------------------------
         CREATE TABLE IF NOT EXISTS schema_migrations (
             version      INTEGER PRIMARY KEY,
@@ -1458,6 +1517,48 @@ def validate_schema_structure(
 
 
 def _validate_before_upgrade(conn: sqlite3.Connection) -> None:
+    validate_recorded_database(conn)
+
+
+def _object_version(kind: str, name: str) -> int:
+    """Object introduction boundaries from the executable schema definitions."""
+    if name in _V2_PHASE10_TABLES | _V2_PHASE10_TRIGGERS:
+        return 13
+    if name in _V2_PHASE3_TABLES | _V2_PHASE3_TRIGGERS:
+        return 12
+    if name in _V2_PHASE1_TABLES | _V2_PHASE1_TRIGGERS:
+        return 11
+    if name in _MVP11_TABLES | _MVP11_TRIGGERS:
+        return 9
+    if name in _MVP10_TABLES:
+        return 8
+    if name in IMMUTABLE_ARTIFACT_TRIGGERS:
+        return 6
+    if name == RAW_CLAIM_TRIGGER_NAME:
+        return 5
+    if kind == "trigger":
+        return 4
+    if name in {
+        "provider_run_contracts",
+        "model_route_attempts",
+        "run_cancellations",
+        "model_route_attempts_run_operation",
+    }:
+        return 3
+    if name in {"orchestration_checkpoints", "orchestration_stage_artifacts"}:
+        return 2
+    return 1
+
+
+def validate_recorded_database(conn: sqlite3.Connection) -> int:
+    """Read-only upgrade preflight, including recognized pre-schema-7 inputs.
+
+    Historical migration-boundary fixtures may retain later additive objects or
+    omit one pending migration; validate committed objects and pending shapes.
+    Public read-only inspection keeps its independent schema-7 lower boundary.
+    """
+    if [row[0] for row in conn.execute("PRAGMA quick_check")] != ["ok"]:
+        raise sqlite3.DatabaseError("database integrity check failed")
     migration_table = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'"
     ).fetchone()
@@ -1474,7 +1575,40 @@ def _validate_before_upgrade(conn: sqlite3.Connection) -> None:
                 f"database schema version {latest} is newer than supported "
                 f"version {CURRENT_SCHEMA_VERSION}"
             )
-        versions = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
+        rows = list(conn.execute("SELECT version, description FROM schema_migrations"))
+        if any(not isinstance(row[0], int) or row[0] not in MIGRATION_DESCRIPTIONS for row in rows):
+            raise sqlite3.DatabaseError("schema migration version is invalid")
+        versions = {row[0] for row in rows}
+        for version, description in rows:
+            # This exact pre-v5 description is covered by the retained v4 fixture.
+            historical_v4 = (
+                version == 4
+                and 5 not in versions
+                and description == "same-run provenance triggers and immutable raw claim"
+            )
+            if description != MIGRATION_DESCRIPTIONS[version] and not historical_v4:
+                raise sqlite3.DatabaseError(f"migration {version} description is inconsistent")
+    objects = {
+        (row[0], row[1])
+        for row in conn.execute(
+            "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        )
+    }
+    if latest == 0:
+        if objects:
+            raise sqlite3.DatabaseError("nonempty database has no recognized migration records")
+        return 0
+    required = {
+        (kind, name)
+        for kind, name, _ in _canonical_schema()
+        if _object_version(kind, name) in versions
+    }
+    missing = required - objects
+    if missing:
+        raise sqlite3.DatabaseError(
+            "required schema object is missing: " + ", ".join(sorted(name for _, name in missing))
+        )
     validate_schema_structure(
         conn, latest, pending_migrations=frozenset(set(MIGRATION_DESCRIPTIONS) - versions)
     )
+    return latest

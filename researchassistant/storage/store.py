@@ -15,8 +15,12 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from researchassistant.storage.database_recovery import BackupPolicy
 
 from researchassistant.common.money import (
     add_usd,
@@ -526,9 +530,13 @@ def open_read_only_store(db_path: str | Path) -> ReadOnlyStore:
 # ---------------------------------------------------------------------------
 
 
-def init_db(db_path: str) -> None:
+def init_db(
+    db_path: str, *, lock_owned: bool = False, backup_policy: BackupPolicy | None = None
+) -> None:
     """Create/validate schema through the intentional writable initialization path."""
-    initialize_database(db_path, connect=_connect)
+    initialize_database(
+        db_path, connect=_connect, lock_owned=lock_owned, backup_policy=backup_policy
+    )
 
 
 # ---------------------------------------------------------------------------

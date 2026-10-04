@@ -1,0 +1,107 @@
+{
+  "audit_date_local": "2026-10-03",
+  "all_mutation_reproductions_used_temporary_databases": true,
+  "schema": {
+    "dropped_table_before_init": "DatabaseCompatibilityError",
+    "after_writable_init": {
+      "compatible": true,
+      "recreated_table_count": 0
+    },
+    "migration_description_after_init": {
+      "1": "changed",
+      "4": "same-run provenance protection triggers"
+    },
+    "cross_run_update_fk_violations": 0,
+    "cross_run_update_reader_accepts": true
+  },
+  "model_attempts": {
+    "accounting_metadata_loss": {
+      "before": {
+        "input_tokens": 100,
+        "cached_input_tokens": 50,
+        "uncached_input_tokens": 50,
+        "cache_write_tokens": 10,
+        "output_tokens": 10,
+        "total_tokens": 110,
+        "cost_usd": "0.01",
+        "usage_cost_basis": "published_cache_prices_reported_writes"
+      },
+      "after": {
+        "input_tokens": 100,
+        "cached_input_tokens": 50,
+        "uncached_input_tokens": 50,
+        "cache_write_tokens": null,
+        "output_tokens": 10,
+        "total_tokens": 110,
+        "cost_usd": "0.01",
+        "usage_cost_basis": null
+      }
+    },
+    "same_completion_replay": "IntegrityError: model attempt 00000000-0000-0000-0000-000000000004 already finished differently",
+    "reservation_identity_collision": {
+      "requested_run": "00000000-0000-0000-0000-000000000002",
+      "returned_run": "00000000-0000-0000-0000-000000000001",
+      "accepted_with_call_ceiling": 0
+    },
+    "completion_identity_mismatch": {
+      "incoming_run": "00000000-0000-0000-0000-000000000002",
+      "stored_run": "00000000-0000-0000-0000-000000000001",
+      "stored_cost": "0.002",
+      "incoming_model": "different-model",
+      "stored_model": "mimo-v2.6-pro"
+    },
+    "conflicting_concurrent_completions": {
+      "workers": [
+        {
+          "cost": "0.02",
+          "result": "accepted"
+        },
+        {
+          "cost": "0.01",
+          "result": "accepted"
+        }
+      ],
+      "stored_cost": "0.01",
+      "stored_output": "{\"cost\": \"0.01\"}"
+    }
+  },
+  "reader_missing_path": {
+    "read_run": "OperationalError and zero-byte file created",
+    "list_runs": "OperationalError and zero-byte file created",
+    "read_snapshot": "OperationalError and zero-byte file created"
+  },
+  "progress": [
+    {
+      "case": "failed-only",
+      "persisted_attempts": 1,
+      "successful_acquisitions": 0,
+      "displayed_retrieval_attempts": 0
+    },
+    {
+      "case": "failed-provider-and-successful-fallback",
+      "persisted_attempts": 2,
+      "successful_acquisitions": 1,
+      "displayed_retrieval_attempts": 1
+    }
+  ],
+  "unreviewed_filter": {
+    "unreviewed_candidate_in_rejected_results": true
+  },
+  "browser_related_query_counts": {
+    "2_candidates": 11,
+    "10_candidates": 51,
+    "40_candidates": 201
+  },
+  "pdf": {
+    "line_count": 70,
+    "page_count": 1,
+    "last_text_baseline_y_from_content_instructions": -68
+  },
+  "existing_python_suite": {
+    "passed": 1400,
+    "skipped": 2,
+    "seconds": 79.94
+  },
+  "lint": "passed",
+  "format": "passed"
+}

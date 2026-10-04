@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Database review implementation — 2026-10-03](plans/database-review-2026-10-03.md) is the shared four-phase record. Prompt 1 covers lifecycle, private copies, pre-upgrade backups, explicit restore and shared worker locks; its review and full-suite verification passed. Prompts 2–4 and final cross-phase/performance verification remain separate sequential work.
+- [Validator integrity, repository organization and current documentation — 2026-10-02](plans/validator-and-current-docs-2026-10-02.md) covers the source-metadata repair, Windows failure investigation, documentation cleanup and requested Python package organization. Its Results section records actual checks and remaining limits.
 
 ## State and delivery
 

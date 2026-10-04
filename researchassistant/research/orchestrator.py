@@ -583,6 +583,40 @@ def run_provider_pipeline(
     research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
     clock: Callable[[], datetime] | None = None,
     stage_hook: _StageHook | None = None,
+    _database_lock_owned: bool = False,
+) -> ProviderPipelineResult:
+    """Retained legacy execution shares the same lock as imports and v2 workers."""
+    from researchassistant.storage.database_lock import database_lock
+
+    with database_lock(db_path, lock_owned=_database_lock_owned):
+        return _run_provider_pipeline(
+            raw_claim,
+            db_path=db_path,
+            search_provider=search_provider,
+            scraper_provider=scraper_provider,
+            llm_provider=llm_provider,
+            run_id=run_id,
+            config=config,
+            provider_contract=provider_contract,
+            research_controls=research_controls,
+            clock=clock,
+            stage_hook=stage_hook,
+        )
+
+
+def _run_provider_pipeline(
+    raw_claim: str,
+    *,
+    db_path: str | Path,
+    search_provider: SearchProvider,
+    scraper_provider: ScraperProvider,
+    llm_provider: LLMProvider,
+    run_id: UUID | None = None,
+    config: ProviderOrchestrationConfig | None = None,
+    provider_contract: ProviderRunContract | None = None,
+    research_controls: ResearchControls = DEFAULT_RESEARCH_CONTROLS,
+    clock: Callable[[], datetime] | None = None,
+    stage_hook: _StageHook | None = None,
 ) -> ProviderPipelineResult:
     """Run or restart the synchronous provider-backed Phase 9 pipeline."""
     claim = raw_claim
@@ -1098,8 +1132,15 @@ def request_run_cancellation(
 ) -> RunCancellationRequest:
     """Persist a cancellation request that is honored at the next stage boundary."""
     path = str(Path(db_path).resolve())
-    init_db(path)
-    read_run(path, run_id)
+    # Cooperative cancellation intentionally writes while the worker retains its
+    # process lock. It must never initialize or migrate that worker's database.
+    from researchassistant.storage.store import DatabaseCompatibilityError, open_read_only_store
+
+    try:
+        with open_read_only_store(path) as store:
+            read_run(store.connection, run_id)
+    except DatabaseCompatibilityError as exc:
+        raise ValueError("Cancellation requires an initialized compatible database") from exc
     request = RunCancellationRequest(
         run_id=run_id,
         requested_at=requested_at or _phase9_utc_now(),

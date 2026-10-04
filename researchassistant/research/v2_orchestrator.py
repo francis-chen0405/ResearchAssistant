@@ -117,7 +117,6 @@ from researchassistant.evidence.evidence_core import (
     EVIDENCE_POLICY_VERSION,
     FRESH_SENTENCE_SEGMENTATION_POLICY,
 )
-from researchassistant.platform_support.file_lock import FileLock
 from researchassistant.research.research_governor import DEFAULT_RESEARCH_GOVERNOR_POLICY
 from researchassistant.storage.store import (
     init_db,
@@ -616,15 +615,10 @@ def _raise_if_v2_cancelled(callback: Callable[[], bool] | None) -> None:
 @contextmanager
 def _v2_database_lock(db_path: str | Path) -> Iterator[None]:
     """Serialize direct v2 callers with the live controller's database lock."""
-    resolved_path = Path(db_path).resolve()
-    lock_path = resolved_path.with_name(f"{resolved_path.name}.mvp5.lock")
-    lock = FileLock(lock_path)
-    if not lock.acquire(blocking=True):
-        raise RuntimeError("Research database is busy in another process")
-    try:
+    from researchassistant.storage.database_lock import database_lock
+
+    with database_lock(db_path, blocking=True):
         yield
-    finally:
-        lock.release()
 
 
 def run_v2_production_pipeline(
@@ -648,23 +642,26 @@ def run_v2_production_pipeline(
 ) -> V2ProductionPipelineResult:
     """Run v2 under one database-scoped lock, unless the live controller owns it."""
     if _database_lock_owned:
-        return _run_v2_production_pipeline(
-            raw_claim,
-            db_path=db_path,
-            directions=directions,
-            discovery_providers=discovery_providers,
-            search_providers=search_providers,
-            wigolo_provider=wigolo_provider,
-            llm_provider=llm_provider,
-            routing_config=routing_config,
-            ceilings=ceilings,
-            firecrawl_provider=firecrawl_provider,
-            crossref_resolver=crossref_resolver,
-            run_id=run_id,
-            provider_policy_fingerprint=provider_policy_fingerprint,
-            cancellation_requested=cancellation_requested,
-            clock=clock,
-        )
+        from researchassistant.storage.database_lock import retained_database_lock
+
+        with retained_database_lock(db_path):
+            return _run_v2_production_pipeline(
+                raw_claim,
+                db_path=db_path,
+                directions=directions,
+                discovery_providers=discovery_providers,
+                search_providers=search_providers,
+                wigolo_provider=wigolo_provider,
+                llm_provider=llm_provider,
+                routing_config=routing_config,
+                ceilings=ceilings,
+                firecrawl_provider=firecrawl_provider,
+                crossref_resolver=crossref_resolver,
+                run_id=run_id,
+                provider_policy_fingerprint=provider_policy_fingerprint,
+                cancellation_requested=cancellation_requested,
+                clock=clock,
+            )
     with _v2_database_lock(db_path):
         return _run_v2_production_pipeline(
             raw_claim,

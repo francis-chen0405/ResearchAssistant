@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -366,9 +367,11 @@ def test_live_controller_default_configures_and_starts_v2(
 @pytest.mark.parametrize("keyword", ["legacy_runner", "runner"])
 def test_live_controller_legacy_runner_selection_and_alias(tmp_path: Path, keyword: str) -> None:
     calls: list[tuple[str, dict[str, object]]] = []
+    runner_called = Event()
 
     def legacy_runner(raw_claim: str, **kwargs: object) -> ProviderPipelineResult:
         calls.append((raw_claim, kwargs))
+        runner_called.set()
         return _legacy_result(kwargs["db_path"], UUID(str(kwargs["run_id"])), raw_claim)
 
     controller = live_service.LiveResearchController(
@@ -379,6 +382,7 @@ def test_live_controller_legacy_runner_selection_and_alias(tmp_path: Path, keywo
         request = _request(tmp_path, uuid4())
         start = controller.start(request)
         assert start.started is True
+        assert runner_called.wait(5)
         assert calls
         assert calls[0][0] == CLAIM
         assert calls[0][1]["run_id"] == start.run_id

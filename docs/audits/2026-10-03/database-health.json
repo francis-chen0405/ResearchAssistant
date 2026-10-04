@@ -1,0 +1,585 @@
+{
+  "audit_date_local": "2026-10-03",
+  "databases": [
+    {
+      "bytes": 38060032,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "delete",
+      "tables": {
+        "schema_migrations": 14,
+        "runs": 8,
+        "planner_outputs": 0,
+        "claim_definitions": 0,
+        "ambiguities": 0,
+        "search_queries": 0,
+        "retrieval_attempts": 0,
+        "snapshots": 0,
+        "provisional_extractions": 0,
+        "candidates": 0,
+        "analyst_decisions": 0,
+        "statement_drafts": 0,
+        "statement_review_attempts": 0,
+        "ledger_records": 0,
+        "synthesis_attempts": 0,
+        "synthesis_sections": 0,
+        "synthesis_items": 0,
+        "validation_runs": 0,
+        "validation_errors": 0,
+        "model_invocations": 0,
+        "orchestration_checkpoints": 0,
+        "orchestration_stage_artifacts": 0,
+        "provider_run_contracts": 8,
+        "model_route_attempts": 108,
+        "run_cancellations": 0,
+        "source_family_members": 0,
+        "evidence_trail_entries": 0,
+        "portfolio_items": 0,
+        "portfolio_coverage_assessments": 0,
+        "research_round_records": 0,
+        "research_governor_decisions": 0,
+        "research_terminal_results": 0,
+        "v2_run_identities": 8,
+        "v2_artifacts": 1374,
+        "v2_initial_planner_outputs": 8,
+        "v2_round_one_search_queries": 56,
+        "v2_ledger_admissions": 60
+      },
+      "schema_versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "run_status_counts": {
+        "completed": 7,
+        "failed": 1
+      },
+      "lifecycle_counts": {
+        "terminal_missing_completed_at": 0,
+        "nonterminal_with_completed_at": 0
+      },
+      "invalid_json": {},
+      "payload_run_mismatches": {},
+      "artifact_hash_errors": 0,
+      "app_schema_compatibility": {
+        "compatible": true,
+        "issue": null,
+        "schema_version": 14,
+        "message": "ResearchAssistant schema version 14 is compatible"
+      },
+      "main_file_metadata_unchanged": true,
+      "seconds": 0.633,
+      "label": "installed-main"
+    },
+    {
+      "bytes": 71159808,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "delete",
+      "tables": {
+        "schema_migrations": 13,
+        "runs": 47,
+        "planner_outputs": 26,
+        "claim_definitions": 26,
+        "ambiguities": 99,
+        "search_queries": 166,
+        "retrieval_attempts": 485,
+        "snapshots": 245,
+        "provisional_extractions": 62,
+        "candidates": 59,
+        "analyst_decisions": 38,
+        "statement_drafts": 40,
+        "statement_review_attempts": 40,
+        "ledger_records": 13,
+        "synthesis_attempts": 7,
+        "synthesis_sections": 6,
+        "synthesis_items": 9,
+        "validation_runs": 7,
+        "validation_errors": 1,
+        "model_invocations": 0,
+        "orchestration_checkpoints": 123,
+        "orchestration_stage_artifacts": 59,
+        "provider_run_contracts": 47,
+        "model_route_attempts": 771,
+        "run_cancellations": 2,
+        "source_family_members": 0,
+        "evidence_trail_entries": 112,
+        "portfolio_items": 8,
+        "portfolio_coverage_assessments": 5,
+        "research_round_records": 15,
+        "research_governor_decisions": 5,
+        "research_terminal_results": 16,
+        "v2_run_identities": 19,
+        "v2_artifacts": 2509,
+        "v2_initial_planner_outputs": 19,
+        "v2_round_one_search_queries": 122,
+        "v2_ledger_admissions": 48
+      },
+      "schema_versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "run_status_counts": {
+        "blocked": 1,
+        "cancelled": 2,
+        "completed": 12,
+        "failed": 32
+      },
+      "lifecycle_counts": {
+        "terminal_missing_completed_at": 0,
+        "nonterminal_with_completed_at": 0
+      },
+      "invalid_json": {},
+      "payload_run_mismatches": {},
+      "artifact_hash_errors": 0,
+      "app_schema_compatibility": {
+        "compatible": true,
+        "issue": null,
+        "schema_version": 13,
+        "message": "ResearchAssistant schema version 13 is compatible"
+      },
+      "main_file_metadata_unchanged": true,
+      "seconds": 1.068,
+      "label": "repository-main"
+    },
+    {
+      "bytes": 11935744,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "delete",
+      "tables": {
+        "schema_migrations": 13,
+        "runs": 4,
+        "planner_outputs": 0,
+        "claim_definitions": 0,
+        "ambiguities": 0,
+        "search_queries": 0,
+        "retrieval_attempts": 0,
+        "snapshots": 0,
+        "provisional_extractions": 0,
+        "candidates": 0,
+        "analyst_decisions": 0,
+        "statement_drafts": 0,
+        "statement_review_attempts": 0,
+        "ledger_records": 0,
+        "synthesis_attempts": 0,
+        "synthesis_sections": 0,
+        "synthesis_items": 0,
+        "validation_runs": 0,
+        "validation_errors": 0,
+        "model_invocations": 0,
+        "orchestration_checkpoints": 0,
+        "orchestration_stage_artifacts": 0,
+        "provider_run_contracts": 4,
+        "model_route_attempts": 7,
+        "run_cancellations": 3,
+        "source_family_members": 0,
+        "evidence_trail_entries": 0,
+        "portfolio_items": 0,
+        "portfolio_coverage_assessments": 0,
+        "research_round_records": 0,
+        "research_governor_decisions": 0,
+        "research_terminal_results": 0,
+        "v2_run_identities": 4,
+        "v2_artifacts": 346,
+        "v2_initial_planner_outputs": 3,
+        "v2_round_one_search_queries": 24,
+        "v2_ledger_admissions": 5
+      },
+      "schema_versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "run_status_counts": {
+        "cancelled": 3,
+        "failed": 1
+      },
+      "lifecycle_counts": {
+        "terminal_missing_completed_at": 0,
+        "nonterminal_with_completed_at": 0
+      },
+      "invalid_json": {},
+      "payload_run_mismatches": {},
+      "artifact_hash_errors": 0,
+      "app_schema_compatibility": {
+        "compatible": true,
+        "issue": null,
+        "schema_version": 13,
+        "message": "ResearchAssistant schema version 13 is compatible"
+      },
+      "main_file_metadata_unchanged": true,
+      "seconds": 0.142,
+      "label": "build-acceptance"
+    },
+    {
+      "bytes": 241664,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "delete",
+      "tables": {
+        "schema_migrations": 3,
+        "runs": 1,
+        "planner_outputs": 1,
+        "claim_definitions": 1,
+        "ambiguities": 1,
+        "search_queries": 6,
+        "retrieval_attempts": 2,
+        "snapshots": 2,
+        "provisional_extractions": 2,
+        "candidates": 2,
+        "analyst_decisions": 2,
+        "statement_drafts": 2,
+        "statement_review_attempts": 2,
+        "ledger_records": 2,
+        "synthesis_attempts": 1,
+        "synthesis_sections": 2,
+        "synthesis_items": 2,
+        "validation_runs": 1,
+        "validation_errors": 0,
+        "model_invocations": 0,
+        "orchestration_checkpoints": 0,
+        "orchestration_stage_artifacts": 0,
+        "provider_run_contracts": 0,
+        "model_route_attempts": 0,
+        "run_cancellations": 0
+      },
+      "schema_versions": [
+        1,
+        2,
+        3
+      ],
+      "run_status_counts": {
+        "completed": 1
+      },
+      "lifecycle_counts": {
+        "terminal_missing_completed_at": 0,
+        "nonterminal_with_completed_at": 0
+      },
+      "invalid_json": {},
+      "payload_run_mismatches": {},
+      "artifact_hash_errors": 0,
+      "app_schema_compatibility": {
+        "error_type": "DatabaseCompatibilityError",
+        "message": "database schema version 3 requires migration to version 14; a writable run or resume is required"
+      },
+      "main_file_metadata_unchanged": true,
+      "seconds": 0.004,
+      "label": "basic-generated-fixture"
+    },
+    {
+      "bytes": 184320,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "delete",
+      "tables": {
+        "schema_migrations": 1,
+        "runs": 1,
+        "planner_outputs": 1,
+        "claim_definitions": 1,
+        "ambiguities": 1,
+        "search_queries": 6,
+        "retrieval_attempts": 2,
+        "snapshots": 2,
+        "provisional_extractions": 2,
+        "candidates": 2,
+        "analyst_decisions": 2,
+        "statement_drafts": 2,
+        "statement_review_attempts": 2,
+        "ledger_records": 2,
+        "synthesis_attempts": 1,
+        "synthesis_sections": 2,
+        "synthesis_items": 2,
+        "validation_runs": 1,
+        "validation_errors": 1,
+        "model_invocations": 0
+      },
+      "schema_versions": [
+        1
+      ],
+      "run_status_counts": {
+        "completed": 1
+      },
+      "lifecycle_counts": {
+        "terminal_missing_completed_at": 0,
+        "nonterminal_with_completed_at": 0
+      },
+      "invalid_json": {},
+      "payload_run_mismatches": {},
+      "artifact_hash_errors": 0,
+      "app_schema_compatibility": {
+        "error_type": "DatabaseCompatibilityError",
+        "message": "database schema version 1 requires migration to version 14; a writable run or resume is required"
+      },
+      "main_file_metadata_unchanged": true,
+      "seconds": 0.003,
+      "label": "invalid-generated-fixture"
+    },
+    {
+      "bytes": 15478784,
+      "error": {
+        "type": "OperationalError",
+        "message": "unable to open database file"
+      },
+      "seconds": 0.0,
+      "label": "installed-wigolo-cache"
+    },
+    {
+      "bytes": 8282112,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "wal",
+      "tables": {
+        "url_cache": 39,
+        "url_cache_fts": 39,
+        "url_cache_fts_data": 107,
+        "url_cache_fts_idx": 105,
+        "url_cache_fts_docsize": 39,
+        "url_cache_fts_config": 1,
+        "search_cache": 0,
+        "domain_routing": 0,
+        "domain_boilerplate": 0,
+        "schema_migrations": 9
+      },
+      "error": {
+        "type": "OperationalError",
+        "message": "no such module: vec0"
+      },
+      "seconds": 0.026,
+      "label": "build-wigolo-cache"
+    },
+    {
+      "bytes": 32768,
+      "integrity_check": [
+        "ok"
+      ],
+      "foreign_key_violations": 0,
+      "journal_mode": "delete",
+      "tables": {
+        "meta": 3,
+        "declarative_performance_observer_policies": 0,
+        "declarative_performance_observer_reports": 0
+      },
+      "invalid_json": {},
+      "payload_run_mismatches": {},
+      "artifact_hash_errors": 0,
+      "main_file_metadata_unchanged": true,
+      "seconds": 0.001,
+      "label": "performance-observer"
+    }
+  ],
+  "native_and_current_class_checks": [
+    {
+      "database": "live-runs.sqlite3",
+      "parent": "ResearchAssistant",
+      "decoded_rows": {
+        "runs": 8,
+        "snapshots": 0,
+        "candidates": 0,
+        "analyst_decisions": 0,
+        "statement_drafts": 0,
+        "statement_review_attempts": 0,
+        "ledger_records": 0,
+        "provider_run_contracts": 8,
+        "orchestration_stage_artifacts": 0,
+        "v2_artifacts": 1374,
+        "model_route_attempts": 108
+      },
+      "decode_failures": {},
+      "same_run_violations": {},
+      "payload_class_decoded": 577,
+      "payload_class_unavailable": {
+        "V2ProductionFingerprint": 8,
+        "V2PhysicalCallStart": 300,
+        "V2PhysicalCallCompletion": 300,
+        "V2RoundOneSearchResult": 8,
+        "V2MergedSurvivorPool": 7,
+        "V2AdaptiveStoppingDecision": 7,
+        "V2AdaptiveContinuationResult": 7,
+        "V2ExactExtractionResult": 130,
+        "V2ProductionPipelineResult": 8,
+        "V2PlanningAttempt": 4,
+        "V2PlanningOutcome": 4,
+        "V2AdaptivePlannedRound": 4,
+        "V2AdaptiveSearchResults": 4,
+        "V2AdaptiveRoundExecution": 4,
+        "V2RoundThreeGovernorDecision": 1,
+        "V2RoundFourRunResult": 1
+      },
+      "payload_class_failures": {}
+    },
+    {
+      "database": "live-runs.sqlite3",
+      "parent": ".researchassistant",
+      "decoded_rows": {
+        "runs": 47,
+        "snapshots": 245,
+        "candidates": 59,
+        "analyst_decisions": 38,
+        "statement_drafts": 40,
+        "statement_review_attempts": 40,
+        "ledger_records": 13,
+        "provider_run_contracts": 47,
+        "orchestration_stage_artifacts": 59,
+        "v2_artifacts": 2509,
+        "model_route_attempts": 771
+      },
+      "decode_failures": {
+        "ledger_records": 2
+      },
+      "same_run_violations": {},
+      "payload_class_decoded": 851,
+      "payload_class_unavailable": {
+        "V2ProductionFingerprint": 19,
+        "V2PhysicalCallStart": 566,
+        "V2PhysicalCallCompletion": 566,
+        "V2RoundOneSearchResult": 19,
+        "V2MergedSurvivorPool": 18,
+        "V2AdaptiveStoppingDecision": 18,
+        "V2AdaptiveContinuationResult": 18,
+        "V2ExactExtractionResult": 199,
+        "V2ProductionPipelineResult": 17,
+        "V2AdaptivePlannedRound": 11,
+        "V2AdaptiveSearchResults": 11,
+        "V2AdaptiveRoundExecution": 11,
+        "V2RoundThreeGovernorDecision": 4
+      },
+      "payload_class_failures": {
+        "V2SourceSelectionQueueResult": 14,
+        "V2EvidenceAnalystBatchResult": 81,
+        "V2ReviewerLedgerBatchResult": 81,
+        "V2DeepAnalysisBackfillResult": 5
+      }
+    },
+    {
+      "database": "acceptance.sqlite3",
+      "parent": "mac-cache-live-acceptance",
+      "decoded_rows": {
+        "runs": 4,
+        "snapshots": 0,
+        "candidates": 0,
+        "analyst_decisions": 0,
+        "statement_drafts": 0,
+        "statement_review_attempts": 0,
+        "ledger_records": 0,
+        "provider_run_contracts": 4,
+        "orchestration_stage_artifacts": 0,
+        "v2_artifacts": 346,
+        "model_route_attempts": 7
+      },
+      "decode_failures": {},
+      "same_run_violations": {},
+      "payload_class_decoded": 172,
+      "payload_class_unavailable": {
+        "V2ProductionFingerprint": 4,
+        "V2PhysicalCallStart": 45,
+        "V2PhysicalCallCompletion": 45,
+        "V2ProductionPipelineResult": 4,
+        "V2RoundOneSearchResult": 2,
+        "V2PlanningAttempt": 4,
+        "V2PlanningOutcome": 4,
+        "V2AdaptivePlannedRound": 4,
+        "V2AdaptiveSearchResults": 4,
+        "V2AdaptiveRoundExecution": 4,
+        "V2RoundThreeGovernorDecision": 2,
+        "V2MergedSurvivorPool": 2,
+        "V2AdaptiveStoppingDecision": 2,
+        "V2AdaptiveContinuationResult": 2,
+        "V2RoundFourRunResult": 2,
+        "V2ExactExtractionResult": 44
+      },
+      "payload_class_failures": {}
+    }
+  ],
+  "complete_v2_class_and_historical_checks": [
+    {
+      "label": "ResearchAssistant",
+      "all_v2_payload_rows": 1374,
+      "unknown_classes": {},
+      "failed_classes": {},
+      "validation_error_categories": {},
+      "legacy_inspection_failures": {},
+      "ledger_run_browser_failure_count": 0
+    },
+    {
+      "label": ".researchassistant",
+      "all_v2_payload_rows": 2509,
+      "unknown_classes": {},
+      "failed_classes": {
+        "V2SourceSelectionQueueResult": 14,
+        "V2ExactExtractionResult": 7,
+        "V2EvidenceAnalystBatchResult": 81,
+        "V2ReviewerLedgerBatchResult": 81,
+        "V2DeepAnalysisBackfillResult": 5
+      },
+      "validation_error_categories": {
+        "V2SourceSelectionQueueResult:('physical_calls_per_source',):literal_error:Input should be 3 or 7": 14,
+        "V2ExactExtractionResult:('queue_result', 'physical_calls_per_source'):literal_error:Input should be 3 or 7": 7,
+        "V2EvidenceAnalystBatchResult:('input', 'queue_result', 'physical_calls_per_source'):literal_error:Input should be 3 or 7": 7,
+        "V2ReviewerLedgerBatchResult:('analyst_result', 'input', 'queue_result', 'physical_calls_per_source'):literal_error:Input should be 3 or 7": 7,
+        "V2ReviewerLedgerBatchResult:('policy_identity',):literal_error:Input should be 'researchassistant-v2-phase-10-reviewer-ledger-v2'": 7,
+        "V2EvidenceAnalystBatchResult:('input',):value_error:Value error, Phase-9 input has an unsupported Analyst policy identity": 74,
+        "V2ReviewerLedgerBatchResult:('analyst_result', 'input'):value_error:Value error, Phase-9 input has an unsupported Analyst policy identity": 74,
+        "V2DeepAnalysisBackfillResult:('final_reviewer_result', 'analyst_result', 'input'):value_error:Value error, Phase-9 input has an unsupported Analyst policy identity": 5
+      },
+      "legacy_inspection_failures": {
+        "ValidationError": 2
+      },
+      "ledger_run_browser_failure_count": 2,
+      "browser_error_type": "EvidenceBrowserError"
+    },
+    {
+      "label": "mac-cache-live-acceptance",
+      "all_v2_payload_rows": 346,
+      "unknown_classes": {},
+      "failed_classes": {},
+      "validation_error_categories": {},
+      "legacy_inspection_failures": {},
+      "ledger_run_browser_failure_count": 0
+    }
+  ]
+}

@@ -521,13 +521,16 @@ class LiveResearchController:
                 return self._snapshot_from_v2_result(result)
             if self._legacy_runner is None:
                 raise TypeError("legacy factory cannot be used by the fresh-v2 runner")
-            legacy_result = self._legacy_runner(
-                request.raw_claim,
-                db_path=request.db_path,
-                factory_config=factory_config,
-                run_id=run_id,
-                research_controls=request.research_controls,
-            )
+            from researchassistant.storage.database_lock import retained_database_lock
+
+            with retained_database_lock(request.db_path):
+                legacy_result = self._legacy_runner(
+                    request.raw_claim,
+                    db_path=request.db_path,
+                    factory_config=factory_config,
+                    run_id=run_id,
+                    research_controls=request.research_controls,
+                )
             return self._snapshot_from_result(legacy_result)
         except ClaimMismatchError as exc:
             return self._early_snapshot(
@@ -706,5 +709,7 @@ class LiveResearchController:
 
 
 def prepare_default_database() -> Path:
-    DEFAULT_LIVE_DB.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    from researchassistant.platform_support.private_files import private_directory
+
+    private_directory(DEFAULT_LIVE_DB.parent)
     return DEFAULT_LIVE_DB

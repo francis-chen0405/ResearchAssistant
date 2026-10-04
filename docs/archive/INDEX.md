@@ -2,6 +2,12 @@
 
 This index points to historical documentation and exact prior snapshots. It is the current navigation guide. The pre-existing [`README.md`](README.md) is preserved unchanged as the original Phase 2 archive guide; it is not this index.
 
+## Exact documents replaced on 2026-10-03
+
+The prior status, handoff, architecture and plan index are preserved byte-for-byte
+under [`2026-10-03-current-state/`](2026-10-03-current-state/). Their release
+evidence remains historical; the shared database-review plan owns new checks.
+
 ## Exact documents replaced on 2026-10-02
 
 The prior current-state set is preserved byte-for-byte under

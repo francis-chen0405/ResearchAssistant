@@ -2,15 +2,13 @@
 
 ## Source and delivery
 
-- The installed runtime's source baseline is `20bf6a2`. The verified database lifecycle changes below are committed source work under the user's conditional approval and are not in the installed or public build. No push or public release was requested.
+- Runtime source is committed as `20bf6a2`; subsequent delivery-documentation changes do not change the tested runtime. No push or public release was requested.
 - `/Applications/ResearchAssistant.app` was replaced on 2026-10-02 with the verified build from `20bf6a2`, including ALPR equity, validator and repository-organization changes. The new installer is `~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`. The superseded app and installer were deleted; saved application files were preserved. OneDrive repeatedly restores placeholders for the obsolete ignored `desktop/dist/private-surveillance-fixes-20261002/` folder, so that folder's cleanup remains incomplete.
 - The public [September 28 unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928) was built from `ac49404`; it does not contain the October fixes. Do not describe it as the current-source build.
 
 ## Active work
 
-The [database-review shared plan](.agent/plans/database-review-2026-10-03.md) owns the four sequential implementation phases. Phase 1 is complete: private verified pre-upgrade SQLite backups, retention after successful upgrades, explicit CLI restore/import, private import copies, CLI selected-parent creation and retained legacy/v2 lock ownership through cancellation. Desktop keeps its documented existing-parent validation. Review fixed a retention/restore race and inconsistent custom backup-directory discovery. Source-derived writable boundaries 1–14 and unchanged public read-only boundaries 7–14 are covered. Full local macOS regression verification: **1,475 passed, three skips**; CLI end-to-end, lint/format and diff checks passed. All migration/restore checks use disposable databases. Prompts 2–4 remain pending; later cross-phase and performance acceptance belong to Prompt 4. Windows native ACL/durability and a new built artifact remain unverified.
-
-The preceding [validator and organization record](.agent/plans/validator-and-current-docs-2026-10-02.md) retains the 1,400-test baseline and exact packaged/installed checks for `20bf6a2`; those results do not verify the new lifecycle source.
+The [current task](.agent/plans/validator-and-current-docs-2026-10-02.md) completed the metadata-validator repair, documentation cleanup, organization of 31 runtime modules into seven `researchassistant/` groups, commit and local app redelivery. Verification: **1,400 tests passed, two unchanged skips**, lint/formatting, offline evaluations and API checks. Packaged and installed native/window checks and old-to-new history/settings/test-credential compatibility passed. All 116 source inputs, 22 frontend files and 30,982 installed payload entries match the verified candidate; installer CRC/checksum checks passed. The task record retains exact results and investigation limits.
 
 ## Open acceptance gates
 
@@ -20,7 +18,7 @@ The preceding [validator and organization record](.agent/plans/validator-and-cur
 
 ## Navigation
 
-- [Active plan and verification results](.agent/plans/database-review-2026-10-03.md)
+- [Active plan and verification results](.agent/plans/validator-and-current-docs-2026-10-02.md)
 - [Next handoff](HANDOFF.md)
 - [Grouped plan and verification history](docs/history.md)
 - [Archive index and exact snapshots](docs/archive/INDEX.md)

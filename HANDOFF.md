@@ -1,16 +1,15 @@
 # Handoff
 
-Continue from the [validator, organization and documentation task record](.agent/plans/validator-and-current-docs-2026-10-02.md). Use [STATUS](STATUS.md) for source, installed-app and public-download state; use the task record for exact checks and remaining limits.
+Continue from the [database-review shared four-phase record](.agent/plans/database-review-2026-10-03.md). Use [STATUS](STATUS.md) for source, installed-app and public-download state. Prompt 1 lifecycle work is reviewed and committed; the installed app remains the preceding build.
 
 ## Next actions
 
-1. Obtain the restricted failure lines for [Windows job 111064698744](https://github.com/francis-chen0405/ResearchAssistant/actions/runs/37075607007/job/111064698744), then reproduce and fix the actual cause. The four quality commands now have separate CI steps; that improves diagnosis and does not establish a Windows pass.
-2. For manual research acceptance, inspect each finding against the full source: quotation context, population/technology/date, whether the measured outcome supports the stated relationship, causal versus associative scope, and whether citations represent independent studies. Record missed relevant sources and unjustified conclusions in the existing task record. Exact quotes and valid provenance alone are insufficient. Fresh paid runs require an explicit allowance.
-3. Before broader Mac distribution, test the same candidate on a clean machine and actual macOS 14, then sign/notarize with the required identity and verify that artifact. Publish a current download only under separate publication authorization.
-4. Finish deleting the obsolete ignored `desktop/dist/private-surveillance-fixes-20261002/` folder after OneDrive stops restoring its placeholders. Ordinary and macOS-coordinated deletion/move both failed to keep it absent. The installed old app and old Downloads installer are already removed; preserve the current installer and saved research.
+1. Apply Prompt 2's schema/accounting scope to the same plan. Reuse the recorded-version preflight and preserve the documented pre-v5 migration-4 description and existing sparse migration-6 accounting fixtures while distinguishing recognized upgrades from damage. Do not make public read-only inspection accept schemas 1–6 or initialize history.
+2. Continue with Prompts 3 and 4 in sequence. Prompt 1's full suite passed; repeat full-suite verification for later changes and complete performance/cross-phase checks in Prompt 4. Resolve interactions without weakening accepted tests, immutable artifacts, exact costs or fingerprint gates.
+3. Before a separate release decision, build and verify the final artifact. Native Windows owner/SYSTEM ACL, NTFS publication and power-loss durability checks are still open; macOS results do not establish Windows success. Earlier Windows-job, live-quality, clean-machine, minimum-OS, signing and notarization gates remain in [STATUS](STATUS.md) and the preceding task record.
 
 ## Boundaries and remaining acceptance
 
-Commit and local app replacement are complete under the user's authorization. No new paid research, saved-data or credential edits, dependencies, push, signing, or public release were requested. Preserve immutable history, quote/admission gates, and budgets. Fresh manual research testing remains necessary to assess interpretation quality; no new paid allowance exists. Actual macOS 14, clean-machine, signing, and notarization gates remain open. Do not infer Windows success from Mac checks.
+The user authorized reviewing Prompt 1 and committing its successful implementation. Installed-app replacement, paid research, real-user database migration/restore/deletion, push and publication remain outside this task. Keep verification disposable. A restored copy preserves history but does not authorize an incompatible research resume. The exhausted paid-test allowance and release gates remain unchanged. The obsolete ignored OneDrive-restored build-directory cleanup is a separate deferred boundary; preserve saved research and the installed app.
 
 Keep completed details in the task record and use [grouped history](docs/history.md) for prior records. Replace these next actions when they change; do not append another phase narrative.

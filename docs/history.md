@@ -2,12 +2,13 @@
 
 This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current authorized work is identified in [the plan index](../.agent/PLANS.md).
 
-There are 80 plan records and 19 verification records.
+There are 81 plan records and 19 verification records.
 
 ## Recent reviews and repairs
 
 ### Plans
 
+- [database-review-2026-10-03](../.agent/plans/database-review-2026-10-03.md)
 - [alpr-equity-run-fixes-2026-10-02](../.agent/plans/alpr-equity-run-fixes-2026-10-02.md)
 - [alpr-equity-run-review-2026-10-02](../.agent/plans/alpr-equity-run-review-2026-10-02.md)
 - [alpr-run-fixes-2026-10-01](../.agent/plans/alpr-run-fixes-2026-10-01.md)
@@ -55,6 +56,7 @@ There are 80 plan records and 19 verification records.
 
 - [audit-maintenance](../docs/verification/audit-maintenance.md)
 - [database-integrity-fixes](../docs/verification/database-integrity-fixes.md)
+- [database-review-2026-10-03](../docs/audits/2026-10-03/database-review.md)
 - [mac-cache-pricing](../docs/verification/mac-cache-pricing.md)
 - [mac-current-build-2026-09-28](../docs/verification/mac-current-build-2026-09-28.md)
 - [sqlite-status-polling](../docs/verification/sqlite-status-polling.md)
