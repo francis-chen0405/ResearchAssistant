@@ -199,48 +199,10 @@ def _markdown(brief: str, metadata: BriefExportMetadata) -> str:
 
 
 def _pdf(text: str) -> bytes:
-    lines = [line.encode("latin-1", "replace").decode("latin-1") for line in text.splitlines()]
-    body = ["BT", "/F1 9 Tf", "50 760 Td", "12 TL"]
-    for line in lines:
-        body.append(f"({_escape_pdf_text(line)}) Tj")
-        body.append("T*")
-    body.append("ET")
-    stream = "\n".join(body).encode("latin-1")
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
-        ),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length "
-        + str(len(stream)).encode("ascii")
-        + b" >>\nstream\n"
-        + stream
-        + b"\nendstream",
-    ]
-    output = bytearray(b"%PDF-1.4\n")
-    offsets = [0]
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(len(output))
-        output.extend(f"{index} 0 obj\n".encode("ascii"))
-        output.extend(obj)
-        output.extend(b"\nendobj\n")
-    xref = len(output)
-    output.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
-    for offset in offsets[1:]:
-        output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
-    output.extend(
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode(
-            "ascii"
-        )
-    )
-    return bytes(output)
+    # Inspection sessions have closed before any slow layout/font embedding.
+    from researchassistant.evidence.pdf_render import render_pdf_text
 
-
-def _escape_pdf_text(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    return render_pdf_text(text)
 
 
 def _docx(text: str, metadata: BriefExportMetadata) -> bytes:

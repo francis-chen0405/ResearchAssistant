@@ -9,6 +9,12 @@ from uuid import UUID
 from pydantic import ConfigDict, Field
 
 import researchassistant.storage.store as artifact_store
+from researchassistant.contracts.historical import (
+    AugustLedgerRecord,
+    HistoricalRead,
+    RecordCompatibilityError,
+    RecordCompatibilityResult,
+)
 from researchassistant.contracts.models import (
     CandidateQuoteBlock,
     EvidenceRole,
@@ -80,7 +86,7 @@ class EvidenceTrailItem(StrictModel):
     analyst_decision: ScoreDecision | None = None
     statement_drafts: tuple[StatementDraft, ...] = ()
     reviewer_decisions: tuple[StatementReviewResult, ...] = ()
-    ledger_records: tuple[LedgerRecord, ...] = ()
+    ledger_records: tuple[LedgerRecord | AugustLedgerRecord, ...] = ()
     final_validation_present: bool
     released: bool
     artifact_label: str = Field(min_length=1)
@@ -91,7 +97,7 @@ class ReleasedStatementTrace(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    ledger_record: LedgerRecord
+    ledger_record: LedgerRecord | AugustLedgerRecord
     reviewer_decision: StatementReviewResult
     candidate: CandidateQuoteBlock
     snapshot: SourceSnapshot
@@ -106,6 +112,7 @@ class EvidenceBrowserRun(StrictModel):
     manifest: RunManifest
     final_validation: ValidationResult | None = None
     trails: tuple[EvidenceTrailItem, ...]
+    compatibility_issues: tuple[RecordCompatibilityResult, ...] = ()
     released_statement_traces: tuple[ReleasedStatementTrace, ...]
     evidence_trail: tuple[EvidenceTrailEntry, ...] = ()
     portfolio_coverage: PortfolioCoverageAssessment | None = None
@@ -127,7 +134,8 @@ def browse_evidence_run(
         with open_read_only_store(db_path) as reader:
             manifest = read_run(reader.connection, run_id)
             validation = _optional_validation(reader.connection, run_id)
-            trails = _trails(reader.connection, run_id, validation)
+            compatibility_issues: list[RecordCompatibilityResult] = []
+            trails = _trails(reader.connection, run_id, validation, compatibility_issues)
             filtered = tuple(trail for trail in trails if _matches(trail, filters))
             traces = _released_traces(filtered, validation)
             evidence_trail = tuple(
@@ -139,6 +147,7 @@ def browse_evidence_run(
                 manifest=manifest,
                 final_validation=validation,
                 trails=filtered,
+                compatibility_issues=tuple(compatibility_issues),
                 released_statement_traces=traces,
                 evidence_trail=evidence_trail,
                 portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
@@ -181,6 +190,7 @@ def _trails(
     connection: artifact_store.DatabaseReader,
     run_id: UUID,
     validation: ValidationResult | None,
+    compatibility_issues: list[RecordCompatibilityResult],
 ) -> tuple[EvidenceTrailItem, ...]:
     candidate_rows = connection.execute(
         "SELECT * FROM candidates WHERE run_id = ? ORDER BY extracted_at, quote_block_id",
@@ -198,7 +208,7 @@ def _trails(
         analyst = _optional_analyst(connection, run_id, candidate.quote_block_id)
         drafts = _drafts(connection, run_id, candidate.quote_block_id)
         reviews = _reviews(connection, run_id, candidate.quote_block_id)
-        ledger = _ledger(connection, run_id, candidate.quote_block_id)
+        ledger = _ledger(connection, run_id, candidate.quote_block_id, compatibility_issues)
         released = bool(validation and validation.valid and ledger)
         trails.append(
             EvidenceTrailItem(
@@ -249,14 +259,34 @@ def _reviews(
 
 
 def _ledger(
-    connection: artifact_store.DatabaseReader, run_id: UUID, quote_block_id: UUID
+    connection: artifact_store.DatabaseReader,
+    run_id: UUID,
+    quote_block_id: UUID,
+    compatibility_issues: list[RecordCompatibilityResult],
 ) -> tuple[LedgerRecord, ...]:
     rows = connection.execute(
         """SELECT * FROM ledger_records WHERE run_id = ? AND quote_block_id = ?
            ORDER BY ledger_claim_id""",
         (str(run_id), str(quote_block_id)),
     ).fetchall()
-    return tuple(artifact_store._row_to_ledger_record(row) for row in rows)
+    try:
+        contract = artifact_store.read_provider_run_contract(connection, run_id)
+    except KeyError:
+        contract = None
+    records: list[LedgerRecord] = []
+    for row in rows:
+        try:
+            record = artifact_store._row_to_ledger_record(row, contract)
+            if isinstance(record, HistoricalRead):
+                from researchassistant.storage.historical_decode import verify_historical_snapshot
+
+                verify_historical_snapshot(
+                    record, artifact_store.read_snapshot(connection, record.snapshot_id)
+                )
+            records.append(record)
+        except RecordCompatibilityError as exc:
+            compatibility_issues.append(exc.result)
+    return tuple(records)
 
 
 def _artifact_label(
@@ -279,7 +309,9 @@ def _matches(trail: EvidenceTrailItem, filters: EvidenceBrowserFilter) -> bool:
     if filters.released is not None and trail.released != filters.released:
         return False
     if filters.approved is not None:
-        decisions = (trail.analyst_decision.approved if trail.analyst_decision else False,)
+        # This filter means an explicit outcome at either persisted stage.
+        # A missing Analyst/Reviewer decision remains pending.
+        decisions = (trail.analyst_decision.approved,) if trail.analyst_decision else ()
         decisions += tuple(review.approved for review in trail.reviewer_decisions)
         if filters.approved not in decisions:
             return False

@@ -148,6 +148,10 @@ def validate_final_release(
     validator_config_version: str = VALIDATOR_CONFIG_VERSION,
     research_mode: ResearchMode | None = None,
 ) -> ValidationResult:
+    from researchassistant.contracts.historical import HistoricalRead
+
+    if any(isinstance(record, HistoricalRead) for record in ledger_records):
+        raise ValueError("historical inspection records cannot authorize a new release")
     framing_errors = _authoritative_claim_errors(authoritative_claim)
     ledger_lookup, ledger_errors = _ledger_lookup(synthesis, ledger_records)
     errors = [

@@ -2,6 +2,13 @@
 
 This index points to historical documentation and exact prior snapshots. It is the current navigation guide. The pre-existing [`README.md`](README.md) is preserved unchanged as the original Phase 2 archive guide; it is not this index.
 
+## Exact documents replaced for Prompt 3 on 2026-10-04
+
+The preceding status, handoff, architecture and plan index are preserved
+byte-for-byte under [`2026-10-04-phase3-state/`](2026-10-04-phase3-state/).
+They describe the committed Prompt 2 baseline. The shared database-review plan
+records Prompt 3's source changes and focused verification.
+
 ## Exact documents replaced on 2026-10-03
 
 The prior status, handoff, architecture and plan index are preserved byte-for-byte

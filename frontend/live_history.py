@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from sqlite3 import Connection
-from typing import Literal
+from sqlite3 import Connection, IntegrityError
+from typing import Literal, TypeVar
 from uuid import UUID
 
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
@@ -16,11 +16,13 @@ from frontend.live_contracts import (
     ResearchTrail,
     ResearchTrailItem,
 )
-from frontend.live_progress import (
-    _read_first_v2_artifact,
+from researchassistant.contracts.historical import (
+    RecordCompatibilityError,
+    RecordCompatibilityResult,
 )
 from researchassistant.contracts.models import (
     RunManifest,
+    StrictModel,
     V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
 )
@@ -42,10 +44,43 @@ from researchassistant.research.v2_orchestrator import (
 from researchassistant.storage.store import (
     list_runs,
     open_read_only_store,
+    read_provider_run_contract,
     read_run,
     read_stage_artifact,
     read_v2_artifact,
 )
+
+_InspectionT = TypeVar("_InspectionT", bound=StrictModel)
+
+
+def _read_v2_inspection_result(
+    connection: Connection,
+    run_id: UUID,
+    artifact_key: str,
+    model_type: type[_InspectionT],
+    compatibility_issues: list[RecordCompatibilityResult],
+) -> tuple[_InspectionT | None, bool]:
+    """Distinguish absent records from unsafe envelopes or unsupported payloads."""
+    from researchassistant.storage.historical_decode import decode_v2_artifact
+
+    try:
+        artifact = read_v2_artifact(connection, run_id, artifact_key)
+    except KeyError:
+        return None, False
+    except (ValueError, IntegrityError):
+        compatibility_issues.append(
+            RecordCompatibilityResult(
+                record_key=artifact_key,
+                artifact_type=model_type.__name__,
+                message="stored artifact envelope or payload hash is invalid",
+            )
+        )
+        return None, True
+    try:
+        return decode_v2_artifact(artifact, model_type), False
+    except RecordCompatibilityError as exc:
+        compatibility_issues.append(exc.result)
+        return None, True
 
 
 def history(db_path: str | Path, *, limit: int = 100) -> tuple[LiveHistoryItem, ...]:
@@ -56,19 +91,24 @@ def history(db_path: str | Path, *, limit: int = 100) -> tuple[LiveHistoryItem, 
         manifests = list_runs(store.connection, limit=limit)
         items: list[LiveHistoryItem] = []
         for manifest in manifests:
-            try:
-                artifact = _read_first_v2_artifact(
+            compatibility_issues: list[RecordCompatibilityResult] = []
+            result = None
+            for artifact_key in (
+                V2_PRODUCTION_ARTIFACT_KEY,
+                V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
+                V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
+            ):
+                result, incompatible = _read_v2_inspection_result(
                     store.connection,
                     manifest.run_id,
-                    (
-                        V2_PRODUCTION_ARTIFACT_KEY,
-                        V2_PRODUCTION_PHASE13_ARTIFACT_KEY,
-                        V2_PRODUCTION_LEGACY_ARTIFACT_KEY,
-                    ),
+                    artifact_key,
+                    V2ProductionPipelineResult,
+                    compatibility_issues,
                 )
-                result = V2ProductionPipelineResult.model_validate_json(artifact.payload_json)
-            except (KeyError, ValueError):
-                items.append(_history_item(manifest))
+                if result is not None or incompatible:
+                    break
+            if result is None:
+                items.append(_history_item(manifest, tuple(compatibility_issues)))
                 continue
             # A saved terminal result is authoritative even if the old writer crashed
             # before updating its manifest. Inspection must not require compatible resume.
@@ -80,19 +120,31 @@ def history(db_path: str | Path, *, limit: int = 100) -> tuple[LiveHistoryItem, 
             )
             updated_at = manifest.updated_at if manifest_complete else result.completed_at
             completed_at = manifest.completed_at if manifest_complete else result.completed_at
+            try:
+                stage = infer_v2_stage(
+                    store.connection,
+                    manifest.run_id,
+                    result.current_stage,
+                    result.final_output is not None,
+                )
+            except (ValueError, IntegrityError):
+                stage = result.current_stage
+                compatibility_issues.append(
+                    RecordCompatibilityResult(
+                        record_key=str(manifest.run_id),
+                        artifact_type=V2ProductionPipelineResult.__name__,
+                        message="persisted artifacts do not permit safe stage reconstruction",
+                    )
+                )
             items.append(
                 LiveHistoryItem(
                     run_id=manifest.run_id,
                     raw_claim=manifest.raw_claim,
                     status=terminal_status,
-                    stage=infer_v2_stage(
-                        store.connection,
-                        manifest.run_id,
-                        result.current_stage,
-                        result.final_output is not None,
-                    ).value,
+                    stage=stage.value,
                     updated_at=updated_at.isoformat(),
                     completed_at=completed_at.isoformat() if completed_at is not None else None,
+                    compatibility_issues=tuple(compatibility_issues),
                 )
             )
     return tuple(items)
@@ -109,18 +161,27 @@ def research_trail(db_path: str | Path, run_id: UUID) -> ResearchTrail:
         (3, MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT),
     )
     items: list[ResearchTrailItem] = []
+    compatibility_issues: list[RecordCompatibilityResult] = []
     with open_read_only_store(path) as store:
         # An existing database is not evidence that this particular run exists.
         read_run(store.connection, run_id)
-        items.extend(_v2_research_trail_items(store.connection, run_id))
+        items.extend(_v2_research_trail_items(store.connection, run_id, compatibility_issues))
         for research_round, artifact_key in stage_keys:
             try:
                 artifact = read_stage_artifact(store.connection, run_id, artifact_key)
             except KeyError:
                 continue
-            if artifact.artifact_type != ResearcherPairResult.__name__:
+            from researchassistant.storage.historical_decode import decode_native_artifact
+
+            try:
+                contract = read_provider_run_contract(store.connection, run_id)
+            except KeyError:
+                contract = None
+            try:
+                pair = decode_native_artifact(artifact, ResearcherPairResult, contract)
+            except RecordCompatibilityError as exc:
+                compatibility_issues.append(exc.result)
                 continue
-            pair = ResearcherPairResult.model_validate_json(artifact.payload_json)
             for side in (pair.supporting, pair.opposing):
                 if side.retrieval_batch is None:
                     continue
@@ -188,6 +249,7 @@ def research_trail(db_path: str | Path, run_id: UUID) -> ResearchTrail:
                     )
     return ResearchTrail(
         run_id=run_id,
+        compatibility_issues=tuple(compatibility_issues),
         items=tuple(
             sorted(
                 items,
@@ -203,7 +265,11 @@ def research_trail(db_path: str | Path, run_id: UUID) -> ResearchTrail:
     )
 
 
-def _v2_research_trail_items(connection: Connection, run_id: UUID) -> tuple[ResearchTrailItem, ...]:
+def _v2_research_trail_items(
+    connection: Connection,
+    run_id: UUID,
+    compatibility_issues: list[RecordCompatibilityResult],
+) -> tuple[ResearchTrailItem, ...]:
     """Project persisted v2 discovery and acquisition artifacts into the trail contract."""
     items: list[ResearchTrailItem] = []
     decision_map = {
@@ -230,19 +296,14 @@ def _v2_research_trail_items(connection: Connection, run_id: UUID) -> tuple[Rese
                 else f"phase-7-round-{research_round}-acquisition-probe"
             )
         )
-        try:
-            artifact = read_v2_artifact(connection, run_id, discovery_key)
-        except KeyError:
+        discovery, _ = _read_v2_inspection_result(
+            connection, run_id, discovery_key, V2DiscoveryScoutOutput, compatibility_issues
+        )
+        acquisition, acquisition_incompatible = _read_v2_inspection_result(
+            connection, run_id, acquisition_key, V2AcquisitionProbeOutput, compatibility_issues
+        )
+        if discovery is None:
             continue
-        discovery = V2DiscoveryScoutOutput.model_validate_json(artifact.payload_json)
-        try:
-            acquisition_artifact = read_v2_artifact(connection, run_id, acquisition_key)
-        except KeyError:
-            acquisition = None
-        else:
-            acquisition = V2AcquisitionProbeOutput.model_validate_json(
-                acquisition_artifact.payload_json
-            )
         decisions = {
             scout_item.item_id: scout_item.decision.value
             for batch in discovery.scout_batches
@@ -268,8 +329,10 @@ def _v2_research_trail_items(connection: Connection, run_id: UUID) -> tuple[Rese
             if decision is None:
                 continue
             cluster_id = cluster_by_item.get(discovery_item.item_id)
-            acquisition_state: Literal["acquired", "attempted", "not_attempted"]
-            if cluster_id in acquired_clusters:
+            acquisition_state: Literal["acquired", "attempted", "not_attempted"] | None
+            if acquisition_incompatible:
+                acquisition_state = None
+            elif cluster_id in acquired_clusters:
                 acquisition_state = "acquired"
             elif cluster_id in attempted_clusters:
                 acquisition_state = "attempted"
@@ -293,7 +356,10 @@ def _v2_research_trail_items(connection: Connection, run_id: UUID) -> tuple[Rese
     return tuple(items)
 
 
-def _history_item(manifest: RunManifest) -> LiveHistoryItem:
+def _history_item(
+    manifest: RunManifest,
+    compatibility_issues: tuple[RecordCompatibilityResult, ...] = (),
+) -> LiveHistoryItem:
     return LiveHistoryItem(
         run_id=manifest.run_id,
         raw_claim=manifest.raw_claim,
@@ -301,4 +367,5 @@ def _history_item(manifest: RunManifest) -> LiveHistoryItem:
         stage=manifest.current_stage.value,
         updated_at=manifest.updated_at.isoformat(),
         completed_at=manifest.completed_at.isoformat() if manifest.completed_at else None,
+        compatibility_issues=compatibility_issues,
     )

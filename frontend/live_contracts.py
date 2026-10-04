@@ -16,6 +16,7 @@ from providers.model_choices import (
 )
 from providers.model_profiles import ProfileId
 from researchassistant.common.money import ExactUSD
+from researchassistant.contracts.historical import RecordCompatibilityResult
 from researchassistant.contracts.models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
@@ -104,6 +105,7 @@ class ResearchProgress(StrictModel):
     status: str = Field(min_length=1)
     model_attempts: int = Field(ge=0)
     retrieval_attempts: int = Field(ge=0)
+    acquired_sources: int = Field(default=0, ge=0)
     usable_snapshots: int = Field(ge=0)
     candidates: int = Field(ge=0)
 
@@ -124,6 +126,7 @@ class LiveRunSnapshot(StrictModel):
     diagnostic_component: str = Field(min_length=1)
     model_calls_used: int = Field(ge=0)
     retrieval_attempts_used: int = Field(ge=0)
+    unassigned_retrieval_attempts_used: int = Field(default=0, ge=0)
     total_tokens: int | None = Field(default=0, ge=0)
     total_cost_usd: ExactUSD | None = Decimal("0")
     known_token_subtotal: int = Field(default=0, ge=0)
@@ -152,6 +155,7 @@ class LiveHistoryItem(StrictModel):
     stage: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
     completed_at: str | None = None
+    compatibility_issues: tuple[RecordCompatibilityResult, ...] = ()
 
 
 class DiscoveryScoreBreakdown(StrictModel):
@@ -192,6 +196,7 @@ class ResearchTrailItem(StrictModel):
 
 class ResearchTrail(StrictModel):
     run_id: UUID
+    compatibility_issues: tuple[RecordCompatibilityResult, ...] = ()
     items: tuple[ResearchTrailItem, ...]
 
 

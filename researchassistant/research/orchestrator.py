@@ -79,6 +79,11 @@ from providers.scraper import (
 from providers.search import SearchProvider
 from researchassistant.common.money import ExactUSD, add_usd
 from researchassistant.common.utils import URL_NAMESPACE
+from researchassistant.contracts.historical import (
+    HistoricalRead,
+    RecordCompatibilityError,
+    RecordCompatibilityResult,
+)
 from researchassistant.contracts.models import (
     DEFAULT_RESEARCH_CONTROLS,
     CandidateQuoteBlock,
@@ -517,6 +522,7 @@ class ProviderPipelineResult(StrictModel):
     current_stage: Stage
     failure_reason: str | None = None
     planner_output: PlannerOutput | None = None
+    compatibility_issues: tuple[RecordCompatibilityResult, ...] = ()
     researcher_result: ResearcherPairResult | None = None
     analysis_result: AnalysisStageResult | None = None
     portfolio_coverage: PortfolioCoverageAssessment | None = None
@@ -1002,6 +1008,7 @@ def _inspect_provider_run_connection(
     *,
     failure_reason: str | None,
 ) -> ProviderPipelineResult:
+    compatibility_issues: list[RecordCompatibilityResult] = []
     manifest = read_run(reader, run_id)
     checkpoints = tuple(read_orchestration_checkpoints(reader, run_id))
     attempts = tuple(read_model_route_attempts(reader, run_id))
@@ -1011,6 +1018,8 @@ def _inspect_provider_run_connection(
         run_id,
         PHASE9_RESEARCHERS_ARTIFACT,
         ResearcherPairResult,
+        historical=True,
+        compatibility_issues=compatibility_issues,
     )
     researcher_rounds = tuple(item for item in (researchers,) if item is not None)
     for artifact_key in (
@@ -1023,6 +1032,8 @@ def _inspect_provider_run_connection(
             run_id,
             artifact_key,
             ResearcherPairResult,
+            historical=True,
+            compatibility_issues=compatibility_issues,
         )
         if expanded_researchers is not None:
             researcher_rounds = (*researcher_rounds, expanded_researchers)
@@ -1031,6 +1042,8 @@ def _inspect_provider_run_connection(
         run_id,
         PHASE9_ANALYSIS_ARTIFACT,
         AnalysisStageResult,
+        historical=True,
+        compatibility_issues=compatibility_issues,
     )
     for artifact_key in (
         MVP10_TARGETED_ANALYSIS_ARTIFACT,
@@ -1042,6 +1055,8 @@ def _inspect_provider_run_connection(
             run_id,
             artifact_key,
             AnalysisStageResult,
+            historical=True,
+            compatibility_issues=compatibility_issues,
         )
         if expanded_analysis is not None:
             analysis = (
@@ -1093,7 +1108,22 @@ def _inspect_provider_run_connection(
                 authoritative_claim=manifest.raw_claim,
             )
             if rendered_hash != sha256(legacy_brief.encode("utf-8")).hexdigest():
-                raise ValueError("persisted released brief does not match its validation hash")
+                from researchassistant.evidence.historical_render import (
+                    render_native_historical_brief,
+                )
+
+                try:
+                    legacy_brief = render_native_historical_brief(
+                        synthesis,
+                        analysis.ledger_records,
+                        manifest.raw_claim,
+                        validation,
+                        contract,
+                    )
+                except ValueError as exc:
+                    raise ValueError(
+                        "persisted released brief does not match its validation hash"
+                    ) from exc
             final_brief = legacy_brief
 
     usage_accounting = summarize_model_usage(attempts)
@@ -1111,6 +1141,7 @@ def _inspect_provider_run_connection(
         failure_reason=resolved_failure,
         planner_output=planner,
         researcher_result=researchers,
+        compatibility_issues=tuple(compatibility_issues),
         analysis_result=analysis,
         portfolio_coverage=portfolio_coverage,
         research_rounds=research_rounds,
@@ -1344,16 +1375,43 @@ def _read_optional_stage_result(
     run_id: UUID,
     artifact_key: str,
     model_type: type[_ModelT],
+    *,
+    historical: bool = False,
+    compatibility_issues: list[RecordCompatibilityResult] | None = None,
 ) -> _ModelT | None:
     try:
         artifact = read_stage_artifact(db_path, run_id, artifact_key)
     except KeyError:
         return None
-    if artifact.artifact_type != model_type.__name__:
+    if not historical and artifact.artifact_type != model_type.__name__:
         raise Phase9OrchestrationError(
             Stage.FINAL_RENDERER_VALIDATOR,
             f"stored {artifact_key} has unexpected type {artifact.artifact_type}",
         )
+    if historical:
+        from researchassistant.storage.historical_decode import (
+            decode_native_artifact,
+            verify_historical_snapshot,
+        )
+
+        try:
+            contract = read_provider_run_contract(db_path, run_id)
+        except KeyError:
+            contract = None
+        try:
+            result = decode_native_artifact(artifact, model_type, contract)
+            if isinstance(result, AnalysisStageResult):
+                for record in result.ledger_records:
+                    if isinstance(record, HistoricalRead):
+                        verify_historical_snapshot(
+                            record, read_snapshot(db_path, record.snapshot_id)
+                        )
+            return result
+        except RecordCompatibilityError as exc:
+            if compatibility_issues is None:
+                raise
+            compatibility_issues.append(exc.result)
+            return None
     return model_type.model_validate_json(artifact.payload_json)
 
 
@@ -2101,7 +2159,16 @@ def _combine_analysis_results(
     initial: AnalysisStageResult, targeted: AnalysisStageResult
 ) -> AnalysisStageResult:
     """Merge independently persisted round results without reprocessing known evidence."""
-    return AnalysisStageResult(
+    # Inspection may combine recognized historical rounds; retain their read-only
+    # type so current Ledger rules are never substituted for the recorded rules.
+    result_type = (
+        type(initial)
+        if isinstance(initial, HistoricalRead)
+        else type(targeted)
+        if isinstance(targeted, HistoricalRead)
+        else AnalysisStageResult
+    )
+    return result_type(
         run_id=initial.run_id,
         analyst_decisions=(*initial.analyst_decisions, *targeted.analyst_decisions),
         statement_drafts=(*initial.statement_drafts, *targeted.statement_drafts),

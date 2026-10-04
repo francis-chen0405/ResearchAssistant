@@ -1,12 +1,12 @@
 # Database review implementation — 2026-10-03
 
-Authorized scope: the four sequential prompts accompanying [the audit](../../docs/audits/2026-10-03/database-review.md). Source, tests, documentation and disposable-database checks are authorized. The user's subsequent instructions authorize reviewing Prompts 1 and 2 and committing each successful implementation. Paid calls, real-user database writes, push, publication, installed-app replacement and release remain outside this task.
+Authorized scope: the four sequential prompts accompanying [the audit](../../docs/audits/2026-10-03/database-review.md). Source, tests, documentation and disposable-database checks are authorized. The user's subsequent instructions authorize reviewing Prompts 1–3 and committing each successful implementation. Paid calls, real-user database writes, push, publication, installed-app replacement and release remain outside this task.
 
 ## Shared implementation phases
 
 1. **Lifecycle, privacy and recovery (complete):** F7, I2, I3 and retained legacy lock ownership. Validate recognized recorded versions without initialization; publish a private, verified SQLite backup before upgrade writes; retain recoverable copies; restore only into new paths; keep worker locks through cancellation; preserve writable historical support and read-only schema 7+ boundaries. Provide supported CLI recovery and import flows. Use only temporary databases for verification.
 2. **Schema and accounting (complete):** Prompt 2 owns stronger shared schema preflight, provenance guards, complete usage persistence and concurrent accounting integrity. Preserve exact historical amounts and immutable artifacts.
-3. **Historical reads and exports:** Prompt 3 owns historical decoding, noncreating point readers, progress/filter corrections and export layout. Preserve recorded policy and resume identity gates.
+3. **Historical reads and exports (complete):** Prompt 3 owns historical decoding, noncreating point readers, progress/filter corrections and export layout. Preserve recorded policy and resume identity gates. Its initial review-ready handoff and subsequent conditional-commit review are recorded below.
 4. **Performance and integration:** Prompt 4 owns measured query improvements, full-suite and cross-phase verification, and final review. Resolve interactions here without weakening acceptance.
 
 ## Phase 1 design and boundaries
@@ -102,3 +102,206 @@ At the initial phase-2 implementation handoff, this was uncommitted source work.
 - Current README, architecture, decisions, research invariants and desktop compatibility notes now agree on schema 16 and read-only support for 7–16. Historical audit/verification/archive records retain their recorded version claims. Caller-level restart replay intentionally uses the persisted original start; storage reservation/completion enforce original-start identity rather than comparing it with a new clock reading.
 - Only disposable databases were used. Actual user databases, credentials, providers and the installed application were untouched. The authorized delivery is a local source commit; push, publication, app replacement and real-data migration remain outside scope.
 - Final complete local macOS run after all review fixes, with isolated `RESEARCHASSISTANT_DATA_DIR` and `pytest -q -rs -W error`: **1,693 passed, 3 skipped**, **85.20 s**. Skips are the existing explicit-approval CLI/provider checks and native Windows ACL verification. `ruff check .`, `ruff format --check .` (**204 files**) and `git diff --check` passed. Prompt 2 meets its source acceptance requirements and is delivered in the user's authorized conditional commit; Prompts 3–4 and native/artifact release gates remain open.
+
+## Phase 3 implementation — historical reads, progress, filters and PDF exports
+
+Prompt 3 authorizes only **F1, F6, F8, F9 and X1**. The integrated committed
+Prompt 1/2 baseline (`2bd3a86`, schema 16) was inspected before changes. Its
+schema, accounting, identity and provenance protections are retained. Sol owns
+the historical trust decisions and final integration; user-authorized Luna
+helpers prepared fixtures, focused reader/filter/progress tests and independent
+progress review. The graph still returns pre-organization paths, has no exposed
+freshness tool, and remains advisory. Live source, current diffs and tests were
+used; the previously denied index/export refresh was not retried.
+
+### Compatibility and implementation choices
+
+- **F1 native Ledger:** Current validation runs first. The exact August
+  schema/prompt/policy identity triple in `historical_decode.py`, a validated
+  canonical provider fingerprint and same-run ownership select the narrow
+  phase8 read contract. It preserves EQ/CF/score 4, secondary placement and
+  original `Strong`, restricted to the recorded Analyst-v1/Reviewer-v2 versions.
+  Stored snapshot identity, retrieval relationship and actual content hash are
+  checked. Both verified August releases reconstruct with their original hash.
+- **F1 native trails:** The explicit two schema/prompt pairs and recorded policy
+  catalog select old web academic-study intent and the earlier discard floor 20
+  (floor 5 for the recorded relaxed policy). Other run, stance, score, rank,
+  exclusion and provenance validators remain in force. Embedded snapshot hashes
+  are checked. Native stage envelopes have no separate payload-hash column;
+  none is invented. Old release-v1 connective text/no-coverage-paragraph rendering
+  was verified against retained `1fc21a8:agents/renderer.py` and is accepted only
+  for the August identity plus recorded validator-v1, with exact final-hash equality.
+- **F1 v2 catalog:** Explicit typed read subclasses support source-selection-v1
+  queues with caps 12/7 and synthesis allowance 2; extraction phase-12 v1/v2;
+  phase-9 Analyst v1/v2; phase-10 Reviewer v1/v2; phase-12 backfill-v1 with nested
+  historical queue/Analyst/Reviewer. Phase-13/current wrappers continue through
+  their existing contracts. Absent old cap/result-policy fields stay unknown;
+  early Analyst policy comes from its recorded input. Extraction/backfill string
+  identities are checked against an explicit supported catalog before decoding.
+  V2 original payload SHA-256, run identity and nested snapshot hashes are verified.
+  The [fixture guide](../../tests/fixtures/historical_reads/README.md) maps all cases.
+- **Trust boundary:** No global validator is loosened and no `model_construct`
+  fallback is used. Historical objects carry an inspection-only marker. Native
+  and v2 Ledger writes revalidate raw data under the current contract; v2 artifact
+  persistence and final-release validation reject historical read objects.
+  Execution/resume retains strict decoding and the unchanged exact identity gates.
+  Unknown types/policies, malformed shapes or unsafe hashes have typed per-record
+  results in browser, trail and provider-inspection views, leaving unrelated
+  records available. A corrupted released brief still raises the existing hash
+  error. Historical round merging retains its read type without changing values.
+- **F6:** Every path-based low-level reader uses one percent-encoded `mode=ro`
+  connection helper. Owned connections enable foreign keys/query-only and close
+  on exceptions. Caller-owned connections retain their row factory, pragmas,
+  open state and transaction: cursors supply named rows independently. Public
+  `ReadOnlyStore` retains its strict schema checks and typed open errors; point
+  reads do not repeat full validation. No polling/snapshot policy is changed.
+- **F8:** Persisted attempt entries, including failed and fallback calls, are
+  counted across acquisition rounds 1–4. Complete singleton discovery-cluster
+  direction mapping is authoritative; persisted acquisition direction is a
+  fallback when the cluster mapping is absent. Conflicting/incomplete/missing
+  mapping remains in `unassigned_retrieval_attempts_used`. Acquired sources and
+  usable survivors remain separate. Running/terminal totals use the same actual
+  persisted attempts, including disabled directions and repeat inspection.
+- **F9:** Approval/rejection means an explicit persisted outcome at either
+  Analyst or Reviewer stage; the stage results remain separate. Missing decisions
+  are pending and match neither filter. Existing “Rejected” labeling is accurate
+  after this change, so no label/layout change was needed.
+- **X1:** ReportLab wraps by glyph width, breaks arbitrarily long words/URLs and
+  paginates at fixed margins. GNU Unifont 15.0.01 is bundled unmodified with its
+  license (OFL option); SHA-256 is
+  `299459bc34e915b1c18dd38677739f41d0b2a6d79b93f480cd157ef24da675ab`.
+  Supported text includes Latin accents/punctuation, Greek/math, Cyrillic and
+  representative Chinese/Japanese/Korean. Unsupported code points, private/control
+  characters and unsupported complex shaping raise a specific error naming code
+  points and Markdown/DOCX alternatives. There is no silent replacement. Original
+  released text/hash and export metadata remain authoritative, not regenerated
+  PDF bytes. Inspection connections close before slow layout/embedding.
+
+ReportLab is the necessary new PDF-generation runtime dependency:
+`>=4.4.9,<5.0`, pinned to **4.4.9** in desktop constraints. The bundled font is
+12,273,948 bytes; ReportLab embeds subsets. Existing `desktop/build.py` already
+copies the entire `researchassistant` data tree, including the font/license.
+No build-script change or new installed-artifact claim is needed. A later build
+must verify the pinned dependency and packaged font on each target platform.
+Only official font downloads and the dependency install used network access;
+no research provider or credentials were accessed.
+
+### Verification — final source, local macOS
+
+- Final focused run: **614 passed, no skips**, **40.36 s**, using
+  `pytest -q -rs -W error --tb=short` with `RESEARCHASSISTANT_DATA_DIR` set before
+  import to a new temporary folder. The full suite was deliberately left to
+  Prompt 4. An earlier focused run passed **565 tests**, 31.61 s, before the final
+  hash/shape guards and adjacent legacy inspection checks.
+- The final selection is the five new phase3 suites plus
+  `test_mvp8_exports.py`, `test_mvp8_2_evidence_browser.py`,
+  `test_mvp6_5_read_only_inspection.py`, `test_mvp6_6_runtime_integrity.py`,
+  `test_status_polling_compatibility.py`, `test_database_schema_integrity.py`,
+  `test_database_schema_provenance_phase2.py`,
+  `test_database_attempt_integrity_phase2.py`,
+  `test_database_attempt_caller_phase2.py`, `test_database_v2_replay_phase2.py`,
+  `test_database_cache_accounting.py`, `test_database_transactions.py`,
+  `test_database_recovery.py`, `test_database_lifecycle_locks.py`,
+  `test_type_contracts.py`, `test_phase5.py`, `test_phase6.py`, `test_phase9.py`,
+  `test_v2_phase10_reviewer_ledger.py`, `test_v2_phase12_production.py`,
+  `test_v2_research_status_display.py` and `test_v2_evidence_display.py`.
+- Tests cover missing/direct/URI-sensitive path readers, default/named caller
+  rows, transaction/pragma ownership, exception closure, permission/open/malformed
+  and version errors; all known historical families/nested wrappers; current
+  rejection and forged identity/hash guards; unknown later trail rounds and
+  Ledger records; unchanged public inspection/export identity; failed/fallback,
+  round/direction/unassigned progress; and public pending/explicit decision filters.
+  Prompt 2's schema suite retains readers 7–16 and rejected readers 1–6.
+- PDF parsing checks include empty/short output, escaped characters, Unicode,
+  a 70-line report, very long URLs and exact 49/50/98/99-line page boundaries.
+  Latest QA PDF was rendered with Poppler and **both pages visually inspected**:
+  accents, punctuation, Greek/math and CJK/Cyrillic glyphs are present; all 70
+  lines and the full wrapped URL parse; margins are clear, with no clipping,
+  overlap or replacement boxes. A public export regression checks that every
+  inspection connection is closed before drawing and retains the release hash.
+- Strictly read-only verification of the original repository schema-13 database
+  lists **all 47 entries**. All **526** artifacts in the five affected families
+  decode (36 queue, 199 extraction, 199 Analyst, 81 Reviewer, 11 backfill),
+  including all **188** direct-current failures (14/7/81/81/5). Browser/trail
+  reads across 28 entries with recorded provider contracts report no compatibility
+  issue. Both affected completed August provider views reconstruct and match
+  original released hashes. Source bytes and mtime are unchanged. Payload JSON,
+  original hashes, provenance and accounting are never updated. These results
+  classify the observed failures as supported drift, not SQLite corruption.
+- `ruff check .`, `ruff format --check .` (**213 Python files**) and
+  `git diff --check` pass. Renderer `tsc --noEmit` and ESLint on changed
+  `web/lib/api.ts` pass. No UI layout or Electron code changed. Exact prior
+  status/handoff/architecture/plan-index snapshots match committed HEAD bytes in
+  [the Prompt 3 archive](../../docs/archive/2026-10-04-phase3-state/).
+- Iteration corrected synthetic fixture snapshot/hash references, a missing
+  timestamp-format comparison and empty historical candidate selection. A test
+  initially assumed a saved Round-2 trail was the initial-round result; it now
+  checks the actual persisted retrieval count while retaining the unrelated-round
+  assertion. A final adjacent legacy hash-corruption check also preserved its
+  established error behavior. No existing assertion or acceptance was weakened.
+
+### Exact changed-file inventory
+
+All paths below are relative to the repository. This inventory includes source,
+dependencies/assets, tests/fixtures and documentation; temporary QA/preparation
+files outside the repository are not delivery artifacts.
+
+| File | Change |
+| --- | --- |
+| `agents/renderer.py` | Reject inspection-only objects for new release validation. |
+| `researchassistant/contracts/historical.py` | New narrow August read type, marker and typed per-record compatibility result/error. |
+| `researchassistant/storage/historical_decode.py` | New explicit native/v2 historical dispatch and hash/provenance verification. |
+| `researchassistant/storage/store.py` | Shared read-only point-reader boundary, caller row-factory preservation, historical Ledger read and strict write guards. |
+| `researchassistant/research/orchestrator.py` | Historical provider inspection, compatibility results, original release reconstruction and typed round merging. |
+| `researchassistant/evidence/evidence_browser.py` | Historical Ledger inspection and explicit-decision filtering. |
+| `researchassistant/evidence/historical_render.py` | New exact released-v1 text reconstruction/hash check. |
+| `researchassistant/evidence/brief_export.py` | Use the materialized Unicode PDF renderer after read sessions close. |
+| `researchassistant/evidence/pdf_render.py` | New embedded-font wrapping/pagination and explicit coverage errors. |
+| `researchassistant/evidence/fonts/unifont-15.0.01.ttf` | New unmodified licensed bundled font. |
+| `researchassistant/evidence/fonts/UNIFONT-LICENSE.txt` | New upstream license text. |
+| `researchassistant/evidence/fonts/README.md` | New source, coverage, license and packaging notes. |
+| `frontend/live_contracts.py` | Typed trail/history compatibility, acquired-source and unassigned-attempt fields. |
+| `frontend/live_history.py` | Historical native/v2 trail dispatch and per-record/per-run compatibility results. |
+| `frontend/live_progress.py` | Actual attempt counts from persisted rounds and safe direction mapping. |
+| `web/lib/api.ts` | Compatible optional renderer API fields. |
+| `requirements.txt` | ReportLab runtime dependency. |
+| `pyproject.toml` | Matching ReportLab dependency. |
+| `desktop/constraints.txt` | ReportLab 4.4.9 pin. |
+| `tests/test_database_read_paths_phase3.py` | New noncreating path/caller ownership regressions. |
+| `tests/test_historical_reads_phase3.py` | New catalog, public reconstruction, strict-current/hash/trust/export regressions. |
+| `tests/test_v2_retrieval_progress_phase3.py` | New no-provider persisted-attempt regressions. |
+| `tests/test_browser_decisions_phase3.py` | New public pending/Analyst/Reviewer filter regressions. |
+| `tests/test_pdf_exports_phase3.py` | New PDF completeness, page geometry, Unicode and unsupported-text regressions. |
+| `tests/fixtures/historical_reads/native-ledger-august2.json` | New two-case redacted Ledger fixtures. |
+| `tests/fixtures/historical_reads/legacy-researcher-trails.json` | New two-case redacted native trail fixtures. |
+| `tests/fixtures/historical_reads/v2-prior-policy-artifacts.json` | New ten-case redacted v2 family/nested-wrapper fixtures. |
+| `tests/fixtures/historical_reads/README.md` | New fixture provenance, redaction and recognized-version guide. |
+| `.agent/plans/database-review-2026-10-03.md` | Shared Phase 3 decisions, results and exact inventory. |
+| `.agent/PLANS.md` | Current review/Prompt 4 navigation. |
+| `STATUS.md` | Current verified source/dependency/delivery state. |
+| `HANDOFF.md` | Review boundary and Prompt 4/future-build actions. |
+| `ARCHITECTURE.md` | Current read/contract/progress/export ownership and invariants. |
+| `docs/archive/INDEX.md` | Links the exact prior current-state set. |
+| `docs/archive/2026-10-04-phase3-state/STATUS.md` | New byte-for-byte prior snapshot. |
+| `docs/archive/2026-10-04-phase3-state/HANDOFF.md` | New byte-for-byte prior snapshot. |
+| `docs/archive/2026-10-04-phase3-state/ARCHITECTURE.md` | New byte-for-byte prior snapshot. |
+| `docs/archive/2026-10-04-phase3-state/.agent/PLANS.md` | New byte-for-byte prior snapshot. |
+
+**Initial implementation handoff:** Phase 3 was implemented and ready for review, uncommitted.
+No reviewed historical format remains unresolved; unknown/unsafe formats produce
+explicit results and unsupported PDF text produces an explicit export error.
+No real database was migrated, rewritten, restored or otherwise modified; no
+research provider was contacted, credentials accessed, installed app replaced,
+commit made, push performed or release published. Prompt 4 still owns full-suite,
+cross-phase, query/index and consistency design, and measured performance work.
+Windows native and packaged-artifact acceptance remain separate later gates.
+
+### Conditional-commit review — 2026-10-04
+
+- The user's subsequent instruction authorizes this successful source review and local commit. Sol checked historical dispatch, strict admission/release boundaries, original release reconstruction and caller ownership; Luna independently reviewed historical trust, all point readers, directional progress, browser filtering and PDF rendering. The advisory graph remains stale and was not refreshed. No execution/resume gate or historical row/hash was changed.
+- Review reproduced a blocker: direct v2 discovery/acquisition decoding could abort the whole trail for an unsupported record. Both now use the versioned hash/type/run-aware inspection decoder and collect per-record results. Unsupported discovery omits only that round; unsupported acquisition retains its discovery with unknown acquisition state rather than inventing an outcome. Invalid stored envelopes/hashes receive typed results without weakening storage integrity checks.
+- Related history listing now preserves other runs when a production envelope is unreadable and reports compatibility on that history item. If an older terminal result needs stage inference and a child artifact is unsafe, its verified terminal status and recorded stage remain available with a reconstruction issue. Missing artifacts retain the established manifest fallback. Eleven new public regressions cover unknown fields, wrong types/runs, envelope/snapshot hashes, unaffected rounds/runs and unchanged bytes/mtime/payloads/hashes.
+- Independent reader/progress/browser verification passed **27 tests**; PDF/export/connection-close verification passed **21 tests**, all with warnings as errors and isolated application storage. Sol and Luna inspected both Poppler-rendered pages of a 70-line report with a long unbroken URL and Latin/Greek/math/Cyrillic/CJK text: complete wrapping, margins and glyphs, with no clipping or overlap. The font/license/dependency and desktop data inclusion agree; native packaged-build verification remains open.
+- The first review selection passed **614 tests**, **44.13 s**, before the compatibility repair. The expanded adjacent legacy-trail/production/export check then passed **140 tests**, **18.93 s**. The reviewed historical module with the eleven new cases passed **34 tests**. These are source checks using disposable databases, not an installed-artifact or full-suite claim.
+- Final combined selection after the source repair and eleven additional cases: **661 passed, no skips**, **40.96 s**, with warnings as errors and isolated `RESEARCHASSISTANT_DATA_DIR`. It repeats the implementation's full focused selection and adds `test_mlp4_research_quality.py`. The history hash fixture was then strengthened to start from valid typed production results and prove clean history before hash-only mutation; the complete historical module passed again (**34 tests**). Repository Ruff lint/format (**213 files**), diff checks, renderer TypeScript and changed-file ESLint pass. Prompt 4 retains full-suite, cross-phase and measured performance/consistency acceptance. The successful review is delivered in the user's authorized local source commit; user databases, providers, credentials, installed artifacts, push and publication were untouched.
+- Staging brought new files into the diff check and exposed two trailing spaces and an extra final blank line in the upstream license text. Normalized only that whitespace, verified identical words and retained the unmodified font bytes; the complete staged diff check then passed.

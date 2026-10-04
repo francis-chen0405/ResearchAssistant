@@ -281,11 +281,22 @@ def _read_connection(source: DatabaseReader) -> Iterator[sqlite3.Connection]:
     if isinstance(source, sqlite3.Connection):
         yield source
         return
-    conn = _connect(str(source))
+    conn = _open_read_connection(source)
     try:
         yield conn
     finally:
         conn.close()
+
+
+def _read_execute(
+    conn: sqlite3.Connection,
+    sql: str,
+    parameters: Sequence[object] = (),
+) -> sqlite3.Cursor:
+    """Use named rows without altering a caller-owned connection's row factory."""
+    cursor = conn.cursor()
+    cursor.row_factory = sqlite3.Row
+    return cursor.execute(sql, parameters)
 
 
 def _compatibility_error(
@@ -333,30 +344,53 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
     )
 
 
+def _open_read_connection(source: str | Path) -> sqlite3.Connection:
+    """Non-creating path boundary; point reads do not repeat schema validation."""
+    if not isinstance(source, (str, Path)):
+        raise TypeError("database reader must be a path or sqlite3.Connection")
+    path = Path(source).expanduser()
+    conn = None
+    try:
+        path = path.resolve()
+        if not path.exists():
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.MISSING_FILE,
+                f"inspection database does not exist: {path}",
+            )
+        if not path.is_file():
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.OPEN_FAILED,
+                f"inspection database is not a regular file: {path}",
+            )
+        encoded_path = quote(path.as_posix(), safe="/")
+        conn = sqlite3.connect(f"file:{encoded_path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA query_only = ON")
+        return conn
+    except DatabaseCompatibilityError:
+        raise
+    except (OSError, sqlite3.Error) as exc:
+        if conn is not None:
+            conn.close()
+        raise _compatibility_error(
+            DatabaseCompatibilityIssue.OPEN_FAILED,
+            f"could not open inspection database read-only: {path}",
+        ) from exc
+
+
 class ReadOnlyStore:
     """One cohesive read-only SQLite session for inspection and history."""
 
     def __init__(self, db_path: str | Path) -> None:
-        path = Path(db_path).expanduser().resolve()
+        path = Path(db_path).expanduser()
         self.path = path
         self.connection: sqlite3.Connection
         self.compatibility: DatabaseCompatibilityResult
         try:
-            if not path.exists():
-                raise _compatibility_error(
-                    DatabaseCompatibilityIssue.MISSING_FILE,
-                    f"inspection database does not exist: {path}",
-                )
-            if not path.is_file():
-                raise _compatibility_error(
-                    DatabaseCompatibilityIssue.OPEN_FAILED,
-                    f"inspection database is not a regular file: {path}",
-                )
-            encoded_path = quote(path.as_posix(), safe="/")
-            self.connection = sqlite3.connect(f"file:{encoded_path}?mode=ro", uri=True)
-            self.connection.row_factory = sqlite3.Row
-            self.connection.execute("PRAGMA foreign_keys = ON")
-            self.connection.execute("PRAGMA query_only = ON")
+            path = path.resolve()
+            self.path = path
+            self.connection = _open_read_connection(path)
             self.compatibility = _validate_read_only_schema(self.connection)
         except DatabaseCompatibilityError:
             if hasattr(self, "connection"):
@@ -490,7 +524,8 @@ def read_evidence_trail_entries(
     """Read appended source outcomes; a pre-MVP-10 database has no such rows."""
     with _read_connection(db_path) as conn:
         try:
-            rows = conn.execute(
+            rows = _read_execute(
+                conn,
                 "SELECT payload_json FROM evidence_trail_entries WHERE run_id = ? "
                 "ORDER BY created_at, trail_entry_id",
                 (str(run_id),),
@@ -525,7 +560,8 @@ def read_portfolio_items(db_path: DatabaseReader, run_id: UUID) -> tuple[Portfol
     """Read the immutable portfolio, or an empty portfolio for historical runs."""
     with _read_connection(db_path) as conn:
         try:
-            rows = conn.execute(
+            rows = _read_execute(
+                conn,
                 "SELECT payload_json FROM portfolio_items WHERE run_id = ? "
                 "ORDER BY ledger_claim_id",
                 (str(run_id),),
@@ -701,7 +737,8 @@ def read_portfolio_coverage_assessment(
     """Read terminal coverage when present, without fabricating it for history."""
     with _read_connection(db_path) as conn:
         try:
-            row = conn.execute(
+            row = _read_execute(
+                conn,
                 "SELECT payload_json FROM portfolio_coverage_assessments WHERE run_id = ?",
                 (str(run_id),),
             ).fetchone()
@@ -746,7 +783,8 @@ def read_research_round_records(
     """Read persisted bounded rounds, returning no synthetic rows for historical runs."""
     with _read_connection(db_path) as conn:
         try:
-            rows = conn.execute(
+            rows = _read_execute(
+                conn,
                 "SELECT payload_json FROM research_round_records WHERE run_id = ? "
                 "ORDER BY research_round",
                 (str(run_id),),
@@ -782,7 +820,8 @@ def read_research_governor_decision(
     """Read the immutable Governor decision without creating one for a historical run."""
     with _read_connection(db_path) as conn:
         try:
-            row = conn.execute(
+            row = _read_execute(
+                conn,
                 "SELECT payload_json FROM research_governor_decisions WHERE run_id = ?",
                 (str(run_id),),
             ).fetchone()
@@ -817,7 +856,8 @@ def read_research_terminal_result(
     """Read a persisted terminal classification without fabricating historical evidence."""
     with _read_connection(db_path) as conn:
         try:
-            row = conn.execute(
+            row = _read_execute(
+                conn,
                 "SELECT payload_json FROM research_terminal_results WHERE run_id = ?",
                 (str(run_id),),
             ).fetchone()
@@ -857,7 +897,7 @@ def insert_run(db_path: str, manifest: RunManifest) -> None:
 
 def read_run(db_path: DatabaseReader, run_id: UUID) -> RunManifest:
     with _read_connection(db_path) as conn:
-        row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (str(run_id),)).fetchone()
+        row = _read_execute(conn, "SELECT * FROM runs WHERE run_id = ?", (str(run_id),)).fetchone()
         if row is None:
             raise KeyError(f"run {run_id} not found")
         return _row_to_run(row)
@@ -868,7 +908,8 @@ def list_runs(db_path: DatabaseReader, *, limit: int = 100) -> list[RunManifest]
     if limit < 1 or limit > 1000:
         raise ValueError("run history limit must be between 1 and 1000")
     with _read_connection(db_path) as conn:
-        rows = conn.execute(
+        rows = _read_execute(
+            conn,
             "SELECT * FROM runs ORDER BY updated_at DESC, run_id ASC LIMIT ?",
             (limit,),
         ).fetchall()
@@ -1029,14 +1070,14 @@ def insert_search_queries(db_path: str, queries: tuple[SearchQuery, ...]) -> Non
 
 def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
     with _read_connection(db_path) as conn:
-        po_row = conn.execute(
-            "SELECT * FROM planner_outputs WHERE run_id = ?", (str(run_id),)
+        po_row = _read_execute(
+            conn, "SELECT * FROM planner_outputs WHERE run_id = ?", (str(run_id),)
         ).fetchone()
         if po_row is None:
             raise KeyError(f"planner output for run {run_id} not found")
 
-        cd_row = conn.execute(
-            "SELECT * FROM claim_definitions WHERE run_id = ?", (str(run_id),)
+        cd_row = _read_execute(
+            conn, "SELECT * FROM claim_definitions WHERE run_id = ?", (str(run_id),)
         ).fetchone()
         claim_def = ClaimDefinition(
             run_id=UUID(cd_row["run_id"]),
@@ -1050,8 +1091,8 @@ def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
             created_at=_iso_to_dt(cd_row["created_at"]),
         )
 
-        amb_rows = conn.execute(
-            "SELECT * FROM ambiguities WHERE run_id = ? ORDER BY created_at", (str(run_id),)
+        amb_rows = _read_execute(
+            conn, "SELECT * FROM ambiguities WHERE run_id = ? ORDER BY created_at", (str(run_id),)
         ).fetchall()
         ambiguities = [
             AmbiguityRecord(
@@ -1065,12 +1106,14 @@ def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
         ]
 
         query_columns = {
-            row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+            row["name"]
+            for row in _read_execute(conn, "PRAGMA table_info(search_queries)").fetchall()
         }
         provider_specific = {"provider", "intent"} <= query_columns
         partition = "stance, provider, query_round" if provider_specific else "stance, query_round"
         provider_order = ", provider" if provider_specific else ""
-        q_rows = conn.execute(
+        q_rows = _read_execute(
+            conn,
             f"""SELECT * FROM (
                     SELECT *,
                            ROW_NUMBER() OVER (
@@ -1143,10 +1186,10 @@ def insert_retrieval_attempt(db_path: str, record: RetrievalRecord) -> None:
         conn.close()
 
 
-def read_retrieval_attempt(db_path: str, retrieval_attempt_id: UUID) -> RetrievalRecord:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+def read_retrieval_attempt(db_path: DatabaseReader, retrieval_attempt_id: UUID) -> RetrievalRecord:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             "SELECT * FROM retrieval_attempts WHERE retrieval_attempt_id = ?",
             (str(retrieval_attempt_id),),
         ).fetchone()
@@ -1164,8 +1207,6 @@ def read_retrieval_attempt(db_path: str, retrieval_attempt_id: UUID) -> Retrieva
             status=row["status"],
             retrieved_at=_iso_to_dt(row["retrieved_at"]),
         )
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1212,17 +1253,14 @@ def insert_snapshot(db_path: str, snapshot: SourceSnapshot) -> None:
         conn.close()
 
 
-def read_snapshot(db_path: str, snapshot_id: UUID) -> SourceSnapshot:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT * FROM snapshots WHERE snapshot_id = ?", (str(snapshot_id),)
+def read_snapshot(db_path: DatabaseReader, snapshot_id: UUID) -> SourceSnapshot:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn, "SELECT * FROM snapshots WHERE snapshot_id = ?", (str(snapshot_id),)
         ).fetchone()
         if row is None:
             raise KeyError(f"snapshot {snapshot_id} not found")
         return _row_to_snapshot(row)
-    finally:
-        conn.close()
 
 
 def _row_to_snapshot(row: sqlite3.Row) -> SourceSnapshot:
@@ -1287,10 +1325,12 @@ def insert_provisional_extraction(db_path: str, prov: ProvisionalCandidate) -> N
         conn.close()
 
 
-def read_provisional_extractions(db_path: str, run_id: UUID) -> list[ProvisionalCandidate]:
-    conn = _connect(db_path)
-    try:
-        rows = conn.execute(
+def read_provisional_extractions(
+    db_path: DatabaseReader, run_id: UUID
+) -> list[ProvisionalCandidate]:
+    with _read_connection(db_path) as conn:
+        rows = _read_execute(
+            conn,
             "SELECT * FROM provisional_extractions WHERE run_id = ? ORDER BY extracted_at",
             (str(run_id),),
         ).fetchall()
@@ -1312,8 +1352,6 @@ def read_provisional_extractions(db_path: str, run_id: UUID) -> list[Provisional
             )
             for r in rows
         ]
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1365,17 +1403,14 @@ def insert_candidate(db_path: str, candidate: CandidateQuoteBlock) -> None:
         conn.close()
 
 
-def read_candidate(db_path: str, quote_block_id: UUID) -> CandidateQuoteBlock:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
-            "SELECT * FROM candidates WHERE quote_block_id = ?", (str(quote_block_id),)
+def read_candidate(db_path: DatabaseReader, quote_block_id: UUID) -> CandidateQuoteBlock:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn, "SELECT * FROM candidates WHERE quote_block_id = ?", (str(quote_block_id),)
         ).fetchone()
         if row is None:
             raise KeyError(f"candidate {quote_block_id} not found")
         return _row_to_candidate(row)
-    finally:
-        conn.close()
 
 
 def _row_to_candidate(row: sqlite3.Row) -> CandidateQuoteBlock:
@@ -1438,18 +1473,18 @@ def insert_analyst_decision(db_path: str, decision: ScoreDecision) -> None:
         conn.close()
 
 
-def read_analyst_decision(db_path: str, run_id: UUID, quote_block_id: UUID) -> ScoreDecision:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+def read_analyst_decision(
+    db_path: DatabaseReader, run_id: UUID, quote_block_id: UUID
+) -> ScoreDecision:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             "SELECT * FROM analyst_decisions WHERE run_id = ? AND quote_block_id = ?",
             (str(run_id), str(quote_block_id)),
         ).fetchone()
         if row is None:
             raise KeyError(f"analyst decision for run={run_id} quote={quote_block_id} not found")
         return _row_to_score_decision(row)
-    finally:
-        conn.close()
 
 
 def _row_to_score_decision(row: sqlite3.Row) -> ScoreDecision:
@@ -1498,18 +1533,16 @@ def insert_statement_draft(db_path: str, draft: StatementDraft) -> None:
         conn.close()
 
 
-def read_statement_draft(db_path: str, statement_draft_id: UUID) -> StatementDraft:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+def read_statement_draft(db_path: DatabaseReader, statement_draft_id: UUID) -> StatementDraft:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             "SELECT * FROM statement_drafts WHERE statement_draft_id = ?",
             (str(statement_draft_id),),
         ).fetchone()
         if row is None:
             raise KeyError(f"statement draft {statement_draft_id} not found")
         return _row_to_statement_draft(row)
-    finally:
-        conn.close()
 
 
 def _row_to_statement_draft(row: sqlite3.Row) -> StatementDraft:
@@ -1555,11 +1588,11 @@ def insert_statement_review(db_path: str, review: StatementReviewResult) -> None
 
 
 def read_statement_review(
-    db_path: str, run_id: UUID, statement_draft_id: UUID
+    db_path: DatabaseReader, run_id: UUID, statement_draft_id: UUID
 ) -> StatementReviewResult:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             """SELECT * FROM statement_review_attempts
                WHERE run_id = ? AND statement_draft_id = ?""",
             (str(run_id), str(statement_draft_id)),
@@ -1569,8 +1602,6 @@ def read_statement_review(
                 f"statement review for run={run_id} draft={statement_draft_id} not found"
             )
         return _row_to_review_result(row)
-    finally:
-        conn.close()
 
 
 def _row_to_review_result(row: sqlite3.Row) -> StatementReviewResult:
@@ -1595,6 +1626,8 @@ def _row_to_review_result(row: sqlite3.Row) -> StatementReviewResult:
 
 
 def insert_ledger_record(db_path: str, record: LedgerRecord) -> None:
+    # Inspection types and forged model_copy values never authorize a fresh admission.
+    record = LedgerRecord.model_validate(record.model_dump())
     conn = _connect(db_path)
     try:
         conn.execute(
@@ -1639,46 +1672,62 @@ def insert_ledger_record(db_path: str, record: LedgerRecord) -> None:
         conn.close()
 
 
-def read_ledger_record(db_path: str, ledger_claim_id: UUID) -> LedgerRecord:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+def read_ledger_record(db_path: DatabaseReader, ledger_claim_id: UUID) -> LedgerRecord:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             "SELECT * FROM ledger_records WHERE ledger_claim_id = ?",
             (str(ledger_claim_id),),
         ).fetchone()
         if row is None:
             raise KeyError(f"ledger record {ledger_claim_id} not found")
-        return _row_to_ledger_record(row)
-    finally:
-        conn.close()
+        try:
+            contract = read_provider_run_contract(conn, UUID(row["run_id"]))
+        except KeyError:
+            contract = None
+        record = _row_to_ledger_record(row, contract)
+        from researchassistant.contracts.historical import HistoricalRead
+        from researchassistant.storage.historical_decode import verify_historical_snapshot
+
+        if isinstance(record, HistoricalRead):
+            verify_historical_snapshot(record, read_snapshot(conn, record.snapshot_id))
+        return record
 
 
-def _row_to_ledger_record(row: sqlite3.Row) -> LedgerRecord:
-    return LedgerRecord(
-        run_id=UUID(row["run_id"]),
-        ledger_claim_id=UUID(row["ledger_claim_id"]),
-        quote_block_id=UUID(row["quote_block_id"]),
-        stance=row["stance"],
-        approved_factual_statement=row["approved_factual_statement"],
-        approved_claim_text=row["approved_claim_text"],
-        evidence_quality=row["evidence_quality"],
-        claim_fit=row["claim_fit"],
-        ledger_score=row["ledger_score"],
-        placement=row["placement"],
-        entailment=row["entailment"],
-        source_url=row["source_url"],
-        retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
-        snapshot_id=UUID(row["snapshot_id"]),
-        snapshot_sha256=row["snapshot_sha256"],
-        segment_offsets=_json_to_offsets(row["segment_offsets"]),
-        analyst_prompt_version=row["analyst_prompt_version"],
-        analyst_model_name=row["analyst_model_name"],
-        analyst_completed_at=_iso_to_dt(row["analyst_completed_at"]),
-        reviewer_prompt_version=row["reviewer_prompt_version"],
-        reviewer_model_name=row["reviewer_model_name"],
-        reviewed_at=_iso_to_dt(row["reviewed_at"]),
-        reviewer_approval_id=row["reviewer_approval_id"],
-        ledger_validated_at=_iso_to_dt(row["ledger_validated_at"]),
+def _row_to_ledger_record(
+    row: sqlite3.Row,
+    contract: ProviderRunContract | None = None,
+) -> LedgerRecord:
+    from researchassistant.storage.historical_decode import decode_ledger
+
+    return decode_ledger(
+        dict(
+            run_id=UUID(row["run_id"]),
+            ledger_claim_id=UUID(row["ledger_claim_id"]),
+            quote_block_id=UUID(row["quote_block_id"]),
+            stance=row["stance"],
+            approved_factual_statement=row["approved_factual_statement"],
+            approved_claim_text=row["approved_claim_text"],
+            evidence_quality=row["evidence_quality"],
+            claim_fit=row["claim_fit"],
+            ledger_score=row["ledger_score"],
+            placement=row["placement"],
+            entailment=row["entailment"],
+            source_url=row["source_url"],
+            retrieval_attempt_id=UUID(row["retrieval_attempt_id"]),
+            snapshot_id=UUID(row["snapshot_id"]),
+            snapshot_sha256=row["snapshot_sha256"],
+            segment_offsets=_json_to_offsets(row["segment_offsets"]),
+            analyst_prompt_version=row["analyst_prompt_version"],
+            analyst_model_name=row["analyst_model_name"],
+            analyst_completed_at=_iso_to_dt(row["analyst_completed_at"]),
+            reviewer_prompt_version=row["reviewer_prompt_version"],
+            reviewer_model_name=row["reviewer_model_name"],
+            reviewed_at=_iso_to_dt(row["reviewed_at"]),
+            reviewer_approval_id=row["reviewer_approval_id"],
+            ledger_validated_at=_iso_to_dt(row["ledger_validated_at"]),
+        ),
+        contract,
     )
 
 
@@ -1746,19 +1795,21 @@ def insert_synthesis(db_path: str, synthesis: SynthesisOutput) -> None:
 
 def read_synthesis(db_path: DatabaseReader, run_id: UUID) -> SynthesisOutput:
     with _read_connection(db_path) as conn:
-        sa_row = conn.execute(
-            "SELECT * FROM synthesis_attempts WHERE run_id = ?", (str(run_id),)
+        sa_row = _read_execute(
+            conn, "SELECT * FROM synthesis_attempts WHERE run_id = ?", (str(run_id),)
         ).fetchone()
         if sa_row is None:
             raise KeyError(f"synthesis for run {run_id} not found")
 
-        sec_rows = conn.execute(
+        sec_rows = _read_execute(
+            conn,
             "SELECT * FROM synthesis_sections WHERE run_id = ? ORDER BY section_order",
             (str(run_id),),
         ).fetchall()
         sections: list[SynthesisSection] = []
         for sec_row in sec_rows:
-            item_rows = conn.execute(
+            item_rows = _read_execute(
+                conn,
                 """SELECT * FROM synthesis_items
                    WHERE run_id = ? AND section_order = ? ORDER BY item_order""",
                 (str(run_id), sec_row["section_order"]),
@@ -1828,13 +1879,14 @@ def insert_validation(db_path: str, result: ValidationResult) -> None:
 
 def read_validation(db_path: DatabaseReader, run_id: UUID) -> ValidationResult:
     with _read_connection(db_path) as conn:
-        vr_row = conn.execute(
-            "SELECT * FROM validation_runs WHERE run_id = ?", (str(run_id),)
+        vr_row = _read_execute(
+            conn, "SELECT * FROM validation_runs WHERE run_id = ?", (str(run_id),)
         ).fetchone()
         if vr_row is None:
             raise KeyError(f"validation for run {run_id} not found")
 
-        err_rows = conn.execute(
+        err_rows = _read_execute(
+            conn,
             "SELECT * FROM validation_errors WHERE run_id = ? ORDER BY error_order",
             (str(run_id),),
         ).fetchall()
@@ -1883,10 +1935,10 @@ def insert_model_invocation(db_path: str, record: ModelInvocationRecord) -> None
         conn.close()
 
 
-def read_model_invocation(db_path: str, invocation_id: UUID) -> ModelInvocationRecord:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+def read_model_invocation(db_path: DatabaseReader, invocation_id: UUID) -> ModelInvocationRecord:
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             "SELECT * FROM model_invocations WHERE invocation_id = ?",
             (str(invocation_id),),
         ).fetchone()
@@ -1905,8 +1957,6 @@ def read_model_invocation(db_path: str, invocation_id: UUID) -> ModelInvocationR
             status=row["status"],
             invoked_at=_iso_to_dt(row["invoked_at"]),
         )
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1962,7 +2012,8 @@ def insert_provider_run_contract(db_path: str, contract: ProviderRunContract) ->
 
 def read_provider_run_contract(db_path: DatabaseReader, run_id: UUID) -> ProviderRunContract:
     with _read_connection(db_path) as conn:
-        row = conn.execute(
+        row = _read_execute(
+            conn,
             "SELECT * FROM provider_run_contracts WHERE run_id = ?",
             (str(run_id),),
         ).fetchone()
@@ -2016,13 +2067,13 @@ def upsert_orchestration_checkpoint(
 
 
 def read_orchestration_checkpoint(
-    db_path: str,
+    db_path: DatabaseReader,
     run_id: UUID,
     stage_key: str,
 ) -> OrchestrationCheckpoint:
-    conn = _connect(db_path)
-    try:
-        row = conn.execute(
+    with _read_connection(db_path) as conn:
+        row = _read_execute(
+            conn,
             """SELECT * FROM orchestration_checkpoints
                WHERE run_id = ? AND stage_key = ?""",
             (str(run_id), stage_key),
@@ -2036,8 +2087,6 @@ def read_orchestration_checkpoint(
             failure_reason=row["failure_reason"],
             updated_at=_iso_to_dt(row["updated_at"]),
         )
-    finally:
-        conn.close()
 
 
 def read_orchestration_checkpoints(
@@ -2045,7 +2094,8 @@ def read_orchestration_checkpoints(
     run_id: UUID,
 ) -> list[OrchestrationCheckpoint]:
     with _read_connection(db_path) as conn:
-        rows = conn.execute(
+        rows = _read_execute(
+            conn,
             """SELECT * FROM orchestration_checkpoints
                WHERE run_id = ? ORDER BY updated_at, stage_key""",
             (str(run_id),),
@@ -2103,7 +2153,8 @@ def read_stage_artifact(
     artifact_key: str,
 ) -> PersistedStageArtifact:
     with _read_connection(db_path) as conn:
-        row = conn.execute(
+        row = _read_execute(
+            conn,
             """SELECT * FROM orchestration_stage_artifacts
                WHERE run_id = ? AND artifact_key = ?""",
             (str(run_id), artifact_key),
@@ -2189,6 +2240,10 @@ def _insert_v2_artifact_on_connection(
     created_at: datetime,
 ) -> V2PersistedArtifact:
     """Apply the existing immutable artifact checks within the caller's transaction."""
+    from researchassistant.contracts.historical import HistoricalRead
+
+    if isinstance(artifact, HistoricalRead):
+        raise ValueError("historical inspection values cannot be admitted as new artifacts")
     if not artifact_key:
         raise ValueError("artifact_key must not be empty")
     _require_aware_datetime(created_at, "created_at")
@@ -2319,7 +2374,8 @@ def read_v2_artifact(
 ) -> V2PersistedArtifact:
     """Read a persisted v2 envelope without converting it into a mutable handoff."""
     with _read_connection(db_path) as conn:
-        row = conn.execute(
+        row = _read_execute(
+            conn,
             "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
             (str(run_id), artifact_key),
         ).fetchone()
@@ -2334,7 +2390,8 @@ def read_v2_physical_call_artifacts(
 ) -> tuple[V2PersistedArtifact, ...]:
     """Read every current or legacy physical-call envelope in one query."""
     with _read_connection(db_path) as conn:
-        rows = conn.execute(
+        rows = _read_execute(
+            conn,
             """SELECT * FROM v2_artifacts
                WHERE run_id = ?
                  AND (
@@ -2356,6 +2413,7 @@ def insert_v2_ledger_admission(
     provenance: V2LedgerProvenance,
 ) -> None:
     """Append one v2-approved Ledger record with immutable discovery provenance."""
+    record = LedgerRecord.model_validate(record.model_dump())
     record_json = record.model_dump_json()
     provenance_json = provenance.model_dump_json()
     conn = _connect(db_path)
@@ -2408,7 +2466,8 @@ def read_v2_ledger_admission(
 ) -> tuple[LedgerRecord, V2LedgerProvenance]:
     """Read one immutable v2 Ledger admission and its separate provenance context."""
     with _read_connection(db_path) as conn:
-        row = conn.execute(
+        row = _read_execute(
+            conn,
             "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
             "WHERE ledger_claim_id = ?",
             (str(ledger_claim_id),),
@@ -2481,7 +2540,8 @@ def read_v2_evidence_admission(
 ) -> tuple[V2EvidenceAdmissionRecord, V2LedgerProvenance]:
     """Read one immutable analyzer admission and its discovery provenance."""
     with _read_connection(db_path) as conn:
-        row = conn.execute(
+        row = _read_execute(
+            conn,
             "SELECT ledger_record_json, provenance_json FROM v2_ledger_admissions "
             "WHERE ledger_claim_id = ?",
             (str(ledger_claim_id),),
@@ -2587,12 +2647,13 @@ def read_v2_initial_planner_output(
 ) -> V2InitialPlannerOutput:
     """Reconstruct a typed fresh-v2 Round-1 plan without creating later-round searches."""
     with _read_connection(db_path) as conn:
-        row = conn.execute(
-            "SELECT * FROM v2_initial_planner_outputs WHERE run_id = ?", (str(run_id),)
+        row = _read_execute(
+            conn, "SELECT * FROM v2_initial_planner_outputs WHERE run_id = ?", (str(run_id),)
         ).fetchone()
         if row is None:
             raise KeyError(f"v2 initial planner output for run {run_id} not found")
-        searches = conn.execute(
+        searches = _read_execute(
+            conn,
             "SELECT * FROM v2_round_one_search_queries WHERE run_id = ? ORDER BY rowid",
             (str(run_id),),
         ).fetchall()
@@ -2623,7 +2684,8 @@ def read_v2_initial_planner_output(
                 "planned_at": _iso_to_dt(row["planned_at"]),
             }
         )
-        artifact_row = conn.execute(
+        artifact_row = _read_execute(
+            conn,
             "SELECT * FROM v2_artifacts WHERE run_id = ? AND artifact_key = ?",
             (str(run_id), "phase-3-initial-round-1-plan"),
         ).fetchone()
@@ -2902,13 +2964,15 @@ def read_model_route_attempts(
 ) -> list[ModelRouteAttempt]:
     with _read_connection(db_path) as conn:
         if operation_id is None:
-            rows = conn.execute(
+            rows = _read_execute(
+                conn,
                 """SELECT * FROM model_route_attempts WHERE run_id = ?
                    ORDER BY started_at, operation_id, route_index, attempt_number""",
                 (str(run_id),),
             ).fetchall()
         else:
-            rows = conn.execute(
+            rows = _read_execute(
+                conn,
                 """SELECT * FROM model_route_attempts
                    WHERE run_id = ? AND operation_id = ?
                    ORDER BY route_index, attempt_number""",
@@ -3059,7 +3123,8 @@ def insert_cancellation_request(
 
 def read_cancellation_request(db_path: DatabaseReader, run_id: UUID) -> RunCancellationRequest:
     with _read_connection(db_path) as conn:
-        row = conn.execute(
+        row = _read_execute(
+            conn,
             "SELECT * FROM run_cancellations WHERE run_id = ?",
             (str(run_id),),
         ).fetchone()

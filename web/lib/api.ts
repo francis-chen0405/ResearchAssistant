@@ -25,6 +25,7 @@ export type ResearchProgress = {
   status: string;
   model_attempts: number;
   retrieval_attempts: number;
+  acquired_sources?: number;
   usable_snapshots: number;
   candidates: number;
 };
@@ -69,6 +70,7 @@ export type RunSnapshot = {
   diagnostic_component: string;
   model_calls_used: number;
   retrieval_attempts_used: number;
+  unassigned_retrieval_attempts_used?: number;
   total_tokens: number | null;
   total_cost_usd: string | number | null;
   known_token_subtotal: number;
@@ -118,6 +120,14 @@ export type HistoryItem = {
   stage: string;
   updated_at: string;
   completed_at: string | null;
+  compatibility_issues?: RecordCompatibilityResult[];
+};
+
+export type RecordCompatibilityResult = {
+  record_key: string;
+  artifact_type: string;
+  compatible: boolean;
+  message: string;
 };
 
 export type ResearchTrailItem = {
@@ -437,7 +447,7 @@ export const researchApi = {
   history: (database: string) =>
     request<{ items: HistoryItem[] }>(`/api/history?db_path=${encodeURIComponent(database)}`),
   trail: (runId: string, database: string) =>
-    request<{ run_id: string; items: ResearchTrailItem[] }>(`/api/research/${runId}/trail?db_path=${encodeURIComponent(database)}`),
+    request<{ run_id: string; items: ResearchTrailItem[]; compatibility_issues?: RecordCompatibilityResult[] }>(`/api/research/${runId}/trail?db_path=${encodeURIComponent(database)}`),
   v2Result: (runId: string, database: string) =>
     request<V2FinalResearchOutput>(`/api/research/${runId}/v2-result?db_path=${encodeURIComponent(database)}`),
   v2Evidence: (runId: string, database: string) =>

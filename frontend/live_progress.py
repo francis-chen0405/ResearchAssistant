@@ -11,6 +11,7 @@ from uuid import UUID
 
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
 from agents.v2_adaptive_search import V2PlanningAttempt
+from agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
 from agents.v2_evidence_analyst import (
     V2_EVIDENCE_ANALYST_SOURCE_ARTIFACT_PREFIX,
     V2_EVIDENCE_ANALYST_SOURCE_LEGACY_PREFIX,
@@ -46,6 +47,7 @@ from researchassistant.contracts.models import (
     Stage,
     StrictModel,
     V2AcquisitionProbeOutput,
+    V2DiscoveryScoutOutput,
     V2EvidenceAnalystSourceResult,
     V2PersistedArtifact,
     V2ResultSource,
@@ -198,7 +200,7 @@ def _v2_research_progress(
         stance=stance,
         status="completed" if enabled else "disabled",
         model_attempts=analyzed,
-        retrieval_attempts=len(matching),
+        retrieval_attempts=0,
         usable_snapshots=len(matching),
         candidates=analyzed,
     )
@@ -385,7 +387,9 @@ def _read_v2_directional_progress(
     directions: ResearchDirections,
     status: RunStatus,
     terminal_status: str | None = None,
-) -> tuple[ResearchProgress, ResearchProgress]:
+) -> tuple[ResearchProgress, ResearchProgress, int]:
+    attempts = dict.fromkeys((ResearchDirection.SUPPORT, ResearchDirection.CHALLENGE), 0)
+    unassigned = 0
     acquired: dict[ResearchDirection, int] = {
         ResearchDirection.SUPPORT: 0,
         ResearchDirection.CHALLENGE: 0,
@@ -407,8 +411,41 @@ def _read_v2_directional_progress(
         except KeyError:
             continue
         output = V2AcquisitionProbeOutput.model_validate_json(artifact.payload_json)
+        discovery_key = (
+            V2_SCOUT_ARTIFACT_KEY
+            if round_number == 1
+            else "post-phase-13-round-4-discovery-scout-v1"
+            if round_number == 4
+            else f"phase-7-round-{round_number}-discovery-scout"
+        )
+        cluster_directions: dict[UUID, set[ResearchDirection]] = {}
+        try:
+            discovery_artifact = read_v2_artifact(db_path, run_id, discovery_key)
+        except KeyError:
+            pass
+        else:
+            discovery = V2DiscoveryScoutOutput.model_validate_json(discovery_artifact.payload_json)
+            items = {item.item_id: item.direction for item in discovery.items}
+            for cluster in discovery.clusters:
+                # Missing members or mixed directions do not establish ownership.
+                cluster_directions[cluster.cluster_id] = (
+                    {items[item_id] for item_id in cluster.item_ids}
+                    if cluster.item_ids and all(item_id in items for item_id in cluster.item_ids)
+                    else set()
+                )
         for source in output.acquisitions:
             acquired[source.direction] += 1
+            if source.cluster_id not in cluster_directions:
+                cluster_directions[source.cluster_id] = {source.direction}
+            elif cluster_directions[source.cluster_id] != {source.direction}:
+                cluster_directions[source.cluster_id] = set()
+        # Count list entries, not unique clusters: fallback/retries are actual calls.
+        for attempt in output.attempts:
+            mapped = cluster_directions.get(attempt.cluster_id, set())
+            if len(mapped) == 1:
+                attempts[next(iter(mapped))] += 1
+            else:
+                unassigned += 1
         for survivor in output.survivors:
             survivors[survivor.direction].add(survivor.snapshot_id)
 
@@ -425,7 +462,9 @@ def _read_v2_directional_progress(
     except KeyError:
         pass
     else:
-        queue = V2SourceSelectionQueueResult.model_validate_json(queue_artifact.payload_json)
+        from researchassistant.storage.historical_decode import decode_v2_artifact
+
+        queue = decode_v2_artifact(queue_artifact, V2SourceSelectionQueueResult)
         survivor_ids = {
             direction: tuple(
                 item.source_id for item in queue.input.survivors if item.direction is direction
@@ -474,12 +513,17 @@ def _read_v2_directional_progress(
             stance="supporting" if direction is ResearchDirection.SUPPORT else "opposing",
             status="disabled" if not enabled else direction_status,
             model_attempts=analyzed[direction],
-            retrieval_attempts=acquired[direction],
+            retrieval_attempts=attempts[direction],
+            acquired_sources=acquired[direction],
             usable_snapshots=len(survivors[direction]),
             candidates=analyzed[direction],
         )
 
-    return build_progress(ResearchDirection.SUPPORT), build_progress(ResearchDirection.CHALLENGE)
+    return (
+        build_progress(ResearchDirection.SUPPORT),
+        build_progress(ResearchDirection.CHALLENGE),
+        unassigned,
+    )
 
 
 def _v2_progress_percent(
@@ -644,7 +688,7 @@ def snapshot_from_v2_progress(
         exit_code = CLIExitCode.CANCELLED
     elif manifest.status is RunStatus.COMPLETED:
         exit_code = CLIExitCode.RELEASED
-    supporting, opposing = _read_v2_directional_progress(
+    supporting, opposing, unassigned = _read_v2_directional_progress(
         read_source,
         run_id,
         directions,
@@ -672,7 +716,10 @@ def snapshot_from_v2_progress(
         ),
         diagnostic_component="v2-production",
         model_calls_used=usage.physical_calls_used,
-        retrieval_attempts_used=diagnostics.acquisition_attempts,
+        retrieval_attempts_used=supporting.retrieval_attempts
+        + opposing.retrieval_attempts
+        + unassigned,
+        unassigned_retrieval_attempts_used=unassigned,
         total_tokens=usage.total_tokens,
         total_cost_usd=usage.total_cost_usd,
         known_token_subtotal=usage.known_token_subtotal,
@@ -726,17 +773,35 @@ def snapshot_from_v2_result(
                 read_source, result.run_id, providers, final_output=output
             )
     stage = infer_v2_stage(read_source, result.run_id, result.current_stage, output is not None)
-    if output is None:
-        supporting, opposing = _read_v2_directional_progress(
-            read_source,
-            result.run_id,
-            directions,
-            terminal_status,
-            terminal_status=classification,
-        )
-    else:
-        supporting = _v2_research_progress(sources, "supporting", directions.support_enabled)
-        opposing = _v2_research_progress(sources, "opposing", directions.challenge_enabled)
+    supporting, opposing, unassigned = _read_v2_directional_progress(
+        read_source,
+        result.run_id,
+        directions,
+        terminal_status,
+        terminal_status=classification,
+    )
+    if output is not None:
+        # Final evidence supplies analyzed/usable metrics; provider attempts still
+        # come from persisted acquisition rounds, including failed-only clusters.
+        for stance in ("supporting", "opposing"):
+            final_progress = _v2_research_progress(
+                sources,
+                stance,
+                directions.support_enabled
+                if stance == "supporting"
+                else directions.challenge_enabled,
+            )
+            persisted = supporting if stance == "supporting" else opposing
+            final_progress = final_progress.model_copy(
+                update={
+                    "retrieval_attempts": persisted.retrieval_attempts,
+                    "acquired_sources": persisted.acquired_sources,
+                }
+            )
+            if stance == "supporting":
+                supporting = final_progress
+            else:
+                opposing = final_progress
     exit_code = {
         V2ProductionState.RELEASED: CLIExitCode.RELEASED,
         V2ProductionState.BLOCKED: CLIExitCode.BLOCKED,
@@ -766,9 +831,10 @@ def snapshot_from_v2_result(
         ),
         diagnostic_component="v2-production",
         model_calls_used=usage.physical_calls_used,
-        retrieval_attempts_used=(
-            diagnostics.acquisition_attempts if diagnostics is not None else len(sources)
-        ),
+        retrieval_attempts_used=supporting.retrieval_attempts
+        + opposing.retrieval_attempts
+        + unassigned,
+        unassigned_retrieval_attempts_used=unassigned,
         total_tokens=usage.total_tokens,
         total_cost_usd=usage.total_cost_usd,
         known_token_subtotal=usage.known_token_subtotal,
