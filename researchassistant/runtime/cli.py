@@ -524,16 +524,11 @@ def _inspect_run_command(db_path: Path, run_id: UUID) -> int:
                 if identity["policy_identity"] != V2_POLICY_IDENTITY:
                     raise ValueError("persisted v2 run identity is incompatible with this pipeline")
                 return _inspect_v2_run_command(db_path, run_id, store.connection)
-    except Exception as exc:
-        print(f"run inspection error: {exc}", file=sys.stderr)
-        return CLIExitCode.INVALID_INPUT
-    try:
-        result = inspect_provider_run(db_path, run_id)
-        try:
-            with open_read_only_store(db_path) as store:
+            result = inspect_provider_run(db_path, run_id, source=store.connection)
+            try:
                 contract = read_provider_run_contract(store.connection, run_id)
-        except KeyError:
-            contract = None
+            except KeyError:
+                contract = None
     except Exception as exc:
         print(f"run inspection error: {exc}", file=sys.stderr)
         return CLIExitCode.INVALID_INPUT

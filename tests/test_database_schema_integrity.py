@@ -121,7 +121,7 @@ def test_malformed_future_table_does_not_record_its_migration(tmp_path: Path) ->
 def test_cache_migration_preserves_old_unknowns_and_rolls_back_on_failure(tmp_path: Path) -> None:
     path = tmp_path / "upgrade.db"
     init_db(str(path))
-    assert CURRENT_SCHEMA_VERSION == 16
+    assert CURRENT_SCHEMA_VERSION == 17
     with _connection(path) as conn:
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall():
             if store_schema._object_version("trigger", row["name"]) > 13:

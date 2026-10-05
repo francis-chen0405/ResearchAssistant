@@ -11,7 +11,7 @@ import json
 import math
 import sqlite3
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -83,6 +83,7 @@ from researchassistant.contracts.models import (
     v2_payload_fingerprint,
 )
 from researchassistant.contracts.provider_contract import parse_provider_contract_payload
+from researchassistant.storage.sqlite_policy import connect_database, is_busy_error
 from researchassistant.storage.store_schema import (
     _MVP10_TABLES as _MVP10_TABLES,
 )
@@ -248,6 +249,7 @@ class DatabaseCompatibilityIssue(StrEnum):
     NEWER_SCHEMA = "newer_schema"
     CORRUPT_SCHEMA = "corrupt_schema"
     OPEN_FAILED = "open_failed"
+    BUSY = "busy"
 
 
 class DatabaseCompatibilityResult(StrictModel):
@@ -255,6 +257,7 @@ class DatabaseCompatibilityResult(StrictModel):
     issue: DatabaseCompatibilityIssue | None = None
     schema_version: int | None = None
     message: str
+    retryable: bool = False
 
 
 class DatabaseCompatibilityError(RuntimeError):
@@ -270,33 +273,79 @@ DatabaseReader = str | Path | sqlite3.Connection
 
 def _connect(db_path: str) -> sqlite3.Connection:
     """Open a connection with foreign keys enabled."""
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.row_factory = sqlite3.Row
+    conn = connect_database(db_path)
+    try:
+        with closing(conn.execute("PRAGMA foreign_keys = ON;")):
+            pass
+        conn.row_factory = sqlite3.Row
+    except BaseException:
+        conn.close()
+        raise
     return conn
+
+
+@contextmanager
+def read_snapshot_connection(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Pin one committed view, preserving an existing caller-owned transaction."""
+    owned = not conn.in_transaction
+    try:
+        if owned:
+            with closing(conn.execute("BEGIN")):
+                pass
+        yield conn
+        if owned and conn.in_transaction:
+            with closing(conn.execute("COMMIT")):
+                pass
+    except BaseException as exc:
+        if owned and conn.in_transaction:
+            with closing(conn.execute("ROLLBACK")):
+                pass
+        if is_busy_error(exc):
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.BUSY,
+                "Database is busy; inspection timed out. Retry shortly.",
+            ) from exc
+        raise
 
 
 @contextmanager
 def _read_connection(source: DatabaseReader) -> Iterator[sqlite3.Connection]:
     if isinstance(source, sqlite3.Connection):
-        yield source
+        with read_snapshot_connection(source):
+            yield source
         return
     conn = _open_read_connection(source)
     try:
-        yield conn
+        with read_snapshot_connection(conn):
+            yield conn
     finally:
         conn.close()
+
+
+class _ReadRows:
+    """Detached results: readers cannot leave SQLite cursors alive after a query."""
+
+    def __init__(self, rows: list[sqlite3.Row]) -> None:
+        self.rows = rows
+
+    def fetchone(self) -> sqlite3.Row | None:
+        return self.rows.pop(0) if self.rows else None
+
+    def fetchall(self) -> list[sqlite3.Row]:
+        rows, self.rows = self.rows, []
+        return rows
 
 
 def _read_execute(
     conn: sqlite3.Connection,
     sql: str,
     parameters: Sequence[object] = (),
-) -> sqlite3.Cursor:
+) -> _ReadRows:
     """Use named rows without altering a caller-owned connection's row factory."""
-    cursor = conn.cursor()
-    cursor.row_factory = sqlite3.Row
-    return cursor.execute(sql, parameters)
+    with closing(conn.cursor()) as cursor:
+        cursor.row_factory = sqlite3.Row
+        cursor.execute(sql, parameters)
+        return _ReadRows(cursor.fetchall())
 
 
 def _compatibility_error(
@@ -311,6 +360,7 @@ def _compatibility_error(
             issue=issue,
             schema_version=schema_version,
             message=message,
+            retryable=issue is DatabaseCompatibilityIssue.BUSY,
         )
     )
 
@@ -319,6 +369,11 @@ def _validate_read_only_schema(conn: sqlite3.Connection) -> DatabaseCompatibilit
     try:
         latest = validate_recorded_database(conn, allow_pending=False)
     except sqlite3.DatabaseError as exc:
+        if is_busy_error(exc):
+            raise _compatibility_error(
+                DatabaseCompatibilityIssue.BUSY,
+                "Database is busy; validation timed out. Retry inspection shortly.",
+            ) from exc
         message = str(exc)
         issue = DatabaseCompatibilityIssue.CORRUPT_SCHEMA
         version = None
@@ -363,10 +418,12 @@ def _open_read_connection(source: str | Path) -> sqlite3.Connection:
                 f"inspection database is not a regular file: {path}",
             )
         encoded_path = quote(path.as_posix(), safe="/")
-        conn = sqlite3.connect(f"file:{encoded_path}?mode=ro", uri=True)
+        conn = connect_database(f"file:{encoded_path}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA query_only = ON")
+        with closing(conn.execute("PRAGMA foreign_keys = ON")):
+            pass
+        with closing(conn.execute("PRAGMA query_only = ON")):
+            pass
         return conn
     except DatabaseCompatibilityError:
         raise
@@ -377,6 +434,10 @@ def _open_read_connection(source: str | Path) -> sqlite3.Connection:
             DatabaseCompatibilityIssue.OPEN_FAILED,
             f"could not open inspection database read-only: {path}",
         ) from exc
+    except BaseException:
+        if conn is not None:
+            conn.close()
+        raise
 
 
 class ReadOnlyStore:
@@ -391,6 +452,8 @@ class ReadOnlyStore:
             path = path.resolve()
             self.path = path
             self.connection = _open_read_connection(path)
+            with closing(self.connection.execute("BEGIN")):
+                pass
             self.compatibility = _validate_read_only_schema(self.connection)
         except DatabaseCompatibilityError:
             if hasattr(self, "connection"):
@@ -400,9 +463,17 @@ class ReadOnlyStore:
             if hasattr(self, "connection"):
                 self.connection.close()
             raise _compatibility_error(
-                DatabaseCompatibilityIssue.OPEN_FAILED,
-                f"could not open inspection database read-only: {path}",
+                DatabaseCompatibilityIssue.BUSY
+                if is_busy_error(exc)
+                else DatabaseCompatibilityIssue.OPEN_FAILED,
+                "Database is busy; retry inspection shortly."
+                if is_busy_error(exc)
+                else f"could not open inspection database read-only: {path}",
             ) from exc
+        except BaseException:
+            if hasattr(self, "connection"):
+                self.connection.close()
+            raise
 
     def __enter__(self) -> ReadOnlyStore:
         return self
@@ -411,6 +482,8 @@ class ReadOnlyStore:
         self.close()
 
     def close(self) -> None:
+        # close() rolls back this locally owned read-only transaction, including
+        # exception paths; it never commits application writes.
         self.connection.close()
 
     def read_run(self, run_id: UUID) -> RunManifest:

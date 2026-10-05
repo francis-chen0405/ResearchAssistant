@@ -110,11 +110,40 @@ from researchassistant.platform_support.desktop_settings import (
 )
 from researchassistant.runtime.application_runtime import repository_identity
 from researchassistant.storage.history_import import HistoryImportResult, import_history
+from researchassistant.storage.sqlite_policy import is_busy_error
 from researchassistant.storage.store import (
     DatabaseCompatibilityError,
     open_read_only_store,
     read_v2_artifact,
 )
+
+
+def _inspection_http_error(exc: Exception) -> HTTPException:
+    """Transient contention has a retryable diagnostic distinct from invalid data."""
+    busy = is_busy_error(exc) or (
+        isinstance(exc, DatabaseCompatibilityError) and exc.result.retryable
+    )
+    if busy:
+        return HTTPException(
+            status_code=503,
+            headers={"Retry-After": "1"},
+            detail={
+                "issue": "busy",
+                "retryable": True,
+                "message": "Database is busy. Retry inspection shortly.",
+            },
+        )
+    if isinstance(exc, DatabaseCompatibilityError):
+        return HTTPException(
+            status_code=400,
+            detail={
+                "issue": exc.result.issue,
+                "retryable": False,
+                "message": redact_text(exc),
+            },
+        )
+    return HTTPException(status_code=400, detail=redact_text(exc))
+
 
 API_HOST = "127.0.0.1"
 API_PORT = 8765
@@ -912,6 +941,8 @@ def create_app(
         try:
             return import_history(Path(source))
         except (DatabaseCompatibilityError, OSError, ValueError) as exc:
+            if isinstance(exc, DatabaseCompatibilityError) and exc.result.retryable:
+                raise _inspection_http_error(exc) from exc
             raise HTTPException(
                 status_code=422,
                 detail="History import failed; check the source database and ensure it is idle.",
@@ -1223,7 +1254,7 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Research run not found.") from exc
         except DatabaseCompatibilityError as exc:
-            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+            raise _inspection_http_error(exc) from exc
 
     @app.post("/api/research/{run_id}/cancel", response_model=CancelResponse)
     def cancel_research(run_id: UUID, payload: RunLocator) -> CancelResponse:
@@ -1243,7 +1274,7 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Research run not found.") from exc
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+            raise _inspection_http_error(exc) from exc
 
     @app.get("/api/research/{run_id}/v2-result", response_model=V2FinalResearchOutput)
     def v2_result(
@@ -1271,7 +1302,7 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="V2 research result not found.") from exc
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+            raise _inspection_http_error(exc) from exc
 
     @app.get("/api/research/{run_id}/v2-evidence", response_model=V2EvidenceDisplay)
     def v2_evidence(
@@ -1348,7 +1379,7 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="V2 evidence details not found.") from exc
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+            raise _inspection_http_error(exc) from exc
 
     @app.get("/api/history", response_model=HistoryResponse)
     def history(
@@ -1358,7 +1389,7 @@ def create_app(
         try:
             return HistoryResponse(items=runtime.controller.history(db_path, limit=limit))
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=redact_text(exc)) from exc
+            raise _inspection_http_error(exc) from exc
 
     @app.get("/api/service", response_model=ServiceDiagnostic)
     def service_status() -> ServiceDiagnostic:

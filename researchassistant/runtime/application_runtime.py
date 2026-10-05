@@ -26,6 +26,8 @@ def repository_identity(root: Path | None = None) -> str:
     """Hash the executable repository surface without runtime databases or secrets."""
     root = root if root is not None else _default_source_root()
     candidates = list(root.glob("*.py")) + [root / "pyproject.toml"]
+    # The bundled font determines released PDF rendering just as source does.
+    candidates.extend(sorted((root / "researchassistant/evidence/fonts").glob("*.ttf")))
     for directory, pattern in (
         ("agents", "*.py"),
         ("providers", "*.py"),
@@ -39,6 +41,7 @@ def repository_identity(root: Path | None = None) -> str:
             not (root / "researchassistant/research/v2_orchestrator.py").is_file()
             or not (root / "researchassistant/runtime/cli.py").is_file()
             or not (root / "prompts").is_dir()
+            or not (root / "researchassistant/evidence/fonts/unifont-15.0.01.ttf").is_file()
         ):
             raise ProviderConfigurationError("packaged source identity surface is incomplete")
     digest = sha256()

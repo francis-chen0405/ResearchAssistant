@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from enum import StrEnum
 from pathlib import Path
 from uuid import UUID
@@ -22,6 +23,7 @@ from researchassistant.contracts.models import (
     EvidenceTrailOutcome,
     LedgerRecord,
     PortfolioCoverageAssessment,
+    ProviderRunContract,
     ResearchGovernorDecision,
     ResearchRoundRecord,
     ResearchTerminalResult,
@@ -187,28 +189,84 @@ def _optional_validation(
 
 
 def _trails(
-    connection: artifact_store.DatabaseReader,
+    connection: sqlite3.Connection,
     run_id: UUID,
     validation: ValidationResult | None,
     compatibility_issues: list[RecordCompatibilityResult],
 ) -> tuple[EvidenceTrailItem, ...]:
-    candidate_rows = connection.execute(
+    candidate_rows = artifact_store._read_execute(
+        connection,
         "SELECT * FROM candidates WHERE run_id = ? ORDER BY extracted_at, quote_block_id",
         (str(run_id),),
     ).fetchall()
+    if not candidate_rows:
+        return ()
+
+    quote_ids = tuple(row["quote_block_id"] for row in candidate_rows)
+    ledger_rows = _group_rows_by_quote(
+        _bounded_rows(connection, "ledger_records", "quote_block_id", quote_ids, run_id),
+        "quote_block_id",
+    )
+    snapshot_rows = _rows_by_id(
+        _bounded_rows(
+            connection,
+            "snapshots",
+            "snapshot_id",
+            tuple(
+                dict.fromkeys(
+                    [row["snapshot_id"] for row in candidate_rows]
+                    + [ledger["snapshot_id"] for rows in ledger_rows.values() for ledger in rows]
+                )
+            ),
+            run_id=None,
+        ),
+        "snapshot_id",
+    )
+    snapshots = {
+        snapshot_id: artifact_store._row_to_snapshot(row)
+        for snapshot_id, row in snapshot_rows.items()
+    }
+    analyst_rows = _rows_by_quote(
+        _bounded_rows(connection, "analyst_decisions", "quote_block_id", quote_ids, run_id),
+        "quote_block_id",
+    )
+    draft_rows = _group_rows_by_quote(
+        _bounded_rows(connection, "statement_drafts", "quote_block_id", quote_ids, run_id),
+        "quote_block_id",
+    )
+    review_rows = _group_rows_by_quote(
+        _bounded_rows(connection, "statement_review_attempts", "quote_block_id", quote_ids, run_id),
+        "quote_block_id",
+    )
+    try:
+        contract = artifact_store.read_provider_run_contract(connection, run_id)
+    except KeyError:
+        contract = None
+
     trails: list[EvidenceTrailItem] = []
     for row in candidate_rows:
         candidate = artifact_store._row_to_candidate(row)
-        snapshot_row = connection.execute(
-            "SELECT * FROM snapshots WHERE snapshot_id = ?", (str(candidate.snapshot_id),)
-        ).fetchone()
+        snapshot_row = snapshots.get(str(candidate.snapshot_id))
         if snapshot_row is None:
             raise EvidenceBrowserError(f"candidate {candidate.quote_block_id} has no snapshot")
-        snapshot = artifact_store._row_to_snapshot(snapshot_row)
-        analyst = _optional_analyst(connection, run_id, candidate.quote_block_id)
-        drafts = _drafts(connection, run_id, candidate.quote_block_id)
-        reviews = _reviews(connection, run_id, candidate.quote_block_id)
-        ledger = _ledger(connection, run_id, candidate.quote_block_id, compatibility_issues)
+        snapshot = snapshot_row
+        quote_id = str(candidate.quote_block_id)
+        analyst_row = analyst_rows.get(quote_id)
+        analyst = (
+            artifact_store._row_to_score_decision(analyst_row) if analyst_row is not None else None
+        )
+        drafts = tuple(
+            artifact_store._row_to_statement_draft(item) for item in draft_rows.get(quote_id, ())
+        )
+        reviews = tuple(
+            artifact_store._row_to_review_result(item) for item in review_rows.get(quote_id, ())
+        )
+        ledger = _decode_ledger(
+            ledger_rows.get(quote_id, ()),
+            contract,
+            snapshots,
+            compatibility_issues,
+        )
         released = bool(validation and validation.valid and ledger)
         trails.append(
             EvidenceTrailItem(
@@ -226,63 +284,79 @@ def _trails(
     return tuple(trails)
 
 
-def _optional_analyst(
-    connection: artifact_store.DatabaseReader, run_id: UUID, quote_block_id: UUID
-) -> ScoreDecision | None:
-    row = connection.execute(
-        "SELECT * FROM analyst_decisions WHERE run_id = ? AND quote_block_id = ?",
-        (str(run_id), str(quote_block_id)),
-    ).fetchone()
-    return artifact_store._row_to_score_decision(row) if row is not None else None
+_BROWSER_QUERY_CHUNK_SIZE = 500
 
 
-def _drafts(
-    connection: artifact_store.DatabaseReader, run_id: UUID, quote_block_id: UUID
-) -> tuple[StatementDraft, ...]:
-    rows = connection.execute(
-        """SELECT * FROM statement_drafts WHERE run_id = ? AND quote_block_id = ?
-           ORDER BY drafted_at""",
-        (str(run_id), str(quote_block_id)),
-    ).fetchall()
-    return tuple(artifact_store._row_to_statement_draft(row) for row in rows)
+def _bounded_rows(
+    connection: sqlite3.Connection,
+    table: str,
+    key_column: str,
+    keys: tuple[str, ...],
+    run_id: UUID | None,
+) -> tuple[sqlite3.Row, ...]:
+    """Read only selected IDs, with headroom below old SQLite bind limits."""
+    if not keys:
+        return ()
+    rows: list[sqlite3.Row] = []
+    for offset in range(0, len(keys), _BROWSER_QUERY_CHUNK_SIZE):
+        chunk = keys[offset : offset + _BROWSER_QUERY_CHUNK_SIZE]
+        marks = ", ".join("?" for _ in chunk)
+        if run_id is None:
+            query = f"SELECT * FROM {table} WHERE {key_column} IN ({marks})"
+            parameters: tuple[object, ...] = chunk
+        else:
+            order_by = {
+                "analyst_decisions": "",
+                "statement_drafts": " ORDER BY quote_block_id, drafted_at",
+                "statement_review_attempts": (
+                    " ORDER BY quote_block_id, reviewed_at, statement_draft_id"
+                ),
+                "ledger_records": " ORDER BY quote_block_id, ledger_claim_id",
+            }[table]
+            query = (
+                f"SELECT * FROM {table} WHERE run_id = ? AND {key_column} IN ({marks}){order_by}"
+            )
+            parameters = (str(run_id), *chunk)
+        rows.extend(artifact_store._read_execute(connection, query, parameters).fetchall())
+    return tuple(rows)
 
 
-def _reviews(
-    connection: artifact_store.DatabaseReader, run_id: UUID, quote_block_id: UUID
-) -> tuple[StatementReviewResult, ...]:
-    rows = connection.execute(
-        """SELECT * FROM statement_review_attempts WHERE run_id = ? AND quote_block_id = ?
-           ORDER BY reviewed_at""",
-        (str(run_id), str(quote_block_id)),
-    ).fetchall()
-    return tuple(artifact_store._row_to_review_result(row) for row in rows)
+def _rows_by_id(rows: tuple[sqlite3.Row, ...], key: str) -> dict[str, sqlite3.Row]:
+    return {row[key]: row for row in rows}
 
 
-def _ledger(
-    connection: artifact_store.DatabaseReader,
-    run_id: UUID,
-    quote_block_id: UUID,
+def _rows_by_quote(rows: tuple[sqlite3.Row, ...], key: str) -> dict[str, sqlite3.Row]:
+    return _rows_by_id(rows, key)
+
+
+def _group_rows_by_quote(
+    rows: tuple[sqlite3.Row, ...], key: str
+) -> dict[str, tuple[sqlite3.Row, ...]]:
+    grouped: dict[str, list[sqlite3.Row]] = {}
+    for row in rows:
+        grouped.setdefault(row[key], []).append(row)
+    return {quote_id: tuple(items) for quote_id, items in grouped.items()}
+
+
+def _decode_ledger(
+    rows: tuple[sqlite3.Row, ...],
+    contract: ProviderRunContract | None,
+    snapshots: dict[str, SourceSnapshot],
     compatibility_issues: list[RecordCompatibilityResult],
-) -> tuple[LedgerRecord, ...]:
-    rows = connection.execute(
-        """SELECT * FROM ledger_records WHERE run_id = ? AND quote_block_id = ?
-           ORDER BY ledger_claim_id""",
-        (str(run_id), str(quote_block_id)),
-    ).fetchall()
-    try:
-        contract = artifact_store.read_provider_run_contract(connection, run_id)
-    except KeyError:
-        contract = None
-    records: list[LedgerRecord] = []
+) -> tuple[LedgerRecord | AugustLedgerRecord, ...]:
+    records: list[LedgerRecord | AugustLedgerRecord] = []
     for row in rows:
         try:
             record = artifact_store._row_to_ledger_record(row, contract)
             if isinstance(record, HistoricalRead):
                 from researchassistant.storage.historical_decode import verify_historical_snapshot
 
-                verify_historical_snapshot(
-                    record, artifact_store.read_snapshot(connection, record.snapshot_id)
-                )
+                snapshot = snapshots.get(str(record.snapshot_id))
+                if snapshot is None:
+                    raise EvidenceBrowserError(
+                        f"historical Ledger {record.ledger_claim_id} has no snapshot"
+                    )
+                verify_historical_snapshot(record, snapshot)
             records.append(record)
         except RecordCompatibilityError as exc:
             compatibility_issues.append(exc.result)

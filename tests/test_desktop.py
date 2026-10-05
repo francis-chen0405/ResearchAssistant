@@ -259,6 +259,12 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
     source_cli = source_root / "researchassistant/runtime/cli.py"
     source_cli.parent.mkdir(parents=True)
     source_cli.write_text("# cli one")
+    source_policy = source_root / "researchassistant/storage/sqlite_policy.py"
+    source_policy.parent.mkdir(parents=True)
+    source_policy.write_text("# policy one")
+    source_font = source_root / "researchassistant/evidence/fonts/unifont-15.0.01.ttf"
+    source_font.parent.mkdir(parents=True)
+    source_font.write_bytes(b"font one")
     (source_root / "pyproject.toml").write_text("# dependencies")
     (source_root / "prompts").mkdir()
     source_prompt = source_root / "prompts/analyst.md"
@@ -275,8 +281,14 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
     source_prompt.write_text("exact prompt two")
     changed_prompt = cli.repository_identity()
     assert changed_prompt != changed_engine
+    source_policy.write_text("# policy two")
+    changed_policy = cli.repository_identity()
+    assert changed_policy != changed_prompt
+    source_font.write_bytes(b"font two")
+    changed_font = cli.repository_identity()
+    assert changed_font != changed_policy
     (source_root / "history.sqlite3").write_bytes(b"runtime data")
-    assert cli.repository_identity() == changed_prompt
+    assert cli.repository_identity() == changed_font
 
     internal_root = tmp_path / "dist/_internal"
     for relative, payload in (
@@ -285,6 +297,7 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
         ("researchassistant/contracts/models.py", "# packaged contracts"),
         ("prompts/analyst.md", "packaged prompt"),
         ("pyproject.toml", "packaged dependencies"),
+        ("researchassistant/evidence/fonts/unifont-15.0.01.ttf", "packaged font"),
     ):
         path = internal_root / relative
         path.parent.mkdir(parents=True, exist_ok=True)

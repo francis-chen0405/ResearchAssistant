@@ -31,7 +31,15 @@ _SCHEMA13_MIGRATION_DESCRIPTIONS = {
     14: "persist cached and uncached model input-token usage",
     15: "persist model cache-write tokens and usage cost basis",
     16: "protect same-run provenance ownership and keys on update",
+    17: "index history ordering and native evidence trail lookups",
 }
+_SCHEMA17_INDEXES = (
+    "runs_updated_history",
+    "candidates_run_extracted_quote",
+    "statement_drafts_run_quote_drafted",
+    "statement_reviews_run_quote_reviewed",
+    "ledger_records_run_quote_claim",
+)
 _SCHEMA13_PROVENANCE_GUARD_TABLES = (
     "analyst_decisions",
     "candidates",
@@ -53,10 +61,13 @@ _SCHEMA13_USAGE_COLUMNS = (
 
 
 def _remove_post_schema13_objects(conn: sqlite3.Connection, version: int) -> None:
-    """Remove only schema 14–16 objects from an isolated compatibility fixture."""
+    """Remove only schema 14–17 objects from an isolated compatibility fixture."""
     if version >= 16:
         for table in _SCHEMA13_PROVENANCE_GUARD_TABLES:
             conn.execute(f"DROP TRIGGER {table}_provenance_immutable_update")
+    if version >= 17:
+        for index in _SCHEMA17_INDEXES:
+            conn.execute(f"DROP INDEX {index}")
     for column in _SCHEMA13_USAGE_COLUMNS:
         if column in _schema13_attempt_columns(conn):
             conn.execute(f"ALTER TABLE model_route_attempts DROP COLUMN {column}")
@@ -70,7 +81,7 @@ def _schema13_attempt_columns(conn: sqlite3.Connection) -> set[str]:
 
 
 def _prepare_schema13_fixture(database: Path) -> None:
-    """Convert a recognized generated schema 14–16 DB into a schema-13 fixture."""
+    """Convert a recognized generated schema 14–17 DB into a schema-13 fixture."""
     conn = sqlite3.connect(database)
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -81,9 +92,9 @@ def _prepare_schema13_fixture(database: Path) -> None:
             raise ValueError("Cannot make a schema-13 fixture without migration records")
         versions = [row[0] for row in rows]
         version = versions[-1]
-        if version not in (14, 15, 16) or versions != list(range(1, version + 1)):
+        if version not in (14, 15, 16, 17) or versions != list(range(1, version + 1)):
             raise ValueError(
-                f"Expected a complete recognized schema 14, 15, or 16; found {version}"
+                f"Expected a complete recognized schema 14, 15, 16, or 17; found {version}"
             )
         descriptions = {row[0]: row[1] for row in rows}
         for introduced_version, expected in _SCHEMA13_MIGRATION_DESCRIPTIONS.items():
@@ -116,6 +127,14 @@ def _prepare_schema13_fixture(database: Path) -> None:
             ).fetchall()
             if any(str(row[0]).endswith("_provenance_immutable_update") for row in trigger_rows):
                 raise ValueError("Schema has unrecorded schema-16 provenance update guards")
+
+        indexes = {
+            str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        }
+        if version >= 17 and not set(_SCHEMA17_INDEXES) <= indexes:
+            raise ValueError("Schema 17 is missing recognized history/evidence indexes")
+        if version < 17 and indexes.intersection(_SCHEMA17_INDEXES):
+            raise ValueError("Schema has unrecorded schema-17 history/evidence indexes")
 
         existing_usage_columns = sorted(expected_usage_columns)
         populated_terms = " OR ".join(f"{column} IS NOT NULL" for column in existing_usage_columns)

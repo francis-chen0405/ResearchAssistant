@@ -229,6 +229,8 @@ def test_every_path_based_store_reader_uses_the_shared_read_boundary() -> None:
         for node in module.body
         if isinstance(node, ast.FunctionDef)
         and (node.name.startswith("read_") or node.name == "list_runs")
+        # Transaction scoping accepts only a connection; it is not a path reader.
+        and node.name != "read_snapshot_connection"
     }
     assert readers
     bypassing = [

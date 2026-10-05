@@ -82,13 +82,16 @@ def _generated_database(path: Path) -> None:
 
 def _downgrade_generated_database(path: Path, version: int) -> None:
     with sqlite3.connect(path) as connection:
-        for table in upgrade_smoke._SCHEMA13_PROVENANCE_GUARD_TABLES:
-            connection.execute(f"DROP TRIGGER {table}_provenance_immutable_update")
+        if version < 16:
+            for table in upgrade_smoke._SCHEMA13_PROVENANCE_GUARD_TABLES:
+                connection.execute(f"DROP TRIGGER {table}_provenance_immutable_update")
+        if version < 17:
+            for index in upgrade_smoke._SCHEMA17_INDEXES:
+                connection.execute(f"DROP INDEX {index}")
         if version == 14:
             for name in ("cache_write_tokens", "usage_cost_basis"):
                 connection.execute(f"ALTER TABLE model_route_attempts DROP COLUMN {name}")
-        if version < 16:
-            connection.execute("DELETE FROM schema_migrations WHERE version > ?", (version,))
+        connection.execute("DELETE FROM schema_migrations WHERE version > ?", (version,))
         connection.commit()
 
 
@@ -182,7 +185,7 @@ def test_unknown_or_incomplete_schema_refuses_conversion_without_mutation(tmp_pa
     _generated_database(database)
     with sqlite3.connect(database) as connection:
         connection.execute(
-            "INSERT INTO schema_migrations VALUES (17, 'unknown', '2026-10-04T00:00:00Z')"
+            "INSERT INTO schema_migrations VALUES (18, 'unknown', '2026-10-04T00:00:00Z')"
         )
         connection.commit()
     before = _schema_state(database)

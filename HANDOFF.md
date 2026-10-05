@@ -1,14 +1,11 @@
 # Handoff
 
-Continue from the [database-review shared four-phase record](.agent/plans/database-review-2026-10-03.md). Use [STATUS](STATUS.md) for source, installed-app and public-download state. Prompts 1–3 are reviewed and committed. The installed app remains the preceding build.
+The four-phase [database implementation](.agent/plans/database-review-2026-10-03.md) is complete at a verified source boundary. All four successful conditional reviews are delivered in local source commits. Use [STATUS](STATUS.md) for current source, installed/public provenance and platform gates, and the [acceptance record](docs/verification/database-phase4.md) for the finding-to-test matrix, benchmarks and exact checks.
 
-## Next actions
+## Next boundary
 
-1. Apply Prompt 4 for full-suite, cross-phase and measured performance/consistency work. Schema remains 16 and read-only support remains 7–16. Prompt 3's conditional-commit run passed 661 focused tests; no full suite was run for this phase. Retain its historical catalog and original values/hashes, strict current admission/resume rules, schema preflight, backup/lock boundaries, immutable artifacts and exact costs.
-2. Before a separate release decision, build and verify the final artifact with ReportLab 4.4.9 and the bundled Unifont/license assets. Current packaging includes the complete backend data tree, but no new packaged executable was built or verified. Native Windows owner/SYSTEM ACL, NTFS publication and power-loss durability checks remain open; earlier live-quality, clean-machine, minimum-OS, signing and notarization gates remain in [STATUS](STATUS.md).
+A separate user decision is required for push, release, installed-app replacement or real-data migration. Before any release, complete the applicable native Windows, credential-backed launch, minimum-OS/clean-machine and signing/notarization gates. The current isolated macOS backend/font/schema proof does not establish those gates. Installed Wigolo verification requires a supported read-only open with its bundled extension, or a service-provided SQLite backup; see the [cache record](docs/verification/database-phase4-review.md).
 
-## Boundaries and remaining acceptance
+Retain schema-17 strict preflight, verified recovery before supported writable upgrades, new-path restore, full per-request read validation, snapshot ownership and one-second contention policy. Keep historical payloads, hashes and costs immutable. Source/font identity changes permit historical reading but require a fresh run under the exact resume gate. No paid/provider calls, credential access, real-user writes, automation, push or publication are authorized by this completed task.
 
-The user authorized reviewing Prompts 1–3 and committing each successful implementation. Installed-app replacement, paid research, real-user database migration/restore/deletion, push and publication remain outside this task. Verification writes stay disposable. Historical decoding preserves recorded policies and does not authorize incompatible resume or fresh admission. PDF coverage limits are explicit; Markdown/DOCX retain the text when glyphs or shaping are unsupported. The exhausted paid-test allowance, release gates and separate OneDrive build-directory cleanup boundary remain unchanged.
-
-Keep completed details in the task record and use [grouped history](docs/history.md) for prior records. Replace these next actions when they change; do not append another phase narrative.
+Keep completed details in the shared record; replace this handoff when the next authorized action changes.

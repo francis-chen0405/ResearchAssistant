@@ -346,6 +346,10 @@ type CredentialInput = {
 
 function readableErrorDetail(detail: unknown): string | null {
   if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    const message = (detail as { message?: unknown }).message;
+    return typeof message === "string" && message.trim() ? message : null;
+  }
   if (!Array.isArray(detail)) return null;
   const messages = detail.flatMap((item): string[] => {
     if (!item || typeof item !== "object") return [];

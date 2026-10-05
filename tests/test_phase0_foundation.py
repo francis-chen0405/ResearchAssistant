@@ -41,6 +41,7 @@ def test_pyproject_declares_phase_dependencies() -> None:
         "markdown-it-py>=3.0,<4.0",
         "pydantic>=2.0,<3.0",
         "pypdf>=5.0,<6.0",
+        "reportlab>=4.4.9,<5.0",
         "uvicorn>=0.30,<1.0",
     ]
     assert pyproject["project"]["optional-dependencies"]["dev"] == [

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -10,8 +12,10 @@ from zipfile import ZipFile
 import pytest
 
 import researchassistant.evidence.brief_export as brief_export
+import researchassistant.storage.store as store
 from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
 from researchassistant.research.orchestrator import ProviderRunStatus
+from researchassistant.storage.store import DatabaseCompatibilityResult, init_db
 
 RUN_ID = UUID("11111111-1111-4111-8111-111111111111")
 BRIEF = (
@@ -34,6 +38,19 @@ def _released() -> SimpleNamespace:
     )
 
 
+def _inspector(result: SimpleNamespace) -> Callable[..., SimpleNamespace]:
+    def inspect(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return result
+
+    return inspect
+
+
+def _database(tmp_path: Path) -> Path:
+    database = tmp_path / "run.sqlite3"
+    init_db(str(database))
+    return database
+
+
 @pytest.mark.parametrize(
     ("export_format", "suffix"),
     [
@@ -48,11 +65,12 @@ def test_export_released_brief_is_local_and_traceable(
     export_format: BriefExportFormat,
     suffix: str,
 ) -> None:
-    monkeypatch.setattr(brief_export, "inspect_provider_run", lambda *_args: _released())
+    monkeypatch.setattr(brief_export, "inspect_provider_run", _inspector(_released()))
     destination = tmp_path / f"brief{suffix}"
+    database = _database(tmp_path)
 
     exported = export_released_brief(
-        tmp_path / "run.sqlite3",
+        database,
         str(RUN_ID),
         destination,
         export_format,
@@ -79,15 +97,16 @@ def test_export_released_brief_is_local_and_traceable(
 def test_markdown_export_is_deterministic_for_fixed_generation_time(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(brief_export, "inspect_provider_run", lambda *_args: _released())
+    monkeypatch.setattr(brief_export, "inspect_provider_run", _inspector(_released()))
+    database = _database(tmp_path)
     first = tmp_path / "first.md"
     second = tmp_path / "second.md"
 
     export_released_brief(
-        tmp_path / "run.sqlite3", str(RUN_ID), first, BriefExportFormat.MARKDOWN, generated_at=WHEN
+        database, str(RUN_ID), first, BriefExportFormat.MARKDOWN, generated_at=WHEN
     )
     export_released_brief(
-        tmp_path / "run.sqlite3", str(RUN_ID), second, BriefExportFormat.MARKDOWN, generated_at=WHEN
+        database, str(RUN_ID), second, BriefExportFormat.MARKDOWN, generated_at=WHEN
     )
 
     assert first.read_bytes() == second.read_bytes()
@@ -108,13 +127,55 @@ def test_export_rejects_nonreleased_runs(
     invalid = _released()
     invalid.status = status
     invalid.validation_result = SimpleNamespace(valid=False)
-    monkeypatch.setattr(brief_export, "inspect_provider_run", lambda *_args: invalid)
+    monkeypatch.setattr(brief_export, "inspect_provider_run", _inspector(invalid))
 
     with pytest.raises(ValueError, match="only released"):
         export_released_brief(
-            tmp_path / "run.sqlite3",
+            _database(tmp_path),
             str(RUN_ID),
             tmp_path / "brief.md",
             BriefExportFormat.MARKDOWN,
             generated_at=WHEN,
         )
+
+
+def test_export_reuses_one_validated_snapshot_and_closes_it_before_render(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    database = _database(tmp_path)
+    opened: list[sqlite3.Connection] = []
+    validation_count = 0
+    original_connect = store.connect_database
+    original_validate = store._validate_read_only_schema
+
+    def track_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        connection = original_connect(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    def count_validation(connection: sqlite3.Connection) -> DatabaseCompatibilityResult:
+        nonlocal validation_count
+        validation_count += 1
+        return original_validate(connection)
+
+    def assert_closed_before_render(_text: str, _metadata: object) -> bytes:
+        assert validation_count == 1
+        assert len(opened) == 1
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            opened[0].execute("SELECT 1")
+        return b"rendered after snapshot release"
+
+    monkeypatch.setattr(store, "connect_database", track_connect)
+    monkeypatch.setattr(store, "_validate_read_only_schema", count_validation)
+    monkeypatch.setattr(brief_export, "inspect_provider_run", _inspector(_released()))
+    monkeypatch.setattr(brief_export, "_render_export", assert_closed_before_render)
+
+    export_released_brief(
+        database,
+        str(RUN_ID),
+        tmp_path / "brief.md",
+        BriefExportFormat.MARKDOWN,
+        generated_at=WHEN,
+    )
+
+    assert validation_count == 1

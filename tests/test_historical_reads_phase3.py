@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -754,6 +754,58 @@ def test_historical_browser_provider_inspection_and_export_reconstruct_released_
             authoritative_claim=offline.raw_claim,
             validated_at=WHEN,
         )
+    assert (db.read_bytes(), db.stat().st_mtime_ns) == before
+
+
+def test_historical_browser_loads_ledger_only_snapshot_in_bounded_batch(tmp_path: Path) -> None:
+    db, offline, _brief = _august_database(tmp_path / "run", 0)
+    ledger_id = str(offline.ledger_records[0].ledger_claim_id)
+    with closing(sqlite3.connect(db)) as connection:
+        connection.row_factory = sqlite3.Row
+        ledger = connection.execute(
+            "SELECT * FROM ledger_records WHERE ledger_claim_id=?", (ledger_id,)
+        ).fetchone()
+        assert ledger is not None
+        snapshot = connection.execute(
+            "SELECT * FROM snapshots WHERE snapshot_id=?", (ledger["snapshot_id"],)
+        ).fetchone()
+        assert snapshot is not None
+        snapshot_id = str(uuid4())
+        values = dict(snapshot)
+        values["snapshot_id"] = snapshot_id
+        columns = tuple(values)
+        connection.execute(
+            f"INSERT INTO snapshots ({', '.join(columns)}) "
+            f"VALUES ({', '.join('?' for _ in columns)})",
+            tuple(values[name] for name in columns),
+        )
+        triggers = connection.execute(
+            "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='ledger_records'"
+        ).fetchall()
+        for name, _sql in triggers:
+            connection.execute(f'DROP TRIGGER "{name}"')
+        connection.execute(
+            "UPDATE ledger_records SET snapshot_id=? WHERE ledger_claim_id=?",
+            (snapshot_id, ledger_id),
+        )
+        for _name, sql in triggers:
+            connection.execute(sql)
+        connection.commit()
+
+    before = db.read_bytes(), db.stat().st_mtime_ns
+    browser = browse_evidence_run(db, offline.run_id)
+    target = next(
+        trail
+        for trail in browser.trails
+        if any(str(record.ledger_claim_id) == ledger_id for record in trail.ledger_records)
+    )
+    ledger_record = next(
+        record for record in target.ledger_records if str(record.ledger_claim_id) == ledger_id
+    )
+    assert isinstance(ledger_record, HistoricalRead)
+    assert ledger_record.snapshot_id != target.candidate.snapshot_id
+    assert not browser.compatibility_issues
+    assert browser.released_statement_traces
     assert (db.read_bytes(), db.stat().st_mtime_ns) == before
 
 

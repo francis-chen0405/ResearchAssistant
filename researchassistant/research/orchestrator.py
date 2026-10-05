@@ -989,9 +989,22 @@ def inspect_provider_run(
     run_id: UUID,
     *,
     failure_reason: str | None = None,
+    source: DatabaseReader | None = None,
 ) -> ProviderPipelineResult:
     """Reopen and inspect a partial or terminal provider-backed run."""
     path = str(Path(db_path).resolve())
+    if source is not None:
+        if isinstance(source, (str, Path)):
+            with open_read_only_store(source) as store:
+                return _inspect_provider_run_connection(
+                    store.connection, path, run_id, failure_reason=failure_reason
+                )
+        from researchassistant.storage.store import _read_connection
+
+        with _read_connection(source) as reader:
+            return _inspect_provider_run_connection(
+                reader, path, run_id, failure_reason=failure_reason
+            )
     with open_read_only_store(path) as store:
         return _inspect_provider_run_connection(
             store.connection,

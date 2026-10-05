@@ -142,7 +142,7 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
 
     assert read_run(str(path), manifest.run_id).raw_claim.encode() == original
     rows = _migration_rows(path)
-    assert rows[-13:] == [
+    assert rows[-14:] == [
         (4, "same-run provenance protection triggers"),
         (5, "database-enforced immutable runs.raw_claim"),
         (6, "immutable snapshots and Ledger with exact decimal model costs"),
@@ -156,6 +156,7 @@ def test_migration_five_upgrades_migration_four_without_rewriting_claims(tmp_pat
         (14, "persist cached and uncached model input-token usage"),
         (15, "persist model cache-write tokens and usage cost basis"),
         (16, "protect same-run provenance ownership and keys on update"),
+        (17, "index history ordering and native evidence trail lookups"),
     ]
 
 

@@ -26,6 +26,7 @@ from researchassistant.contracts.models import (
 )
 from researchassistant.research.orchestrator import ProviderRunStatus, inspect_provider_run
 from researchassistant.storage.store import (
+    DatabaseReader,
     open_read_only_store,
     read_provider_run_contract,
     read_v2_artifact,
@@ -71,32 +72,33 @@ def export_released_brief(
 ) -> BriefExportResult:
     """Write one local report only after re-verifying a released persisted run."""
     parsed_run_id = _parse_run_id(run_id)
-    v2_output = _read_v2_final_output(db_path, parsed_run_id)
-    if v2_output is not None:
-        if not v2_output.release_validation.valid:
-            raise ValueError("only released runs with valid final validation may be exported")
-        final_brief = render_v2_final_output(v2_output)
-        rendered_hash = v2_output.release_validation.rendered_output_hash
-        if (
-            rendered_hash is None
-            or sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash
-        ):
-            raise ValueError("released v2 brief hash does not match reconstructed brief")
-    else:
-        result = inspect_provider_run(db_path, parsed_run_id)
-        if result.status is not ProviderRunStatus.RELEASED:
-            raise ValueError("only released runs with valid final validation may be exported")
-        if result.validation_result is None or not result.validation_result.valid:
-            raise ValueError("only released runs with valid final validation may be exported")
-        if result.final_brief is None or result.rendered_brief_hash is None:
-            raise ValueError("released run has no reconstructable final brief")
-        final_brief = result.final_brief
-        rendered_hash = result.rendered_brief_hash
-        if sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash:
-            raise ValueError("released brief hash does not match reconstructed brief")
+    with open_read_only_store(db_path) as store:
+        v2_output = _read_v2_final_output(store.connection, parsed_run_id)
+        if v2_output is not None:
+            if not v2_output.release_validation.valid:
+                raise ValueError("only released runs with valid final validation may be exported")
+            final_brief = render_v2_final_output(v2_output)
+            rendered_hash = v2_output.release_validation.rendered_output_hash
+            if (
+                rendered_hash is None
+                or sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash
+            ):
+                raise ValueError("released v2 brief hash does not match reconstructed brief")
+        else:
+            result = inspect_provider_run(db_path, parsed_run_id, source=store.connection)
+            if result.status is not ProviderRunStatus.RELEASED:
+                raise ValueError("only released runs with valid final validation may be exported")
+            if result.validation_result is None or not result.validation_result.valid:
+                raise ValueError("only released runs with valid final validation may be exported")
+            if result.final_brief is None or result.rendered_brief_hash is None:
+                raise ValueError("released run has no reconstructable final brief")
+            final_brief = result.final_brief
+            rendered_hash = result.rendered_brief_hash
+            if sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash:
+                raise ValueError("released brief hash does not match reconstructed brief")
 
-    timestamp = generated_at or datetime.now(UTC)
-    controls = _read_controls(db_path, parsed_run_id)
+        timestamp = generated_at or datetime.now(UTC)
+        controls = _read_controls(store.connection, parsed_run_id)
     metadata = BriefExportMetadata(
         run_id=str(parsed_run_id),
         rendered_brief_hash=rendered_hash,
@@ -120,22 +122,19 @@ def export_released_brief(
     )
 
 
-def _read_v2_final_output(db_path: str | Path, run_id: UUID) -> V2FinalResearchOutput | None:
-    if not Path(db_path).is_file():
+def _read_v2_final_output(source: DatabaseReader, run_id: UUID) -> V2FinalResearchOutput | None:
+    for artifact_key in (
+        V2_FINAL_OUTPUT_ARTIFACT_KEY,
+        V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
+        V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
+    ):
+        try:
+            artifact = read_v2_artifact(source, run_id, artifact_key)
+        except KeyError:
+            continue
+        break
+    else:
         return None
-    with open_read_only_store(db_path) as store:
-        for artifact_key in (
-            V2_FINAL_OUTPUT_ARTIFACT_KEY,
-            V2_FINAL_OUTPUT_PHASE13_ARTIFACT_KEY,
-            V2_FINAL_OUTPUT_LEGACY_ARTIFACT_KEY,
-        ):
-            try:
-                artifact = read_v2_artifact(store.connection, run_id, artifact_key)
-            except KeyError:
-                continue
-            break
-        else:
-            return None
     if artifact.artifact_type != V2FinalResearchOutput.__name__:
         raise ValueError("v2 final output artifact has an unexpected type")
     return V2FinalResearchOutput.model_validate_json(artifact.payload_json)
@@ -145,14 +144,11 @@ def _parse_run_id(value: str) -> UUID:
     return UUID(value)
 
 
-def _read_controls(db_path: str | Path, run_id: UUID) -> ResearchControls:
-    if not Path(db_path).is_file():
+def _read_controls(source: DatabaseReader, run_id: UUID) -> ResearchControls:
+    try:
+        contract = read_provider_run_contract(source, run_id)
+    except KeyError:
         return DEFAULT_RESEARCH_CONTROLS
-    with open_read_only_store(db_path) as store:
-        try:
-            contract = read_provider_run_contract(store.connection, run_id)
-        except KeyError:
-            return DEFAULT_RESEARCH_CONTROLS
     return ResearchControls.from_policy_identity(contract.policy_identity)
 
 

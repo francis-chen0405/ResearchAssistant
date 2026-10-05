@@ -74,7 +74,10 @@ def test_snapshot_reports_incompatible_database_without_server_error_or_changes(
     try:
         response = client.get(f"/api/research/{uuid4()}", params={"db_path": str(database)})
         assert response.status_code == 400
-        assert isinstance(response.json()["detail"], str)
+        detail = response.json()["detail"]
+        assert detail["issue"] == "invalid_sqlite"
+        assert detail["retryable"] is False
+        assert isinstance(detail["message"], str)
         assert "invalid-private-database-content" not in response.text
         assert (database.read_bytes(), database.stat().st_mtime_ns) == before
     finally:

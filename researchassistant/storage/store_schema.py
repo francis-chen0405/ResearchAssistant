@@ -15,15 +15,18 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from researchassistant.common.money import canonical_usd, parse_canonical_usd, parse_exact_usd
+from researchassistant.storage.sqlite_policy import connect_database, is_busy_error
 
 if TYPE_CHECKING:
     from researchassistant.storage.database_recovery import BackupPolicy
 
-CURRENT_SCHEMA_VERSION = 16
+CURRENT_SCHEMA_VERSION = 17
 
 COMPLETE_USAGE_SCHEMA_VERSION = 15
 
 UPDATE_PROVENANCE_SCHEMA_VERSION = 16
+
+QUERY_INDEXES_SCHEMA_VERSION = 17
 
 CACHE_USAGE_SCHEMA_VERSION = 14
 
@@ -81,6 +84,7 @@ MIGRATION_DESCRIPTIONS = {
     14: "persist cached and uncached model input-token usage",
     15: "persist model cache-write tokens and usage cost basis",
     16: "protect same-run provenance ownership and keys on update",
+    17: "index history ordering and native evidence trail lookups",
 }
 
 # Every relationship protected by a migration-4 insert guard. Ownership and
@@ -208,6 +212,11 @@ _V2_PHASE10_TRIGGERS = {
 _REQUIRED_INDEXES = {
     "provisional_extractions_run_snapshot_stance",
     "model_route_attempts_run_operation",
+    "runs_updated_history",
+    "candidates_run_extracted_quote",
+    "statement_drafts_run_quote_drafted",
+    "statement_reviews_run_quote_reviewed",
+    "ledger_records_run_quote_claim",
 }
 
 
@@ -227,7 +236,7 @@ def initialize_database(
         recovery_path: Path | None = None
         if path.exists():
             uri = f"file:{quote(path.as_posix(), safe='/')}?mode=ro"
-            source = sqlite3.connect(uri, uri=True)
+            source = connect_database(uri, uri=True)
             source.row_factory = sqlite3.Row
             try:
                 source.execute("PRAGMA query_only=ON")
@@ -768,7 +777,64 @@ def _migration_steps() -> tuple[tuple[int, Callable[[sqlite3.Connection], None]]
         (14, _apply_cache_usage_migration),
         (15, _apply_complete_usage_migration),
         (16, _apply_update_provenance_migration),
+        (17, _apply_query_indexes_migration),
     )
+
+
+def _apply_query_indexes_migration(conn: sqlite3.Connection) -> None:
+    """Add indexes backed by history/evidence plans without changing stored rows."""
+    version = QUERY_INDEXES_SCHEMA_VERSION
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (version,)
+    ).fetchone()
+    definitions = (
+        (
+            "runs_updated_history",
+            "CREATE INDEX runs_updated_history ON runs(updated_at DESC, run_id ASC)",
+        ),
+        (
+            "candidates_run_extracted_quote",
+            "CREATE INDEX candidates_run_extracted_quote "
+            "ON candidates(run_id, extracted_at, quote_block_id)",
+        ),
+        (
+            "statement_drafts_run_quote_drafted",
+            "CREATE INDEX statement_drafts_run_quote_drafted "
+            "ON statement_drafts(run_id, quote_block_id, drafted_at)",
+        ),
+        (
+            "statement_reviews_run_quote_reviewed",
+            "CREATE INDEX statement_reviews_run_quote_reviewed "
+            "ON statement_review_attempts("
+            "run_id, quote_block_id, reviewed_at, statement_draft_id)",
+        ),
+        (
+            "ledger_records_run_quote_claim",
+            "CREATE INDEX ledger_records_run_quote_claim "
+            "ON ledger_records(run_id, quote_block_id, ledger_claim_id)",
+        ),
+    )
+    if row is not None:
+        if row[0] != MIGRATION_DESCRIPTIONS[version]:
+            raise sqlite3.DatabaseError(f"migration {version} description is inconsistent")
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for name, statement in definitions:
+            conn.execute(statement.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ", 1))
+            installed = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name = ?", (name,)
+            ).fetchone()
+            if installed is None or _sql_tokens(installed[0]) != _sql_tokens(statement):
+                raise sqlite3.DatabaseError(f"index {name} has an invalid definition")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (version, MIGRATION_DESCRIPTIONS[version], "2026-10-04T00:00:00+00:00"),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
 
 
 def _raw_claim_trigger_sql() -> str:
@@ -1824,5 +1890,7 @@ def validate_recorded_database(conn: sqlite3.Connection, *, allow_pending: bool 
         )
         validate_same_run_provenance(conn, versions)
     except sqlite3.DatabaseError as exc:
+        if is_busy_error(exc):
+            raise
         raise RecordedSchemaError(str(exc), version=latest) from exc
     return latest

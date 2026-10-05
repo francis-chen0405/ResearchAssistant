@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from researchassistant.platform_support.private_files import create_private_file, private_directory
 from researchassistant.storage.database_lock import database_lock
+from researchassistant.storage.sqlite_policy import connect_database
 from researchassistant.storage.store_schema import (
     CURRENT_SCHEMA_VERSION,
     validate_recorded_database,
@@ -66,7 +67,7 @@ def _folder(path: Path, policy: BackupPolicy) -> Path:
 @contextmanager
 def _read_only(path: Path) -> Iterator[sqlite3.Connection]:
     uri = f"file:{quote(path.as_posix(), safe='/')}?mode=ro"
-    with closing(sqlite3.connect(uri, uri=True)) as conn:
+    with closing(connect_database(uri, uri=True)) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA query_only=ON")
         conn.execute("BEGIN")

@@ -110,6 +110,8 @@ from researchassistant.research.v2_orchestrator import (
 )
 from researchassistant.runtime.application_runtime import CLIExitCode, repository_identity
 from researchassistant.storage.store import (
+    DatabaseCompatibilityError,
+    DatabaseReader,
     open_read_only_store,
     read_provider_run_contract,
 )
@@ -383,24 +385,34 @@ class LiveResearchController:
                             source=store.connection,
                             db_path=resolved,
                         )
+                    # Default legacy inspection shares validation and all projection
+                    # reads with the v2-dispatch snapshot. Injected inspectors retain
+                    # their established two-argument interface.
+                    if self._inspector is inspect_provider_run:
+                        result = self._inspector(resolved, run_id, source=store.connection)
+                        self._discard_early_result(key)
+                        return self._snapshot_from_result(result, source=store.connection)
             except KeyError:
                 pass
-            try:
-                result = self._inspector(resolved, run_id)
-                self._discard_early_result(key)
-                return self._snapshot_from_result(result)
-            except KeyError:
-                pass
-            except Exception as exc:
-                if active is None or active.future.done():
-                    return self._early_snapshot_from_values(
-                        resolved,
-                        run_id,
-                        "Run inspection failed",
-                        "failed",
-                        CLIExitCode.FAILED,
-                        self._redact(exc),
-                    )
+            if self._inspector is not inspect_provider_run:
+                try:
+                    result = self._inspector(resolved, run_id)
+                    self._discard_early_result(key)
+                    return self._snapshot_from_result(result)
+                except KeyError:
+                    pass
+                except Exception as exc:
+                    if isinstance(exc, DatabaseCompatibilityError):
+                        raise
+                    if active is None or active.future.done():
+                        return self._early_snapshot_from_values(
+                            resolved,
+                            run_id,
+                            "Run inspection failed",
+                            "failed",
+                            CLIExitCode.FAILED,
+                            self._redact(exc),
+                        )
         if active is not None:
             if active.future.done():
                 return active.future.result()
@@ -567,7 +579,9 @@ class LiveResearchController:
         finally:
             database_lock.release()
 
-    def _snapshot_from_result(self, result: ProviderPipelineResult) -> LiveRunSnapshot:
+    def _snapshot_from_result(
+        self, result: ProviderPipelineResult, *, source: DatabaseReader | None = None
+    ) -> LiveRunSnapshot:
         supporting = _research_progress(result, "supporting")
         opposing = _research_progress(result, "opposing")
         validation_errors = ()
@@ -578,8 +592,11 @@ class LiveResearchController:
             )
         contract = None
         try:
-            with open_read_only_store(result.db_path) as store:
-                contract = read_provider_run_contract(store.connection, result.run_id)
+            if source is not None:
+                contract = read_provider_run_contract(source, result.run_id)
+            else:
+                with open_read_only_store(result.db_path) as store:
+                    contract = read_provider_run_contract(store.connection, result.run_id)
         except KeyError:
             pass
         classification = result.status.value

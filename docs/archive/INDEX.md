@@ -48,3 +48,7 @@ The new concise documents replace accumulated chronology and stale current-state
 - The active release and product constraints are summarized in the current [plan index](../../.agent/PLANS.md), [status](../../STATUS.md), and [handoff](../../HANDOFF.md).
 
 The maintenance snapshot also preserves the exact prior [Mac release plan](2026-09-26-maintenance/.agent/plans/mac-release-cache-pricing.md) and [planner/Scout verification record](2026-09-26-maintenance/docs/verification/planner-scout-reliability.md). Their current versions retain the evidence and checksums while replacing obsolete download directions with historical-artifact notes. Relative links inside verbatim snapshots use their original repository locations; navigate through current documents for working links. The [grouped history](../history.md) links all retained plan and verification records at their stable paths.
+
+## Exact documents replaced for Prompt 4
+
+The preceding STATUS, HANDOFF, ARCHITECTURE, DECISIONS and `.agent/PLANS.md` are preserved byte-for-byte in [`2026-10-04-phase4-state/`](2026-10-04-phase4-state/). The shared database-review plan and linked verification records retain completed evidence.

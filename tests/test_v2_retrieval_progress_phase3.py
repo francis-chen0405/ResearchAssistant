@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
+
+import researchassistant.storage.store as store
 from frontend.live_progress import _read_v2_directional_progress, snapshot_from_v2_progress
 from providers.v2_budget import V2RunCeilings
 from researchassistant.contracts.models import (
@@ -33,6 +37,7 @@ from researchassistant.research.v2_orchestrator import (
     V2ProductionFingerprint,
 )
 from researchassistant.storage.store import (
+    DatabaseCompatibilityResult,
     init_db,
     insert_run,
     insert_v2_artifact,
@@ -433,7 +438,19 @@ def test_mixed_cluster_directions_remain_unassigned_even_with_acquisition_source
 
 def test_snapshot_reports_unassigned_attempts_for_running_and_terminal_runs(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    validation_count = 0
+    original_validate = store._validate_read_only_schema
+
+    def count_validation(
+        connection: sqlite3.Connection,
+    ) -> DatabaseCompatibilityResult:
+        nonlocal validation_count
+        validation_count += 1
+        return original_validate(connection)
+
+    monkeypatch.setattr(store, "_validate_read_only_schema", count_validation)
     for status, expected_directional_status in (
         (RunStatus.RUNNING, "running"),
         (RunStatus.FAILED, "failed"),
@@ -455,6 +472,8 @@ def test_snapshot_reports_unassigned_attempts_for_running_and_terminal_runs(
 
         snapshot = snapshot_from_v2_progress(db_path, run_id, (DiscoveryProvider.EXA,))
 
+        assert validation_count == 1
+        validation_count = 0
         assert snapshot.retrieval_attempts_used == 1
         assert snapshot.unassigned_retrieval_attempts_used == 1
         assert snapshot.supporting.retrieval_attempts == 0

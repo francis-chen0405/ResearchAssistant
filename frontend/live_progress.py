@@ -387,9 +387,11 @@ def _read_v2_directional_progress(
     directions: ResearchDirections,
     status: RunStatus,
     terminal_status: str | None = None,
+    historical_attempt_count: int = 0,
 ) -> tuple[ResearchProgress, ResearchProgress, int]:
     attempts = dict.fromkeys((ResearchDirection.SUPPORT, ResearchDirection.CHALLENGE), 0)
     unassigned = 0
+    acquisition_present = False
     acquired: dict[ResearchDirection, int] = {
         ResearchDirection.SUPPORT: 0,
         ResearchDirection.CHALLENGE: 0,
@@ -410,6 +412,7 @@ def _read_v2_directional_progress(
             artifact = read_v2_artifact(db_path, run_id, artifact_key)
         except KeyError:
             continue
+        acquisition_present = True
         output = V2AcquisitionProbeOutput.model_validate_json(artifact.payload_json)
         discovery_key = (
             V2_SCOUT_ARTIFACT_KEY
@@ -448,6 +451,11 @@ def _read_v2_directional_progress(
                 unassigned += 1
         for survivor in output.survivors:
             survivors[survivor.direction].add(survivor.snapshot_id)
+
+    # Some earlier terminal histories retain only their aggregate diagnostics.
+    # Preserve that recorded count without inventing direction/round ownership.
+    if not acquisition_present:
+        unassigned = historical_attempt_count
 
     survivor_ids: dict[ResearchDirection, tuple[UUID, ...]] = {
         ResearchDirection.SUPPORT: (),
@@ -658,6 +666,14 @@ def snapshot_from_v2_progress(
 ) -> LiveRunSnapshot:
     """Build a v2 live snapshot using only persisted run data."""
     read_source = source if source is not None else db_path
+    from researchassistant.storage.store import open_read_only_store, read_snapshot_connection
+
+    if not isinstance(read_source, Connection):
+        with open_read_only_store(read_source) as store:
+            return snapshot_from_v2_progress(db_path, run_id, providers, source=store.connection)
+    if not read_source.in_transaction:
+        with read_snapshot_connection(read_source):
+            return snapshot_from_v2_progress(db_path, run_id, providers, source=read_source)
     manifest = read_run(read_source, run_id)
     directions = _read_v2_directions(read_source, run_id)
     diagnostics = build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
@@ -751,6 +767,14 @@ def snapshot_from_v2_result(
 ) -> LiveRunSnapshot:
     """Build a terminal v2 live snapshot without constructing runtime services."""
     read_source = source if source is not None else result.db_path
+    from researchassistant.storage.store import open_read_only_store, read_snapshot_connection
+
+    if not isinstance(read_source, Connection):
+        with open_read_only_store(read_source) as store:
+            return snapshot_from_v2_result(result, source=store.connection, db_path=db_path)
+    if not read_source.in_transaction:
+        with read_snapshot_connection(read_source):
+            return snapshot_from_v2_result(result, source=read_source, db_path=db_path)
     displayed_db_path = db_path if db_path is not None else result.db_path
     output = result.final_output
     directions = (
@@ -779,6 +803,7 @@ def snapshot_from_v2_result(
         directions,
         terminal_status,
         terminal_status=classification,
+        historical_attempt_count=diagnostics.acquisition_attempts if diagnostics else 0,
     )
     if output is not None:
         # Final evidence supplies analyzed/usable metrics; provider attempts still

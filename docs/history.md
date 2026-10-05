@@ -57,6 +57,8 @@ There are 81 plan records and 19 verification records.
 - [audit-maintenance](../docs/verification/audit-maintenance.md)
 - [database-integrity-fixes](../docs/verification/database-integrity-fixes.md)
 - [database-review-2026-10-03](../docs/audits/2026-10-03/database-review.md)
+- [Database phase 4 integration](verification/database-phase4.md)
+- [Database phase 4 independent review and cache checks](verification/database-phase4-review.md)
 - [mac-cache-pricing](../docs/verification/mac-cache-pricing.md)
 - [mac-current-build-2026-09-28](../docs/verification/mac-current-build-2026-09-28.md)
 - [sqlite-status-polling](../docs/verification/sqlite-status-polling.md)
