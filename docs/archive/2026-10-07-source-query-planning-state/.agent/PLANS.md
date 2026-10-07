@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. Phase 1 foundations and Phase 2 provider-specific conceptual planning/compilation are implemented. Fresh Round 1–4 searches share frozen compiler/settings and durable physical accounting. Prompt 3 is the next implementation boundary: deeper retrieval/ranking and bounded Scout integration. Previews, expansion and product settings/acceptance remain later phases; each needs its corresponding instruction.
+- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. The requested Phase 1 delivers dormant policy/contracts, fair allocation, physical accounting, persistence, identity and inspection foundations. Current production discovery remains on its prior policy. Phase 2 owns provider-specific compilation and query integration; later phases own retrieval/ranking, previews, expansion and final UI/acceptance.
 - The completed [database review](plans/database-review-2026-10-03.md) and [source acceptance](../docs/verification/database-phase4.md) retain earlier schema/recovery/history evidence. Installation and release remain separate boundaries.
 
 ## State and delivery
@@ -16,4 +16,4 @@ See [STATUS](../STATUS.md) for source/commit state, installed and public build p
 - [Product architecture and implementation phases](../docs/history.md#product-and-architecture)
 - [All retained plan and verification records](../docs/history.md)
 
-Historical plans preserve evidence and decisions at stable paths. They do not authorize additional work. The exact preceding plan index and current-state documents are in [the query-planning archive](../docs/archive/2026-10-07-source-query-planning-state/); [the archive index](../docs/archive/INDEX.md) retains earlier snapshots.
+Historical plans preserve evidence and decisions at stable paths. They do not authorize additional work. The exact preceding plan index and current-state documents are in [the discovery foundations archive](../docs/archive/2026-10-06-source-discovery-foundations-state/); [the archive index](../docs/archive/INDEX.md) retains earlier snapshots.

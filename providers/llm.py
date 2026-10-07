@@ -36,10 +36,12 @@ from researchassistant.contracts.models import (
     StatementDraft,
     StrictModel,
     SynthesisOutput,
+    V2AdaptiveSearchConceptsOutput,
     V2AdaptiveSearchModelOutput,
     V2CanonicalStatementModelOutput,
     V2EvidenceAnalystModelOutput,
     V2GapAnalysisModelOutput,
+    V2InitialPlannerConceptsOutput,
     V2InitialPlannerModelOutput,
     V2InitialResearchPlan,
     V2SearchRoundPlan,
@@ -728,13 +730,18 @@ def invoke_llm(
 
 def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.PLANNER:
-        return (PlannerOutput, V2InitialResearchPlan, V2InitialPlannerModelOutput)
+        return (
+            PlannerOutput,
+            V2InitialResearchPlan,
+            V2InitialPlannerModelOutput,
+            V2InitialPlannerConceptsOutput,
+        )
     if stage is LLMStage.SCOUT:
         return (ScoutBatch,)
     if stage is LLMStage.GAP_ANALYSIS:
         return (GapAnalysisResult, V2GapAnalysisModelOutput)
     if stage is LLMStage.SEARCH_AGENT:
-        return (V2SearchRoundPlan, V2AdaptiveSearchModelOutput)
+        return (V2SearchRoundPlan, V2AdaptiveSearchModelOutput, V2AdaptiveSearchConceptsOutput)
     if stage is LLMStage.SOURCE_SELECTION:
         return (SourceRecommendationResult, V2SourceSelectionModelOutput)
     if stage is LLMStage.EXTRACTOR:

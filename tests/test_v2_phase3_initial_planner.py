@@ -17,12 +17,14 @@ from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchDirection,
     ResearchDirections,
+    V2InitialPlannerConceptsOutput,
     V2InitialPlannerModelOutput,
     V2InitialPlannerOutput,
     V2InitialPlannerPolicy,
     V2InitialPlannerSearchResponse,
     V2RoundOneSearchQuery,
 )
+from researchassistant.contracts.query_planning import V2QueryConceptGroup, V2QueryConcepts
 from researchassistant.storage.store import (
     CURRENT_SCHEMA_VERSION,
     read_v2_artifact,
@@ -57,6 +59,24 @@ class FakeInitialPlanner:
                 )
                 for lane in lanes
             ),
+        )
+
+
+class FakeConceptPlanner(FakeInitialPlanner):
+    def generate(self, request: object) -> V2InitialPlannerConceptsOutput:
+        self.requests.append(request)
+        return V2InitialPlannerConceptsOutput(
+            queries=tuple(
+                V2QueryConcepts(
+                    required_concepts=(
+                        V2QueryConceptGroup(
+                            concept=f"claim evidence {lane.strategy.replace('_', ' ')}"
+                        ),
+                    ),
+                    purpose="broad",
+                )
+                for lane in request.input_artifact.search_lanes
+            )
         )
 
 
@@ -110,12 +130,54 @@ def test_v2_initial_planner_isolates_enabled_directions(
         discovery_providers=(DiscoveryProvider.EXA,),
         llm_provider=provider,
         routing_config=_routing(),
+        legacy_prompt=True,
         clock=lambda: NOW,
     )
 
     assert {query.direction for query in result.planner_output.searches} == expected_directions
     assert {query.round_number for query in result.planner_output.searches} == {1}
     assert result.planner_output.raw_claim == "A public claim."
+    assert len(provider.requests) == 1
+
+
+def test_fresh_planner_compiles_concepts_for_application_owned_lanes(tmp_path: Path) -> None:
+    provider = FakeConceptPlanner()
+    result = run_v2_initial_planner(
+        "A public claim.",
+        db_path=tmp_path / "concepts.sqlite3",
+        directions=ResearchDirections(),
+        discovery_providers=(DiscoveryProvider.EXA,),
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    assert len(result.planner_output.searches) == len(
+        V2InitialPlannerPolicy().search_lanes(ResearchDirections(), (DiscoveryProvider.EXA,))
+    )
+    assert all(query.compiled_query is not None for query in result.planner_output.searches)
+    assert all(
+        query.query_text == query.compiled_query.query_text
+        for query in result.planner_output.searches
+    )
+    assert provider.requests[0].requested_output_type is V2InitialPlannerConceptsOutput
+    assert (
+        read_v2_initial_planner_output(
+            str(tmp_path / "concepts.sqlite3"), result.planner_output.run_id
+        )
+        == result.planner_output
+    )
+    resumed = run_v2_initial_planner(
+        "A public claim.",
+        db_path=tmp_path / "concepts.sqlite3",
+        directions=ResearchDirections(),
+        discovery_providers=(DiscoveryProvider.EXA,),
+        llm_provider=provider,
+        routing_config=_routing(),
+        run_id=result.planner_output.run_id,
+        clock=lambda: NOW,
+    )
+    assert resumed.resumed
+    assert resumed.planner_output == result.planner_output
     assert len(provider.requests) == 1
 
 
@@ -129,6 +191,7 @@ def test_v2_initial_planner_respects_provider_toggles_and_never_plans_future_rou
         discovery_providers=(DiscoveryProvider.SERPSEARCH, DiscoveryProvider.OPENALEX),
         llm_provider=FakeInitialPlanner(),
         routing_config=_routing(),
+        legacy_prompt=True,
         clock=lambda: NOW,
     )
 
@@ -149,6 +212,7 @@ def test_v2_initial_planner_preserves_the_exact_submitted_claim(tmp_path: Path) 
         discovery_providers=(DiscoveryProvider.EXA,),
         llm_provider=FakeInitialPlanner(),
         routing_config=_routing(),
+        legacy_prompt=True,
         clock=lambda: NOW,
     )
 
@@ -236,6 +300,7 @@ def test_v2_initial_planner_persists_and_restarts_without_another_planner_call(
         llm_provider=provider,
         routing_config=_routing(),
         run_id=run_id,
+        legacy_prompt=True,
         clock=lambda: NOW,
     )
     second = run_v2_initial_planner(
@@ -246,6 +311,7 @@ def test_v2_initial_planner_persists_and_restarts_without_another_planner_call(
         llm_provider=provider,
         routing_config=_routing(),
         run_id=run_id,
+        legacy_prompt=True,
         clock=lambda: NOW,
     )
 
@@ -271,6 +337,7 @@ def test_v2_initial_planner_rejects_fingerprint_mismatch(tmp_path: Path) -> None
         llm_provider=FakeInitialPlanner(),
         routing_config=_routing(),
         run_id=run_id,
+        legacy_prompt=True,
         clock=lambda: NOW,
     )
     changed = _environment()
@@ -285,5 +352,40 @@ def test_v2_initial_planner_rejects_fingerprint_mismatch(tmp_path: Path) -> None
             llm_provider=FakeInitialPlanner(),
             routing_config=_routing(changed),
             run_id=run_id,
+            legacy_prompt=True,
             clock=lambda: NOW,
         )
+
+
+@pytest.mark.parametrize("legacy_first", [True, False])
+def test_initial_planner_rejects_cross_version_resume_without_rewriting(
+    tmp_path: Path, legacy_first: bool
+) -> None:
+    path = tmp_path / "version-resume.sqlite3"
+    run_id = uuid4()
+    first = run_v2_initial_planner(
+        "A public claim.",
+        db_path=path,
+        directions=ResearchDirections(),
+        discovery_providers=(DiscoveryProvider.EXA,),
+        llm_provider=FakeInitialPlanner() if legacy_first else FakeConceptPlanner(),
+        routing_config=_routing(),
+        run_id=run_id,
+        legacy_prompt=legacy_first,
+        clock=lambda: NOW,
+    )
+    provider = FakeConceptPlanner() if legacy_first else FakeInitialPlanner()
+    with pytest.raises(V2InitialPlannerFingerprintMismatchError, match="new run ID"):
+        run_v2_initial_planner(
+            "A public claim.",
+            db_path=path,
+            directions=ResearchDirections(),
+            discovery_providers=(DiscoveryProvider.EXA,),
+            llm_provider=provider,
+            routing_config=_routing(),
+            run_id=run_id,
+            legacy_prompt=not legacy_first,
+            clock=lambda: NOW,
+        )
+    assert provider.requests == []
+    assert read_v2_initial_planner_output(str(path), run_id) == first.planner_output

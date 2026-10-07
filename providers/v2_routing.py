@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
 from hashlib import sha256
+from pathlib import Path
 from uuid import UUID
 
 from pydantic import ConfigDict, Field, SecretStr, model_validator
@@ -22,7 +23,15 @@ from providers.config import (
     OpenAIChoiceConfig,
     ProviderConfigurationError,
 )
-from providers.llm import V2_LLM_ROUTING, LLMStage, ModelAlias, StageRoute, load_prompt
+from providers.llm import (
+    PROMPT_DIRECTORY,
+    V2_LLM_ROUTING,
+    LLMStage,
+    ModelAlias,
+    StageRoute,
+    load_prompt,
+    load_prompt_file,
+)
 from providers.model_choices import (
     ACTIVE_MODEL_STAGES,
     StageModelSelections,
@@ -34,7 +43,17 @@ from providers.pricing import (
     ModelPriceCap,
     price_cap_from_environment,
 )
-from researchassistant.contracts.models import ProviderRunContract, StrictModel
+from researchassistant.contracts.discovery_v2 import (
+    V2CompiledQueryAction,
+    V2ConceptualQuery,
+)
+from researchassistant.contracts.models import (
+    ProviderRunContract,
+    StrictModel,
+    V2AdaptiveSearchConceptsOutput,
+    V2InitialPlannerConceptsOutput,
+    V2QueryConcepts,
+)
 from researchassistant.contracts.provider_contract import canonical_provider_contract_payload
 
 V2_ROUTING_FINGERPRINT_VERSION = "researchassistant-v2-phase-2-routing-v1"
@@ -339,7 +358,7 @@ class V2RoutingConfig(StrictModel):
                 return item
         raise ProviderConfigurationError(f"no selected adapter for {stage.value}")
 
-    def fingerprint_payload(self) -> dict[str, str]:
+    def fingerprint_payload(self, *, legacy_query_planning: bool = False) -> dict[str, str]:
         """Return canonical contract fields without serializing credentials."""
         preflight = self.preflight()
         route_json = json.dumps(
@@ -367,11 +386,45 @@ class V2RoutingConfig(StrictModel):
         )
         prompt_json = json.dumps(
             {
-                stage.value: {
-                    "version": load_prompt(stage).version,
-                    "sha256": load_prompt(stage).sha256,
-                }
-                for stage in LLMStage
+                **{
+                    stage.value: {
+                        "version": load_prompt(stage).version,
+                        "sha256": load_prompt(stage).sha256,
+                    }
+                    for stage in LLMStage
+                },
+                "fresh_v2_planner_concepts": _prompt_identity(
+                    PROMPT_DIRECTORY / "v2_initial_planner_v2.md", LLMStage.PLANNER
+                ),
+                "fresh_v2_search_agent_concepts": _prompt_identity(
+                    PROMPT_DIRECTORY / "search_agent_v2.md", LLMStage.SEARCH_AGENT
+                ),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if legacy_query_planning:
+            prompt_json = json.dumps(
+                {
+                    stage.value: {
+                        "version": load_prompt(stage).version,
+                        "sha256": load_prompt(stage).sha256,
+                    }
+                    for stage in LLMStage
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        planning_schema = json.dumps(
+            {
+                model.__name__: model.model_json_schema()
+                for model in (
+                    V2QueryConcepts,
+                    V2InitialPlannerConceptsOutput,
+                    V2AdaptiveSearchConceptsOutput,
+                    V2ConceptualQuery,
+                    V2CompiledQueryAction,
+                )
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -392,7 +445,14 @@ class V2RoutingConfig(StrictModel):
             "prompt_identity": (
                 f"{V2_ROUTING_PROMPT_VERSION}|{sha256(prompt_json.encode()).hexdigest()}"
             ),
-            "schema_identity": V2_ROUTING_SCHEMA_VERSION,
+            "schema_identity": (
+                V2_ROUTING_SCHEMA_VERSION
+                if legacy_query_planning
+                else (
+                    f"{V2_ROUTING_SCHEMA_VERSION}|fresh-query-planning-v1:"
+                    f"{sha256(planning_schema.encode()).hexdigest()}"
+                )
+            ),
             "normalization_identity": "v2-routing-unwired",
             "policy_identity": (
                 f"{V2_ROUTING_POLICY_VERSION}|routing:{sha256(routing_json.encode()).hexdigest()}"
@@ -419,6 +479,11 @@ class V2RoutingConfig(StrictModel):
             payload_json=payload_json,
             created_at=created_at,
         )
+
+
+def _prompt_identity(path: Path, stage: LLMStage) -> dict[str, str]:
+    prompt = load_prompt_file(path, expected_stage=stage)
+    return {"version": prompt.version, "sha256": prompt.sha256}
 
 
 def _mimo_route(

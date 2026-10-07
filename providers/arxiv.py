@@ -10,6 +10,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import ArxivConfig
+from providers.discovery_transport import physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -18,6 +19,8 @@ from providers.search import (
     SearchResponse,
     SearchResult,
     SearchTimeoutError,
+    compiled_parameters,
+    validate_request_url,
 )
 from researchassistant.contracts.models import DiscoveryProvider
 
@@ -28,6 +31,8 @@ _WHITESPACE = re.compile(r"\s+")
 
 class ArxivSearchAdapter:
     """Fetch published arXiv metadata without treating abstracts as evidence."""
+
+    physical_accounting = True
 
     def __init__(self, config: ArxivConfig, *, client: httpx.Client | None = None) -> None:
         self._config = config
@@ -43,14 +48,55 @@ class ArxivSearchAdapter:
                 SearchFailureCode.PERMANENT_FAILURE,
                 "arXiv requires a typed arXiv search request",
             )
+        parameters = compiled_parameters(
+            request,
+            allowed_names=frozenset(
+                {"search_query", "start", "max_results", "sortBy", "sortOrder"}
+            ),
+            required_names=frozenset(
+                {"search_query", "start", "max_results", "sortBy", "sortOrder"}
+            ),
+        )
+        if parameters is None:
+            query_params: dict[str, str | int | bool] = {
+                "search_query": _legacy_search_query(request.query_text),
+                "start": 0,
+                "max_results": request.limit,
+                "sortBy": "relevance",
+                "sortOrder": "descending",
+            }
+        else:
+            expected = {
+                "start": 0,
+                "max_results": request.limit,
+                "sortBy": "relevance",
+                "sortOrder": "descending",
+            }
+            if any(parameters.get(key) != value for key, value in expected.items()):
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled arXiv parameters contain unsupported paging or sorting settings",
+                )
+            query_value = parameters.get("search_query")
+            if not isinstance(query_value, str) or not query_value.strip():
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled arXiv search_query must be a nonempty fielded expression",
+                )
+            query_params = parameters
+        if request.compiled_query is not None:
+            validate_request_url(
+                str(self._client.base_url) + "api/query", query_params, max_bytes=7500
+            )
         try:
-            response = self._client.get(
-                "/api/query",
-                params={
-                    "search_query": f"all:{request.query_text}",
-                    "start": "0",
-                    "max_results": str(request.limit),
-                },
+            response = physical_request(
+                request,
+                query_params,
+                lambda: self._client.get(
+                    "/api/query",
+                    params=query_params,
+                    timeout=self._config.deadlines.search_seconds,
+                ),
             )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(
@@ -135,6 +181,12 @@ def _parse_entries(root: ElementTree.Element, limit: int) -> list[SearchResult]:
 def _category(entry: ElementTree.Element) -> str | None:
     category = entry.find(f"{_ATOM}category")
     return category.get("term") if category is not None else None
+
+
+def _legacy_search_query(query: str) -> str:
+    """Use all-fields for legacy free text without doubling an existing field prefix."""
+    normalized = query.strip()
+    return normalized if normalized.lower().startswith("all:") else f"all:{normalized}"
 
 
 def _text(element: ElementTree.Element | None) -> str | None:

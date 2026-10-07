@@ -711,6 +711,7 @@ def _run(
 ) -> V2ProductionPipelineResult:
     return run_v2_production_pipeline(
         "The regional program increases course completion.",
+        legacy_query_planning=True,
         db_path=db_path,
         directions=directions or ResearchDirections(support_enabled=True, challenge_enabled=False),
         discovery_providers=(DiscoveryProvider.EXA,),

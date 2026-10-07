@@ -5,11 +5,12 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction
 from researchassistant.contracts.models import DiscoveryProvider, SearchIntent, StrictModel
 
 
@@ -25,6 +26,7 @@ class SearchFailureCode(StrEnum):
     EMPTY_RESULTS = "empty_results"
     INVALID_URL = "invalid_url"
     BUDGET_EXHAUSTED = "budget_exhausted"
+    CANCELLED = "cancelled"
 
 
 class SearchProviderError(RuntimeError):
@@ -56,6 +58,7 @@ class SearchRequest(StrictModel):
     semantic: bool = False
     query_text: str = Field(min_length=1)
     limit: int = Field(ge=1, le=100)
+    compiled_query: V2CompiledQueryAction | None = None
 
     @model_validator(mode="after")
     def validate_provider_controls(self) -> SearchRequest:
@@ -66,7 +69,75 @@ class SearchRequest(StrictModel):
                 raise ValueError("OpenAlex searches require a run_id for budget accounting")
             if self.intent is not SearchIntent.ACADEMIC_STUDY:
                 raise ValueError("OpenAlex searches require academic-study intent")
+        if self.compiled_query is not None:
+            compiled = self.compiled_query
+            if compiled.run_id != self.run_id:
+                raise ValueError("compiled query run does not match the search request")
+            if compiled.conceptual_query.provider is not self.provider:
+                raise ValueError("compiled query provider does not match the search request")
+            if compiled.query_text != self.query_text:
+                raise ValueError("compiled query text does not match the search request")
+            if self.limit != compiled.effective_depth:
+                raise ValueError("search limit must equal compiled effective depth")
+            if self.semantic != (compiled.mode == "semantic"):
+                raise ValueError("semantic flag does not match compiled query mode")
+            if (
+                self.provider is DiscoveryProvider.OPENALEX
+                and compiled.mode == "semantic"
+                and compiled.effective_depth > 50
+            ):
+                raise ValueError("OpenAlex semantic searches are limited to 50 results")
+            from researchassistant.research.query_compiler import validate_compiled_action
+
+            try:
+                validate_compiled_action(compiled)
+            except ValueError as exc:
+                raise ValueError("compiled query failed deterministic validation") from exc
         return self
+
+
+def compiled_parameters(
+    request: SearchRequest,
+    *,
+    allowed_names: frozenset[str],
+    required_names: frozenset[str],
+) -> dict[str, str | int | bool] | None:
+    """Validate and return the compiler-owned native request parameters.
+
+    ``None`` means this is a legacy request and adapters should retain their historic
+    query construction. Compiled requests may only supply the provider's reviewed
+    native parameters; authentication and transport-only values stay adapter-owned.
+    """
+    action = request.compiled_query
+    if action is None:
+        return None
+    parameters = {item.name: item.value for item in action.parameters}
+    names = set(parameters)
+    if names - allowed_names:
+        raise SearchProviderError(
+            SearchFailureCode.PERMANENT_FAILURE,
+            "compiled query contains unsupported provider parameters: "
+            f"{', '.join(sorted(names - allowed_names))}",
+        )
+    if not required_names <= names:
+        missing = ", ".join(sorted(required_names - names))
+        raise SearchProviderError(
+            SearchFailureCode.PERMANENT_FAILURE,
+            f"compiled query omitted required provider parameters: {missing}",
+        )
+    return parameters
+
+
+def validate_request_url(
+    endpoint: str, parameters: dict[str, str | int | bool], *, max_bytes: int = 7500
+) -> None:
+    """Check the final encoded URL in memory; errors never reveal credential values."""
+    encoded = endpoint + "?" + urlencode(parameters)
+    if len(encoded.encode("utf-8")) > max_bytes:
+        raise SearchProviderError(
+            SearchFailureCode.PERMANENT_FAILURE,
+            "encoded provider request URL exceeds its bounded policy",
+        )
 
 
 class SearchDiscoveryMetadata(StrictModel):

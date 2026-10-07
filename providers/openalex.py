@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
+from contextlib import nullcontext
 from decimal import Decimal
 from threading import Lock
 from typing import Any
@@ -12,6 +15,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import OpenAlexConfig
+from providers.discovery_transport import physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -20,8 +24,11 @@ from providers.search import (
     SearchResponse,
     SearchResult,
     SearchTimeoutError,
+    compiled_parameters,
+    validate_request_url,
 )
 from researchassistant.common.money import add_usd, parse_exact_usd
+from researchassistant.contracts.discovery_v2 import SearchMode, V2DiscoveryProviderBudget
 from researchassistant.contracts.models import DiscoveryProvider
 
 OPENALEX_SELECT = ",".join(
@@ -46,7 +53,16 @@ OPENALEX_SELECT = ",".join(
 class OpenAlexSearchAdapter:
     """Search OpenAlex without exposing its query-parameter credential."""
 
-    def __init__(self, config: OpenAlexConfig, *, client: httpx.Client | None = None) -> None:
+    physical_accounting = True
+
+    def __init__(
+        self,
+        config: OpenAlexConfig,
+        *,
+        client: httpx.Client | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._config = config
         self._client = client or httpx.Client(
             base_url=config.base_url,
@@ -54,8 +70,26 @@ class OpenAlexSearchAdapter:
             follow_redirects=False,
         )
         self._usage_lock = Lock()
+        self._semantic_lock = Lock()
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._last_semantic_start: float | None = None
         self._calls_by_run: dict[UUID, int] = {}
         self._cost_by_run: dict[UUID, Decimal] = {}
+
+    def query_budget(
+        self, provider: DiscoveryProvider, mode: SearchMode
+    ) -> V2DiscoveryProviderBudget | None:
+        if provider is not DiscoveryProvider.OPENALEX:
+            return None
+        return V2DiscoveryProviderBudget(
+            provider=provider,
+            max_requests=self._config.max_search_calls_per_run,
+            max_cost_usd=self._config.max_search_cost_usd_per_run,
+            cost_policy_identity=f"query-openalex-{mode}-2026-10-06-v2",
+            reservation_per_request_usd=Decimal("0.001"),
+            cost_basis="configured_upper_bound",
+        )
 
     def search(self, request: SearchRequest) -> SearchResponse:
         if request.provider is not DiscoveryProvider.OPENALEX or request.run_id is None:
@@ -63,20 +97,62 @@ class OpenAlexSearchAdapter:
                 SearchFailureCode.PERMANENT_FAILURE,
                 "OpenAlex requires a typed OpenAlex search request with run identity",
             )
-        self._reserve(request.run_id)
+        parameters = compiled_parameters(
+            request,
+            allowed_names=frozenset({"search", "search.semantic", "per_page"}),
+            required_names=frozenset({"per_page"}),
+        )
         search_parameter = "search.semantic" if request.semantic else "search"
+        if parameters is None:
+            query_parameters: dict[str, str | int | bool] = {
+                search_parameter: request.query_text,
+                "per_page": request.limit,
+            }
+        else:
+            if set(parameters) != {search_parameter, "per_page"}:
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled OpenAlex parameters do not match the selected search mode",
+                )
+            if (
+                parameters[search_parameter] != request.query_text
+                or parameters["per_page"] != request.limit
+            ):
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled OpenAlex parameters do not match query text or result depth",
+                )
+            query_parameters = parameters
         params = {
+            **query_parameters,
             "api_key": self._config.api_key.get_secret_value(),
-            search_parameter: request.query_text,
-            "per_page": str(request.limit),
             "select": OPENALEX_SELECT,
         }
+        if request.compiled_query is not None:
+            validate_request_url(str(self._client.base_url) + "works", params, max_bytes=4094)
         try:
-            response = self._client.get(
-                "/works",
-                params=params,
-                timeout=self._config.deadlines.search_seconds,
-            )
+            semantic_guard = self._semantic_lock if request.semantic else nullcontext()
+            with semantic_guard:
+                if request.semantic and request.compiled_query is None:
+                    self._wait_for_semantic_slot(None)
+                if request.compiled_query is None:
+                    self._reserve(request.run_id, semantic=request.semantic)
+
+                def send() -> httpx.Response:
+                    if request.semantic:
+                        self._last_semantic_start = self._monotonic()
+                    return self._client.get(
+                        "/works",
+                        params=params,
+                        timeout=self._config.deadlines.search_seconds,
+                    )
+
+                response = physical_request(
+                    request,
+                    query_parameters,
+                    send,
+                    before_reservation=self._wait_for_semantic_slot if request.semantic else None,
+                )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(
                 SearchFailureCode.TIMEOUT,
@@ -118,11 +194,37 @@ class OpenAlexSearchAdapter:
             cost_usd=cost,
         )
 
-    def _reserve(self, run_id: UUID) -> None:
+    def _wait_for_semantic_slot(self, cancelled: Callable[[], bool] | None) -> None:
+        """Wait for this adapter's next semantic start, checking cancellation while waiting."""
+        if cancelled is not None and cancelled():
+            raise SearchProviderError(
+                SearchFailureCode.CANCELLED, "query cancelled before transport"
+            )
+        now = self._monotonic()
+        if self._last_semantic_start is not None:
+            deadline = self._last_semantic_start + 1.0
+            while now < deadline:
+                if cancelled is not None and cancelled():
+                    raise SearchProviderError(
+                        SearchFailureCode.CANCELLED, "query cancelled while waiting for OpenAlex"
+                    )
+                self._sleep(min(max(deadline - now, 0.001), 0.1))
+                now = self._monotonic()
+        if cancelled is not None and cancelled():
+            raise SearchProviderError(
+                SearchFailureCode.CANCELLED, "query cancelled before transport"
+            )
+
+    def _reserve(self, run_id: UUID, *, semantic: bool = False) -> None:
         with self._usage_lock:
             calls = self._calls_by_run.get(run_id, 0)
             cost = self._cost_by_run.get(run_id, Decimal("0"))
-            next_cost = add_usd(cost, self._config.nominal_search_cost_usd)
+            nominal = (
+                self._config.nominal_semantic_search_cost_usd
+                if semantic
+                else self._config.nominal_search_cost_usd
+            )
+            next_cost = add_usd(cost, nominal)
             if (
                 calls >= self._config.max_search_calls_per_run
                 or next_cost > self._config.max_search_cost_usd_per_run
@@ -242,19 +344,19 @@ def _abstract(value: object) -> str | None:
     return " ".join(token for _, token in sorted(terms))
 
 
-def _response_cost(body: dict[str, Any]) -> Decimal:
+def _response_cost(body: dict[str, Any]) -> Decimal | None:
     meta = body.get("meta")
     if not isinstance(meta, dict):
-        return Decimal("0.001")
+        return None
     value = meta.get("cost_usd")
     try:
         return parse_exact_usd(value)
     except (TypeError, ValueError):
-        return Decimal("0.001")
+        return None
 
 
 def _raise_status(status_code: int) -> None:
-    if status_code < 400:
+    if 200 <= status_code < 300:
         return
     if status_code in {401, 403}:
         raise SearchProviderError(

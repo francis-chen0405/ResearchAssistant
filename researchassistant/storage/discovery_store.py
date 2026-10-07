@@ -295,6 +295,8 @@ def _validate_policy(binding: V2DiscoveryBinding, artifact: V2DiscoveryArtifact)
             raise ValueError("operation direction is disabled by the run binding")
         capability = next(item for item in binding.capabilities if item.provider == provider)
         if isinstance(action, V2CompiledQueryAction):
+            if action.compiler_identity != binding.compiler_identity:
+                raise ValueError("query compiler identity differs from frozen binding")
             if action.policy != binding.policy or action.capabilities != capability:
                 raise ValueError("query policy/capability identity differs from binding")
         elif action.policy != binding.policy or action.capabilities != capability:

@@ -11,8 +11,10 @@ from agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
     V2AdaptiveRoundStatus,
     V2AdaptiveStopCode,
+    _adaptive_concept_lanes,
     _execute_searches,
     _round_two_gap_input,
+    _validate_and_assemble_plan,
     normalize_query_text,
     queries_are_materially_new,
     run_v2_adaptive_search_continuation,
@@ -32,6 +34,11 @@ from providers.search import (
     SearchResult,
 )
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.discovery_v2 import (
+    V2ConceptGroup,
+    V2ConceptualQuery,
+    discovery_id,
+)
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchDirection,
@@ -64,6 +71,13 @@ from researchassistant.contracts.models import (
     V2RoundOneSearchQuery,
     V2SearchAgentInput,
 )
+from researchassistant.contracts.query_planning import (
+    V2AdaptiveSearchConceptProposal,
+    V2AdaptiveSearchConceptsOutput,
+    V2QueryConceptGroup,
+    V2QueryConcepts,
+)
+from researchassistant.research.query_compiler import compile_query
 from researchassistant.research.research_governor import (
     V2RoundThreeGovernorInput,
     V2RoundThreeReasonCode,
@@ -450,6 +464,112 @@ def test_adaptive_search_preserves_successful_empty_provider_results(tmp_path: P
 
     assert result.outcomes[0].succeeded
     assert result.outcomes[0].results == ()
+
+
+def test_adaptive_concept_planner_routes_through_application_lane_and_gap() -> None:
+    initial = _initial_plan(uuid4())
+    gap_output = _gap(initial, continue_research=True)
+    assert gap_output.result is not None
+    request = V2SearchAgentInput(
+        run_id=initial.run_id,
+        exact_claim=initial.raw_claim,
+        round_number=2,
+        directions=initial.directions,
+        eligible_providers=(DiscoveryProvider.EXA,),
+        material_gaps=gap_output.result.material_gaps,
+        search_directions=gap_output.result.new_search_directions,
+        discovered_terms=gap_output.result.discovered_terms,
+        previous_queries=tuple(item.query_text for item in initial.searches),
+        provider_budgets=(
+            V2ProviderSearchBudget(
+                provider=DiscoveryProvider.EXA,
+                attempted_calls=1,
+                maximum_calls=18,
+            ),
+        ),
+        maximum_queries=1,
+    )
+    lanes = _adaptive_concept_lanes(request, {})
+    proposal = V2AdaptiveSearchConceptProposal(
+        lane_index=0,
+        concepts=V2QueryConcepts(
+            required_concepts=(V2QueryConceptGroup(concept="independent cohort replication"),),
+            outcomes=("population outcome",),
+            purpose="gap",
+        ),
+    )
+    plan = _validate_and_assemble_plan(
+        request,
+        V2AdaptiveSearchConceptsOutput(searches=(proposal,)),
+        "concept-search-v1",
+        NOW,
+        lanes=lanes,
+        query_modes={},
+    )
+    query = plan.searches[0]
+    assert query.provider is lanes[0].provider is DiscoveryProvider.EXA
+    assert query.direction is lanes[0].direction
+    assert query.targeted_gap_ids == lanes[0].target_gap_ids == ("gap-outcome",)
+    assert query.compiled_query is not None
+    assert query.query_text == query.compiled_query.query_text
+
+
+def test_adaptive_search_mode_change_is_material_conceptual_novelty() -> None:
+    initial = _initial_plan(uuid4())
+    gap_output = _gap(initial, continue_research=True)
+    assert gap_output.result is not None
+    request = V2SearchAgentInput(
+        run_id=initial.run_id,
+        exact_claim=initial.raw_claim,
+        round_number=2,
+        directions=initial.directions,
+        eligible_providers=(DiscoveryProvider.OPENALEX,),
+        material_gaps=gap_output.result.material_gaps,
+        search_directions=gap_output.result.new_search_directions,
+        discovered_terms=gap_output.result.discovered_terms,
+        previous_queries=(),
+        provider_budgets=(
+            V2ProviderSearchBudget(
+                provider=DiscoveryProvider.OPENALEX,
+                attempted_calls=1,
+                maximum_calls=10,
+            ),
+        ),
+        maximum_queries=1,
+    )
+    gap_id = gap_output.result.material_gaps[0].gap_id
+    prior_concept = V2ConceptualQuery(
+        run_id=initial.run_id,
+        artifact_id=discovery_id(initial.run_id, "V2ConceptualQuery", "prior"),
+        identity_key="prior",
+        required_concepts=(V2ConceptGroup(concept="independent cohort replication"),),
+        purpose="gap",
+        direction=ResearchDirection.SUPPORT,
+        provider=DiscoveryProvider.OPENALEX,
+        round_number=1,
+        target_gap_ids=(gap_id,),
+    )
+    prior_action = compile_query(prior_concept, mode="lexical")
+    request = request.model_copy(update={"previous_queries": (prior_action.query_text,)})
+    lanes = _adaptive_concept_lanes(request, {DiscoveryProvider.OPENALEX: "semantic"})
+    proposal = V2AdaptiveSearchConceptProposal(
+        lane_index=0,
+        concepts=V2QueryConcepts(
+            required_concepts=(V2QueryConceptGroup(concept="independent cohort replication"),),
+            purpose="gap",
+        ),
+    )
+    plan = _validate_and_assemble_plan(
+        request,
+        V2AdaptiveSearchConceptsOutput(searches=(proposal,)),
+        "concept-search-v1",
+        NOW,
+        lanes=lanes,
+        query_modes={DiscoveryProvider.OPENALEX: "semantic"},
+        previous_compiled_queries=(prior_action,),
+    )
+    assert plan.searches[0].compiled_query is not None
+    assert plan.searches[0].compiled_query.mode == "semantic"
 
 
 def _proposal(

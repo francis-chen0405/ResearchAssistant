@@ -14,6 +14,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from researchassistant.common.money import ExactUSD
+from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction
 from researchassistant.contracts.model_contracts import (
     DiscoveryProvider,
     NonEmptyStr,
@@ -23,6 +24,7 @@ from researchassistant.contracts.model_contracts import (
     StrictModel,
     _validate_aware_datetime,
 )
+from researchassistant.contracts.research_directions import ResearchDirection, ResearchDirections
 
 V2_PIPELINE_IDENTITY = "researchassistant-v2"
 
@@ -79,49 +81,6 @@ V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY = (
 V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP = 60_000
 
 V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP = 3
-
-
-class ResearchDirection(StrEnum):
-    SUPPORT = "support"
-    CHALLENGE = "challenge"
-
-
-class ResearchDirections(StrictModel):
-    """The complete, independent direction selection for a fresh v2 run."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    support_enabled: bool = True
-    challenge_enabled: bool = False
-
-    @model_validator(mode="after")
-    def validate_at_least_one_enabled(self) -> ResearchDirections:
-        if not self.support_enabled and not self.challenge_enabled:
-            raise ValueError("at least one research direction must be enabled")
-        return self
-
-    @property
-    def enabled_directions(self) -> tuple[ResearchDirection, ...]:
-        return tuple(
-            direction
-            for direction, enabled in (
-                (ResearchDirection.SUPPORT, self.support_enabled),
-                (ResearchDirection.CHALLENGE, self.challenge_enabled),
-            )
-            if enabled
-        )
-
-    def permits(self, direction: ResearchDirection) -> bool:
-        return direction in self.enabled_directions
-
-    def require_permitted(self, direction: ResearchDirection) -> None:
-        if not self.permits(direction):
-            raise ValueError(
-                f"disabled research direction cannot appear in a v2 artifact: {direction}"
-            )
-
-    def canonical_json(self) -> str:
-        return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
 
 class V2PipelineIdentity(StrictModel):
@@ -383,12 +342,30 @@ class V2RoundOneSearchQuery(StrictModel):
     round_number: Literal[1] = 1
     strategy: NonEmptyStr
     query_text: NonEmptyStr
+    compiled_query: V2CompiledQueryAction | None = None
     policy_identity: Literal["researchassistant-v2-phase-3-initial-planner-v1"] = (
         V2_INITIAL_PLANNER_POLICY_IDENTITY
     )
     created_at: datetime
 
     _created_at_is_aware = field_validator("created_at")(_validate_aware_datetime)
+
+    @model_validator(mode="after")
+    def validate_compiled_lane(self) -> V2RoundOneSearchQuery:
+        if self.compiled_query is not None:
+            concepts = self.compiled_query.conceptual_query
+            if (
+                concepts.run_id != self.run_id
+                or concepts.provider != self.provider
+                or concepts.direction != self.direction
+                or concepts.round_number != self.round_number
+                or self.compiled_query.query_text != self.query_text
+                or concepts.target_gap_ids != ()
+            ):
+                raise ValueError(
+                    "compiled query must preserve its application-owned lane and Gap IDs"
+                )
+        return self
 
 
 class V2InitialPlannerOutput(StrictModel):
@@ -514,6 +491,7 @@ class V2AdaptiveSearchQuery(StrictModel):
     targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
     strategy: NonEmptyStr
     query_text: NonEmptyStr
+    compiled_query: V2CompiledQueryAction | None = None
     policy_identity: Literal[
         "researchassistant-v2-phase-7-adaptive-search-v1",
         "researchassistant-v2-post-phase-13-round-four-v1",
@@ -528,6 +506,23 @@ class V2AdaptiveSearchQuery(StrictModel):
             raise ValueError("Phase-7 adaptive queries permit only rounds 2 or 3")
         if self.round_number < 4 and self.policy_identity != V2_ADAPTIVE_SEARCH_POLICY_IDENTITY:
             raise ValueError("Rounds 2 and 3 require the Phase-7 policy")
+        return self
+
+    @model_validator(mode="after")
+    def validate_compiled_lane(self) -> V2AdaptiveSearchQuery:
+        if self.compiled_query is not None:
+            concepts = self.compiled_query.conceptual_query
+            if (
+                concepts.run_id != self.run_id
+                or concepts.provider != self.provider
+                or concepts.direction != self.direction
+                or concepts.round_number != self.round_number
+                or self.compiled_query.query_text != self.query_text
+                or concepts.target_gap_ids != self.targeted_gap_ids
+            ):
+                raise ValueError(
+                    "compiled query must preserve its application-owned lane and Gap IDs"
+                )
         return self
 
 

@@ -8,7 +8,7 @@ There are 82 plan records and 19 verification records.
 
 ### Plans
 
-- [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md)
+- [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md) — foundations and provider-aware conceptual query compilation; later phases retain their separate boundaries.
 - [database-review-2026-10-03](../.agent/plans/database-review-2026-10-03.md)
 - [alpr-equity-run-fixes-2026-10-02](../.agent/plans/alpr-equity-run-fixes-2026-10-02.md)
 - [alpr-equity-run-review-2026-10-02](../.agent/plans/alpr-equity-run-review-2026-10-02.md)

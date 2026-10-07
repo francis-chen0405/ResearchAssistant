@@ -20,7 +20,7 @@ from researchassistant.contracts.model_contracts import (
     StrictModel,
     _validate_aware_datetime,
 )
-from researchassistant.contracts.model_research import ResearchDirection, ResearchDirections
+from researchassistant.contracts.research_directions import ResearchDirection, ResearchDirections
 
 DISCOVERY_POLICY_ID = "source-discovery-v2-2026-10-05-v1"
 COMPILER_ID = "source-query-compiler-v1"
@@ -125,7 +125,9 @@ class V2DiscoveryPolicy(V2DiscoveryValue):
 
 class V2ProviderCapabilities(V2DiscoveryValue):
     provider: Provider
-    capability_identity: Literal["source-provider-capabilities-v1"] = CAPABILITIES_ID
+    capability_identity: Literal[
+        "source-provider-capabilities-v1", "source-provider-capabilities-v2"
+    ] = CAPABILITIES_ID
     search_modes: tuple[SearchMode, ...]
     fields: tuple[Label, ...] = ()
     operators: tuple[Label, ...] = ()
@@ -235,7 +237,7 @@ class V2CompiledQueryAction(V2DiscoveryArtifact):
     mode: SearchMode
     requested_depth: int = Field(strict=True, ge=1, le=50)
     effective_depth: int = Field(strict=True, ge=1, le=50)
-    compiler_identity: Literal["source-query-compiler-v1"] = COMPILER_ID
+    compiler_identity: Literal["source-query-compiler-v1", "source-query-compiler-v2"] = COMPILER_ID
     policy: V2DiscoveryPolicy
     capabilities: V2ProviderCapabilities
     fingerprint: Digest
@@ -647,7 +649,7 @@ class V2DiscoveryBinding(V2DiscoveryArtifact):
     provider_configuration_hash: Digest
     source_identity_hash: Digest
     prompt_schema_hash: Digest
-    compiler_identity: Literal["source-query-compiler-v1"] = COMPILER_ID
+    compiler_identity: Literal["source-query-compiler-v1", "source-query-compiler-v2"] = COMPILER_ID
     ranking_identity: Literal["source-candidate-ranking-v1"] = RANKING_ID
     preview_identity: Literal["source-claim-preview-v1"] = PREVIEW_ID
     seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID

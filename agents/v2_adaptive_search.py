@@ -27,6 +27,7 @@ from providers.llm import (
     LLMStage,
     invoke_llm,
     load_prompt,
+    load_prompt_file,
     render_stage_prompt,
 )
 from providers.mimo import MimoFailureCode, MimoProviderError
@@ -35,14 +36,19 @@ from providers.ranking import canonical_discovery_url
 from providers.scraper import ScraperProvider
 from providers.search import (
     SearchFailureCode,
-    SearchIntent,
     SearchProvider,
     SearchProviderError,
-    SearchRequest,
     SearchResult,
 )
 from providers.v2_routing import V2RoutingConfig
 from researchassistant.common.money import add_usd
+from researchassistant.contracts.discovery_v2 import (
+    SearchMode,
+    V2CompiledQueryAction,
+    V2ConceptGroup,
+    V2ConceptualQuery,
+    discovery_id,
+)
 from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryProvider,
@@ -51,7 +57,9 @@ from researchassistant.contracts.models import (
     StrictModel,
     V2AcquisitionProbeOutput,
     V2AdaptiveRoundPlan,
+    V2AdaptiveSearchConceptsOutput,
     V2AdaptiveSearchModelOutput,
+    V2AdaptiveSearchProposal,
     V2AdaptiveSearchQuery,
     V2DiscoveryScoutOutput,
     V2GapAcquisitionFailure,
@@ -68,6 +76,12 @@ from researchassistant.contracts.models import (
     V2SearchAgentInput,
     V2SurvivingSource,
 )
+from researchassistant.contracts.query_planning import (
+    V2ConceptualAdaptiveLane,
+    V2ConceptualSearchAgentInput,
+)
+from researchassistant.research.query_compiler import compile_query, conceptual_signature
+from researchassistant.research.query_execution import available_query_budgets, execute_query
 from researchassistant.research.research_governor import (
     V2RoundThreeGovernorDecision,
     V2RoundThreeGovernorInput,
@@ -141,7 +155,7 @@ class V2PlanningOutcome(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    candidate: V2AdaptiveSearchModelOutput | None = None
+    candidate: V2AdaptiveSearchModelOutput | V2AdaptiveSearchConceptsOutput | None = None
     rejection_code: str | None = None
     explanation: str | None = None
     completed_at: datetime
@@ -368,6 +382,8 @@ def run_v2_adaptive_search_continuation(
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     budget: V2AdaptiveBudgetState,
     provider_attempts: Mapping[DiscoveryProvider, int] | None = None,
+    query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    legacy_prompt: bool = False,
     budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
@@ -384,6 +400,13 @@ def run_v2_adaptive_search_continuation(
     _validate_round_one_inputs(
         initial_plan, round_one_discovery, round_one_acquisition, round_one_gap
     )
+    legacy_prompt = legacy_prompt or all(
+        query.compiled_query is None for query in initial_plan.searches
+    )
+    resolved_query_modes = dict(query_modes or {})
+    for query in initial_plan.searches:
+        if query.compiled_query is not None:
+            resolved_query_modes.setdefault(query.provider, query.compiled_query.mode)
     initial_pool = _merge_survivors(
         initial_plan.run_id, ((1, round_one_discovery, round_one_acquisition),)
     )
@@ -423,9 +446,16 @@ def run_v2_adaptive_search_continuation(
         gap_output=round_one_gap,
         previous_queries=history,
         provider_attempts=attempts,
+        previous_compiled_queries=tuple(
+            query.compiled_query
+            for query in initial_plan.searches
+            if query.compiled_query is not None
+        ),
         search_providers=search_providers,
         llm_provider=llm_provider,
         routing_config=routing_config,
+        query_modes=resolved_query_modes,
+        legacy_prompt=legacy_prompt,
         wigolo_provider=wigolo_provider,
         firecrawl_provider=firecrawl_provider,
         crossref_resolver=crossref_resolver,
@@ -536,9 +566,16 @@ def run_v2_adaptive_search_continuation(
             gap_output=gap_two,
             previous_queries=(*history, *(query.query_text for query in plan_two.searches)),
             provider_attempts=attempts,
+            previous_compiled_queries=tuple(
+                query.compiled_query
+                for query in (*initial_plan.searches, *plan_two.searches)
+                if query.compiled_query is not None
+            ),
             search_providers=search_providers,
             llm_provider=llm_provider,
             routing_config=routing_config,
+            query_modes=resolved_query_modes,
+            legacy_prompt=legacy_prompt,
             budget=budget,
             budget_snapshot=budget_snapshot,
             cancellation_requested=cancellation_requested,
@@ -773,9 +810,12 @@ def _run_round(
     gap_output: V2GapAnalysisOutput,
     previous_queries: tuple[str, ...],
     provider_attempts: Mapping[DiscoveryProvider, int],
+    previous_compiled_queries: tuple[V2CompiledQueryAction, ...],
     search_providers: Mapping[DiscoveryProvider, SearchProvider],
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
+    query_modes: Mapping[DiscoveryProvider, SearchMode],
+    legacy_prompt: bool,
     wigolo_provider: ScraperProvider | None,
     firecrawl_provider: ScraperProvider | None,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None,
@@ -814,9 +854,12 @@ def _run_round(
             gap_output=gap_output,
             previous_queries=previous_queries,
             provider_attempts=provider_attempts,
+            previous_compiled_queries=previous_compiled_queries,
             search_providers=search_providers,
             llm_provider=llm_provider,
             routing_config=routing_config,
+            query_modes=query_modes,
+            legacy_prompt=legacy_prompt,
             budget=budget,
             budget_snapshot=budget_snapshot,
             cancellation_requested=cancellation_requested,
@@ -942,6 +985,9 @@ def _plan_round(
     budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime],
+    query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    legacy_prompt: bool = False,
+    previous_compiled_queries: tuple[V2CompiledQueryAction, ...] = (),
 ) -> V2AdaptivePlannedRound:
     key = f"phase-7-round-{round_number}-plan"
     try:
@@ -950,17 +996,27 @@ def _plan_round(
         stored = None
     if stored is not None:
         return V2AdaptivePlannedRound.model_validate_json(stored.payload_json)
+    legacy_prompt = legacy_prompt or all(
+        query.compiled_query is None for query in initial_plan.searches
+    )
+    resolved_query_modes = dict(query_modes or {})
+    for query in initial_plan.searches:
+        if query.compiled_query is not None:
+            resolved_query_modes.setdefault(query.provider, query.compiled_query.mode)
+    previous_compiled_queries = previous_compiled_queries or tuple(
+        query.compiled_query for query in initial_plan.searches if query.compiled_query is not None
+    )
     if gap_output.result is None or not gap_output.result.continue_research:
         raise V2AdaptiveNoContinuationError(
             "Luna did not authorize a material adaptive search recommendation"
         )
-    budgets = _eligible_budgets(initial_plan, provider_attempts, search_providers)
+    budgets = _eligible_budgets(initial_plan, provider_attempts, search_providers, path=path)
     if not budgets:
         raise V2AdaptiveNoEligibleProviderError(
             "No eligible enabled provider remains within its search ceiling."
         )
     maximum_queries = _maximum_queries(round_number, initial_plan, budgets)
-    request_input = V2SearchAgentInput(
+    base_request_input = V2SearchAgentInput(
         run_id=initial_plan.run_id,
         exact_claim=initial_plan.raw_claim,
         round_number=round_number,
@@ -976,15 +1032,35 @@ def _plan_round(
         maximum_queries=maximum_queries,
     )
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
-    prompt = load_prompt(LLMStage.SEARCH_AGENT)
+    if legacy_prompt:
+        request_input: V2SearchAgentInput | V2ConceptualSearchAgentInput = base_request_input
+        output_type = V2AdaptiveSearchModelOutput
+        prompt = load_prompt(LLMStage.SEARCH_AGENT)
+        lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
+    else:
+        if DiscoveryProvider.SERPER in base_request_input.eligible_providers:
+            raise V2AdaptiveNoEligibleProviderError(
+                "Serper has no provider-native conceptual query compiler"
+            )
+        lanes = _adaptive_concept_lanes(base_request_input, resolved_query_modes)
+        if not lanes:
+            raise V2AdaptiveNoEligibleProviderError(
+                "No application-owned conceptual lane remains within the round limits."
+            )
+        request_input = V2ConceptualSearchAgentInput(request=base_request_input, lanes=lanes)
+        output_type = V2AdaptiveSearchConceptsOutput
+        prompt = load_prompt_file(
+            Path(__file__).resolve().parents[1] / "prompts" / "search_agent_v2.md",
+            expected_stage=LLMStage.SEARCH_AGENT,
+        )
     request = LLMRequest(
         run_id=initial_plan.run_id,
         stage=LLMStage.SEARCH_AGENT,
         prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, request_input, V2AdaptiveSearchModelOutput),
+        rendered_prompt=render_stage_prompt(prompt, request_input, output_type),
         input_artifact=request_input,
         input_artifact_ids=(initial_plan.run_id,),
-        requested_output_type=V2AdaptiveSearchModelOutput,
+        requested_output_type=output_type,
         model_alias=route.logical_alias,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.SEARCH_AGENT).generation,
     )
@@ -992,6 +1068,12 @@ def _plan_round(
         path=path,
         request=request,
         request_input=request_input,
+        base_request_input=base_request_input,
+        lanes=lanes,
+        query_modes=resolved_query_modes,
+        previous_compiled_queries=previous_compiled_queries,
+        output_type=output_type,
+        legacy_prompt=legacy_prompt,
         llm_provider=llm_provider,
         routing_config=routing_config,
         budget=budget,
@@ -1017,7 +1099,13 @@ def _plan_with_repair(
     *,
     path: str,
     request: LLMRequest,
-    request_input: V2SearchAgentInput,
+    request_input: V2SearchAgentInput | V2ConceptualSearchAgentInput,
+    base_request_input: V2SearchAgentInput,
+    lanes: tuple[V2ConceptualAdaptiveLane, ...],
+    query_modes: Mapping[DiscoveryProvider, SearchMode],
+    previous_compiled_queries: tuple[V2CompiledQueryAction, ...],
+    output_type: type[V2AdaptiveSearchModelOutput] | type[V2AdaptiveSearchConceptsOutput],
+    legacy_prompt: bool,
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
     budget: V2AdaptiveBudgetState,
@@ -1033,17 +1121,22 @@ def _plan_with_repair(
         rendered = request.rendered_prompt
         input_artifact = request_input
         if prior is not None:
-            input_artifact = V2PlanningRepairInput(
-                **request_input.model_dump(),
-                rejected=prior,
-            )
+            if isinstance(request_input, V2ConceptualSearchAgentInput):
+                input_artifact = request_input.model_copy(
+                    update={"rejected_feedback": prior.explanation or prior.rejection_code}
+                )
+            else:
+                input_artifact = V2PlanningRepairInput(
+                    **request_input.model_dump(),
+                    rejected=prior,
+                )
             rendered = render_stage_prompt(
                 request.prompt,
                 input_artifact,
-                V2AdaptiveSearchModelOutput,
+                output_type,
             )
         attempt_id = uuid5(
-            request.run_id, f"adaptive-reliability-{request_input.round_number}-{number}"
+            request.run_id, f"adaptive-reliability-{base_request_input.round_number}-{number}"
         )
         current = request.model_copy(
             update={
@@ -1061,7 +1154,7 @@ def _plan_with_repair(
             reserved_tokens=reserved.reserved_tokens,
             reserved_cost_usd=reserved.reserved_cost_usd,
         )
-        key = f"adaptive-reliability-round-{request_input.round_number}-attempt-{number}"
+        key = f"adaptive-reliability-round-{base_request_input.round_number}-attempt-{number}"
         try:
             started = V2PlanningAttempt.model_validate_json(
                 read_v2_artifact(path, request.run_id, key).payload_json
@@ -1090,7 +1183,7 @@ def _plan_with_repair(
             started = V2PlanningAttempt(
                 run_id=request.run_id,
                 attempt_id=attempt_id,
-                round_number=request_input.round_number,
+                round_number=base_request_input.round_number,
                 attempt_number=number,
                 request_hash=digest,
                 prompt_version=request.prompt.version,
@@ -1099,11 +1192,20 @@ def _plan_with_repair(
             insert_v2_artifact(path, key, started, started.started_at)
             try:
                 response = invoke_llm(llm_provider, current, clock=clock).output_artifact
-                if not isinstance(response, V2AdaptiveSearchModelOutput):
+                if not isinstance(
+                    response,
+                    (V2AdaptiveSearchModelOutput, V2AdaptiveSearchConceptsOutput),
+                ):
                     raise V2AdaptivePlanValidationError("Unexpected Search Agent artifact")
                 try:
                     _validate_and_assemble_plan(
-                        request_input, response, request.prompt.version, clock()
+                        base_request_input,
+                        response,
+                        request.prompt.version,
+                        clock(),
+                        lanes=lanes,
+                        query_modes=query_modes,
+                        previous_compiled_queries=previous_compiled_queries,
                     )
                     outcome = V2PlanningOutcome(
                         run_id=request.run_id, candidate=response, completed_at=clock()
@@ -1113,6 +1215,14 @@ def _plan_with_repair(
                         run_id=request.run_id,
                         candidate=response,
                         rejection_code=exc.code,
+                        explanation=str(exc)[:2000],
+                        completed_at=clock(),
+                    )
+                except (TypeError, ValueError) as exc:
+                    outcome = V2PlanningOutcome(
+                        run_id=request.run_id,
+                        candidate=response,
+                        rejection_code="invalid_concept",
                         explanation=str(exc)[:2000],
                         completed_at=clock(),
                     )
@@ -1149,7 +1259,13 @@ def _plan_with_repair(
         if outcome.rejection_code is None and outcome.candidate is not None:
             return (
                 _validate_and_assemble_plan(
-                    request_input, outcome.candidate, request.prompt.version, outcome.completed_at
+                    base_request_input,
+                    outcome.candidate,
+                    request.prompt.version,
+                    outcome.completed_at,
+                    lanes=lanes,
+                    query_modes=query_modes,
+                    previous_compiled_queries=previous_compiled_queries,
                 ),
                 reservation,
             )
@@ -1175,10 +1291,73 @@ def _plan_with_repair(
 
 def _validate_and_assemble_plan(
     request: V2SearchAgentInput,
-    response: V2AdaptiveSearchModelOutput,
+    response: V2AdaptiveSearchModelOutput | V2AdaptiveSearchConceptsOutput,
     prompt_version: str,
     planned_at: datetime,
+    *,
+    lanes: tuple[V2ConceptualAdaptiveLane, ...] = (),
+    query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    previous_compiled_queries: tuple[V2CompiledQueryAction, ...] = (),
 ) -> V2AdaptiveRoundPlan:
+    compiled_candidates: list[V2CompiledQueryAction | None] = []
+    if isinstance(response, V2AdaptiveSearchConceptsOutput):
+        proposals: list[V2AdaptiveSearchProposal] = []
+        signatures: set[tuple[object, ...]] = {
+            conceptual_signature(action.conceptual_query, action.mode)
+            for action in previous_compiled_queries
+        }
+        for proposal in response.searches:
+            if proposal.lane_index >= len(lanes):
+                raise V2AdaptivePlanValidationError(
+                    "Search Agent selected an unknown application lane", code="unknown_lane"
+                )
+            lane = lanes[proposal.lane_index]
+            identity = (
+                f"round-{request.round_number}/lane-{proposal.lane_index}/"
+                f"{lane.direction.value}/{lane.provider.value}"
+            )
+            concepts = proposal.concepts
+            conceptual = V2ConceptualQuery(
+                run_id=request.run_id,
+                artifact_id=discovery_id(request.run_id, "V2ConceptualQuery", identity),
+                identity_key=identity,
+                required_concepts=tuple(
+                    V2ConceptGroup(concept=item.concept, synonyms=item.aliases)
+                    for item in concepts.required_concepts
+                ),
+                methods=concepts.methods,
+                outcomes=concepts.outcomes,
+                purpose=concepts.purpose,
+                direction=lane.direction,
+                provider=lane.provider,
+                round_number=request.round_number,
+                target_gap_ids=lane.target_gap_ids,
+            )
+            compiled = compile_query(
+                conceptual,
+                mode=lane.mode,
+                requested_depth=5,
+            )
+            signature = conceptual_signature(conceptual, compiled.mode)
+            if signature in signatures:
+                raise V2AdaptivePlanValidationError(
+                    "Search Agent repeated a previous material query concept/mode",
+                    code="repeated_concept",
+                )
+            signatures.add(signature)
+            proposals.append(
+                V2AdaptiveSearchProposal(
+                    direction=lane.direction,
+                    provider=lane.provider,
+                    targeted_gap_ids=lane.target_gap_ids,
+                    strategy=lane.strategy,
+                    query_text=compiled.query_text,
+                )
+            )
+            compiled_candidates.append(compiled)
+        response = V2AdaptiveSearchModelOutput(searches=tuple(proposals))
+    else:
+        compiled_candidates.extend(None for _ in response.searches)
     gap_by_id = {gap.gap_id: gap for gap in request.material_gaps}
     counts: Counter[tuple[ResearchDirection, DiscoveryProvider]] = Counter()
     direction_counts: Counter[ResearchDirection] = Counter()
@@ -1188,7 +1367,8 @@ def _validate_and_assemble_plan(
     total_cap = (
         min(request.maximum_queries, 3) if request.round_number == 3 else request.maximum_queries
     )
-    for index, item in enumerate(response.searches, start=1):
+    for zero_index, item in enumerate(response.searches):
+        index = zero_index + 1
         try:
             request.directions.require_permitted(item.direction)
         except ValueError as exc:
@@ -1208,7 +1388,25 @@ def _validate_and_assemble_plan(
                 "Search Agent query direction must match every targeted Gap",
                 code="gap_direction_mismatch",
             )
-        if not queries_are_materially_new(item.query_text, tuple(history)):
+        compiled = compiled_candidates[zero_index]
+        mode_change_exception = False
+        if compiled is not None:
+            candidate_signature = conceptual_signature(compiled.conceptual_query, compiled.mode)
+            mode_change_exception = any(
+                action.mode != compiled.mode
+                and conceptual_signature(action.conceptual_query, action.mode)[1:]
+                == candidate_signature[1:]
+                for action in previous_compiled_queries
+            ) or any(
+                prior is not None
+                and prior.mode != compiled.mode
+                and conceptual_signature(prior.conceptual_query, prior.mode)[1:]
+                == candidate_signature[1:]
+                for prior in compiled_candidates[:zero_index]
+            )
+        if not mode_change_exception and not queries_are_materially_new(
+            item.query_text, tuple(history)
+        ):
             match = next(
                 (
                     position
@@ -1265,6 +1463,7 @@ def _validate_and_assemble_plan(
                 targeted_gap_ids=item.targeted_gap_ids,
                 strategy=item.strategy,
                 query_text=item.query_text,
+                compiled_query=compiled_candidates[zero_index],
                 policy_identity=request.policy_identity,
                 created_at=planned_at,
             )
@@ -1417,25 +1616,16 @@ def _execute_searches(
     for query in plan.searches:
         if _cancelled(cancellation_requested):
             break
-        provider = providers[query.provider]
         try:
-            response = provider.search(
-                SearchRequest(
-                    run_id=plan.run_id,
-                    provider=query.provider,
-                    intent=(
-                        SearchIntent.ACADEMIC_STUDY
-                        if query.provider
-                        in {
-                            DiscoveryProvider.OPENALEX,
-                            DiscoveryProvider.ARXIV,
-                            DiscoveryProvider.PUBMED,
-                        }
-                        else SearchIntent.BROAD_WEB
-                    ),
-                    query_text=query.query_text,
-                    limit=5,
-                )
+            response = execute_query(
+                path=path,
+                run_id=query.run_id,
+                provider=query.provider,
+                query_text=query.query_text,
+                compiled_query=query.compiled_query,
+                providers=providers,
+                clock=clock,
+                cancellation_requested=cancellation_requested,
             )
             outcomes.append(
                 V2AdaptiveSearchOutcome(
@@ -1591,7 +1781,15 @@ def _eligible_budgets(
     plan: V2InitialPlannerOutput,
     attempted: Mapping[DiscoveryProvider, int],
     providers: Mapping[DiscoveryProvider, SearchProvider],
+    *,
+    path: str | None = None,
 ) -> tuple[V2ProviderSearchBudget, ...]:
+    if path is not None and any(query.compiled_query is not None for query in plan.searches):
+        return tuple(
+            item
+            for item in available_query_budgets(path, plan.run_id)
+            if item.provider in providers
+        )
     return tuple(
         V2ProviderSearchBudget(
             provider=provider,
@@ -1606,24 +1804,87 @@ def _eligible_budgets(
 def _maximum_queries(
     round_number: int, plan: V2InitialPlannerOutput, budgets: tuple[V2ProviderSearchBudget, ...]
 ) -> int:
+    compiled = any(query.compiled_query is not None for query in plan.searches)
+    remaining = {
+        item.provider: item.remaining_calls
+        // (2 if compiled and item.provider is DiscoveryProvider.PUBMED else 1)
+        for item in budgets
+    }
     if round_number == 3:
-        return min(3, sum(min(1, item.remaining_calls) for item in budgets))
+        return min(3, sum(min(1, count) for count in remaining.values()))
     if round_number == 4:
         return min(
             4 * len(plan.directions.enabled_directions),
-            sum(min(2, item.remaining_calls) for item in budgets),
+            sum(min(2, count) for count in remaining.values()),
         )
     return min(
         12,
         sum(
             min(
-                _ROUND_TWO_PER_DIRECTION_CAPS[item.provider]
-                * len(plan.directions.enabled_directions),
-                item.remaining_calls,
+                _ROUND_TWO_PER_DIRECTION_CAPS[provider] * len(plan.directions.enabled_directions),
+                count,
             )
-            for item in budgets
+            for provider, count in remaining.items()
         ),
     )
+
+
+def _adaptive_concept_lanes(
+    request: V2SearchAgentInput,
+    query_modes: Mapping[DiscoveryProvider, SearchMode],
+) -> tuple[V2ConceptualAdaptiveLane, ...]:
+    """Create bounded application-owned slots before requesting adaptive concepts."""
+    total_cap = min(request.maximum_queries, 3 if request.round_number == 3 else 12)
+    lane_counts: Counter[tuple[ResearchDirection, DiscoveryProvider]] = Counter()
+    direction_counts: Counter[ResearchDirection] = Counter()
+    providers_by_direction: dict[ResearchDirection, set[DiscoveryProvider]] = {}
+    physical_used: Counter[DiscoveryProvider] = Counter()
+    available = {item.provider: item.remaining_calls for item in request.provider_budgets}
+    gaps = {gap.gap_id: gap for gap in request.material_gaps}
+    results: list[V2ConceptualAdaptiveLane] = []
+    for search_direction in request.search_directions:
+        gap = gaps[search_direction.gap_id]
+        for provider in request.eligible_providers:
+            lane = (search_direction.direction, provider)
+            cap = (
+                1
+                if request.round_number == 3
+                else 2
+                if request.round_number == 4
+                else _ROUND_TWO_PER_DIRECTION_CAPS[provider]
+            )
+            direction_providers = providers_by_direction.setdefault(
+                search_direction.direction, set()
+            )
+            if (
+                physical_used[provider] + (2 if provider is DiscoveryProvider.PUBMED else 1)
+                > available[provider]
+                or len(results) >= total_cap
+                or lane_counts[lane] >= cap
+                or (
+                    request.round_number == 4
+                    and provider not in direction_providers
+                    and len(direction_providers) >= 2
+                )
+                or (request.round_number == 4 and direction_counts[search_direction.direction] >= 4)
+            ):
+                continue
+            results.append(
+                V2ConceptualAdaptiveLane(
+                    direction=search_direction.direction,
+                    provider=provider,
+                    strategy=search_direction.search_focus or gap.missing_evidence,
+                    target_gap_ids=(gap.gap_id,),
+                    mode=query_modes.get(provider),
+                )
+            )
+            physical_used[provider] += 2 if provider is DiscoveryProvider.PUBMED else 1
+            lane_counts[lane] += 1
+            direction_counts[search_direction.direction] += 1
+            direction_providers.add(provider)
+        if len(results) >= total_cap:
+            break
+    return tuple(results)
 
 
 def _round_three_precheck(

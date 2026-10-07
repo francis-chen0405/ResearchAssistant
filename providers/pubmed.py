@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from pydantic import ValidationError
 
 from providers.config import PubMedConfig
+from providers.discovery_transport import physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -16,12 +17,16 @@ from providers.search import (
     SearchResponse,
     SearchResult,
     SearchTimeoutError,
+    compiled_parameters,
+    validate_request_url,
 )
 from researchassistant.contracts.models import DiscoveryProvider
 
 
 class PubMedSearchAdapter:
     """Search PubMed then retrieve only bibliographic summaries for discovery."""
+
+    physical_accounting = True
 
     def __init__(self, config: PubMedConfig, *, client: httpx.Client | None = None) -> None:
         self._config = config
@@ -37,28 +42,62 @@ class PubMedSearchAdapter:
                 SearchFailureCode.PERMANENT_FAILURE,
                 "PubMed requires a typed PubMed search request",
             )
-        params: dict[str, str] = {
-            "db": "pubmed",
-            "term": request.query_text,
-            "retmode": "json",
-            "retmax": str(request.limit),
-            "sort": "relevance",
-        }
+        parameters = compiled_parameters(
+            request,
+            allowed_names=frozenset({"db", "term", "retmode", "retmax"}),
+            required_names=frozenset({"db", "term", "retmode", "retmax"}),
+        )
+        if parameters is None:
+            query_params: dict[str, str | int | bool] = {
+                "db": "pubmed",
+                "term": request.query_text,
+                "retmode": "json",
+                "retmax": request.limit,
+                "sort": "relevance",
+            }
+        else:
+            term = parameters.get("term")
+            if (
+                parameters.get("db") != "pubmed"
+                or parameters.get("retmode") != "json"
+                or parameters.get("retmax") != request.limit
+                or not isinstance(term, str)
+                or not term.strip()
+                or not any(tag in term.lower() for tag in ("[tiab]", "[title/abstract]"))
+            ):
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled PubMed query must use a bounded Title/Abstract search",
+                )
+            query_params = parameters
         if self._config.api_key is not None:
-            params["api_key"] = self._config.api_key.get_secret_value()
-        body = self._get_json("/entrez/eutils/esearch.fcgi", params)
+            query_params["api_key"] = self._config.api_key.get_secret_value()
+        body = self._get_json("/entrez/eutils/esearch.fcgi", query_params, request=request)
         result = body.get("esearchresult") if isinstance(body, dict) else None
         ids = result.get("idlist") if isinstance(result, dict) else None
-        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+        if not isinstance(ids, list) or not all(
+            isinstance(item, str) and item.isascii() and item.isdecimal() and len(item) <= 20
+            for item in ids
+        ):
             raise SearchProviderError(
                 SearchFailureCode.MALFORMED_RESPONSE, "PubMed response omitted result identifiers"
+            )
+        if len(ids) > request.limit:
+            raise SearchProviderError(
+                SearchFailureCode.MALFORMED_RESPONSE,
+                "PubMed response exceeds the reserved identifier limit",
             )
         if not ids:
             raise SearchProviderError(SearchFailureCode.EMPTY_RESULTS, "PubMed returned no results")
         summary_params = {"db": "pubmed", "id": ",".join(ids), "retmode": "json"}
         if self._config.api_key is not None:
             summary_params["api_key"] = self._config.api_key.get_secret_value()
-        summaries = self._get_json("/entrez/eutils/esummary.fcgi", summary_params)
+        summaries = self._get_json(
+            "/entrez/eutils/esummary.fcgi",
+            summary_params,
+            request=request,
+            request_kind="metadata",
+        )
         records = summaries.get("result") if isinstance(summaries, dict) else None
         if not isinstance(records, dict):
             raise SearchProviderError(
@@ -77,9 +116,31 @@ class PubMedSearchAdapter:
             search_type="metadata",
         )
 
-    def _get_json(self, path: str, params: dict[str, str]) -> object:
+    def _get_json(
+        self,
+        path: str,
+        params: dict[str, str | int | bool],
+        *,
+        request: SearchRequest | None = None,
+        request_kind: Literal["primary", "metadata"] = "primary",
+    ) -> object:
+        if request is not None and request.compiled_query is not None:
+            validate_request_url(str(self._client.base_url) + path, params)
         try:
-            response = self._client.get(path, params=params)
+            if request is None:
+                response = self._client.get(path, params=params)
+            else:
+                observed_params = {key: value for key, value in params.items() if key != "api_key"}
+                response = physical_request(
+                    request,
+                    observed_params,
+                    lambda: self._client.get(
+                        path,
+                        params=params,
+                        timeout=self._config.deadlines.search_seconds,
+                    ),
+                    request_kind=request_kind,
+                )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(
                 SearchFailureCode.TIMEOUT, "PubMed search timed out", retryable=True

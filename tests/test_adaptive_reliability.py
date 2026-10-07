@@ -66,6 +66,7 @@ def test_fresh_empty_focus_gets_exact_claim_default(tmp_path: Path) -> None:
         routing_config=V2RoutingConfig.from_environment(
             _environment(), repository_revision="reliability-test"
         ),
+        legacy_prompt=True,
     )
     assert len(result.planner_output.claim_coverage_focus) == 1
     assert result.planner_output.claim_coverage_focus[0].claim_component == claim

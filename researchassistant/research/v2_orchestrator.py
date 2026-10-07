@@ -59,10 +59,8 @@ from providers.llm import LLMProvider
 from providers.scraper import ScraperProvider
 from providers.search import (
     SearchFailureCode,
-    SearchIntent,
     SearchProvider,
     SearchProviderError,
-    SearchRequest,
     SearchResult,
 )
 from providers.v2_budget import (
@@ -73,6 +71,7 @@ from providers.v2_budget import (
     V2RunCeilings,
 )
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.discovery_v2 import SearchMode
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
@@ -117,7 +116,13 @@ from researchassistant.evidence.evidence_core import (
     EVIDENCE_POLICY_VERSION,
     FRESH_SENTENCE_SEGMENTATION_POLICY,
 )
+from researchassistant.research.query_execution import (
+    execute_query,
+    freeze_query_execution,
+    query_provider_budgets,
+)
 from researchassistant.research.research_governor import DEFAULT_RESEARCH_GOVERNOR_POLICY
+from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.store import (
     init_db,
     insert_provider_run_contract,
@@ -636,6 +641,8 @@ def run_v2_production_pipeline(
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     run_id: UUID | None = None,
     provider_policy_fingerprint: str = "injected-provider-policy-v1",
+    query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    legacy_query_planning: bool = False,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
     _database_lock_owned: bool = False,
@@ -659,6 +666,8 @@ def run_v2_production_pipeline(
                 crossref_resolver=crossref_resolver,
                 run_id=run_id,
                 provider_policy_fingerprint=provider_policy_fingerprint,
+                query_modes=query_modes,
+                legacy_query_planning=legacy_query_planning,
                 cancellation_requested=cancellation_requested,
                 clock=clock,
             )
@@ -677,6 +686,8 @@ def run_v2_production_pipeline(
             crossref_resolver=crossref_resolver,
             run_id=run_id,
             provider_policy_fingerprint=provider_policy_fingerprint,
+            query_modes=query_modes,
+            legacy_query_planning=legacy_query_planning,
             cancellation_requested=cancellation_requested,
             clock=clock,
         )
@@ -697,6 +708,8 @@ def _run_v2_production_pipeline(
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     run_id: UUID | None = None,
     provider_policy_fingerprint: str = "injected-provider-policy-v1",
+    query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    legacy_query_planning: bool = False,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2ProductionPipelineResult:
@@ -730,12 +743,40 @@ def _run_v2_production_pipeline(
     if phase13_terminal is not None:
         return V2ProductionPipelineResult.model_validate_json(phase13_terminal.payload_json)
 
+    try:
+        discovery_binding = read_discovery_binding(path, resolved_run_id)
+    except KeyError:
+        discovery_binding = None
+    if legacy_query_planning and discovery_binding is not None:
+        raise ValueError(
+            "existing discovery binding requires fresh query planning; use a new run ID"
+        )
+
     def effective_cancellation_requested() -> bool:
         return _cancelled(cancellation_requested) or v2_cancellation_requested(
             path, resolved_run_id
         )
 
     _prepare_identity(path, resolved_run_id, raw_claim, routing_config, now)
+    if not legacy_query_planning:
+        try:
+            completed = read_v2_artifact(path, resolved_run_id, V2_PRODUCTION_ARTIFACT_KEY)
+        except KeyError:
+            completed = None
+        if completed is None or discovery_binding is not None:
+            freeze_query_execution(
+                path,
+                resolved_run_id,
+                raw_claim,
+                directions,
+                discovery_providers,
+                now,
+                query_modes=query_modes,
+                provider_configuration_fingerprint=provider_policy_fingerprint,
+                provider_budgets=query_provider_budgets(
+                    discovery_providers, search_providers, query_modes
+                ),
+            )
     fingerprint = _production_fingerprint(
         resolved_run_id,
         directions,
@@ -776,6 +817,9 @@ def _run_v2_production_pipeline(
             llm_provider=budgeted_llm,
             routing_config=routing_config,
             run_id=resolved_run_id,
+            query_modes=dict(query_modes or {}),
+            legacy_prompt=legacy_query_planning,
+            provider_configuration_fingerprint=provider_policy_fingerprint,
             clock=now,
         ).planner_output
         _raise_if_v2_cancelled(effective_cancellation_requested)
@@ -843,6 +887,8 @@ def _run_v2_production_pipeline(
         continuation = run_v2_adaptive_search_continuation(
             db_path=path,
             initial_plan=planner,
+            query_modes=query_modes,
+            legacy_prompt=legacy_query_planning,
             round_one_discovery=discovery_one,
             round_one_acquisition=acquisition_one,
             round_one_gap=gap_one,
@@ -1121,7 +1167,7 @@ def _production_fingerprint(
         "directions": directions.model_dump(mode="json"),
         "providers": [provider.value for provider in providers],
         "ceilings": ceilings.model_dump(mode="json"),
-        "routing_contract": routing.fingerprint_payload(),
+        "routing_contract": routing.fingerprint_payload(legacy_query_planning=True),
         "provider_policy_fingerprint": provider_policy_fingerprint,
         "semantic_policy": _semantic_policy_payload(),
         "round_limit": 4,
@@ -1245,23 +1291,15 @@ def _run_round_one_search(
         if _cancelled(cancellation_requested):
             break
         try:
-            response = providers[query.provider].search(
-                SearchRequest(
-                    run_id=query.run_id,
-                    provider=query.provider,
-                    intent=(
-                        SearchIntent.ACADEMIC_STUDY
-                        if query.provider
-                        in {
-                            DiscoveryProvider.OPENALEX,
-                            DiscoveryProvider.ARXIV,
-                            DiscoveryProvider.PUBMED,
-                        }
-                        else SearchIntent.BROAD_WEB
-                    ),
-                    query_text=query.query_text,
-                    limit=5,
-                )
+            response = execute_query(
+                path=path,
+                run_id=query.run_id,
+                provider=query.provider,
+                query_text=query.query_text,
+                compiled_query=query.compiled_query,
+                providers=providers,
+                clock=clock,
+                cancellation_requested=cancellation_requested,
             )
             outcomes.append(
                 V2RoundOneSearchOutcome(

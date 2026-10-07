@@ -2692,7 +2692,7 @@ def insert_v2_initial_planner_output(
                 ),
             )
         # Keep the complete typed handoff in the same transaction as its relational
-        # projection. Coverage fields have no columns in the historical schema.
+        # projection. Coverage and compiled-query fields have no historical columns.
         conn.execute(
             """INSERT INTO v2_artifacts
                (run_id, artifact_key, artifact_type, payload_json, payload_sha256, created_at)
@@ -2767,7 +2767,15 @@ def read_v2_initial_planner_output(
         complete = V2InitialPlannerOutput.model_validate_json(
             _row_to_v2_artifact(artifact_row).payload_json
         )
-        if complete.model_copy(update={"claim_coverage_focus": ()}) != relational:
+        projection = complete.model_copy(
+            update={
+                "claim_coverage_focus": (),
+                "searches": tuple(
+                    query.model_copy(update={"compiled_query": None}) for query in complete.searches
+                ),
+            }
+        )
+        if projection != relational:
             raise sqlite3.IntegrityError("Initial planner artifact disagrees with stored queries")
         return complete
 

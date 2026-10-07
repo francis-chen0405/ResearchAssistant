@@ -1,8 +1,8 @@
 # Source discovery v2 — shared implementation record
 
-Authorized scope: Prompt 1 foundations only, within a six-prompt pack delivered one requested phase at a time. The subsequent user instruction authorizes review, necessary corrections and a local commit if sound. Preserve the untracked proposal pack. No paid transports, credentials, real databases, installation, push, publication, or runtime activation.
+Authorized scope: completed Prompt 1 foundations and Prompt 2 provider-aware query planning/compilation, within a six-prompt pack delivered one requested phase at a time. The user's subsequent “Review 2 and then commit if it's good” authorizes review corrections and a local Phase 2 commit after verification. Preserve the unrelated untracked proposal pack. Paid transports, credentials, real databases, installation, automation, push and publication remain outside this phase.
 
-## Specification and ownership
+## Original Phase 1 specification and ownership
 
 - `researchassistant.contracts.discovery_v2`: immutable strict contracts, explicit identities, query versus graph actions, metadata/candidate dispositions, exact snapshot previews, seed/edge provenance, counters, request reservations and compatibility binding.
 - `researchassistant.research.discovery_capabilities`: versioned, conservative native/provider capability catalog with official provenance; adapters remain unchanged.
@@ -16,7 +16,7 @@ Accounting: search, identity and neighbor pages use the same applicable provider
 
 Trust boundary: metadata, ranks, previews and edges are discovery only. Existing acquisition → immutable snapshot → exact extraction → Analyst → admission is mandatory. Search direction never implies evidence relationship. Round 4 authorization and Round 1–4 lifecycle remain unchanged.
 
-## Acceptance tracking
+## Phase 1 acceptance tracking
 
 Complete: live owner map, official capability evidence, typed contracts, store/accounting, focused regressions, review, Python full suite/lint/format/diff. Later phases must use the exact contracts and owners below. Runtime integration remains Phase 2–6 and requires each corresponding instruction.
 
@@ -86,3 +86,62 @@ Sol reviewed the shared contracts, accounting and integration boundaries hands-o
 Fourteen additional cases bring discovery-focused coverage to **96 passing tests**. Native-only graph/identity action contracts remain valid for planned pending/skipped outcomes; durable reservation still rejects those actions unless the frozen capability explicitly permits execution. No production call sites import the new discovery owners. The archived prior-state files were checked byte-for-byte against the previous commit. The proposal pack remains untracked by the prior scope instruction; this review authorizes only the Phase 1 source and supporting records for a local commit.
 
 Final isolated macOS/Python **3.12.14** verification after the corrections: **1,893 passed, 3 existing skips in 101.94 seconds**; focused tests **96 passed in 1.68 seconds**. Full Ruff lint and formatting checks passed (**231 files**); staged and working-tree whitespace checks passed. The advisory graph was refreshed without persistence after the source additions and conclusions were verified against live source/tests. No schema, dependencies, executable prompts, frontend or desktop surfaces changed. Delivered as a local conditional-review commit; no push or installation.
+
+
+## Phase 2 implementation and ownership
+
+Fresh production planning uses concept-only successors `v2_initial_planner_v2.md` and `search_agent_v2.md` through the existing selected Planner/Search Agent stages. The strict output owns only bounded phrases, at most three aliases per group and optional method/outcome groups. Application-owned initial lanes and adaptive lane indices retain providers, directions, round numbers, strategies, query IDs and original Gap IDs. Initial broad searches avoid optional narrowing; explicit gap/method/outcome queries add bounded evidence concepts. Exact submitted claims remain unchanged; fresh claim-component focus requires exact substrings. The Search Agent's existing two-attempt repair owner returns precise schema/compiler/novelty feedback and never issues another search to fill a rejected slot.
+
+`researchassistant.research.query_compiler` owns deterministic single-page native syntax, validation, executable capabilities, canonical fingerprinting and conceptual/mode novelty. `query_execution` is the shared Round-1/adaptive/Round-4 executor and freezes query compiler **v2**, executable capabilities **v2**, successor prompts/schemas, query modes, provider configuration, source identity and effective budgets. `providers.discovery_transport` exposes scoped physical request observations to this owner. `discovery_store` retains the durable immutable artifact/reservation owner; no table, migration or dependency is added. `ResearchDirection(s)` moved to a dependency-independent contract module with its historical exports unchanged.
+
+All five configured adapters send the actual compiled parameters. OpenAlex semantic mode uses `search.semantic`, lexical mode uses `search`; both current documented prices are $0.001 per request with distinct frozen mode identities. No paid rerank, filter/lookup, semantic fallback or hidden Exa fallback is enabled. Default production remains lexical OpenAlex; deliberate programmatic `query_modes` selects semantic. Ordinary client mode controls belong to Phase 6. Exa uses natural intent and `type=auto`; SERP uses bounded quoted/OR phrases and verified `exact_match=true`; arXiv uses explicit title/abstract fields; PubMed uses `[tiab]` and separately reserves ESearch/ESummary. No configured Serper adapter exists; unsupported Serper/modes are rejected before transport.
+
+Every observed physical request matches its compiled owner/parameters before reservation. PubMed metadata IDs must come from its completed primary response, with parent attempt/hash linkage. Parameters persisted in the audit omit secrets. URL/query/encoded length, syntax/control characters, ambiguous bare acronyms, normalized aliases and declared modes are checked before transport. Cancellation is typed and checked before each request; HTTP deadlines remain bounded. Known 429/502/503/504 failures can retry within the three-physical-request operation bound only when cost is known; PubMed allows at most two primary attempts to leave capacity for summary. Unknown outcomes are never retried or refunded. Reported OpenAlex/Exa cost is parsed exactly; absent cost stays unknown and exposure remains reserved. Configured tighter OpenAlex ceilings are retained; physical counts, retries and summaries constrain adaptive lane allocation. Existing provider ceilings remain 10/6/6/18/12 for OpenAlex/arXiv/PubMed/Exa/SERP respectively.
+
+Historical prompt files retain their bytes and explicit legacy planning dispatch remains covered by the original regression fixtures. Old optional `compiled_query=None` artifacts retain their meaning. The legacy production fingerprint payload/golden hash remains unchanged; fresh execution also requires the new immutable binding and source/prompt/schema identity. Incompatible mode/configuration/source resume requires a fresh run. Completed history stays readable. Round 1–4, Round-4 Governor authorization, no Round 5, challenge-only behavior, independent acquisition/snapshot/extraction/Analyst/admission and final release gates are exercised by the fresh fixture pipeline.
+
+### Documented compiled examples
+
+Official URLs and verification dates **2026-10-06/07** are recorded in [provider reference](../../docs/source-query-provider-reference.md). Prices are bounded policy inputs, not guarantees of future upstream behavior.
+
+| Lane | Representative compiled request |
+| --- | --- |
+| ALPR crime, OpenAlex lexical | `search=("automated license plate readers" OR "ALPR" OR "license plate recognition") AND ("crime investigation")`, `per_page=5` |
+| ALPR discrimination, OpenAlex lexical | Same technology group `AND ("racial discrimination" OR "disparate impact")`; no exclusions of null/challenging results |
+| OpenAlex semantic | `search.semantic=automated license plate readers (also called ALPR, license plate recognition); crime investigation`, `per_page=5`; no Boolean/filter/rerank parameters |
+| arXiv | `(ti:"automated license plate readers" OR abs:"automated license plate readers" OR ti:"ALPR" OR abs:"ALPR") AND (ti:"crime investigation" OR abs:"crime investigation")`, `start=0`, relevance descending |
+| Biomedical PubMed | `("maternal health"[tiab] OR "pregnancy care"[tiab] OR "obstetric care"[tiab]) AND ("hypertension"[tiab])`, `db=pubmed`, `retmode=json`, `retmax=5` |
+| Normative Exa | `school zoning policy (also called school attendance boundaries); community debate (also called local public discussion)`, `type=auto`, `numResults=5` |
+| Normative SERP | `("school zoning policy" OR "school attendance boundaries") ("community debate" OR "local public discussion")`, `page=1`, `exact_match=true` |
+
+### Phase 2 acceptance evidence
+
+Luna helpers owned official-doc research/adapters, conceptual handoffs and fixtures, production fixture construction and independent review. Sol owned compiler/execution architecture, budget/trust-boundary decisions, critical integration, source review and final acceptance. Review corrected adaptive wrapper ownership, Round-4 request unpacking, physical budget headroom, lower configured limits, Exa reported costs, exact native parameter ownership, PubMed returned-ID bounds, metadata counts, non-2xx handling and durable failure classification.
+
+| Requirement | Evidence |
+| --- | --- |
+| Strict concept-only schema, disabled lanes, bounded aliases, compiler syntax/Unicode/quotes/length/acronyms/modes | `test_v2_query_planning_contracts.py`, `test_query_compiler.py`, initial/adaptive Planner regressions |
+| Actual native request payloads for all five configured providers | `test_v2_compiled_provider_parameters.py` with mock HTTP transports |
+| Genuine semantic Round-1 execution, adaptive compiler use, physical PubMed pairs/retries/cancellation/caps/configuration | `test_query_execution.py` with durable temporary database audit |
+| ALPR crime/discrimination, biomedical and normative web queries; tighter OpenAlex limits and reported Exa cost | `test_query_acceptance.py` |
+| Two-attempt repair, conceptual duplicates/trivial proposals, mode novelty, preserved Gap/round ownership | `test_v2_phase7_adaptive_search.py` and reliability regressions |
+| Fresh full lifecycle, Governor-only Round 4, compiled queries in each round, challenge-only admission, terminal read/restart and frozen mode mismatch | `test_query_production.py`; retained legacy production fixtures remain explicit |
+| Historical contracts/fingerprints/accounting and downstream model/source limits | Full existing suite, including Phase 1 foundation/store tests and fixed production hash regression |
+
+The conditional review established a baseline of **1,951 passed, 3 existing skips in 110.49 seconds**, with disposable application data on macOS arm64/Python **3.12.14**. Resume review corrected relational-projection comparison so the complete compiled artifact is retained and native relational fields still agree. Verification uses only fixtures, mocked transports and temporary databases. Offline results do not prove live research quality. No frontend/desktop surfaces changed, so their builds are not required for this phase. Retrieval depth/pagination/ranking and Scout allocation remain Phase 3; exact previews, seed expansion and product mode/settings presentation remain later authorized phases. This phase retains ordinary five-result query requests and introduces no additional acquisition or research round.
+
+### Phase 2 conditional-commit review
+
+Sol reviewed the implementation hands-on with Luna helpers independently reviewing contracts/storage and running verification. Corrections made before commit:
+
+- A legacy selector cannot bypass a fresh run's immutable query binding, even when its cached terminal result exists; historical unbound dispatch remains covered. Valid reordered legacy Planner responses retain their original order.
+- Semantic and Exa natural-intent queries describe optional method/outcome alternatives as evidence context, reserving “also called” for actual aliases. Explicit empty modes are rejected rather than defaulted.
+- Compiled native requests require the scoped durable execution owner. Fresh compiler-bound runs reject an uncompiled request before calling an adapter. Historical unbound requests retain their adapter path.
+- OpenAlex semantic starts are spaced at least one second apart per adapter instance, including known retries. Cancellation while waiting is checked before durable reservation. Actual send-start timestamps preserve spacing despite variable reservation latency. Separate adapters or processes sharing an account are outside this limiter.
+- Round-4 query allowance counts complete logical PubMed queries from physical request headroom; three available requests yield one query, while one request stops before constructing a fresh planning contract.
+
+Regression evidence is in `test_query_review.py`, `test_query_transport_review.py`, `test_query_round_four_review.py`, compiler tests and native-parameter fixtures. Focused review checks passed: **37 transport/execution tests**, **8 acceptance/production tests**, **101 Round-4/production tests**, and **15 resume/initial-planning tests**. These groups overlap and are not an aggregate count. The advisory graph was checked and refreshed; after a degraded integrity result, its supported rebuild succeeded without persistence (**6,385 nodes / 47,142 edges**). Live sources, diffs and tests remained authoritative. Prior-state archives match the preceding committed bytes; proposals remain untracked.
+
+The first final full run found missing annotations in new test helpers (**1,968 passed, 3 skipped, 1 failed**). Explicit helper types were added without changing application behavior; the repository type-contract test and both affected suites then passed **18 tests in 1.67 seconds**. Final native-parameter review also restored explicit SERP phrase/Unicode/page/verbatim assertions. Whole-repository Ruff lint and format passed (**245 files**).
+
+Final isolated full verification after all corrections: **1,969 passed, 3 existing skips in 109.05 seconds** on macOS/Python **3.12.14**. The skips are the explicit-approval CLI fixture, optional LLM integration and native Windows ACL verification. Full Ruff lint/format and staged/working-tree whitespace checks passed. All 53 staged files belong to Phase 2 and its supporting records; proposals remain excluded. Delivered as the user-authorized reviewed local commit, without push or installation. No remaining required Phase 2 correction was identified; offline verification does not establish live retrieval quality.

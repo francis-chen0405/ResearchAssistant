@@ -285,6 +285,12 @@ from researchassistant.contracts.model_research import (
 from researchassistant.contracts.model_research import (
     _validate_v2_discovery_providers as _validate_v2_discovery_providers,
 )
+from researchassistant.contracts.query_planning import (
+    V2AdaptiveSearchConceptsOutput,
+    V2InitialPlannerConceptsOutput,
+    V2QueryConceptGroup,
+    V2QueryConcepts,
+)
 
 __all__ = [
     "AmbiguityRecord",
@@ -396,6 +402,7 @@ __all__ = [
     "V2AcquisitionProvider",
     "V2AdaptiveRoundPlan",
     "V2AdaptiveSearchModelOutput",
+    "V2AdaptiveSearchConceptsOutput",
     "V2AdaptiveSearchProposal",
     "V2AdaptiveSearchQuery",
     "V2AdmissionMethod",
@@ -457,6 +464,7 @@ __all__ = [
     "V2GapSurvivingSourceMetadata",
     "V2InitialPlannerInput",
     "V2InitialPlannerModelOutput",
+    "V2InitialPlannerConceptsOutput",
     "V2InitialPlannerOutput",
     "V2InitialPlannerPolicy",
     "V2InitialPlannerSearchLane",
@@ -466,6 +474,8 @@ __all__ = [
     "V2MaterialGap",
     "V2PersistedArtifact",
     "V2PipelineIdentity",
+    "V2QueryConceptGroup",
+    "V2QueryConcepts",
     "V2PlannedSearch",
     "V2ProbePassage",
     "V2ProbeResult",

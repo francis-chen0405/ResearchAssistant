@@ -10,6 +10,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import ExaConfig
+from providers.discovery_transport import physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -18,6 +19,7 @@ from providers.search import (
     SearchResponse,
     SearchResult,
     SearchTimeoutError,
+    compiled_parameters,
 )
 
 DEFAULT_EXCLUDED_DOMAINS = (
@@ -67,6 +69,8 @@ _SITE_EXCLUSION = re.compile(r"(?:^|\s)-site:([^\s]+)", re.IGNORECASE)
 
 
 class ExaSearchAdapter:
+    physical_accounting = True
+
     def __init__(self, config: ExaConfig, *, client: httpx.Client | None = None) -> None:
         self._config = config
         self._client = client or httpx.Client(
@@ -76,24 +80,51 @@ class ExaSearchAdapter:
         )
 
     def search(self, request: SearchRequest) -> SearchResponse:
-        query, exclusions = _query_and_exclusions(request.query_text)
+        parameters = compiled_parameters(
+            request,
+            allowed_names=frozenset({"query", "type", "numResults"}),
+            required_names=frozenset({"query", "type", "numResults"}),
+        )
+        if parameters is None:
+            query, exclusions = _query_and_exclusions(request.query_text)
+        else:
+            query = parameters.get("query")
+            if (
+                not isinstance(query, str)
+                or not query.strip()
+                or parameters.get("type") != "auto"
+                or parameters.get("numResults") != request.limit
+            ):
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled Exa settings require natural-language auto mode "
+                    "and a bounded result count",
+                )
+            exclusions = []
         if not query:
             raise SearchProviderError(SearchFailureCode.PERMANENT_FAILURE, "search query is empty")
-        payload = {
+        payload: dict[str, object] = {
             "query": query,
             "type": self._config.search_type,
             "numResults": request.limit,
-            "excludeDomains": exclusions,
         }
+        if parameters is None:
+            payload["excludeDomains"] = exclusions
+        else:
+            payload = parameters
         try:
-            response = self._client.post(
-                "/search",
-                headers={
-                    "Authorization": f"Bearer {self._config.api_key.get_secret_value()}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=self._config.deadlines.search_seconds,
+            response = physical_request(
+                request,
+                parameters if parameters is not None else payload,
+                lambda: self._client.post(
+                    "/search",
+                    headers={
+                        "Authorization": f"Bearer {self._config.api_key.get_secret_value()}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=self._config.deadlines.search_seconds,
+                ),
             )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(

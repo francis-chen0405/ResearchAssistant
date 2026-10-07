@@ -6,7 +6,7 @@ ResearchAssistant is a local desktop application for research on a precise claim
 
 | Area | Owner |
 | --- | --- |
-| Provider-aware discovery and foundations | `researchassistant.contracts.discovery_v2`, `researchassistant.research.discovery_policy`, `discovery_capabilities`, and `researchassistant.storage.discovery_store` |
+| Opt-in discovery foundations | `researchassistant.contracts.discovery_v2`, `researchassistant.research.discovery_policy`, `discovery_capabilities`, and `researchassistant.storage.discovery_store` |
 | Fresh research orchestration | `researchassistant.research.v2_orchestrator`, `agents/v2_*.py` |
 | Model catalogs and provider routing | `providers/model_profiles.py`, `providers/v2_routing.py`, `providers/v2_budget.py` |
 | Historical provider execution | `researchassistant.research.orchestrator` |
@@ -29,7 +29,7 @@ The model contract modules depend in one direction: shared contracts, then resea
 
 ## Discovery foundations
 
-The [source-discovery plan](.agent/plans/source-discovery-v2-2026-10-05.md) records active provider-aware query planning/compilation and foundations for later retrieval/ranking, exact previews and one-hop expansion. Fresh Planner/Search Agent handoffs contain bounded concepts; application lanes and `query_compiler` own native syntax, IDs and executable settings. Round 1 and authorized adaptive/Round-4 searches share `query_execution`, which freezes compiler/prompt/schema/mode/configuration identity and reserves each physical request in immutable `v2_artifacts` before transport. Compiled native requests fail closed without this accounting owner. Provider adapters observe every retry and metadata request; PubMed summaries bind primary IDs/response hashes. Unknown outcomes retain exposure and stop further requests. Native and executable modes/pagination/identity/relationships remain distinct; semantic OpenAlex is an explicit frozen mode with separate pricing identity and no hidden fallback/rerank. Its adapter serializes semantic starts/retries one second apart and checks cancellation before reservation; separate adapter instances/processes require external coordination. Historical query artifacts and explicit legacy prompt paths retain their meaning; incompatible fresh resumes require a new run, and a legacy selector cannot bypass a fresh binding. Read-only inspection owns one validated snapshot. No schema migration or model stage is added.
+The [source-discovery plan](.agent/plans/source-discovery-v2-2026-10-05.md) defines separate opt-in contracts for conceptual/provider queries, metadata depth, candidate ranking, exact previews and one-hop expansion. Current production execution retains its prior discovery policy. New foundations reuse immutable `v2_artifacts`, freeze versions/settings/capabilities/source/schema identity, and reserve each physical request durably before transport. Native and executable modes/pagination/identity/relationships are distinct. PubMed's search and summary requests have separate checkpoints; unknown outcomes retain exposure and stop further requests under the initial recovery policy. New read-only inspection owns one validated snapshot. No schema migration or model stage is added.
 
 ## Research execution
 
@@ -88,4 +88,4 @@ Physical-call completion artifacts separately preserve cache-write tokens and co
 
 macOS is the first release target. Windows release work is deferred; the earlier Phase 2 native Windows matrix does not verify the current version. The unsigned Mac candidate has not passed live-quality acceptance, clean-machine installation, minimum-OS verification, signing, or notarization. The five-submission live-test allowance is exhausted and requires new explicit authorization before more paid research. See [STATUS](STATUS.md), [HANDOFF](HANDOFF.md), and [desktop operations](desktop/README.md).
 
-The exact preceding architecture is preserved in the [source-query planning archive](docs/archive/2026-10-07-source-query-planning-state/ARCHITECTURE.md). The [2026-09-26 archive](docs/archive/2026-09-26-maintenance/ARCHITECTURE.md) retains the earlier full module inventory and historical invariants; the [archive index](docs/archive/INDEX.md) lists all replaced documents. Current implementation facts remain separate from release evidence.
+The exact preceding architecture is preserved in the [Prompt 3 archive](docs/archive/2026-10-04-phase3-state/ARCHITECTURE.md). The [2026-09-26 archive](docs/archive/2026-09-26-maintenance/ARCHITECTURE.md) retains the earlier full module inventory and historical invariants; the [archive index](docs/archive/INDEX.md) lists all replaced documents. Current implementation facts remain separate from release evidence.

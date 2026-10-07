@@ -9,6 +9,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import SerpSearchConfig
+from providers.discovery_transport import physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -17,12 +18,16 @@ from providers.search import (
     SearchResponse,
     SearchResult,
     SearchTimeoutError,
+    compiled_parameters,
+    validate_request_url,
 )
 from researchassistant.contracts.models import DiscoveryProvider
 
 
 class SerpSearchAdapter:
     """Return normalized organic Google results without treating snippets as evidence."""
+
+    physical_accounting = True
 
     def __init__(self, config: SerpSearchConfig, *, client: httpx.Client | None = None) -> None:
         self._config = config
@@ -40,13 +45,39 @@ class SerpSearchAdapter:
                 SearchFailureCode.PERMANENT_FAILURE,
                 "SERP Search requires a typed request with run identity",
             )
-        self._reserve(request.run_id)
+        parameters = compiled_parameters(
+            request,
+            allowed_names=frozenset({"query", "page", "exact_match"}),
+            required_names=frozenset({"query", "page"}),
+        )
+        if parameters is None:
+            query_params: dict[str, str | int | bool] = {"query": request.query_text, "page": 1}
+            self._reserve(request.run_id)
+        else:
+            if (
+                parameters.get("query") != request.query_text
+                or parameters.get("page") != 1
+                or ("exact_match" in parameters and parameters["exact_match"] is not True)
+            ):
+                raise SearchProviderError(
+                    SearchFailureCode.PERMANENT_FAILURE,
+                    "compiled SERP Search parameters do not preserve the query on the first page",
+                )
+            query_params = parameters
+        if request.compiled_query is not None:
+            validate_request_url(
+                str(self._client.base_url) + "api/v1/search", query_params, max_bytes=7500
+            )
         try:
-            response = self._client.get(
-                "/api/v1/search",
-                headers={"Authorization": f"Bearer {self._config.api_key.get_secret_value()}"},
-                params={"query": request.query_text, "page": "1"},
-                timeout=self._config.deadlines.search_seconds,
+            response = physical_request(
+                request,
+                query_params,
+                lambda: self._client.get(
+                    "/api/v1/search",
+                    headers={"Authorization": f"Bearer {self._config.api_key.get_secret_value()}"},
+                    params=query_params,
+                    timeout=self._config.deadlines.search_seconds,
+                ),
             )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(

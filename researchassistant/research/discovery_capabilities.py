@@ -247,3 +247,22 @@ def validate_relationship_capability(
 ) -> None:
     """Reject unsupported native or currently executable graph operations."""
     get_provider_capabilities(provider).require_relationship(relationship, executable=executable)
+
+
+def get_query_capabilities(provider: DiscoveryProvider) -> V2ProviderCapabilities:
+    """Phase-2 executable compiler declaration; retain the Phase-1 catalog verbatim."""
+    original = get_provider_capabilities(provider)
+    return original.model_copy(
+        update={
+            "capability_identity": "source-provider-capabilities-v2",
+            "unsupported_features": (
+                "no structured authority, date, language or publication-type filters",
+                "no pagination, identity lookup or graph-neighbor transport",
+                "no automatic semantic fallback or upstream reranking",
+            ),
+            "restrictions": (
+                *original.restrictions,
+                "concept groups compiled under source-query-compiler-v2",
+            ),
+        }
+    )

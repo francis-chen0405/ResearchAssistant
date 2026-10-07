@@ -127,6 +127,10 @@ class OpenAlexConfig(StrictModel):
         ExactUSD,
         Field(gt=Decimal("0"), le=Decimal("0.001")),
     ] = Decimal("0.001")
+    nominal_semantic_search_cost_usd: Annotated[
+        ExactUSD,
+        Field(gt=Decimal("0"), le=Decimal("0.001")),
+    ] = Decimal("0.001")
     deadlines: DeadlineConfig = DeadlineConfig()
 
     @field_validator("base_url")

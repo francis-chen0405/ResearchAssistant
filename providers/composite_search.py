@@ -14,6 +14,7 @@ from providers.search import (
     SearchResponse,
 )
 from providers.serpsearch import SerpSearchAdapter
+from researchassistant.contracts.discovery_v2 import SearchMode, V2DiscoveryProviderBudget
 from researchassistant.contracts.models import DiscoveryProvider
 
 _DEGRADABLE_OPENALEX_FAILURES = frozenset(
@@ -29,6 +30,8 @@ _DEGRADABLE_OPENALEX_FAILURES = frozenset(
 
 class CompositeSearchProvider:
     """Route each typed query to its declared provider, never by query text."""
+
+    physical_accounting = True
 
     def __init__(
         self,
@@ -46,6 +49,13 @@ class CompositeSearchProvider:
         self._arxiv = arxiv
         self._pubmed = pubmed
         self._serper = serper
+
+    def query_budget(
+        self, provider: DiscoveryProvider, mode: SearchMode
+    ) -> V2DiscoveryProviderBudget | None:
+        if provider is DiscoveryProvider.OPENALEX and self._openalex is not None:
+            return self._openalex.query_budget(provider, mode)
+        return None
 
     def search(self, request: SearchRequest) -> SearchResponse:
         if request.provider is DiscoveryProvider.EXA:
@@ -70,6 +80,8 @@ class CompositeSearchProvider:
             raise SearchProviderError(
                 SearchFailureCode.MISSING_CONFIGURATION, "OpenAlex is disabled"
             )
+        if request.compiled_query is not None:
+            return self._openalex.search(request)
         try:
             normal = self._openalex.search(request)
         except SearchProviderError as normal_error:

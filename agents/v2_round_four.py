@@ -21,8 +21,10 @@ from agents.v2_adaptive_search import (
     V2AdaptiveRoundStatus,
     V2AdaptiveStopCode,
     V2SearchAgentReservation,
+    _adaptive_concept_lanes,
     _eligible_budgets,
     _known_urls,
+    _maximum_queries,
     _merge_survivors,
     _run_round_from_plan,
     _validate_and_assemble_plan,
@@ -46,6 +48,7 @@ from providers.scraper import ScraperProvider
 from providers.search import SearchProvider
 from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
+from researchassistant.contracts.discovery_v2 import SearchMode, V2CompiledQueryAction
 from researchassistant.contracts.models import (
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
@@ -98,6 +101,11 @@ from researchassistant.contracts.models import (
     V2SearchAgentInput,
     V2SourceSelectionCandidate,
     validate_v2_gap_history_against_material_gaps,
+)
+from researchassistant.contracts.query_planning import (
+    V2AdaptiveSearchConceptsOutput,
+    V2ConceptualAdaptiveLane,
+    V2ConceptualSearchAgentInput,
 )
 from researchassistant.evidence.evidence_portfolio import identify_source_family
 from researchassistant.research.research_governor import (
@@ -264,7 +272,7 @@ def run_v2_round_four_continuation(
             now,
         )
     attempts = _provider_attempts(initial_plan, path)
-    eligible = _eligible_budgets(initial_plan, attempts, search_providers)
+    eligible = _eligible_budgets(initial_plan, attempts, search_providers, path=path)
     if not eligible:
         return _finish(
             path,
@@ -290,13 +298,41 @@ def run_v2_round_four_continuation(
         )
     persisted_decision = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_GOVERNOR_KEY)
     if persisted_decision is None:
-        request_input, _request, search_reservation = _build_round_four_search_agent_request(
+        built = _build_round_four_search_agent_request(
             path=path,
             initial_plan=initial_plan,
             gap=gap,
             eligible=eligible,
             routing_config=routing_config,
         )
+        if built is None:
+            return _finish(
+                path,
+                continuation,
+                gap,
+                _governor_decision(
+                    run_id=initial_plan.run_id,
+                    clock=now,
+                    gap=gap,
+                    eligible_provider_exists=True,
+                    round_three_duplicate_rate=duplicate_rate,
+                    novel_query_opportunity=False,
+                    productive_opportunity=False,
+                    complete_workload_reservable=False,
+                ),
+                now,
+            )
+        (
+            request_input,
+            _request,
+            search_reservation,
+            _lanes,
+            _prior_actions,
+            _legacy_prompt,
+            _modes,
+        ) = built
+        if isinstance(request_input, V2ConceptualSearchAgentInput):
+            request_input = request_input.request
         if request_input.maximum_queries == 0:
             return _finish(
                 path,
@@ -1199,9 +1235,23 @@ def _build_round_four_search_agent_request(
     gap: V2GapAnalysisOutput,
     eligible: tuple[V2ProviderSearchBudget, ...],
     routing_config: V2RoutingConfig,
-) -> tuple[V2SearchAgentInput, LLMRequest, V2ModelReservation]:
+) -> (
+    tuple[
+        V2SearchAgentInput | V2ConceptualSearchAgentInput,
+        LLMRequest,
+        V2ModelReservation,
+        tuple[V2ConceptualAdaptiveLane, ...],
+        tuple[V2CompiledQueryAction, ...],
+        bool,
+        Mapping[DiscoveryProvider, SearchMode],
+    ]
+    | None
+):
     if gap.result is None:
         raise ValueError("Round-4 Search Agent requires a usable Gap Analysis result")
+    maximum_queries = _maximum_queries(4, initial_plan, eligible)
+    if maximum_queries == 0:
+        return None
     previous = tuple(query.query_text for query in initial_plan.searches)
     for round_number in (2, 3):
         payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
@@ -1223,29 +1273,59 @@ def _build_round_four_search_agent_request(
         )[:40],
         previous_queries=previous,
         provider_budgets=eligible,
-        maximum_queries=min(
-            4 * len(initial_plan.directions.enabled_directions),
-            sum(min(2, item.remaining_calls) for item in eligible),
-        ),
+        maximum_queries=maximum_queries,
         policy_identity=V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
     )
-    prompt = load_prompt(LLMStage.SEARCH_AGENT)
+    prior_actions = tuple(
+        query.compiled_query for query in initial_plan.searches if query.compiled_query is not None
+    )
+    for round_number in (2, 3):
+        payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
+        if payload is not None:
+            prior_actions += tuple(
+                query.compiled_query
+                for query in V2AdaptivePlannedRound.model_validate_json(payload).plan.searches
+                if query.compiled_query is not None
+            )
+    modes = {action.conceptual_query.provider: action.mode for action in prior_actions}
+    legacy_prompt = not any(query.compiled_query is not None for query in initial_plan.searches)
+    if legacy_prompt:
+        planner_input: V2SearchAgentInput | V2ConceptualSearchAgentInput = request_input
+        lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
+        output_type = V2AdaptiveSearchModelOutput
+        prompt = load_prompt(LLMStage.SEARCH_AGENT)
+    else:
+        if DiscoveryProvider.SERPER in request_input.eligible_providers:
+            raise V2AdaptivePlanValidationError(
+                "Serper has no provider-native conceptual query compiler"
+            )
+        lanes = _adaptive_concept_lanes(request_input, modes)
+        if not lanes:
+            return None
+        planner_input = V2ConceptualSearchAgentInput(request=request_input, lanes=lanes)
+        output_type = V2AdaptiveSearchConceptsOutput
+        from providers.llm import load_prompt_file
+
+        prompt = load_prompt_file(
+            Path(__file__).resolve().parents[1] / "prompts" / "search_agent_v2.md",
+            expected_stage=LLMStage.SEARCH_AGENT,
+        )
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
     request = LLMRequest(
         run_id=initial_plan.run_id,
         stage=LLMStage.SEARCH_AGENT,
         prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, request_input, V2AdaptiveSearchModelOutput),
-        input_artifact=request_input,
+        rendered_prompt=render_stage_prompt(prompt, planner_input, output_type),
+        input_artifact=planner_input,
         input_artifact_ids=(initial_plan.run_id,),
-        requested_output_type=V2AdaptiveSearchModelOutput,
+        requested_output_type=output_type,
         model_alias=route.logical_alias,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.SEARCH_AGENT).generation,
     )
     search_reservation = routing_config.preflight().reserve(
         LLMStage.SEARCH_AGENT, conservative_token_estimate(request.rendered_prompt)
     )
-    return request_input, request, search_reservation
+    return planner_input, request, search_reservation, lanes, prior_actions, legacy_prompt, modes
 
 
 def _plan_round_four(
@@ -1273,21 +1353,48 @@ def _plan_round_four(
     stored = _read(path, initial_plan.run_id, V2_POST13_ROUND_FOUR_PLAN_KEY)
     if stored is not None:
         return V2AdaptivePlannedRound.model_validate_json(stored)
-    request_input, request, search_reservation = _build_round_four_search_agent_request(
+    built = _build_round_four_search_agent_request(
         path=path,
         initial_plan=initial_plan,
         gap=gap,
         eligible=eligible,
         routing_config=routing_config,
     )
-    if request_input.maximum_queries == 0:
+    if built is None:
+        return None
+    (
+        request_input,
+        request,
+        search_reservation,
+        lanes,
+        prior_actions,
+        legacy_prompt,
+        modes,
+    ) = built
+    base_request_input = (
+        request_input.request
+        if isinstance(request_input, V2ConceptualSearchAgentInput)
+        else request_input
+    )
+    if base_request_input.maximum_queries == 0:
         return None
     response = invoke_llm(llm_provider, request, clock=clock).output_artifact
-    if not isinstance(response, V2AdaptiveSearchModelOutput):
+    if not isinstance(response, (V2AdaptiveSearchModelOutput, V2AdaptiveSearchConceptsOutput)):
         raise V2AdaptivePlanValidationError("Search Agent returned an unexpected typed artifact")
-    assembled = _validate_and_assemble_plan(
-        request_input, response, request.prompt.version, clock()
-    )
+    if isinstance(response, V2AdaptiveSearchConceptsOutput):
+        assembled = _validate_and_assemble_plan(
+            base_request_input,
+            response,
+            request.prompt.version,
+            clock(),
+            lanes=lanes,
+            query_modes=modes,
+            previous_compiled_queries=prior_actions,
+        )
+    else:
+        assembled = _validate_and_assemble_plan(
+            base_request_input, response, request.prompt.version, clock()
+        )
     if not assembled.searches:
         raise V2AdaptivePlanValidationError("Search Agent plan contained no accepted queries")
     plan = assembled.model_copy(
