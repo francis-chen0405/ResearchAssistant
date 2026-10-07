@@ -2,7 +2,8 @@
 
 ## Active
 
-- [Database review implementation — 2026-10-03](plans/database-review-2026-10-03.md) is the shared four-phase record. All four phases passed conditional-commit review: lifecycle/schema/accounting, historical reads, noncreating readers, progress/filter fixes and Unicode PDF exports. Prompt 4 completes measured query batching/indexes, coherent requests and final offline integration verification; its acceptance evidence and external/platform limits are recorded in the shared plan and linked verification record. The reviewed implementation is delivered in local source commits; release and installed-app acceptance remain separate boundaries.
+- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. The requested Phase 1 delivers dormant policy/contracts, fair allocation, physical accounting, persistence, identity and inspection foundations. Current production discovery remains on its prior policy. Phase 2 owns provider-specific compilation and query integration; later phases own retrieval/ranking, previews, expansion and final UI/acceptance.
+- The completed [database review](plans/database-review-2026-10-03.md) and [source acceptance](../docs/verification/database-phase4.md) retain earlier schema/recovery/history evidence. Installation and release remain separate boundaries.
 
 ## State and delivery
 
@@ -15,4 +16,4 @@ See [STATUS](../STATUS.md) for source/commit state, installed and public build p
 - [Product architecture and implementation phases](../docs/history.md#product-and-architecture)
 - [All retained plan and verification records](../docs/history.md)
 
-Historical plans preserve evidence and decisions at stable paths. They do not authorize additional work. The exact preceding plan index and current-state documents are in [the Prompt 4 archive](../docs/archive/2026-10-04-phase4-state/); [the archive index](../docs/archive/INDEX.md) retains earlier snapshots.
+Historical plans preserve evidence and decisions at stable paths. They do not authorize additional work. The exact preceding plan index and current-state documents are in [the discovery foundations archive](../docs/archive/2026-10-06-source-discovery-foundations-state/); [the archive index](../docs/archive/INDEX.md) retains earlier snapshots.

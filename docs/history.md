@@ -2,12 +2,13 @@
 
 This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current authorized work is identified in [the plan index](../.agent/PLANS.md).
 
-There are 81 plan records and 19 verification records.
+There are 82 plan records and 19 verification records.
 
 ## Recent reviews and repairs
 
 ### Plans
 
+- [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md)
 - [database-review-2026-10-03](../.agent/plans/database-review-2026-10-03.md)
 - [alpr-equity-run-fixes-2026-10-02](../.agent/plans/alpr-equity-run-fixes-2026-10-02.md)
 - [alpr-equity-run-review-2026-10-02](../.agent/plans/alpr-equity-run-review-2026-10-02.md)

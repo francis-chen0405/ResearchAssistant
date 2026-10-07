@@ -6,7 +6,6 @@ ResearchAssistant is a local desktop application for research on a precise claim
 
 | Area | Owner |
 | --- | --- |
-| Opt-in discovery foundations | `researchassistant.contracts.discovery_v2`, `researchassistant.research.discovery_policy`, `discovery_capabilities`, and `researchassistant.storage.discovery_store` |
 | Fresh research orchestration | `researchassistant.research.v2_orchestrator`, `agents/v2_*.py` |
 | Model catalogs and provider routing | `providers/model_profiles.py`, `providers/v2_routing.py`, `providers/v2_budget.py` |
 | Historical provider execution | `researchassistant.research.orchestrator` |
@@ -26,10 +25,6 @@ Backend modules are organized under `researchassistant/`: `contracts/` holds sha
 The root `models.py`, `store.py`, and `orchestrator.py` entries preserve historical import paths by aliasing their canonical package modules. Root `cli.py` preserves the script launcher; new imports use `researchassistant.runtime.cli`. Historical researcher and analyst paths remain compatibility facades where neutral evidence helpers now live; `agents.supportingresearcher` retains historical retrieval. Ordinary CLI and API construction select v2. Historical execution requires the explicit typed `legacy_runner` dependency; the controller's older `runner` name remains a compatibility alias.
 
 The model contract modules depend in one direction: shared contracts, then research contracts, then evidence/result contracts. Fresh v2 stages use the neutral evidence modules directly. Model-facing output schemas remain narrow; application identity and provenance travel in typed envelopes.
-
-## Discovery foundations
-
-The [source-discovery plan](.agent/plans/source-discovery-v2-2026-10-05.md) defines separate opt-in contracts for conceptual/provider queries, metadata depth, candidate ranking, exact previews and one-hop expansion. Current production execution retains its prior discovery policy. New foundations reuse immutable `v2_artifacts`, freeze versions/settings/capabilities/source/schema identity, and reserve each physical request durably before transport. Native and executable modes/pagination/identity/relationships are distinct. PubMed's search and summary requests have separate checkpoints; unknown outcomes retain exposure and stop further requests under the initial recovery policy. New read-only inspection owns one validated snapshot. No schema migration or model stage is added.
 
 ## Research execution
 
