@@ -15,7 +15,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import OpenAlexConfig
-from providers.discovery_transport import physical_request
+from providers.discovery_transport import bounded_send, physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -25,6 +25,7 @@ from providers.search import (
     SearchResult,
     SearchTimeoutError,
     compiled_parameters,
+    metadata_page_size,
     validate_request_url,
 )
 from researchassistant.common.money import add_usd, parse_exact_usd
@@ -97,32 +98,34 @@ class OpenAlexSearchAdapter:
                 SearchFailureCode.PERMANENT_FAILURE,
                 "OpenAlex requires a typed OpenAlex search request with run identity",
             )
-        parameters = compiled_parameters(
+        base_parameters = compiled_parameters(
             request,
-            allowed_names=frozenset({"search", "search.semantic", "per_page"}),
+            allowed_names=frozenset({"search", "search.semantic", "per_page", "cursor"}),
             required_names=frozenset({"per_page"}),
         )
         search_parameter = "search.semantic" if request.semantic else "search"
-        if parameters is None:
+        if base_parameters is None:
             query_parameters: dict[str, str | int | bool] = {
                 search_parameter: request.query_text,
                 "per_page": request.limit,
             }
         else:
-            if set(parameters) != {search_parameter, "per_page"}:
-                raise SearchProviderError(
-                    SearchFailureCode.PERMANENT_FAILURE,
-                    "compiled OpenAlex parameters do not match the selected search mode",
-                )
+            if set(base_parameters) != {search_parameter, "per_page"}:
+                if set(base_parameters) != {search_parameter, "per_page", "cursor"}:
+                    raise SearchProviderError(
+                        SearchFailureCode.PERMANENT_FAILURE,
+                        "compiled OpenAlex page parameters do not match the selected search mode",
+                    )
             if (
-                parameters[search_parameter] != request.query_text
-                or parameters["per_page"] != request.limit
+                base_parameters[search_parameter] != request.query_text
+                or base_parameters["per_page"] != request.limit
+                or ("cursor" in base_parameters and not isinstance(base_parameters["cursor"], str))
             ):
                 raise SearchProviderError(
                     SearchFailureCode.PERMANENT_FAILURE,
-                    "compiled OpenAlex parameters do not match query text or result depth",
+                    "compiled OpenAlex page parameters do not match query text or page depth",
                 )
-            query_parameters = parameters
+            query_parameters = base_parameters
         params = {
             **query_parameters,
             "api_key": self._config.api_key.get_secret_value(),
@@ -141,8 +144,11 @@ class OpenAlexSearchAdapter:
                 def send() -> httpx.Response:
                     if request.semantic:
                         self._last_semantic_start = self._monotonic()
-                    return self._client.get(
+                    return bounded_send(
+                        self._client,
+                        "GET",
                         "/works",
+                        expected_base_url=self._config.base_url,
                         params=params,
                         timeout=self._config.deadlines.search_seconds,
                     )
@@ -178,13 +184,21 @@ class OpenAlexSearchAdapter:
                 SearchFailureCode.MALFORMED_RESPONSE,
                 "OpenAlex response omitted results",
             )
-        results = _parse_results(body["results"], request.limit)
+        page_size = (
+            metadata_page_size(request.compiled_query) if request.compiled_query else request.limit
+        )
+        rank_offset = (request.page_number - 1) * page_size
+        results = _parse_results(
+            body["results"], request.limit, rank_offset, provider_page=request.page_number
+        )
         if not results:
             raise SearchProviderError(
                 SearchFailureCode.EMPTY_RESULTS,
                 "OpenAlex returned no usable non-retracted discovery results",
             )
         cost = _response_cost(body)
+        meta = body.get("meta")
+        next_cursor = meta.get("next_cursor") if isinstance(meta, dict) else None
         return SearchResponse(
             results=results,
             provider_name=self._config.provider_name,
@@ -192,6 +206,7 @@ class OpenAlexSearchAdapter:
             adapter_version=self._config.adapter_version,
             search_type="semantic" if request.semantic else "search",
             cost_usd=cost,
+            next_cursor=next_cursor if isinstance(next_cursor, str) and next_cursor else None,
         )
 
     def _wait_for_semantic_slot(self, cancelled: Callable[[], bool] | None) -> None:
@@ -237,10 +252,16 @@ class OpenAlexSearchAdapter:
             self._cost_by_run[run_id] = next_cost
 
 
-def _parse_results(items: list[object], limit: int) -> list[SearchResult]:
+def _parse_results(
+    items: list[object],
+    limit: int,
+    rank_offset: int = 0,
+    *,
+    provider_page: int = 1,
+) -> list[SearchResult]:
     results: list[SearchResult] = []
     seen: set[str] = set()
-    for item in items:
+    for index, item in enumerate(items, start=1):
         if not isinstance(item, dict) or item.get("is_retracted") is True:
             continue
         url = _work_url(item)
@@ -250,10 +271,12 @@ def _parse_results(items: list[object], limit: int) -> list[SearchResult]:
             result = SearchResult(
                 original_url=url,
                 title=_string(item.get("title")) or "",
-                rank=len(results) + 1,
+                rank=rank_offset + index,
                 relevance_score=_number(item.get("relevance_score")),
                 metadata=SearchDiscoveryMetadata(
                     engine="openalex",
+                    provider_page=provider_page,
+                    raw_provider_rank=index,
                     published_at=_string(item.get("publication_date")),
                     display_url=url,
                     category="academic",

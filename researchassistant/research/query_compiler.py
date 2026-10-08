@@ -10,6 +10,7 @@ from researchassistant.contracts.discovery_v2 import (
     V2CompiledQueryAction,
     V2ConceptualQuery,
     V2DiscoveryPolicy,
+    V2MetadataDiscoveryPolicy,
     V2SanitizedParameter,
     discovery_hash,
     discovery_id,
@@ -17,7 +18,7 @@ from researchassistant.contracts.discovery_v2 import (
 from researchassistant.contracts.model_contracts import DiscoveryProvider
 from researchassistant.research.discovery_capabilities import get_query_capabilities
 
-QUERY_COMPILER_ID = "source-query-compiler-v2"
+QUERY_COMPILER_ID = "source-query-compiler-v3"
 MAX_QUERY_BYTES = 3000
 MAX_ENCODED_PARAMETERS = 7500
 
@@ -64,7 +65,7 @@ def compile_query(
     requested_depth: int = 5,
     policy: V2DiscoveryPolicy | None = None,
 ) -> V2CompiledQueryAction:
-    """Compile one bounded single metadata page, with no implicit mode fallback."""
+    """Compile a bounded metadata operation, with no implicit mode fallback."""
     capabilities = get_query_capabilities(conceptual.provider)
     resolved_mode: SearchMode = (
         mode
@@ -74,10 +75,18 @@ def compile_query(
         else "lexical"
     )
     capabilities.require_search(resolved_mode, executable=True)
-    resolved_policy = policy or V2DiscoveryPolicy()
+    resolved_policy = policy or V2MetadataDiscoveryPolicy()
     if isinstance(requested_depth, bool) or not 1 <= requested_depth <= 50:
         raise ValueError("requested query depth must be in 1..50")
-    depth = min(requested_depth, resolved_policy.metadata_depth, capabilities.max_metadata_per_page)
+    from researchassistant.research.discovery_policy import effective_metadata_depth
+
+    depth = effective_metadata_depth(
+        requested_depth=requested_depth,
+        policy=resolved_policy,
+        capabilities=capabilities,
+        remaining_requests=resolved_policy.max_pages_per_operation,
+        mode=resolved_mode,
+    )
     if conceptual.provider is DiscoveryProvider.OPENALEX and resolved_mode == "semantic":
         depth = min(depth, 50)
     groups: list[tuple[str, ...]] = []
@@ -124,9 +133,16 @@ def compile_query(
         parts = parts[:required_count] + optional_parts
         text = "; ".join(parts)
         if provider is DiscoveryProvider.EXA:
-            parameters = {"query": text, "type": "auto", "numResults": depth}
+            parameters = {
+                "query": text,
+                "type": "auto",
+                "numResults": min(depth, capabilities.max_metadata_per_page),
+            }
         else:
-            parameters = {"search.semantic": text, "per_page": depth}
+            parameters = {
+                "search.semantic": text,
+                "per_page": min(depth, capabilities.max_metadata_per_page),
+            }
     elif provider is DiscoveryProvider.ARXIV:
         text = " AND ".join(
             "("
@@ -137,7 +153,7 @@ def compile_query(
         parameters = {
             "search_query": text,
             "start": 0,
-            "max_results": depth,
+            "max_results": min(depth, capabilities.max_metadata_per_page),
             "sortBy": "relevance",
             "sortOrder": "descending",
         }
@@ -145,12 +161,17 @@ def compile_query(
         text = " AND ".join(
             "(" + " OR ".join(_phrase(term) + "[tiab]" for term in terms) + ")" for terms in groups
         )
-        parameters = {"term": text, "db": "pubmed", "retmax": depth, "retmode": "json"}
+        parameters = {
+            "term": text,
+            "db": "pubmed",
+            "retmax": min(depth, capabilities.max_metadata_per_page),
+            "retmode": "json",
+        }
     elif provider is DiscoveryProvider.OPENALEX:
         text = " AND ".join(
             "(" + " OR ".join(_phrase(term) for term in terms) + ")" for terms in groups
         )
-        parameters = {"search": text, "per_page": depth}
+        parameters = {"search": text, "per_page": min(depth, capabilities.max_metadata_per_page)}
     elif provider is DiscoveryProvider.SERPSEARCH:
         text = " ".join(
             "(" + " OR ".join(_phrase(term) for term in terms) + ")"

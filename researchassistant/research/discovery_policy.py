@@ -21,6 +21,7 @@ from researchassistant.contracts.discovery_v2 import (
     V2DiscoveryPolicy,
     V2DiscoveryProviderBudget,
     V2DiscoveryValue,
+    V2MetadataDiscoveryPolicy,
     V2ProviderCapabilities,
     discovery_hash,
     discovery_id,
@@ -132,6 +133,7 @@ def effective_metadata_depth(
     remaining_requests: int,
     *,
     executable: bool = True,
+    mode: discovery_v2.SearchMode | None = None,
 ) -> int:
     """Zero means no request may start; provider caps always dominate desired depth."""
     if type(requested_depth) is not int or not 1 <= requested_depth <= 50:
@@ -142,13 +144,16 @@ def effective_metadata_depth(
         capabilities.physical_requests_per_page
     )
     pagination = capabilities.executable_pagination if executable else capabilities.pagination
+    page_size = capabilities.max_metadata_per_page
+    if isinstance(policy, V2MetadataDiscoveryPolicy) and mode is not None:
+        page_size = policy.page_size_for(capabilities.provider, mode, page_size)
     if pagination == "none":
         pages = min(1, pages)
     return min(
         policy.metadata_depth,
         requested_depth,
         capabilities.max_metadata_per_operation,
-        capabilities.max_metadata_per_page * pages,
+        page_size * pages,
     )
 
 

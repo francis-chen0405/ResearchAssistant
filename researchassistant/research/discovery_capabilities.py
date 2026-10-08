@@ -254,15 +254,26 @@ def get_query_capabilities(provider: DiscoveryProvider) -> V2ProviderCapabilitie
     original = get_provider_capabilities(provider)
     return original.model_copy(
         update={
-            "capability_identity": "source-provider-capabilities-v2",
+            "capability_identity": "source-provider-capabilities-v3",
+            **(
+                {"max_metadata_per_page": 25, "max_metadata_per_operation": 25}
+                if provider is DiscoveryProvider.EXA
+                else {}
+            ),
+            "executable_pagination": original.pagination,
             "unsupported_features": (
                 "no structured authority, date, language or publication-type filters",
-                "no pagination, identity lookup or graph-neighbor transport",
+                "no identity lookup or graph-neighbor transport",
                 "no automatic semantic fallback or upstream reranking",
             ),
             "restrictions": (
                 *original.restrictions,
-                "concept groups compiled under source-query-compiler-v2",
+                "concept groups compiled under source-query-compiler-v3; pages count physically",
+                *(
+                    ("Exa auto count capped at 25 pending enterprise entitlement; no pagination",)
+                    if provider is DiscoveryProvider.EXA
+                    else ()
+                ),
             ),
         }
     )

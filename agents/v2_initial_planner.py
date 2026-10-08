@@ -25,6 +25,7 @@ from researchassistant.contracts.discovery_v2 import (
     SearchMode,
     V2ConceptGroup,
     V2ConceptualQuery,
+    V2MetadataDiscoveryPolicy,
     discovery_id,
 )
 from researchassistant.contracts.models import (
@@ -87,6 +88,7 @@ def run_v2_initial_planner(
     routing_config: V2RoutingConfig,
     run_id: UUID | None = None,
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    discovery_policy: V2MetadataDiscoveryPolicy | None = None,
     provider_configuration_fingerprint: str = "injected-provider-policy-v1",
     legacy_prompt: bool = False,
     clock: Callable[[], datetime] | None = None,
@@ -163,6 +165,7 @@ def run_v2_initial_planner(
                 discovery_providers,
                 now,
                 query_modes=query_modes,
+                discovery_policy=discovery_policy,
                 provider_configuration_fingerprint=provider_configuration_fingerprint,
             )
         return V2InitialPlannerRunResult(
@@ -180,6 +183,7 @@ def run_v2_initial_planner(
             discovery_providers,
             now,
             query_modes=query_modes,
+            discovery_policy=discovery_policy,
             provider_configuration_fingerprint=provider_configuration_fingerprint,
         )
 
@@ -221,6 +225,7 @@ def run_v2_initial_planner(
         prompt_version=prompt.version,
         planned_at=planned_at,
         query_modes=query_modes or {},
+        discovery_policy=discovery_policy,
     )
     insert_v2_initial_planner_output(path, output)
     insert_v2_artifact(path, "phase-3-initial-round-1-plan", output, output.planned_at)
@@ -239,6 +244,7 @@ def _assemble_initial_plan(
     prompt_version: str,
     planned_at: datetime,
     query_modes: Mapping[DiscoveryProvider, SearchMode],
+    discovery_policy: V2MetadataDiscoveryPolicy | None = None,
 ) -> V2InitialPlannerOutput:
     searches: list[V2RoundOneSearchQuery] = []
     lanes = (
@@ -275,7 +281,12 @@ def _assemble_initial_plan(
                 provider=lane.provider,
                 round_number=1,
             )
-            compiled = compile_query(conceptual, mode=query_modes.get(lane.provider))
+            compiled = compile_query(
+                conceptual,
+                mode=query_modes.get(lane.provider),
+                requested_depth=(discovery_policy or V2MetadataDiscoveryPolicy()).metadata_depth,
+                policy=discovery_policy or V2MetadataDiscoveryPolicy(),
+            )
             query_text = compiled.query_text
         else:
             item = response.searches[index]

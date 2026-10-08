@@ -60,3 +60,7 @@ The preceding STATUS, HANDOFF, ARCHITECTURE, DECISIONS and `.agent/PLANS.md` are
 ## Exact documents replaced for source-discovery Phase 2
 
 The preceding STATUS, HANDOFF, ARCHITECTURE and `.agent/PLANS.md` are preserved byte-for-byte in [`2026-10-07-source-query-planning-state/`](2026-10-07-source-query-planning-state/). The [shared source-discovery plan](../../.agent/plans/source-discovery-v2-2026-10-05.md) records provider-aware query implementation and acceptance. Prior Phase 1, database and release evidence retains its original scope.
+
+## Exact documents replaced for source-discovery Phase 3
+
+The preceding STATUS, HANDOFF, ARCHITECTURE, DECISIONS and `.agent/PLANS.md` are preserved byte-for-byte in [`2026-10-07-source-discovery-phase3-state/`](2026-10-07-source-discovery-phase3-state/). The [shared source-discovery plan](../../.agent/plans/source-discovery-v2-2026-10-05.md) records bounded retrieval, ranking, Scout and acquisition integration. Phase 4 exact-preview activation remains the next boundary; Phase 3 verification is recorded in the shared plan.

@@ -10,7 +10,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import ExaConfig
-from providers.discovery_transport import physical_request
+from providers.discovery_transport import bounded_send, physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -116,8 +116,11 @@ class ExaSearchAdapter:
             response = physical_request(
                 request,
                 parameters if parameters is not None else payload,
-                lambda: self._client.post(
+                lambda: bounded_send(
+                    self._client,
+                    "POST",
                     "/search",
+                    expected_base_url=self._config.base_url,
                     headers={
                         "Authorization": f"Bearer {self._config.api_key.get_secret_value()}",
                         "Content-Type": "application/json",
@@ -147,7 +150,7 @@ class ExaSearchAdapter:
             )
         results: list[SearchResult] = []
         seen: set[str] = set()
-        for item in body["results"]:
+        for index, item in enumerate(body["results"], start=1):
             if not isinstance(item, dict) or not isinstance(item.get("url"), str):
                 continue
             url = item["url"]
@@ -157,9 +160,11 @@ class ExaSearchAdapter:
                 result = SearchResult(
                     original_url=url,
                     title=item.get("title") if isinstance(item.get("title"), str) else "",
-                    rank=len(results) + 1,
+                    rank=index,
                     metadata=SearchDiscoveryMetadata(
                         engine="exa",
+                        provider_page=request.page_number,
+                        raw_provider_rank=index,
                         published_at=_string_or_none(item.get("publishedDate")),
                         display_url=url,
                         author=_string_or_none(item.get("author")),

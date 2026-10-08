@@ -9,7 +9,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import SerpSearchConfig
-from providers.discovery_transport import physical_request
+from providers.discovery_transport import bounded_send, physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -56,7 +56,7 @@ class SerpSearchAdapter:
         else:
             if (
                 parameters.get("query") != request.query_text
-                or parameters.get("page") != 1
+                or parameters.get("page") != request.page_number
                 or ("exact_match" in parameters and parameters["exact_match"] is not True)
             ):
                 raise SearchProviderError(
@@ -72,8 +72,11 @@ class SerpSearchAdapter:
             response = physical_request(
                 request,
                 query_params,
-                lambda: self._client.get(
+                lambda: bounded_send(
+                    self._client,
+                    "GET",
                     "/api/v1/search",
+                    expected_base_url=self._config.base_url,
                     headers={"Authorization": f"Bearer {self._config.api_key.get_secret_value()}"},
                     params=query_params,
                     timeout=self._config.deadlines.search_seconds,
@@ -101,18 +104,28 @@ class SerpSearchAdapter:
             )
         results: list[SearchResult] = []
         seen: set[str] = set()
-        for item in body["organic_results"]:
+        for index, item in enumerate(body["organic_results"], start=1):
             if not isinstance(item, dict) or not isinstance(item.get("url"), str):
                 continue
             url = item["url"]
             if url in seen:
                 continue
             position = item.get("position")
-            rank = (
+            if (
+                isinstance(position, int)
+                and not isinstance(position, bool)
+                and not 1 <= position <= 10
+                and request.compiled_query is not None
+            ):
+                raise SearchProviderError(
+                    SearchFailureCode.MALFORMED_RESPONSE, "SERP rank is outside the requested page"
+                )
+            local_rank = (
                 position
                 if isinstance(position, int) and not isinstance(position, bool) and position >= 1
-                else len(results) + 1
+                else index
             )
+            rank = (request.page_number - 1) * 10 + local_rank
             try:
                 result = SearchResult(
                     original_url=url,
@@ -125,6 +138,8 @@ class SerpSearchAdapter:
                     rank=rank,
                     metadata=SearchDiscoveryMetadata(
                         engine="serpsearch",
+                        provider_page=request.page_number,
+                        raw_provider_rank=local_rank,
                         display_url=(
                             item.get("visible_url")
                             if isinstance(item.get("visible_url"), str)

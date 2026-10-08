@@ -290,6 +290,16 @@ class BudgetedV2LLMProvider:
         with self._lock:
             return _snapshot(self._starts, self._completions, self._ceilings)
 
+    def conservative_input_tokens(self, request: LLMRequest, minimum_input_tokens: int) -> int:
+        """Expose the same complete adapter-input estimate used by durable reservation."""
+        estimate = getattr(self._provider, "conservative_input_tokens", None)
+        tokens = (
+            estimate(request, minimum_input_tokens) if callable(estimate) else minimum_input_tokens
+        )
+        if type(tokens) is not int or tokens < minimum_input_tokens:
+            raise ValueError("adapter input estimate cannot understate the rendered model request")
+        return tokens
+
     def generate(self, request: LLMRequest) -> BaseModel:
         if request.run_id != self._run_id:
             raise ValueError("budgeted provider request must match its v2 run")
@@ -301,12 +311,7 @@ class BudgetedV2LLMProvider:
         if self._cancellation_requested is not None and self._cancellation_requested():
             raise V2CancellationRequested("v2 cancellation was observed before a model call")
         minimum_input_tokens = conservative_token_estimate(request.rendered_prompt)
-        estimate_input_tokens = getattr(self._provider, "conservative_input_tokens", None)
-        input_tokens = (
-            estimate_input_tokens(request, minimum_input_tokens)
-            if callable(estimate_input_tokens)
-            else minimum_input_tokens
-        )
+        input_tokens = self.conservative_input_tokens(request, minimum_input_tokens)
         reservation = self._routing.preflight().reserve(request.stage, input_tokens)
         with self._lock:
             current = _snapshot(self._starts, self._completions, self._ceilings)

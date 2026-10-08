@@ -1,7 +1,7 @@
 # Source query provider reference
 
 Checked against primary provider documentation on 2026-10-06; OpenAlex semantic
-limits/pricing and SERP exact-match behavior rechecked on 2026-10-07. This reference records
+limits/pricing, SERP pagination/exact-match behavior, and Exa pricing rechecked on 2026-10-07. This reference records
 the provider behavior used by the bounded query compiler and adapters. It is not a
 claim that every documented operation is enabled in this application.
 
@@ -12,8 +12,9 @@ claim that every documented operation is enabled in this application.
   with another search parameter. See [Search](https://help.openalex.org/api/searching/)
   and [Semantic Search](https://help.openalex.org/api/semantic-search/).
 - Ordinary `per_page` is supported from 1 to 100; semantic search allows at most 50
-  results and query text up to 2,000 characters. The adapter caps compiled semantic
-  depth at the requested policy bound, at most 50. See [paging](https://help.openalex.org/api/paging/)
+  results and query text up to 2,000 characters. Fresh executable metadata uses
+  bounded 20-result pages for lexical search (up to 50 across three physical pages)
+  and one request for up to 50 semantic results. See [paging](https://help.openalex.org/api/paging/)
   and [Semantic Search limits](https://help.openalex.org/api/semantic-search/).
 - Semantic search is limited to one request per second. The adapter serializes and
   spaces actual semantic send starts, including retries, with cancellation checked
@@ -58,11 +59,21 @@ claim that every documented operation is enabled in this application.
   letting Exa select the search route. The adapter sends the compiler's query string
   directly and reports `costDollars.total` only when the response supplies it. See
   [Exa Search API](https://exa.ai/docs/reference/search).
+- The API request supports `numResults`; the application currently caps executable
+  auto-search at 25 pending enterprise entitlement. The [Exa pricing page](https://exa.ai/pricing)
+  prices Auto Search at $7 per 1,000 requests for up to 10 results and $1 per 1,000
+  requests per additional result. To preserve the existing $0.18 / 18-request run
+  ceiling, this implementation reserves $0.02 per default depth-20 operation and
+  $0.03 at policy depth 50 (effective result cap 25). These are conservative policy
+  reservations, not guarantees about future provider pricing or returned result count.
 
 ## SERP Search
 
 - The Google organic search endpoint is `GET /api/v1/search` with `query` and a
-  1-based `page`. Results are ten per page. The adapter executes page one only.
+  1-based `page`. Results are ten per page; fresh retrieval follows up to three
+  pages under the three-physical-request operation ceiling. Empty later pages are
+  retained as completed results, and page checkpoints prevent replay of completed
+  pages after interruption. See [SERP Search pagination examples](https://serpsearch.com/examples).
 - For compiled queries with phrases or Boolean operators, `exact_match=true` requests
   Google's verbatim interpretation, suppressing spelling corrections and preserving
   quotes, Unicode, parentheses, and `OR`. See [SERP Search API documentation](https://serpsearch.com/docs).

@@ -7,11 +7,14 @@ discovery ranking.
 
 from __future__ import annotations
 
+import hashlib
+import ipaddress
 import json
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict
@@ -27,10 +30,24 @@ from providers.llm import (
     load_prompt_file,
     render_stage_prompt,
 )
+from providers.pricing import conservative_token_estimate
 from providers.ranking import canonical_discovery_url
 from providers.search import SearchResult
-from providers.v2_budget import V2CancellationRequested
+from providers.v2_budget import V2BudgetSnapshot, V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.contracts.discovery_v2 import (
+    V2DiscoveryBinding,
+    V2DiscoveryPolicy,
+    V2MetadataDiscoveryPolicy,
+    normalize_doi,
+    safe_location,
+)
+from researchassistant.contracts.metadata_ranking import (
+    MetadataIdentityConflict,
+    MetadataRank,
+    V2MetadataRankingArtifact,
+    V2ScoutDisposition,
+)
 from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryMetadataEntry,
@@ -51,11 +68,16 @@ from researchassistant.contracts.models import (
     V2RoundOneSearchQuery,
     V2ScoutRequest,
 )
+from researchassistant.research.discovery_policy import safe_optional_model_prefix
+from researchassistant.research.metadata_ranking import fair_ranked_ids, rank_metadata
+from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_SCOUT_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "v2_scout.md"
+V2_SCOUT_V2_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "v2_scout_v2.md"
 V2_SCOUT_BATCH_SIZE = 20
 V2_SCOUT_ARTIFACT_KEY = "phase-4-discovery-scout"
+V2_RANKING_ARTIFACT_PREFIX = "phase-3-metadata-ranking-round-"
 _TITLE_TOKEN_RE = re.compile(r"[a-z0-9]+")
 _DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)\s*", re.IGNORECASE)
 
@@ -84,6 +106,7 @@ class V2DiscoveryScoutRunResult(StrictModel):
 
     output: V2DiscoveryScoutOutput
     resumed: bool
+    ranking_artifact: V2MetadataRankingArtifact | None = None
 
 
 def normalize_discovery_responses(
@@ -161,7 +184,9 @@ def normalize_discovery_responses(
     return tuple(items)
 
 
-def cluster_discovery_items(items: Sequence[NormalizedDiscoveryItem]) -> tuple[SourceCluster, ...]:
+def cluster_discovery_items(
+    items: Sequence[NormalizedDiscoveryItem], *, include_provider_locations: bool = False
+) -> tuple[SourceCluster, ...]:
     """Conservatively union only exact URL/DOI/title or exact author-year-title identity."""
     if not items:
         return ()
@@ -181,10 +206,23 @@ def cluster_discovery_items(items: Sequence[NormalizedDiscoveryItem]) -> tuple[S
         if left_root != right_root:
             parent[right_root] = left_root
 
-    for left, item in enumerate(items):
-        for right in range(left):
-            if _same_source(item, items[right]):
-                union(left, right)
+    # Each identity predicate is equality on a normalized token. Bucket candidates by
+    # token and union only bucket members, preserving the prior equivalence semantics
+    # without comparing every pair in a large metadata pool.
+    identity_buckets: dict[tuple[str, str], int] = {}
+    for index, item in enumerate(items):
+        keys = [("url", item.canonical_url)]
+        if item.doi:
+            keys.append(("doi", item.doi))
+        title = _title_key(item.title)
+        if title:
+            keys.append(("title", title))
+        for key in keys:
+            prior = identity_buckets.get(key)
+            if prior is None:
+                identity_buckets[key] = index
+            else:
+                union(index, prior)
     groups: dict[int, list[NormalizedDiscoveryItem]] = {}
     for index, item in enumerate(items):
         groups.setdefault(find(index), []).append(item)
@@ -192,10 +230,16 @@ def cluster_discovery_items(items: Sequence[NormalizedDiscoveryItem]) -> tuple[S
     for members in groups.values():
         ordered = sorted(members, key=lambda item: (item.canonical_url, str(item.item_id)))
         preferred = min(ordered, key=_preferred_url_key)
+        provider_locations = (
+            {location for member in ordered for location in _provider_full_text_locations(member)}
+            if include_provider_locations
+            else set()
+        )
         urls = tuple(
             sorted(
                 {member.source_url for member in ordered}
                 | {member.canonical_url for member in ordered}
+                | provider_locations
             )
         )
         cluster_id = uuid5(
@@ -247,6 +291,8 @@ def run_v2_discovery_and_scout(
     clock: Callable[[], datetime] | None = None,
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
+    budget_snapshot: Callable[[], V2BudgetSnapshot] | None = None,
+    downstream_input_tokens: Mapping[LLMStage, int] | None = None,
 ) -> V2DiscoveryScoutRunResult:
     """Persist or resume one round of normalized discovery and batched Scout decisions."""
     now = clock or _utc_now
@@ -262,7 +308,11 @@ def run_v2_discovery_and_scout(
         output = V2DiscoveryScoutOutput.model_validate_json(existing.payload_json)
         if output.directions != planner_output.directions:
             raise ValueError("persisted discovery output directions do not match the initial plan")
-        return V2DiscoveryScoutRunResult(output=output, resumed=True)
+        return V2DiscoveryScoutRunResult(
+            output=output,
+            resumed=True,
+            ranking_artifact=_read_ranking_artifact(db_path, planner_output, output),
+        )
     routing_config.preflight()
     items = normalize_discovery_responses(
         run_id=planner_output.run_id,
@@ -272,15 +322,45 @@ def run_v2_discovery_and_scout(
         crossref_resolver=crossref_resolver,
         cancellation_requested=cancellation_requested,
     )
-    clusters = cluster_discovery_items(items)
+    binding = _fresh_ranked_binding(db_path, planner_output.run_id)
+    clusters = cluster_discovery_items(items, include_provider_locations=binding is not None)
+    ranking_artifact: V2MetadataRankingArtifact | None = None
+    scout_items = items
+    prompt_path = V2_SCOUT_PROMPT_PATH
+    bounded_metadata = False
+    if binding is not None:
+        ranks = rank_metadata(
+            items,
+            exact_claim=binding.exact_claim,
+            policy=binding.policy,
+            known_work_keys=_prior_work_keys(
+                db_path, planner_output.run_id, _round_number(planner_output)
+            ),
+        )
+        scout_items, ranking_artifact = _ranked_scout_selection(
+            run_id=planner_output.run_id,
+            round_number=_round_number(planner_output),
+            directions=planner_output.directions,
+            items=items,
+            ranks=ranks,
+            policy=binding.policy,
+            routing_config=routing_config,
+            llm_provider=llm_provider,
+            budget_snapshot=budget_snapshot,
+            downstream_input_tokens=downstream_input_tokens,
+        )
+        prompt_path = V2_SCOUT_V2_PROMPT_PATH
+        bounded_metadata = True
     batches, audits = _run_scout_batches(
         run_id=planner_output.run_id,
         directions=planner_output.directions,
-        items=items,
+        items=scout_items,
         llm_provider=llm_provider,
         model_alias=routing_config.preflight().for_stage(LLMStage.SCOUT).logical_alias,
         clock=now,
         cancellation_requested=cancellation_requested,
+        prompt_path=prompt_path,
+        bounded_metadata=bounded_metadata,
     )
     output = V2DiscoveryScoutOutput(
         run_id=planner_output.run_id,
@@ -291,8 +371,14 @@ def run_v2_discovery_and_scout(
         scout_audits=audits,
         completed_at=completed_at,
     )
+    if ranking_artifact is not None:
+        insert_v2_artifact(
+            str(db_path), _ranking_artifact_key(planner_output), ranking_artifact, completed_at
+        )
     insert_v2_artifact(str(db_path), _artifact_key(planner_output), output, completed_at)
-    return V2DiscoveryScoutRunResult(output=output, resumed=False)
+    return V2DiscoveryScoutRunResult(
+        output=output, resumed=False, ranking_artifact=ranking_artifact
+    )
 
 
 def _raise_if_cancelled(callback: Callable[[], bool] | None) -> None:
@@ -300,12 +386,292 @@ def _raise_if_cancelled(callback: Callable[[], bool] | None) -> None:
         raise V2CancellationRequested("v2 cancellation was observed before discovery work")
 
 
-def scout_ordered_item_ids(output: V2DiscoveryScoutOutput) -> tuple[UUID, ...]:
+def _fresh_ranked_binding(db_path: str | Path, run_id: UUID) -> V2DiscoveryBinding | None:
+    try:
+        binding = read_discovery_binding(str(db_path), run_id)
+    except KeyError:
+        return None
+    if binding.compiler_identity == "source-query-compiler-v3":
+        if binding.ranking_identity != "source-candidate-ranking-v2":
+            raise ValueError("compiler v3 binding requires metadata ranking v2")
+        if not isinstance(binding.policy, V2MetadataDiscoveryPolicy):
+            raise ValueError("compiler v3 binding requires the successor discovery policy")
+        return binding
+    return None
+
+
+def _round_number(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) -> int:
+    return 1 if isinstance(planner_output, V2InitialPlannerOutput) else planner_output.round_number
+
+
+def _selected_model_input_tokens(llm_provider: LLMProvider, request: LLMRequest) -> int:
+    """Mirror the Budgeted provider's estimate, including selected adapter instructions."""
+    minimum = conservative_token_estimate(request.rendered_prompt)
+    estimator = getattr(llm_provider, "estimate_request_tokens", None)
+    if callable(estimator):
+        estimate = estimator(request)
+    else:
+        estimator = getattr(llm_provider, "conservative_input_tokens", None)
+        if not callable(estimator):
+            selected_provider = getattr(llm_provider, "_provider", llm_provider)
+            estimator = getattr(selected_provider, "conservative_input_tokens", None)
+        estimate = estimator(request, minimum) if callable(estimator) else minimum
+    if isinstance(estimate, bool) or not isinstance(estimate, int) or estimate < minimum:
+        raise ValueError(
+            "selected Scout provider input estimate is invalid or below rendered prompt"
+        )
+    return estimate
+
+
+def _ranked_scout_selection(
+    *,
+    run_id: UUID,
+    round_number: int,
+    directions: ResearchDirections,
+    items: tuple[NormalizedDiscoveryItem, ...],
+    ranks: tuple[MetadataRank, ...],
+    policy: V2MetadataDiscoveryPolicy | V2DiscoveryPolicy,
+    routing_config: V2RoutingConfig,
+    llm_provider: LLMProvider,
+    budget_snapshot: Callable[[], V2BudgetSnapshot] | None,
+    downstream_input_tokens: Mapping[LLMStage, int] | None,
+) -> tuple[tuple[NormalizedDiscoveryItem, ...], V2MetadataRankingArtifact]:
+    ranked_by_id = {item.item_id: item for item in ranks}
+    by_item = {item.item_id: item for item in items}
+    ordered_ids = fair_ranked_ids(ranks, policy.max_scout_per_round)
+    capped_items = tuple(ranked_by_id[item_id] for item_id in ordered_ids)
+    snapshot_provider = budget_snapshot or getattr(llm_provider, "snapshot", None)
+    safe_capacity = 0
+    if callable(snapshot_provider):
+        snapshot = snapshot_provider()
+        route = routing_config.preflight()
+        protected_inputs = downstream_input_tokens or {
+            stage: 16_000 for stage, _stage_route in route.routing
+        }
+        prompt = load_prompt_file(V2_SCOUT_V2_PROMPT_PATH, expected_stage=LLMStage.SCOUT)
+        reservations = []
+        for start in range(0, len(capped_items), V2_SCOUT_BATCH_SIZE):
+            batch = capped_items[start : start + V2_SCOUT_BATCH_SIZE]
+            request_input = V2ScoutRequest(
+                run_id=run_id,
+                directions=directions,
+                batch_number=start // V2_SCOUT_BATCH_SIZE + 1,
+                candidates=tuple(
+                    _scout_candidate(by_item[item.item_id], bounded=True) for item in batch
+                ),
+            )
+            rendered = render_stage_prompt(prompt, request_input, ScoutBatch)
+            request = LLMRequest(
+                run_id=run_id,
+                stage=LLMStage.SCOUT,
+                prompt=prompt,
+                rendered_prompt=rendered,
+                input_artifact=request_input,
+                input_artifact_ids=(run_id,),
+                requested_output_type=ScoutBatch,
+                model_alias=route.for_stage(LLMStage.SCOUT).logical_alias,
+                generation=V2_LLM_ROUTING.for_stage(LLMStage.SCOUT).generation,
+            )
+            estimate = _selected_model_input_tokens(llm_provider, request)
+            reservation = route.reserve(LLMStage.SCOUT, estimate)
+            # A malformed/truncated response can consume either complete attempt.
+            reservations.extend((reservation, reservation))
+        safe_attempts = safe_optional_model_prefix(
+            snapshot=snapshot,
+            routing=routing_config,
+            downstream_input_tokens=protected_inputs,
+            optional_reservations=tuple(reservations),
+        )
+        safe_capacity = min(
+            policy.max_scout_per_round,
+            (safe_attempts // 2) * V2_SCOUT_BATCH_SIZE,
+            len(capped_items),
+        )
+    selected_ids = set(fair_ranked_ids(ranks, safe_capacity))
+    capped_ids = {item.item_id for item in capped_items}
+    selected = tuple(ranked_by_id[item_id] for item_id in ordered_ids if item_id in selected_ids)
+    scout_items = tuple(by_item[rank.item_id] for rank in selected)
+    dispositions = tuple(
+        V2ScoutDisposition(
+            item_id=rank.item_id,
+            disposition=(
+                "scouted"
+                if rank.item_id in selected_ids
+                else "not_scouted_budget"
+                if rank.item_id in capped_ids
+                else "not_scouted_cap"
+            ),
+        )
+        for rank in ranks
+    )
+    artifact = V2MetadataRankingArtifact(
+        run_id=run_id,
+        round_number=round_number,
+        ranks=ranks,
+        scout_dispositions=dispositions,
+        identity_conflicts=_metadata_identity_conflicts(items),
+        retained_count=len(ranks),
+        scouted_count=len(selected_ids),
+        cap_limited_count=sum(item.disposition == "not_scouted_cap" for item in dispositions),
+        budget_limited_count=sum(item.disposition == "not_scouted_budget" for item in dispositions),
+    )
+    return scout_items, artifact
+
+
+def _metadata_identity_conflicts(
+    items: tuple[NormalizedDiscoveryItem, ...],
+) -> tuple[MetadataIdentityConflict, ...]:
+    by_location: dict[str, list[tuple[UUID, str]]] = {}
+    by_doi: dict[str, list[tuple[UUID, str]]] = {}
+    for item in items:
+        if not item.doi:
+            continue
+        try:
+            doi = normalize_doi(item.doi)
+        except ValueError:
+            continue
+        by_location.setdefault(item.canonical_url, []).append((item.item_id, doi))
+        title = _title_key(item.title)
+        if title:
+            by_doi.setdefault(doi, []).append((item.item_id, title))
+
+    conflicts: list[MetadataIdentityConflict] = []
+    for entries in by_location.values():
+        dois = {value for _item_id, value in entries}
+        if len(dois) > 1:
+            conflicts.append(
+                MetadataIdentityConflict(
+                    kind="same_location_distinct_doi",
+                    item_ids=tuple(sorted({item_id for item_id, _value in entries}, key=str)),
+                    values=tuple(_bounded_conflict_value(value) for value in sorted(dois)),
+                )
+            )
+    for entries in by_doi.values():
+        titles = {value for _item_id, value in entries}
+        if len(titles) > 1:
+            conflicts.append(
+                MetadataIdentityConflict(
+                    kind="same_doi_distinct_titles",
+                    item_ids=tuple(sorted({item_id for item_id, _value in entries}, key=str)),
+                    values=tuple(_bounded_conflict_value(value) for value in sorted(titles)),
+                )
+            )
+    return tuple(
+        sorted(
+            conflicts,
+            key=lambda item: (item.kind, item.values, tuple(map(str, item.item_ids))),
+        )
+    )
+
+
+def _bounded_conflict_value(value: str) -> str:
+    if len(value) <= 512:
+        return value
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+    return f"{value[:488]}…#{digest}"
+
+
+def _ranking_artifact_key(
+    planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan,
+) -> str:
+    return f"{V2_RANKING_ARTIFACT_PREFIX}{_round_number(planner_output)}"
+
+
+def _read_ranking_artifact(
+    db_path: str | Path,
+    planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan,
+    output: V2DiscoveryScoutOutput,
+) -> V2MetadataRankingArtifact | None:
+    if _fresh_ranked_binding(db_path, planner_output.run_id) is None:
+        return None
+    try:
+        artifact = read_v2_artifact(
+            str(db_path), planner_output.run_id, _ranking_artifact_key(planner_output)
+        )
+    except KeyError as exc:
+        raise ValueError("ranked discovery checkpoint is missing its ranking sidecar") from exc
+    result = V2MetadataRankingArtifact.model_validate_json(artifact.payload_json)
+    if result.run_id != planner_output.run_id or result.round_number != _round_number(
+        planner_output
+    ):
+        raise ValueError("ranking sidecar does not match its discovery round")
+    if {item.item_id for item in result.ranks} != {item.item_id for item in output.items}:
+        raise ValueError("ranking sidecar membership differs from normalized discovery items")
+    expected_scouted = {
+        item.item_id for item in result.scout_dispositions if item.disposition == "scouted"
+    }
+    observed_scouted = {item.item_id for batch in output.scout_batches for item in batch.items}
+    if expected_scouted != observed_scouted:
+        raise ValueError("ranking sidecar Scout dispositions differ from completed batch inputs")
+    return result
+
+
+def _prior_work_keys(db_path: str | Path, run_id: UUID, round_number: int) -> tuple[str, ...]:
+    keys: set[str] = set()
+    for prior_round in range(1, round_number):
+        sidecar_key = f"{V2_RANKING_ARTIFACT_PREFIX}{prior_round}"
+        try:
+            artifact = read_v2_artifact(str(db_path), run_id, sidecar_key)
+        except KeyError:
+            try:
+                discovery = read_v2_artifact(
+                    str(db_path), run_id, _round_discovery_artifact_key(prior_round)
+                )
+            except KeyError as exc:
+                raise ValueError(
+                    "later ranked discovery is missing an earlier discovery checkpoint"
+                ) from exc
+            if discovery.artifact_type != "V2DiscoveryScoutOutput":
+                raise ValueError("prior discovery checkpoint has an unexpected type") from None
+            empty = V2DiscoveryScoutOutput.model_validate_json(discovery.payload_json)
+            if empty.run_id != run_id or any(
+                (empty.items, empty.clusters, empty.scout_batches, empty.scout_audits)
+            ):
+                raise ValueError(
+                    "nonempty prior discovery checkpoint is missing its ranking sidecar"
+                ) from None
+            continue
+        if artifact.artifact_type != "V2MetadataRankingArtifact":
+            raise ValueError("prior ranking artifact has an unexpected type")
+        prior = V2MetadataRankingArtifact.model_validate_json(artifact.payload_json)
+        if prior.run_id != run_id or prior.round_number != prior_round:
+            raise ValueError("prior ranking sidecar belongs to another run or round")
+        keys.update(rank.work_key for rank in prior.ranks)
+    return tuple(sorted(keys))
+
+
+def _round_discovery_artifact_key(round_number: int) -> str:
+    if round_number == 1:
+        return V2_SCOUT_ARTIFACT_KEY
+    if round_number == 4:
+        return "post-phase-13-round-4-discovery-scout-v1"
+    return f"phase-7-round-{round_number}-discovery-scout"
+
+
+def scout_ordered_item_ids(
+    output: V2DiscoveryScoutOutput,
+    ranks: tuple[MetadataRank, ...] | None = None,
+) -> tuple[UUID, ...]:
     """Return retrieve/maybe candidates in deterministic provider-neutral fallback order."""
     decisions = {
         item.item_id: item.decision for batch in output.scout_batches for item in batch.items
     }
     order = {"retrieve": 0, "maybe": 1, "skip": 2}
+    rank_by_id = {item.item_id: item.rank for item in ranks or ()}
+    if ranks is not None:
+        return tuple(
+            item.item_id
+            for item in sorted(
+                output.items,
+                key=lambda item: (
+                    order.get(_decision_value(item.item_id, decisions), 3),
+                    rank_by_id.get(item.item_id, 10**9),
+                    item.canonical_url,
+                    str(item.item_id),
+                ),
+            )
+            if decisions.get(item.item_id) is None or decisions[item.item_id].value != "skip"
+        )
     return tuple(
         item.item_id
         for item in sorted(
@@ -330,9 +696,11 @@ def _run_scout_batches(
     model_alias: ModelAlias,
     clock: Callable[[], datetime],
     cancellation_requested: Callable[[], bool] | None,
+    prompt_path: Path = V2_SCOUT_PROMPT_PATH,
+    bounded_metadata: bool = False,
 ) -> tuple[tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...]]:
     _raise_if_cancelled(cancellation_requested)
-    prompt = load_prompt_file(V2_SCOUT_PROMPT_PATH, expected_stage=LLMStage.SCOUT)
+    prompt = load_prompt_file(prompt_path, expected_stage=LLMStage.SCOUT)
     batches: list[ScoutBatch] = []
     audits: list[ScoutBatchAudit] = []
     for start in range(0, len(items), V2_SCOUT_BATCH_SIZE):
@@ -342,7 +710,9 @@ def _run_scout_batches(
             run_id=run_id,
             directions=directions,
             batch_number=start // V2_SCOUT_BATCH_SIZE + 1,
-            candidates=tuple(_scout_candidate(item) for item in batch_items),
+            candidates=tuple(
+                _scout_candidate(item, bounded=bounded_metadata) for item in batch_items
+            ),
         )
         last_error: LLMInvocationError | None = None
         response: ScoutBatch | None = None
@@ -496,6 +866,53 @@ def _metadata_string(result: SearchResult, key: str) -> str | None:
     raise ValueError(f"unknown normalized discovery metadata field: {key}")
 
 
+def _provider_full_text_locations(item: NormalizedDiscoveryItem) -> tuple[str, ...]:
+    locations: set[str] = set()
+    for entry in item.provider_metadata:
+        if entry.key not in {"pdf_url", "full_text_url"}:
+            continue
+        try:
+            value = json.loads(entry.value_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(value, str):
+            continue
+        try:
+            safe_location(value)
+            parsed = urlsplit(value)
+            host = (parsed.hostname or "").rstrip(".").casefold()
+            if (
+                not host
+                or any(character.isspace() for character in host)
+                or host == "localhost"
+                or host.endswith(
+                    (
+                        ".localhost",
+                        ".local",
+                        ".internal",
+                        ".lan",
+                        ".home",
+                        ".test",
+                        ".example",
+                        ".invalid",
+                    )
+                )
+            ):
+                continue
+            try:
+                address = ipaddress.ip_address(host)
+            except ValueError:
+                address = None
+                if all(character in "0123456789." for character in host):
+                    continue
+            if address is not None and not address.is_global:
+                continue
+            locations.add(canonical_discovery_url(value))
+        except ValueError:
+            continue
+    return tuple(sorted(locations))
+
+
 def _same_source(left: NormalizedDiscoveryItem, right: NormalizedDiscoveryItem) -> bool:
     if left.canonical_url == right.canonical_url:
         return True
@@ -532,18 +949,23 @@ def _preferred_url_key(item: NormalizedDiscoveryItem) -> tuple[int, str, str]:
     return (0 if item.doi else 1, item.canonical_url, str(item.item_id))
 
 
-def _scout_candidate(item: NormalizedDiscoveryItem) -> ScoutCandidate:
+def _scout_candidate(item: NormalizedDiscoveryItem, *, bounded: bool = False) -> ScoutCandidate:
+    def clip(value: str | None, limit: int) -> str | None:
+        if value is None or not bounded:
+            return value
+        return value[:limit]
+
     return ScoutCandidate(
         item_id=item.item_id,
         direction=item.direction,
-        title=item.title,
-        source_url=item.source_url,
-        snippet=item.snippet,
-        abstract=item.abstract,
-        doi=item.doi,
-        authors=item.authors,
-        publication_date=item.publication_date,
-        source_type=item.source_type,
+        title=clip(item.title, 400),
+        source_url=clip(item.source_url, 2048) or item.source_url[:2048],
+        snippet=clip(item.snippet, 800),
+        abstract=clip(item.abstract, 2400),
+        doi=clip(item.doi, 200),
+        authors=tuple(author[:240] for author in item.authors[:12]) if bounded else item.authors,
+        publication_date=clip(item.publication_date, 80),
+        source_type=clip(item.source_type, 160),
     )
 
 

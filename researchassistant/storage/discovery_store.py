@@ -627,7 +627,18 @@ def complete_provider_attempt(
             raise ValueError("completion operation differs from its reservation")
         if completion.completed_at < start.started_at:
             raise ValueError("completion precedes its reservation")
-        if completion.metadata_records > start.requested_records:
+        response_bound = start.requested_records
+        if (
+            binding.compiler_identity == "source-query-compiler-v3"
+            and start.provider is DiscoveryProvider.SERPSEARCH
+        ):
+            # SERP returns a fixed ten-hit physical page even for a smaller retained prefix.
+            response_bound = next(
+                item.max_metadata_per_page
+                for item in binding.capabilities
+                if item.provider == start.provider
+            )
+        if completion.metadata_records > response_bound:
             raise ValueError("completion exceeds reserved result bound")
         if len(completion.result_ids) > completion.metadata_records:
             raise ValueError("completion identities exceed returned metadata count")

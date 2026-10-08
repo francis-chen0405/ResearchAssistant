@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import re
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -10,7 +13,10 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction
+from researchassistant.contracts.discovery_v2 import (
+    V2CompiledQueryAction,
+    V2MetadataDiscoveryPolicy,
+)
 from researchassistant.contracts.models import DiscoveryProvider, SearchIntent, StrictModel
 
 
@@ -59,6 +65,8 @@ class SearchRequest(StrictModel):
     query_text: str = Field(min_length=1)
     limit: int = Field(ge=1, le=100)
     compiled_query: V2CompiledQueryAction | None = None
+    page_number: int = Field(default=1, strict=True, ge=1, le=3)
+    page_cursor: str | None = Field(default=None, min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def validate_provider_controls(self) -> SearchRequest:
@@ -77,8 +85,37 @@ class SearchRequest(StrictModel):
                 raise ValueError("compiled query provider does not match the search request")
             if compiled.query_text != self.query_text:
                 raise ValueError("compiled query text does not match the search request")
-            if self.limit != compiled.effective_depth:
-                raise ValueError("search limit must equal compiled effective depth")
+            page_size = metadata_page_size(compiled)
+            if self.limit > min(compiled.effective_depth, page_size):
+                raise ValueError("search limit exceeds compiled page depth")
+            page_budget = (
+                compiled.policy.max_pages_per_operation
+                // compiled.capabilities.physical_requests_per_page
+            )
+            if compiled.capabilities.executable_pagination == "none" or (
+                self.provider is DiscoveryProvider.OPENALEX and compiled.mode == "semantic"
+            ):
+                page_budget = min(page_budget, 1)
+            page_count = (compiled.effective_depth + page_size - 1) // page_size
+            if self.page_number > min(page_budget, page_count):
+                raise ValueError("page number exceeds physical request policy")
+            if compiled.capabilities.executable_pagination == "none" and self.page_number != 1:
+                raise ValueError("provider does not support page transport")
+            cursor_paging = (
+                compiled.capabilities.executable_pagination == "cursor"
+                and self.provider is DiscoveryProvider.OPENALEX
+                and compiled.mode != "semantic"
+            )
+            if self.page_cursor is not None and (
+                not cursor_paging or not _valid_opaque_cursor(self.page_cursor)
+            ):
+                raise ValueError("invalid opaque provider cursor")
+            if cursor_paging and self.page_number > 1 and self.page_cursor is None:
+                raise ValueError("cursor page requires the prior page cursor")
+            if cursor_paging and self.page_number > 1 and self.page_cursor == "*":
+                raise ValueError("cursor page cannot restart at the provider start cursor")
+            if self.page_number == 1 and self.page_cursor not in (None, "*"):
+                raise ValueError("first cursor page must use the provider start cursor")
             if self.semantic != (compiled.mode == "semantic"):
                 raise ValueError("semantic flag does not match compiled query mode")
             if (
@@ -111,7 +148,7 @@ def compiled_parameters(
     action = request.compiled_query
     if action is None:
         return None
-    parameters = {item.name: item.value for item in action.parameters}
+    parameters = page_parameters(request)
     names = set(parameters)
     if names - allowed_names:
         raise SearchProviderError(
@@ -126,6 +163,69 @@ def compiled_parameters(
             f"compiled query omitted required provider parameters: {missing}",
         )
     return parameters
+
+
+def page_parameters(request: SearchRequest) -> dict[str, str | int | bool]:
+    """Derive native paging values from the immutable application-owned operation."""
+    action = request.compiled_query
+    if action is None:
+        raise ValueError("page parameters require a compiled operation")
+    parameters = {item.name: item.value for item in action.parameters}
+    provider = request.provider
+    page_size = metadata_page_size(action)
+    offset = (request.page_number - 1) * page_size
+    if offset + request.limit > action.effective_depth:
+        raise ValueError("page limit exceeds cumulative operation depth")
+    if provider is DiscoveryProvider.SERPSEARCH:
+        parameters["page"] = request.page_number
+    elif provider is DiscoveryProvider.ARXIV:
+        parameters.update(start=offset, max_results=request.limit)
+    elif provider is DiscoveryProvider.PUBMED:
+        parameters["retmax"] = request.limit
+        if request.page_number > 1:
+            parameters["retstart"] = offset
+    elif provider is DiscoveryProvider.EXA:
+        parameters["numResults"] = request.limit
+    elif provider is DiscoveryProvider.OPENALEX:
+        parameters["per_page"] = request.limit
+        if action.mode != "semantic":
+            parameters["cursor"] = request.page_cursor or "*"
+        elif request.page_number > 1 or request.page_cursor is not None:
+            raise ValueError("semantic search is count-only under the bounded policy")
+    return parameters
+
+
+def metadata_page_size(action: V2CompiledQueryAction) -> int:
+    """Return the deterministic page size shared by execution and adapters."""
+    provider = action.conceptual_query.provider
+    native_page_limit = min(action.effective_depth, action.capabilities.max_metadata_per_page)
+    if isinstance(action.policy, V2MetadataDiscoveryPolicy):
+        return action.policy.page_size_for(provider, action.mode, native_page_limit)
+    return native_page_limit
+
+
+_CURSOR_PATTERN = re.compile(r"^[A-Za-z0-9+/_-]+={0,2}$")
+
+
+def _valid_opaque_cursor(value: str) -> bool:
+    if value == "*":
+        return True
+    if (
+        not value
+        or len(value) > 512
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
+        or "://" in value
+        or not _CURSOR_PATTERN.fullmatch(value)
+        or len(value.rstrip("=")) % 4 == 1
+        or ("=" in value and len(value) % 4 != 0)
+    ):
+        return False
+    padded = value + "=" * (-len(value) % 4)
+    try:
+        base64.b64decode(padded, altchars=b"-_", validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return True
 
 
 def validate_request_url(
@@ -144,6 +244,8 @@ class SearchDiscoveryMetadata(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     engine: str | None = None
+    provider_page: int | None = Field(default=None, strict=True, ge=1, le=3)
+    raw_provider_rank: int | None = Field(default=None, strict=True, ge=1, le=100)
     published_at: str | None = None
     display_url: str | None = None
     category: str | None = None
@@ -156,6 +258,7 @@ class SearchDiscoveryMetadata(StrictModel):
     work_type: str | None = None
     is_retracted: bool | None = None
     pdf_url: str | None = None
+    full_text_url: str | None = None
 
 
 class SearchEngineTelemetry(StrictModel):
@@ -201,6 +304,14 @@ class SearchResponse(StrictModel):
     request_id: str | None = None
     search_type: str | None = None
     cost_usd: Decimal | None = Field(default=None, ge=0)
+    next_cursor: str | None = Field(default=None, min_length=1, max_length=512)
+
+    @field_validator("next_cursor")
+    @classmethod
+    def validate_next_cursor(cls, value: str | None) -> str | None:
+        if value is not None and (value == "*" or not _valid_opaque_cursor(value)):
+            raise ValueError("provider next cursor must be bounded opaque base64")
+        return value
 
 
 @runtime_checkable

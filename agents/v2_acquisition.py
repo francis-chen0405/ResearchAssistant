@@ -19,6 +19,11 @@ from providers.acquisition import AcquisitionFailureCode
 from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProvider, ScraperProviderError
 from providers.v2_budget import V2CancellationRequested
 from researchassistant.common.utils import count_words
+from researchassistant.contracts.acquisition_ranking import (
+    V2AcquisitionRankingAudit,
+    V2ClusterAcquisitionDisposition,
+)
+from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
@@ -42,6 +47,9 @@ from researchassistant.evidence.evidence_core import (
     fresh_sentence_spans,
     has_statistical_markers,
 )
+from researchassistant.research.metadata_ranking import fair_ranked_ids
+from researchassistant.storage.discovery_store import read_discovery_binding
+from researchassistant.storage.query_retrieval_store import raw_hit_counts
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_ACQUISITION_PROBE_ARTIFACT_KEY = "phase-5-acquisition-probe"
@@ -132,11 +140,57 @@ def run_v2_acquisition_probe(
         discovery_output.clusters,
         key=lambda cluster: _cluster_order(cluster, item_by_id, decisions),
     )
+    ranking: V2MetadataRankingArtifact | None = None
+    try:
+        binding = read_discovery_binding(db_path, discovery_output.run_id)
+    except KeyError:
+        binding = None
+    if binding is not None and binding.compiler_identity == "source-query-compiler-v3":
+        ranking = V2MetadataRankingArtifact.model_validate_json(
+            read_v2_artifact(
+                db_path, discovery_output.run_id, f"phase-3-metadata-ranking-round-{round_number}"
+            ).payload_json
+        )
+        if (
+            ranking.run_id != discovery_output.run_id
+            or ranking.round_number != round_number
+            or {item.item_id for item in ranking.ranks} != set(item_by_id)
+        ):
+            raise ValueError("acquisition ranking sidecar differs from its discovery pool")
+        eligible = sorted(
+            (
+                rank
+                for rank in ranking.ranks
+                if decisions.get(rank.item_id) in {"retrieve", "maybe"}
+            ),
+            key=lambda rank: ({"retrieve": 0, "maybe": 1}[decisions[rank.item_id]], rank.rank),
+        )
+        eligible = tuple(
+            rank.model_copy(update={"rank": index}) for index, rank in enumerate(eligible, 1)
+        )
+        candidate_ids = fair_ranked_ids(eligible, len(eligible))
+        cluster_by_item = {
+            item_id: cluster
+            for cluster in discovery_output.clusters
+            for item_id in cluster.item_ids
+        }
+        chosen_clusters = []
+        chosen_ids = set()
+        for item_id in candidate_ids:
+            cluster = cluster_by_item[item_id]
+            if cluster.cluster_id in chosen_ids or cluster.cluster_id in excluded_cluster_ids:
+                continue
+            chosen_ids.add(cluster.cluster_id)
+            chosen_clusters.append(cluster)
+        ordered_clusters = chosen_clusters[
+            : min(policy.max_clusters, binding.policy.max_acquisition_per_round)
+        ]
     attempts: list[V2AcquisitionAttempt] = []
     acquired: list[V2AcquiredSource] = []
     probes: list[V2ProbeResult] = []
     survivors: list[V2SurvivingSource] = []
     acquired_urls: set[str] = set()
+    duplicate_cluster_ids: set[UUID] = set()
 
     for cluster in ordered_clusters[: policy.max_clusters]:
         _raise_if_cancelled(cancellation_requested)
@@ -147,6 +201,7 @@ def run_v2_acquisition_probe(
             # Scout skip remains an audit-preserved discovery decision, not an acquisition.
             continue
         if {cluster.preferred_url, cluster.canonical_url, *cluster.alternate_urls} & acquired_urls:
+            duplicate_cluster_ids.add(cluster.cluster_id)
             continue
         source, cluster_attempts = _acquire_cluster(
             run_id=discovery_output.run_id,
@@ -211,6 +266,48 @@ def run_v2_acquisition_probe(
         policy_identity=policy.policy_identity,
         completed_at=completed_at,
     )
+    if ranking is not None:
+        shortlisted = {item.cluster_id for item in ordered_clusters}
+        fetched = {item.cluster_id for item in acquired}
+        usable = {item.cluster_id for item in survivors}
+        dispositions = tuple(
+            V2ClusterAcquisitionDisposition(
+                cluster_id=cluster.cluster_id,
+                shortlisted=cluster.cluster_id in shortlisted,
+                disposition="usable"
+                if cluster.cluster_id in usable
+                else "fetched_unusable"
+                if cluster.cluster_id in fetched
+                else "duplicate"
+                if cluster.cluster_id in duplicate_cluster_ids
+                else "unavailable"
+                if cluster.cluster_id in shortlisted
+                else "excluded_prior"
+                if cluster.cluster_id in excluded_cluster_ids
+                else "not_scouted"
+                if not any(item_id in decisions for item_id in cluster.item_ids)
+                else "scout_skipped"
+                if not any(
+                    decisions.get(item_id) in {"retrieve", "maybe"} for item_id in cluster.item_ids
+                )
+                else "cap_prevented",
+            )
+            for cluster in discovery_output.clusters
+        )
+        audit = V2AcquisitionRankingAudit(
+            run_id=discovery_output.run_id,
+            round_number=round_number,
+            raw_hits=raw_hit_counts(db_path, discovery_output.run_id).get(round_number, 0),
+            deduplicated_works=len(discovery_output.clusters),
+            scouted_candidates=len(decisions),
+            acquisition_shortlisted_clusters=len(shortlisted),
+            fetched_documents=len(acquired),
+            usable_survivors=len(survivors),
+            dispositions=dispositions,
+        )
+        insert_v2_artifact(
+            db_path, f"metadata-acquisition-v2-round-{round_number}", audit, completed_at
+        )
     insert_v2_artifact(db_path, artifact_key, output, completed_at)
     return V2AcquisitionProbeRunResult(output=output, resumed=False)
 

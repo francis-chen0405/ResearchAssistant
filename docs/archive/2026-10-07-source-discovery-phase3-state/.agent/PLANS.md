@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. Phases 1–3 are implemented: provider-specific conceptual planning, bounded metadata pagination/checkpoints, deterministic direction-neutral ranking, fair bounded Scout allocation, and ranked acquisition shortlisting. Phase 4 exact previews is the next boundary; expansion and product settings/acceptance remain later phases and require their corresponding instruction.
+- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. Phase 1 foundations and Phase 2 provider-specific conceptual planning/compilation are implemented. Fresh Round 1–4 searches share frozen compiler/settings and durable physical accounting. Prompt 3 is the next implementation boundary: deeper retrieval/ranking and bounded Scout integration. Previews, expansion and product settings/acceptance remain later phases; each needs its corresponding instruction.
 - The completed [database review](plans/database-review-2026-10-03.md) and [source acceptance](../docs/verification/database-phase4.md) retain earlier schema/recovery/history evidence. Installation and release remain separate boundaries.
 
 ## State and delivery

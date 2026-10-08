@@ -14,6 +14,7 @@ from uuid import UUID, uuid5
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from researchassistant.common.money import ExactUSD
+from researchassistant.contracts.metadata_ranking import MetadataRankingWeights
 from researchassistant.contracts.model_contracts import (
     DiscoveryProvider,
     SourceSnapshot,
@@ -123,10 +124,29 @@ class V2DiscoveryPolicy(V2DiscoveryValue):
         return self
 
 
+class V2MetadataDiscoveryPolicy(V2DiscoveryPolicy):
+    """Successor policy for paged metadata depth/ranking; historical v1 stays exact."""
+
+    policy_identity: Literal["source-discovery-v2-2026-10-07-v2"] = (
+        "source-discovery-v2-2026-10-07-v2"
+    )
+    metadata_page_size: Literal[20] = 20
+    ranking_weights: MetadataRankingWeights = Field(default_factory=MetadataRankingWeights)
+
+    def page_size_for(
+        self, provider: DiscoveryProvider, mode: SearchMode, native_page_limit: int
+    ) -> int:
+        if mode == "lexical" and provider in {DiscoveryProvider.OPENALEX, DiscoveryProvider.ARXIV}:
+            return min(self.metadata_page_size, native_page_limit)
+        return native_page_limit
+
+
 class V2ProviderCapabilities(V2DiscoveryValue):
     provider: Provider
     capability_identity: Literal[
-        "source-provider-capabilities-v1", "source-provider-capabilities-v2"
+        "source-provider-capabilities-v1",
+        "source-provider-capabilities-v2",
+        "source-provider-capabilities-v3",
     ] = CAPABILITIES_ID
     search_modes: tuple[SearchMode, ...]
     fields: tuple[Label, ...] = ()
@@ -237,8 +257,10 @@ class V2CompiledQueryAction(V2DiscoveryArtifact):
     mode: SearchMode
     requested_depth: int = Field(strict=True, ge=1, le=50)
     effective_depth: int = Field(strict=True, ge=1, le=50)
-    compiler_identity: Literal["source-query-compiler-v1", "source-query-compiler-v2"] = COMPILER_ID
-    policy: V2DiscoveryPolicy
+    compiler_identity: Literal[
+        "source-query-compiler-v1", "source-query-compiler-v2", "source-query-compiler-v3"
+    ] = COMPILER_ID
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
     capabilities: V2ProviderCapabilities
     fingerprint: Digest
 
@@ -259,8 +281,11 @@ class V2CompiledQueryAction(V2DiscoveryArtifact):
             self.effective_depth > self.capabilities.max_metadata_per_page
         ):
             raise ValueError("effective depth requires unsupported pagination")
+        page_size = self.capabilities.max_metadata_per_page
+        if isinstance(self.policy, V2MetadataDiscoveryPolicy):
+            page_size = self.policy.page_size_for(self.capabilities.provider, self.mode, page_size)
         if self.effective_depth > (
-            self.capabilities.max_metadata_per_page
+            page_size
             * (self.policy.max_pages_per_operation // self.capabilities.physical_requests_per_page)
         ):
             raise ValueError("effective depth exceeds bounded physical pages")
@@ -528,7 +553,7 @@ class V2GraphNeighborAction(V2DiscoveryArtifact):
     _gaps_unique = field_validator("target_gap_ids")(_unique_gaps)
     hop: Literal[1] = 1
     requested_depth: int = Field(strict=True, ge=1, le=10)
-    policy: V2DiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
     capabilities: V2ProviderCapabilities
     seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID
 
@@ -643,14 +668,18 @@ class V2DiscoveryBinding(V2DiscoveryArtifact):
     exact_claim: Annotated[str, Field(min_length=1)]
     directions: ResearchDirections
     providers: tuple[Provider, ...] = Field(min_length=1, max_length=5)
-    policy: V2DiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
     capabilities: tuple[V2ProviderCapabilities, ...]
     provider_budgets: tuple[V2DiscoveryProviderBudget, ...]
     provider_configuration_hash: Digest
     source_identity_hash: Digest
     prompt_schema_hash: Digest
-    compiler_identity: Literal["source-query-compiler-v1", "source-query-compiler-v2"] = COMPILER_ID
-    ranking_identity: Literal["source-candidate-ranking-v1"] = RANKING_ID
+    compiler_identity: Literal[
+        "source-query-compiler-v1", "source-query-compiler-v2", "source-query-compiler-v3"
+    ] = COMPILER_ID
+    ranking_identity: Literal["source-candidate-ranking-v1", "source-candidate-ranking-v2"] = (
+        RANKING_ID
+    )
     preview_identity: Literal["source-claim-preview-v1"] = PREVIEW_ID
     seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID
 
@@ -683,7 +712,7 @@ class V2IdentityLookupAction(V2DiscoveryArtifact):
     target_gap_ids: tuple[Label, ...] = Field(default=(), max_length=6)
     _gaps_unique = field_validator("target_gap_ids")(_unique_gaps)
     requested_depth: Literal[1] = 1
-    policy: V2DiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
     capabilities: V2ProviderCapabilities
 
     @model_validator(mode="after")

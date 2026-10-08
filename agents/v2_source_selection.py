@@ -25,10 +25,12 @@ from providers.pricing import conservative_token_estimate
 from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from researchassistant.common.money import add_usd
+from researchassistant.contracts.discovery_v2 import V2PreviewRequest, V2PreviewResult, discovery_id
 from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
     ResearchDirection,
+    SourceSnapshot,
     V2AcquisitionProbeOutput,
     V2ClaimCoverageAssessment,
     V2ClaimCoverageState,
@@ -85,6 +87,7 @@ def build_v2_source_selection_input(
     discovery_outputs: tuple[V2DiscoveryScoutOutput, ...],
     acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
     gap_outputs: tuple[V2GapAnalysisOutput, ...],
+    preview_builder: Callable[[V2PreviewRequest, SourceSnapshot], V2PreviewResult] | None = None,
 ) -> V2SourceSelectionInput:
     """Reconstruct every merged survivor with its persisted round context."""
     if not discovery_outputs or len(discovery_outputs) != len(acquisition_outputs):
@@ -155,6 +158,33 @@ def build_v2_source_selection_input(
             )
             for passage_id in survivor.passage_ids
         )
+        if preview_builder is not None:
+            key = f"selection-preview/{survivor.cluster_id}/{survivor.snapshot_id}"
+            preview_request = V2PreviewRequest(
+                run_id=run_id,
+                artifact_id=discovery_id(run_id, "V2PreviewRequest", key),
+                identity_key=key,
+                exact_claim=exact_claim,
+                direction=survivor.direction,
+                directions=directions,
+                source_id=survivor.cluster_id,
+                snapshot_id=survivor.snapshot_id,
+                snapshot_hash=survivor.snapshot_sha256,
+            )
+            preview = preview_builder(preview_request, source.snapshot)
+            if preview.request != preview_request:
+                raise ValueError("selection preview differs from its exact claim/snapshot request")
+            preview.require_snapshot(source.snapshot)
+            if preview.outcome == "completed":
+                selected_passages = tuple(
+                    V2SourceSelectionProbePassage(
+                        passage_id=f"preview:{preview.artifact_id}:{span.start}:{span.end}",
+                        text=span.text[:1200],
+                        score=0,
+                    )
+                    for span in preview.spans
+                )
+            # An unavailable preview uses the persisted deterministic Probe passages.
         search_provenance = tuple(
             V2SourceSelectionSearchProvenance(
                 query_id=item.query_id,

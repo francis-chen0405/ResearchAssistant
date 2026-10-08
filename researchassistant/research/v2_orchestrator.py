@@ -71,7 +71,7 @@ from providers.v2_budget import (
     V2RunCeilings,
 )
 from providers.v2_routing import V2RoutingConfig
-from researchassistant.contracts.discovery_v2 import SearchMode
+from researchassistant.contracts.discovery_v2 import SearchMode, V2MetadataDiscoveryPolicy
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
@@ -118,6 +118,7 @@ from researchassistant.evidence.evidence_core import (
 )
 from researchassistant.research.query_execution import (
     execute_query,
+    fair_query_order,
     freeze_query_execution,
     query_provider_budgets,
 )
@@ -643,6 +644,7 @@ def run_v2_production_pipeline(
     provider_policy_fingerprint: str = "injected-provider-policy-v1",
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
     legacy_query_planning: bool = False,
+    discovery_policy: V2MetadataDiscoveryPolicy | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
     _database_lock_owned: bool = False,
@@ -668,6 +670,7 @@ def run_v2_production_pipeline(
                 provider_policy_fingerprint=provider_policy_fingerprint,
                 query_modes=query_modes,
                 legacy_query_planning=legacy_query_planning,
+                discovery_policy=discovery_policy,
                 cancellation_requested=cancellation_requested,
                 clock=clock,
             )
@@ -688,6 +691,7 @@ def run_v2_production_pipeline(
             provider_policy_fingerprint=provider_policy_fingerprint,
             query_modes=query_modes,
             legacy_query_planning=legacy_query_planning,
+            discovery_policy=discovery_policy,
             cancellation_requested=cancellation_requested,
             clock=clock,
         )
@@ -710,6 +714,7 @@ def _run_v2_production_pipeline(
     provider_policy_fingerprint: str = "injected-provider-policy-v1",
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
     legacy_query_planning: bool = False,
+    discovery_policy: V2MetadataDiscoveryPolicy | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2ProductionPipelineResult:
@@ -774,8 +779,12 @@ def _run_v2_production_pipeline(
                 query_modes=query_modes,
                 provider_configuration_fingerprint=provider_policy_fingerprint,
                 provider_budgets=query_provider_budgets(
-                    discovery_providers, search_providers, query_modes
+                    discovery_providers,
+                    search_providers,
+                    query_modes,
+                    discovery_policy=discovery_policy,
                 ),
+                discovery_policy=discovery_policy,
             )
     fingerprint = _production_fingerprint(
         resolved_run_id,
@@ -819,6 +828,7 @@ def _run_v2_production_pipeline(
             run_id=resolved_run_id,
             query_modes=dict(query_modes or {}),
             legacy_prompt=legacy_query_planning,
+            discovery_policy=discovery_policy,
             provider_configuration_fingerprint=provider_policy_fingerprint,
             clock=now,
         ).planner_output
@@ -845,6 +855,7 @@ def _run_v2_production_pipeline(
             responses=responses,
             llm_provider=budgeted_llm,
             routing_config=routing_config,
+            budget_snapshot=budgeted_llm.snapshot,
             clock=now,
             crossref_resolver=crossref_resolver,
             cancellation_requested=effective_cancellation_requested,
@@ -1287,7 +1298,7 @@ def _run_round_one_search(
     if stored is not None:
         return V2RoundOneSearchResult.model_validate_json(stored.payload_json)
     outcomes: list[V2RoundOneSearchOutcome] = []
-    for query in queries:
+    for query in fair_query_order(queries):
         if _cancelled(cancellation_requested):
             break
         try:

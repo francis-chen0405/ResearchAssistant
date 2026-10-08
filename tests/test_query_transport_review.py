@@ -108,7 +108,7 @@ def _semantic_run(path: Path) -> UUID:
         _clock,
         query_modes={DiscoveryProvider.OPENALEX: "semantic"},
     )
-    assert binding.compiler_identity == "source-query-compiler-v2"
+    assert binding.compiler_identity == "source-query-compiler-v3"
     return run_id
 
 
@@ -144,7 +144,7 @@ def test_fresh_compiler_binding_rejects_uncompiled_execution(tmp_path: Path) -> 
         (DiscoveryProvider.EXA,),
         _clock,
     )
-    assert binding.compiler_identity == "source-query-compiler-v2"
+    assert binding.compiler_identity == "source-query-compiler-v3"
     adapter = _Adapter()
 
     with pytest.raises(SearchProviderError) as exc_info:

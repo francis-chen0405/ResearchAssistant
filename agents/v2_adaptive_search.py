@@ -47,6 +47,7 @@ from researchassistant.contracts.discovery_v2 import (
     V2CompiledQueryAction,
     V2ConceptGroup,
     V2ConceptualQuery,
+    V2MetadataDiscoveryPolicy,
     discovery_id,
 )
 from researchassistant.contracts.models import (
@@ -81,7 +82,11 @@ from researchassistant.contracts.query_planning import (
     V2ConceptualSearchAgentInput,
 )
 from researchassistant.research.query_compiler import compile_query, conceptual_signature
-from researchassistant.research.query_execution import available_query_budgets, execute_query
+from researchassistant.research.query_execution import (
+    available_query_budgets,
+    execute_query,
+    fair_query_order,
+)
 from researchassistant.research.research_governor import (
     V2RoundThreeGovernorDecision,
     V2RoundThreeGovernorInput,
@@ -1299,6 +1304,15 @@ def _validate_and_assemble_plan(
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
     previous_compiled_queries: tuple[V2CompiledQueryAction, ...] = (),
 ) -> V2AdaptiveRoundPlan:
+    previous_policies = tuple(action.policy for action in previous_compiled_queries)
+    if previous_policies and any(
+        policy != previous_policies[0] for policy in previous_policies[1:]
+    ):
+        raise V2AdaptivePlanValidationError(
+            "previous compiled searches use inconsistent discovery policies",
+            code="inconsistent_discovery_policy",
+        )
+    discovery_policy = previous_policies[0] if previous_policies else V2MetadataDiscoveryPolicy()
     compiled_candidates: list[V2CompiledQueryAction | None] = []
     if isinstance(response, V2AdaptiveSearchConceptsOutput):
         proposals: list[V2AdaptiveSearchProposal] = []
@@ -1336,7 +1350,8 @@ def _validate_and_assemble_plan(
             compiled = compile_query(
                 conceptual,
                 mode=lane.mode,
-                requested_depth=5,
+                requested_depth=discovery_policy.metadata_depth,
+                policy=discovery_policy,
             )
             signature = conceptual_signature(conceptual, compiled.mode)
             if signature in signatures:
@@ -1613,7 +1628,7 @@ def _execute_searches(
     if stored is not None:
         return V2AdaptiveSearchResults.model_validate_json(stored.payload_json)
     outcomes: list[V2AdaptiveSearchOutcome] = []
-    for query in plan.searches:
+    for query in fair_query_order(plan.searches):
         if _cancelled(cancellation_requested):
             break
         try:

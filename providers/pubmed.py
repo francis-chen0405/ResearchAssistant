@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import re
+import time
+from collections.abc import Callable
+from threading import Lock
 from typing import Any, Literal
 
 import httpx
 from pydantic import ValidationError
 
 from providers.config import PubMedConfig
-from providers.discovery_transport import physical_request
+from providers.discovery_transport import bounded_send, physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -28,13 +32,24 @@ class PubMedSearchAdapter:
 
     physical_accounting = True
 
-    def __init__(self, config: PubMedConfig, *, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        config: PubMedConfig,
+        *,
+        client: httpx.Client | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._config = config
         self._client = client or httpx.Client(
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.search_seconds),
             follow_redirects=False,
         )
+        self._request_lock = Lock()
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._last_request_start: float | None = None
 
     def search(self, request: SearchRequest) -> SearchResponse:
         if request.provider is not DiscoveryProvider.PUBMED:
@@ -44,7 +59,7 @@ class PubMedSearchAdapter:
             )
         parameters = compiled_parameters(
             request,
-            allowed_names=frozenset({"db", "term", "retmode", "retmax"}),
+            allowed_names=frozenset({"db", "term", "retmode", "retmax", "retstart"}),
             required_names=frozenset({"db", "term", "retmode", "retmax"}),
         )
         if parameters is None:
@@ -103,7 +118,13 @@ class PubMedSearchAdapter:
             raise SearchProviderError(
                 SearchFailureCode.MALFORMED_RESPONSE, "PubMed response omitted article summaries"
             )
-        results = _parse_records(ids, records, request.limit)
+        results = _parse_records(
+            ids,
+            records,
+            request.limit,
+            rank_offset=int(query_params.get("retstart", 0)),
+            provider_page=request.page_number,
+        )
         if not results:
             raise SearchProviderError(
                 SearchFailureCode.EMPTY_RESULTS, "PubMed returned no usable results"
@@ -127,20 +148,26 @@ class PubMedSearchAdapter:
         if request is not None and request.compiled_query is not None:
             validate_request_url(str(self._client.base_url) + path, params)
         try:
-            if request is None:
-                response = self._client.get(path, params=params)
-            else:
+            with self._request_lock:
+                if request is None or request.compiled_query is None:
+                    self._wait_for_slot(None)
                 observed_params = {key: value for key, value in params.items() if key != "api_key"}
-                response = physical_request(
-                    request,
-                    observed_params,
-                    lambda: self._client.get(
-                        path,
-                        params=params,
-                        timeout=self._config.deadlines.search_seconds,
-                    ),
-                    request_kind=request_kind,
-                )
+
+                def send() -> httpx.Response:
+                    return self._send(path, params)
+
+                if request is None:
+                    response = send()
+                else:
+                    response = physical_request(
+                        request,
+                        observed_params,
+                        send,
+                        request_kind=request_kind,
+                        before_reservation=self._wait_for_slot
+                        if request.compiled_query is not None
+                        else None,
+                    )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(
                 SearchFailureCode.TIMEOUT, "PubMed search timed out", retryable=True
@@ -157,10 +184,45 @@ class PubMedSearchAdapter:
                 SearchFailureCode.MALFORMED_RESPONSE, "PubMed returned invalid JSON"
             ) from exc
 
+    def _wait_for_slot(self, cancelled: Callable[[], bool] | None) -> None:
+        if cancelled is not None and cancelled():
+            raise SearchProviderError(SearchFailureCode.CANCELLED, "PubMed request cancelled")
+        now = self._monotonic()
+        if self._last_request_start is not None:
+            deadline = self._last_request_start + 3.0
+            while now < deadline:
+                if cancelled is not None and cancelled():
+                    raise SearchProviderError(
+                        SearchFailureCode.CANCELLED,
+                        "PubMed request cancelled while rate limited",
+                    )
+                self._sleep(min(max(deadline - now, 0.001), 0.1))
+                now = self._monotonic()
+        if cancelled is not None and cancelled():
+            raise SearchProviderError(SearchFailureCode.CANCELLED, "PubMed request cancelled")
 
-def _parse_records(ids: list[str], records: dict[str, Any], limit: int) -> list[SearchResult]:
+    def _send(self, path: str, params: dict[str, str | int | bool]) -> httpx.Response:
+        self._last_request_start = self._monotonic()
+        return bounded_send(
+            self._client,
+            "GET",
+            path,
+            expected_base_url=self._config.base_url,
+            params=params,
+            timeout=self._config.deadlines.search_seconds,
+        )
+
+
+def _parse_records(
+    ids: list[str],
+    records: dict[str, Any],
+    limit: int,
+    rank_offset: int = 0,
+    *,
+    provider_page: int = 1,
+) -> list[SearchResult]:
     results: list[SearchResult] = []
-    for uid in ids:
+    for index, uid in enumerate(ids, start=1):
         item = records.get(uid)
         if not isinstance(item, dict):
             continue
@@ -181,6 +243,17 @@ def _parse_records(ids: list[str], records: dict[str, Any], limit: int) -> list[
             else None
         )
         authors = item.get("authors")
+        pmc_id = _pmc_id(item.get("pmc"))
+        if pmc_id is None and isinstance(article_ids, list):
+            pmc_id = next(
+                (
+                    parsed
+                    for entry in article_ids
+                    if isinstance(entry, dict) and entry.get("idtype") == "pmc"
+                    if (parsed := _pmc_id(entry.get("value"))) is not None
+                ),
+                None,
+            )
         author_names = (
             tuple(
                 author.get("name")
@@ -194,9 +267,11 @@ def _parse_records(ids: list[str], records: dict[str, Any], limit: int) -> list[
             result = SearchResult(
                 original_url=url,
                 title=item.get("title") if isinstance(item.get("title"), str) else "",
-                rank=len(results) + 1,
+                rank=rank_offset + index,
                 metadata=SearchDiscoveryMetadata(
                     engine="pubmed",
+                    provider_page=provider_page,
+                    raw_provider_rank=index,
                     published_at=_string(item.get("pubdate")) or _string(item.get("sortpubdate")),
                     display_url=url,
                     category="biomedical",
@@ -204,6 +279,11 @@ def _parse_records(ids: list[str], records: dict[str, Any], limit: int) -> list[
                     external_id=uid,
                     doi=doi,
                     is_open_access=_string(item.get("pmc")) is not None,
+                    full_text_url=(
+                        f"https://pmc.ncbi.nlm.nih.gov/articles/{pmc_id}/"
+                        if pmc_id is not None
+                        else None
+                    ),
                     work_type=_string(item.get("pubtype")) or "journal_article",
                 ),
             )
@@ -217,6 +297,11 @@ def _parse_records(ids: list[str], records: dict[str, Any], limit: int) -> list[
 
 def _string(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _pmc_id(value: object) -> str | None:
+    candidate = _string(value)
+    return candidate if candidate is not None and re.fullmatch(r"PMC[0-9]+", candidate) else None
 
 
 def _raise_status(status: int) -> None:

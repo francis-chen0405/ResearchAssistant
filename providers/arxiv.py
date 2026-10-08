@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import re
+import time
+from collections.abc import Callable
+from contextlib import nullcontext
+from threading import Lock
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
@@ -10,7 +14,7 @@ import httpx
 from pydantic import ValidationError
 
 from providers.config import ArxivConfig
-from providers.discovery_transport import physical_request
+from providers.discovery_transport import bounded_send, physical_request
 from providers.search import (
     SearchDiscoveryMetadata,
     SearchFailureCode,
@@ -34,13 +38,24 @@ class ArxivSearchAdapter:
 
     physical_accounting = True
 
-    def __init__(self, config: ArxivConfig, *, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        config: ArxivConfig,
+        *,
+        client: httpx.Client | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._config = config
         self._client = client or httpx.Client(
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.search_seconds),
             follow_redirects=False,
         )
+        self._request_lock = Lock()
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._last_request_start: float | None = None
 
     def search(self, request: SearchRequest) -> SearchResponse:
         if request.provider is not DiscoveryProvider.ARXIV:
@@ -67,7 +82,7 @@ class ArxivSearchAdapter:
             }
         else:
             expected = {
-                "start": 0,
+                "start": parameters.get("start"),
                 "max_results": request.limit,
                 "sortBy": "relevance",
                 "sortOrder": "descending",
@@ -89,15 +104,16 @@ class ArxivSearchAdapter:
                 str(self._client.base_url) + "api/query", query_params, max_bytes=7500
             )
         try:
-            response = physical_request(
-                request,
-                query_params,
-                lambda: self._client.get(
-                    "/api/query",
-                    params=query_params,
-                    timeout=self._config.deadlines.search_seconds,
-                ),
-            )
+            pacing = self._request_lock if request.compiled_query is not None else nullcontext()
+            with pacing:
+                response = physical_request(
+                    request,
+                    query_params,
+                    lambda: self._send(query_params),
+                    before_reservation=self._wait_for_slot
+                    if request.compiled_query is not None
+                    else None,
+                )
         except httpx.TimeoutException as exc:
             raise SearchTimeoutError(
                 SearchFailureCode.TIMEOUT, "arXiv search timed out", retryable=True
@@ -113,7 +129,10 @@ class ArxivSearchAdapter:
             raise SearchProviderError(
                 SearchFailureCode.MALFORMED_RESPONSE, "arXiv returned invalid Atom XML"
             ) from exc
-        results = _parse_entries(root, request.limit)
+        start = query_params["start"]
+        results = _parse_entries(
+            root, request.limit, rank_offset=start, provider_page=request.page_number
+        )
         if not results:
             raise SearchProviderError(
                 SearchFailureCode.EMPTY_RESULTS, "arXiv returned no usable results"
@@ -126,11 +145,44 @@ class ArxivSearchAdapter:
             search_type="metadata",
         )
 
+    def _wait_for_slot(self, cancelled: Callable[[], bool] | None) -> None:
+        if cancelled is not None and cancelled():
+            raise SearchProviderError(SearchFailureCode.CANCELLED, "arXiv request cancelled")
+        now = self._monotonic()
+        if self._last_request_start is not None:
+            deadline = self._last_request_start + 3.0
+            while now < deadline:
+                if cancelled is not None and cancelled():
+                    raise SearchProviderError(
+                        SearchFailureCode.CANCELLED, "arXiv request cancelled while rate limited"
+                    )
+                self._sleep(min(max(deadline - now, 0.001), 0.1))
+                now = self._monotonic()
+        if cancelled is not None and cancelled():
+            raise SearchProviderError(SearchFailureCode.CANCELLED, "arXiv request cancelled")
 
-def _parse_entries(root: ElementTree.Element, limit: int) -> list[SearchResult]:
+    def _send(self, parameters: dict[str, str | int | bool]) -> httpx.Response:
+        self._last_request_start = self._monotonic()
+        return bounded_send(
+            self._client,
+            "GET",
+            "/api/query",
+            expected_base_url=self._config.base_url,
+            params=parameters,
+            timeout=self._config.deadlines.search_seconds,
+        )
+
+
+def _parse_entries(
+    root: ElementTree.Element,
+    limit: int,
+    rank_offset: int = 0,
+    *,
+    provider_page: int = 1,
+) -> list[SearchResult]:
     results: list[SearchResult] = []
     seen: set[str] = set()
-    for entry in root.findall(f"{_ATOM}entry"):
+    for index, entry in enumerate(root.findall(f"{_ATOM}entry"), start=1):
         url = _text(entry.find(f"{_ATOM}id"))
         if url is None or url in seen or not _http_url(url):
             continue
@@ -154,9 +206,11 @@ def _parse_entries(root: ElementTree.Element, limit: int) -> list[SearchResult]:
                 original_url=url,
                 title=_text(entry.find(f"{_ATOM}title")) or "",
                 snippet=_text(entry.find(f"{_ATOM}summary")),
-                rank=len(results) + 1,
+                rank=rank_offset + index,
                 metadata=SearchDiscoveryMetadata(
                     engine="arxiv",
+                    provider_page=provider_page,
+                    raw_provider_rank=index,
                     published_at=_text(entry.find(f"{_ATOM}published")),
                     display_url=url,
                     category=_category(entry),
