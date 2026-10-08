@@ -190,13 +190,23 @@ def freeze_query_execution(
     # Freeze new executable prompt/schema identity without relabeling Phase-1 history.
     prompt_hashes = {
         name: hashlib.sha256((root / "prompts" / name).read_bytes()).hexdigest()
-        for name in ("v2_initial_planner_v2.md", "search_agent_v2.md", "v2_scout_v2.md")
+        for name in (
+            "v2_initial_planner_v2.md",
+            "search_agent_v2.md",
+            "v2_scout_v2.md",
+            "source_selection_v3.md",
+        )
     }
     from researchassistant.contracts.acquisition_ranking import (
         V2AcquisitionRankingAudit,
         V2DiscoveryPipelineCounters,
     )
+    from researchassistant.contracts.discovery_v2 import V2PreviewRequest, V2PreviewResult
     from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
+    from researchassistant.contracts.model_research import (
+        V2AcquisitionProbeOutput,
+        V2SourceSelectionInput,
+    )
     from researchassistant.contracts.query_planning import (
         V2AdaptiveSearchConceptsOutput,
         V2InitialPlannerConceptsOutput,
@@ -206,13 +216,28 @@ def freeze_query_execution(
         V2QueryParseReceipt,
         V2QueryRetrievalResult,
     )
+    from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
 
     schema_hash = discovery_hash(
         json.dumps(
             {
                 "foundation": binding.prompt_schema_hash,
                 "prompts": prompt_hashes,
+                "preview_probe_policy": "researchassistant-v2-phase-5-acquisition-probe-v3",
+                "selection_policy": "researchassistant-v2-phase-8-source-selection-v2",
+                "selection_input_cap": 24000,
+                "preview_bounds": {
+                    "spans": 5,
+                    "span_chars": 1200,
+                    "total_chars": 4800,
+                    "context_chars_each": 160,
+                },
                 "schemas": [
+                    V2PreviewRequest.model_json_schema(),
+                    V2PreviewResult.model_json_schema(),
+                    V2SourceSelectionInput.model_json_schema(),
+                    V2AcquisitionProbeOutput.model_json_schema(),
+                    V2SelectionShortlistAudit.model_json_schema(),
                     V2InitialPlannerConceptsOutput.model_json_schema(),
                     V2AdaptiveSearchConceptsOutput.model_json_schema(),
                     V2MetadataRankingArtifact.model_json_schema(),
@@ -230,6 +255,7 @@ def freeze_query_execution(
         update={
             "compiler_identity": QUERY_COMPILER_ID,
             "ranking_identity": "source-candidate-ranking-v2",
+            "preview_identity": "source-claim-preview-v2",
             "prompt_schema_hash": schema_hash,
         }
     )

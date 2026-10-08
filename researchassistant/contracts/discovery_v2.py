@@ -11,7 +11,14 @@ from typing import Annotated, Literal
 from urllib.parse import parse_qsl, urlsplit
 from uuid import UUID, uuid5
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from researchassistant.common.money import ExactUSD
 from researchassistant.contracts.metadata_ranking import MetadataRankingWeights
@@ -446,11 +453,30 @@ class V2PreviewRequest(V2DiscoveryArtifact):
     source_id: UUID
     snapshot_id: UUID
     snapshot_hash: Digest
-    preview_identity: Literal["source-claim-preview-v1"] = PREVIEW_ID
+    preview_identity: Literal["source-claim-preview-v1", "source-claim-preview-v2"] = PREVIEW_ID
+
+    asserted_components: tuple[str, ...] = Field(default=(), max_length=6)
+    target_gaps: tuple[str, ...] = Field(default=(), max_length=6)
+
+    @model_serializer(mode="wrap")
+    def historical_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if self.preview_identity == "source-claim-preview-v1":
+            data.pop("asserted_components", None)
+            data.pop("target_gaps", None)
+        return data
 
     @model_validator(mode="after")
     def permitted_lane(self) -> V2PreviewRequest:
         self.directions.require_permitted(self.direction)
+        if any(not x or x not in self.exact_claim for x in self.asserted_components):
+            raise ValueError("preview asserted components must be exact claim substrings")
+        if any(not x.strip() or len(x) > 2000 for x in self.target_gaps):
+            raise ValueError("preview target gaps must be bounded nonempty text")
+        if self.preview_identity == "source-claim-preview-v1" and (
+            self.asserted_components or self.target_gaps
+        ):
+            raise ValueError("historical preview cannot carry current claim context")
         return self
 
 
@@ -458,10 +484,29 @@ class V2PreviewSpan(V2DiscoveryValue):
     start: Count
     end: int = Field(strict=True, ge=1)
     text: Annotated[str, Field(min_length=1)]
-    section: Literal["methods", "results", "discussion", "abstract", "bibliography", "unknown"]
+    section: Literal[
+        "title",
+        "methods",
+        "results",
+        "discussion",
+        "conclusion",
+        "abstract",
+        "bibliography",
+        "unknown",
+    ]
     context_before: str = ""
     context_after: str = ""
     relevance_signals: tuple[Label, ...] = ()
+    omitted_before: bool | None = None
+    omitted_after: bool | None = None
+
+    @model_serializer(mode="wrap")
+    def historical_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        for field in ("omitted_before", "omitted_after"):
+            if data.get(field) is None:
+                data.pop(field, None)
+        return data
 
     @model_validator(mode="after")
     def exact_length(self) -> V2PreviewSpan:
@@ -473,9 +518,30 @@ class V2PreviewSpan(V2DiscoveryValue):
 class V2PreviewResult(V2DiscoveryArtifact):
     request: V2PreviewRequest
     spans: tuple[V2PreviewSpan, ...] = Field(default=(), max_length=8)
-    content_classification: Literal["full_text", "partial", "abstract_only", "shell", "unknown"]
+    content_classification: Literal[
+        "full_text", "partial", "abstract_only", "landing", "error", "shell", "unknown"
+    ]
     outcome: Literal["completed", "unavailable"]
     reason: Label
+    observed_sections: tuple[str, ...] = Field(default=(), max_length=8)
+    missing_sections: tuple[str, ...] = Field(default=(), max_length=8)
+    snapshot_truncated: bool = False
+    capture_usable: bool | None = None
+    relevance_score: int = Field(default=0, strict=True, ge=0, le=100)
+
+    @model_serializer(mode="wrap")
+    def historical_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if self.request.preview_identity == "source-claim-preview-v1":
+            for field in (
+                "observed_sections",
+                "missing_sections",
+                "snapshot_truncated",
+                "capture_usable",
+                "relevance_score",
+            ):
+                data.pop(field, None)
+        return data
 
     @model_validator(mode="after")
     def owned_request(self) -> V2PreviewResult:
@@ -487,6 +553,18 @@ class V2PreviewResult(V2DiscoveryArtifact):
             raise ValueError("completed previews require exact spans")
         if any(a.end > b.start for a, b in zip(self.spans, self.spans[1:], strict=False)):
             raise ValueError("preview spans must be ordered and nonoverlapping")
+        if self.request.preview_identity == "source-claim-preview-v2":
+            if self.capture_usable is None:
+                raise ValueError("current preview requires observable capture usability")
+            if len(self.spans) > 5 or sum(len(x.text) for x in self.spans) > 4800:
+                raise ValueError("current preview exceeds passage/character budget")
+            if any(
+                len(x.text) > 1200 or len(x.context_before) > 160 or len(x.context_after) > 160
+                for x in self.spans
+            ):
+                raise ValueError("current preview exceeds window/context budget")
+            if any(x.omitted_before is None or x.omitted_after is None for x in self.spans):
+                raise ValueError("current preview requires context omission markers")
         return self
 
     def require_snapshot(self, snapshot: SourceSnapshot) -> None:
@@ -499,7 +577,18 @@ class V2PreviewResult(V2DiscoveryArtifact):
         text = snapshot.normalized_text
         if sha256(text.encode()).hexdigest() != self.request.snapshot_hash:
             raise ValueError("preview snapshot text hash is stale")
+        if self.request.preview_identity == "source-claim-preview-v2" and (
+            self.snapshot_truncated != snapshot.truncated
+        ):
+            raise ValueError("preview truncation diagnostic differs from snapshot")
         for span in self.spans:
+            if span.end > len(text):
+                raise ValueError("preview offsets exceed immutable snapshot")
+            if self.request.preview_identity == "source-claim-preview-v2" and (
+                span.omitted_before != (span.start > 0)
+                or span.omitted_after != (span.end < len(text))
+            ):
+                raise ValueError("preview context omission markers differ from offsets")
             if (
                 text[span.start : span.end] != span.text
                 or text[max(0, span.start - len(span.context_before)) : span.start]
@@ -680,7 +769,7 @@ class V2DiscoveryBinding(V2DiscoveryArtifact):
     ranking_identity: Literal["source-candidate-ranking-v1", "source-candidate-ranking-v2"] = (
         RANKING_ID
     )
-    preview_identity: Literal["source-claim-preview-v1"] = PREVIEW_ID
+    preview_identity: Literal["source-claim-preview-v1", "source-claim-preview-v2"] = PREVIEW_ID
     seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID
 
     @model_validator(mode="after")

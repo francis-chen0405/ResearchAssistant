@@ -19,6 +19,7 @@ from providers.llm import (
     LLMStage,
     invoke_llm,
     load_prompt,
+    load_prompt_file,
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
@@ -26,6 +27,8 @@ from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
 from researchassistant.common.money import add_usd
 from researchassistant.contracts.discovery_v2 import V2PreviewRequest, V2PreviewResult, discovery_id
+from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
+from researchassistant.contracts.model_research import V2_PREVIEW_SELECTION_POLICY_IDENTITY
 from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
@@ -52,7 +55,12 @@ from researchassistant.contracts.models import (
     V2SourceSelectionSearchProvenance,
     validate_v2_source_selection_gap_history,
 )
+from researchassistant.contracts.source_selection_preview import (
+    V2SelectionOmission,
+    V2SelectionShortlistAudit,
+)
 from researchassistant.evidence.evidence_portfolio import identify_source_family
+from researchassistant.research.source_preview import build_claim_preview
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_SOURCE_SELECTION_MAX_ATTEMPTS = 2
@@ -87,6 +95,9 @@ def build_v2_source_selection_input(
     discovery_outputs: tuple[V2DiscoveryScoutOutput, ...],
     acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
     gap_outputs: tuple[V2GapAnalysisOutput, ...],
+    claim_aware: bool = False,
+    asserted_components: tuple[str, ...] = (),
+    metadata_ranking_outputs: tuple[V2MetadataRankingArtifact, ...] = (),
     preview_builder: Callable[[V2PreviewRequest, SourceSnapshot], V2PreviewResult] | None = None,
 ) -> V2SourceSelectionInput:
     """Reconstruct every merged survivor with its persisted round context."""
@@ -119,6 +130,20 @@ def build_v2_source_selection_input(
     for round_number, discovery in discoveries.items():
         if any(item.round_number != round_number for item in discovery.items):
             raise ValueError("source-selection discovery outputs must use completed round order")
+    rankings = {item.round_number: item for item in metadata_ranking_outputs}
+    if len(rankings) != len(metadata_ranking_outputs):
+        raise ValueError("selection metadata rankings must be unique by round")
+    for number, ranking in rankings.items():
+        discovery = discoveries.get(number)
+        if discovery is None or {rank.item_id for rank in ranking.ranks} != {
+            item.item_id for item in discovery.items
+        }:
+            raise ValueError("selection ranking differs from discovery membership")
+    if any(item.run_id != run_id for item in metadata_ranking_outputs):
+        raise ValueError("selection metadata ranking belongs to another run")
+    fresh_preview = claim_aware or preview_builder is build_claim_preview
+    if fresh_preview and preview_builder is None:
+        preview_builder = build_claim_preview
     candidates: list[V2SourceSelectionCandidate] = []
     for merged in merged_survivors.sources:
         discovery = discoveries.get(merged.research_round)
@@ -158,6 +183,7 @@ def build_v2_source_selection_input(
             )
             for passage_id in survivor.passage_ids
         )
+        preview: V2PreviewResult | None = None
         if preview_builder is not None:
             key = f"selection-preview/{survivor.cluster_id}/{survivor.snapshot_id}"
             preview_request = V2PreviewRequest(
@@ -170,8 +196,17 @@ def build_v2_source_selection_input(
                 source_id=survivor.cluster_id,
                 snapshot_id=survivor.snapshot_id,
                 snapshot_hash=survivor.snapshot_sha256,
+                preview_identity="source-claim-preview-v2"
+                if fresh_preview
+                else "source-claim-preview-v1",
+                asserted_components=asserted_components if fresh_preview else (),
+                target_gaps=tuple(dict.fromkeys(gap.missing_evidence for gap in gap_rows))[:6]
+                if fresh_preview
+                else (),
             )
-            preview = preview_builder(preview_request, source.snapshot)
+            preview = V2PreviewResult.model_validate(
+                preview_builder(preview_request, source.snapshot).model_dump(mode="python")
+            )
             if preview.request != preview_request:
                 raise ValueError("selection preview differs from its exact claim/snapshot request")
             preview.require_snapshot(source.snapshot)
@@ -179,12 +214,15 @@ def build_v2_source_selection_input(
                 selected_passages = tuple(
                     V2SourceSelectionProbePassage(
                         passage_id=f"preview:{preview.artifact_id}:{span.start}:{span.end}",
-                        text=span.text[:1200],
-                        score=0,
+                        text=span.text if fresh_preview else span.text[:1200],
+                        score=preview.relevance_score if fresh_preview else 0,
                     )
                     for span in preview.spans
                 )
-            # An unavailable preview uses the persisted deterministic Probe passages.
+            elif fresh_preview:
+                # Retain usable acquisition with explicit unknown/low relevance, no stale excerpts.
+                selected_passages = ()
+            # Historical callback unavailability retains the original Probe fallback.
         search_provenance = tuple(
             V2SourceSelectionSearchProvenance(
                 query_id=item.query_id,
@@ -211,6 +249,14 @@ def build_v2_source_selection_input(
                     dict.fromkeys(item.provider for item in cluster.provider_references)
                 ),
                 probe_passages=selected_passages,
+                preview=preview,
+                metadata_ranks=tuple(
+                    rank
+                    for rank in rankings[merged.research_round].ranks
+                    if rank.item_id in cluster.item_ids
+                )
+                if merged.research_round in rankings
+                else (),
                 search_provenance=search_provenance,
                 snapshot_word_count=source.snapshot.word_count,
                 deep_analysis_input_tokens=(
@@ -228,6 +274,9 @@ def build_v2_source_selection_input(
         gap_history=gap_rows,
         gap_reporting_policy="conservative-v1",
         latest_gap_coverage=_latest_gap_coverage(gap_outputs),
+        policy_identity=V2_PREVIEW_SELECTION_POLICY_IDENTITY
+        if fresh_preview
+        else "researchassistant-v2-phase-8-source-selection-v1",
     )
 
 
@@ -288,7 +337,15 @@ def run_v2_source_selection_and_queue(
 
     insert_v2_artifact(path, V2_SOURCE_SELECTION_POOL_KEY, selection_input, completed_at)
     route = routing_config.preflight().for_stage(LLMStage.SOURCE_SELECTION)
-    prompt = load_prompt(LLMStage.SOURCE_SELECTION)
+    fresh = selection_input.policy_identity == V2_PREVIEW_SELECTION_POLICY_IDENTITY
+    prompt = (
+        load_prompt_file(
+            Path(__file__).resolve().parents[1] / "prompts" / "source_selection_v3.md",
+            expected_stage=LLMStage.SOURCE_SELECTION,
+        )
+        if fresh
+        else load_prompt(LLMStage.SOURCE_SELECTION)
+    )
     request = LLMRequest(
         run_id=selection_input.run_id,
         stage=LLMStage.SOURCE_SELECTION,
@@ -304,21 +361,32 @@ def run_v2_source_selection_and_queue(
         model_alias=route.logical_alias,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.SOURCE_SELECTION).generation,
     )
+    if fresh:
+        request, shortlist = _bounded_selection_request(request, selection_input, llm_provider)
+        insert_v2_artifact(path, "source-selection-preview-shortlist-v2", shortlist, completed_at)
     attempts: list[V2SourceSelectionAttempt] = []
     recommendations: tuple[V2SourceSelectionRecommendation, ...] | None = None
     for attempt_number in range(1, V2_SOURCE_SELECTION_MAX_ATTEMPTS + 1):
+        if request is None:
+            break
         reservation = routing_config.preflight().reserve(
             LLMStage.SOURCE_SELECTION,
-            conservative_token_estimate(request.rendered_prompt),
+            _actual_input_tokens(llm_provider, request),
         )
-        if not _selection_attempt_is_safe(budget, attempts, reservation, routing_config):
+        if not _selection_attempt_is_safe(
+            budget,
+            attempts,
+            reservation,
+            routing_config,
+            protected_sources=selection_input.survivors if fresh else (),
+        ):
             break
         try:
             invocation = invoke_llm(llm_provider, request, clock=now)
             output = V2SourceSelectionModelOutput.model_validate(
                 invocation.output_artifact.model_dump(mode="python", round_trip=True)
             )
-            recommendations = _validate_recommendations(selection_input, output)
+            recommendations = _validate_recommendations(request.input_artifact, output)
             attempts.append(
                 V2SourceSelectionAttempt(
                     attempt_number=attempt_number,
@@ -379,6 +447,73 @@ def run_v2_source_selection_and_queue(
     insert_v2_artifact(path, V2_SOURCE_SELECTION_STATUS_KEY, result, completed_at)
     insert_v2_artifact(path, V2_SOURCE_SELECTION_COMPLETION_KEY, result, completed_at)
     return V2SourceSelectionRunResult(**result.model_dump(), resumed=False)
+
+
+def _actual_input_tokens(provider: LLMProvider, request: LLMRequest) -> int:
+    """Use the durable reservation owner's complete adapter input estimate."""
+    minimum = conservative_token_estimate(request.rendered_prompt)
+    estimator = getattr(provider, "conservative_input_tokens", None)
+    tokens = estimator(request, minimum) if callable(estimator) else minimum
+    if type(tokens) is not int or tokens < minimum:
+        raise ValueError("selection input estimate cannot understate rendered input")
+    return tokens
+
+
+def _bounded_selection_request(
+    request: LLMRequest,
+    full_pool: V2SourceSelectionInput,
+    provider: LLMProvider,
+) -> tuple[LLMRequest | None, V2SelectionShortlistAudit]:
+    """Select a stable fair prefix of whole sources; retain every omitted disposition."""
+    cap = 24000
+    lanes = {
+        direction: list(
+            _complementary_order(
+                tuple(item for item in full_pool.survivors if item.direction is direction)
+            )
+        )
+        for direction in full_pool.directions.enabled_directions
+    }
+    ordered = _interleave_lanes(lanes, full_pool.directions.enabled_directions)
+    selected: list[V2SourceSelectionCandidate] = []
+    fitted_request: LLMRequest | None = None
+    fitted_tokens = 0
+    for candidate in ordered:
+        pool = full_pool.model_copy(update={"survivors": tuple((*selected, candidate))})
+        proposal = request.model_copy(
+            update={
+                "input_artifact": pool,
+                "input_artifact_ids": tuple(item.source_id for item in pool.survivors),
+                "rendered_prompt": render_stage_prompt(
+                    request.prompt, pool, V2SourceSelectionModelOutput
+                ),
+            }
+        )
+        tokens = _actual_input_tokens(provider, proposal)
+        if tokens > cap:
+            break
+        selected.append(candidate)
+        fitted_request, fitted_tokens = proposal, tokens
+    included = tuple(item.source_id for item in selected)
+    included_set = set(included)
+    audit = V2SelectionShortlistAudit(
+        run_id=full_pool.run_id,
+        total_sources=len(full_pool.survivors),
+        included_source_ids=included,
+        rendered_input_tokens=fitted_tokens,
+        omitted=tuple(
+            V2SelectionOmission(
+                source_id=item.source_id,
+                reason=(
+                    "Whole source omitted from model input by deterministic fair input-cap "
+                    "prefix; retained for fallback/queue."
+                ),
+            )
+            for item in full_pool.survivors
+            if item.source_id not in included_set
+        ),
+    )
+    return fitted_request, audit
 
 
 def calculate_v2_deep_analysis_queue(
@@ -543,6 +678,11 @@ def _fallback_recommendations(
                     rationale=(
                         "Deterministic fallback retained high Probe priority while adding "
                         "an unused source family before redundant family members."
+                        + (
+                            f" Preview: {candidate.preview.reason}"
+                            if candidate.preview is not None
+                            else ""
+                        )
                     ),
                 )
             )
@@ -614,7 +754,12 @@ def _candidate_sort_key(candidate: V2SourceSelectionCandidate) -> tuple[int, int
         )
     )
     return (
-        -max(item.score for item in candidate.probe_passages),
+        -(
+            candidate.preview.relevance_score
+            if candidate.preview is not None
+            and candidate.preview.request.preview_identity == "source-claim-preview-v2"
+            else max((item.score for item in candidate.probe_passages), default=0)
+        ),
         -primary,
         candidate.research_round,
         str(candidate.source_id),
@@ -655,14 +800,26 @@ def _selection_attempt_is_safe(
     attempts: Sequence[V2SourceSelectionAttempt],
     reservation: object,
     routing_config: V2RoutingConfig,
+    *,
+    protected_sources: tuple[V2SourceSelectionCandidate, ...] = (),
 ) -> bool:
     prior_tokens = sum(item.reserved_tokens for item in attempts)
     prior_cost = add_usd(*(item.reserved_cost_usd for item in attempts))
+    protected_tokens, protected_cost, protected_calls = 0, Decimal("0"), 0
+    if protected_sources:
+        protected_tokens, protected_cost = min(
+            (
+                _source_reservation(routing_config.preflight(), source)
+                for source in protected_sources
+            ),
+            key=lambda value: (value[1], value[0]),
+        )
+        protected_calls = V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
     return _fits(
         budget,
-        physical_calls=len(attempts) + 1,
-        tokens=prior_tokens + reservation.reserved_tokens,
-        cost=add_usd(prior_cost, reservation.reserved_cost_usd),
+        physical_calls=len(attempts) + 1 + protected_calls,
+        tokens=prior_tokens + reservation.reserved_tokens + protected_tokens,
+        cost=add_usd(prior_cost, reservation.reserved_cost_usd, protected_cost),
     )
 
 
@@ -673,6 +830,7 @@ def _budget_after_selection(
     reserved_tokens = sum(item.reserved_tokens for item in attempts)
     reserved_cost = add_usd(*(item.reserved_cost_usd for item in attempts))
     return V2DeepAnalysisBudget(
+        physical_call_ceiling=budget.physical_call_ceiling,
         physical_calls_used=budget.physical_calls_used + len(attempts),
         tokens_remaining=max(0, budget.tokens_remaining - reserved_tokens),
         cost_remaining_usd=_subtract_usd(budget.cost_remaining_usd, reserved_cost),

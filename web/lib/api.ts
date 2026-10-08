@@ -130,6 +130,27 @@ export type RecordCompatibilityResult = {
   message: string;
 };
 
+export type SourcePreview = {
+  content_classification: "full_text" | "partial" | "abstract_only" | "landing" | "error" | "shell" | "unknown";
+  outcome: "completed" | "unavailable";
+  reason: string;
+  observed_sections?: string[];
+  missing_sections?: string[];
+  snapshot_truncated?: boolean;
+  capture_usable?: boolean | null;
+  relevance_score?: number;
+  spans: {
+    start: number;
+    end: number;
+    text: string;
+    section: string;
+    context_before: string;
+    context_after: string;
+    omitted_before?: boolean | null;
+    omitted_after?: boolean | null;
+  }[];
+};
+
 export type ResearchTrailItem = {
   research_round: number;
   stance: "supporting" | "opposing";
@@ -160,6 +181,13 @@ export type ResearchTrailItem = {
     penalties: number;
   } | null;
   acquisition_state: "acquired" | "attempted" | "not_attempted" | null;
+  preview?: SourcePreview | null;
+  metadata_rank?: { rank: number; score: number; rationale: string[] } | null;
+  selection_rationale?: string | null;
+  source_selection_rank?: number | null;
+  source_selection_status?: "recommended" | "not_recommended" | null;
+  selection_input_disposition?: "included" | "omitted_input_cap" | null;
+  selection_input_reason?: string | null;
 };
 
 export type V2ResultSource = {

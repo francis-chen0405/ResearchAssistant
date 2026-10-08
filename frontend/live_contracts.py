@@ -16,7 +16,9 @@ from providers.model_choices import (
 )
 from providers.model_profiles import ProfileId
 from researchassistant.common.money import ExactUSD
+from researchassistant.contracts.discovery_v2 import V2PreviewResult
 from researchassistant.contracts.historical import RecordCompatibilityResult
+from researchassistant.contracts.metadata_ranking import MetadataRank
 from researchassistant.contracts.models import (
     DEFAULT_RESEARCH_CONTROLS,
     DiscoveryProvider,
@@ -192,6 +194,14 @@ class ResearchTrailItem(StrictModel):
     extraction_rank: int | None = Field(default=None, ge=1, le=25)
     acquired_breakdown: AcquiredSourceScoreBreakdown | None = None
     acquisition_state: Literal["acquired", "attempted", "not_attempted"] | None = None
+    # Previews and metadata ranks explain prioritization only; neither is evidence.
+    preview: V2PreviewResult | None = None
+    metadata_rank: MetadataRank | None = None
+    selection_rationale: str | None = None
+    source_selection_rank: int | None = Field(default=None, ge=1)
+    source_selection_status: Literal["recommended", "not_recommended"] | None = None
+    selection_input_disposition: Literal["included", "omitted_input_cap"] | None = None
+    selection_input_reason: str | None = None
 
 
 class ResearchTrail(StrictModel):

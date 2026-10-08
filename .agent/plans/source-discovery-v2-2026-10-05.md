@@ -1,6 +1,6 @@
 # Source discovery v2 — shared implementation record
 
-Authorized scope: Phases 1–3 of the six-phase source-discovery pack, delivered one requested phase at a time. Phase 1 foundations and Phase 2 provider-aware query planning/compilation were reviewed and committed locally. The user's conditional-review request, clarified as Phase 3, authorizes review corrections and a local commit after verification of deeper retrieval, deterministic metadata ranking, Scout fairness and ranked acquisition integration. Preserve the unrelated proposal pack. Paid transports, credentials, real databases, installation, automation, push and publication remain outside this phase.
+Authorized scope: Phases 1–4 of the six-phase source-discovery pack, delivered one requested phase at a time. Phases 1–3 were reviewed and committed locally. Following Phase 4 review, the user explicitly authorized correcting its findings, reviewing the repairs and committing the complete phase after verification. Preserve the unrelated proposal pack. Paid transports, credentials, real databases, installation, automation, push and publication remain outside this phase.
 
 ## Original Phase 1 specification and ownership
 
@@ -182,3 +182,151 @@ Three issues were corrected before commit: historical Scout calls now preserve a
 No retrieval defect was found: native paging, physical reservation/retry caps, cancelled/resumed checkpoints, unknown exposure, parser provenance and terminal replay behavior were verified against live source/tests. The existing arXiv and PubMed pacing guards were checked against primary provider documentation and retained. The advisory graph was refreshed without persistence after corrections (**8,643 nodes / 58,428 edges**). Prior-state archives match the Phase 2 commit bytes, including DECISIONS; unrelated proposals remain untracked. No dependency, schema, frontend, desktop, model stage, paid-provider call or real-data change was introduced by review. Offline fixtures establish synthetic behavior, not live recall or research quality.
 
 Final isolated verification after review: **2,046 passed, 3 existing skips in 136.84 seconds** on macOS/Python **3.12.14**. Full Ruff lint/format (**265 files**) and staged/working-tree whitespace checks passed. Skips remain the explicitly gated live CLI smoke, optional LLM integration and native Windows ACL check. All **56** staged files belong to Phase 3 and supporting records; proposals remain excluded. Delivered as the reviewed local commit, without push or installation. Phase 4 exact previews remains the next boundary.
+
+
+## Phase 4 implementation
+
+Authorized by Prompt 4 on October 7, 2026. This phase adds exact claim-aware previews;
+Phases 1–3 were verified against committed source and their focused regression suites.
+The initial implementation instruction excluded commit, paid service, credential read,
+real-user database write, installation and publication. The subsequent user instruction
+authorizes the reviewed local commit; other boundaries remain. The proposal pack and
+unrelated files remain untouched.
+
+Ownership: Sol implemented contracts, current/historical dispatch, acquisition/selection and
+Round 1–4 integration, fingerprint binding, complete actual-input reservation and shortlist
+accounting, UI display, runtime regressions and final review. Luna High implemented bounded
+preview construction and acceptance fixtures; Luna Medium implemented read-only trail
+projection/tests. Their main work landed, but later helper turns hit a usage limit; Sol
+completed algorithm/integration review and remaining verification without claiming that the
+unfinished independent review ran.
+
+`researchassistant.research.source_preview` selects contiguous exact windows from one
+owned normalized snapshot using lexical aliases, observable sections, substantive methods,
+results, statistical context and negative qualifications. Reference/chrome/error/instruction
+fragments cannot dominate selection. Numbered/flattened headings, Unicode and PDF markers
+retain exact offsets. Neighboring spans never bridge excluded material; long paragraphs use
+bounded contiguous windows. Claim-relevance and capture-usability remain separate. No
+length-based or section-based full-document verification is claimed: observed study sections
+are partial captures, abstracts remain abstracts, and unobserved sections remain unknown.
+A substantive source with no relevant window remains a survivor with neutral Probe priority.
+Empty responses have failed-attempt reasons; shell/reference-only snapshots retain their
+immutable failed Probe diagnostics. The existing quote-length gate remains.
+
+Fresh production uses Probe **v3**, preview **v2**, Source Selection input policy **v2** and
+successor `source_selection_v3.md`. Existing default/explicit Probe v1/v2 and selection-v1
+paths, historical prompt bytes and old serialization remain unchanged. The pre-Phase-4
+production schema fingerprint is frozen at its verified c942070 value; fresh executable
+prompt/schema/policy/bounds are bound separately in the exact discovery fingerprint, and
+repository source identity continues to prevent incompatible resume. No migration, new
+model stage, provider or dependency is introduced; nested typed previews and the audited
+shortlist use existing immutable `v2_artifacts`.
+
+Bounds: five nonoverlapping spans, 1,200 characters each, 4,800 passage characters/source,
+160 exact context characters on each side/span; at most 6 claim components/target gaps.
+All spans validate offsets, text, hash/run/source/lane, ordering, overlap, omission markers
+and truncation. Metadata ranks remain separate from preview relevance and final model
+recommendation rationale. Extraction continues to receive the complete authoritative capped
+snapshot, never a preview; Analyst/admission/independent axes/release invariants are unchanged.
+
+Complete model input (including selected adapter overhead) is limited to **24,000 tokens**.
+A deterministic complementary, direction-fair whole-source prefix fits the actual rendered
+input; every omitted source has a typed input-cap disposition, remains in the full persisted
+pool and deterministic queue priority, and appears in read-only trail diagnostics. No arbitrary
+JSON truncation or silent source loss. Every actual selection attempt reserves the complete
+input plus route output allowance, counts failures/retries, and protects one existing
+60,000-token/three-call source envelope. The queue retains lower configured call ceilings.
+Current/historical trail readers validate typed previews against acquired snapshots and show
+capture/relevance diagnostics, metadata priority, selection rationale and input omissions.
+Released-brief export continues to revalidate exact released output and excludes previews.
+
+Acceptance evidence is recorded after final verification below. Offline fixtures establish
+exactness and expected fixture selection only, not live recall or research quality. Next
+boundary: Phase 5 seed-paper expansion within existing provider budgets and authorized rounds.
+
+
+### Phase 4 final acceptance evidence
+
+Target: macOS arm64 source, Python **3.12.14**, fake transports, disposable SQLite/application
+data and isolated static renderer output. Final full suite: **2,086 passed, 3 existing skips
+in 169.75 seconds**. Skips remain explicitly gated live CLI, optional LLM integration and
+native Windows ACL validation. The focused new preview/contract/type group passed **80
+in 2.73 seconds**. Existing acquisition/adaptive/selection/analysis/release/export groups
+passed **196 in 29.07 seconds** (overlapping full-suite coverage). Desktop-specific checks
+are included in the full suite and additionally passed **19 tests in 1.93 seconds**.
+
+| Requirement | Evidence |
+| --- | --- |
+| Exact offsets/context/hash/run/snapshot forgery, bounded Unicode/PDF windows | `test_claim_source_previews.py`, `test_preview_structure_review.py` |
+| RePEc abstract plus irrelevant numeric refs, below-opening study methods/results, null findings, text tables, DOI-only/chrome/instructions, short/truncated/empty/no-match | 25 deterministic construction fixtures across those two files |
+| Actual current acquisition and rendered physical selection request exclude known bibliography while extractor text retains it; usability independent of relevance; failed captures inspectable; resume mismatch blocked | `test_preview_runtime.py` (6 tests) |
+| Deterministic whole-source shortlist, complete omissions, selected adapter overhead plus output reservation, omitted-ID rejection, no-fit/budget fallback and protected lower ceilings | `test_preview_selection_bounds.py`, `test_preview_runtime.py` |
+| Probe-v1/v2 and preview-v1 golden serialization hashes, unchanged historical selection prompt/fingerprint, old read-only inspection/export/release | Golden tests plus existing foundation/history/export/final-release regressions |
+| Typed current preview/metadata-rank/selection-rationale trail, read-only database bytes/mtime unchanged | `test_preview_inspection.py` (3 tests), historical-read regressions |
+| Round 1–4 fresh production release/restart without bypassing extraction/Analyst/admission/Governor | `test_query_production.py` plus full existing pipeline/admission/release suites |
+
+Repository quality: a clean overlay of committed tracked files plus Phase 4 changes/additions
+passed whole-tree Ruff lint and formatting (**272 Python files**); `git diff --check` passed.
+Raw workspace Ruff reports three unrelated import-order issues in untracked legacy files
+`desktop_settings.py`, `history_import.py`, `model_contracts.py`; those files appeared during
+verification with older timestamps and were left untouched. Raw workspace formatting passes.
+The source-quality distinction is explicit; no tests/validators were weakened. Initial
+integration regressions exposed claim-component naming, the Round-4 context call site,
+recommendation-rationale invariants and nested selection-policy dispatch; all were corrected
+before the final full passing run. The earlier full run had one policy-dispatch failure and
+2,079 passing cases; it is superseded by the final result.
+
+Renderer ESLint and TypeScript pass. An isolated **Next.js 16.3.1 webpack desktop static
+export** compiled, type-checked and generated all pages; `node --check desktop/main.cjs`
+passed. Package-manager commands initially attempted unavailable registry/version checks;
+verification used existing installed executables directly with no dependency changes. No
+packaging installation, signed distribution or installed-app replacement was performed.
+
+The graph was refreshed without persisted artifacts (**9,390 nodes / 60,268 edges**) and
+reported ready at c942070; inbound tracing verified all three adaptive/Round-4 acquisition
+call sites against live code. Prior STATUS/HANDOFF/ARCHITECTURE/DECISIONS/plan index archives
+were verified byte-for-byte against the pre-change commit. The proposal pack and unrelated
+untracked modules remain preserved. No paid transports, secrets, real databases, schema
+migration, dependency/model-stage additions, automation, commit, push or publication.
+
+Phase 4 acceptance is complete for source and offline fixtures. Phase 5 seed-paper expansion
+is the next implementation boundary; Phase 6 retains final cross-phase/product acceptance.
+
+### Phase 4 review corrections
+
+The independent review reproduced two defects: ordinary unspaced Chinese study text was
+marked non-substantive, and a checksum-valid selection preview could refer to another
+source's acquired snapshot without a history compatibility warning. Sol corrected both
+findings and personally reviewed the repairs against the original exactness, historical
+identity and read-only boundaries.
+
+Han-script preview usability now requires conservative character diversity and explicit
+research vocabulary, with recognized Chinese methods/discussion headings. Literal bounded
+claim components match unspaced text without translation or single-character relevance.
+Research sections and unheaded prose remain usable independently of relevance; repeated
+text, navigation, access errors and references remain ineligible. Simplified/traditional
+Chinese fixtures verify exact relevant windows and neutral unrelated captures. This change
+concerns preview diagnostics and component matching; the existing quotation-length/counting
+policy is unchanged, and native-text preview usability does not waive quote eligibility.
+
+History resolves the whole acquired-source record before accepting a selection preview and
+checks its cluster, direction and enabled directions in addition to snapshot/run/hash/text.
+Checksum-valid fixtures with a different owner or direction produce a compatibility warning;
+only the original source's independently validated Probe preview may supply a fallback.
+Database bytes and modification time remain unchanged during inspection.
+
+Eleven new regression cases cover these repairs without removing existing assertions.
+Focused preview/runtime/inspection/selection and repository type-contract checks passed
+**52 tests in 2.31 seconds**. Final complete verification and commit evidence follows.
+
+Final isolated macOS/Python **3.12.14** verification after corrections: **2,097 passed,
+3 existing skips in 166.81 seconds**. Skips remain the explicitly gated live CLI smoke,
+optional LLM integration and native Windows ACL verification. Whole-workspace Ruff was run:
+its only failures remain three import-order errors in unrelated untracked restored modules
+(`desktop_settings.py`, `history_import.py`, `model_contracts.py`). All **272 tracked/Phase 4
+Python files** pass lint and formatting; raw workspace formatting passes **289 files**.
+Whitespace checks, installed renderer ESLint/TypeScript checks, a fresh isolated **Next.js
+16.3.1 webpack desktop static export**, and desktop shell syntax pass. The five archived
+current-state documents match c942070 byte-for-byte. Existing tests and historical prompt
+bytes remain intact; the proposal pack and restored legacy modules remain excluded from
+the reviewed local commit. No installation, push, publication or paid research is performed.

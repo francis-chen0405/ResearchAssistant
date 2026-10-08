@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. Phases 1–3 are implemented: provider-specific conceptual planning, bounded metadata pagination/checkpoints, deterministic direction-neutral ranking, fair bounded Scout allocation, and ranked acquisition shortlisting. Phase 4 exact previews is the next boundary; expansion and product settings/acceptance remain later phases and require their corresponding instruction.
+- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase implementation record. Phases 1–4 are implemented: provider-specific conceptual planning, bounded metadata pagination/checkpoints, deterministic direction-neutral ranking, fair bounded Scout allocation, ranked acquisition shortlisting, exact claim-aware previews and preview-informed selection. Phase 5 seed-paper expansion is the next boundary; expansion and product settings/acceptance remain later phases and require their corresponding instruction.
 - The completed [database review](plans/database-review-2026-10-03.md) and [source acceptance](../docs/verification/database-phase4.md) retain earlier schema/recovery/history evidence. Installation and release remain separate boundaries.
 
 ## State and delivery
@@ -16,4 +16,4 @@ See [STATUS](../STATUS.md) for source/commit state, installed and public build p
 - [Product architecture and implementation phases](../docs/history.md#product-and-architecture)
 - [All retained plan and verification records](../docs/history.md)
 
-Historical plans preserve evidence and decisions at stable paths. They do not authorize additional work. The exact preceding plan index and current-state documents are in [the query-planning archive](../docs/archive/2026-10-07-source-query-planning-state/); [the archive index](../docs/archive/INDEX.md) retains earlier snapshots.
+Historical plans preserve evidence and decisions at stable paths. They do not authorize additional work. The exact preceding plan index and current-state documents are in [the source-preview archive](../docs/archive/2026-10-07-source-preview-state/); [the archive index](../docs/archive/INDEX.md) retains earlier snapshots.

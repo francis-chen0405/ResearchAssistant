@@ -10,11 +10,19 @@ from hashlib import sha256
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from researchassistant.common.money import ExactUSD
-from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction
+from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction, V2PreviewResult
+from researchassistant.contracts.metadata_ranking import MetadataRank
 from researchassistant.contracts.model_contracts import (
     DiscoveryProvider,
     NonEmptyStr,
@@ -37,6 +45,10 @@ V2_DISCOVERY_POLICY_IDENTITY = "researchassistant-v2-phase-4-discovery-scout-v1"
 V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v1"
 
 V2_ACQUISITION_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v2"
+
+V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v3"
+
+V2_PREVIEW_SELECTION_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v2"
 
 V2_GAP_ANALYSIS_POLICY_IDENTITY = "researchassistant-v2-phase-6-gap-analysis-v1"
 
@@ -822,6 +834,7 @@ class V2AcquisitionPolicy(StrictModel):
     policy_identity: Literal[
         "researchassistant-v2-phase-5-acquisition-probe-v1",
         "researchassistant-v2-phase-5-acquisition-probe-v2",
+        "researchassistant-v2-phase-5-acquisition-probe-v3",
     ] = V2_ACQUISITION_PROBE_POLICY_IDENTITY
 
 
@@ -892,6 +905,15 @@ class V2ProbeResult(StrictModel):
     passages: tuple[V2ProbePassage, ...] = Field(default=(), max_length=5)
     failure: NonEmptyStr | None = None
 
+    preview: V2PreviewResult | None = None
+
+    @model_serializer(mode="wrap")
+    def historical_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if self.preview is None:
+            data.pop("preview", None)
+        return data
+
     @model_validator(mode="after")
     def validate_probe_shape(self) -> V2ProbeResult:
         if self.succeeded:
@@ -906,6 +928,12 @@ class V2ProbeResult(StrictModel):
             for passage in self.passages
         ):
             raise ValueError("Probe passages must match their snapshot and source cluster")
+        if self.preview is not None and (
+            self.preview.request.source_id != self.cluster_id
+            or self.preview.request.snapshot_id != self.snapshot_id
+            or self.preview.request.snapshot_hash != self.snapshot_sha256
+        ):
+            raise ValueError("Probe preview must match its source and snapshot")
         return self
 
 
@@ -935,6 +963,7 @@ class V2AcquisitionProbeOutput(StrictModel):
     policy_identity: Literal[
         "researchassistant-v2-phase-5-acquisition-probe-v1",
         "researchassistant-v2-phase-5-acquisition-probe-v2",
+        "researchassistant-v2-phase-5-acquisition-probe-v3",
     ] = V2_ACQUISITION_PROBE_POLICY_IDENTITY
     completed_at: datetime
 
@@ -951,6 +980,30 @@ class V2AcquisitionProbeOutput(StrictModel):
         if set(probe_by_snapshot) != snapshot_ids:
             raise ValueError("Probe results must cover exactly the acquired snapshots")
         for source in self.acquisitions:
+            probe = probe_by_snapshot[source.snapshot.snapshot_id]
+            if (
+                probe.cluster_id != source.cluster_id
+                or probe.snapshot_sha256 != source.snapshot.snapshot_sha256
+            ):
+                raise ValueError("Probe must match acquired source identity/hash")
+            if self.policy_identity == V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY and (
+                probe.preview is None
+                or probe.preview.request.preview_identity != "source-claim-preview-v2"
+            ):
+                raise ValueError("current Probe requires its exact versioned preview")
+            if probe.preview is not None:
+                probe.preview.require_snapshot(source.snapshot)
+                if (
+                    probe.preview.request.directions != self.directions
+                    or probe.preview.request.direction != source.direction
+                ):
+                    raise ValueError("Probe preview lane differs from acquisition")
+            for passage in probe.passages:
+                if (
+                    source.snapshot.normalized_text[passage.start_char : passage.end_char]
+                    != passage.text
+                ):
+                    raise ValueError("Probe text differs from immutable snapshot")
             self.directions.require_permitted(source.direction)
             if source.snapshot.run_id != self.run_id:
                 raise ValueError("acquired snapshot run_id must match output run_id")
@@ -962,6 +1015,11 @@ class V2AcquisitionProbeOutput(StrictModel):
             probe = probe_by_snapshot.get(survivor.snapshot_id)
             if probe is None or not probe.succeeded:
                 raise ValueError("survivors require a successful Probe result")
+            source = next(
+                x for x in self.acquisitions if x.snapshot.snapshot_id == survivor.snapshot_id
+            )
+            if survivor.cluster_id != probe.cluster_id or survivor.direction != source.direction:
+                raise ValueError("survivor source/lane must match acquired Probe")
             if survivor.snapshot_sha256 != probe.snapshot_sha256:
                 raise ValueError("survivor snapshot hash must match Probe")
             if not set(survivor.passage_ids).issubset(
@@ -1908,15 +1966,37 @@ class V2SourceSelectionCandidate(StrictModel):
     authors: tuple[NonEmptyStr, ...] = ()
     publication_date: NonEmptyStr | None = None
     discovery_providers: tuple[DiscoveryProvider, ...] = Field(min_length=1, max_length=6)
-    probe_passages: tuple[V2SourceSelectionProbePassage, ...] = Field(min_length=1, max_length=5)
+    probe_passages: tuple[V2SourceSelectionProbePassage, ...] = Field(max_length=5)
     search_provenance: tuple[V2SourceSelectionSearchProvenance, ...] = Field(
         min_length=1, max_length=20
     )
     snapshot_word_count: PositiveInt
     deep_analysis_input_tokens: PositiveInt
 
+    preview: V2PreviewResult | None = None
+    metadata_ranks: tuple[MetadataRank, ...] = Field(default=(), max_length=300)
+
+    @model_serializer(mode="wrap")
+    def historical_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if self.preview is None:
+            data.pop("preview", None)
+        if not self.metadata_ranks:
+            data.pop("metadata_ranks", None)
+        return data
+
     @model_validator(mode="after")
     def validate_candidate_provenance(self) -> V2SourceSelectionCandidate:
+        if not self.probe_passages and (
+            self.preview is None
+            or self.preview.request.preview_identity != "source-claim-preview-v2"
+        ):
+            raise ValueError("historical selection candidates require Probe passages")
+        if self.preview is not None and (
+            self.preview.request.source_id != self.source_id
+            or self.preview.request.direction != self.direction
+        ):
+            raise ValueError("selection preview source/lane mismatch")
         if len(set(self.discovery_providers)) != len(self.discovery_providers):
             raise ValueError("source-selection discovery providers must be unique")
         if any(item.round_number > self.research_round for item in self.search_provenance):
@@ -1936,12 +2016,20 @@ class V2SourceSelectionInput(StrictModel):
     gap_history: tuple[V2SourceSelectionGap, ...] = Field(max_length=18)
     gap_reporting_policy: Literal["legacy", "conservative-v1"] = "legacy"
     latest_gap_coverage: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
-    policy_identity: Literal["researchassistant-v2-phase-8-source-selection-v1"] = (
-        V2_SOURCE_SELECTION_POLICY_IDENTITY
-    )
+    policy_identity: Literal[
+        "researchassistant-v2-phase-8-source-selection-v1",
+        "researchassistant-v2-phase-8-source-selection-v2",
+    ] = V2_SOURCE_SELECTION_POLICY_IDENTITY
 
     @model_validator(mode="after")
     def validate_complete_pool(self) -> V2SourceSelectionInput:
+        for candidate in self.survivors:
+            if candidate.preview is not None and (
+                candidate.preview.run_id != self.run_id
+                or candidate.preview.request.exact_claim != self.exact_claim
+                or candidate.preview.request.directions != self.directions
+            ):
+                raise ValueError("selection preview run/claim/directions mismatch")
         source_ids = tuple(item.source_id for item in self.survivors)
         if len(source_ids) != len(set(source_ids)):
             raise ValueError("source-selection survivor IDs must be unique")

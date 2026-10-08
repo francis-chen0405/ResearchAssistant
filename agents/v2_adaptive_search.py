@@ -50,6 +50,10 @@ from researchassistant.contracts.discovery_v2 import (
     V2MetadataDiscoveryPolicy,
     discovery_id,
 )
+from researchassistant.contracts.model_research import (
+    V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
+    V2AcquisitionPolicy,
+)
 from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryProvider,
@@ -93,6 +97,7 @@ from researchassistant.research.research_governor import (
     V2RoundThreeReasonCode,
     evaluate_v2_round_three_authorization,
 )
+from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_ADAPTIVE_COMPLETION_KEY = "phase-7-adaptive-search-completion"
@@ -764,6 +769,15 @@ def run_v2_adaptive_search_continuation(
     round_three = _run_round_from_plan(
         path=path,
         planned=round_three_plan,
+        exact_claim=initial_plan.raw_claim,
+        asserted_components=tuple(
+            x.claim_component
+            for x in initial_plan.claim_coverage_focus
+            if x.claim_component in initial_plan.raw_claim
+        ),
+        preview_gaps=tuple(x.missing_evidence for x in gap_two.result.material_gaps)[:6]
+        if gap_two.result is not None
+        else (),
         search_providers=search_providers,
         llm_provider=llm_provider,
         routing_config=routing_config,
@@ -962,6 +976,15 @@ def _run_round(
     search, discovery, acquisition, summary = _run_round_from_plan(
         path=path,
         planned=planned,
+        exact_claim=initial_plan.raw_claim,
+        asserted_components=tuple(
+            x.claim_component
+            for x in initial_plan.claim_coverage_focus
+            if x.claim_component in initial_plan.raw_claim
+        ),
+        preview_gaps=tuple(x.missing_evidence for x in gap_output.result.material_gaps)[:6]
+        if gap_output.result is not None
+        else (),
         search_providers=search_providers,
         llm_provider=llm_provider,
         routing_config=routing_config,
@@ -1505,6 +1528,9 @@ def _run_round_from_plan(
     *,
     path: str,
     planned: V2AdaptivePlannedRound,
+    exact_claim: str,
+    asserted_components: tuple[str, ...],
+    preview_gaps: tuple[str, ...],
     search_providers: Mapping[DiscoveryProvider, SearchProvider],
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
@@ -1521,6 +1547,14 @@ def _run_round_from_plan(
     V2AdaptiveRoundExecution,
 ]:
     plan = planned.plan
+    try:
+        preview_binding = read_discovery_binding(path, plan.run_id)
+    except KeyError:
+        preview_binding = None
+    fresh_preview = (
+        preview_binding is not None
+        and preview_binding.preview_identity == "source-claim-preview-v2"
+    )
     search = _execute_searches(path, plan, search_providers, cancellation_requested, clock)
     cancelled_after_search = _cancelled(cancellation_requested)
     responses = tuple(
@@ -1563,6 +1597,12 @@ def _run_round_from_plan(
         acquisition = run_v2_acquisition_probe(
             db_path=path,
             discovery_output=discovery,
+            exact_claim=exact_claim,
+            asserted_components=asserted_components,
+            target_gaps=preview_gaps,
+            policy=V2AcquisitionPolicy(policy_identity=V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY)
+            if fresh_preview
+            else None,
             wigolo_provider=wigolo_provider,
             firecrawl_provider=firecrawl_provider,
             excluded_cluster_ids=duplicate_ids,

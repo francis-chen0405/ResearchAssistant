@@ -72,6 +72,11 @@ from providers.v2_budget import (
 )
 from providers.v2_routing import V2RoutingConfig
 from researchassistant.contracts.discovery_v2 import SearchMode, V2MetadataDiscoveryPolicy
+from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
+from researchassistant.contracts.model_research import (
+    V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
+    V2AcquisitionPolicy,
+)
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
@@ -84,33 +89,21 @@ from researchassistant.contracts.models import (
     ResearchDirections,
     RunManifest,
     RunStatus,
-    ScoutBatch,
     Stage,
     StrictModel,
-    SynthesisOutput,
     V2AcquisitionProbeOutput,
-    V2AdaptiveSearchModelOutput,
     V2DeepAnalysisBackfillResult,
     V2DeepAnalysisBudget,
     V2DiscoveryScoutOutput,
-    V2EvidenceAdmissionBatchResult,
-    V2EvidenceAdmissionRecord,
-    V2EvidenceAdmissionSourceResult,
-    V2EvidenceAnalystModelOutput,
     V2FinalResearchOutput,
-    V2GapAnalysisModelOutput,
     V2GapAnalysisOutput,
     V2GapBudgetState,
-    V2InitialPlannerModelOutput,
     V2PipelineIdentity,
     V2ProviderRunDiagnostics,
     V2ResultSourceStatus,
     V2RoundOneSearchQuery,
     V2RunDiagnostics,
-    V2SourceSelectionModelOutput,
     V2SourceSelectionQueueResult,
-    V2SynthesizerInput,
-    V2VerbatimQuoteSelection,
 )
 from researchassistant.evidence.evidence_core import (
     EVIDENCE_POLICY_VERSION,
@@ -866,6 +859,15 @@ def _run_v2_production_pipeline(
         acquisition_one = run_v2_acquisition_probe(
             db_path=path,
             discovery_output=discovery_one,
+            exact_claim=raw_claim,
+            asserted_components=tuple(
+                x.claim_component
+                for x in planner.claim_coverage_focus
+                if x.claim_component in raw_claim
+            ),
+            policy=V2AcquisitionPolicy(policy_identity=V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY)
+            if not legacy_query_planning
+            else None,
             wigolo_provider=wigolo_provider,
             firecrawl_provider=firecrawl_provider,
             cancellation_requested=effective_cancellation_requested,
@@ -1000,6 +1002,21 @@ def _run_v2_production_pipeline(
             discovery_outputs=discoveries,
             acquisition_outputs=acquisitions,
             gap_outputs=gaps,
+            claim_aware=not legacy_query_planning,
+            asserted_components=tuple(
+                x.claim_component
+                for x in planner.claim_coverage_focus
+                if x.claim_component in raw_claim
+            ),
+            metadata_ranking_outputs=tuple(
+                V2MetadataRankingArtifact.model_validate_json(
+                    read_v2_artifact(
+                        path, resolved_run_id, f"phase-3-metadata-ranking-round-{index}"
+                    ).payload_json
+                )
+                for index, output in enumerate(discoveries, 1)
+                if output.items and not legacy_query_planning
+            ),
         )
         before_selection = budgeted_llm.snapshot()
         selection = run_v2_source_selection_and_queue(
@@ -1207,29 +1224,8 @@ def _semantic_policy_payload() -> dict[str, object]:
             "search_agent.md",
         )
     }
-    schema_types = (
-        V2InitialPlannerModelOutput,
-        ScoutBatch,
-        V2GapAnalysisModelOutput,
-        V2AdaptiveSearchModelOutput,
-        V2SourceSelectionModelOutput,
-        V2SourceSelectionQueueResult,
-        V2DeepAnalysisBackfillResult,
-        V2VerbatimQuoteSelection,
-        V2EvidenceAnalystModelOutput,
-        V2EvidenceAdmissionBatchResult,
-        V2EvidenceAdmissionSourceResult,
-        V2EvidenceAdmissionRecord,
-        V2SynthesizerInput,
-        SynthesisOutput,
-        V2FinalResearchOutput,
-        V2ProductionPipelineResult,
-    )
-    schemas = json.dumps(
-        {item.__name__: item.model_json_schema() for item in schema_types},
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    # Frozen historical schema fingerprint (c942070). Fresh preview schemas/prompts
+    # are versioned separately in the exact discovery binding; old identities retain meaning.
     return {
         "acquisition_probe_policy": V2_ACQUISITION_PROBE_POLICY_IDENTITY,
         "deep_analysis_queue_policy": (
@@ -1252,7 +1248,7 @@ def _semantic_policy_payload() -> dict[str, object]:
         },
         "synthesis_assembly": V2_DETERMINISTIC_SYNTHESIZER_VERSION,
         "custom_prompt_hashes": prompt_hashes,
-        "schema_sha256": hashlib.sha256(schemas.encode()).hexdigest(),
+        "schema_sha256": "e11186232face4ad4b0b1f8378b8910fbd35763fd7d0e57b1c9b2e6fa842d7e7",
         "evidence_policy": EVIDENCE_POLICY_VERSION,
         "extraction_policy": V2_EXTRACTION_POLICY_IDENTITY,
         "sentence_segmentation_policy": FRESH_SENTENCE_SEGMENTATION_POLICY,

@@ -49,6 +49,7 @@ from providers.search import SearchProvider
 from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
 from researchassistant.contracts.discovery_v2 import SearchMode, V2CompiledQueryAction
+from researchassistant.contracts.model_research import V2_PREVIEW_SELECTION_POLICY_IDENTITY
 from researchassistant.contracts.models import (
     V2_EVIDENCE_ADMISSION_POLICY_IDENTITY,
     V2_EVIDENCE_ADMISSION_PREVIOUS_POLICY_IDENTITY,
@@ -433,6 +434,15 @@ def run_v2_round_four_continuation(
     search, discovery, acquisition, summary = _run_round_from_plan(
         path=path,
         planned=plan,
+        exact_claim=initial_plan.raw_claim,
+        asserted_components=tuple(
+            x.claim_component
+            for x in initial_plan.claim_coverage_focus
+            if x.claim_component in initial_plan.raw_claim
+        ),
+        preview_gaps=tuple(x.missing_evidence for x in gap.result.material_gaps)[:6]
+        if gap.result is not None
+        else (),
         search_providers=search_providers,
         llm_provider=llm_provider,
         routing_config=routing_config,
@@ -863,7 +873,10 @@ def _validate_reconciliation_admission(
     if queue_result.run_id != run_id or queue_result.input.run_id != run_id:
         raise ValueError("nested source-selection run IDs must match the Gap run")
     selection_input = queue_result.input
-    if selection_input.policy_identity != V2_SOURCE_SELECTION_POLICY_IDENTITY:
+    if selection_input.policy_identity not in {
+        V2_SOURCE_SELECTION_POLICY_IDENTITY,
+        V2_PREVIEW_SELECTION_POLICY_IDENTITY,
+    }:
         raise ValueError("nested source-selection input uses an unexpected policy identity")
 
     gap_ids = tuple(gap.gap_id for gap in gaps)

@@ -307,6 +307,8 @@ def _validate_policy(binding: V2DiscoveryBinding, artifact: V2DiscoveryArtifact)
         if artifact.binding_fingerprint != binding.fingerprint:
             raise ValueError("attempt binding fingerprint differs from run binding")
     elif isinstance(artifact, V2PreviewRequest):
+        if artifact.preview_identity != binding.preview_identity:
+            raise ValueError("preview policy differs from frozen run binding")
         if not binding.directions.permits(artifact.direction):
             raise ValueError("preview direction is disabled by the run binding")
         if artifact.exact_claim != binding.exact_claim:

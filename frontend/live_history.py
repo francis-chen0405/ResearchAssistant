@@ -9,6 +9,10 @@ from uuid import UUID
 
 from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
 from agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
+from agents.v2_source_selection import (
+    V2_SOURCE_SELECTION_COMPLETION_KEY,
+    V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
+)
 from frontend.live_contracts import (
     AcquiredSourceScoreBreakdown,
     DiscoveryScoreBreakdown,
@@ -20,12 +24,15 @@ from researchassistant.contracts.historical import (
     RecordCompatibilityError,
     RecordCompatibilityResult,
 )
+from researchassistant.contracts.metadata_ranking import MetadataRank, V2MetadataRankingArtifact
 from researchassistant.contracts.models import (
     RunManifest,
     StrictModel,
     V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
+    V2SourceSelectionQueueResult,
 )
+from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
 from researchassistant.research.orchestrator import (
     MVP10_TARGETED_RESEARCHERS_ARTIFACT,
     MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
@@ -277,6 +284,27 @@ def _v2_research_trail_items(
         "maybe": "deferred",
         "skip": "discarded",
     }
+    selection_result = _read_v2_selection_result(connection, run_id, compatibility_issues)
+    selection_candidates = (
+        {candidate.source_id: candidate for candidate in selection_result.input.survivors}
+        if selection_result is not None
+        else {}
+    )
+    selection_statuses = (
+        {status.source_id: status for status in selection_result.source_statuses}
+        if selection_result is not None
+        else {}
+    )
+    shortlist, _ = _read_v2_inspection_result(
+        connection,
+        run_id,
+        "source-selection-preview-shortlist-v2",
+        V2SelectionShortlistAudit,
+        compatibility_issues,
+    )
+    omitted = {row.source_id: row.reason for row in shortlist.omitted} if shortlist else {}
+    included = set(shortlist.included_source_ids) if shortlist else set()
+    invalid_selection_previews: set[UUID] = set()
     for research_round in (1, 2, 3, 4):
         discovery_key = (
             V2_SCOUT_ARTIFACT_KEY
@@ -302,6 +330,9 @@ def _v2_research_trail_items(
         acquisition, acquisition_incompatible = _read_v2_inspection_result(
             connection, run_id, acquisition_key, V2AcquisitionProbeOutput, compatibility_issues
         )
+        metadata_ranking = _read_v2_metadata_ranking(
+            connection, run_id, research_round, compatibility_issues
+        )
         if discovery is None:
             continue
         decisions = {
@@ -324,11 +355,74 @@ def _v2_research_trail_items(
             if acquisition is not None
             else set()
         )
+        probes_by_cluster = (
+            {probe.cluster_id: probe for probe in acquisition.probes}
+            if acquisition is not None
+            else {}
+        )
         for discovery_item in discovery.items:
             decision = decisions.get(discovery_item.item_id)
             if decision is None:
                 continue
             cluster_id = cluster_by_item.get(discovery_item.item_id)
+            candidate = selection_candidates.get(cluster_id) if cluster_id is not None else None
+            selection_status = (
+                selection_statuses.get(cluster_id) if cluster_id is not None else None
+            )
+            probe = probes_by_cluster.get(cluster_id) if cluster_id is not None else None
+            selection_preview = candidate.preview if candidate is not None else None
+            if selection_preview is not None:
+                acquired_source = next(
+                    (
+                        source
+                        for source in (acquisition.acquisitions if acquisition is not None else ())
+                        if source.snapshot.snapshot_id == selection_preview.request.snapshot_id
+                    ),
+                    None,
+                )
+                try:
+                    if acquired_source is None:
+                        raise ValueError("selection preview has no matching acquired snapshot")
+                    if (
+                        acquisition is None
+                        or acquired_source.cluster_id != selection_preview.request.source_id
+                        or acquired_source.direction != selection_preview.request.direction
+                        or acquisition.directions != selection_preview.request.directions
+                    ):
+                        raise ValueError("selection preview source/lane differs from acquisition")
+                    selection_preview.require_snapshot(acquired_source.snapshot)
+                except ValueError:
+                    selection_preview = None
+                    if cluster_id not in invalid_selection_previews:
+                        compatibility_issues.append(
+                            RecordCompatibilityResult(
+                                record_key=V2_SOURCE_SELECTION_COMPLETION_KEY,
+                                artifact_type=V2SourceSelectionQueueResult.__name__,
+                                message="selection preview does not match its persisted snapshot",
+                            )
+                        )
+                        invalid_selection_previews.add(cluster_id)
+            preview = (
+                selection_preview
+                if selection_preview is not None
+                else probe.preview
+                if probe is not None
+                else None
+            )
+            metadata_rank = (
+                metadata_ranking.get(discovery_item.item_id)
+                if metadata_ranking is not None
+                else None
+            )
+            if metadata_rank is None and candidate is not None:
+                metadata_rank = next(
+                    (
+                        rank
+                        for rank in candidate.metadata_ranks
+                        if rank.item_id == discovery_item.item_id
+                    ),
+                    None,
+                )
             acquisition_state: Literal["acquired", "attempted", "not_attempted"] | None
             if acquisition_incompatible:
                 acquisition_state = None
@@ -351,9 +445,73 @@ def _v2_research_trail_items(
                     url=discovery_item.canonical_url,
                     decision=decision_map[decision],
                     acquisition_state=acquisition_state,
+                    preview=preview,
+                    selection_input_disposition="omitted_input_cap"
+                    if cluster_id in omitted
+                    else "included"
+                    if cluster_id in included
+                    else None,
+                    selection_input_reason=omitted.get(cluster_id),
+                    metadata_rank=metadata_rank,
+                    selection_rationale=(
+                        selection_status.selection_rationale
+                        if selection_status is not None
+                        else None
+                    ),
+                    source_selection_rank=(
+                        selection_status.recommendation_rank
+                        if selection_status is not None
+                        else None
+                    ),
+                    source_selection_status=(
+                        ("recommended" if selection_status.recommended else "not_recommended")
+                        if selection_status is not None
+                        else None
+                    ),
                 )
             )
     return tuple(items)
+
+
+def _read_v2_metadata_ranking(
+    connection: Connection,
+    run_id: UUID,
+    research_round: int,
+    compatibility_issues: list[RecordCompatibilityResult],
+) -> dict[UUID, MetadataRank] | None:
+    """Read the optional per-round metadata rationale sidecar."""
+    artifact, _incompatible = _read_v2_inspection_result(
+        connection,
+        run_id,
+        f"phase-3-metadata-ranking-round-{research_round}",
+        V2MetadataRankingArtifact,
+        compatibility_issues,
+    )
+    if artifact is None:
+        return None
+    return {rank.item_id: rank for rank in artifact.ranks}
+
+
+def _read_v2_selection_result(
+    connection: Connection,
+    run_id: UUID,
+    compatibility_issues: list[RecordCompatibilityResult],
+) -> V2SourceSelectionQueueResult | None:
+    """Read current then historical completion keys without changing old artifacts."""
+    for artifact_key in (
+        V2_SOURCE_SELECTION_COMPLETION_KEY,
+        V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
+    ):
+        result, incompatible = _read_v2_inspection_result(
+            connection,
+            run_id,
+            artifact_key,
+            V2SourceSelectionQueueResult,
+            compatibility_issues,
+        )
+        if result is not None or incompatible:
+            return result
+    return None
 
 
 def _history_item(

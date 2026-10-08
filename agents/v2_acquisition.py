@@ -23,7 +23,9 @@ from researchassistant.contracts.acquisition_ranking import (
     V2AcquisitionRankingAudit,
     V2ClusterAcquisitionDisposition,
 )
+from researchassistant.contracts.discovery_v2 import V2PreviewRequest, discovery_id
 from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
+from researchassistant.contracts.model_research import V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
@@ -48,6 +50,7 @@ from researchassistant.evidence.evidence_core import (
     has_statistical_markers,
 )
 from researchassistant.research.metadata_ranking import fair_ranked_ids
+from researchassistant.research.source_preview import build_capture_windows, build_claim_preview
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.query_retrieval_store import raw_hit_counts
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
@@ -103,6 +106,9 @@ def run_v2_acquisition_probe(
     wigolo_provider: ScraperProvider | None,
     firecrawl_provider: ScraperProvider | None = None,
     policy: V2AcquisitionPolicy | None = None,
+    exact_claim: str | None = None,
+    asserted_components: tuple[str, ...] = (),
+    target_gaps: tuple[str, ...] = (),
     excluded_cluster_ids: frozenset[UUID] = frozenset(),
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
@@ -110,6 +116,8 @@ def run_v2_acquisition_probe(
     """Acquire ordered Scout candidates once, snapshot them, Probe them, and persist audit data."""
     now = clock or _utc_now
     policy = policy or V2AcquisitionPolicy()
+    if policy.policy_identity == V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY and not exact_claim:
+        raise ValueError("claim-aware acquisition requires the frozen exact claim")
     completed_at = now()
     _require_aware(completed_at, "clock result")
     round_number = _discovery_round(discovery_output)
@@ -126,6 +134,15 @@ def run_v2_acquisition_probe(
         existing = None
     if existing is not None:
         output = V2AcquisitionProbeOutput.model_validate_json(existing.payload_json)
+        if policy.policy_identity == V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY:
+            if output.policy_identity != policy.policy_identity or any(
+                probe.preview is None
+                or probe.preview.request.exact_claim != exact_claim
+                or probe.preview.request.asserted_components != asserted_components
+                or probe.preview.request.target_gaps != target_gaps
+                for probe in output.probes
+            ):
+                raise ValueError("claim-aware acquisition identity changed; use a new run")
         if output.directions != discovery_output.directions:
             raise ValueError("persisted acquisition output directions do not match Scout output")
         return V2AcquisitionProbeRunResult(output=output, resumed=True)
@@ -245,6 +262,73 @@ def run_v2_acquisition_probe(
                 succeeded=False,
                 failure=f"{type(exc).__name__}: {exc}"[:500],
             )
+        if policy.policy_identity == V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY:
+            key = f"acquisition-preview/{cluster.cluster_id}/{source.snapshot.snapshot_id}"
+            request = V2PreviewRequest(
+                run_id=discovery_output.run_id,
+                artifact_id=discovery_id(discovery_output.run_id, "V2PreviewRequest", key),
+                identity_key=key,
+                exact_claim=exact_claim,
+                direction=direction,
+                directions=discovery_output.directions,
+                source_id=cluster.cluster_id,
+                snapshot_id=source.snapshot.snapshot_id,
+                snapshot_hash=source.snapshot.snapshot_sha256,
+                preview_identity="source-claim-preview-v2",
+                asserted_components=asserted_components,
+                target_gaps=target_gaps,
+            )
+            preview = build_claim_preview(request, source.snapshot)
+            if not preview.capture_usable:
+                probe = V2ProbeResult(
+                    cluster_id=cluster.cluster_id,
+                    snapshot_id=source.snapshot.snapshot_id,
+                    snapshot_sha256=source.snapshot.snapshot_sha256,
+                    succeeded=False,
+                    failure=preview.reason,
+                    preview=preview,
+                )
+            else:
+                capture_spans = build_capture_windows(source.snapshot)
+                capture_text = " ".join(span.text for span in capture_spans)
+                minimum_words = (
+                    CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
+                    if has_statistical_markers(capture_text)
+                    else CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words
+                )
+                useful = bool(capture_spans) and count_words(capture_text) >= minimum_words
+                selected = preview.spans if preview.outcome == "completed" else capture_spans
+                probe = V2ProbeResult(
+                    cluster_id=cluster.cluster_id,
+                    snapshot_id=source.snapshot.snapshot_id,
+                    snapshot_sha256=source.snapshot.snapshot_sha256,
+                    succeeded=useful,
+                    failure=None
+                    if useful
+                    else "acquired snapshot cannot meet the minimum quote length",
+                    preview=preview,
+                    passages=tuple(
+                        V2ProbePassage(
+                            passage_id=str(
+                                uuid5(
+                                    NAMESPACE_URL,
+                                    f"researchassistant-v2-probe-v3::{source.snapshot.snapshot_id}::{span.start}::{span.end}",
+                                )
+                            ),
+                            snapshot_id=source.snapshot.snapshot_id,
+                            snapshot_sha256=source.snapshot.snapshot_sha256,
+                            source_cluster_id=cluster.cluster_id,
+                            start_char=span.start,
+                            end_char=span.end,
+                            text=span.text,
+                            score=preview.relevance_score,
+                            signals=span.relevance_signals,
+                        )
+                        for span in selected
+                    )
+                    if useful
+                    else (),
+                )
         probes.append(probe)
         if probe.succeeded and probe.passages:
             survivors.append(
@@ -457,6 +541,7 @@ def _acquire_cluster(
                     _successful_attempt(cluster.cluster_id, url, V2AcquisitionProvider.WIGOLO)
                 )
             except ScraperProviderError as exc:
+                response = None
                 primary_error = exc
                 attempts.append(
                     _failed_attempt(
@@ -468,6 +553,7 @@ def _acquire_cluster(
                     )
                 )
             except Exception as exc:
+                response = None
                 attempts.append(
                     _failed_attempt(
                         cluster.cluster_id,
@@ -492,6 +578,7 @@ def _acquire_cluster(
                     _successful_attempt(cluster.cluster_id, url, V2AcquisitionProvider.FIRECRAWL)
                 )
             except ScraperProviderError as exc:
+                response = None
                 attempts.append(
                     _failed_attempt(
                         cluster.cluster_id,
@@ -502,6 +589,7 @@ def _acquire_cluster(
                     )
                 )
             except Exception as exc:
+                response = None
                 attempts.append(
                     _failed_attempt(
                         cluster.cluster_id,
@@ -667,6 +755,8 @@ def _failed_attempt(
 def _require_response(response: ScrapeResponse) -> None:
     if not isinstance(response, ScrapeResponse):
         raise TypeError("acquisition provider returned a non-ScrapeResponse value")
+    if not response.text.strip():
+        raise ScraperProviderError("empty_capture", "acquisition returned empty normalized text")
 
 
 def _require_aware(value: datetime, name: str) -> None:
