@@ -441,6 +441,7 @@ def _v2_research_trail_items(
                     provider=discovery_item.provider,
                     intent="v2 discovery",
                     query_text=discovery_item.query_text,
+                    graph_action=discovery_item.graph_action,
                     title=discovery_item.title or "",
                     url=discovery_item.canonical_url,
                     decision=decision_map[decision],

@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_serializer
+from pydantic.functional_serializers import SerializerFunctionWrapHandler
 
 from providers.model_choices import (
     DEFAULT_STAGE_MODELS,
@@ -16,7 +17,7 @@ from providers.model_choices import (
 )
 from providers.model_profiles import ProfileId
 from researchassistant.common.money import ExactUSD
-from researchassistant.contracts.discovery_v2 import V2PreviewResult
+from researchassistant.contracts.discovery_v2 import V2GraphNeighborAction, V2PreviewResult
 from researchassistant.contracts.historical import RecordCompatibilityResult
 from researchassistant.contracts.metadata_ranking import MetadataRank
 from researchassistant.contracts.models import (
@@ -183,7 +184,7 @@ class ResearchTrailItem(StrictModel):
     stance: Literal["supporting", "opposing"]
     provider: DiscoveryProvider
     intent: str = Field(min_length=1)
-    query_text: str = Field(min_length=1)
+    query_text: str | None = Field(default=None, min_length=1)
     title: str
     url: str = Field(min_length=1)
     score: int | None = Field(default=None, ge=0, le=100)
@@ -202,6 +203,14 @@ class ResearchTrailItem(StrictModel):
     source_selection_status: Literal["recommended", "not_recommended"] | None = None
     selection_input_disposition: Literal["included", "omitted_input_cap"] | None = None
     selection_input_reason: str | None = None
+    graph_action: V2GraphNeighborAction | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_action(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if self.graph_action is None:
+            value.pop("graph_action", None)
+        return value
 
 
 class ResearchTrail(StrictModel):

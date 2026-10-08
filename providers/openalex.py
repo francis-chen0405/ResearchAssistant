@@ -7,7 +7,7 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from decimal import Decimal
 from threading import Lock
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -31,6 +31,9 @@ from providers.search import (
 from researchassistant.common.money import add_usd, parse_exact_usd
 from researchassistant.contracts.discovery_v2 import SearchMode, V2DiscoveryProviderBudget
 from researchassistant.contracts.models import DiscoveryProvider
+
+if TYPE_CHECKING:
+    from providers.openalex_neighborhood import OpenAlexNeighborhoodAdapter
 
 OPENALEX_SELECT = ",".join(
     (
@@ -77,6 +80,18 @@ class OpenAlexSearchAdapter:
         self._last_semantic_start: float | None = None
         self._calls_by_run: dict[UUID, int] = {}
         self._cost_by_run: dict[UUID, Decimal] = {}
+        self._neighborhood_adapter: OpenAlexNeighborhoodAdapter | None = None
+
+    @property
+    def neighborhood_adapter(self) -> OpenAlexNeighborhoodAdapter:
+        """Return the cached bounded ID/citation adapter used by discovery scouting."""
+        if self._neighborhood_adapter is None:
+            from providers.openalex_neighborhood import OpenAlexNeighborhoodAdapter
+
+            self._neighborhood_adapter = OpenAlexNeighborhoodAdapter(
+                self._config, client=self._client
+            )
+        return self._neighborhood_adapter
 
     def query_budget(
         self, provider: DiscoveryProvider, mode: SearchMode

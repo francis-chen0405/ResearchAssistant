@@ -48,7 +48,10 @@ from researchassistant.contracts.model_research import (
     V2RoundOneSearchQuery,
 )
 from researchassistant.contracts.research_directions import ResearchDirections
-from researchassistant.research.discovery_capabilities import get_query_capabilities
+from researchassistant.research.discovery_capabilities import (
+    get_neighborhood_capabilities,
+    get_query_capabilities,
+)
 from researchassistant.research.discovery_policy import build_discovery_binding
 from researchassistant.research.query_compiler import QUERY_COMPILER_ID, validate_compiled_action
 from researchassistant.storage.discovery_store import (
@@ -182,7 +185,7 @@ def freeze_query_execution(
         directions=directions,
         providers=providers,
         policy=policy,
-        capabilities=tuple(get_query_capabilities(x) for x in providers),
+        capabilities=tuple(get_neighborhood_capabilities(x) for x in providers),
         provider_budgets=tuple(budgets),
         provider_configuration_hash=config_hash,
         source_root=root,
@@ -195,21 +198,35 @@ def freeze_query_execution(
             "search_agent_v2.md",
             "v2_scout_v2.md",
             "source_selection_v3.md",
+            "search_agent_v3.md",
         )
     }
     from researchassistant.contracts.acquisition_ranking import (
         V2AcquisitionRankingAudit,
         V2DiscoveryPipelineCounters,
     )
-    from researchassistant.contracts.discovery_v2 import V2PreviewRequest, V2PreviewResult
+    from researchassistant.contracts.discovery_v2 import (
+        V2ExpansionResult,
+        V2GraphNeighborAction,
+        V2PreviewRequest,
+        V2PreviewResult,
+        V2WorkResolution,
+    )
     from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
     from researchassistant.contracts.model_research import (
         V2AcquisitionProbeOutput,
         V2SourceSelectionInput,
     )
+    from researchassistant.contracts.neighborhood import (
+        V2NeighborhoodCheckpoint,
+        V2NeighborhoodResponse,
+        V2SeedSelection,
+    )
     from researchassistant.contracts.query_planning import (
         V2AdaptiveSearchConceptsOutput,
         V2InitialPlannerConceptsOutput,
+        V2NeighborhoodSearchAgentInput,
+        V2NeighborhoodSearchOutput,
     )
     from researchassistant.contracts.query_retrieval import (
         V2QueryPageCheckpoint,
@@ -226,6 +243,11 @@ def freeze_query_execution(
                 "preview_probe_policy": "researchassistant-v2-phase-5-acquisition-probe-v3",
                 "selection_policy": "researchassistant-v2-phase-8-source-selection-v2",
                 "selection_input_cap": 24000,
+                "seed_policy": "source-seed-expansion-v2",
+                "seed_selection": "relevant_owned_preview_exact_identifier_scholarly_type_year",
+                "relationships_priority": ["references", "citing", "related"],
+                "graph_http_attempts": 3,
+                "graph_retries": 0,
                 "preview_bounds": {
                     "spans": 5,
                     "span_chars": 1200,
@@ -233,6 +255,14 @@ def freeze_query_execution(
                     "context_chars_each": 160,
                 },
                 "schemas": [
+                    V2SeedSelection.model_json_schema(),
+                    V2NeighborhoodCheckpoint.model_json_schema(),
+                    V2NeighborhoodResponse.model_json_schema(),
+                    V2NeighborhoodSearchAgentInput.model_json_schema(),
+                    V2NeighborhoodSearchOutput.model_json_schema(),
+                    V2GraphNeighborAction.model_json_schema(),
+                    V2WorkResolution.model_json_schema(),
+                    V2ExpansionResult.model_json_schema(),
                     V2PreviewRequest.model_json_schema(),
                     V2PreviewResult.model_json_schema(),
                     V2SourceSelectionInput.model_json_schema(),
@@ -256,6 +286,7 @@ def freeze_query_execution(
             "compiler_identity": QUERY_COMPILER_ID,
             "ranking_identity": "source-candidate-ranking-v2",
             "preview_identity": "source-claim-preview-v2",
+            "seed_identity": "source-seed-expansion-v2",
             "prompt_schema_hash": schema_hash,
         }
     )

@@ -38,6 +38,7 @@ export type V2ProviderRunDiagnostics = {
   timeout_queries: number;
   failed_queries: number;
   search_results: number;
+  graph_actions?: number | null;
   surviving_sources: number;
 };
 
@@ -46,6 +47,7 @@ export type V2RunDiagnostics = {
   provider_outcomes: V2ProviderRunDiagnostics[];
   search_attempts: number;
   search_results: number;
+  graph_actions?: number | null;
   acquisition_attempts: number;
   sources_acquired: number;
   sources_survived_probe: number;
@@ -156,7 +158,21 @@ export type ResearchTrailItem = {
   stance: "supporting" | "opposing";
   provider: "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper";
   intent: string;
-  query_text: string;
+  query_text: string | null;
+  graph_action?: {
+    artifact_id: string;
+    action_type: "graph_neighbors";
+    relationship: "references" | "citing" | "related";
+    provider: string;
+    direction: "support" | "challenge";
+    round_number: number;
+    target_gap_ids: string[];
+    seed: {
+      source_id: string | null;
+      snapshot_id: string | null;
+      work: { title: string | null; provider_work_id: string | null; doi: string | null };
+    };
+  } | null;
   title: string;
   url: string;
   score: number | null;

@@ -1,6 +1,6 @@
 # Source discovery v2 — shared implementation record
 
-Authorized scope: Phases 1–4 of the six-phase source-discovery pack, delivered one requested phase at a time. Phases 1–3 were reviewed and committed locally. Following Phase 4 review, the user explicitly authorized correcting its findings, reviewing the repairs and committing the complete phase after verification. Preserve the unrelated proposal pack. Paid transports, credentials, real databases, installation, automation, push and publication remain outside this phase.
+Authorized scope: Phases 1–5 of the six-phase source-discovery pack, delivered one requested phase at a time. Phases 1–4 are committed locally; Phase 5 is implemented in the current uncommitted source. Phase 6 product controls and final cross-phase acceptance remain the next boundary. Preserve the unrelated proposal pack and restored compatibility files. Paid transports, credentials, real databases, installation, automation, commit, push and publication are outside this Phase 5 request.
 
 ## Original Phase 1 specification and ownership
 
@@ -330,3 +330,171 @@ Whitespace checks, installed renderer ESLint/TypeScript checks, a fresh isolated
 current-state documents match c942070 byte-for-byte. Existing tests and historical prompt
 bytes remain intact; the proposal pack and restored legacy modules remain excluded from
 the reviewed local commit. No installation, push, publication or paid research is performed.
+
+
+## Phase 5 implementation and acceptance
+
+Root personally owns contracts, durable response/provenance verification, budget policy,
+adaptive integration and final evidence. Three user-requested GPT-6 Luna helpers owned
+bounded OpenAlex transport/documentation, ordinary handoff/runtime fixtures, and reader/UI
+plumbing and planning regressions. Exclusive source ownership prevented overlapping edits;
+root reviewed their changes and corrected integration defects at the source-selection and
+Gap-analysis boundaries.
+
+`providers.openalex_neighborhood` implements fixed OpenAlex work-ID or exact DOI lookup,
+reference/related ID batches and a first page of citing works. Current official sources are
+[API recipes](https://help.openalex.org/how-to/api-recipes/) and
+[work attributes](https://help.openalex.org/data/works/attributes/). Related work is retrieved
+only from reported `related_works`, using the documented ID batch filter. Incoming citations
+must independently list the seed in `referenced_works`. There is no title-equivalence lookup,
+LLM-created edge, second hop, pagination crawl, retry or undocumented withdrawn field.
+Invalid IDs, ambiguity and conflicting DOI/title/authors/year remain unresolved. Known
+retracted/withdrawn work types are excluded. Missing withdrawal metadata remains unknown;
+missing/empty relationship fields have explicit unsupported/empty dispositions. Candidate
+locations undergo syntactic public-host checks and the existing acquisition transport policy;
+provider transport has fixed endpoints, no redirected requests, explicit deadlines and a
+262,144-byte response cap.
+
+`seed_expansion` selects at most three distinct ordinary scholarly seeds from owned usable,
+relevant current-round previews and immutable acquisitions; no model call is added. It
+persists seed eligibility/selection, relationship priority (references, citing, related),
+relevance/work-ID tie-breaks, and failed/used/visited identities. Expanded items cannot become
+seeds. Only subsequent authorized rounds 2–4 receive offers; every graph action replaces a
+normal application lane slot. Existing Search Agent routing/repair reservations and Round-3
+stopping apply, with Round-4 Governor authorization checked before planning and transport.
+No fifth round exists. At most ten unique neighbors per seed across relationships and thirty
+per run are subordinate to raw metadata, provider, slot, model and acquisition budgets.
+
+Fresh neighborhood capability v4, seed policy v2, Search Agent neighborhood prompt and
+schemas are separately frozen. Existing query-capability/compiled-query identities preserve
+their historical meanings. Each identity/neighbor HTTP start reserves from the same OpenAlex
+10-request/$0.01 ceiling. Identity lookup may observe two DOI records solely to detect
+ambiguity; relationship requests fetch at most ten candidate records in one batch/page.
+Successful response bytes and completion commit atomically, with stable parser checkpoints.
+Interrupted starts retain unknown exposure and cannot repeat. Cancellation/budget exhaustion
+can retain the resolved identity and pending state; resume reuses completed identity and
+response bytes. Parser receipts and raw/edge metadata are revalidated against the exact
+owned physical response, including operation/seed ownership and hashes; recomputing a forged
+parsed hash does not authorize metadata. No schema/table/index/dependency/model-stage change.
+
+Expanded records use the existing normalization, deduplication, metadata rank, Scout,
+acquisition, exact previews, source selection, extraction, Analyst and deterministic
+admission. Query text is null; actual graph action, seed/work, relation, round, provider,
+lane and target Gaps remain typed provenance. New optional fields are omitted for historical
+serialization. Read-only trails show neighborhood metadata, and graph action counts remain
+separate from text-query attempts. Release reconstruction/export and immutable Ledger/source
+families are unchanged.
+
+| Acceptance | Evidence |
+| --- | --- |
+| Fixed exact ID/DOI lookup, reference/citing/related transport, ambiguity, malformed/rate-limit/outage, unsafe locations, bounded bytes, duplicate returned IDs | `test_openalex_neighborhood.py` |
+| No keyword match/baseline reference reaches common Scout/acquisition, exact extraction, Analyst and admission, with action/source/snapshot/hash linkage | `test_seed_expansion_runtime.py::test_graph_neighbor_enters_full_evidence_chain` |
+| Valid support-lane citing work independently reports conflicting findings and is admitted as CHALLENGES; tangential work is Scout-skipped without acquisition/admission | Parameterized full-chain and tangential runtime fixtures |
+| Relevant owned previews only; no seed/capable lane; DOI mirrors/cycles; unknown/cancellation/partial resolution; crash replay without repeated HTTP; forged parser hash rejected | Runtime fixtures and graph contract regressions |
+| Three seeds selected from four; ten neighbors per seed/thirty run; six accounted HTTP requests; bounded ID batch; cached replay without transport; raw candidate/response forgery rejected; late DOI metadata keeps prior work IDs visited; known failed exact lookup is not re-offered despite remaining budget | `test_seed_expansion_review.py` and foundation/store cap tests |
+| Text and graph compete for slots; enabled provider/direction/Gap routing; Round-3 total cap; Round-4 Governor and lane caps; no Round 5; adapter runtime caller and Round-2 Gap continuation | `test_neighborhood_planning.py`, `test_graph_neighbor_adaptive_handoffs.py`, existing adaptive/Round-4 suites |
+| Legacy trails and exported releases unchanged; read-only bytes/mtime; graph metadata/diagnostics distinct from evidence/text | `test_historical_reads_phase3.py`, planning diagnostics and existing history/export/release regressions |
+
+Final verification is recorded below. Offline fixtures establish
+bounded execution, provenance and constructed-case admission, not live research quality.
+Phase 6 remains product controls and final cross-phase acceptance.
+
+
+### Phase 5 review corrections and verification boundaries
+
+Root fixed nullable-query integration in source-selection provenance and explicit graph
+round ownership in Gap continuation. Raw/edge replay now compares exact re-derived metadata,
+response-body hashes and physical operation/seed ownership. A checksum-valid edited response
+cannot borrow its unchanged physical completion. The prior query-retention regression now
+asserts both exact versioned query and neighborhood catalogs and equality of every shared
+capability field, while retaining its fairness/retention/physical-request assertions.
+No assertion was removed or evidence gate weakened.
+
+A review fixture reproduced a same-W-ID record gaining DOI metadata in a later relationship;
+root now retains both provider IDs and DOI aliases across all expansion edges and enforces
+that rule at storage insertion. Known failed exact seed lookups are excluded from subsequent
+relation offers even when costs are reported and physical headroom remains. This does not
+prevent a resolved seed with a failed/unsupported relationship from trying a different
+bounded relationship; unknown physical outcomes still stop all transport.
+
+Final focused and complete-suite evidence follows below. Final source checks use fake transports, disposable SQLite/application
+data and isolated desktop static outputs on macOS arm64/Python 3.12.14. Nothing is installed,
+committed, pushed, published or paid. No credentials or real application databases are read.
+
+
+### Phase 5 implementation-stage acceptance evidence
+
+Final target: macOS arm64, Python **3.12.14**, fake transports, temporary application data,
+disposable SQLite and isolated renderer outputs. Complete suite: **2,156 passed, 3 existing
+skips in 158.27 seconds**. Skips remain gated live CLI smoke, optional LLM integration and
+native Windows ACL validation. The final runtime/planning/review/type group passed **27
+in 10.49 seconds**; the earlier broader graph/adapter/history/fairness/type group passed
+**96 in 10.77 seconds** before the final known-failure seed-offer regression, which is covered
+by the final focused and complete passing runs. Initial broad verification exposed the old
+capability equality assumption; the strengthened exact-catalog/shared-field regression and
+all retention assertions now pass. Later completed broad runs are superseded by this final
+source result.
+
+Ruff lint and formatting pass for all **280 tracked and Phase 5 Python files**. Raw workspace
+formatting passes **297 files**; raw whole-workspace Ruff was actually run and still reports
+only three pre-existing import-order problems in unrelated untracked restored modules
+`desktop_settings.py`, `history_import.py`, `model_contracts.py`. Those files remain untouched.
+`git diff --check` and all **14 new source/prompt/archive file** whitespace checks pass.
+
+Installed renderer ESLint and TypeScript checks pass. The helper verified a disposable
+**Next.js 16.3.1 webpack desktop static export** with `RESEARCHASSISTANT_DESKTOP=1` in
+`/private/tmp/ra-neighborhood-desktop-build/out/`; compilation, TypeScript and static pages
+completed successfully. `node --check desktop/main.cjs` passes. A temporary Turbopack build
+rejected a dependency symlink outside its root; the supported webpack build passed with the
+existing installed dependencies. No dependency download, bundle installation or installed-app
+replacement was performed.
+
+A final full advisory graph refresh reported ready with **9,691 nodes / 66,926 edges**,
+without persisted graph artifacts. Live source and graph inbound traces verify both adaptive
+and Round-4 offer paths and the common `_execute_searches` → `execute_expansion` runtime
+caller. Five prior current-state documents in the citation-neighborhood archive match
+pre-change HEAD **efbe119** byte-for-byte. Historical prompt bytes, schema 17 and release
+hashes remain unchanged; complete existing release/export/history regressions pass.
+
+Phase 5 source/offline acceptance is complete. Changes remain uncommitted. No paid service,
+credential read, real database change, migration, dependency/model-stage increase, automation,
+installation, commit, push or publication occurred. Phase 6 product controls and final
+cross-phase acceptance remain the next request boundary. Offline fixtures do not establish
+live research quality.
+
+
+### Phase 5 independent review repairs and local commit
+
+Independent review reproduced three identity defects despite the implementation-stage
+passing suite: the same known OpenAlex work occupied separate DOI/non-DOI seed slots;
+a DOI-only seed resolved to a work ID but could return itself without DOI metadata; and
+partial author observations failed exact author-set comparison. The user's follow-up
+explicitly authorized the repairs after requesting a reviewed local commit.
+
+Seed selection and transactional storage now recognize shared DOI/provider-ID anchors before
+applying the seed cap. Duplicate seed artifacts cannot bypass selection; existing identical
+seed writes remain idempotent. Runtime and transactional edge insertion retain resolved seed
+IDs and DOI aliases as visited, and current graph contracts also reject direct known aliases.
+Compatible author subsets are accepted only alongside the existing exact ID/DOI/title/year
+checks. Disjoint or non-nested conflicting author sets remain unresolved. Historical v1 edge
+validation and serialization retain their meaning. No quota, dependency, schema or evidence
+gate changes accompany these corrections.
+
+Eleven new regression cases cover both alias forms, capacity for distinct seeds, storage
+bypass/idempotence, resolved self-cycles, transport-free replay, partial author lists in both
+directions, conflicting authors, and independent ID/DOI/title/year conflicts. Final focused
+graph/runtime/store/contract/type verification: **82 passed in 23.30 seconds**. Complete suite
+using fresh temporary application data: **2,167 passed, 3 existing skips in 159.14 seconds**
+on macOS arm64/Python 3.12.14. All **280 tracked/new Python files** pass Ruff lint and format;
+raw workspace format passes **297 files**. Whole-workspace lint was run and retains only the
+same three pre-existing import-order failures in untouched untracked restored modules.
+ESLint, TypeScript, desktop syntax and whitespace checks pass. Renderer source is unchanged
+by the repairs; its implementation-stage isolated webpack static export remains recorded above.
+The full advisory graph refresh, with no persisted artifacts, reports ready at **9,697 nodes /
+66,935 edges**; live source verifies selection, storage and contract alias checks. The five
+Phase 4 snapshots still match efbe119 byte-for-byte.
+
+Phase 5 and these repairs are delivered as the reviewed local commit. The proposal pack and
+unrelated restored root files remain excluded. No installation, push, publication, paid
+transport, credential access or real application-data change occurred. Phase 6 remains the
+next request boundary. Offline tests establish constructed behavior and provenance only.

@@ -214,16 +214,12 @@ def build_v2_run_diagnostics(
             "timeout_queries": 0,
             "failed_queries": 0,
             "search_results": 0,
+            "graph_actions": 0,
         }
         for provider in providers
     }
 
-    def record_search(
-        provider: DiscoveryProvider,
-        succeeded: bool,
-        result_count: int,
-        failure_code: str | None,
-    ) -> None:
+    def ensure_provider(provider: DiscoveryProvider) -> dict[str, int]:
         if provider not in counters:
             providers.append(provider)
             counters[provider] = {
@@ -233,8 +229,17 @@ def build_v2_run_diagnostics(
                 "timeout_queries": 0,
                 "failed_queries": 0,
                 "search_results": 0,
+                "graph_actions": 0,
             }
-        provider_counts = counters[provider]
+        return counters[provider]
+
+    def record_search(
+        provider: DiscoveryProvider,
+        succeeded: bool,
+        result_count: int,
+        failure_code: str | None,
+    ) -> None:
+        provider_counts = ensure_provider(provider)
         provider_counts["query_attempts"] += 1
         provider_counts["search_results"] += result_count
         if succeeded:
@@ -245,6 +250,11 @@ def build_v2_run_diagnostics(
             provider_counts["timeout_queries"] += 1
         else:
             provider_counts["failed_queries"] += 1
+
+    def record_graph_action(provider: DiscoveryProvider, result_count: int) -> None:
+        provider_counts = ensure_provider(provider)
+        provider_counts["graph_actions"] += 1
+        provider_counts["search_results"] += result_count
 
     round_one_payload = _read_v2_payload(path, run_id, V2_ROUND_ONE_SEARCH_KEY)
     if round_one_payload is not None:
@@ -270,12 +280,15 @@ def build_v2_run_diagnostics(
             continue
         search_result = V2AdaptiveSearchResults.model_validate_json(search_payload)
         for outcome in search_result.outcomes:
-            record_search(
-                outcome.query.provider,
-                outcome.succeeded,
-                len(outcome.results),
-                outcome.failure_code,
-            )
+            if outcome.query.graph_action is not None:
+                record_graph_action(outcome.query.provider, len(outcome.results))
+            else:
+                record_search(
+                    outcome.query.provider,
+                    outcome.succeeded,
+                    len(outcome.results),
+                    outcome.failure_code,
+                )
 
     cluster_providers: dict[UUID, tuple[DiscoveryProvider, ...]] = {}
     for round_number in (1, 2, 3, 4):
@@ -416,6 +429,7 @@ def build_v2_run_diagnostics(
             failed_queries=counters[provider]["failed_queries"],
             search_results=counters[provider]["search_results"],
             surviving_sources=len(surviving_by_provider.get(provider, set())),
+            graph_actions=counters[provider]["graph_actions"] or None,
         )
         for provider in providers
     )
@@ -430,6 +444,7 @@ def build_v2_run_diagnostics(
         sources_queued_for_analysis=queued_sources,
         sources_analyzed=analyzed_sources,
         approved_evidence_records=approved_records,
+        graph_actions=sum(item.graph_actions or 0 for item in provider_outcomes) or None,
     )
 
 

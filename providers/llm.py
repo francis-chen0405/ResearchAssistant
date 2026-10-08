@@ -49,6 +49,7 @@ from researchassistant.contracts.models import (
     V2VerbatimQuoteSelection,
     VerbatimQuoteSelection,
 )
+from researchassistant.contracts.query_planning import V2NeighborhoodSearchOutput
 
 PROMPT_DIRECTORY = Path(__file__).resolve().parents[1] / "prompts"
 
@@ -741,7 +742,12 @@ def _allowed_output_types(stage: LLMStage) -> tuple[type[BaseModel], ...]:
     if stage is LLMStage.GAP_ANALYSIS:
         return (GapAnalysisResult, V2GapAnalysisModelOutput)
     if stage is LLMStage.SEARCH_AGENT:
-        return (V2SearchRoundPlan, V2AdaptiveSearchModelOutput, V2AdaptiveSearchConceptsOutput)
+        return (
+            V2SearchRoundPlan,
+            V2AdaptiveSearchModelOutput,
+            V2AdaptiveSearchConceptsOutput,
+            V2NeighborhoodSearchOutput,
+        )
     if stage is LLMStage.SOURCE_SELECTION:
         return (SourceRecommendationResult, V2SourceSelectionModelOutput)
     if stage is LLMStage.EXTRACTOR:

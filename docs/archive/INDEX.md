@@ -66,3 +66,5 @@ The preceding STATUS, HANDOFF, ARCHITECTURE and `.agent/PLANS.md` are preserved 
 The preceding STATUS, HANDOFF, ARCHITECTURE, DECISIONS and `.agent/PLANS.md` are preserved byte-for-byte in [`2026-10-07-source-discovery-phase3-state/`](2026-10-07-source-discovery-phase3-state/). The [shared source-discovery plan](../../.agent/plans/source-discovery-v2-2026-10-05.md) records bounded retrieval, ranking, Scout and acquisition integration. Phase 4 exact-preview activation remains the next boundary; Phase 3 verification is recorded in the shared plan.
 
 - [Before Phase 4 source previews](2026-10-07-source-preview-state/STATUS.md): exact prior STATUS, HANDOFF, ARCHITECTURE, DECISIONS and plan index, preserved before the claim-aware preview implementation.
+
+- [Before Phase 5 citation neighborhoods](2026-10-08-source-neighborhood-state/STATUS.md): exact prior STATUS, HANDOFF, ARCHITECTURE, DECISIONS and plan index, byte-verified before current-state replacement.

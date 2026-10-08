@@ -105,7 +105,7 @@ def rank_metadata(
                 else None
             )
         )
-        gap_tokens = _tokens(item.query_text[:4000]) - claim
+        gap_tokens = _tokens((item.query_text or "")[:4000]) - claim
         targeted = any(p.targeted_gap_ids for p in item.provenance_chain)
         gap = (
             len(gap_tokens & words) / len(gap_tokens) if targeted and gap_tokens and text else None

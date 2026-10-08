@@ -138,14 +138,22 @@ def persist_page(path: str, page: V2QueryPageCheckpoint, created_at: datetime) -
 
 def raw_hit_counts(source: DatabaseReader, run_id: UUID) -> dict[int, int]:
     """Count primary raw records once, including responses that could not be parsed."""
-    from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction, V2DiscoveryOperation
+    from researchassistant.contracts.discovery_v2 import (
+        V2CompiledQueryAction,
+        V2DiscoveryOperation,
+        V2GraphNeighborAction,
+    )
     from researchassistant.storage.discovery_store import read_discovery_artifacts
 
     operations = {
-        artifact.action.artifact_id: artifact.action.conceptual_query.round_number
+        artifact.action.artifact_id: (
+            artifact.action.conceptual_query.round_number
+            if isinstance(artifact.action, V2CompiledQueryAction)
+            else artifact.action.round_number
+        )
         for artifact in read_discovery_artifacts(source, run_id)
         if isinstance(artifact, V2DiscoveryOperation)
-        and isinstance(artifact.action, V2CompiledQueryAction)
+        and isinstance(artifact.action, (V2CompiledQueryAction, V2GraphNeighborAction))
     }
     counts: dict[int, int] = {}
     audit = provider_attempt_audit(source, run_id)

@@ -844,6 +844,16 @@ class V2ProviderRunDiagnostics(StrictModel):
     failed_queries: NonNegativeInt = 0
     search_results: NonNegativeInt = 0
     surviving_sources: NonNegativeInt = 0
+    graph_actions: NonNegativeInt | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_actions(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        data = handler(self)
+        if self.graph_actions is None:
+            data.pop("graph_actions", None)
+        return data
 
     @model_validator(mode="after")
     def validate_query_counts(self) -> V2ProviderRunDiagnostics:
@@ -870,6 +880,16 @@ class V2RunDiagnostics(StrictModel):
     sources_queued_for_analysis: NonNegativeInt = 0
     sources_analyzed: NonNegativeInt = 0
     approved_evidence_records: NonNegativeInt = 0
+    graph_actions: NonNegativeInt | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_actions(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        data = handler(self)
+        if self.graph_actions is None:
+            data.pop("graph_actions", None)
+        return data
 
     @model_validator(mode="after")
     def validate_diagnostics(self) -> V2RunDiagnostics:
@@ -883,6 +903,9 @@ class V2RunDiagnostics(StrictModel):
             raise ValueError("search attempts must reconcile to provider diagnostics")
         if self.search_results != sum(item.search_results for item in self.provider_outcomes):
             raise ValueError("search results must reconcile to provider diagnostics")
+        provider_graph_actions = sum(item.graph_actions or 0 for item in self.provider_outcomes)
+        if (self.graph_actions or 0) != provider_graph_actions:
+            raise ValueError("graph actions must reconcile to provider diagnostics")
         return self
 
 

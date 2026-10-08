@@ -1,0 +1,13 @@
+# Handoff
+
+Phases 1–4 of [source discovery v2](.agent/plans/source-discovery-v2-2026-10-05.md) are delivered in reviewed local commits, including Phase 4's Chinese preview and saved source/lane ownership corrections. See [STATUS](STATUS.md) for verified source, delivery and platform boundaries. Installation remains separate.
+
+## Next boundary
+
+The next authorized phase is Phase 5 seed-paper expansion. Use frozen work identity, bounded eligible seeds and one-hop neighborhoods inside existing provider budgets and Round 1–4/Governor authorization. No Round 5, new specialist provider, full-text recovery project or automatic additional spending is authorized. Ordinary discovery/seed product controls and final cross-phase acceptance remain Phase 6.
+
+Fresh acquisition Probe v3 uses exact claim-aware preview v2; Source Selection input v2 uses `source_selection_v3.md`. Preview windows and generic substantive capture windows are owned by `researchassistant.research.source_preview`. Metadata priority, acquisition usability, preview relevance and model recommendation remain separate. A substantive no-match capture stays eligible with neutral preview priority. Do not infer full-document completeness from text length or observed sections. Preserve exact offsets/text/context/hash/run/source/lane, omission/truncation markers, the existing 3,000-word snapshot cap and quotation gates. Extraction uses the complete owned snapshot; previews/ranks/neighborhoods never become admitted evidence.
+
+Source Selection bounds five windows, 1,200 characters/window, 4,800 passage characters/source, 160 context characters per side/window and 24,000 complete actual input tokens. An audited direction-fair whole-source prefix supplies the model; every omitted source remains in the full persisted pool and deterministic queue. Reserve complete actual adapter input and route output before each attempt, retain unknown exposure, and protect existing downstream/source envelopes and lower configured ceilings. Do not increase search/provider/model caps to accommodate expansion.
+
+Preserve Probe v1/v2 and selection-v1 historical dispatch, prompt bytes, serialization and prior fingerprint meaning. Fresh schemas/prompts/policies are separately frozen in the discovery binding; changed identity requires a fresh run. Reuse immutable `v2_artifacts`, validated read-only request snapshots and existing locks/recovery. Schema 17, source families, Ledger IDs/hashes/costs and released historical output remain unchanged. Live quality and installed-Wigolo/Windows/distribution gates remain in STATUS; fake fixture success is not live research-quality evidence.

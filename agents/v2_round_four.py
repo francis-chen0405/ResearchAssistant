@@ -734,6 +734,7 @@ def _representative_queries(
                 provider=query.provider,
                 strategy=query.strategy,
                 query_text=query.query_text,
+                graph_action=getattr(query, "graph_action", None),
                 round_number=round_number,
             )
             for query in searches
@@ -1272,6 +1273,7 @@ def _build_round_four_search_agent_request(
             previous += tuple(
                 query.query_text
                 for query in V2AdaptivePlannedRound.model_validate_json(payload).plan.searches
+                if query.query_text is not None
             )
     request_input = V2SearchAgentInput(
         run_id=initial_plan.run_id,
@@ -1315,12 +1317,42 @@ def _build_round_four_search_agent_request(
         lanes = _adaptive_concept_lanes(request_input, modes)
         if not lanes:
             return None
-        planner_input = V2ConceptualSearchAgentInput(request=request_input, lanes=lanes)
-        output_type = V2AdaptiveSearchConceptsOutput
+        from researchassistant.contracts.query_planning import (
+            V2NeighborhoodSearchAgentInput,
+            V2NeighborhoodSearchOutput,
+        )
+        from researchassistant.research.seed_expansion import offer_expansions
+        from researchassistant.storage.discovery_store import read_discovery_binding
+
+        try:
+            fresh_expansion = (
+                read_discovery_binding(path, initial_plan.run_id).seed_identity
+                == "source-seed-expansion-v2"
+            )
+        except KeyError:
+            fresh_expansion = False
+        offers = (
+            offer_expansions(path, initial_plan.run_id, 4, lanes, _utc_now)
+            if fresh_expansion
+            else ()
+        )
+        fresh_expansion = bool(offers)
+        planner_input = (
+            V2NeighborhoodSearchAgentInput(
+                request=request_input, lanes=lanes, offered_expansions=offers
+            )
+            if fresh_expansion
+            else V2ConceptualSearchAgentInput(request=request_input, lanes=lanes)
+        )
+        output_type = (
+            V2NeighborhoodSearchOutput if fresh_expansion else V2AdaptiveSearchConceptsOutput
+        )
         from providers.llm import load_prompt_file
 
         prompt = load_prompt_file(
-            Path(__file__).resolve().parents[1] / "prompts" / "search_agent_v2.md",
+            Path(__file__).resolve().parents[1]
+            / "prompts"
+            / ("search_agent_v3.md" if fresh_expansion else "search_agent_v2.md"),
             expected_stage=LLMStage.SEARCH_AGENT,
         )
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
@@ -1403,6 +1435,7 @@ def _plan_round_four(
             lanes=lanes,
             query_modes=modes,
             previous_compiled_queries=prior_actions,
+            offered_expansions=getattr(request_input, "offered_expansions", ()),
         )
     else:
         assembled = _validate_and_assemble_plan(

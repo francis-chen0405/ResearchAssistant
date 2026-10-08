@@ -189,6 +189,8 @@ def build_v2_gap_analysis_input(
                 provider=query.provider,
                 strategy=query.strategy,
                 query_text=query.query_text,
+                graph_action=getattr(query, "graph_action", None),
+                round_number=getattr(query, "round_number", 1),
             )
             for query in planner_output.searches
         ),

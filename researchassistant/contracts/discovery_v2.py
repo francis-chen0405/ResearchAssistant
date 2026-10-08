@@ -154,6 +154,7 @@ class V2ProviderCapabilities(V2DiscoveryValue):
         "source-provider-capabilities-v1",
         "source-provider-capabilities-v2",
         "source-provider-capabilities-v3",
+        "source-provider-capabilities-v4",
     ] = CAPABILITIES_ID
     search_modes: tuple[SearchMode, ...]
     fields: tuple[Label, ...] = ()
@@ -252,7 +253,10 @@ class V2SanitizedParameter(V2DiscoveryValue):
         ):
             raise ValueError("credential parameters cannot be serialized")
         if isinstance(self.value, str) and "://" in self.value:
-            safe_location(self.value)
+            if self.name == "filter" and self.value.startswith("doi:https://doi.org/"):
+                normalize_doi(self.value.removeprefix("doi:"))
+            else:
+                safe_location(self.value)
         return self
 
 
@@ -373,6 +377,17 @@ class V2WorkIdentity(V2DiscoveryValue):
         if self.resolution == "provider_identity" and not self.provider_work_id:
             raise ValueError("provider resolution requires provider identity")
         return self
+
+    def shares_work_anchor(self, other: V2WorkIdentity) -> bool:
+        """Recognize observed aliases without inferring identity from bibliographic text."""
+        return (
+            self.grouping_key == other.grouping_key
+            or (self.doi is not None and self.doi == other.doi)
+            or (
+                self.provider_work_id is not None
+                and self.provider_work_id == other.provider_work_id
+            )
+        )
 
 
 class V2RawDiscoveryCandidate(V2DiscoveryArtifact):
@@ -605,7 +620,7 @@ class V2SeedEligibility(V2DiscoveryArtifact):
     work: V2WorkIdentity
     eligible: bool
     reason: Label
-    seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID
+    seed_identity: Literal["source-seed-expansion-v1", "source-seed-expansion-v2"] = SEED_ID
 
     @model_validator(mode="after")
     def resolved_seed(self) -> V2SeedEligibility:
@@ -644,12 +659,14 @@ class V2GraphNeighborAction(V2DiscoveryArtifact):
     requested_depth: int = Field(strict=True, ge=1, le=10)
     policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
     capabilities: V2ProviderCapabilities
-    seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID
+    seed_identity: Literal["source-seed-expansion-v1", "source-seed-expansion-v2"] = SEED_ID
 
     @model_validator(mode="after")
     def valid_neighbor_action(self) -> V2GraphNeighborAction:
         if self.seed.run_id != self.run_id or not self.seed.eligible:
             raise ValueError("neighbor action requires eligible seed owned by this run")
+        if self.seed_identity != self.seed.seed_identity:
+            raise ValueError("neighbor action differs from seed policy identity")
         if self.provider != self.capabilities.provider:
             raise ValueError("neighbor provider differs from capabilities")
         self.capabilities.require_relationship(self.relationship)
@@ -667,7 +684,10 @@ class V2ExpansionEdge(V2DiscoveryArtifact):
     def edge_provenance(self) -> V2ExpansionEdge:
         if self.action.run_id != self.run_id or self.candidate.run_id != self.run_id:
             raise ValueError("expansion edge has cross-run ownership")
-        if self.candidate.work.grouping_key == self.action.seed.work.grouping_key:
+        if self.candidate.work.grouping_key == self.action.seed.work.grouping_key or (
+            self.action.seed_identity == "source-seed-expansion-v2"
+            and self.candidate.work.shares_work_anchor(self.action.seed.work)
+        ):
             raise ValueError("one-hop expansion forbids self cycles")
         if (
             self.candidate.operation_id != self.action.artifact_id
@@ -770,7 +790,7 @@ class V2DiscoveryBinding(V2DiscoveryArtifact):
         RANKING_ID
     )
     preview_identity: Literal["source-claim-preview-v1", "source-claim-preview-v2"] = PREVIEW_ID
-    seed_identity: Literal["source-seed-expansion-v1"] = SEED_ID
+    seed_identity: Literal["source-seed-expansion-v1", "source-seed-expansion-v2"] = SEED_ID
 
     @model_validator(mode="after")
     def complete_providers(self) -> V2DiscoveryBinding:
@@ -832,7 +852,7 @@ class V2ProviderAttemptStart(V2DiscoveryArtifact):
     provider: Provider
     sequence: int = Field(strict=True, ge=1, le=3)
     page_number: int = Field(strict=True, ge=1, le=3)
-    request_kind: Literal["primary", "metadata"] = "primary"
+    request_kind: Literal["primary", "metadata", "identity"] = "primary"
     parent_attempt_id: UUID | None = None
     parent_response_hash: Digest | None = None
     parameters: tuple[V2SanitizedParameter, ...] = ()
@@ -848,7 +868,9 @@ class V2ProviderAttemptStart(V2DiscoveryArtifact):
             self.parent_attempt_id is not None and self.parent_response_hash is not None
         ):
             raise ValueError("metadata subrequests require an owned completed parent response")
-        if self.request_kind == "primary" and (self.parent_attempt_id or self.parent_response_hash):
+        if self.request_kind != "metadata" and (
+            self.parent_attempt_id or self.parent_response_hash
+        ):
             raise ValueError("primary request cannot claim a metadata response parent")
         names = tuple(item.name for item in self.parameters)
         if len(names) != len(set(names)):

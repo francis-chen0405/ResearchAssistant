@@ -47,6 +47,7 @@ from researchassistant.contracts.discovery_v2 import (
     V2CompiledQueryAction,
     V2ConceptGroup,
     V2ConceptualQuery,
+    V2GraphNeighborAction,
     V2MetadataDiscoveryPolicy,
     discovery_id,
 )
@@ -84,6 +85,8 @@ from researchassistant.contracts.models import (
 from researchassistant.contracts.query_planning import (
     V2ConceptualAdaptiveLane,
     V2ConceptualSearchAgentInput,
+    V2NeighborhoodSearchAgentInput,
+    V2NeighborhoodSearchOutput,
 )
 from researchassistant.research.query_compiler import compile_query, conceptual_signature
 from researchassistant.research.query_execution import (
@@ -97,6 +100,7 @@ from researchassistant.research.research_governor import (
     V2RoundThreeReasonCode,
     evaluate_v2_round_three_authorization,
 )
+from researchassistant.research.seed_expansion import execute_expansion, offer_expansions
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
@@ -165,7 +169,12 @@ class V2PlanningOutcome(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    candidate: V2AdaptiveSearchModelOutput | V2AdaptiveSearchConceptsOutput | None = None
+    candidate: (
+        V2AdaptiveSearchModelOutput
+        | V2AdaptiveSearchConceptsOutput
+        | V2NeighborhoodSearchOutput
+        | None
+    ) = None
     rejection_code: str | None = None
     explanation: str | None = None
     completed_at: datetime
@@ -574,7 +583,10 @@ def run_v2_adaptive_search_continuation(
             round_number=3,
             initial_plan=initial_plan,
             gap_output=gap_two,
-            previous_queries=(*history, *(query.query_text for query in plan_two.searches)),
+            previous_queries=(
+                *history,
+                *(query.query_text for query in plan_two.searches if query.query_text is not None),
+            ),
             provider_attempts=attempts,
             previous_compiled_queries=tuple(
                 query.compiled_query
@@ -1075,10 +1087,22 @@ def _plan_round(
             raise V2AdaptiveNoEligibleProviderError(
                 "No application-owned conceptual lane remains within the round limits."
             )
-        request_input = V2ConceptualSearchAgentInput(request=base_request_input, lanes=lanes)
-        output_type = V2AdaptiveSearchConceptsOutput
+        offers = offer_expansions(path, initial_plan.run_id, round_number, lanes, clock)
+        fresh_expansion = bool(offers)
+        request_input = (
+            V2NeighborhoodSearchAgentInput(
+                request=base_request_input, lanes=lanes, offered_expansions=offers
+            )
+            if fresh_expansion
+            else V2ConceptualSearchAgentInput(request=base_request_input, lanes=lanes)
+        )
+        output_type = (
+            V2NeighborhoodSearchOutput if fresh_expansion else V2AdaptiveSearchConceptsOutput
+        )
         prompt = load_prompt_file(
-            Path(__file__).resolve().parents[1] / "prompts" / "search_agent_v2.md",
+            Path(__file__).resolve().parents[1]
+            / "prompts"
+            / ("search_agent_v3.md" if fresh_expansion else "search_agent_v2.md"),
             expected_stage=LLMStage.SEARCH_AGENT,
         )
     request = LLMRequest(
@@ -1234,6 +1258,7 @@ def _plan_with_repair(
                         lanes=lanes,
                         query_modes=query_modes,
                         previous_compiled_queries=previous_compiled_queries,
+                        offered_expansions=getattr(request_input, "offered_expansions", ()),
                     )
                     outcome = V2PlanningOutcome(
                         run_id=request.run_id, candidate=response, completed_at=clock()
@@ -1294,6 +1319,7 @@ def _plan_with_repair(
                     lanes=lanes,
                     query_modes=query_modes,
                     previous_compiled_queries=previous_compiled_queries,
+                    offered_expansions=getattr(request_input, "offered_expansions", ()),
                 ),
                 reservation,
             )
@@ -1326,7 +1352,98 @@ def _validate_and_assemble_plan(
     lanes: tuple[V2ConceptualAdaptiveLane, ...] = (),
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
     previous_compiled_queries: tuple[V2CompiledQueryAction, ...] = (),
+    offered_expansions: tuple[V2GraphNeighborAction, ...] = (),
 ) -> V2AdaptiveRoundPlan:
+    if isinstance(response, V2NeighborhoodSearchOutput):
+        offered = {action.artifact_id: action for action in offered_expansions}
+        text_proposals = []
+        graph_queries = {}
+        for proposal in response.searches:
+            if proposal.lane_index >= len(lanes):
+                raise V2AdaptivePlanValidationError("Unknown application lane", code="unknown_lane")
+            if proposal.graph_action_id is None:
+                text_proposals.append(proposal.model_dump(exclude={"graph_action_id"}))
+                continue
+            action = offered.get(proposal.graph_action_id)
+            lane = lanes[proposal.lane_index]
+            if action is None or (action.direction, action.provider, action.target_gap_ids) != (
+                lane.direction,
+                lane.provider,
+                lane.target_gap_ids,
+            ):
+                raise V2AdaptivePlanValidationError(
+                    "Unknown or mismatched graph action", code="unknown_graph_action"
+                )
+            graph_queries[proposal.lane_index] = V2AdaptiveSearchQuery(
+                run_id=request.run_id,
+                query_id=action.artifact_id,
+                round_number=request.round_number,
+                direction=action.direction,
+                provider=action.provider,
+                targeted_gap_ids=action.target_gap_ids,
+                strategy=lane.strategy,
+                query_text=None,
+                graph_action=action,
+                policy_identity=request.policy_identity,
+                created_at=planned_at,
+            )
+        text_plan = (
+            _validate_and_assemble_plan(
+                request,
+                V2AdaptiveSearchConceptsOutput(searches=tuple(text_proposals)),
+                prompt_version,
+                planned_at,
+                lanes=lanes,
+                query_modes=query_modes,
+                previous_compiled_queries=previous_compiled_queries,
+            )
+            if text_proposals
+            else None
+        )
+        texts = iter(text_plan.searches if text_plan else ())
+        combined = []
+        for proposal in response.searches:
+            if proposal.graph_action_id is not None:
+                combined.append(graph_queries[proposal.lane_index])
+            else:
+                query = next(texts, None)
+                if query is not None:
+                    combined.append(query)
+        cap = min(request.maximum_queries, 3 if request.round_number == 3 else 12)
+        combined = combined[:cap]
+        # A graph lookup needs an identity HTTP call plus a bounded neighbor/detail call.
+        # Tighter physical budgets shorten the prefix; no graph quota is invented.
+        available = {item.provider: item.remaining_calls for item in request.provider_budgets}
+        used = Counter()
+        accepted = []
+        for query in combined:
+            demand = (
+                2
+                if query.graph_action is not None or query.provider is DiscoveryProvider.PUBMED
+                else 1
+            )
+            if used[query.provider] + demand > available.get(query.provider, 0):
+                continue
+            used[query.provider] += demand
+            accepted.append(query)
+        if not accepted:
+            raise V2AdaptivePlanValidationError(
+                "No action fits existing physical provider capacity"
+            )
+        return V2AdaptiveRoundPlan(
+            run_id=request.run_id,
+            round_number=request.round_number,
+            directions=request.directions,
+            enabled_providers=request.eligible_providers,
+            targeted_gap_ids=tuple(
+                dict.fromkeys(gap for query in accepted for gap in query.targeted_gap_ids)
+            ),
+            discovered_terms=request.discovered_terms,
+            searches=tuple(accepted),
+            search_agent_prompt_version=prompt_version,
+            policy_identity=request.policy_identity,
+            planned_at=planned_at,
+        )
     previous_policies = tuple(action.policy for action in previous_compiled_queries)
     if previous_policies and any(
         policy != previous_policies[0] for policy in previous_policies[1:]
@@ -1672,16 +1789,32 @@ def _execute_searches(
         if _cancelled(cancellation_requested):
             break
         try:
-            response = execute_query(
-                path=path,
-                run_id=query.run_id,
-                provider=query.provider,
-                query_text=query.query_text,
-                compiled_query=query.compiled_query,
-                providers=providers,
-                clock=clock,
-                cancellation_requested=cancellation_requested,
-            )
+            if query.graph_action is not None:
+                configured = providers.get(query.provider)
+                adapter = getattr(configured, "neighborhood_adapter", None)
+                if callable(adapter):
+                    adapter = adapter()
+                results = execute_expansion(
+                    path=path,
+                    action=query.graph_action,
+                    adapter=adapter,
+                    clock=clock,
+                    cancellation_requested=cancellation_requested,
+                )
+                from providers.search import SearchResponse
+
+                response = SearchResponse(results=list(results), provider_name=query.provider.value)
+            else:
+                response = execute_query(
+                    path=path,
+                    run_id=query.run_id,
+                    provider=query.provider,
+                    query_text=query.query_text,
+                    compiled_query=query.compiled_query,
+                    providers=providers,
+                    clock=clock,
+                    cancellation_requested=cancellation_requested,
+                )
             outcomes.append(
                 V2AdaptiveSearchOutcome(
                     query=query, succeeded=True, results=tuple(response.results)
@@ -1809,6 +1942,8 @@ def _round_two_gap_input(
                     provider=item.provider,
                     strategy=item.strategy,
                     query_text=item.query_text,
+                    graph_action=item.graph_action,
+                    round_number=item.round_number,
                 )
                 for item in plan.searches
             ),

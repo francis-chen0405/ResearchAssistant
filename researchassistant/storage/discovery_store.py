@@ -44,6 +44,11 @@ from researchassistant.contracts.model_research import (
     V2PersistedArtifact,
     V2RoundFourGovernorDecision,
 )
+from researchassistant.contracts.neighborhood import (
+    V2NeighborhoodCheckpoint,
+    V2NeighborhoodResponse,
+    V2SeedSelection,
+)
 from researchassistant.storage.store import (
     DatabaseReader,
     _connect,
@@ -130,6 +135,9 @@ _DISCOVERY_ARTIFACT_TYPES: dict[str, type[V2DiscoveryArtifact]] = {
         V2ExpansionEdge,
         V2ExpansionResult,
         V2DiscoveryAuditCounters,
+        V2SeedSelection,
+        V2NeighborhoodCheckpoint,
+        V2NeighborhoodResponse,
     )
 }
 
@@ -297,10 +305,23 @@ def _validate_policy(binding: V2DiscoveryBinding, artifact: V2DiscoveryArtifact)
         if isinstance(action, V2CompiledQueryAction):
             if action.compiler_identity != binding.compiler_identity:
                 raise ValueError("query compiler identity differs from frozen binding")
-            if action.policy != binding.policy or action.capabilities != capability:
-                raise ValueError("query policy/capability identity differs from binding")
+            if action.capabilities != capability:
+                from researchassistant.research.discovery_capabilities import get_query_capabilities
+
+                if (
+                    binding.seed_identity != "source-seed-expansion-v2"
+                    or action.capabilities != get_query_capabilities(provider)
+                ):
+                    raise ValueError("query capability identity differs from binding")
+            if action.policy != binding.policy:
+                raise ValueError("query policy identity differs from binding")
         elif action.policy != binding.policy or action.capabilities != capability:
             raise ValueError("operation policy/capability identity differs from binding")
+        if (
+            isinstance(action, V2GraphNeighborAction)
+            and action.seed_identity != binding.seed_identity
+        ):
+            raise ValueError("graph action policy differs from frozen seed identity")
         if round_number > 4:
             raise ValueError("operation exceeds the authorized four-round lifecycle")
     elif isinstance(artifact, V2ProviderAttemptStart):
@@ -488,9 +509,15 @@ def reserve_provider_attempt(db_path: str, start: V2ProviderAttemptStart) -> V2P
         max_pages = binding.policy.max_pages_per_operation // capability.physical_requests_per_page
         if start.page_number > max_pages:
             raise ValueError("attempt page exceeds the complete physical operation page cap")
+        if start.request_kind == "identity" and not isinstance(action, V2GraphNeighborAction):
+            raise ValueError("identity subrequest is only supported for graph actions")
+        if start.request_kind == "identity" and not capability.executable_identity_lookup:
+            raise ValueError("graph identity lookup is not executable")
+        if start.request_kind == "identity" and start.requested_records > 2:
+            raise ValueError("exact identity lookup returns at most two ambiguity records")
         if start.request_kind == "metadata" and capability.physical_requests_per_page != 2:
             raise ValueError("provider does not support a separate metadata page request")
-        if start.requested_records > max_depth:
+        if start.request_kind != "identity" and start.requested_records > max_depth:
             raise ValueError("attempt result limit exceeds parent operation depth")
         if capability.executable_pagination == "none" and start.page_number > 1:
             raise ValueError("provider operation does not support multiple pages")
@@ -532,7 +559,11 @@ def reserve_provider_attempt(db_path: str, start: V2ProviderAttemptStart) -> V2P
             for item in all_starts
         ):
             raise ValueError("unknown request outcome stops further provider attempts for this run")
-        if len(starts) >= 3:
+        if isinstance(action, V2GraphNeighborAction) and any(
+            prior.request_kind == start.request_kind for prior in starts
+        ):
+            raise ValueError("one-shot graph physical requests cannot repeat")
+        if len(starts) >= binding.policy.max_pages_per_operation:
             raise ValueError("logical operation attempt cap is exhausted")
         if start.sequence != len(starts) + 1:
             raise ValueError("attempt sequence must be dense and newly reserved")
@@ -559,7 +590,11 @@ def reserve_provider_attempt(db_path: str, start: V2ProviderAttemptStart) -> V2P
                 > budget.max_cost_usd
             ):
                 raise ValueError("provider cost budget cannot fit a complete metadata page")
-        previous_pages = {item.page_number: item.requested_records for item in starts}
+        previous_pages = {
+            item.page_number: item.requested_records
+            for item in starts
+            if item.request_kind != "identity"
+        }
         if start.page_number in previous_pages and any(
             prior.page_number == start.page_number
             and prior.request_kind == start.request_kind
@@ -575,9 +610,12 @@ def reserve_provider_attempt(db_path: str, start: V2ProviderAttemptStart) -> V2P
             raise ValueError("page sequence cannot skip a page")
         if start.page_number not in previous_pages:
             requested_so_far = sum(previous_pages.values()) + start.requested_records
-            if requested_so_far > max_depth:
+            if start.request_kind != "identity" and requested_so_far > max_depth:
                 raise ValueError("cumulative page depth exceeds logical operation depth")
-        elif start.requested_records != previous_pages[start.page_number]:
+        elif (
+            start.request_kind != "identity"
+            and start.requested_records != previous_pages[start.page_number]
+        ):
             raise ValueError("retry page bounds differ from the original page reservation")
         if _operation_round(operation) == 4:
             try:
@@ -612,7 +650,11 @@ def _operation_key_for_id(conn: sqlite3.Connection, run_id: UUID, operation_id: 
 
 
 def complete_provider_attempt(
-    db_path: str, completion: V2ProviderAttemptCompletion, completed_at: datetime
+    db_path: str,
+    completion: V2ProviderAttemptCompletion,
+    completed_at: datetime,
+    *,
+    response: V2NeighborhoodResponse | None = None,
 ) -> V2ProviderAttemptCompletion:
     completion = _validated(completion)
     if completed_at != completion.completed_at:
@@ -654,6 +696,17 @@ def complete_provider_attempt(
             raise sqlite3.IntegrityError("provider completion replay conflicts with stored result")
         if completion.cost_basis == "documented_free" and start.cost_basis != "documented_free":
             raise ValueError("completion claims free cost outside the frozen provider policy")
+        if response is not None:
+            response = _validated(response)
+            if (
+                response.run_id != completion.run_id
+                or response.attempt_id != completion.attempt_id
+                or response.operation_id != completion.operation_id
+                or response.response_hash != completion.response_hash
+                or completion.status != "completed"
+            ):
+                raise ValueError("exact graph response differs from its physical completion")
+            _insert_typed(conn, response, completed_at)
         _validate_policy(binding, completion)
         key = _artifact_key(completion)
         _insert_v2_artifact_on_connection(conn, key, completion, completed_at)
@@ -794,6 +847,20 @@ def _validate_raw_candidate(
         raise ValueError("raw candidate response hash differs from completed response")
     if candidate.artifact_id not in completion.result_ids:
         raise ValueError("raw candidate ID was not returned by completed response")
+    if (
+        isinstance(action, V2GraphNeighborAction)
+        and binding.seed_identity == "source-seed-expansion-v2"
+    ):
+        from researchassistant.research.seed_expansion import _checkpoint, raw_neighbor_candidate
+
+        checkpoint = _checkpoint(
+            db_path, action, "neighbors", None, binding, lambda: completion.completed_at, None
+        )
+        if candidate.attempt_id != checkpoint.attempt_id or not any(
+            raw_neighbor_candidate(action, checkpoint, item) == candidate
+            for item in checkpoint.results
+        ):
+            raise ValueError("graph candidate differs from exact provider response")
 
 
 def insert_seed_eligibility(
@@ -1010,6 +1077,40 @@ def insert_expansion_result(
             for prior in prior_results
         ):
             raise sqlite3.IntegrityError("completed expansion result for this action is immutable")
+        if binding.seed_identity == "source-seed-expansion-v2":
+            seed_works = [
+                V2SeedEligibility.model_validate_json(item.payload_json).work
+                for item in _all_run_artifacts(conn, result.run_id)
+                if item.artifact_type == "V2SeedEligibility"
+            ]
+            resolutions = [
+                V2WorkResolution.model_validate_json(item.payload_json)
+                for item in _all_run_artifacts(conn, result.run_id)
+                if item.artifact_type == "V2WorkResolution"
+            ]
+            seed_works.extend(item.work for item in resolutions if item.status == "resolved")
+            visited_ids = {
+                edge.candidate.work.provider_work_id
+                for prior in prior_results
+                for edge in prior.edges
+                if edge.candidate.work.provider_work_id
+            }
+            visited_dois = {
+                edge.candidate.work.doi
+                for prior in prior_results
+                for edge in prior.edges
+                if edge.candidate.work.doi
+            }
+            visited_ids.update(
+                work.provider_work_id for work in seed_works if work.provider_work_id
+            )
+            visited_dois.update(work.doi for work in seed_works if work.doi)
+            if any(
+                edge.candidate.work.provider_work_id in visited_ids
+                or edge.candidate.work.doi in visited_dois
+                for edge in result.edges
+            ):
+                raise ValueError("expansion repeats a visited provider work or DOI alias")
         all_work_keys = {
             edge.candidate.work.grouping_key for prior in prior_results for edge in prior.edges
         }
@@ -1192,6 +1293,57 @@ def insert_work_resolution(
     if resolution.provider not in binding.providers:
         raise ValueError("work resolution provider is outside run binding")
     candidate = _candidate_for_id(db_path, resolution.run_id, resolution.candidate_id)
+    if candidate is None and binding.seed_identity == "source-seed-expansion-v2":
+        seeds = [
+            item
+            for item in read_discovery_artifacts(db_path, resolution.run_id)
+            if isinstance(item, V2SeedEligibility) and item.candidate_id == resolution.candidate_id
+        ]
+        if not seeds:
+            raise ValueError("work resolution lacks owned pipeline seed")
+        if resolution.operation_id is None:
+            raise ValueError("pipeline resolution requires its owned operation")
+        operation = read_discovery_operation(
+            db_path,
+            resolution.run_id,
+            _operation_key_for_artifact(db_path, resolution.run_id, resolution.operation_id),
+        )
+        if (
+            not isinstance(operation.action, V2GraphNeighborAction)
+            or operation.action.seed not in seeds
+        ):
+            raise ValueError("pipeline resolution differs from stored seed action")
+        if resolution.provider != operation.action.provider:
+            raise ValueError("resolved provider differs from seed action")
+        from researchassistant.research.seed_expansion import (
+            _checkpoint,
+            _matches_seed,
+            _resolved_identity,
+        )
+
+        checkpoints = [
+            item
+            for item in read_discovery_artifacts(db_path, resolution.run_id)
+            if isinstance(item, V2NeighborhoodCheckpoint)
+            and item.phase == "identity"
+            and item.action.seed == operation.action.seed
+        ]
+        if resolution.status == "resolved":
+            for item in checkpoints:
+                _checkpoint(
+                    db_path, item.action, "identity", None, binding, lambda: created_at, None
+                )
+            if not any(
+                item.work
+                and _matches_seed(operation.action.seed, item.work)
+                and _resolved_identity(item.work) == resolution.work
+                for item in checkpoints
+            ):
+                raise ValueError("resolution lacks matching exact provider identity checkpoint")
+        elif resolution.work != operation.action.seed.work:
+            raise ValueError("unresolved identity must retain original seed metadata")
+        _persist_once(db_path, resolution, created_at)
+        return resolution
     if candidate is None:
         raise ValueError("work resolution requires a stored normalized candidate")
     if not isinstance(candidate, V2NormalizedDiscoveryCandidate):
@@ -1387,3 +1539,113 @@ def insert_raw_candidate(
     finally:
         conn.close()
     return candidate
+
+
+def insert_pipeline_seed(
+    db_path: str,
+    seed: V2SeedEligibility,
+    discovery_key: str,
+    acquisition_key: str,
+    created_at: datetime,
+) -> V2SeedEligibility:
+    """Bind Phase-5 eligibility to the actual normalized item and exact acquired preview."""
+    from researchassistant.contracts.model_research import V2DiscoveryScoutOutput
+
+    seed = _validated(seed)
+    binding = read_discovery_binding(db_path, seed.run_id)
+    if (
+        seed.seed_identity != binding.seed_identity
+        or seed.seed_identity != "source-seed-expansion-v2"
+    ):
+        raise ValueError("pipeline seed requires the versioned expansion binding")
+    discovery = V2DiscoveryScoutOutput.model_validate_json(
+        read_v2_artifact(db_path, seed.run_id, discovery_key).payload_json
+    )
+    acquisition = V2AcquisitionProbeOutput.model_validate_json(
+        read_v2_artifact(db_path, seed.run_id, acquisition_key).payload_json
+    )
+    candidate = next((item for item in discovery.items if item.item_id == seed.candidate_id), None)
+    if candidate is None or candidate.graph_action is not None:
+        raise ValueError("one-hop seed must be an owned ordinary discovery item")
+    from researchassistant.research.seed_expansion import _round_keys, pipeline_work_identity
+
+    if seed.work != pipeline_work_identity(candidate):
+        raise ValueError("pipeline seed differs from full observed candidate identity")
+    if (discovery_key, acquisition_key) != _round_keys(candidate.round_number):
+        raise ValueError("pipeline seed requires canonical same-round outputs")
+    if seed.eligible and (
+        candidate.source_type not in {"article", "review", "proceedings-article", "dissertation"}
+        or seed.work.publication_year is None
+        or any(
+            entry.key == "is_retracted" and entry.value_json == "true"
+            for entry in candidate.provider_metadata
+        )
+    ):
+        raise ValueError("pipeline seed lacks credible observable scholarly metadata")
+    if seed.eligible:
+        source = next(
+            (
+                item
+                for item in acquisition.acquisitions
+                if item.cluster_id == seed.source_id
+                and item.snapshot.snapshot_id == seed.snapshot_id
+            ),
+            None,
+        )
+        survivor = next(
+            (
+                item
+                for item in acquisition.survivors
+                if item.cluster_id == seed.source_id and item.snapshot_id == seed.snapshot_id
+            ),
+            None,
+        )
+        cluster = next(
+            (item for item in discovery.clusters if item.cluster_id == seed.source_id), None
+        )
+        probe = next(
+            (item for item in acquisition.probes if item.snapshot_id == seed.snapshot_id), None
+        )
+        if (
+            source is None
+            or survivor is None
+            or cluster is None
+            or candidate.item_id not in cluster.item_ids
+            or probe is None
+            or probe.preview is None
+            or not probe.preview.capture_usable
+            or probe.preview.relevance_score <= 0
+        ):
+            raise ValueError("eligible seed requires substantive relevant owned preview")
+        probe.preview.require_snapshot(source.snapshot)
+    conn = _connect(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        prior = [
+            V2SeedEligibility.model_validate_json(item.payload_json)
+            for item in _all_run_artifacts(conn, seed.run_id)
+            if item.artifact_type == "V2SeedEligibility"
+        ]
+        keys = {item.work.grouping_key for item in prior if item.eligible}
+        if seed.eligible and any(
+            item.eligible
+            and item.artifact_id != seed.artifact_id
+            and seed.work.shares_work_anchor(item.work)
+            for item in prior
+        ):
+            raise ValueError("pipeline seed repeats a known work alias")
+        if (
+            seed.eligible
+            and seed.work.grouping_key not in keys
+            and len(keys) >= binding.policy.max_seeds_per_run
+        ):
+            raise ValueError("run seed cap is exhausted")
+        _insert_typed(conn, seed, created_at)
+        conn.commit()
+    except BaseException:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return seed

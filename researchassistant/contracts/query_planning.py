@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from researchassistant.contracts.discovery_v2 import SearchMode
+from researchassistant.contracts.discovery_v2 import SearchMode, V2GraphNeighborAction
 from researchassistant.contracts.model_contracts import DiscoveryProvider, StrictModel
 from researchassistant.contracts.model_research import (
     V2InitialPlannerClaimComponent,
@@ -144,4 +145,49 @@ class V2AdaptiveSearchConceptsOutput(StrictModel):
             raise ValueError("adaptive Search Agent concepts must use gap purpose")
         if len({item.lane_index for item in self.searches}) != len(self.searches):
             raise ValueError("adaptive proposals must use each application lane at most once")
+        return self
+
+
+class V2NeighborhoodSearchAgentInput(V2ConceptualSearchAgentInput):
+    """Versioned offered graph actions compete with the same text-query lane slots."""
+
+    offered_expansions: tuple[V2GraphNeighborAction, ...] = Field(default=(), max_length=12)
+
+    @model_validator(mode="after")
+    def valid_offers(self) -> V2NeighborhoodSearchAgentInput:
+        for action in self.offered_expansions:
+            if (
+                action.run_id != self.request.run_id
+                or action.round_number != self.request.round_number
+            ):
+                raise ValueError("offered expansion has conflicting round/run")
+            if not any(
+                (action.direction, action.provider, action.target_gap_ids)
+                == (lane.direction, lane.provider, lane.target_gap_ids)
+                for lane in self.lanes
+            ):
+                raise ValueError("offered expansion has no authorized lane/Gap set")
+        return self
+
+
+class V2NeighborhoodConceptProposal(V2AdaptiveSearchConceptProposal):
+    concepts: V2QueryConcepts | None = None
+    graph_action_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def one_action(self) -> V2NeighborhoodConceptProposal:
+        if (self.concepts is None) == (self.graph_action_id is None):
+            raise ValueError("choose exactly one conceptual query or offered graph action")
+        return self
+
+
+class V2NeighborhoodSearchOutput(V2AdaptiveSearchConceptsOutput):
+    searches: tuple[V2NeighborhoodConceptProposal, ...] = Field(min_length=1, max_length=12)
+
+    @model_validator(mode="after")
+    def require_gap_purpose(self) -> V2NeighborhoodSearchOutput:
+        if any(item.concepts and item.concepts.purpose != "gap" for item in self.searches):
+            raise ValueError("adaptive query concepts must use gap purpose")
+        if len({item.lane_index for item in self.searches}) != len(self.searches):
+            raise ValueError("each conceptual/graph action consumes one unique lane slot")
         return self

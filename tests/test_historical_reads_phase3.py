@@ -17,6 +17,14 @@ from agents.renderer import validate_final_release
 from agents.v2_extraction import V2ExactExtractionResult
 from frontend.live_history import history, research_trail
 from researchassistant.contracts import models
+from researchassistant.contracts.discovery_v2 import (
+    V2DiscoveryPolicy,
+    V2GraphNeighborAction,
+    V2ProviderCapabilities,
+    V2SeedEligibility,
+    V2WorkIdentity,
+    discovery_id,
+)
 from researchassistant.contracts.historical import HistoricalRead, RecordCompatibilityError
 from researchassistant.contracts.models import (
     LedgerRecord,
@@ -81,31 +89,38 @@ def _v2_envelope(case: dict[str, Any]) -> V2PersistedArtifact:
 def _v2_trail_pair(
     run_id: UUID,
     round_number: int,
+    graph_action: V2GraphNeighborAction | None = None,
 ) -> tuple[models.V2DiscoveryScoutOutput, models.V2AcquisitionProbeOutput, UUID]:
     """Build one realistic, entirely offline discovery/acquisition trail pair."""
     direction = models.ResearchDirection.SUPPORT
     directions = models.ResearchDirections(support_enabled=True, challenge_enabled=False)
-    item_id, query_id, cluster_id = (
-        UUID(int=round_number),
-        UUID(int=100 + round_number),
-        UUID(int=200 + round_number),
+    item_id, cluster_id = UUID(int=round_number), UUID(int=200 + round_number)
+    query_id = (
+        graph_action.artifact_id if graph_action is not None else UUID(int=100 + round_number)
     )
     url = f"https://example.test/history/{round_number}"
     provenance = models.DiscoveryProvenance(
-        provider=models.DiscoveryProvider.EXA,
+        provider=graph_action.provider
+        if graph_action is not None
+        else models.DiscoveryProvider.EXA,
         query_id=query_id,
-        query_text=f"offline history query {round_number}",
+        query_text=None if graph_action is not None else f"offline history query {round_number}",
+        graph_action=graph_action,
         direction=direction,
         round_number=round_number,
         provider_rank=1,
         original_url=url,
+        targeted_gap_ids=graph_action.target_gap_ids if graph_action is not None else (),
     )
     item = models.NormalizedDiscoveryItem(
         run_id=run_id,
         item_id=item_id,
-        provider=models.DiscoveryProvider.EXA,
+        provider=graph_action.provider
+        if graph_action is not None
+        else models.DiscoveryProvider.EXA,
         query_id=query_id,
         query_text=provenance.query_text,
+        graph_action=graph_action,
         direction=direction,
         round_number=round_number,
         provider_rank=1,
@@ -225,7 +240,9 @@ def _v2_failed_production_result(
     )
 
 
-def _v2_trail_database(path: Path) -> tuple[UUID, dict[int, UUID]]:
+def _v2_trail_database(
+    path: Path, *, graph_action: V2GraphNeighborAction | None = None
+) -> tuple[UUID, dict[int, UUID]]:
     run_id = UUID(int=500)
     init_db(str(path))
     insert_run(
@@ -242,7 +259,8 @@ def _v2_trail_database(path: Path) -> tuple[UUID, dict[int, UUID]]:
     insert_v2_pipeline_identity(str(path), run_id, V2PipelineIdentity(), WHEN)
     item_ids: dict[int, UUID] = {}
     for round_number in (1, 2):
-        discovery, acquisition, item_id = _v2_trail_pair(run_id, round_number)
+        action = graph_action if round_number == 2 else None
+        discovery, acquisition, item_id = _v2_trail_pair(run_id, round_number, action)
         item_ids[round_number] = item_id
         discovery_key = (
             "phase-4-discovery-scout"
@@ -257,6 +275,73 @@ def _v2_trail_database(path: Path) -> tuple[UUID, dict[int, UUID]]:
         insert_v2_artifact(str(path), discovery_key, discovery, WHEN)
         insert_v2_artifact(str(path), acquisition_key, acquisition, WHEN)
     return run_id, item_ids
+
+
+def _history_graph_action(run_id: UUID) -> V2GraphNeighborAction:
+    provider = models.DiscoveryProvider.OPENALEX
+    capabilities = V2ProviderCapabilities(
+        provider=provider,
+        search_modes=("lexical",),
+        max_metadata_per_page=20,
+        max_metadata_per_operation=20,
+        pagination="none",
+        identity_lookup=True,
+        executable_identity_lookup=True,
+        relationships=("references", "citing", "related"),
+        executable_relationships=("references", "citing", "related"),
+        executable_search_modes=("lexical",),
+        documentation_urls=("https://docs.openalex.org/api-entities/works/search-works",),
+    )
+    seed = V2SeedEligibility(
+        run_id=run_id,
+        artifact_id=discovery_id(run_id, "V2SeedEligibility", "history-seed"),
+        identity_key="history-seed",
+        candidate_id=UUID(int=701),
+        source_id=UUID(int=702),
+        snapshot_id=UUID(int=703),
+        work=V2WorkIdentity(
+            grouping_key="doi:10.5555/history-seed",
+            doi="10.5555/history-seed",
+            provider_work_id="https://openalex.org/W-history",
+            title="Persisted seed paper",
+            resolution="verified_identifiers",
+        ),
+        eligible=True,
+        reason="resolved seed",
+    )
+    return V2GraphNeighborAction(
+        run_id=run_id,
+        artifact_id=discovery_id(run_id, "V2GraphNeighborAction", "history-citing"),
+        identity_key="history-citing",
+        seed=seed,
+        relationship="citing",
+        provider=provider,
+        direction=models.ResearchDirection.SUPPORT,
+        round_number=2,
+        target_gap_ids=("gap-history-a",),
+        requested_depth=3,
+        policy=V2DiscoveryPolicy(),
+        capabilities=capabilities,
+    )
+
+
+def test_public_v2_graph_trail_preserves_saved_action_and_legacy_text(tmp_path: Path) -> None:
+    database = tmp_path / "v2-graph-trail.sqlite3"
+    run_id = UUID(int=500)
+    action = _history_graph_action(run_id)
+    _v2_trail_database(database, graph_action=action)
+
+    trail = research_trail(database, run_id)
+
+    graph_item = next(item for item in trail.items if item.research_round == 2)
+    text_item = next(item for item in trail.items if item.research_round == 1)
+    assert graph_item.query_text is None
+    assert graph_item.graph_action == action
+    assert graph_item.model_dump(mode="json")["graph_action"]["artifact_id"] == str(
+        action.artifact_id
+    )
+    assert text_item.query_text == "offline history query 1"
+    assert "graph_action" not in text_item.model_dump(mode="json")
 
 
 def _tamper_v2_artifact(

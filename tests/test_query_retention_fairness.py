@@ -16,6 +16,10 @@ from researchassistant.contracts.model_research import (
     ResearchDirection,
     V2RoundOneSearchQuery,
 )
+from researchassistant.research.discovery_capabilities import (
+    get_neighborhood_capabilities,
+    get_query_capabilities,
+)
 from researchassistant.research.query_compiler import compile_query
 from researchassistant.research.query_execution import (
     fair_query_order,
@@ -87,7 +91,22 @@ def test_initial_round_fair_order_preserves_sparse_provider_within_retention_cap
     for query in planned:
         assert query.compiled_query is not None
         assert query.compiled_query.policy == binding.policy
-        assert query.compiled_query.capabilities == capability_by_provider[query.provider]
+        # Text compilation retains its frozen v3 identity; the fresh run also
+        # declares separately versioned neighborhood transport for OpenAlex.
+        assert query.compiled_query.capabilities == get_query_capabilities(query.provider)
+        assert capability_by_provider[query.provider] == get_neighborhood_capabilities(
+            query.provider
+        )
+        graph_fields = {
+            "capability_identity",
+            "executable_identity_lookup",
+            "executable_relationships",
+            "documentation_urls",
+            "unsupported_features",
+        }
+        assert query.compiled_query.capabilities.model_dump(exclude=graph_fields) == (
+            capability_by_provider[query.provider].model_dump(exclude=graph_fields)
+        )
 
     requests: list[DiscoveryProvider] = []
 

@@ -8,7 +8,7 @@ There are 82 plan records and 19 verification records.
 
 ### Plans
 
-- [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md) — foundation, provider-aware conceptual query compilation, bounded retrieval, ranking, Scout/acquisition integration, exact claim-aware previews and bounded preview-informed selection; seed-paper expansion remains the next boundary.
+- [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md) — foundation, provider-aware conceptual query compilation, bounded retrieval, ranking, Scout/acquisition integration, exact claim-aware previews and bounded preview-informed selection; bounded one-hop seed-paper expansion; Phase 6 product controls and final cross-phase acceptance remain the next boundary.
 - [database-review-2026-10-03](../.agent/plans/database-review-2026-10-03.md)
 - [alpr-equity-run-fixes-2026-10-02](../.agent/plans/alpr-equity-run-fixes-2026-10-02.md)
 - [alpr-equity-run-review-2026-10-02](../.agent/plans/alpr-equity-run-review-2026-10-02.md)

@@ -21,7 +21,11 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from researchassistant.common.money import ExactUSD
-from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction, V2PreviewResult
+from researchassistant.contracts.discovery_v2 import (
+    V2CompiledQueryAction,
+    V2GraphNeighborAction,
+    V2PreviewResult,
+)
 from researchassistant.contracts.metadata_ranking import MetadataRank
 from researchassistant.contracts.model_contracts import (
     DiscoveryProvider,
@@ -500,10 +504,11 @@ class V2AdaptiveSearchQuery(StrictModel):
     round_number: Literal[2, 3, 4]
     direction: ResearchDirection
     provider: DiscoveryProvider
-    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(min_length=1, max_length=3)
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(max_length=6)
     strategy: NonEmptyStr
-    query_text: NonEmptyStr
+    query_text: NonEmptyStr | None
     compiled_query: V2CompiledQueryAction | None = None
+    graph_action: V2GraphNeighborAction | None = None
     policy_identity: Literal[
         "researchassistant-v2-phase-7-adaptive-search-v1",
         "researchassistant-v2-post-phase-13-round-four-v1",
@@ -522,6 +527,24 @@ class V2AdaptiveSearchQuery(StrictModel):
 
     @model_validator(mode="after")
     def validate_compiled_lane(self) -> V2AdaptiveSearchQuery:
+        if self.graph_action is not None:
+            action = self.graph_action
+            if self.query_text is not None or self.compiled_query is not None:
+                raise ValueError("graph neighbor lanes cannot carry text or compiled queries")
+            if (
+                self.query_id != action.artifact_id
+                or self.run_id != action.run_id
+                or self.provider != action.provider
+                or self.direction != action.direction
+                or self.round_number != action.round_number
+                or self.targeted_gap_ids != action.target_gap_ids
+            ):
+                raise ValueError("graph neighbor lane must preserve its action identity and fields")
+            return self
+        if self.query_text is None:
+            raise ValueError("text search lanes require query_text")
+        if not self.targeted_gap_ids:
+            raise ValueError("text search lanes require targeted Gap IDs")
         if self.compiled_query is not None:
             concepts = self.compiled_query.conceptual_query
             if (
@@ -536,6 +559,13 @@ class V2AdaptiveSearchQuery(StrictModel):
                     "compiled query must preserve its application-owned lane and Gap IDs"
                 )
         return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_action(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if self.graph_action is None:
+            value.pop("graph_action", None)
+        return value
 
 
 class V2AdaptiveRoundPlan(StrictModel):
@@ -578,6 +608,29 @@ class V2AdaptiveRoundPlan(StrictModel):
                 raise ValueError("adaptive query provider must be enabled")
             if not set(query.targeted_gap_ids).issubset(set(self.targeted_gap_ids)):
                 raise ValueError("adaptive queries must target persisted round Gap IDs")
+        graph_queries = [query for query in self.searches if query.graph_action is not None]
+        if graph_queries:
+            from collections import Counter
+
+            lane_counts = Counter((query.direction, query.provider) for query in graph_queries)
+            providers_by_direction: dict[ResearchDirection, set[DiscoveryProvider]] = {}
+            for query in graph_queries:
+                providers_by_direction.setdefault(query.direction, set()).add(query.provider)
+            if self.round_number == 3 and (
+                len(graph_queries) > 3 or any(count > 1 for count in lane_counts.values())
+            ):
+                raise ValueError(
+                    "Round-3 graph actions allow at most three lanes, one per direction/provider"
+                )
+            if self.round_number == 4:
+                if any(count > 2 for count in lane_counts.values()):
+                    raise ValueError(
+                        "Round-4 graph actions allow at most two per direction/provider lane"
+                    )
+                if any(len(providers) > 2 for providers in providers_by_direction.values()):
+                    raise ValueError(
+                        "Round-4 graph actions allow at most two providers per direction"
+                    )
         return self
 
 
@@ -597,12 +650,36 @@ class DiscoveryProvenance(StrictModel):
 
     provider: DiscoveryProvider
     query_id: UUID
-    query_text: NonEmptyStr
+    query_text: NonEmptyStr | None
+    graph_action: V2GraphNeighborAction | None = None
     direction: ResearchDirection
     round_number: PositiveInt
     provider_rank: PositiveInt
     original_url: NonEmptyStr
-    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=3)
+    targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(default=(), max_length=6)
+
+    @model_validator(mode="after")
+    def validate_graph_reference(self) -> DiscoveryProvenance:
+        if self.graph_action is None:
+            if self.query_text is None:
+                raise ValueError("text discovery provenance requires query_text")
+        elif (
+            self.query_text is not None
+            or self.query_id != self.graph_action.artifact_id
+            or self.provider != self.graph_action.provider
+            or self.direction is not self.graph_action.direction
+            or self.round_number != self.graph_action.round_number
+            or self.targeted_gap_ids != self.graph_action.target_gap_ids
+        ):
+            raise ValueError("graph provenance must preserve its action without forged query text")
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_action(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if self.graph_action is None:
+            value.pop("graph_action", None)
+        return value
 
 
 class CrossrefIdentityMetadata(StrictModel):
@@ -633,7 +710,8 @@ class NormalizedDiscoveryItem(StrictModel):
     item_id: UUID
     provider: DiscoveryProvider
     query_id: UUID
-    query_text: NonEmptyStr
+    query_text: NonEmptyStr | None
+    graph_action: V2GraphNeighborAction | None = None
     direction: ResearchDirection
     round_number: PositiveInt
     provider_rank: PositiveInt
@@ -659,7 +737,35 @@ class NormalizedDiscoveryItem(StrictModel):
             raise ValueError("discovery provenance chain must not be empty")
         if any(item.direction is not self.direction for item in self.provenance_chain):
             raise ValueError("discovery provenance directions must match the item direction")
+        if self.graph_action is None:
+            if self.query_text is None:
+                raise ValueError("text discovery items require query_text")
+        elif (
+            self.query_text is not None
+            or self.query_id != self.graph_action.artifact_id
+            or self.graph_action.run_id != self.run_id
+            or self.graph_action.provider != self.provider
+            or self.graph_action.direction is not self.direction
+            or self.graph_action.round_number != self.round_number
+        ):
+            raise ValueError(
+                "graph discovery item must preserve its action reference without query text"
+            )
+        if self.graph_action is not None and any(
+            provenance.query_id != self.query_id
+            or provenance.query_text is not None
+            or provenance.graph_action != self.graph_action
+            for provenance in self.provenance_chain
+        ):
+            raise ValueError("graph item provenance must preserve its action without query text")
         return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_action(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if self.graph_action is None:
+            value.pop("graph_action", None)
+        return value
 
 
 class DiscoveryProviderReference(StrictModel):
@@ -1048,8 +1154,31 @@ class V2GapAttemptedQuery(StrictModel):
     direction: ResearchDirection
     provider: DiscoveryProvider
     strategy: NonEmptyStr
-    query_text: NonEmptyStr
-    round_number: Literal[1, 2, 3] = 1
+    query_text: NonEmptyStr | None
+    graph_action: V2GraphNeighborAction | None = None
+    round_number: Literal[1, 2, 3, 4] = 1
+
+    @model_validator(mode="after")
+    def validate_graph_reference(self) -> V2GapAttemptedQuery:
+        if self.graph_action is None:
+            if self.query_text is None:
+                raise ValueError("text attempted queries require query_text")
+        elif (
+            self.query_text is not None
+            or self.query_id != self.graph_action.artifact_id
+            or self.direction is not self.graph_action.direction
+            or self.provider != self.graph_action.provider
+            or self.round_number != self.graph_action.round_number
+        ):
+            raise ValueError("graph attempted query must preserve its action without query text")
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_action(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if self.graph_action is None:
+            value.pop("graph_action", None)
+        return value
 
 
 class V2GapSurvivingSourceMetadata(StrictModel):
@@ -1818,8 +1947,31 @@ class V2SourceSelectionSearchProvenance(StrictModel):
     query_id: UUID
     provider: DiscoveryProvider
     round_number: Annotated[int, Field(ge=1, le=4)]
-    query_text: NonEmptyStr
+    query_text: NonEmptyStr | None
+    graph_action: V2GraphNeighborAction | None = None
     targeted_gap_ids: tuple[NonEmptyStr, ...] = Field(max_length=6)
+
+    @model_validator(mode="after")
+    def validate_discovery_action(self) -> V2SourceSelectionSearchProvenance:
+        if self.graph_action is None:
+            if self.query_text is None:
+                raise ValueError("text discovery requires its query")
+        elif (
+            self.query_text is not None
+            or self.query_id != self.graph_action.artifact_id
+            or self.provider != self.graph_action.provider
+            or self.round_number != self.graph_action.round_number
+            or self.targeted_gap_ids != self.graph_action.target_gap_ids
+        ):
+            raise ValueError("selection provenance differs from graph action")
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_graph_action(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if self.graph_action is None:
+            value.pop("graph_action", None)
+        return value
 
 
 class V2SourceSelectionGap(StrictModel):

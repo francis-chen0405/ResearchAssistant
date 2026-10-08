@@ -36,21 +36,6 @@ New checkpoints and physical reservations reuse `v2_artifacts`; historical finge
 
 Phase 3 extends fresh discovery with durable bounded pagination (default depth 20, maximum requested depth 50, no more than three physical attempts per operation), deterministic ranking from common metadata signals, fair Scout allocation and ranked acquisition shortlisting. Effective depth always respects executable provider capabilities and tighter request/cost budgets. Raw retention is capped at 300 per round and 1,000 per run; Scout is capped at 60 per round, in batches of at most 20 and at most two attempts per batch; acquisition is capped at 25 per round. Search direction is provenance only; rank never interprets support/challenge, missing fields remain neutral, and conflicting metadata is recorded rather than silently resolved. Identity grouping uses conservative work anchors and does not assert study independence. Every enabled direction/provider lane receives a first pass before repeated strategies consume retention headroom. Completed pages and independent parser receipts checkpoint durably; cancellation/resume does not replay completed or terminal pages, and substituted page candidates fail provenance checks. Exa uses an effective result cap of 25 with $0.02 default-depth and $0.03 policy-depth request reservations, while retaining the established $0.18 total /18-request ceiling. Phase 4 activates deterministic exact snapshot previews in fresh Probe v3/selection-v2, with bounded windows and separate acquisition-usability/relevance diagnostics. Historical Probe v1/v2 and selection-v1 preserve serialization, prompt bytes and policy meaning. Full rendered selection input including adapter overhead is capped at 24,000 tokens through an audited whole-source shortlist; omissions remain in the complete pool/queue, downstream source capacity is protected, and lower configured ceilings remain authoritative. All ranks, Scout dispositions, shortlists and previews remain discovery/selection metadata and cannot satisfy the acquisition, snapshot, exact-extraction, Analyst or admission gates.
 
-Phase 5 activates OpenAlex exact scholarly identity lookup and provider-reported one-hop
-references/citing/related discovery inside existing Round 2–4 lane slots and Governor
-permission. Three owned relevant seeds, ten unique neighbors per seed and thirty per run
-are maximums; remaining shared budgets dominate. Each HTTP request reserves from the existing
-10-request/$0.01 OpenAlex envelope. No title-only identity, hidden retry or new graph quota.
-Author observations may be compatible subsets when exact identifiers, title and year agree;
-conflicting author sets and bibliographic identifiers remain unresolved. Identity aliases
-are checked before seed caps and persisted edges, including IDs learned by exact resolution.
-Fresh capability/seed/prompt/schema identities require a fresh run. Exact bounded response
-bytes commit with completion; pure re-parsing validates checkpoints and raw candidates on
-resume, and unknown outcomes cannot repeat. Graph action provenance replaces query text
-without inventing a query or evidence snapshot. All candidates retain the ordinary snapshot,
-quotation, Analyst and deterministic admission gates. Historical optional fields serialize
-as before, and released history remains unchanged.
-
 ## Release boundary
 
 macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).

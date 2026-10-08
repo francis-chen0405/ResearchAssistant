@@ -142,6 +142,9 @@ def normalize_discovery_responses(
                 provider=query.provider,
                 query_id=query.query_id,
                 query_text=query.query_text,
+                graph_action=(
+                    query.graph_action if isinstance(query, V2AdaptiveSearchQuery) else None
+                ),
                 direction=query.direction,
                 round_number=query.round_number,
                 provider_rank=result.rank,
@@ -166,6 +169,9 @@ def normalize_discovery_responses(
                         provider=query.provider,
                         query_id=query.query_id,
                         query_text=query.query_text,
+                        graph_action=(
+                            query.graph_action if isinstance(query, V2AdaptiveSearchQuery) else None
+                        ),
                         direction=query.direction,
                         round_number=query.round_number,
                         provider_rank=result.rank,

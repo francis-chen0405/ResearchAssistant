@@ -229,6 +229,7 @@ def build_v2_source_selection_input(
                 provider=item.provider,
                 round_number=item.round_number,
                 query_text=item.query_text,
+                graph_action=item.graph_action,
                 targeted_gap_ids=item.targeted_gap_ids,
             )
             for item in cluster.metadata_provenance

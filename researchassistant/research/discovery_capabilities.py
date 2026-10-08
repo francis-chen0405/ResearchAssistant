@@ -277,3 +277,23 @@ def get_query_capabilities(provider: DiscoveryProvider) -> V2ProviderCapabilitie
             ),
         }
     )
+
+
+def get_neighborhood_capabilities(provider: DiscoveryProvider) -> V2ProviderCapabilities:
+    """Fresh bounded neighborhood transport; historical catalogs remain unchanged."""
+    original = get_query_capabilities(provider)
+    if provider is not DiscoveryProvider.OPENALEX:
+        return original
+    return original.model_copy(
+        update={
+            "capability_identity": "source-provider-capabilities-v4",
+            "executable_identity_lookup": True,
+            "executable_relationships": ("references", "citing", "related"),
+            "documentation_urls": (
+                *original.documentation_urls,
+                "https://help.openalex.org/how-to/api-recipes/",
+                "https://help.openalex.org/data/works/attributes/",
+            ),
+            "unsupported_features": ("no title-only identity resolution", "one-hop only"),
+        }
+    )
