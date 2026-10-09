@@ -1,16 +1,18 @@
 # Desktop application
 
-Current source through `15b8281` includes completed database/discovery implementation and
-repository review fixes. No distributable containing that source was produced by the
-documentation review; see [STATUS](../STATUS.md) for delivery and acceptance gates.
+The current app was built from `27aeb95` and installed at
+`/Applications/ResearchAssistant.app` on 2026-10-09. It includes the completed
+database/schema-17 and source-discovery implementation plus repository review fixes
+through `15b8281`. Packaged identity, offline tests, historical upgrade and installed
+backend/window checks passed; see [the October 9 delivery record](../docs/verification/current-app-install-2026-10-09.md).
+The previous October 2 installed app was removed. Saved research, settings and
+Keychain credentials were preserved; the user allowed Keychain access on normal launch.
 
-The app was replaced with a verified local build from `20bf6a2` on 2026-10-02, including
-the ALPR equity, validator and repository-organization changes; see the
-[October 2 delivery results](../.agent/plans/validator-and-current-docs-2026-10-02.md#user-authorized-commit-and-local-redelivery).
-The recorded local installer is `~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`.
-The latest recorded public download is the September 28 test release built from `ac49404`;
-it does not contain the October fixes. The older `desktop/dist` paths below describe
-historical artifacts. Saved research and credentials were preserved.
+This is an unsigned local Apple Silicon test build. No new DMG/ZIP or public release
+was created. The latest recorded public download remains the September 28 test release
+built from `ac49404`, which lacks the later changes. The October 2 ZIP and older
+`desktop/dist` paths below describe historical artifacts. [STATUS](../STATUS.md)
+tracks the remaining acceptance and distribution gates.
 
 Current delivery target is a directly downloadable Apple Silicon Mac test build; no
 Mac App Store submission is planned. Windows release work is deferred.
@@ -61,8 +63,8 @@ Persistent data:
 - `imports/`: explicitly imported historical databases.
 
 In current source, writable runs and resumes migrate compatible databases to schema 17.
-The installed October 2 backend predates these schema-17 changes. The following recovery
-and compatibility guidance applies after rebuilding/upgrading to current source. Schema 14 added nullable
+The installed October 9 backend includes these schema-17 changes. The following recovery
+and compatibility guidance applies to the current app. Schema 14 added nullable
 cached/uncached input-token fields; schema 15 adds nullable cache-write tokens/cost basis,
 schema 16 protects same-run ownership and referenced keys, and schema 17 adds measured
 history/evidence indexes. Existing records retain unknown cache

@@ -2,27 +2,29 @@
 
 Reviewed 2026-10-08 against local source at `15b8281`, Git history, the installed
 backend, and fresh offline checks. [The documentation review](docs/verification/project-stage-2026-10-08.md)
-records the scope and evidence.
+records the scope and evidence. Current-source Mac delivery was completed on
+2026-10-09 from `27aeb95`; see [the installation record](docs/verification/current-app-install-2026-10-09.md).
 
 ## Project stage
 
 **Implementation and local verification are complete for the database work, all six
-source-discovery phases, and the subsequent repository review. Delivery of that source
-and live research acceptance remain pending.** There is no unfinished implementation
-phase in the current shared plans.
+source-discovery phases, and the subsequent repository review. The current-source Mac
+app is installed and running locally; live research acceptance remains pending.**
+There is no unfinished implementation phase in the current shared plans.
 
 | Surface | Verified state |
 | --- | --- |
-| Repository source | `master` at `15b8281`; nine commits ahead of the local `origin/master` reference after the documentation commit (eight at the source-review baseline). The remote was not fetched during this review. |
-| Working tree | The documentation refresh and reviewed proposal pack are committed locally. Seventeen pre-existing untracked root Python copies remain local. |
-| Installed Mac backend | October 2 build `20bf6a2`; its executable SHA-256 still matches the delivery record. It lacks the later database and source-discovery work. |
+| Repository source | Built from `master` at `27aeb95`, including implementation through `15b8281`. At build time, HEAD matched the local `origin/master` reference; no remote fetch or push was performed during delivery. |
+| Working tree | Clean before delivery. The installation record and current delivery guidance are updated locally; runtime source is unchanged. |
+| Installed Mac backend | October 9 build from `27aeb95`, installed at `/Applications/ResearchAssistant.app`. Database schema 17 and source-discovery updates are included; packaged identity, upgrade, installed runtime and window checks passed. |
 | Latest recorded public release | [September 28 unsigned Mac test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928), based on `ac49404`. Public release state was not reverified during this review. |
-| Current-source distributable | No fresh PyInstaller backend or native installer for `15b8281` is recorded or was produced by this review. |
+| Current-source distributable | A fresh unsigned Apple Silicon app bundle was built and installed on October 9. No new DMG/ZIP or public release was created. |
 
 The installed backend hash is
-`41c930ebde8f65e0f53f999b1a4d652f744bd9028974954e73230797847f8c4f`.
-The recorded local installer is
-`~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`.
+`12e1705b6790b2532e8284ce5baa32e25f09b83de701dd15ce6d0415945c03f5`.
+The old installed app was removed after verification. All 38 saved-data payload entries
+were unchanged through replacement and isolated installed checks. The October 2 ZIP
+is historical and does not contain the current changes.
 The remaining OneDrive cleanup of obsolete ignored distribution placeholders has no
 recorded completion. Source verification, installation, push and publication are
 separate boundaries.
@@ -71,10 +73,10 @@ The earlier rejected refresh remains historical evidence in the repository-revie
   The five-submission paid allowance is exhausted. The later eight-run/$6.48 protocol
   is a proposal, not authorization. General retry after unusable HTML, OCR and new
   catalog providers remain outside the completed implementation scope.
-- **Mac delivery:** Build and verify a distributable containing current source, then
-  perform separately authorized installation/distribution. Credential-backed launch,
-  actual macOS 14 and clean-machine installation, Developer ID signing and notarization
-  remain open. The installed app is an older local test build.
+- **Mac distribution:** Current-source local installation and normal credential-backed
+  launch passed on October 9; the user allowed macOS Keychain access. Actual macOS 14,
+  clean-machine installation, Developer ID signing/notarization and updated public
+  distribution remain open. The installed app is an unsigned local test build.
 - **External cache:** Repository-build Wigolo integrity, migrations, references, vectors
   and FTS passed on a disposable backup; installed-cache access remains unverified.
   [The cache review](docs/verification/database-phase4-review.md) gives the completion path.
