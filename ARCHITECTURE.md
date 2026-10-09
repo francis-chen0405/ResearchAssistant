@@ -25,6 +25,8 @@ Backend modules are organized under `researchassistant/`: `contracts/` holds sha
 
 The root `models.py`, `store.py`, and `orchestrator.py` entries preserve historical import paths by aliasing their canonical package modules. Root `cli.py` preserves the script launcher; new imports use `researchassistant.runtime.cli`. Historical researcher and analyst paths remain compatibility facades where neutral evidence helpers now live; `agents.supportingresearcher` retains historical retrieval. Ordinary CLI and API construction select v2. Historical execution requires the explicit typed `legacy_runner` dependency; the controller's older `runner` name remains a compatibility alias.
 
+Bundled source data and executable fingerprints include only those four documented root Python entries alongside the canonical package and existing executable directories. Inactive root source copies are preserved locally but do not enter the bundle or alter run identity.
+
 The model contract modules depend in one direction: shared contracts, then research contracts, then evidence/result contracts. Fresh v2 stages use the neutral evidence modules directly. Model-facing output schemas remain narrow; application identity and provenance travel in typed envelopes.
 
 ## Source discovery v2

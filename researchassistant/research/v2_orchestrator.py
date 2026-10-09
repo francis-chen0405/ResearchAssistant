@@ -765,7 +765,10 @@ def _run_v2_production_pipeline(
             raise ValueError(
                 "historical policy cannot resume with product settings; start a new run"
             )
-        return V2ProductionPipelineResult.model_validate_json(legacy_terminal.payload_json)
+        result = V2ProductionPipelineResult.model_validate_json(legacy_terminal.payload_json)
+        if result.raw_claim != raw_claim:
+            raise ValueError("cross-claim v2 resume is forbidden")
+        return result.model_copy(update={"db_path": path})
     try:
         phase13_terminal = read_v2_artifact(
             path, resolved_run_id, V2_PRODUCTION_PHASE13_ARTIFACT_KEY
@@ -777,7 +780,10 @@ def _run_v2_production_pipeline(
             raise ValueError(
                 "historical policy cannot resume with product settings; start a new run"
             )
-        return V2ProductionPipelineResult.model_validate_json(phase13_terminal.payload_json)
+        result = V2ProductionPipelineResult.model_validate_json(phase13_terminal.payload_json)
+        if result.raw_claim != raw_claim:
+            raise ValueError("cross-claim v2 resume is forbidden")
+        return result.model_copy(update={"db_path": path})
 
     try:
         discovery_binding = read_discovery_binding(path, resolved_run_id)
@@ -838,7 +844,7 @@ def _run_v2_production_pipeline(
     if stored is not None:
         result = V2ProductionPipelineResult.model_validate_json(stored.payload_json)
         _persist_terminal(path, result, now)
-        return result
+        return result.model_copy(update={"db_path": path})
 
     budgeted_llm = BudgetedV2LLMProvider(
         db_path=path,

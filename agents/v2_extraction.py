@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
 
@@ -13,11 +15,13 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from providers.llm import (
     V2_LLM_ROUTING,
+    LLMInvocationError,
     LLMProvider,
     LLMRequest,
     LLMStage,
     ModelAlias,
     invoke_llm,
+    is_non_retryable_provider_error,
     load_prompt,
     render_stage_prompt,
 )
@@ -192,6 +196,25 @@ class V2ExactExtractionResult(StrictModel):
         )
 
 
+class V2ExtractionInputBinding(StrictModel):
+    """Bind resumable source checkpoints to the exact extraction inputs."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class V2ExtractionSourceCheckpoint(StrictModel):
+    """Persist one completed source so a resumed batch does not repeat paid calls."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source: V2ExtractionSourceResult
+
+
 def run_v2_exact_extraction(
     *,
     db_path: str | Path,
@@ -206,6 +229,24 @@ def run_v2_exact_extraction(
     """Select exact passages for every queued survivor, preserving per-source failure."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
+    identity_payload = {
+        "queue_result": queue_result.model_dump(mode="json"),
+        "discovery_outputs": [item.model_dump(mode="json") for item in discovery_outputs],
+        "acquisition_outputs": [item.model_dump(mode="json") for item in acquisition_outputs],
+        "routing_fingerprint": routing_config.fingerprint_payload(),
+    }
+    input_sha256 = sha256(
+        json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    binding_key = f"{artifact_key}-input-binding"
+    try:
+        stored_binding = read_v2_artifact(path, queue_result.run_id, binding_key)
+    except KeyError:
+        stored_binding = None
+    if stored_binding is not None:
+        binding = V2ExtractionInputBinding.model_validate_json(stored_binding.payload_json)
+        if binding.input_sha256 != input_sha256:
+            raise ValueError("persisted extraction input identity changed; use a new run")
     try:
         stored = read_v2_artifact(path, queue_result.run_id, artifact_key)
     except KeyError:
@@ -216,29 +257,51 @@ def run_v2_exact_extraction(
             raise ValueError("persisted extraction result does not match the Phase-8 queue")
         return result
 
+    if stored_binding is None:
+        binding = V2ExtractionInputBinding(run_id=queue_result.run_id, input_sha256=input_sha256)
+        insert_v2_artifact(path, binding_key, binding, _aware(now()))
+
     route = routing_config.preflight().for_stage(LLMStage.EXTRACTOR)
     artifact_model_name = routing_config.artifact_model_name_for_stage(LLMStage.EXTRACTOR)
     snapshots = _snapshots_by_source(acquisition_outputs)
     source_rows = {item.source_id: item for item in queue_result.input.survivors}
     results: list[V2ExtractionSourceResult] = []
     for source_id in queue_result.queued_source_ids:
+        checkpoint_key = f"{artifact_key}-source-{source_id}"
+        try:
+            checkpoint_artifact = read_v2_artifact(path, queue_result.run_id, checkpoint_key)
+        except KeyError:
+            checkpoint_artifact = None
+        if checkpoint_artifact is not None:
+            checkpoint = V2ExtractionSourceCheckpoint.model_validate_json(
+                checkpoint_artifact.payload_json
+            )
+            if checkpoint.input_sha256 != input_sha256 or checkpoint.source.source_id != source_id:
+                raise ValueError("persisted extraction source checkpoint does not match this input")
+            results.append(checkpoint.source)
+            continue
         source = source_rows[source_id]
         snapshot = snapshots[source_id]
-        results.append(
-            _extract_source(
-                source_id=source_id,
-                direction=source.direction,
-                exact_claim=queue_result.input.exact_claim,
-                snapshot=snapshot,
-                query_id=source.search_provenance[0].query_id,
-                query_round=source.research_round,
-                search_rank=_search_rank(source_id, discovery_outputs),
-                llm_provider=llm_provider,
-                model_alias=route.logical_alias,
-                recorded_model_name=artifact_model_name,
-                clock=now,
-            )
+        extracted = _extract_source(
+            source_id=source_id,
+            direction=source.direction,
+            exact_claim=queue_result.input.exact_claim,
+            snapshot=snapshot,
+            query_id=source.search_provenance[0].query_id,
+            query_round=source.research_round,
+            search_rank=_search_rank(source_id, discovery_outputs),
+            llm_provider=llm_provider,
+            model_alias=route.logical_alias,
+            recorded_model_name=artifact_model_name,
+            clock=now,
         )
+        checkpoint = V2ExtractionSourceCheckpoint(
+            run_id=queue_result.run_id,
+            input_sha256=input_sha256,
+            source=extracted,
+        )
+        insert_v2_artifact(path, checkpoint_key, checkpoint, _aware(now()))
+        results.append(extracted)
     output = V2ExactExtractionResult(
         run_id=queue_result.run_id,
         queue_result=queue_result,
@@ -339,7 +402,9 @@ def _extract_source(
                     failure=f"{type(budget_failure).__name__}: {budget_failure}"[:1000],
                 )
             last_failure = f"{type(exc).__name__}: {exc}"[:1000]
-            if attempt < V2_EXTRACTION_MAX_ATTEMPTS:
+            if attempt < V2_EXTRACTION_MAX_ATTEMPTS and not (
+                isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc)
+            ):
                 continue
             return V2ExtractionSourceResult(
                 source_id=source_id,

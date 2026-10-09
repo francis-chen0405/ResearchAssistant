@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -100,6 +101,21 @@ class V2AcquisitionProbeRunResult(StrictModel):
     resumed: bool
 
 
+class V2AcquisitionInputBinding(StrictModel):
+    """Freeze all acquisition controls that affect a run before external reads begin."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    round_number: int
+    discovery_sha256: str
+    policy: V2AcquisitionPolicy
+    exact_claim: str | None
+    asserted_components: tuple[str, ...]
+    target_gaps: tuple[str, ...]
+    excluded_cluster_ids: tuple[UUID, ...]
+
+
 def run_v2_acquisition_probe(
     *,
     db_path: str,
@@ -129,10 +145,31 @@ def run_v2_acquisition_probe(
         if round_number == 4
         else f"phase-7-round-{round_number}-acquisition-probe"
     )
+    binding_key = f"{artifact_key}-input-binding"
+    binding = V2AcquisitionInputBinding(
+        run_id=discovery_output.run_id,
+        round_number=round_number,
+        discovery_sha256=sha256(discovery_output.model_dump_json().encode("utf-8")).hexdigest(),
+        policy=policy,
+        exact_claim=exact_claim,
+        asserted_components=asserted_components,
+        target_gaps=target_gaps,
+        excluded_cluster_ids=tuple(sorted(excluded_cluster_ids, key=str)),
+    )
     try:
         existing = read_v2_artifact(db_path, discovery_output.run_id, artifact_key)
     except KeyError:
         existing = None
+    try:
+        existing_binding = read_v2_artifact(db_path, discovery_output.run_id, binding_key)
+    except KeyError:
+        existing_binding = None
+    if existing_binding is not None:
+        stored_binding = V2AcquisitionInputBinding.model_validate_json(
+            existing_binding.payload_json
+        )
+        if stored_binding != binding:
+            raise ValueError("persisted acquisition input identity changed; use a new run")
     if existing is not None:
         output = V2AcquisitionProbeOutput.model_validate_json(existing.payload_json)
         if policy.policy_identity == V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY:
@@ -147,6 +184,8 @@ def run_v2_acquisition_probe(
         if output.directions != discovery_output.directions:
             raise ValueError("persisted acquisition output directions do not match Scout output")
         return V2AcquisitionProbeRunResult(output=output, resumed=True)
+    if existing_binding is None:
+        insert_v2_artifact(db_path, binding_key, binding, completed_at)
 
     decisions = {
         item.item_id: item.decision.value

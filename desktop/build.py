@@ -54,15 +54,15 @@ def stage_node() -> Path:
         urllib.request.urlretrieve(base + filename, archive)
     if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
         raise RuntimeError("Bundled Node checksum mismatch")
-    unpack = DESKTOP / "build/node-unpack"
-    unpack.mkdir(exist_ok=True)
-    if suffix == "zip":
-        with zipfile.ZipFile(archive) as zipped:
-            zipped.extractall(unpack)
-    else:
-        with tarfile.open(archive) as tar:
-            tar.extractall(unpack, filter="data")
-    shutil.copytree(unpack / stem, RESOURCES / "node", dirs_exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="node-unpack-", dir=DESKTOP / "build") as temp_dir:
+        unpack = Path(temp_dir)
+        if suffix == "zip":
+            with zipfile.ZipFile(archive) as zipped:
+                zipped.extractall(unpack)
+        else:
+            with tarfile.open(archive) as tar:
+                tar.extractall(unpack, filter="data")
+        replace_tree(unpack / stem, RESOURCES / "node")
     return RESOURCES / "node" / ("node.exe" if sys.platform == "win32" else "bin/node")
 
 
@@ -82,7 +82,7 @@ def main() -> None:
             [str(node), str(acquisition / "node_modules/playwright/cli.js"), "install", "chromium"],
             env=browser_env,
         )
-        shutil.copytree(acquisition, RESOURCES / "acquisition", dirs_exist_ok=True)
+        replace_tree(acquisition, RESOURCES / "acquisition")
         run(
             [str(node), str(ROOT / "web/node_modules/next/dist/bin/next"), "build"],
             cwd=ROOT / "web",
@@ -93,7 +93,7 @@ def main() -> None:
                 "NEXT_TELEMETRY_DISABLED": "1",
             },
         )
-        shutil.copytree(ROOT / "web/out", RESOURCES / "web", dirs_exist_ok=True)
+        replace_tree(ROOT / "web/out", RESOURCES / "web")
     command = [
         sys.executable,
         "-m",
@@ -116,7 +116,9 @@ def main() -> None:
         "--exclude-module",
         "pytest",
     ]
-    for path in sorted(ROOT.glob("*.py")):
+    # Match the documented compatibility surface and repository_identity's root list.
+    for name in ("cli.py", "models.py", "orchestrator.py", "store.py"):
+        path = ROOT / name
         command.extend(["--add-data", f"{path}{os.pathsep}."])
     command.extend(["--add-data", f"{ROOT / 'pyproject.toml'}{os.pathsep}."])
     for name in ("agents", "providers", "frontend", "prompts", "researchassistant"):

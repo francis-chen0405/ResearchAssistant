@@ -443,7 +443,9 @@ def test_phase11_invokes_mimo_and_persists_restartable_output(tmp_path: Path) ->
     assert len(provider.requests) == 1
 
 
-def test_v2_export_and_api_schema_use_the_persisted_final_output(tmp_path: Path) -> None:
+def test_v2_export_and_api_schema_use_the_persisted_final_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
     output = build_v2_final_research_output(
         reviewer_result=reviewer_result,
@@ -472,6 +474,13 @@ def test_v2_export_and_api_schema_use_the_persisted_final_output(tmp_path: Path)
             return False
 
     from fastapi.testclient import TestClient
+
+    import frontend.api as api_module
+    import frontend.live_service as live_service
+
+    default_database = tmp_path / "application-data" / "live-runs.sqlite3"
+    monkeypatch.setattr(api_module, "DEFAULT_LIVE_DB", default_database)
+    monkeypatch.setattr(live_service, "DEFAULT_LIVE_DB", default_database)
 
     app = create_app(
         ApiRuntime(controller=_Controller(), services=_Services(), environment={}),

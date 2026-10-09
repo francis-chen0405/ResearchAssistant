@@ -1,10 +1,8 @@
 # Handoff
 
-All six source-discovery phases and the subsequent repository review are verified locally.
-The latest review fixes are committed locally. [STATUS](STATUS.md) is the current state;
-the [repository-review record](.agent/plans/repository-review-2026-10-08.md) owns the latest
-findings and checks, and the [discovery plan](.agent/plans/source-discovery-v2-2026-10-05.md)
-retains prior phase evidence and acceptance limits.
+All six source-discovery phases and the comprehensive cross-phase fixes are verified locally.
+[STATUS](STATUS.md) is the current state; the [shared plan](.agent/plans/source-discovery-v2-2026-10-05.md)
+records all seven new findings, regressions, artifacts and the acceptance limits.
 
 The next boundary is separately authorized live research or distribution. The installed app
 remains `20bf6a2` and does not include these changes. The prior paid allowance is exhausted;

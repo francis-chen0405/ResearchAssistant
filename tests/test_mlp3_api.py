@@ -25,8 +25,40 @@ from providers.model_choices import (
     StageModelSelections,
 )
 from researchassistant.contracts.models import DiscoveryProvider
+from researchassistant.platform_support import desktop_settings
 from researchassistant.platform_support.credential_store import ProviderCredentials
 from researchassistant.platform_support.desktop_settings import InterfaceSettings, Preferences
+
+
+@pytest.fixture(autouse=True)
+def isolate_application_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep API lifespan and preference I/O inside the test's private directory."""
+    import frontend.api as api_module
+    import frontend.live_service as live_service
+
+    data_dir = tmp_path / "application-data"
+    database = data_dir / "live-runs.sqlite3"
+    preferences = data_dir / "preferences.json"
+    monkeypatch.setattr(live_service, "DEFAULT_LIVE_DB", database)
+    monkeypatch.setattr(api_module, "DEFAULT_LIVE_DB", database)
+    monkeypatch.setattr(
+        api_module,
+        "read_preferences",
+        lambda: desktop_settings.read_preferences(preferences),
+    )
+
+    def update_preferences(
+        *,
+        interface: InterfaceSettings | None = None,
+        provider_settings: dict[str, str] | None = None,
+    ) -> Preferences:
+        return desktop_settings.update_preferences(
+            interface=interface,
+            provider_settings=provider_settings,
+            path=preferences,
+        )
+
+    monkeypatch.setattr(api_module, "update_preferences", update_preferences)
 
 
 class FakeController:

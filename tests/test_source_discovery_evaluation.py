@@ -28,6 +28,24 @@ def test_manifest_is_strict_synthetic_and_covers_required_scenarios() -> None:
         Manifest.model_validate({**manifest.model_dump(), "unreviewed_field": True})
 
 
+def test_manifest_rejects_duplicate_scenario_and_expected_work_ids() -> None:
+    manifest = Manifest.model_validate_json(DEFAULT_MANIFEST.read_text(encoding="utf-8"))
+    payload = manifest.model_dump(mode="json")
+
+    duplicate_scenario = json.loads(json.dumps(payload))
+    duplicate_scenario["scenarios"][1]["scenario_id"] = duplicate_scenario["scenarios"][0][
+        "scenario_id"
+    ]
+    with pytest.raises(ValidationError, match="scenario IDs must be unique"):
+        Manifest.model_validate(duplicate_scenario)
+
+    duplicate_expected_work = json.loads(json.dumps(payload))
+    scenario = duplicate_expected_work["scenarios"][0]
+    scenario["expected_work_ids"][1] = scenario["expected_work_ids"][0]
+    with pytest.raises(ValidationError, match="expected work IDs must be unique"):
+        Manifest.model_validate(duplicate_expected_work)
+
+
 def test_offline_eval_preserves_direct_evidence_and_reaches_deeper_and_seed_work() -> None:
     report = evaluate_manifest()
     scenarios = {scenario.scenario_id: scenario for scenario in report.scenarios}

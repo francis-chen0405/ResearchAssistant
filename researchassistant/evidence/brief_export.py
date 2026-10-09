@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import zipfile
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -107,14 +108,32 @@ def export_released_brief(
         exporter_version=EXPORTER_VERSION,
         research_controls=controls,
     )
-    destination = Path(output_path).resolve()
+    destination = Path(output_path).expanduser().absolute()
     if destination.suffix.lower() != _suffix_for(export_format):
         raise ValueError(f"export path must end in {_suffix_for(export_format)}")
-    if destination.exists():
+    if os.path.lexists(destination):
         raise FileExistsError(f"refusing to overwrite existing export: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = _render_export(final_brief, metadata)
-    destination.write_bytes(payload)
+    # O_EXCL makes the no-overwrite guarantee hold even if another process creates
+    # this path after the check above. Keeping the user-selected path unresolved
+    # also ensures a dangling symlink is rejected instead of writing its target.
+    descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+    identity = os.fstat(descriptor)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+    except BaseException:
+        try:
+            current = destination.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            if (current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino):
+                destination.unlink()
+        raise
     return BriefExportResult(
         metadata=metadata,
         output_path=str(destination),

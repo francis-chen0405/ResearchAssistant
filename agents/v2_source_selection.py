@@ -14,10 +14,12 @@ from pydantic import ConfigDict
 from agents.v2_adaptive_search import V2MergedSurvivorPool
 from providers.llm import (
     V2_LLM_ROUTING,
+    LLMInvocationError,
     LLMProvider,
     LLMRequest,
     LLMStage,
     invoke_llm,
+    is_non_retryable_provider_error,
     load_prompt,
     load_prompt_file,
     render_stage_prompt,
@@ -409,6 +411,8 @@ def run_v2_source_selection_and_queue(
                     failure=f"{type(exc).__name__}: {exc}"[:1000],
                 )
             )
+            if isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc):
+                break
 
     used_fallback = recommendations is None
     if recommendations is None:

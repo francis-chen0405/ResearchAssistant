@@ -81,6 +81,8 @@ class Scenario(BaseModel):
         ids = [work.work_id for work in self.works]
         if len(ids) != len(set(ids)):
             raise ValueError("work IDs must be unique; publication versions share a DOI")
+        if len(self.expected_work_ids) != len(set(self.expected_work_ids)):
+            raise ValueError("expected work IDs must be unique")
         if not set(self.expected_work_ids) <= set(ids):
             raise ValueError("every expected work must occur in fixture results")
         work_by_id = {work.work_id: work for work in self.works}
@@ -110,6 +112,9 @@ class Manifest(BaseModel):
     @model_validator(mode="after")
     def topic_coverage(self) -> Manifest:
         required = {"alpr-crime", "alpr-discrimination", "biomedical", "non-scholarly"}
+        scenario_ids = [scenario.scenario_id for scenario in self.scenarios]
+        if len(scenario_ids) != len(set(scenario_ids)):
+            raise ValueError("scenario IDs must be unique")
         if not required <= {scenario.topic for scenario in self.scenarios}:
             raise ValueError("manifest must cover all four required topic classes")
         return self

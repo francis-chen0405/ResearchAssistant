@@ -31,6 +31,7 @@ Follow the active scope in the [plan index](.agent/PLANS.md) and its linked plan
 - Desktop credentials use macOS Keychain or Windows Credential Manager without plaintext fallback. Secrets must stay out of logs, SQLite, exports, browser storage, and child arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Do not load `.env` files or shell profiles automatically.
 - Keep `prompts/*.md` in place and preserve their bytes unless an authorized plan explicitly changes them; they are executable inputs.
 - Source or executable identity changes require a fresh run under the existing exact compatibility gate. The identity surface must include organized package sources as well as the existing agents, providers, frontend, and prompt sources. Preserve historical inspection/export and reject incompatible resume.
+- Root source data and identity include only the documented `cli.py`, `models.py`, `orchestrator.py`, and `store.py` entry points. Keep inactive root copies out of desktop packaging and executable fingerprints.
 
 ## Packaging and verification
 

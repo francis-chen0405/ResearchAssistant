@@ -2,12 +2,13 @@
 
 This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current authorized work is identified in [the plan index](../.agent/PLANS.md).
 
-There are 82 plan records and 19 verification records.
+There are 83 plan records and 21 verification records.
 
 ## Recent reviews and repairs
 
 ### Plans
 
+- [repository-review-2026-10-08](../.agent/plans/repository-review-2026-10-08.md) — repository-wide review, fixes and offline verification using Luna helpers and Sol integration.
 - [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md) — all six phases: foundations, provider queries, bounded retrieval/ranking, exact previews, one-hop seed expansion, ordinary product controls and complete offline integration acceptance; synthetic evaluation and later bounded live-test protocol.
 - [database-review-2026-10-03](../.agent/plans/database-review-2026-10-03.md)
 - [alpr-equity-run-fixes-2026-10-02](../.agent/plans/alpr-equity-run-fixes-2026-10-02.md)

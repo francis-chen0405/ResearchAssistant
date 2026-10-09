@@ -20,30 +20,24 @@ regression cases cover those paths, including actual durable seed execution and 
 acquisition of a known PDF before an unusable publisher shell. Historical/default clustering
 and normalization remain unchanged; no schema, dependency, prompt, quota or admission change.
 
-Latest repository-review verification on macOS arm64/Python **3.12.14**:
-**2,232 passed, 3 existing skips in 200.51 seconds**. Whole-workspace Ruff lint and
-format pass across **312 Python files**, including the corrected imports in three
-pre-existing untracked root copies. Offline evaluation passes **38 cases** and
-strict source-discovery evaluation completes **six synthetic scenarios**; these
-measure frozen fixtures rather than live research quality.
+Final isolated macOS arm64/Python **3.12.14** verification: **2,214 passed, 3 existing skips in
+172.85 seconds**. All **291 tracked/task Python files** pass Ruff lint/format; whole-workspace
+format passes **308 files**. Whole-workspace lint retains only three pre-existing import-order
+failures in untouched untracked `desktop_settings.py`, `history_import.py`, `model_contracts.py`.
+Existing offline evaluation passes **38 cases**; strict discovery evaluation passes **six
+synthetic scenarios**, retaining the biomedical capture failure and neutral precision loss.
+These do not establish live source discovery or interpretation quality. General retry after
+an unusable HTML capture remains outside the six-phase implementation scope.
 
-ESLint, TypeScript, Next.js **16.3.1** webpack desktop static export and whitespace
-checks pass. The review repairs export overwrite races, terminal model retries,
-acquisition/extraction input binding and checkpoint reuse, historical claim checks,
-relocated database result paths, model-route display, generated-resource cleanup,
-evaluation validation and test isolation. Bundles and executable fingerprints now
-include only the four documented root Python entry points alongside package code.
-The [repository-review record](.agent/plans/repository-review-2026-10-08.md) owns the
-findings, regressions and scope. These changes are committed locally.
-
-No fresh PyInstaller backend or native installer was built for these changes;
-previous packaged-artifact evidence remains in the discovery plan. The advisory
-graph retained old paths, and automatic approval review rejected its refresh;
-local source, diffs and tests verified the reviewed owners. Exact preceding
-current-state documents are retained in the
-[repository-review archive](docs/archive/2026-10-08-repository-review-state/STATUS.md).
-The installed application remains the older build. Installation, live provider
-work, push and publication remain separate boundaries.
+ESLint, TypeScript, isolated Next.js **16.3.1** webpack desktop export, desktop shell syntax and
+whitespace checks pass. A fresh isolated PyInstaller **6.22.2** backend includes seven inspected
+modules and nine byte-exact sources/prompts; packaged/workspace source identities match
+`source-sha256:008fdb5f52c74f3663b3ff4ba4f5f21c2a804c16a3d939e385dfa8c6d0176e62`.
+The advisory graph remains incomplete after refresh; live source, complete phase diffs and
+tests verify the reviewed owners. Exact prior current-state files are retained in the
+[comprehensive-review archive](docs/archive/2026-10-08-source-complete-review-state/STATUS.md).
+No paid transport, credentials, real application database mutation, app replacement,
+automation, push or publication occurred. The installed application remains the older build.
 
 ## Open acceptance gates
 

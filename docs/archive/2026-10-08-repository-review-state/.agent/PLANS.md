@@ -2,7 +2,6 @@
 
 ## Active
 
-- [Repository review — 2026-10-08](plans/repository-review-2026-10-08.md) records the user-authorized review and confirmed fixes, verified locally with 2,232 passing tests and three existing skips and committed locally. Delivery remains a separate boundary.
 - [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase record. All six phases and the complete cross-phase review fixes are verified locally; the final matrix, seven cross-phase findings, verification, synthetic evaluation and later bounded live protocol are recorded in this plan. Further live research or distribution requires separate authorization.
 - The completed [database review](plans/database-review-2026-10-03.md) and [source acceptance](../docs/verification/database-phase4.md) retain earlier schema/recovery/history evidence. Installation and release remain separate boundaries.
 

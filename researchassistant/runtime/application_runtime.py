@@ -9,6 +9,9 @@ from pathlib import Path
 
 from providers.config import ProviderConfigurationError
 
+# These are the supported root entry points; implementations live in the package.
+EXECUTABLE_ROOT_MODULES = ("cli.py", "models.py", "orchestrator.py", "store.py")
+
 
 class CLIExitCode(IntEnum):
     """Stable MVP-4 process exit codes."""
@@ -25,7 +28,7 @@ class CLIExitCode(IntEnum):
 def repository_identity(root: Path | None = None) -> str:
     """Hash the executable repository surface without runtime databases or secrets."""
     root = root if root is not None else _default_source_root()
-    candidates = list(root.glob("*.py")) + [root / "pyproject.toml"]
+    candidates = [root / name for name in EXECUTABLE_ROOT_MODULES] + [root / "pyproject.toml"]
     # The bundled font determines released PDF rendering just as source does.
     candidates.extend(sorted((root / "researchassistant/evidence/fonts").glob("*.ttf")))
     for directory, pattern in (
