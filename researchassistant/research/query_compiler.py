@@ -166,6 +166,7 @@ def compile_query(
             "db": "pubmed",
             "retmax": min(depth, capabilities.max_metadata_per_page),
             "retmode": "json",
+            "sort": "relevance",
         }
     elif provider is DiscoveryProvider.OPENALEX:
         text = " AND ".join(

@@ -15,6 +15,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import ConfigDict
 
+from agents.v2_discovery import _provider_full_text_locations
 from providers.acquisition import AcquisitionFailureCode
 from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProvider, ScraperProviderError
 from providers.v2_budget import V2CancellationRequested
@@ -240,6 +241,16 @@ def run_v2_acquisition_probe(
             policy=policy,
             retrieved_at=completed_at,
             cancellation_requested=cancellation_requested,
+            preferred_locations=tuple(
+                dict.fromkeys(
+                    url
+                    for item_id in cluster.item_ids
+                    for url in _provider_full_text_locations(item_by_id[item_id], pdf_only=True)
+                    if url in {cluster.preferred_url, *cluster.alternate_urls}
+                )
+            )
+            if ranking is not None
+            else (),
         )
         attempts.extend(cluster_attempts)
         if source is None:
@@ -524,9 +535,12 @@ def _acquire_cluster(
     policy: V2AcquisitionPolicy,
     retrieved_at: datetime,
     cancellation_requested: Callable[[], bool] | None,
+    preferred_locations: tuple[str, ...] = (),
 ) -> tuple[V2AcquiredSource | None, tuple[V2AcquisitionAttempt, ...]]:
     attempts: list[V2AcquisitionAttempt] = []
-    urls = (cluster.preferred_url, *cluster.alternate_urls)[: policy.max_urls_per_cluster]
+    urls = tuple(
+        dict.fromkeys((*preferred_locations, cluster.preferred_url, *cluster.alternate_urls))
+    )[: policy.max_urls_per_cluster]
     for url in urls:
         _raise_if_cancelled(cancellation_requested)
         response: ScrapeResponse | None = None

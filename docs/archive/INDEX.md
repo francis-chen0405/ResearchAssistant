@@ -70,3 +70,5 @@ The preceding STATUS, HANDOFF, ARCHITECTURE, DECISIONS and `.agent/PLANS.md` are
 - [Before Phase 5 citation neighborhoods](2026-10-08-source-neighborhood-state/STATUS.md): exact prior STATUS, HANDOFF, ARCHITECTURE, DECISIONS and plan index, byte-verified before current-state replacement.
 
 - [Before Phase 6 product integration](2026-10-08-source-integration-state/STATUS.md): exact prior STATUS, HANDOFF, ARCHITECTURE, DECISIONS and plan index, byte-verified against f665f204 before replacement. The shared plan retains all six phases' acceptance evidence.
+
+- [Before the complete source-discovery review](2026-10-08-source-complete-review-state/STATUS.md): exact prior STATUS, HANDOFF, ARCHITECTURE and plan index, byte-verified against aa6a23a before replacement. New findings and verification stay in the shared discovery plan.

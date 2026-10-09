@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase record. All six phases and the complete cross-phase review fixes are verified locally; the final matrix, seven cross-phase findings, verification, synthetic evaluation and later bounded live protocol are recorded in this plan. Further live research or distribution requires separate authorization.
+- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) is the shared six-phase record. All six phases are reviewed and committed locally, including the Phase 6 diagnostics/evaluation repairs; the final matrix, synthetic evaluation and later bounded live protocol are recorded in this plan. Further live research or distribution requires separate authorization.
 - The completed [database review](plans/database-review-2026-10-03.md) and [source acceptance](../docs/verification/database-phase4.md) retain earlier schema/recovery/history evidence. Installation and release remain separate boundaries.
 
 ## State and delivery

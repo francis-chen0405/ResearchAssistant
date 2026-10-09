@@ -18,6 +18,7 @@ from researchassistant.contracts.discovery_v2 import (
     V2ConceptualQuery,
     V2ProductDiscoveryPolicy,
     discovery_id,
+    normalize_doi,
 )
 from researchassistant.contracts.model_contracts import DiscoveryProvider
 from researchassistant.contracts.model_research import DiscoveryProvenance, NormalizedDiscoveryItem
@@ -161,6 +162,11 @@ class EvaluationReport(BaseModel):
 
 def _uuid(key: str) -> UUID:
     return uuid5(_NAMESPACE, key)
+
+
+def _work_key(work: FixtureWork) -> str:
+    """Publication aliases with an exact DOI represent one expected work."""
+    return f"doi:{normalize_doi(work.doi)}" if work.doi else f"fixture:{work.work_id}"
 
 
 def _item(scenario: Scenario, work: FixtureWork, run_id: UUID) -> NormalizedDiscoveryItem:
@@ -311,9 +317,16 @@ def evaluate_manifest(path: Path = DEFAULT_MANIFEST) -> EvaluationReport:
         if len(work_by_item) != len(items):
             raise ValueError("production graph candidates must map back to one frozen work")
         rank_by_item = {row.item_id: row for row in rank_rows}
-        expected = set(scenario.expected_work_ids)
+        expected = {_work_key(query_map[work_id]) for work_id in scenario.expected_work_ids}
+
+        def found(
+            works: list[FixtureWork] | tuple[FixtureWork, ...],
+            expected_keys: frozenset[str] = frozenset(expected),
+        ) -> set[str]:
+            return {_work_key(work) for work in works} & expected_keys
+
         baseline = tuple(query_map[work_id] for work_id in scenario.baseline_work_ids)
-        baseline_found = {work.work_id for work in baseline} & expected
+        baseline_found = found(baseline)
         # Deduplicate DOI versions after the production ranker, preserving its best record.
         unique_ranked: list[FixtureWork] = []
         seen: set[str] = set()
@@ -390,21 +403,21 @@ def evaluate_manifest(path: Path = DEFAULT_MANIFEST) -> EvaluationReport:
                 original_rank[work.work_id],
             ),
         )[:12]
-        seed_found = {work.work_id for work in shortlist} & expected
+        seed_found = found(shortlist)
         baseline_value = len(baseline_found) / len(expected)
         new_value = len(seed_found) / len(expected)
         resolved_shortlist = [work for work in shortlist if work.independence != "unresolved"]
         resolved_baseline = [work for work in baseline if work.independence != "unresolved"]
-        base_precision = len({work.work_id for work in resolved_baseline} & expected) / max(
-            1, len(resolved_baseline)
+        base_precision = len(found(resolved_baseline)) / max(
+            1, len({_work_key(work) for work in resolved_baseline})
         )
         resolved_acquired = [work for work in resolved_shortlist if work.work_id in acquired]
-        new_precision = len({work.work_id for work in resolved_shortlist} & expected) / max(
-            1, len(resolved_shortlist)
+        new_precision = len(found(resolved_shortlist)) / max(
+            1, len({_work_key(work) for work in resolved_shortlist})
         )
-        acquired_recall = len(set(acquired) & expected) / len(expected)
-        acquired_precision = len({work.work_id for work in resolved_acquired} & expected) / max(
-            1, len(resolved_acquired)
+        acquired_recall = len(found([query_map[work_id] for work_id in acquired])) / len(expected)
+        acquired_precision = len(found(resolved_acquired)) / max(
+            1, len({_work_key(work) for work in resolved_acquired})
         )
         duplicate_count = len(query_works) - len({row.work_key for row in query_rank_rows})
         query_work_by_item = {
@@ -421,22 +434,16 @@ def evaluate_manifest(path: Path = DEFAULT_MANIFEST) -> EvaluationReport:
         physical_requests = seed_requests + acquisition_requests
         reserved_cost = seed_result.reserved_cost_usd if seed_result is not None else None
         product_top5 = (
-            set(scenario.provider_specific_top5_ids) & expected if compiled is not None else set()
+            found([query_map[work_id] for work_id in scenario.provider_specific_top5_ids])
+            if compiled is not None
+            else set()
         )
         ablations = {
             "provider_specific_query_at_5": len(product_top5) / len(expected),
-            "deeper_retrieval_and_ranking": len(
-                {work.work_id for work in query_unique[: scenario.acquisition_k]} & expected
-            )
+            "deeper_retrieval_and_ranking": len(found(query_unique[: scenario.acquisition_k]))
             / len(expected),
-            "preview_aware_selection_at_12": len(
-                {work.work_id for work in selected_at_12} & expected
-            )
-            / len(expected),
-            "rank_only_selection_at_12": len(
-                {work.work_id for work in eligible_previews[:12]} & expected
-            )
-            / len(expected),
+            "preview_aware_selection_at_12": len(found(selected_at_12)) / len(expected),
+            "rank_only_selection_at_12": len(found(eligible_previews[:12])) / len(expected),
             "seed_expansion": new_value,
         }
         counterexamples = []

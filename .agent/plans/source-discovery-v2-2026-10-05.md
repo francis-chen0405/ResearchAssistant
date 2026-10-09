@@ -1,6 +1,6 @@
 # Source discovery v2 — shared implementation record
 
-Authorized scope: all six phases of the source-discovery pack, with source/offline acceptance complete. All six phases are reviewed local commits, including the Phase 6 diagnostic-count and evaluation-identity repairs. Preserve the unrelated proposal pack and restored root compatibility files. Paid transports, credential access, real databases, installation, automation, push and publication remain outside this request.
+Authorized scope: all six phases of the source-discovery pack, with source/offline acceptance complete. All six phases are reviewed local commits. The subsequent complete cross-phase review and seven repairs are recorded at the end of this plan. Preserve the unrelated proposal pack and restored root compatibility files. Paid transports, credential access, real databases, installation, automation, push and publication remain outside this request.
 
 ## Original Phase 1 specification and ownership
 
@@ -723,3 +723,107 @@ proposals and unrelated restored root modules remain excluded. No paid transport
 real application database mutation, installation, automation, push or publication occurred.
 Live quality, installed-cache/native Windows and Mac distribution gates remain in STATUS;
 the later live-test protocol above still requires separate explicit authorization.
+
+
+### Complete six-phase review — 2026-10-08
+
+The user requested review of every change against the actual better-source goal and repair
+of all confirmed problems. Scope was the complete `11b1466..aa6a23a` six-phase diff:
+**156 files**, plus this review's fixes. The audit traced ordinary API/CLI/desktop controls
+through conceptual compilation, physical retrieval, retained pages, ranking/Scout, acquisition,
+claim previews, adaptive seed/graph lanes, selection, exact extraction and admission. Existing
+phase-specific reviews remain supporting evidence; this review adds realistic cross-phase
+regressions rather than treating previous test passes as proof of live quality.
+
+| Changed owner group | Files in original phase diff | Review/verification focus |
+| --- | ---: | --- |
+| Agents | 8 | Initial/adaptive compilation, lane limits, fair Scout/acquisition, seed handoff, preview selection and Round-4 permission |
+| Providers | 14 | Native parameters, pagination, pacing, every physical reservation, bounded transport, configured origins, graph parsing, routing/identity |
+| Canonical backend | 26 | Strict contracts/serialization, source identity, frozen public controls, work/seed aliases, immutable storage, read-only inspection and conservative accounting |
+| Frontend/API and web | 9 | Defaults, actual controller wiring, legacy absence, settings, detached trails/counts, TypeScript/lint/export |
+| Executable prompts | 5 | Versioned conceptual search, bounded Scout/selection inputs, metadata/evidence distinction and byte-exact packaging |
+| Evaluation implementation/manifest | 4 | Frozen synthetic expectations, real production fake-transport paths, graph ID attribution, independent work metrics and honest limitations |
+| Tests | 52 | Full regression execution including historical fingerprints, ownership, unknown outcomes, budgets, corruption, fairness and acquisition/admission boundaries |
+| Records and exact archives | 38 | Scope/defaults/limits agree with code; original executable/historical meanings and prior-state records preserved |
+
+The graph index reports the correct branch/head but remains incomplete after full refresh
+(initially 121 nodes/239 edges; final refresh 362 nodes/1,216 edges). Initial acquisition
+definition/caller queries returned no match. The final refresh exposes clustering/acquisition
+definitions and a bounded trace; important conclusions still use live files, complete commit
+diffs and regression behavior. No graph artifact was persisted.
+
+Seven confirmed findings were repaired:
+
+1. **Joined author displays blocked exact seeds.** PubMed/arXiv joined author strings were
+   compared as one name against resolved individual authors. Exact comma/semicolon-rendered
+   prefixes now match the resolved list; no arbitrary comma split, fuzzy name or title-only
+   identity is accepted. DOI/ID/year/title, retraction and contradictory-author checks remain.
+2. **Graph-only PDF locations were lost.** OpenAlex `locations` PDFs were ignored when primary
+   and best-OA PDF fields were empty. The existing public/safe-location parser now retains a
+   documented PDF from that list for normal clustering and acquisition.
+3. **Known PDFs could be stranded behind publisher shells.** Fresh ranked acquisition now
+   prioritizes safe provider-reported PDFs already in the owned cluster. URL deduplication,
+   three-location cap, fallback/physical accounting and ordinary media checks remain. Default
+   historical acquisition ordering is unchanged. No general acquisition-recovery project.
+4. **Same-title distinct works were merged.** Fresh union components reject contradictory
+   DOI/provider-ID anchors, including transitive unidentified bridges. Same-DOI publication
+   aliases still merge. Duplicate-heavy historical behavior remains linear; default historical
+   equivalence, cluster identity formula and source-family identification are unchanged.
+5. **DOI normalization altered identifiers and trusted malformed metadata.** Compiled/graph
+   discovery uses the exact DOI normalizer, preserving legitimate terminal punctuation and
+   leaving malformed provider DOI observations out of identity anchors. Historical free-text
+   normalization retains its original dispatch.
+6. **Compiled PubMed searches dropped relevance sorting.** `sort=relevance` is restored as
+   a compiler-owned, adapter-validated and physically audited parameter, replacing dependence
+   on ESearch's default order. Current official sorting evidence is linked in the provider
+   reference. Physical request ceilings and ESearch/ESummary ownership remain unchanged.
+7. **Evaluation missed better aliases of expected work.** Expected/observed recall, precision
+   and ablations now compare exact DOI work anchors while retaining separate record IDs and
+   acquisition URLs. Selecting the best publication version cannot falsely reduce recall;
+   repeated aliases cannot inflate independent expected-work counts. Titles never define aliases.
+
+The initial five new regression cases failed before fixes: joined authors (two separators),
+graph PDF location, conflicting same-title clustering and alias recall (incorrectly 0.75).
+Final additions total **13 cases**: eleven in `test_discovery_complete_review.py`, two durable
+seed-runtime author parameters in `test_seed_expansion_review.py`, plus strengthened actual
+PubMed request verification. Tests also cover title-only bridges, provider IDs without DOIs,
+same-DOI aliases, PDF-before-shell acquisition and valid/malformed DOI metadata.
+
+Final verification on macOS arm64, Python **3.12.14**:
+
+- Isolated application-data complete suite: **2,214 passed, 3 unchanged skips in 172.85s**.
+- Focused pre-final groups: 67 provider/seed/rank/evaluation cases, 25 cross-phase acquisition
+  cases and 89 query/depth/transport/seed/preview/type cases passed; the complete final suite
+  includes subsequent author/runtime regressions and all final source changes.
+- Tracked/task Ruff lint and format: **291 files pass**. Whole-workspace format: **308 pass**.
+  Whole-workspace lint was run and still reports the three pre-existing I001 errors in unrelated
+  untracked `desktop_settings.py`, `history_import.py`, `model_contracts.py`, all preserved.
+  Working/staged whitespace checks pass.
+- Existing offline evaluation: **38 cases PASS**. Strict discovery runner: **six scenarios
+  PASS**, unchanged author-created manifest hash
+  `bc1038d52ae027ed4e131a77257b29e8c9a81bd3cd522b9393127ebe58a42c67`.
+  Biomedical usable recall remains 0.75 and the neutral precision reduction remains visible.
+  Alias regression now correctly reports 1.00 recall without changing expected works.
+  Outputs: `/private/tmp/ra-complete-review-evals-uvto6cqx/`.
+- ESLint, TypeScript and desktop main-shell syntax pass. Isolated Next.js **16.3.1** webpack
+  static desktop export passes at `/private/tmp/ra-complete-review-web-iz3lz96t/web/out`.
+  An attempted check of nonexistent `desktop/preload.cjs` was corrected to the actual shell
+  inventory; it was a verification-command path error, not an application failure.
+- Isolated PyInstaller **6.22.2** backend build passes at
+  `/private/tmp/ra-complete-review-backend-bwfjo_at/dist/researchassistant-backend`.
+  Inspection verifies seven current PYZ modules and nine byte-exact source/prompt files.
+  Packaged/workspace source identity matches
+  `source-sha256:008fdb5f52c74f3663b3ff4ba4f5f21c2a804c16a3d939e385dfa8c6d0176e62`.
+  Inspection does not launch the credential-backed backend or install the application.
+- Four exact replaced current-state records match `aa6a23a` in the comprehensive-review archive.
+
+**Product conclusion:** the three accepted improvements are implemented and connected, and
+these regressions repair real obstacles to additional sources reaching usable snapshots.
+They are viable discovery improvements; neither code inspection nor author-created fixtures
+establish that real claims now produce better live sources or correct interpretation. General
+retry after an unusable HTML response, recovery of unavailable full text, new specialist
+providers and OCR were excluded by the six-phase specification. The remaining limitation is
+recorded, not presented as solved. The installed runtime remains `20bf6a2`, so users of that
+build do not yet receive any discovery changes. Further paid research requires new explicit
+authorization; no paid call, key read, real-data write, migration, dependency/prompt/quota/admission
+change, app replacement, automation, push or publication occurred in this review.

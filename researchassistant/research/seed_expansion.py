@@ -384,9 +384,21 @@ def _matches_seed(seed: V2SeedEligibility, work: ResolvedOpenAlexWork) -> bool:
     if expected.authors and identity.authors:
         observed_authors = {x.casefold() for x in expected.authors}
         resolved_authors = {x.casefold() for x in identity.authors}
+        # arXiv/PubMed discovery expose a comma-joined author display string.
+        # Compare exact rendered prefixes of the resolved names, rather than
+        # splitting commas inside names or accepting arbitrary substring matches.
+        joined_prefix = len(expected.authors) == 1 and any(
+            expected.authors[0].casefold() == separator.join(identity.authors[:count]).casefold()
+            for count in range(1, len(identity.authors) + 1)
+            for separator in (", ", "; ")
+        )
         # Providers can expose only a prefix/subset of the author list. Additional
         # compatible coauthors are missing metadata, not an identity contradiction.
-        if not (observed_authors <= resolved_authors or resolved_authors <= observed_authors):
+        if not (
+            joined_prefix
+            or observed_authors <= resolved_authors
+            or resolved_authors <= observed_authors
+        ):
             return False
     return True
 

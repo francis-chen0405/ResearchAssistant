@@ -159,6 +159,8 @@ def test_doi_only_seed_resolution_prevents_self_cycle_and_replay(tmp_path: Path)
     (
         (("A. Researcher",), ("A. Researcher", "B. Researcher"), True),
         (("A. Researcher", "B. Researcher"), ("A. Researcher",), True),
+        (("A. Researcher, B. Researcher",), ("A. Researcher", "B. Researcher"), True),
+        (("A. Researcher; B. Researcher",), ("A. Researcher", "B. Researcher"), True),
         (("A. Researcher",), ("Different Author",), False),
         (("A. Researcher", "B. Researcher"), ("A. Researcher", "Different Author"), False),
     ),

@@ -172,6 +172,7 @@ def test_pubmed_compiled_title_abstract_expression_is_sent_to_esearch() -> None:
     assert params["term"] == action.query_text
     assert "[tiab]" in params["term"].lower() or "[title/abstract]" in params["term"].lower()
     assert params["retmax"] == str(action.effective_depth)
+    assert params["sort"] == "relevance"
     assert len(seen) == 2
 
 

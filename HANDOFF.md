@@ -1,19 +1,18 @@
 # Handoff
 
-All six source-discovery phases are reviewed and committed locally, including the Phase 6
-diagnostic-count and exact evaluation-identity repairs. [STATUS](STATUS.md) is the verified state and the
-[shared plan](.agent/plans/source-discovery-v2-2026-10-05.md) records the requirement/failure
-matrix, measured synthetic outcomes and exact acceptance commands.
+All six source-discovery phases and the comprehensive cross-phase fixes are verified locally.
+[STATUS](STATUS.md) is the current state; the [shared plan](.agent/plans/source-discovery-v2-2026-10-05.md)
+records all seven new findings, regressions, artifacts and the acceptance limits.
 
-The next boundary is separately authorized live research or distribution work, rather than
-another implementation phase. The plan proposes eight paired public-claim runs with explicit
-model/search/call limits and a configured exposure ceiling of $6.48. Do not run it under this
-prompt: the earlier five-submission paid allowance is exhausted. Live retrieval quality,
-credential-backed Mac launch/clean-machine installation/signing, Windows durability and the
-installed external-cache checks remain open in STATUS. Installation, push and publication require their own authorization.
+The next boundary is separately authorized live research or distribution. The installed app
+remains `20bf6a2` and does not include these changes. The prior paid allowance is exhausted;
+the later eight-run/$6.48 protocol in the plan remains a proposal, not authorization.
+Live ranking, usable full-text gains, model-selection value and interpretation quality are
+unverified. Bounded known-PDF prioritization is implemented; general retry after an unusable
+HTML capture, new catalog providers and OCR remain outside this implementation scope.
 
 Preserve exact historical artifacts, validated query-only request snapshots, schema 17,
-conservative unknown-cost exposure, existing source/model ceilings, Round-4 Governor
-permission and no Round 5. Discovery metadata/edges/previews remain candidate context;
-ordinary acquisition, immutable snapshot, exact extraction, Analyst and deterministic
-admission remain mandatory. No migration, dependency or new model stage accompanies Phase 6.
+unknown-cost reservations, existing quotas, Round-4 authorization, no Round 5 and independent
+snapshot/extraction/Analyst/admission gates. Native installation, signing, clean-machine and
+Windows/cache checks remain in STATUS. Preserve unrelated untracked compatibility files and
+proposal documents. Installation, push and publication require their own authorization.

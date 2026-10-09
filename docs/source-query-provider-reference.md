@@ -51,6 +51,17 @@ claim that every documented operation is enabled in this application.
   explicitly scoped to Title/Abstract by the compiler, so compiled queries do not
   depend on automatic term mapping across other fields. NCBI also documents the
   equivalent long form `[Title/Abstract]`. See [PubMed search help](https://pubmed.ncbi.nlm.nih.gov/help/).
+- Compiled ESearch explicitly retains `sort=relevance`, matching the prior adapter
+  rather than relying on its date-oriented API default. The compiler fingerprint
+  and durable request audit include this parameter. See [NCBI E-utilities sorting](https://www.ncbi.nlm.nih.gov/sites/books/NBK25499/).
+
+Fresh discovery preserves exact valid DOI punctuation and excludes malformed DOI metadata
+from identity anchors. Distinct known DOI/provider IDs prevent same-title clustering;
+unidentified records cannot bridge conflicting works. Historical clustering and normalization
+remain unchanged. Ranked acquisition prioritizes a validated provider-reported PDF already
+retained in its cluster, within the existing URL/attempt caps and ordinary scraper checks.
+OpenAlex graph parsing also retains a PDF supplied only in `locations`; those objects identify
+places the same work is available. See [OpenAlex work locations](https://help.openalex.org/data/works/attributes/).
 
 ## Exa Search API
 

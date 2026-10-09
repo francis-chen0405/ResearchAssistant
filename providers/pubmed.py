@@ -59,8 +59,8 @@ class PubMedSearchAdapter:
             )
         parameters = compiled_parameters(
             request,
-            allowed_names=frozenset({"db", "term", "retmode", "retmax", "retstart"}),
-            required_names=frozenset({"db", "term", "retmode", "retmax"}),
+            allowed_names=frozenset({"db", "term", "retmode", "retmax", "retstart", "sort"}),
+            required_names=frozenset({"db", "term", "retmode", "retmax", "sort"}),
         )
         if parameters is None:
             query_params: dict[str, str | int | bool] = {
@@ -76,6 +76,7 @@ class PubMedSearchAdapter:
                 parameters.get("db") != "pubmed"
                 or parameters.get("retmode") != "json"
                 or parameters.get("retmax") != request.limit
+                or parameters.get("sort") != "relevance"
                 or not isinstance(term, str)
                 or not term.strip()
                 or not any(tag in term.lower() for tag in ("[tiab]", "[title/abstract]"))

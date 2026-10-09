@@ -20,6 +20,9 @@ Their gates are covered by separate production integration tests. Fixture gains 
 establish live rankings or research quality and do not redefine the historical corpus below.
 Graph results are attributed to exact OpenAlex fixture IDs. Identical titles cannot substitute
 another work or acquisition URL, and missing or unknown graph IDs fail the evaluation.
+Recall and precision count independent DOI work anchors, so choosing a better publication
+alias cannot create a false miss or inflate the number of expected works. Record IDs and
+acquisition locations remain separate; title equality never establishes a work alias.
 
 Run the normal deterministic evaluation from the repository root:
 

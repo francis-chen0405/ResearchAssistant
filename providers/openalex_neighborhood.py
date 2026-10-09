@@ -454,6 +454,11 @@ def _to_search_result(item: object, rank: int) -> SearchResult | None:
     primary_url = _location_field(primary, "landing_page_url")
     best_url = _location_field(best, "landing_page_url")
     pdf_url = _location_field(primary, "pdf_url") or _location_field(best, "pdf_url")
+    if pdf_url is None and isinstance(locations, list):
+        pdf_url = next(
+            (url for location in locations if (url := _location_field(location, "pdf_url"))),
+            None,
+        )
     original_url = primary_url or best_url or doi_value or f"https://openalex.org/{work_id}"
     try:
         return SearchResult(

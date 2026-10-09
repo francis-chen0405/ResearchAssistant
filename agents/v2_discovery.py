@@ -133,7 +133,11 @@ def normalize_discovery_responses(
             if item_id in seen_ids:
                 raise ValueError("stable discovery item IDs must be unique")
             seen_ids.add(item_id)
-            provider_doi = _normalized_doi(result.metadata.doi)
+            provider_doi = _normalized_doi(
+                result.metadata.doi,
+                exact_identifiers=query.compiled_query is not None
+                or (isinstance(query, V2AdaptiveSearchQuery) and query.graph_action is not None),
+            )
             crossref = _crossref_identity(provider_doi, crossref_resolver)
             doi = crossref.doi if crossref and crossref.doi else provider_doi
             item = NormalizedDiscoveryItem(
@@ -200,6 +204,10 @@ def cluster_discovery_items(
     if len(run_ids) != 1:
         raise ValueError("a discovery pool cannot cluster more than one run")
     parent = list(range(len(items)))
+    root_dois = [{item.doi} if item.doi else set() for item in items]
+    root_provider_ids = [
+        _provider_identity_anchors(item) if include_provider_locations else set() for item in items
+    ]
 
     def find(index: int) -> int:
         while parent[index] != index:
@@ -210,12 +218,32 @@ def cluster_discovery_items(
     def union(left: int, right: int) -> None:
         left_root, right_root = find(left), find(right)
         if left_root != right_root:
+            combined_dois = root_dois[left_root] | root_dois[right_root]
+            # Fresh metadata pools must not replace a distinct identified paper
+            # merely because its title matches. Guard the entire union component
+            # so an unidentified record cannot bridge contradictory DOI anchors.
+            if include_provider_locations and len(combined_dois) > 1:
+                return
+            combined_ids = root_provider_ids[left_root] | root_provider_ids[right_root]
+            shared_doi = bool(root_dois[left_root] & root_dois[right_root])
+            if (
+                include_provider_locations
+                and not shared_doi
+                and any(
+                    len({identifier for provider, identifier in combined_ids if provider == owner})
+                    > 1
+                    for owner, _identifier in combined_ids
+                )
+            ):
+                return
             parent[right_root] = left_root
+            root_dois[left_root] = combined_dois
+            root_provider_ids[left_root] = combined_ids
 
     # Each identity predicate is equality on a normalized token. Bucket candidates by
     # token and union only bucket members, preserving the prior equivalence semantics
     # without comparing every pair in a large metadata pool.
-    identity_buckets: dict[tuple[str, str], int] = {}
+    identity_buckets: dict[tuple[str, str], list[int]] = {}
     for index, item in enumerate(items):
         keys = [("url", item.canonical_url)]
         if item.doi:
@@ -224,11 +252,13 @@ def cluster_discovery_items(
         if title:
             keys.append(("title", title))
         for key in keys:
-            prior = identity_buckets.get(key)
-            if prior is None:
-                identity_buckets[key] = index
-            else:
+            prior_members = identity_buckets.setdefault(key, [])
+            for prior in prior_members:
                 union(index, prior)
+            prior_members.append(index)
+            # Keep one representative per component, preserving linear behavior
+            # for duplicate-heavy historical pools and avoiding repeated unions.
+            identity_buckets[key] = list(dict.fromkeys(find(member) for member in prior_members))
     groups: dict[int, list[NormalizedDiscoveryItem]] = {}
     for index, item in enumerate(items):
         groups.setdefault(find(index), []).append(item)
@@ -825,9 +855,14 @@ def _artifact_key(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) 
     )
 
 
-def _normalized_doi(value: str | None) -> str | None:
+def _normalized_doi(value: str | None, *, exact_identifiers: bool = False) -> str | None:
     if value is None:
         return None
+    if exact_identifiers:
+        try:
+            return normalize_doi(value)
+        except ValueError:
+            return None
     normalized = _DOI_PREFIX_RE.sub("", value.strip()).rstrip("/.,;)").casefold()
     return normalized or None
 
@@ -872,10 +907,27 @@ def _metadata_string(result: SearchResult, key: str) -> str | None:
     raise ValueError(f"unknown normalized discovery metadata field: {key}")
 
 
-def _provider_full_text_locations(item: NormalizedDiscoveryItem) -> tuple[str, ...]:
+def _provider_identity_anchors(item: NormalizedDiscoveryItem) -> set[tuple[str, str]]:
+    if item.provider.value not in {"openalex", "arxiv", "pubmed"}:
+        return set()
+    anchors: set[tuple[str, str]] = set()
+    for entry in item.provider_metadata:
+        if entry.key == "external_id":
+            try:
+                value = json.loads(entry.value_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(value, str) and value:
+                anchors.add((item.provider.value, value))
+    return anchors
+
+
+def _provider_full_text_locations(
+    item: NormalizedDiscoveryItem, *, pdf_only: bool = False
+) -> tuple[str, ...]:
     locations: set[str] = set()
     for entry in item.provider_metadata:
-        if entry.key not in {"pdf_url", "full_text_url"}:
+        if entry.key not in ({"pdf_url"} if pdf_only else {"pdf_url", "full_text_url"}):
             continue
         try:
             value = json.loads(entry.value_json)
