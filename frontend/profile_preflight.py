@@ -7,16 +7,24 @@ from uuid import UUID
 
 from agents.v2_initial_planner import V2_INITIAL_PLANNER_PROMPT_PATH
 from frontend.live_contracts import LiveRunRequest
-from providers.llm import LLMStage, load_prompt_file, render_stage_prompt
+from providers.llm import (
+    V2_LLM_ROUTING,
+    LLMRequest,
+    LLMStage,
+    load_prompt_file,
+    render_stage_prompt,
+)
+from providers.mimo import _direct_mimo_prompt
 from providers.model_choices import CONFIGURABLE_PROFILE_ID
 from providers.model_profiles import profile_environment
 from providers.pricing import conservative_token_estimate
 from providers.v2_routing import V2ModelReservation, V2RoutingConfig
 from researchassistant.contracts.models import (
     V2InitialPlannerInput,
-    V2InitialPlannerModelOutput,
     V2InitialPlannerPolicy,
 )
+from researchassistant.contracts.query_planning import V2InitialPlannerConceptsOutput
+from researchassistant.research.product_discovery import resolve_product_discovery
 
 
 def check_start_reservation(
@@ -36,6 +44,7 @@ def check_start_reservation(
         ),
     )
     providers = request.research_controls.discovery_providers
+    resolve_product_discovery(request.research_controls, providers)
     artifact = V2InitialPlannerInput(
         run_id=request.run_id or UUID(int=0),
         raw_claim=request.raw_claim,
@@ -43,10 +52,28 @@ def check_start_reservation(
         discovery_providers=providers,
         search_lanes=V2InitialPlannerPolicy().search_lanes(request.directions, providers),
     )
-    prompt = load_prompt_file(V2_INITIAL_PLANNER_PROMPT_PATH, expected_stage=LLMStage.PLANNER)
-    rendered = render_stage_prompt(prompt, artifact, V2InitialPlannerModelOutput)
+    prompt = load_prompt_file(
+        V2_INITIAL_PLANNER_PROMPT_PATH.with_name("v2_initial_planner_v2.md"),
+        expected_stage=LLMStage.PLANNER,
+    )
+    rendered = render_stage_prompt(prompt, artifact, V2InitialPlannerConceptsOutput)
+    physical_request = LLMRequest(
+        run_id=artifact.run_id,
+        stage=LLMStage.PLANNER,
+        prompt=prompt,
+        rendered_prompt=rendered,
+        input_artifact=artifact,
+        input_artifact_ids=(artifact.run_id,),
+        requested_output_type=V2InitialPlannerConceptsOutput,
+        model_alias=routing.preflight().for_stage(LLMStage.PLANNER).logical_alias,
+        generation=V2_LLM_ROUTING.for_stage(LLMStage.PLANNER).generation,
+    )
     reservation = routing.preflight().reserve(
-        LLMStage.PLANNER, conservative_token_estimate(rendered)
+        LLMStage.PLANNER,
+        max(
+            conservative_token_estimate(rendered),
+            conservative_token_estimate(_direct_mimo_prompt(physical_request)),
+        ),
     )
     if reservation.reserved_tokens > request.max_tokens:
         raise ValueError(

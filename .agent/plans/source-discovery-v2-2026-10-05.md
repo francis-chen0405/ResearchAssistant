@@ -1,6 +1,6 @@
 # Source discovery v2 — shared implementation record
 
-Authorized scope: Phases 1–5 of the six-phase source-discovery pack, delivered one requested phase at a time. Phases 1–4 are committed locally; Phase 5 is implemented in the current uncommitted source. Phase 6 product controls and final cross-phase acceptance remain the next boundary. Preserve the unrelated proposal pack and restored compatibility files. Paid transports, credentials, real databases, installation, automation, commit, push and publication are outside this Phase 5 request.
+Authorized scope: all six phases of the source-discovery pack, with source/offline acceptance complete. All six phases are reviewed local commits, including the Phase 6 diagnostic-count and evaluation-identity repairs. Preserve the unrelated proposal pack and restored root compatibility files. Paid transports, credential access, real databases, installation, automation, push and publication remain outside this request.
 
 ## Original Phase 1 specification and ownership
 
@@ -498,3 +498,228 @@ Phase 5 and these repairs are delivered as the reviewed local commit. The propos
 unrelated restored root files remain excluded. No installation, push, publication, paid
 transport, credential access or real application-data change occurred. Phase 6 remains the
 next request boundary. Offline tests establish constructed behavior and provenance only.
+
+
+## Phase 6 integration and acceptance
+
+Root owns architecture, frozen controls/policy, runtime wiring, preflight, evidence/reader
+boundaries, review and final evidence. User-requested GPT-6 Luna helpers own renderer/settings,
+read-only diagnostics, synthetic evaluation and independent requirement review. The graph
+was refreshed without persistence; live source verifies the ordinary CLI and live controller
+callers. All verification uses fake transports, temporary SQLite/application data and
+isolated build output; no credentials or real user databases are accessed.
+
+Fresh product policy `source-discovery-v2-2026-10-08-v3` inherits bounded metadata ranking
+and exact previews, with explicit product choices. API old clients receive depth 20,
+expansion enabled and lexical scholarly search. ResearchControls on historical records omit
+absent optional choices, preserving canonical old JSON and unknown display. Direct-v2 callers
+can supply ResearchControls; omitted controls retain the preceding direct-v2 policy. The
+legacy-injected controller strips discovery additions, and CLI rejects explicit new switches
+at that boundary. New policy/config/source identity changes require a fresh run. Automatic
+selects lexical deterministically; semantic applies only to selected OpenAlex while other
+selected providers keep their supported mode. Disabled OpenAlex never requires its key or
+receives a request. No research-model selection is changed by coding-team model instructions.
+
+Metadata depth 10/20/50 is separate from the existing per-direction source target, which
+bounds product acquisition shortlists independently. Existing raw/Scout/acquisition,
+physical provider, Round 1–4/Governor and model/source ceilings remain tighter authorities.
+Paper expansion disabled is enforced at offer, execution and storage-policy validation,
+including identity lookups; no extra model stage/migration/dependency is introduced.
+
+| Requirement / failure boundary | Implementation / verification ownership |
+| --- | --- |
+| Foundations, fair lanes, atomic physical reservations, conservative unknown costs and races | `discovery_v2`, `discovery_policy`, `discovery_store`; foundation/policy/store/integration/transport suites |
+| Exact provider query compilation and mode/depth identities, pagination, partial/unknown/cancelled starts | `query_compiler`, `query_execution`, `query_retrieval_store`, adapters; query execution/production/frozen-depth/review and adapter suites |
+| Metadata ranks, below-five shortlists, separate source/metadata caps | `metadata_ranking`, `v2_discovery`, `v2_acquisition`, product policy; ranked Scout/acquisition and product pipeline regressions |
+| Exact owned substantive previews, bibliography/injection/context/input-pressure boundaries | `source_preview`, `v2_acquisition`, `v2_source_selection`; preview construction/runtime/selection/inspection suites |
+| One-hop citation candidate through normal acquisition/extraction/Analyst/admission; aliases/cycles/ambiguity | `seed_expansion`, `openalex_neighborhood`, `discovery_store`; neighborhood/runtime/review/planning suites |
+| API/desktop/CLI/direct-v2 defaults, explicit settings, old clients, unsupported semantic and disabled legacy boundary | API/live contracts/factory/product resolver/runtime/renderer; `test_discovery_product_review`, `test_product_discovery_pipeline`, settings plus existing API/CLI/live suites |
+| Frozen settings, unchanged exact replay, incompatible resume | production/discovery fingerprints; product pipeline round1–4/replay/mismatch cases and historical identity goldens |
+| Read-only snapshot/schema/FK/provenance, bounded diagnostic/trail queries, old absent fields | live history/progress and discovery diagnostics; historical-read/API/import/export/recovery suites and new diagnostic/product fixtures |
+| Honest logical/physical/retained/dedup/shortlist/capture/seed/admission counts | optional display diagnostics from immutable artifacts; actual completed-pipeline diagnostic test |
+| Synthetic baseline/new-policy comparison and ablations, protected direct work and exact relevant previews | strict `evaluations/cases/source_discovery/manifest.json`, deterministic runner + actual fake seed transport; evaluation tests and production full-chain fixtures |
+| Protected downstream budgets, source envelope, Round4 authorization, no Round5, immutable releases | existing budget/source/selection/adaptive/Governor/admission/final-release suites, full Python acceptance |
+| Renderer/package source identity and prompts | isolated static build, desktop shell syntax, existing package identity tests; no installed-app replacement |
+
+### Integration-stage verification
+
+First integration verification: 64 focused query/contracts/seed/historical-control cases
+passed. Product round1–4/frozen-controls/read-only/replay and API/type group passed 35 tests.
+Startup preflight now renders the actual conceptual Planner schema/prompt and includes
+physical adapter overhead; a legacy runner receives the prior controls unchanged. The
+initial API check omitted the disposable application-data override and sandbox blocked
+permission changes to the default app directory; all subsequent API/full checks explicitly
+use temporary application data. No real database write occurred. Final acceptance below
+will supersede intermediate results and any failures corrected during integration.
+
+### Phase 6 implementation-stage source/offline acceptance
+
+The first isolated broad run found two genuine regressions (missing generation configuration
+in conceptual Planner preflight and changed direct-query resume exception semantics). Root
+fixed both without weakening existing assertions; focused preflight/query tests passed 32.
+An independent helper's broad run omitted the disposable application-data override and hit
+seven sandbox permission failures at the real default directory, plus a concurrently changed
+evaluation expectation. No database write was made; its corrected focused review passed 25.
+The stable final root run supersedes those intermediate runs:
+
+| Check | Actual final result / repeatable command |
+| --- | --- |
+| Complete Python suite | `RESEARCHASSISTANT_DATA_DIR=/private/tmp/ra-phase6-final-tests .venv/bin/python -m pytest -q`: **2,192 passed, 3 skipped, 153.50 seconds**, macOS arm64/Python 3.12.14; live CLI, optional LLM and native Windows ACL gates remain skipped |
+| Python quality | All **290 exact tracked/task Python paths** pass `.venv/bin/ruff check` and `format --check`; raw `.venv/bin/ruff format --check .`: **307 formatted**. Raw `.venv/bin/ruff check .` was run and fails only pre-existing I001 in untouched untracked root `desktop_settings.py`, `history_import.py`, `model_contracts.py`; no basename exclusion hides canonical package files |
+| Existing offline evaluation | `.venv/bin/python evaluations/run_evaluations.py --json-output /private/tmp/ra-phase6-existing-evaluations/results.json --summary-output /private/tmp/ra-phase6-existing-evaluations/summary.md`: **38 cases, PASS**, live skipped; manifest `86611a646450995ba51fa2e8d047924d174e1bd62c3e4f320cc1d8f576bdbedc` |
+| Separate discovery evaluation | `.venv/bin/python -m evaluations.source_discovery --json-output /private/tmp/ra-phase6-discovery-evaluation/results.json --summary-output /private/tmp/ra-phase6-discovery-evaluation/summary.md`: **six scenarios, PASS**; strict manifest `bc1038d52ae027ed4e131a77257b29e8c9a81bd3cd522b9393127ebe58a42c67` |
+| Renderer | Installed ESLint and TypeScript pass. Disposable `/private/tmp/ra-phase6-web-build` uses existing dependencies and `RESEARCHASSISTANT_DESKTOP=1 NEXT_TELEMETRY_DISABLED=1 next build --webpack`: **Next.js 16.3.1 desktop export PASS**, `/` and `/_not-found`, 31 output files / 1.4 MB. Types rerun after generated Next types pass. An initial managed offline dependency attempt was unavailable; no packages installed or lockfiles changed |
+| Desktop/backend | `node --check desktop/main.cjs` passes. **PyInstaller 6.22.2** isolated macOS onedir backend in `/private/tmp/ra-phase6-backend-build` succeeds. Archive inspection includes `product_discovery`, `discovery_diagnostics`, `seed_expansion`, `query_execution`, current discovery contracts and byte-exact `v2_initial_planner_v2.md`, `search_agent_v3.md`, `source_selection_v3.md`; packaged/workspace identity both `source-sha256:2408027e60a5f9f5c940300c898f5a134f98e2f9e4dfbaed407debe88c9b0c80`. Normal credential-backed launch, Electron distribution, minimum-OS and Windows native acceptance were not run |
+| Graph/archive/diff | Advisory index refreshed without persistence: **9,869 nodes / 68,535 edges**. Fully qualified inbound graph trace and live source verify canonical CLI/controller callers. Five preceding state files in `docs/archive/2026-10-08-source-integration-state` match HEAD **f665f204** byte-for-byte. `git diff --check` passes; prior executable prompts/schema 17 and unrelated restored files remain unchanged |
+
+The final integration failure matrix is exercised by the complete passing suite. Each row
+names concrete test files, supplementing the architecture/ownership matrix above:
+
+| Failure/compatibility case | Concrete regression coverage |
+| --- | --- |
+| Old/new API and desktop settings; direct-v2 and live controller; legacy boundary | `test_prompt6_interface_settings.py`, `test_discovery_product_review.py`, `test_product_discovery_pipeline.py`, `test_pipeline_selection.py`, existing `test_mlp3_api.py` |
+| Unselected/unavailable providers and unsupported semantic combinations | `test_product_discovery_pipeline.py`, `test_mlp5_provider_selection.py`, `test_query_review.py`, `test_v2_discovery_provider_adapters.py` |
+| No seeds, disabled expansion, empty searches, interrupted/unknown/cancelled requests | `test_seed_expansion_runtime.py`, `test_seed_expansion_review.py`, `test_product_discovery_pipeline.py`, `test_query_execution.py`, `test_query_retrieval_review.py`, `test_query_transport_review.py` |
+| Multi-page partial failure and immutable checkpoint/replay | `test_query_retrieval_depth.py`, `test_query_retrieval_review.py`, `test_query_frozen_depth.py`, `test_query_acceptance.py`, `test_product_discovery_pipeline.py` |
+| Unknown costs, reservation races, scarce budget/protected downstream capacity | `test_discovery_store_acceptance.py`, `test_discovery_store.py`, `test_discovery_policy.py`, `test_discovery_transport_bounds.py`, `test_v2_source_budget_backfill_integration.py`, `test_v2_problem2_budget_reconciliation.py` |
+| Alias/duplicate/cyclic/ambiguous identities; graph through normal evidence chain | `test_seed_expansion_review.py`, `test_seed_expansion_runtime.py`, `test_openalex_neighborhood.py`, `test_graph_neighbor_adaptive_handoffs.py`, `test_discovery_evaluation_transport.py` |
+| Separate metadata/source caps and deeper rank-12/18 acquisition | `test_product_discovery_pipeline.py`, `test_query_retention_fairness.py`, `test_v2_phase4_discovery_scout.py`, `test_source_discovery_evaluation.py` |
+| Exact previews, bibliography/injection, relevance and selection input pressure | `test_claim_source_previews.py`, `test_preview_structure_review.py`, `test_preview_runtime.py`, `test_preview_selection_bounds.py`, `test_source_selection_preview_extension.py`, existing mutation corpus |
+| Round-4 permission/gaps/lane caps; no Round 5 | `test_query_round_four_review.py`, `test_neighborhood_planning.py`, `test_v2_phase7_adaptive_search.py`, `test_mvp11_research_governor.py`, `test_product_discovery_pipeline.py` |
+| Corrupt artifacts, incompatible fingerprint and exact historical serialization | `test_discovery_review.py`, `test_query_production.py`, `test_query_frozen_depth.py`, `test_product_discovery_pipeline.py`, `test_historical_reads_phase3.py`, identity goldens |
+| Request snapshot/ownership/FK, no read-side migrations; history/import/recovery/export | `test_frontend_discovery_diagnostics.py`, `test_preview_inspection.py`, `test_historical_reads_phase3.py`, `test_database_import_failures.py`, `test_database_recovery.py`, `test_database_recovery_cli.py`, `test_mvp8_exports.py`, `test_pdf_exports_phase3.py` |
+
+Root personally inspected factory/controller/CLI → resolver → frozen initial/adaptive policy
+→ compiler/physical requests → common rank/Scout → bounded acquisition/preview → seed offers
+→ selection/extraction/Analyst/admission → release, plus read-only diagnostics/trails. The live
+controller regression executes that production pipeline to a release using fakes; it is not
+only an API request-shape test. Disabled expansion is tested at offer, execution and storage,
+with zero physical starts. Historical goldens and export tests remain intact. Independent
+Luna review found no reproduced material integration or security gap after corrections.
+
+### Measured synthetic outcomes and limits
+
+Author-created records/documents replay the same frozen corpus with independently annotated
+expected-work rationales. Four opportunity cases use requested depth 20, K=18 and source
+target 20 (not the product default target 10). Production ranker shortlists preserve direct
+study03, include studies at original ranks 12/18, and acquire the citation-only neighbor21.
+Graph candidate insertion is from real `offer_expansions`/`execute_expansion` fake transport;
+there is no forced shortlist insertion. Every benchmark capture runs actual production
+acquisition, immutable snapshot creation and exact preview. Separate Phase 5 full-chain tests
+cover actual exact extraction/Analyst/admission; this runner marks admission **not assessed**.
+
+| Case | Baseline recall / precision at 5 | Product recall / precision at 18 | Usable recall | Annotated preview useful / exact / relevant |
+| --- | --- | --- | --- | --- |
+| ALPR crime | .25 / .20 | 1.00 / .235 | 1.00 (16/18 usable) | 1.00 / 1.00 / 1.00 |
+| ALPR discrimination | .25 / .20 | 1.00 / .235 | 1.00 (16/18 usable) | 1.00 / 1.00 / 1.00 |
+| Biomedical | .25 / .20 | 1.00 / .235 | .75 (15/18 usable) | .75 / 1.00 / .75 |
+| Non-scholarly | .25 / .20 | 1.00 / .235 | 1.00 (16/18 usable) | 1.00 / 1.00 / 1.00 |
+| Enabled neutral (depth 5, K=18) | 1.00 / .60 | 1.00 / .50 (6 shortlisted) | 1.00 | 1.00 / 1.00 / 1.00 |
+| Disabled lane | Recorded corpus baseline .25 / .20 | 0 / 0, no shortlist | 0 | No previews |
+
+Each opportunity case has one seed-only work, metadata DOI duplication rate .05 and one
+unresolved-independence abstention excluded from precision. Query-at-five and deeper-ranking
+ablations each achieve .75 recall; seed adds the fourth expected work to 1.00. Provider-query
+response ordering is a frozen fixture assumption, not measured network ranking. Preview-aware
+and rank-only selection at 12 compare the same actually usable pool and are **neutral**:
+1.00 in three cases, .75 biomedical. The capture-aware deterministic ablation does not run
+the production Source Selection model and establishes no ranking-quality improvement.
+Biomedical study18's synthetic shell loses usable recall; neutral-case irrelevant seed work
+lowers precision from .60 to .50. Neither expected set was tuned to remove these counterexamples.
+
+Each opportunity case makes **20 fake physical calls**: two audited seed requests and 18
+scraper attempts; enabled-neutral makes eight (2+6), disabled makes zero. Metadata response
+replay makes no HTTP calls. All cases comply with protected production caps; each seed arm
+retains **$0.002 reserved exposure**, actual total monetary cost remains **unknown**. No model
+request runs, so measured model calls/tokens are zero, not an estimate of full research cost.
+Synthetic recall/precision, capture usability and annotated exactness are not real-world
+retrieval quality, entailment quality, study independence or evidence admission claims.
+
+### Later live-test protocol — not executed or authorized here
+
+After new explicit paid-test authorization, freeze four public claims (ALPR crime,
+ALPR discrimination, one biomedical and one non-scholarly) and an independent expected-work
+list before running. Use eight fresh isolated runs: paired five-result/expansion-off baseline
+and depth-20/expansion-on product policy per claim, with the same direction, selected providers,
+source target 10, model routes, input claim and budget. A separately constructed frozen depth-5
+policy may be used for the baseline; do not reopen historical runs or bypass accounting.
+Capture actual provider responses and URLs privately with redistribution-safe metadata only.
+
+Per run: model exposure ceiling **$0.50**, at most **160 calls / 500,000 tokens** and
+**3 calls / 60,000 tokens per source**; all stage/protected downstream limits continue to bind.
+Selected search lanes: SERP at most **12 requests / $0.12**, Exa at most **18 requests / $0.18**
+(depth-20 reservations usually tighten its request count), OpenAlex including identity/graph
+at most **10 requests / $0.01**. No paid acquisition fallback or Crossref extras for this
+comparison. Keep the existing acquisition cap **25 clusters per round**, four rounds and at
+most six public URL attempts per cluster: **600 attempts/run** as a conservative upper bound,
+normally reduced by the source target and budgets. Do not bypass paywalls or add OCR.
+
+Across eight runs these bounds are **$4.00 model + $2.48 configured discovery exposure = $6.48**,
+at most **320 search HTTP requests**, **1,280 model calls / 4,000,000 tokens** and **4,800
+acquisition attempts**. They are configured conservative exposure ceilings, not guaranteed
+invoice totals or permission to exhaust them. Recheck official pricing/capabilities before
+authorization; unknown outcomes retain exposure and stop applicable transport, never retry
+without accounting. No extra spend or automatic follow-up after a failed pair.
+
+Blindly compare independent expected-work recall, precision at the same acquisition K,
+seed-only works, duplicates/unresolved independence, exact relevant full-text previews,
+actual admission disposition, contradictory findings, protected direct evidence and complete
+physical/model/token/cost audits. Record unavailable captures, budget reductions and neutral/
+negative cases. Add separately authorized one-factor query/depth/seed/selection ablations only
+with their own caps; eight paired runs alone cannot isolate all causal contributions.
+Live ranking changes or failures do not justify tuning the expected list after observing results.
+
+Phase 6 source/offline acceptance is complete, uncommitted. The exact prior state is archived;
+current STATUS/HANDOFF/history point here. No paid service, credential access, real database
+mutation, migration, app replacement, automation, commit, push or publication occurred.
+External cache, Windows durability, native credential launch/distribution and live quality
+remain separately bounded acceptance gates; no required source integration TODO remains.
+
+
+### Phase 6 independent review repairs and reviewed local commit
+
+Independent review reproduced two defects after the implementation-stage acceptance: raw
+graph hits counted rejected self-cycles as new seed-derived candidates, and graph fixture
+attribution by title substituted a different publication when titles matched. The user's
+follow-up authorized both repairs after requesting a reviewed local commit.
+
+Read-only diagnostics now count unique accepted edges from completed expansion results.
+Raw retained metadata and physical request counts remain separate, including rejected cycles,
+aliases and retractions. The evaluation uses one stable OpenAlex-ID-to-fixture-work map;
+graph attribution and acquisition URLs share those exact work identities. Unknown or missing
+IDs fail explicitly rather than falling back to title. No release, Ledger, source-family,
+contract shape, admission gate, quota, dependency or migration changes accompany these fixes.
+
+Nine new regression cases cover rejected hits, zero accepted neighbors, late DOI aliases,
+unchanged bytes/mtime across repeated read-only diagnostics, identical titles across aliases
+and distinct direct/graph papers, independent acquisition URLs, and missing/unknown graph IDs.
+The pre-fix test run reproduced five failures; the final diagnostics/evaluation/type group
+passes **16 tests in 9.94 seconds**. Fresh isolated complete verification on macOS arm64/Python
+3.12.14: **2,201 passed, 3 existing skips in 165.65 seconds**. All **290 tracked/task Python
+files** pass Ruff lint and formatting; raw formatting passes **307 files**. Whole-workspace
+lint was run and retains only the three pre-existing I001 failures in unrelated untracked
+root `desktop_settings.py`, `history_import.py`, `model_contracts.py`; those files stay untouched.
+ESLint, TypeScript, desktop shell syntax and working/staged whitespace checks pass.
+
+Existing offline evaluation passes **38 cases**; strict discovery evaluation passes **six
+scenarios** with the unchanged manifest and previous default metrics, including the biomedical
+capture failure and neutral precision loss. These remain synthetic-only results. The new
+same-title regression retains the correct neighbor and 1.00 expected-work recall instead of
+the erroneous 0.75, without altering the curated expected set or default fixture corpus.
+
+Isolated Next.js **16.3.1** webpack desktop export passes at
+`/private/tmp/ra-phase6-fixed-web-9v4wryeg/web/out`. PyInstaller **6.22.2** macOS arm64 backend
+build passes at `/private/tmp/ra-phase6-fixed-backend-2bvvskp3/dist/researchassistant-backend`.
+Archive inspection verifies five current modules and byte-exact corrected diagnostics/product
+source and three executable prompts. Packaged and workspace source identity both equal
+`source-sha256:60e008aa2870f00b0e64cce55e7f6fcc83dfde317cebd822764dfc92d08609d2`.
+The backend was inspected without normal credential-backed launch or installation.
+
+A full graph refresh without persistence returned **81 nodes / 205 edges** and remains
+incomplete; unavailable graph function/caller lookups were checked against live source,
+diffs and regressions instead. Five prior current-state archives still match f665f204 bytes.
+Phase 6, its repairs and supporting records are delivered in the reviewed local commit;
+proposals and unrelated restored root modules remain excluded. No paid transport, credentials,
+real application database mutation, installation, automation, push or publication occurred.
+Live quality, installed-cache/native Windows and Mac distribution gates remain in STATUS;
+the later live-test protocol above still requires separate explicit authorization.

@@ -221,6 +221,13 @@ class LiveResearchController:
         return None
 
     def start(self, request: LiveRunRequest) -> LiveStartResult:
+        if self._legacy_runner is not None:
+            controls = request.research_controls.model_dump(mode="python")
+            for name in ("metadata_depth", "seed_expansion_enabled", "scholarly_search_mode"):
+                controls.pop(name, None)
+            request = request.model_copy(
+                update={"research_controls": ResearchControls.model_validate(controls)}
+            )
         if self._shutdown_requested.is_set():
             raise ValueError("Application is shutting down")
         run_id = request.run_id or uuid4()
@@ -280,6 +287,7 @@ class LiveResearchController:
                             max_total_cost_usd=request.max_cost_usd,
                         ),
                         crossref_enabled=request.crossref_enabled,
+                        research_controls=request.research_controls,
                     )
                 )
             else:
@@ -522,6 +530,7 @@ class LiveResearchController:
                     llm_provider=bundle.llm,
                     routing_config=factory_config.routing,
                     ceilings=factory_config.ceilings,
+                    research_controls=request.research_controls,
                     run_id=run_id,
                     provider_policy_fingerprint=(factory_config.semantic_fingerprint_sha256()),
                     cancellation_requested=lambda: (

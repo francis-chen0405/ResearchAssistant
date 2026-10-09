@@ -54,6 +54,13 @@ export type V2RunDiagnostics = {
   sources_queued_for_analysis: number;
   sources_analyzed: number;
   approved_evidence_records: number;
+  logical_discovery_operations?: number | null;
+  physical_search_requests?: number | null;
+  retained_metadata_records?: number | null;
+  deduplicated_work_candidates?: number | null;
+  seed_derived_candidates?: number | null;
+  shortlist_candidates?: number | null;
+  diagnostic_messages?: string[] | null;
 };
 
 export type RunSnapshot = {
@@ -100,6 +107,9 @@ export type RunSnapshot = {
     research_mode: "focused" | "balanced";
     sources_per_stance_per_round: 5 | 10 | 15 | 20;
     discovery_providers: string[];
+    metadata_depth?: 10 | 20 | 50 | null;
+    seed_expansion_enabled?: boolean | null;
+    scholarly_search_mode?: "lexical" | "semantic" | "auto" | null;
   };
   v2_diagnostics: V2RunDiagnostics | null;
 };
@@ -204,6 +214,9 @@ export type ResearchTrailItem = {
   source_selection_status?: "recommended" | "not_recommended" | null;
   selection_input_disposition?: "included" | "omitted_input_cap" | null;
   selection_input_reason?: string | null;
+  compiled_query?: string | null;
+  requested_metadata_depth?: number | null;
+  effective_metadata_depth?: number | null;
 };
 
 export type V2ResultSource = {
@@ -315,6 +328,9 @@ type StartInput = {
   use_arxiv: boolean;
   use_pubmed: boolean;
   use_crossref: boolean;
+  metadata_depth: 10 | 20 | 50;
+  seed_expansion_enabled: boolean;
+  scholarly_search_mode: "lexical" | "semantic" | "auto";
 };
 
 export type ProviderSelection = Pick<
@@ -512,6 +528,9 @@ export type InterfaceSettings = {
   supportEnabled: boolean; challengeEnabled: boolean; sourceTarget: 5 | 10 | 15 | 20;
   useSerpSearch: boolean; useExa: boolean; useOpenAlex: boolean; useArxiv: boolean;
   usePubmed: boolean; useCrossref: boolean;
+  metadataDepth: 10 | 20 | 50;
+  seedExpansionEnabled: boolean;
+  scholarlySearchMode: "lexical" | "semantic" | "auto";
 };
 
 export type ModelProfile = { id: "configurable-2026-09" | "standard-2026-09"; name: string; description: string; pricing_reviewed: string; models: { model: string; roles: string; input_per_million: string; output_per_million: string; completion_limit: number; output_contract: string }[] };

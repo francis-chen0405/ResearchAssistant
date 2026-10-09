@@ -86,6 +86,7 @@ from researchassistant.contracts.models import (
     V2_EVIDENCE_ANALYST_POLICY_IDENTITY,
     CrossrefIdentityMetadata,
     DiscoveryProvider,
+    ResearchControls,
     ResearchDirections,
     RunManifest,
     RunStatus,
@@ -109,6 +110,7 @@ from researchassistant.evidence.evidence_core import (
     EVIDENCE_POLICY_VERSION,
     FRESH_SENTENCE_SEGMENTATION_POLICY,
 )
+from researchassistant.research.product_discovery import resolve_product_discovery
 from researchassistant.research.query_execution import (
     execute_query,
     fair_query_order,
@@ -653,6 +655,7 @@ def run_v2_production_pipeline(
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
     legacy_query_planning: bool = False,
     discovery_policy: V2MetadataDiscoveryPolicy | None = None,
+    research_controls: ResearchControls | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
     _database_lock_owned: bool = False,
@@ -679,6 +682,7 @@ def run_v2_production_pipeline(
                 query_modes=query_modes,
                 legacy_query_planning=legacy_query_planning,
                 discovery_policy=discovery_policy,
+                research_controls=research_controls,
                 cancellation_requested=cancellation_requested,
                 clock=clock,
             )
@@ -700,6 +704,7 @@ def run_v2_production_pipeline(
             query_modes=query_modes,
             legacy_query_planning=legacy_query_planning,
             discovery_policy=discovery_policy,
+            research_controls=research_controls,
             cancellation_requested=cancellation_requested,
             clock=clock,
         )
@@ -723,10 +728,20 @@ def _run_v2_production_pipeline(
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
     legacy_query_planning: bool = False,
     discovery_policy: V2MetadataDiscoveryPolicy | None = None,
+    research_controls: ResearchControls | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2ProductionPipelineResult:
     """Run or resume the complete v2 path under one physical-call/token authority."""
+    if research_controls is not None:
+        if legacy_query_planning:
+            raise ValueError("product discovery settings require a fresh run")
+        policy, modes = resolve_product_discovery(research_controls, discovery_providers)
+        if discovery_policy is not None and discovery_policy != policy:
+            raise ValueError("product controls conflict with explicit discovery policy")
+        if query_modes is not None and dict(query_modes) != modes:
+            raise ValueError("product controls conflict with explicit query modes")
+        discovery_policy, query_modes = policy, modes
     resolved_ceilings = ceilings or V2RunCeilings()
     if not raw_claim or raw_claim != raw_claim.strip():
         raise ValueError("fresh v2 claim must be non-empty without surrounding whitespace")
@@ -746,6 +761,10 @@ def _run_v2_production_pipeline(
     except KeyError:
         legacy_terminal = None
     if legacy_terminal is not None:
+        if research_controls is not None:
+            raise ValueError(
+                "historical policy cannot resume with product settings; start a new run"
+            )
         return V2ProductionPipelineResult.model_validate_json(legacy_terminal.payload_json)
     try:
         phase13_terminal = read_v2_artifact(
@@ -754,6 +773,10 @@ def _run_v2_production_pipeline(
     except KeyError:
         phase13_terminal = None
     if phase13_terminal is not None:
+        if research_controls is not None:
+            raise ValueError(
+                "historical policy cannot resume with product settings; start a new run"
+            )
         return V2ProductionPipelineResult.model_validate_json(phase13_terminal.payload_json)
 
     try:
@@ -770,6 +793,9 @@ def _run_v2_production_pipeline(
             path, resolved_run_id
         )
 
+    if research_controls is not None and discovery_binding is not None:
+        if discovery_binding.policy != discovery_policy:
+            raise ValueError("Discovery settings changed; start a new run.")
     _prepare_identity(path, resolved_run_id, raw_claim, routing_config, now)
     if not legacy_query_planning:
         try:
@@ -802,6 +828,7 @@ def _run_v2_production_pipeline(
         routing_config,
         provider_policy_fingerprint,
         _aware(now()),
+        research_controls=research_controls,
     )
     _persist_or_validate_fingerprint(path, fingerprint)
     try:
@@ -1204,6 +1231,7 @@ def _production_fingerprint(
     routing: V2RoutingConfig,
     provider_policy_fingerprint: str,
     created_at: datetime,
+    research_controls: ResearchControls | None = None,
 ) -> V2ProductionFingerprint:
     payload = {
         "policy": V2_PRODUCTION_POLICY_IDENTITY,
@@ -1217,6 +1245,8 @@ def _production_fingerprint(
         "round_four_policy": "researchassistant-v2-post-phase-13-round-four-v1",
         "final_output_contract": "researchassistant-v2-post-phase-13-round-four-final-output-v1",
     }
+    if research_controls is not None:
+        payload["research_controls"] = research_controls.model_dump(mode="json")
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return V2ProductionFingerprint(
         run_id=run_id,

@@ -1,0 +1,13 @@
+# Handoff
+
+Phases 1–5 of [source discovery v2](.agent/plans/source-discovery-v2-2026-10-05.md) are reviewed and committed locally. Phase 5 includes the reviewed fixes for seed aliases, resolved self-cycles and partial author metadata. See [STATUS](STATUS.md) for actual verification and installed/public delivery boundaries.
+
+## Next boundary
+
+Phase 6 owns ordinary discovery/seed product controls and final cross-phase acceptance when its corresponding request is supplied. It must preserve current default and historical dispatch, exact frozen configuration, enabled providers/directions and valid Gap IDs. Do not add another research round, specialist provider, recovery project, model stage or spending allowance. Installation, push and publication remain separate permissions.
+
+`seed_expansion` selects relevant seeds only after owned current-round acquisition/preview data exists and offers actions to later authorized adaptive/Governor lanes. `providers.openalex_neighborhood` has exact ID/DOI, reference/citing/related transport. Graph actions replace ordinary text slots; every identity and detail/page request uses the shared OpenAlex 10-request/$0.01 budget. Limits remain three seeds, one hop, ten unique neighbors per seed across relations and thirty per run, further reduced by existing budgets. Completed and failed/used seed relationships cannot silently repeat; partial resolution and cancellation are typed, and unknown physical starts retain exposure and stop transport.
+
+Exact bounded provider responses commit with completions and pure parsers verify saved checkpoints, raw metadata and edges before reuse. Graph action provenance has null query text and must survive Gap continuation, source selection, immutable acquisition/snapshot, exact extraction, Analyst and admission. Citation relationship does not imply agreement or truth; support-lane conflicting findings remain eligible. Graph metadata/preview/rank never becomes evidence by itself. Preserve historical optional-field serializers and read-only history/export without rewriting releases or Ledger.
+
+Fresh capability v4, seed policy v2, neighborhood Search Agent prompt and schemas are separately frozen; incompatible resume requires a fresh run. Reuse immutable `v2_artifacts`, validated read-only request snapshots, existing locks/recovery and schema 17. No migration/dependency increase. Existing source limits, 160-call/500,000-token run ceilings, three-call/60,000-token source envelope, protected downstream capacity and Round-4 Governor limits remain authoritative. Offline fixtures are not live research-quality evidence; installed-cache/Windows/distribution gates remain in STATUS.

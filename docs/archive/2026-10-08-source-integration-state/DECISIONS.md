@@ -51,21 +51,6 @@ without inventing a query or evidence snapshot. All candidates retain the ordina
 quotation, Analyst and deterministic admission gates. Historical optional fields serialize
 as before, and released history remains unchanged.
 
-Phase 6 activates fresh product policy v3 for ordinary API/desktop/CLI requests, with
-metadata depth 20, paper expansion enabled and lexical scholarly search by default.
-User depth choices 10/20/50 are independent of the per-direction acquisition target;
-all existing physical/raw/Scout/source/model limits still dominate. Automatic selects lexical
-deterministically. Semantic requires selected OpenAlex and never enables an unselected
-provider. Disabled expansion is enforced at offering, execution and durable policy validation.
-Direct-v2 omission and the explicit legacy runner preserve their prior dispatch; missing
-historical fields serialize as before. Changed controls require a fresh run. Optional counts
-and trails are read-only presentation, and released text/hashes remain immutable. Synthetic
-evaluations report acquisition failures and independence abstentions separately from discovery
-recall; model selection/admission and live research quality are not measured by that runner.
-Displayed seed-derived candidates count accepted expansion edges rather than rejected raw hits.
-The evaluation requires exact fixture provider identities and keeps same-title works and
-their acquisition URLs separate; missing or unknown IDs fail explicitly without title fallback.
-
 ## Release boundary
 
 macOS remains the first release target and Windows release work is deferred. The five-submission paid acceptance allowance is exhausted; further live research requires new explicit authorization. The unsigned Mac candidate has not cleared live-quality acceptance, clean-machine installation, minimum-OS, signing, or notarization gates. The earlier Phase 2 Windows matrix does not verify the current version. See [desktop operations](desktop/README.md) and the current [status](STATUS.md).

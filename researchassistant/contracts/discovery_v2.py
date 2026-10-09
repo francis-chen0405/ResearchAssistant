@@ -148,6 +148,17 @@ class V2MetadataDiscoveryPolicy(V2DiscoveryPolicy):
         return native_page_limit
 
 
+class V2ProductDiscoveryPolicy(V2MetadataDiscoveryPolicy):
+    """Fresh product controls; v1/v2 retain exact historical serialization."""
+
+    policy_identity: Literal["source-discovery-v2-2026-10-08-v3"] = (
+        "source-discovery-v2-2026-10-08-v3"
+    )
+    seed_expansion_enabled: bool = Field(default=True, strict=True)
+    sources_per_direction_per_round: Literal[5, 7, 10, 15, 20] = 10
+    scholarly_search_mode: Literal["lexical", "semantic", "auto"] = "lexical"
+
+
 class V2ProviderCapabilities(V2DiscoveryValue):
     provider: Provider
     capability_identity: Literal[
@@ -271,7 +282,7 @@ class V2CompiledQueryAction(V2DiscoveryArtifact):
     compiler_identity: Literal[
         "source-query-compiler-v1", "source-query-compiler-v2", "source-query-compiler-v3"
     ] = COMPILER_ID
-    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy | V2ProductDiscoveryPolicy
     capabilities: V2ProviderCapabilities
     fingerprint: Digest
 
@@ -657,7 +668,7 @@ class V2GraphNeighborAction(V2DiscoveryArtifact):
     _gaps_unique = field_validator("target_gap_ids")(_unique_gaps)
     hop: Literal[1] = 1
     requested_depth: int = Field(strict=True, ge=1, le=10)
-    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy | V2ProductDiscoveryPolicy
     capabilities: V2ProviderCapabilities
     seed_identity: Literal["source-seed-expansion-v1", "source-seed-expansion-v2"] = SEED_ID
 
@@ -777,7 +788,7 @@ class V2DiscoveryBinding(V2DiscoveryArtifact):
     exact_claim: Annotated[str, Field(min_length=1)]
     directions: ResearchDirections
     providers: tuple[Provider, ...] = Field(min_length=1, max_length=5)
-    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy | V2ProductDiscoveryPolicy
     capabilities: tuple[V2ProviderCapabilities, ...]
     provider_budgets: tuple[V2DiscoveryProviderBudget, ...]
     provider_configuration_hash: Digest
@@ -821,7 +832,7 @@ class V2IdentityLookupAction(V2DiscoveryArtifact):
     target_gap_ids: tuple[Label, ...] = Field(default=(), max_length=6)
     _gaps_unique = field_validator("target_gap_ids")(_unique_gaps)
     requested_depth: Literal[1] = 1
-    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy
+    policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy | V2ProductDiscoveryPolicy
     capabilities: V2ProviderCapabilities
 
     @model_validator(mode="after")

@@ -199,6 +199,17 @@ def run_v2_acquisition_probe(
                 continue
             chosen_ids.add(cluster.cluster_id)
             chosen_clusters.append(cluster)
+        direction_target = getattr(binding.policy, "sources_per_direction_per_round", None)
+        if direction_target is not None:
+            direction_counts: dict[ResearchDirection, int] = {}
+            bounded_clusters: list[SourceCluster] = []
+            for cluster in chosen_clusters:
+                direction = _cluster_direction(cluster, item_by_id, decisions)
+                if direction is None or direction_counts.get(direction, 0) >= direction_target:
+                    continue
+                direction_counts[direction] = direction_counts.get(direction, 0) + 1
+                bounded_clusters.append(cluster)
+            chosen_clusters = bounded_clusters
         ordered_clusters = chosen_clusters[
             : min(policy.max_clusters, binding.policy.max_acquisition_per_round)
         ]

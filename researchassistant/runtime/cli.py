@@ -152,6 +152,25 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="STAGE=CHOICE",
         help="Choose one of the six supported models for a research stage; repeat per stage.",
     )
+    live_run.add_argument(
+        "--metadata-depth",
+        type=int,
+        choices=(10, 20, 50),
+        default=None,
+        help="Metadata search depth (default 20), subject to provider budgets.",
+    )
+    live_run.add_argument(
+        "--seed-expansion",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Expand from strong papers (default enabled on fresh runs).",
+    )
+    live_run.add_argument(
+        "--scholarly-search-mode",
+        choices=("lexical", "semantic", "auto"),
+        default=None,
+        help="Scholarly query mode (default lexical).",
+    )
     live_run.add_argument("--depth", type=ResearchDepth, default=ResearchDepth.STANDARD)
     live_run.add_argument("--length", type=ReportLength, default=ReportLength.REPORT)
     live_run.add_argument("--tone", type=PresentationTone, default=PresentationTone.NEUTRAL)
@@ -244,7 +263,21 @@ def _run_live_command(
             if any(value is not None for value in focus_values.values())
             else None
         )
+        if legacy_runner is not None and any(
+            value is not None
+            for value in (args.metadata_depth, args.seed_expansion, args.scholarly_search_mode)
+        ):
+            raise ValueError("discovery settings are available only for fresh v2 runs")
         controls = ResearchControls(
+            metadata_depth=(args.metadata_depth or 20) if legacy_runner is None else None,
+            seed_expansion_enabled=(
+                args.seed_expansion if args.seed_expansion is not None else True
+            )
+            if legacy_runner is None
+            else None,
+            scholarly_search_mode=(args.scholarly_search_mode or "lexical")
+            if legacy_runner is None
+            else None,
             depth=args.depth,
             length=args.length,
             tone=args.tone,
@@ -275,6 +308,7 @@ def _run_live_command(
                 wigolo=wigolo,
                 discovery_providers=controls.discovery_providers,
                 stage_models=stage_models,
+                research_controls=controls,
                 ceilings=V2RunCeilings(
                     max_physical_calls=ceilings.max_llm_calls,
                     max_total_tokens=ceilings.max_tokens,
@@ -321,6 +355,7 @@ def _run_live_command(
                 llm_provider=bundle.llm,
                 routing_config=factory_config.routing,
                 ceilings=factory_config.ceilings,
+                research_controls=controls,
                 run_id=run_id,
                 provider_policy_fingerprint=factory_config.semantic_fingerprint_sha256(),
                 cancellation_requested=lambda: v2_cancellation_requested(db_path, run_id),
@@ -461,6 +496,10 @@ def _print_v2_launch_summary(
     print(f"cost budget usd: {config.ceilings.max_total_cost_usd}")
     print(f"physical llm call budget: {config.ceilings.max_physical_calls}")
     print(f"research mode: {controls.research_mode.value}")
+    print(
+        f"metadata depth: {controls.metadata_depth}; expand from papers: "
+        f"{controls.seed_expansion_enabled}; scholarly search: {controls.scholarly_search_mode}"
+    )
 
 
 def _print_v2_result(result: V2ProductionPipelineResult) -> int:

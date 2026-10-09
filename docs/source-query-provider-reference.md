@@ -82,3 +82,21 @@ claim that every documented operation is enabled in this application.
 
 No Serper adapter or Serper configuration is present in `providers/`; the configured
 Google-style adapter is SERP Search above. No Serper requests or credentials were used.
+
+## Product configuration
+
+Fresh API/desktop/CLI requests choose metadata depth 10, 20 or 50 (default 20), paper
+expansion on/off (default on), and lexical/semantic/automatic scholarly mode (default lexical).
+Automatic deterministically selects lexical once. Semantic requires selected OpenAlex and
+uses only its supported semantic endpoint; other selected providers retain their own mode.
+Unselected providers need no key and receive no requests. Expansion uses only owned usable,
+relevant scholarly seeds when OpenAlex is selected, inside its existing 10-request/$0.01
+envelope. Depth is a request bound, not a returned-result promise or acquisition target.
+
+CLI switches are `--metadata-depth`, `--seed-expansion`/`--no-seed-expansion` and
+`--scholarly-search-mode`. Old API clients receive fresh defaults. Old saved preferences
+receive defaults without a format-version change; historical run fields remain absent and
+display as not recorded. Direct-v2 callers pass `ResearchControls` to activate product policy;
+omitting them retains the preceding policy. Explicit legacy CLI discovery flags are rejected
+and legacy-injected controllers receive historical controls. Settings are frozen for a run;
+changed settings require a fresh run. Source targets and all protected budgets remain separate.

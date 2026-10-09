@@ -881,14 +881,31 @@ class V2RunDiagnostics(StrictModel):
     sources_analyzed: NonNegativeInt = 0
     approved_evidence_records: NonNegativeInt = 0
     graph_actions: NonNegativeInt | None = None
+    logical_discovery_operations: NonNegativeInt | None = None
+    physical_search_requests: NonNegativeInt | None = None
+    retained_metadata_records: NonNegativeInt | None = None
+    deduplicated_work_candidates: NonNegativeInt | None = None
+    seed_derived_candidates: NonNegativeInt | None = None
+    shortlist_candidates: NonNegativeInt | None = None
+    diagnostic_messages: tuple[NonEmptyStr, ...] | None = Field(default=None, max_length=8)
 
     @model_serializer(mode="wrap")
     def omit_absent_graph_actions(
         self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
     ) -> dict[str, Any]:
         data = handler(self)
-        if self.graph_actions is None:
-            data.pop("graph_actions", None)
+        for field in (
+            "graph_actions",
+            "logical_discovery_operations",
+            "physical_search_requests",
+            "retained_metadata_records",
+            "deduplicated_work_candidates",
+            "seed_derived_candidates",
+            "shortlist_candidates",
+            "diagnostic_messages",
+        ):
+            if getattr(self, field) is None:
+                data.pop(field, None)
         return data
 
     @model_validator(mode="after")

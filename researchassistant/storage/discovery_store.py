@@ -289,6 +289,10 @@ def _validate_policy(binding: V2DiscoveryBinding, artifact: V2DiscoveryArtifact)
         if artifact.binding_fingerprint != binding.fingerprint:
             raise ValueError("operation binding fingerprint differs from run binding")
         action = artifact.action
+        if isinstance(action, (V2GraphNeighborAction, V2IdentityLookupAction)) and not getattr(
+            binding.policy, "seed_expansion_enabled", True
+        ):
+            raise ValueError("Expansion from papers is disabled in the frozen run settings")
         if isinstance(action, V2CompiledQueryAction):
             provider = action.conceptual_query.provider
             direction = action.conceptual_query.direction

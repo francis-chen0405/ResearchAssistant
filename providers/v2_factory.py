@@ -34,7 +34,8 @@ from providers.search import SearchProvider
 from providers.serpsearch import SerpSearchAdapter
 from providers.v2_budget import RoutedV2LLMProvider, V2RunCeilings
 from providers.v2_routing import V2RoutingConfig
-from researchassistant.contracts.models import DiscoveryProvider, StrictModel
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, StrictModel
+from researchassistant.research.product_discovery import resolve_product_discovery
 
 
 class V2ProductionFactoryConfig(StrictModel):
@@ -43,6 +44,7 @@ class V2ProductionFactoryConfig(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     routing: V2RoutingConfig
+    research_controls: ResearchControls | None = None
     ceilings: V2RunCeilings = V2RunCeilings()
     discovery_providers: tuple[DiscoveryProvider, ...]
     wigolo: WigoloConfig = WigoloConfig()
@@ -56,6 +58,8 @@ class V2ProductionFactoryConfig(StrictModel):
 
     @model_validator(mode="after")
     def validate_discovery_routes(self) -> V2ProductionFactoryConfig:
+        if self.research_controls is not None:
+            resolve_product_discovery(self.research_controls, self.discovery_providers)
         enabled = set(self.discovery_providers)
         if not enabled or len(enabled) != len(self.discovery_providers):
             raise ValueError("fresh v2 discovery providers must be unique and non-empty")
@@ -85,6 +89,7 @@ class V2ProductionFactoryConfig(StrictModel):
         wigolo: WigoloConfig | None = None,
         crossref_enabled: bool = False,
         stage_models: StageModelSelections | None = None,
+        research_controls: ResearchControls | None = None,
     ) -> V2ProductionFactoryConfig:
         enabled = set(discovery_providers)
         return cls(
@@ -94,6 +99,7 @@ class V2ProductionFactoryConfig(StrictModel):
                 stage_models=stage_models,
             ),
             ceilings=ceilings or V2RunCeilings(),
+            research_controls=research_controls,
             discovery_providers=discovery_providers,
             wigolo=wigolo or WigoloConfig(),
             exa=(
@@ -151,6 +157,8 @@ class V2ProductionFactoryConfig(StrictModel):
                 else None
             ),
         }
+        if self.research_controls is not None:
+            payload["research_controls"] = self.research_controls.model_dump(mode="json")
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode()).hexdigest()
 

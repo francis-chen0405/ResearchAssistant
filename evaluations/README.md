@@ -1,5 +1,26 @@
 # Phase 10 Evaluations
 
+## Separate source-discovery evaluation
+
+Run `.venv/bin/python -m evaluations.source_discovery --json-output /private/tmp/source-discovery/results.json --summary-output /private/tmp/source-discovery/summary.md`.
+The strict `cases/source_discovery/manifest.json` contains author-created metadata/documents
+and independent expected-work rationales for ALPR crime, discrimination, biomedical and
+non-scholarly claims, plus disabled and neutral cases. It replays frozen query responses
+through the production compiler/ranker and runs production seed transport and acquisition/
+exact previews with fakes. Rank-12/18 and citation-only cases use explicit shortlist K=18
+and a source target of 20, rather than the product default target of 10.
+
+The report separates recall/precision, unresolved independence, DOI duplication, annotated
+preview exactness/relevance, actual usable captures and fake physical request counts.
+Metadata transport is replayed locally; its network cost is unmeasured. No model stage runs;
+model calls/tokens are zero, total monetary cost is unknown and seed reservation exposure
+is reported separately. The capture-aware selection ablation is deterministic and neutral
+on the usable pool; it does not execute production model selection, Analyst or admission.
+Their gates are covered by separate production integration tests. Fixture gains do not
+establish live rankings or research quality and do not redefine the historical corpus below.
+Graph results are attributed to exact OpenAlex fixture IDs. Identical titles cannot substitute
+another work or acquisition URL, and missing or unknown graph IDs fail the evaluation.
+
 Run the normal deterministic evaluation from the repository root:
 
 ```bash

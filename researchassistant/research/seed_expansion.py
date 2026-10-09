@@ -245,6 +245,8 @@ def offer_expansions(
         binding = read_discovery_binding(path, run_id)
     except KeyError:
         return ()
+    if not getattr(binding.policy, "seed_expansion_enabled", True):
+        return ()
     if binding.seed_identity != SEED_EXECUTION_ID or round_number not in {2, 3, 4}:
         return ()
     selection = select_seeds(path, run_id, round_number - 1, clock)
@@ -862,6 +864,8 @@ def execute_expansion(
 ) -> tuple[SearchResult, ...]:
     """Run only an already planned slot; each HTTP call reserves against shared ceilings."""
     binding = read_discovery_binding(path, action.run_id)
+    if not getattr(binding.policy, "seed_expansion_enabled", True):
+        raise ValueError("Expansion from papers is disabled in the frozen run settings")
     key = f"expansion/{action.artifact_id}/result"
     try:
         cached = V2ExpansionResult.model_validate_json(

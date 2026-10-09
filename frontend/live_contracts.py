@@ -203,6 +203,9 @@ class ResearchTrailItem(StrictModel):
     source_selection_status: Literal["recommended", "not_recommended"] | None = None
     selection_input_disposition: Literal["included", "omitted_input_cap"] | None = None
     selection_input_reason: str | None = None
+    compiled_query: str | None = None
+    requested_metadata_depth: int | None = Field(default=None, ge=1)
+    effective_metadata_depth: int | None = Field(default=None, ge=1)
     graph_action: V2GraphNeighborAction | None = None
 
     @model_serializer(mode="wrap")

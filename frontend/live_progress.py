@@ -21,6 +21,7 @@ from agents.v2_source_selection import (
     V2_SOURCE_SELECTION_COMPLETION_KEY,
     V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
 )
+from frontend.discovery_diagnostics import enrich_discovery_diagnostics
 from frontend.live_contracts import (
     LiveClassification,
     LiveCostBasisCount,
@@ -657,6 +658,21 @@ def _diagnostic_component(result: ProviderPipelineResult) -> str:
     return result.current_stage.value
 
 
+def _read_v2_controls(
+    source: Connection, run_id: UUID, fallback: ResearchControls
+) -> ResearchControls:
+    """Read frozen settings under the caller's validated request snapshot."""
+    try:
+        artifact = read_v2_artifact(source, run_id, V2_PRODUCTION_FINGERPRINT_KEY)
+        fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
+        payload = json.loads(fingerprint.canonical_payload_json)
+        if "research_controls" in payload:
+            return ResearchControls.model_validate(payload["research_controls"])
+    except KeyError:
+        pass
+    return fallback
+
+
 def snapshot_from_v2_progress(
     db_path: str,
     run_id: UUID,
@@ -676,7 +692,9 @@ def snapshot_from_v2_progress(
             return snapshot_from_v2_progress(db_path, run_id, providers, source=read_source)
     manifest = read_run(read_source, run_id)
     directions = _read_v2_directions(read_source, run_id)
-    diagnostics = build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
+    diagnostics = enrich_discovery_diagnostics(
+        read_source, run_id, build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
+    )
     budget = _read_v2_budget_snapshot(read_source, run_id)
     terminal = manifest.status is not RunStatus.RUNNING
     usage = _read_v2_usage_summary(read_source, run_id, terminal=terminal)
@@ -750,11 +768,15 @@ def snapshot_from_v2_progress(
         provider_identity=contract.provider_identity if contract is not None else None,
         model_identity=contract.model_identity if contract is not None else None,
         fingerprint=contract.fingerprint_sha256 if contract is not None else None,
-        research_controls=ResearchControls(
-            research_mode=(
-                ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+        research_controls=_read_v2_controls(
+            read_source,
+            run_id,
+            ResearchControls(
+                research_mode=(
+                    ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+                ),
+                discovery_providers=providers,
             ),
-            discovery_providers=providers,
         ),
     )
 
@@ -796,6 +818,8 @@ def snapshot_from_v2_result(
             diagnostics = build_v2_run_diagnostics_or_empty(
                 read_source, result.run_id, providers, final_output=output
             )
+    if diagnostics is not None:
+        diagnostics = enrich_discovery_diagnostics(read_source, result.run_id, diagnostics)
     stage = infer_v2_stage(read_source, result.run_id, result.current_stage, output is not None)
     supporting, opposing, unassigned = _read_v2_directional_progress(
         read_source,
@@ -884,14 +908,18 @@ def snapshot_from_v2_result(
         rendered_brief_hash=(
             output.release_validation.rendered_output_hash if output is not None else None
         ),
-        research_controls=ResearchControls(
-            research_mode=(
-                ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
-            ),
-            discovery_providers=(
-                diagnostics.configured_providers
-                if diagnostics is not None
-                else DEFAULT_RESEARCH_CONTROLS.discovery_providers
+        research_controls=_read_v2_controls(
+            read_source,
+            result.run_id,
+            ResearchControls(
+                research_mode=(
+                    ResearchMode.BALANCED if directions.challenge_enabled else ResearchMode.FOCUSED
+                ),
+                discovery_providers=(
+                    diagnostics.configured_providers
+                    if diagnostics is not None
+                    else DEFAULT_RESEARCH_CONTROLS.discovery_providers
+                ),
             ),
         ),
         v2_diagnostics=diagnostics,

@@ -20,6 +20,7 @@ from frontend.live_contracts import (
     ResearchTrail,
     ResearchTrailItem,
 )
+from researchassistant.contracts.discovery_v2 import V2CompiledQueryAction, V2DiscoveryOperation
 from researchassistant.contracts.historical import (
     RecordCompatibilityError,
     RecordCompatibilityResult,
@@ -48,6 +49,7 @@ from researchassistant.research.v2_orchestrator import (
     V2ProductionState,
     infer_v2_stage,
 )
+from researchassistant.storage.discovery_store import read_discovery_artifacts
 from researchassistant.storage.store import (
     list_runs,
     open_read_only_store,
@@ -279,6 +281,30 @@ def _v2_research_trail_items(
 ) -> tuple[ResearchTrailItem, ...]:
     """Project persisted v2 discovery and acquisition artifacts into the trail contract."""
     items: list[ResearchTrailItem] = []
+    compiled_by_query: dict[tuple[object, ...], V2CompiledQueryAction] = {}
+    try:
+        for artifact in read_discovery_artifacts(connection, run_id):
+            if isinstance(artifact, V2DiscoveryOperation) and isinstance(
+                artifact.action, V2CompiledQueryAction
+            ):
+                query = artifact.action.conceptual_query
+                compiled_by_query[
+                    (
+                        query.provider,
+                        query.direction,
+                        query.round_number,
+                        artifact.action.query_text,
+                    )
+                ] = artifact.action
+    except (ValueError, IntegrityError):
+        compatibility_issues.append(
+            RecordCompatibilityResult(
+                record_key="source-discovery-v1",
+                artifact_type="V2DiscoveryOperation",
+                message="Discovery query details could not be validated.",
+            )
+        )
+        compiled_by_query.clear()
     decision_map = {
         "retrieve": "selected",
         "maybe": "deferred",
@@ -432,8 +458,23 @@ def _v2_research_trail_items(
                 acquisition_state = "attempted"
             else:
                 acquisition_state = "not_attempted"
+            compiled = compiled_by_query.get(
+                (
+                    discovery_item.provider,
+                    discovery_item.direction,
+                    research_round,
+                    discovery_item.query_text,
+                )
+            )
             items.append(
                 ResearchTrailItem(
+                    compiled_query=compiled.query_text if compiled is not None else None,
+                    requested_metadata_depth=compiled.requested_depth
+                    if compiled is not None
+                    else None,
+                    effective_metadata_depth=compiled.effective_depth
+                    if compiled is not None
+                    else None,
                     research_round=research_round,
                     stance=(
                         "supporting" if discovery_item.direction.value == "support" else "opposing"

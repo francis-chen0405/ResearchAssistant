@@ -410,6 +410,9 @@ class ResearchStartInput(StrictModel):
     use_arxiv: bool = False
     use_pubmed: bool = False
     use_crossref: bool = True
+    metadata_depth: Literal[10, 20, 50] = 20
+    seed_expansion_enabled: bool = Field(default=True, strict=True)
+    scholarly_search_mode: Literal["lexical", "semantic", "auto"] = "lexical"
 
     @model_validator(mode="after")
     def validate_research_directions(self) -> ResearchStartInput:
@@ -417,6 +420,8 @@ class ResearchStartInput(StrictModel):
             self.challenge_enabled or self.include_counterevidence
         ):
             raise ValueError("Enable Support, Challenge, or both research directions.")
+        if self.scholarly_search_mode == "semantic" and not self.use_openalex:
+            raise ValueError("Meaning based scholarly search requires OpenAlex to be selected.")
         return self
 
     def directions(self) -> ResearchDirections:
@@ -1229,6 +1234,9 @@ def create_app(
                         else ResearchMode.FOCUSED
                     ),
                     sources_per_stance_per_round=payload.sources_per_stance_per_round,
+                    metadata_depth=payload.metadata_depth,
+                    seed_expansion_enabled=payload.seed_expansion_enabled,
+                    scholarly_search_mode=payload.scholarly_search_mode,
                     discovery_providers=_selected_discovery_providers(
                         use_serpsearch=payload.use_serpsearch,
                         use_exa=payload.use_exa,

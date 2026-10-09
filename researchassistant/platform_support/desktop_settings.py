@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, StrictBool, field_validator
 
 from providers.model_choices import (
     CONFIGURABLE_PROFILE_ID,
@@ -32,6 +32,9 @@ class InterfaceSettings(StrictModel):
     supportEnabled: bool = True
     challengeEnabled: bool = False
     sourceTarget: Literal[5, 10, 15, 20] = 10
+    metadataDepth: Literal[10, 20, 50] = 20
+    seedExpansionEnabled: StrictBool = True
+    scholarlySearchMode: Literal["lexical", "semantic", "auto"] = "lexical"
     useSerpSearch: bool = True
     useExa: bool = True
     useOpenAlex: bool = True

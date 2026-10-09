@@ -1,13 +1,19 @@
 # Handoff
 
-Phases 1–5 of [source discovery v2](.agent/plans/source-discovery-v2-2026-10-05.md) are reviewed and committed locally. Phase 5 includes the reviewed fixes for seed aliases, resolved self-cycles and partial author metadata. See [STATUS](STATUS.md) for actual verification and installed/public delivery boundaries.
+All six source-discovery phases are reviewed and committed locally, including the Phase 6
+diagnostic-count and exact evaluation-identity repairs. [STATUS](STATUS.md) is the verified state and the
+[shared plan](.agent/plans/source-discovery-v2-2026-10-05.md) records the requirement/failure
+matrix, measured synthetic outcomes and exact acceptance commands.
 
-## Next boundary
+The next boundary is separately authorized live research or distribution work, rather than
+another implementation phase. The plan proposes eight paired public-claim runs with explicit
+model/search/call limits and a configured exposure ceiling of $6.48. Do not run it under this
+prompt: the earlier five-submission paid allowance is exhausted. Live retrieval quality,
+credential-backed Mac launch/clean-machine installation/signing, Windows durability and the
+installed external-cache checks remain open in STATUS. Installation, push and publication require their own authorization.
 
-Phase 6 owns ordinary discovery/seed product controls and final cross-phase acceptance when its corresponding request is supplied. It must preserve current default and historical dispatch, exact frozen configuration, enabled providers/directions and valid Gap IDs. Do not add another research round, specialist provider, recovery project, model stage or spending allowance. Installation, push and publication remain separate permissions.
-
-`seed_expansion` selects relevant seeds only after owned current-round acquisition/preview data exists and offers actions to later authorized adaptive/Governor lanes. `providers.openalex_neighborhood` has exact ID/DOI, reference/citing/related transport. Graph actions replace ordinary text slots; every identity and detail/page request uses the shared OpenAlex 10-request/$0.01 budget. Limits remain three seeds, one hop, ten unique neighbors per seed across relations and thirty per run, further reduced by existing budgets. Completed and failed/used seed relationships cannot silently repeat; partial resolution and cancellation are typed, and unknown physical starts retain exposure and stop transport.
-
-Exact bounded provider responses commit with completions and pure parsers verify saved checkpoints, raw metadata and edges before reuse. Graph action provenance has null query text and must survive Gap continuation, source selection, immutable acquisition/snapshot, exact extraction, Analyst and admission. Citation relationship does not imply agreement or truth; support-lane conflicting findings remain eligible. Graph metadata/preview/rank never becomes evidence by itself. Preserve historical optional-field serializers and read-only history/export without rewriting releases or Ledger.
-
-Fresh capability v4, seed policy v2, neighborhood Search Agent prompt and schemas are separately frozen; incompatible resume requires a fresh run. Reuse immutable `v2_artifacts`, validated read-only request snapshots, existing locks/recovery and schema 17. No migration/dependency increase. Existing source limits, 160-call/500,000-token run ceilings, three-call/60,000-token source envelope, protected downstream capacity and Round-4 Governor limits remain authoritative. Offline fixtures are not live research-quality evidence; installed-cache/Windows/distribution gates remain in STATUS.
+Preserve exact historical artifacts, validated query-only request snapshots, schema 17,
+conservative unknown-cost exposure, existing source/model ceilings, Round-4 Governor
+permission and no Round 5. Discovery metadata/edges/previews remain candidate context;
+ordinary acquisition, immutable snapshot, exact extraction, Analyst and deterministic
+admission remain mandatory. No migration, dependency or new model stage accompanies Phase 6.

@@ -136,6 +136,21 @@ class ResearchControls(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    # Absent on historical controls: never invent recorded settings on old runs.
+    metadata_depth: Literal[10, 20, 50] | None = None
+    seed_expansion_enabled: bool | None = Field(default=None, strict=True)
+    scholarly_search_mode: Literal["lexical", "semantic", "auto"] | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_unrecorded_discovery_settings(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        data = handler(self)
+        for name in ("metadata_depth", "seed_expansion_enabled", "scholarly_search_mode"):
+            if getattr(self, name) is None:
+                data.pop(name, None)
+        return data
+
     depth: ResearchDepth = ResearchDepth.STANDARD
     length: ReportLength = ReportLength.REPORT
     tone: PresentationTone = PresentationTone.NEUTRAL
