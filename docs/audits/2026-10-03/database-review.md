@@ -1,5 +1,7 @@
 # Database review — proposals for approval
 
+> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../STATUS.md). The findings and instructions below retain their original scope.
+
 Reviewed October 3, 2026, on macOS. This is an audit and proposal record. No application code, schema, or user database was changed. GPT-6-Luna helpers reviewed schema/migrations, reads, evidence consumers, and lifecycle paths; the primary agent reproduced and integrated the cross-cutting findings.
 
 The strongest finding is an existing historical-read compatibility failure. The installed database passes the checks performed, but two completed runs in the repository's older research database cannot be inspected through the current evidence browser. The next priorities are complete accounting persistence, safe attempt completion, and consistent schema validation.

@@ -1,5 +1,7 @@
 # API, settings, and native boundary review — 2026-10-01
 
+> Historical October 1 audit evidence. Subsequent repairs and local app replacement are recorded in [October 2 delivery](../../verification/committed-app-redelivery-2026-10-02.md); [current STATUS](../../../STATUS.md) owns today’s source and delivery state. Findings, test counts and artifact hashes below describe the original audit point.
+
 The primary agent reviewed `frontend/api.py`, `frontend/security.py`,
 `frontend/live_contracts.py`, `frontend/live_service.py`, `frontend/live_progress.py`,
 `frontend/live_history.py`, `frontend/service_manager.py`, `credential_store.py`,

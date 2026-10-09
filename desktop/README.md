@@ -1,10 +1,14 @@
 # Desktop application
 
+Current source through `15b8281` includes completed database/discovery implementation and
+repository review fixes. No distributable containing that source was produced by the
+documentation review; see [STATUS](../STATUS.md) for delivery and acceptance gates.
+
 The app was replaced with a verified local build from `20bf6a2` on 2026-10-02, including
 the ALPR equity, validator and repository-organization changes; see the
-[current task's delivery results](../.agent/plans/validator-and-current-docs-2026-10-02.md#user-authorized-commit-and-local-redelivery).
-The current local installer is `~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`.
-The latest public download is still the September 28 test release built from `ac49404`;
+[October 2 delivery results](../.agent/plans/validator-and-current-docs-2026-10-02.md#user-authorized-commit-and-local-redelivery).
+The recorded local installer is `~/Downloads/ResearchAssistant-mac-arm64-20261002-20bf6a2.zip`.
+The latest recorded public download is the September 28 test release built from `ac49404`;
 it does not contain the October fixes. The older `desktop/dist` paths below describe
 historical artifacts. Saved research and credentials were preserved.
 
@@ -56,7 +60,9 @@ Persistent data:
 - `acquisition/`: application-owned Wigolo data; bundled browser resources are read-only.
 - `imports/`: explicitly imported historical databases.
 
-Writable runs and resumes migrate compatible databases to schema 17. Schema 14 added nullable
+In current source, writable runs and resumes migrate compatible databases to schema 17.
+The installed October 2 backend predates these schema-17 changes. The following recovery
+and compatibility guidance applies after rebuilding/upgrading to current source. Schema 14 added nullable
 cached/uncached input-token fields; schema 15 adds nullable cache-write tokens/cost basis,
 schema 16 protects same-run ownership and referenced keys, and schema 17 adds measured
 history/evidence indexes. Existing records retain unknown cache

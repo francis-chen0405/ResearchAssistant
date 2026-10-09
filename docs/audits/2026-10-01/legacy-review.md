@@ -1,5 +1,7 @@
 # Legacy, CLI, and evaluation audit — 2026-10-01
 
+> Historical October 1 audit evidence. Subsequent repairs and local app replacement are recorded in [October 2 delivery](../../verification/committed-app-redelivery-2026-10-02.md); [current STATUS](../../../STATUS.md) owns today’s source and delivery state. Findings, test counts and artifact hashes below describe the original audit point.
+
 ## Scope
 
 Reviewed the legacy pipeline, retrieval deduplication, run inspection CLI, offline evaluation entry points, and secondary Python frontends. All reproductions used isolated local fixtures and fake providers. The live MiMo smoke script was read only; it was not executed. No provider, paid, or network calls were made.

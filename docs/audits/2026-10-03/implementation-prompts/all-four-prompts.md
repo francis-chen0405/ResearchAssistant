@@ -1,5 +1,7 @@
 # Four database implementation prompts
 
+> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../../STATUS.md). The findings and instructions below retain their original scope.
+
 Run these four prompts sequentially in the same ResearchAssistant chat/checkout. Each numbered section is one complete prompt to copy and paste. Preserve preceding phases and use a single shared plan and verification record. The prompts authorize implementation and temporary-database tests when submitted; this document itself does not execute them.
 
 | Prompt | Coverage |

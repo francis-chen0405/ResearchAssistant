@@ -2,9 +2,13 @@
 
 ResearchAssistant is a local desktop application for source-backed research on a claim. Choose Support, Challenge, or both. The local Python backend discovers sources, preserves exact evidence and provenance, investigates gaps within budget, and releases only deterministically validated results. Historical runs remain readable and exportable. There is no hosted application backend.
 
+Current source has completed database and six-phase source-discovery implementation plus
+repository review fixes. Current-source delivery and live acceptance remain pending; the
+installed app is older. [STATUS](STATUS.md) owns the verified stage and remaining gates.
+
 ## Install and run
 
-The desktop application bundles its runtime; end users do not install Python, Node, or Docker. The latest public Apple Silicon DMG/ZIP is the [September 28 unsigned test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928), built from `ac49404`. It does **not** include the October fixes in current source or the locally installed app, so do not treat it as current. It is unsigned and unnotarized; macOS may block its first launch. Clean-machine/macOS 14 checks and Developer ID signing/notarization remain open. Current delivery facts and the Windows deferral are in [STATUS](STATUS.md) and [desktop operations](desktop/README.md).
+The desktop application bundles its runtime; end users do not install Python, Node, or Docker. The latest recorded public Apple Silicon DMG/ZIP is the [September 28 unsigned test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928), built from `ac49404`. It does **not** include the October fixes in current source or the locally installed app, so do not treat it as current. It is unsigned and unnotarized; macOS may block its first launch. Clean-machine/macOS 14 checks and Developer ID signing/notarization remain open. Current delivery facts and the Windows deferral are in [STATUS](STATUS.md) and [desktop operations](desktop/README.md).
 
 ## Develop and verify
 

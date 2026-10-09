@@ -1,5 +1,7 @@
 # ResearchAssistant testing handoff — 2026-10-01
 
+> Historical testing handoff. Its setup describes the September build and is superseded by [current STATUS](../STATUS.md) and [current HANDOFF](../HANDOFF.md). Retain the dated observations below; the installed backend was subsequently replaced on October 2.
+
 Use this file as context for a new chat while I test the installed Mac app. I will
 describe each bug I encounter. Investigate the reported behavior, reproduce it when
 possible, fix it within the scope I authorize, and verify the fix. Do not assume a bug

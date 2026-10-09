@@ -74,3 +74,12 @@ The preceding STATUS, HANDOFF, ARCHITECTURE, DECISIONS and `.agent/PLANS.md` are
 - [Before the complete source-discovery review](2026-10-08-source-complete-review-state/STATUS.md): exact prior STATUS, HANDOFF, ARCHITECTURE and plan index, byte-verified against aa6a23a before replacement. New findings and verification stay in the shared discovery plan.
 
 - [Before the repository-wide review](2026-10-08-repository-review-state/STATUS.md): exact preceding STATUS, HANDOFF and plan index, byte-verified before updating the current review state. Findings and acceptance evidence stay in the repository-review plan.
+
+## Exact documents replaced by the project-stage documentation review
+
+The preceding STATUS, HANDOFF and `.agent/PLANS.md` are preserved byte-for-byte under
+[`2026-10-08-documentation-stage-state/`](2026-10-08-documentation-stage-state/), from
+source commit `15b8281`. [The documentation review](../verification/project-stage-2026-10-08.md)
+records the current-source/installed-build distinction and fresh checks. Historical
+next-phase wording elsewhere in this index describes its original snapshot only;
+[STATUS](../../STATUS.md) owns today’s completed implementation and pending acceptance.

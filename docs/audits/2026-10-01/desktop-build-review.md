@@ -1,5 +1,7 @@
 # Desktop packaging and CI review — 2026-10-01
 
+> Historical October 1 audit evidence. Subsequent repairs and local app replacement are recorded in [October 2 delivery](../../verification/committed-app-redelivery-2026-10-02.md); [current STATUS](../../../STATUS.md) owns today’s source and delivery state. Findings, test counts and artifact hashes below describe the original audit point.
+
 ## Scope and method
 
 Read-only review of `.github/workflows/ci.yml`, `.github/workflows/desktop.yml`,

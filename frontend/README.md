@@ -21,7 +21,9 @@ discovery/model routes. Use canonical `researchassistant.*` paths for backend im
 the root `models.py`, `store.py`, and `orchestrator.py` modules remain compatibility aliases.
 
 See [architecture](../ARCHITECTURE.md) for exact evidence, persistence, accounting and
-credential invariants. The Phase 3 workspace, settings and history workflows are implemented;
-fresh research also includes the bounded adaptive-search reliability correction.
+credential invariants. The workspace, settings and history workflows are implemented. Current source includes
+all six discovery phases: provider-specific queries, bounded retrieval/ranking, exact
+previews, seed expansion and frozen product controls. [STATUS](../STATUS.md) distinguishes
+this source behavior from the older installed app and pending live acceptance.
 The [original frontend README](../docs/archive/pre-phase-2/frontend/README.md) is preserved
 verbatim. This document replaces its historical MLP-only provider/launcher description.

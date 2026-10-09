@@ -1,5 +1,7 @@
 # Prompt 1 of 4 — Make database import, upgrades, and recovery private and fault-safe
 
+> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../../STATUS.md). The findings and instructions below retain their original scope.
+
 Work in the ResearchAssistant repository. Implement the lifecycle/backup/privacy scope authorized by this prompt from `docs/audits/2026-10-03/database-review.md` (F7, I2, I3, plus the conditional legacy lock finding in the report). This is the first of four sequential implementation tasks. Keep the change focused on database lifecycle, imports, and recovery; do not take on unrelated history-reader, evidence-query, export, or storage-accounting fixes.
 
 This prompt authorizes GPT-6-Luna helpers. Use them for repository search, call-site discovery, and bounded test exploration wherever suitable. Keep GPT-6.1-Sol for the storage policy, backup/migration atomicity, lock ownership, and final design review. Treat the code graph as advisory and verify all conclusions in current source and tests. Do not refresh the stale index or transmit source elsewhere.

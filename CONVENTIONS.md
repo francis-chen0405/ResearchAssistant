@@ -1,12 +1,12 @@
 # Development conventions
 
-Follow the active scope in the [plan index](.agent/PLANS.md) and its linked plan. Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
+Follow the current scope in the [plan index](.agent/PLANS.md) and its linked task record. Completed implementation records are not active work. Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
 
 ## Keep project records small
 
 - Use one active plan for a task. Add only decisions, boundaries, and checks needed to do and review that work.
 - Replace current-state summaries in `STATUS.md`, `HANDOFF.md`, and `.agent/PLANS.md` when the state changes. Do not append a dated phase narrative to these current-state files.
-- Keep `STATUS.md` as the sole summary of verified current state. `HANDOFF.md` records only the next action or boundary; `.agent/PLANS.md` points to the active plan and stable history.
+- Keep `STATUS.md` as the sole summary of verified current state. `HANDOFF.md` records only the next action or boundary; `.agent/PLANS.md` points to the current task, completed implementation records and stable history.
 - Put completed task details in that task's plan or verification record. Link it from [grouped history](docs/history.md); do not duplicate its chronology in root documents.
 - Preserve earlier records at stable paths. For exact documents replaced by a concise current version, save a byte-for-byte snapshot and link it from the [archive index](docs/archive/INDEX.md).
 - Before adding a plan or verification file, check whether the existing task record can be updated. Create another file only when it captures a distinct task or immutable result.

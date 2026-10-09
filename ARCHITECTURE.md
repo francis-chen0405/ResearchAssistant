@@ -2,6 +2,10 @@
 
 ResearchAssistant is a local desktop application for research on a precise claim. The Electron shell serves a static Next.js renderer and starts a bundled Python backend on loopback. Research execution, provider credentials, SQLite access, and acquisition stay in the backend. The renderer has no direct filesystem, database, process, or provider access. There is no hosted application backend.
 
+The database and all six discovery phases described below are implemented in local source
+through `15b8281`. The installed app remains an earlier build; [STATUS](STATUS.md) owns
+current verification, delivery provenance and open acceptance gates.
+
 ## Runtime and module ownership
 
 | Area | Owner |

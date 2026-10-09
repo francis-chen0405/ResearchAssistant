@@ -1,8 +1,8 @@
 # Plan and verification history
 
-This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current authorized work is identified in [the plan index](../.agent/PLANS.md).
+This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current task and completed implementation records are identified in [the plan index](../.agent/PLANS.md).
 
-There are 83 plan records and 21 verification records.
+There are 83 plan records and 22 verification records. Historical setup, next-step and approval wording in these records applies to their dated scope; [STATUS](../STATUS.md) and [HANDOFF](../HANDOFF.md) own the present stage.
 
 ## Recent reviews and repairs
 
@@ -27,6 +27,7 @@ There are 83 plan records and 21 verification records.
 
 ### Verification records
 
+- [project-stage-2026-10-08](verification/project-stage-2026-10-08.md) — review of all existing repository Markdown, reconciliation with current source/installed backend, and fresh offline checks.
 - [alpr-equity-run-review-2026-10-02](../docs/verification/alpr-equity-run-review-2026-10-02.md)
 - [alpr-run-fixes-2026-10-01](../docs/verification/alpr-run-fixes-2026-10-01.md)
 - [alpr-run-review-2026-10-01](../docs/verification/alpr-run-review-2026-10-01.md)
