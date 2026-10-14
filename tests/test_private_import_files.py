@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import os
 import re
+import stat
 import sys
 from ctypes import wintypes
 from pathlib import Path
@@ -247,6 +248,31 @@ def test_windows_acl_setup_refuses_replaced_created_path(
         create_private_file(path)
 
     assert path.read_bytes() == b"replacement"
+
+
+def test_private_directory_refuses_windows_reparse_attributes_before_acl(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = tmp_path / "reparse-directory"
+    folder.mkdir()
+    original_lstat = Path.lstat
+
+    def reparse_lstat(self: Path) -> os.stat_result | SimpleNamespace:
+        if self == folder:
+            return SimpleNamespace(
+                st_mode=stat.S_IFDIR,
+                st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT,
+            )
+        return original_lstat(self)
+
+    def forbidden_acl(path: Path, *, directory: bool) -> None:
+        pytest.fail("ACL must never target a reparse directory")
+
+    monkeypatch.setattr(private_files_module, "_POSIX", False)
+    monkeypatch.setattr(Path, "lstat", reparse_lstat)
+    monkeypatch.setattr(private_files_module, "_set_windows_private_acl", forbidden_acl)
+    with pytest.raises(PrivateFileSecurityError, match="real directory"):
+        private_directory(folder)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Native Windows ACL verification")

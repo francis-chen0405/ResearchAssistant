@@ -84,7 +84,13 @@ def private_directory(path: Path) -> Path:
     path = Path(path)
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     info = path.lstat()
-    if not stat.S_ISDIR(info.st_mode):
+    # Windows junctions report a directory mode and are not symbolic links.
+    # Refuse reparse entries before SetFileSecurityW can follow one to an
+    # unrelated target. POSIX lstat already distinguishes symbolic links.
+    reparse_directory = not _POSIX and bool(
+        getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    )
+    if not stat.S_ISDIR(info.st_mode) or reparse_directory:
         raise PrivateFileSecurityError(f"Private directory is not a real directory: {path}")
     if _POSIX:
         if info.st_uid != os.geteuid():
