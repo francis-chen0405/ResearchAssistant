@@ -36,10 +36,10 @@ jobs:
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e "./backend[dev]"
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
       - name: Verify isolated wheel and editable installs outside the checkout
-        run: python scripts/verify_distribution.py
+        run: python scripts/verify_distribution.py --constraints desktop/constraints.txt
 
       - name: Check repository root and dependency boundaries
         run: python scripts/check_repository_boundaries.py
@@ -65,7 +65,7 @@ jobs:
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e "./backend[dev]"
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
       - name: Run Ruff lint
         run: ruff check .
@@ -91,7 +91,7 @@ jobs:
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e "./backend[dev]"
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
       - name: Run deterministic offline evaluation
         run: |

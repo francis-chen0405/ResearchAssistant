@@ -56,6 +56,11 @@ def test_native_unicode_long_path_upgrade_backup_restore_and_no_overwrite(
     folder = tmp_path / "résultats 研究 # percent%"
     for index in range(depth):
         folder /= f"{index}-" + "long-path-" * 4
+    if depth:
+        # Runner temp roots vary in length; exercise the same >300-character
+        # native path even under a short Linux or Windows temp root.
+        while len(str(folder / "historique 研究 # %.sqlite3")) <= 300:
+            folder /= "long-path-padding"
     private_directory(folder)
     path = folder / "historique 研究 # %.sqlite3"
     if depth:

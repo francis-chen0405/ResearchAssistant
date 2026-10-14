@@ -22,8 +22,13 @@ def main() -> None:
     from test_mvp4_cli import _command, _environment
     from test_product_discovery_pipeline import _run
 
-    from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+    from researchassistant.contracts.models import (
+        DiscoveryProvider,
+        ResearchControls,
+        V2DeepAnalysisBackfillResult,
+    )
     from researchassistant.storage.source_leads import read_source_leads
+    from researchassistant.storage.store import read_v2_artifact
 
     output = ROOT / "desktop/build/windows-evidence/diagnostics.json"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -55,9 +60,19 @@ def main() -> None:
             ),
         )
         leads = read_source_leads(pipeline.db_path, pipeline.run_id)
+        backfill = V2DeepAnalysisBackfillResult.model_validate_json(
+            read_v2_artifact(
+                pipeline.db_path,
+                pipeline.run_id,
+                "phase-13-deep-analysis-backfill-analyzer-admission",
+            ).payload_json
+        )
         report["leads"] = {
             "elapsed_seconds": round(time.monotonic() - started, 3),
             "state": pipeline.state.value,
+            "source_executions": [
+                execution.model_dump(mode="json") for execution in backfill.source_executions
+            ],
             "items": [
                 {
                     "url": item.url,
