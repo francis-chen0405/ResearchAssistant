@@ -34,7 +34,10 @@ from researchassistant.storage.store import (
 )
 
 
-def test_forced_owned_process_preserves_sqlite_unknown_reservation(tmp_path: Path) -> None:
+@pytest.mark.parametrize("journal_mode", ["delete", "wal"])
+def test_forced_owned_process_preserves_sqlite_unknown_reservation(
+    tmp_path: Path, journal_mode: str
+) -> None:
     """Kill a writer mid-transaction; never infer completion or refund missing usage."""
     path = tmp_path / "isolated.sqlite3"
     run_id = uuid4()
@@ -60,6 +63,10 @@ def test_forced_owned_process_preserves_sqlite_unknown_reservation(tmp_path: Pat
         started_at=now,
     )
     insert_v2_artifact(path, "phase-13-physical-call-001-start", reservation, now)
+    with sqlite3.connect(path) as connection:
+        assert (
+            connection.execute(f"PRAGMA journal_mode={journal_mode}").fetchone()[0] == journal_mode
+        )
     before = read_v2_physical_call_audit(path, run_id)
     code = (
         "import sqlite3, sys, time\n"

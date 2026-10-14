@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import sys
 from ctypes import wintypes
 from pathlib import Path
@@ -209,19 +210,29 @@ def test_windows_acl_setup_refuses_replaced_created_path(
 ) -> None:
     path = tmp_path / "history.sqlite3"
     original_fstat = os.fstat
+    original_lstat = Path.lstat
     replaced = False
 
     def replace_after_open(fd: int) -> os.stat_result:
         nonlocal replaced
         info = original_fstat(fd)
         if not replaced:
-            path.unlink()
+            # Simulate a rebound directory entry without unlinking an open CRT
+            # handle, which Windows correctly refuses. Both identity observations
+            # expose the replacement; the real descriptor remains owned/closed.
             path.write_bytes(b"replacement")
             replaced = True
         return info
 
+    def replacement_lstat(self: Path) -> os.stat_result:
+        info = original_lstat(self)
+        if self == path and replaced:
+            return os.stat_result((info.st_mode, info.st_ino + 1, *info[2:]))
+        return info
+
     monkeypatch.setattr(private_files_module, "_POSIX", False)
     monkeypatch.setattr(private_files_module.os, "fstat", replace_after_open)
+    monkeypatch.setattr(Path, "lstat", replacement_lstat)
 
     def fail_acl(path: Path, *, directory: bool) -> None:
         pytest.fail("ACL must not target a replacement path")
@@ -246,6 +257,20 @@ def test_native_windows_acl_is_protected_and_contains_owner_and_system(
     fd = create_private_file(path)
     os.close(fd)
 
+    rendered = _native_windows_acl_sddl(path)
+    _assert_native_windows_private_acl(rendered, directory=False)
+
+
+def _assert_native_windows_private_acl(rendered: str, *, directory: bool) -> None:
+    assert rendered.startswith("D:P")
+    inheritance = "OICI" if directory else ""
+    assert set(re.findall(r"\([^)]*\)", rendered)) == {
+        f"(A;{inheritance};FA;;;OW)",
+        f"(A;{inheritance};FA;;;SY)",
+    }
+
+
+def _native_windows_acl_sddl(path: Path) -> str:
     advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     get_security = advapi32.GetFileSecurityW
@@ -286,9 +311,6 @@ def test_native_windows_acl_is_protected_and_contains_owner_and_system(
     assert to_sddl(descriptor, 1, security_information, ctypes.byref(sddl), None)
     try:
         rendered = sddl.value or ""
-        assert "D:P" in rendered
-        assert ";;;OW)" in rendered
-        assert ";;;SY)" in rendered
-        assert "OICI" not in rendered
+        return rendered
     finally:
         local_free(sddl)

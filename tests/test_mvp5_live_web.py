@@ -390,6 +390,8 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(service_manager_module.sys, "platform", "darwin")
+    # This test simulates POSIX on Windows too; host signal exports differ.
+    monkeypatch.setattr(service_manager_module.signal, "SIGKILL", 9, raising=False)
     captured: dict[str, object] = {}
 
     class FakeProcess:
@@ -451,6 +453,8 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     assert stopped.state == "stopped"
     assert stopped.pid == process.pid
     assert killed and killed[0][0] == process.pid
+    assert all(pid == process.pid for pid, _sig in killed)
+    assert killed[-1] == (process.pid, service_manager_module.signal.SIGKILL)
 
 
 def test_stop_never_kills_unowned_listener(monkeypatch: pytest.MonkeyPatch) -> None:

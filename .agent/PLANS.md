@@ -2,6 +2,12 @@
 
 ## Current task
 
+[Prompt 17 — Windows CI and native durability](plans/windows-ci-durability-2026-10-13.md)
+is investigating current Windows runner evidence on an isolated verification branch.
+Windows release remains deferred. Preserve the installed Mac app and existing work.
+
+## Preceding delivery boundary
+
 [Prompt 16 — remaining Mac delivery gates](plans/mac-delivery-gates-2026-10-13.md)
 has completed the local current-source candidate, installed-cache inspection,
 confirmed FTS integration repair and standalone source-archive review fix. [Exact verification](../docs/verification/mac-delivery-gates-2026-10-13.md)

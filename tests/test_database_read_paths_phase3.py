@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
@@ -85,7 +86,9 @@ def test_readers_encode_uri_sensitive_path_characters(
     offline_run: FixturePipelineResult, tmp_path: Path
 ) -> None:
     source = Path(offline_run.db_path)
-    odd_path = tmp_path / "reader # percent% question?.sqlite3"
+    # Keep URI delimiters/Unicode while respecting the host's filename grammar.
+    question = "?" if os.name == "posix" else "？"
+    odd_path = tmp_path / f"reader # percent% café question{question}.sqlite3"
     odd_path.write_bytes(source.read_bytes())
 
     assert read_run(odd_path, offline_run.run_id).run_id == offline_run.run_id
