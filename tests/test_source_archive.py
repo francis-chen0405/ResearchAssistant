@@ -60,6 +60,7 @@ def test_archive_inventory_retains_documented_launchers_and_required_guidance(
     assert required <= {str(name) for name in REQUIRED_FILES}
     launcher = source_repository / "Launch ResearchAssistant.command"
     launcher.chmod(0o755)
+    _git(source_repository, "update-index", "--chmod=+x", "--", launcher.name)
     rows = build_source_archive(
         source_repository, tmp_path / "source.tar.gz", tmp_path / "SOURCE-MANIFEST.json"
     )

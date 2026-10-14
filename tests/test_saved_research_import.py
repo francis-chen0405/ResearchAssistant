@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
@@ -176,8 +177,18 @@ def test_saved_fixture_replay_is_private_read_only_and_keeps_unknowns(
     assert not observed["discovery_replay"]["candidate_inventory_available"]
     assert observed["actual_total_cost_usd"] is None
     assert observed["stages"]["returned"]["reference_recall"] is None
-    assert output.stat().st_mode & 0o777 == 0o700
-    assert all(p.stat().st_mode & 0o777 == 0o600 for p in output.iterdir())
+    if os.name == "posix":
+        assert output.stat().st_mode & 0o777 == 0o700
+        assert all(p.stat().st_mode & 0o777 == 0o600 for p in output.iterdir())
+    else:
+        from tests.test_private_import_files import (
+            _assert_native_windows_private_acl,
+            _native_windows_acl_sddl,
+        )
+
+        _assert_native_windows_private_acl(_native_windows_acl_sddl(output), directory=True)
+        for path in output.iterdir():
+            _assert_native_windows_private_acl(_native_windows_acl_sddl(path), directory=False)
     with pytest.raises(ValueError, match="fresh private"):
         import_saved_research.import_history(database, output, origin="fixture")
 

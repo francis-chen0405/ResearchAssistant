@@ -124,8 +124,11 @@ def contract_inventory(monkeypatch: pytest.MonkeyPatch, folder: Path) -> dict[st
     # The request path is the only machine-dependent value in these offline responses.
     import json
 
-    return json.loads(
-        json.dumps({"routes": routes, "openapi": app.openapi(), "responses": responses}).replace(
-            database, "/fixture/absent.sqlite3"
-        )
-    )
+    payload = json.dumps({"routes": routes, "openapi": app.openapi(), "responses": responses})
+    # Normalize only fixture machine paths, including JSON-escaped backslashes.
+    for actual, canonical in (
+        (database, "/fixture/absent.sqlite3"),
+        (str(Path("/fixture/live.sqlite3")), "/fixture/live.sqlite3"),
+    ):
+        payload = payload.replace(json.dumps(actual)[1:-1], json.dumps(canonical)[1:-1])
+    return json.loads(payload)

@@ -26,6 +26,7 @@ from evaluations.research_quality_contracts import (
 from researchassistant.agents.v2_discovery import V2DiscoveryResponse
 from researchassistant.contracts.research_acquisition import V2AcquisitionProbeOutput
 from researchassistant.contracts.research_planning import V2InitialPlannerOutput
+from researchassistant.platform_support.private_files import create_private_file, private_directory
 from researchassistant.providers.v2_budget import read_v2_physical_call_audit
 from researchassistant.storage.store import (
     open_read_only_store,
@@ -44,13 +45,14 @@ def _private_export(output: Path) -> Iterator[Callable[[str, bytes, str], None]]
     def write(name: str, payload: bytes, media_type: str) -> None:
         validate_artifact_content(payload, media_type)
         path = output / name
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        descriptor = create_private_file(path)
         file_stat = os.fstat(descriptor)
         owned.append((path, file_stat.st_dev, file_stat.st_ino))
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(payload)
 
     try:
+        private_directory(output)
         yield write
     except BaseException:
         for path, device, inode in reversed(owned):

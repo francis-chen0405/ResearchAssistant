@@ -126,6 +126,18 @@ def build_source_archive(
     archive.parent.mkdir(parents=True, exist_ok=True)
     manifest.parent.mkdir(parents=True, exist_ok=True)
     rows: dict[str, dict[str, int | str]] = {}
+    # NTFS mode bits cannot represent the executable bit of a Mac launcher.
+    # Keep worktree bytes, using Git's portable tracked mode only on Windows.
+    tracked_modes: dict[str, int] = {}
+    if os.name == "nt":
+        entries = subprocess.check_output(["git", "-C", str(root), "ls-files", "--stage", "-z"])
+        for entry in entries.decode("utf-8").split("\0"):
+            if not entry:
+                continue
+            metadata, name = entry.split("\t", 1)
+            mode, _object, stage = metadata.split()
+            if stage == "0" and mode in {"100644", "100755"}:
+                tracked_modes[name] = int(mode[-3:], 8)
     # Prepare both outputs fully before replacing either existing artifact.
     with (
         tempfile.TemporaryDirectory(prefix=".source-archive-", dir=archive.parent) as archive_temp,
@@ -143,7 +155,7 @@ def build_source_archive(
             for path in paths:
                 name = path.relative_to(root).as_posix()
                 payload = path.read_bytes()
-                mode = stat.S_IMODE(path.stat().st_mode)
+                mode = tracked_modes.get(name, stat.S_IMODE(path.stat().st_mode))
                 rows[name] = {
                     "sha256": hashlib.sha256(payload).hexdigest(),
                     "size": len(payload),

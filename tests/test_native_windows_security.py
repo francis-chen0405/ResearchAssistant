@@ -142,3 +142,114 @@ def test_native_windows_links_refuse_private_path_and_restore_publication(tmp_pa
     with pytest.raises(FileExistsError):
         database_recovery.restore_backup(backup, link)
     assert sentinel.read_bytes() == b"unchanged"
+
+
+class _SidAndAttributes(ctypes.Structure):
+    _fields_ = [("Sid", ctypes.c_void_p), ("Attributes", wintypes.DWORD)]
+
+
+def test_native_windows_private_acl_denies_restricted_token_read(tmp_path: Path) -> None:
+    from researchassistant.platform_support import private_files
+
+    assert _filesystem(tmp_path) == "NTFS"
+    private = tmp_path / "private-token-read"
+    descriptor = create_private_file(private)
+    os.close(descriptor)
+    control = tmp_path / "public-control"
+    control.write_bytes(b"test-only control")
+    convert, apply_acl, free = private_files._windows_security_functions()
+    control_descriptor = ctypes.c_void_p()
+    assert convert("D:P(A;;FR;;;WD)", 1, ctypes.byref(control_descriptor), None)
+    try:
+        assert apply_acl(str(control), 0x80000004, control_descriptor)
+    finally:
+        assert not free(control_descriptor)
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel.GetCurrentProcess.argtypes = ()
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel.CreateFileW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    advapi.OpenProcessToken.argtypes = (
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.HANDLE),
+    )
+    advapi.OpenProcessToken.restype = wintypes.BOOL
+    advapi.ConvertStringSidToSidW.argtypes = (wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p))
+    advapi.ConvertStringSidToSidW.restype = wintypes.BOOL
+    advapi.CreateRestrictedToken.argtypes = (
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(_SidAndAttributes),
+        ctypes.POINTER(wintypes.HANDLE),
+    )
+    advapi.CreateRestrictedToken.restype = wintypes.BOOL
+    advapi.ImpersonateLoggedOnUser.argtypes = (wintypes.HANDLE,)
+    advapi.ImpersonateLoggedOnUser.restype = wintypes.BOOL
+    advapi.RevertToSelf.argtypes = ()
+    advapi.RevertToSelf.restype = wintypes.BOOL
+    invalid_handle = ctypes.c_void_p(-1).value
+
+    def open_read(path: Path) -> int:
+        return kernel.CreateFileW(str(path), 0x80000000, 7, None, 3, 0x80, None)
+
+    owner = open_read(private)
+    assert owner != invalid_handle
+    assert kernel.CloseHandle(owner)
+    source, restricted = wintypes.HANDLE(), wintypes.HANDLE()
+    everyone = ctypes.c_void_p()
+    impersonating = False
+    try:
+        assert advapi.OpenProcessToken(kernel.GetCurrentProcess(), 0x000E, ctypes.byref(source))
+        assert advapi.ConvertStringSidToSidW("S-1-1-0", ctypes.byref(everyone))
+        restriction = _SidAndAttributes(everyone, 0)
+        # Disable privileges (except traversal) and require Everyone permission in
+        # the restricted access check. No account or permanent token is created.
+        assert advapi.CreateRestrictedToken(
+            source,
+            1,
+            0,
+            None,
+            0,
+            None,
+            1,
+            ctypes.byref(restriction),
+            ctypes.byref(restricted),
+        )
+        assert advapi.ImpersonateLoggedOnUser(restricted)
+        impersonating = True
+        public_handle = open_read(control)
+        assert public_handle != invalid_handle, "control read must succeed under the same token"
+        assert kernel.CloseHandle(public_handle)
+        private_handle = open_read(private)
+        error = ctypes.get_last_error()
+        if private_handle != invalid_handle:
+            kernel.CloseHandle(private_handle)
+        assert private_handle == invalid_handle
+        assert error == 5  # ERROR_ACCESS_DENIED from the real filesystem access check.
+    finally:
+        if impersonating:
+            assert advapi.RevertToSelf()
+        if restricted:
+            kernel.CloseHandle(restricted)
+        if source:
+            kernel.CloseHandle(source)
+        if everyone:
+            assert not free(everyone)
