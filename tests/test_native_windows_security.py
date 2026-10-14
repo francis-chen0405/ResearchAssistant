@@ -94,3 +94,51 @@ def test_native_windows_vault_persists_cross_process_and_cleans_unique_target() 
     finally:
         windows_credentials.delete(target)
     assert windows_credentials.read(target) is None
+
+
+def test_native_windows_links_refuse_private_path_and_restore_publication(tmp_path: Path) -> None:
+    from researchassistant.platform_support.private_files import (
+        PrivateFileSecurityError,
+        secure_private_path,
+    )
+
+    assert _filesystem(tmp_path) == "NTFS"
+    target = tmp_path / "outside-owned-folder"
+    target.mkdir()
+    before_acl = _native_windows_acl_sddl(target)
+    junction = tmp_path / "owned-junction"
+    subprocess.run(
+        ["cmd", "/d", "/c", "mklink", "/J", str(junction), str(target)],
+        capture_output=True,
+        check=True,
+    )
+    try:
+        assert junction.is_junction()
+        with pytest.raises(PrivateFileSecurityError):
+            private_directory(junction)
+        assert _native_windows_acl_sddl(target) == before_acl
+    finally:
+        junction.rmdir()  # Remove the test reparse entry, preserving its target.
+
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_bytes(b"unchanged")
+    link = tmp_path / "private-file-link"
+    link.symlink_to(sentinel)
+    with pytest.raises(PrivateFileSecurityError):
+        secure_private_path(link)
+    with pytest.raises(FileExistsError):
+        create_private_file(link)
+    pending = tmp_path / "pending"
+    descriptor = create_private_file(pending)
+    os.close(descriptor)
+    with pytest.raises(FileExistsError):
+        database_recovery._publish(pending, link)
+    assert sentinel.read_bytes() == b"unchanged"
+    assert pending.exists()
+    source = tmp_path / "source.sqlite3"
+    _old_database(source)
+    init_db(source)
+    backup = database_recovery.list_backups(source)[0].path
+    with pytest.raises(FileExistsError):
+        database_recovery.restore_backup(backup, link)
+    assert sentinel.read_bytes() == b"unchanged"
