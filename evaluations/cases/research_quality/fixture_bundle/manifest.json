@@ -1,0 +1,580 @@
+{
+  "schema_version": "research-quality-v1",
+  "prepared_on": "2026-10-11",
+  "baseline": {
+    "fixture": true
+  },
+  "topics": [
+    {
+      "topic_id": "arithmetic",
+      "split": "development",
+      "claim": "Authored neutral claim for benchmark arithmetic.",
+      "rationale": "Unknown denominator, aliases and conflicting admission versus human labels.",
+      "short_query": "fixture neutral claim",
+      "concepts": [
+        "fixture"
+      ],
+      "reference": {
+        "status": "locked",
+        "scope": "exhaustive_fixture",
+        "method": "Authored fixture expected useful work IDs",
+        "locked_at": "2026-10-11T19:00:00Z",
+        "reviewer": "fixture-author",
+        "evidence": {
+          "path": "reference.json",
+          "sha256": "6f2696c3c0fb40c0d16076dcd5390719d0b2cf08652a5de631bcc2cf73c079c9",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": [
+          {
+            "work_id": "work-a",
+            "urls": [
+              "https://fixture.invalid/work-a"
+            ],
+            "rationale": "Authored expected useful fixture work"
+          },
+          {
+            "work_id": "work-missing",
+            "urls": [
+              "https://fixture.invalid/work-missing"
+            ],
+            "rationale": "Authored expected useful fixture work"
+          }
+        ]
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "fixture-arithmetic",
+      "topic_id": "arithmetic",
+      "arm": "current-fixture",
+      "origin": "fixture",
+      "collector": "fixture-author",
+      "provenance_note": "All provider responses, snapshots and judgments are authored fixtures; no live calls.",
+      "allowance_id": null,
+      "source_identity": "authored-fixture",
+      "settings_sha256": "8f70e2acbda3ee6e0c5f9c739df91d0466c2ca844a7da2c5631bf82eded16d27",
+      "settings_path": "settings.json",
+      "input_sha256": "035b83c88921e9f4f1ac97539ab28c98a850561a132aa0286926de944fead640",
+      "started_at": "2026-10-11T20:00:00Z",
+      "completed_at": "2026-10-11T20:00:02Z",
+      "audit_complete": true,
+      "candidate_inventory_complete": true,
+      "final_inventory_complete": true,
+      "attempts": [
+        {
+          "attempt_id": "search-1",
+          "category": "search",
+          "provider": "serpsearch",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "settings": {
+            "query": "fixture neutral claim",
+            "page": 1,
+            "exact_match": true,
+            "country": null,
+            "language": null,
+            "location": null,
+            "query_id": "20000000-0000-4000-8000-000000000014"
+          },
+          "started_at": "2026-10-11T20:00:00Z",
+          "finished_at": "2026-10-11T20:00:01Z",
+          "outcome": "success",
+          "request": {
+            "path": "request.json",
+            "sha256": "584625acf6f3fc8ae3b72f1efc84ae5e2df076cdc285fb42fd99d3ad66c4be80",
+            "media_type": "application/json",
+            "role": "request"
+          },
+          "response": {
+            "path": "provider.json",
+            "sha256": "f6e879b776769d2876cb93ba39b8fc5f4324866296685a95d7799805dc29dc4b",
+            "media_type": "application/json",
+            "role": "raw_response"
+          },
+          "reserved_usd": "0.01",
+          "actual_usd": null,
+          "cost_basis": null,
+          "tokens": null
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "settings.json",
+          "sha256": "8f70e2acbda3ee6e0c5f9c739df91d0466c2ca844a7da2c5631bf82eded16d27",
+          "media_type": "application/json",
+          "role": "request"
+        },
+        {
+          "path": "request.json",
+          "sha256": "584625acf6f3fc8ae3b72f1efc84ae5e2df076cdc285fb42fd99d3ad66c4be80",
+          "media_type": "application/json",
+          "role": "request"
+        },
+        {
+          "path": "provider.json",
+          "sha256": "f6e879b776769d2876cb93ba39b8fc5f4324866296685a95d7799805dc29dc4b",
+          "media_type": "application/json",
+          "role": "raw_response"
+        },
+        {
+          "path": "snapshot.txt",
+          "sha256": "8820d6f517126fbd99cc88bd3ef8fccbd1d4fdb47539f9a10c16b4deb8ead85e",
+          "media_type": "text/plain",
+          "role": "snapshot"
+        },
+        {
+          "path": "reference.json",
+          "sha256": "6f2696c3c0fb40c0d16076dcd5390719d0b2cf08652a5de631bcc2cf73c079c9",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        {
+          "path": "handoff.json",
+          "sha256": "4147e9899747e75d22e8c7c739bbdb1a1f6ae5114eafd0e0bb31a1af3fd653fe",
+          "media_type": "application/json",
+          "role": "stage"
+        },
+        {
+          "path": "search-page.json",
+          "sha256": "4147e9899747e75d22e8c7c739bbdb1a1f6ae5114eafd0e0bb31a1af3fd653fe",
+          "media_type": "application/json",
+          "role": "stage"
+        }
+      ],
+      "discovery_handoff_paths": [
+        "handoff.json"
+      ],
+      "candidates": [
+        {
+          "candidate_id": "a",
+          "attempt_id": "search-1",
+          "url": "https://fixture.invalid/a",
+          "work_id": "work-a",
+          "rank": 1,
+          "snapshot_path": "snapshot.txt",
+          "judgment": {
+            "reviewer": "fixture-author",
+            "kind": "authored_fixture",
+            "rationale": "Authored arithmetic test, not inspected live content.",
+            "evidence_paths": [
+              "snapshot.txt"
+            ],
+            "useful": true,
+            "relevant": true,
+            "capture": "full_text",
+            "study_id": "fixture-study-1",
+            "independence_rationale": "Authored same-study grouping"
+          },
+          "dispositions": [
+            {
+              "stage": "returned",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "normalized",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "retained",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "ranked",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "scout",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "acquisition",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "capture",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "selection",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "extraction",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "analyst",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "admission",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "visible",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            }
+          ]
+        },
+        {
+          "candidate_id": "a-copy",
+          "attempt_id": "search-1",
+          "url": "https://fixture.invalid/a-copy",
+          "work_id": "work-a",
+          "rank": 2,
+          "snapshot_path": null,
+          "judgment": {
+            "reviewer": "fixture-author",
+            "kind": "authored_fixture",
+            "rationale": "Authored arithmetic test, not inspected live content.",
+            "evidence_paths": [
+              "provider.json"
+            ],
+            "useful": true,
+            "relevant": true,
+            "capture": "unknown",
+            "study_id": "fixture-study-1",
+            "independence_rationale": "Authored same-study grouping"
+          },
+          "dispositions": [
+            {
+              "stage": "returned",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "normalized",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "retained",
+              "outcome": "dropped",
+              "reason": "fixture duplicate alias",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "ranked",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "scout",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "acquisition",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "capture",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "selection",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "extraction",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "analyst",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "admission",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "visible",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            }
+          ]
+        },
+        {
+          "candidate_id": "b",
+          "attempt_id": "search-1",
+          "url": "https://fixture.invalid/b",
+          "work_id": "work-b",
+          "rank": 3,
+          "snapshot_path": null,
+          "judgment": {
+            "reviewer": "fixture-author",
+            "kind": "authored_fixture",
+            "rationale": "Authored arithmetic test, not inspected live content.",
+            "evidence_paths": [
+              "provider.json"
+            ],
+            "useful": false,
+            "relevant": false,
+            "capture": "unknown",
+            "study_id": null,
+            "independence_rationale": null
+          },
+          "dispositions": [
+            {
+              "stage": "returned",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "normalized",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "retained",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "ranked",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "scout",
+              "outcome": "dropped",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "acquisition",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "capture",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "selection",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "extraction",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "analyst",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "admission",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "visible",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            }
+          ]
+        },
+        {
+          "candidate_id": "c",
+          "attempt_id": "search-1",
+          "url": "https://fixture.invalid/c",
+          "work_id": "work-c",
+          "rank": 4,
+          "snapshot_path": "snapshot.txt",
+          "judgment": {
+            "reviewer": "fixture-author",
+            "kind": "authored_fixture",
+            "rationale": "Authored arithmetic test, not inspected live content.",
+            "evidence_paths": [
+              "snapshot.txt"
+            ],
+            "useful": null,
+            "relevant": null,
+            "capture": "unknown",
+            "study_id": null,
+            "independence_rationale": null
+          },
+          "dispositions": [
+            {
+              "stage": "returned",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "normalized",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "retained",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "ranked",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "scout",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "acquisition",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "capture",
+              "outcome": "kept",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "selection",
+              "outcome": "dropped",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "extraction",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "analyst",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "admission",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            },
+            {
+              "stage": "visible",
+              "outcome": "not_reached",
+              "reason": "authored fixture stage result",
+              "evidence_path": "handoff.json"
+            }
+          ]
+        }
+      ],
+      "statements": [
+        {
+          "statement_id": "supported",
+          "text": "The fixture outcome was unchanged.",
+          "source_ids": [
+            "a"
+          ],
+          "quote": "The measured fixture outcome was unchanged.",
+          "snapshot_path": "snapshot.txt",
+          "entailment": "supported",
+          "reviewer": "fixture-author",
+          "reviewer_kind": "authored_fixture",
+          "rationale": "Exact authored fixture text."
+        },
+        {
+          "statement_id": "unsupported",
+          "text": "The fixture shows a large benefit.",
+          "source_ids": [
+            "a"
+          ],
+          "quote": null,
+          "snapshot_path": null,
+          "entailment": "unsupported",
+          "reviewer": "fixture-author",
+          "reviewer_kind": "authored_fixture",
+          "rationale": "Intentionally contradicts fixture text."
+        },
+        {
+          "statement_id": "unjudged",
+          "text": "Unknown statement.",
+          "source_ids": [],
+          "quote": null,
+          "snapshot_path": null,
+          "entailment": "unknown",
+          "reviewer": null,
+          "reviewer_kind": null,
+          "rationale": null
+        }
+      ],
+      "discovery_handoff_attempts": {
+        "handoff.json": [
+          "search-1"
+        ]
+      },
+      "search_attempt_result_paths": {
+        "search-1": "search-page.json"
+      }
+    }
+  ]
+}

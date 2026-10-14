@@ -1,0 +1,43 @@
+{
+  "aggregate_exposure_usd": "2.48",
+  "allowance_id": "prompt14-2026-10-11-usd2.48",
+  "frozen_inputs": {
+    "prepared.json": "28647eaa4ab95a06aec792d058216fa814472e5c45fd565fcc26009e093ede26",
+    "queries.json": "beecb8c2bea9ae7f667d51555cd6aefe4ee4217f70160c966fc163905c732d38",
+    "reference_nominations.json": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d"
+  },
+  "human_authorization": [
+    {
+      "source": "direct human reply in this conversation",
+      "text": "Approve the $2.48 protocol cap"
+    },
+    {
+      "source": "direct human reply in this conversation",
+      "text": "Collect now; human scores pending"
+    }
+  ],
+  "human_useful_reference_denominator": null,
+  "not_authorized": [
+    "production-default changes",
+    "model-routing changes",
+    "credential collection in chat",
+    "billing purchases"
+  ],
+  "recorded_at": "2026-10-12T15:25:11.898126+00:00",
+  "reference_policy": "assistant_candidates_frozen_human_scores_pending",
+  "retained_conditions": [
+    "rate/account verification before transport",
+    "private raw provenance capture",
+    "durable aggregate/component reservations",
+    "stop on unknown outcome",
+    "no retries for standalone comparisons",
+    "no top-ups or replacement runs"
+  ],
+  "schema_version": 1,
+  "scope": {
+    "additional_model_comparisons_max": 8,
+    "baseline_submissions": 4,
+    "standalone_serp_requests": 20
+  },
+  "status": "approved"
+}

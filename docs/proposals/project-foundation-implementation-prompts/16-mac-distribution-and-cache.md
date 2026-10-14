@@ -1,0 +1,13 @@
+# Prompt 16 — close remaining Mac distribution and installed-cache gates
+
+You are powered by GPT 6.1 Sol XHigh. Usage goes very fast. Keep doing some hands-on Sol work. But, use `gpt-6-luna` helpers with task-appropriate effort when suitable, preferably only for simple tasks, such as for searching in general! Retain Sol for hard reasoning.
+
+Finish the **remaining** Mac delivery work for current source; the October 9 local app was already built, installed, launched with Keychain access and recorded in `docs/verification/current-app-install-2026-10-09.md`. Do not repeat local replacement merely to satisfy the old critique. Read AGENTS/conventions/status/HANDOFF, `desktop/README.md`, `docs/verification/database-phase4-review.md`, build constraints and current source/Git state. Verify the exact installed/backend/source identities and whether the new code/fixes have since changed them.
+
+First inspect installed Wigolo/external-cache access under an isolated, disposable copy or read-only path following the existing review's completion procedure. Check migrations, references, vectors, FTS and privacy/ownership without modifying the user's real cache or credentials. Record exact app version and where installed-app access succeeds or fails. Repair a confirmed integration defect with focused tests; do not infer one from a repository-build disposable-backup pass.
+
+Prepare a clean, current-source Apple Silicon distributable and run source-parity, packaged identity, CLI/API/native UI, old-to-new upgrade, saved-data preservation and credential-backed launch checks. Verify macOS 14/minimum-OS behavior and a clean-machine install when an appropriate test environment exists. Prepare signing/notarization inputs and the exact release artifact/notes; use Developer ID credentials only through the established secure local mechanism. If certificate/account access or an external test Mac is unavailable, finish every local artifact/check and report the precise remaining gate. Publishing/uploading a public release is the final external action and requires explicit authorization at that point.
+
+Do not call a locally installed unsigned app a public release. Preserve historical runs, native-vault contents, app data and unknown reservations. Run full source/desktop checks applicable to the changed revision, record hashes and platform versions, and update STATUS/HANDOFF with verified facts. Acceptance is a signed/notarized clean-machine-tested artifact when prerequisites exist, or a complete reviewable candidate with only named external prerequisites remaining.
+
+Acceptance: installed-cache findings and distribution checks are documented against exact identities, with a signed clean-machine-tested artifact or precise external blockers.

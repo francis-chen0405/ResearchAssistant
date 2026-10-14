@@ -1,0 +1,49 @@
+{
+  "actual_paid_call_exposure_usd": "0.00",
+  "aggregate_exposure_usd": "2.48",
+  "allowance_id": "prompt14-2026-10-11-usd2.48",
+  "current_pipeline": {
+    "acquisition_operations_per_run": 600,
+    "discovery_exposure_per_run_usd": "0.31",
+    "exposure_usd": "2.04",
+    "model_calls_per_run": 160,
+    "model_exposure_per_run_usd": "0.20",
+    "model_tokens_per_run": 500000,
+    "physical_search_requests_per_run": 40,
+    "submissions": 4
+  },
+  "executed_provider_requests": 0,
+  "human_quality_judgments": "pending",
+  "model_comparison": {
+    "calls": 8,
+    "exposure_per_call_usd": "0.03",
+    "exposure_usd": "0.24",
+    "retry_limit": 0,
+    "tokens_per_call": 60000
+  },
+  "pilot_topics": [
+    "alpr-crime",
+    "congestion",
+    "school-start",
+    "green-roofs"
+  ],
+  "prepared_on": "2026-10-11",
+  "query_comparison": {
+    "exposure_per_request_usd": "0.01",
+    "exposure_usd": "0.20",
+    "requests": 20,
+    "retry_limit": 0
+  },
+  "reference_policy": "assistant_candidates_frozen_human_scores_pending",
+  "required_preflight": "Approved allowance and assistant-nomination input hashes; verified current account terms/rates; existing native credentials; private raw capture and durable global reservation ledger. No transport if any condition missing.",
+  "standalone_live_runner_available": false,
+  "status": "approved_preflight_stopped",
+  "stop_on_unknown_outcome": true,
+  "total_ceiling": {
+    "acquisition_operations": 2400,
+    "model_calls": 648,
+    "model_tokens": 2480000,
+    "search_requests": 180,
+    "wire_http_requests": null
+  }
+}

@@ -2,37 +2,43 @@
 
 ## Current task
 
-The [2026-10-08 documentation and project-stage review](../docs/verification/project-stage-2026-10-08.md)
-is complete. Current-stage guidance was reconciled against source at `15b8281`, Git,
-the installed backend and offline checks. The documentation changes and reviewed
-proposal pack are committed locally.
+[Prompt 16 — remaining Mac delivery gates](plans/mac-delivery-gates-2026-10-13.md)
+has completed the local current-source candidate, installed-cache inspection,
+confirmed FTS integration repair and standalone source-archive review fix. [Exact verification](../docs/verification/mac-delivery-gates-2026-10-13.md)
+records identities, hashes, full source/desktop checks and preserved real data.
+Developer ID/notarization and actual clean-machine/macOS 14 testing require external
+inputs. The unsigned candidate is reviewable; public publication needs final explicit
+authorization after those gates pass. The October 9 installed app was preserved.
+
+[STATUS](../docs/project/STATUS.md) owns actual verification and limits.
+[HANDOFF](../docs/project/HANDOFF.md) records the next delivery boundary.
+Earlier staged and unstaged work is preserved.
 
 ## Completed implementation records
 
-- [Repository review — 2026-10-08](plans/repository-review-2026-10-08.md) owns the confirmed
-  repository fixes, regressions and original offline verification; source is committed at `15b8281`.
-- [Source discovery v2 — 2026-10-05](plans/source-discovery-v2-2026-10-05.md) owns all six
-  completed phases, cross-phase findings, synthetic evaluation and the proposed live protocol.
-- [Database review](plans/database-review-2026-10-03.md) and
-  [source acceptance](../docs/verification/database-phase4.md) own completed schema,
-  recovery, history and integration evidence.
+[Prompt 15 source coverage, dispositions and review repairs](plans/source-leads-quality-2026-10-13.md),
 
-No implementation phase remains active in these plans. Current-source delivery and live
-acceptance are pending boundaries; proposed protocols and historical prompts do not
-authorize additional paid calls, installation, push or publication.
+[Prompt 14 research-quality benchmark and review repairs](plans/research-quality-acceptance-2026-10-11.md),
 
-## State and delivery
+[Prompt 13 backend responsibility splits](../docs/verification/backend-hotspot-split-2026-10-11.md),
+[Prompt 12 neutral contracts and historical inspection](../docs/verification/contract-ownership-2026-10-10.md),
+[Prompt 11 renderer feature split](../docs/verification/renderer-split-2026-10-10.md),
+[Prompt 10 API responsibility split](../docs/verification/api-module-split-2026-10-10.md),
+[Prompt 09 guidance/test navigation](../docs/verification/docs-test-navigation-2026-10-10.md),
+[Prompt 07 installability](../docs/verification/backend-installability-2026-10-10.md),
+[Prompt 08 folder consolidation and review fixes](../docs/verification/folder-consolidation-2026-10-10.md#review-fixes),
+[root cleanup](../docs/verification/root-cleanup-2026-10-09.md), and the bounded desktop
+shutdown, service lifecycle, resume status, acquisition fallback and citation-expansion
+repairs retain their verification records in [grouped history](../docs/history.md).
 
-See [STATUS](../STATUS.md) for current source, installed/public build provenance and open
-acceptance gates. [HANDOFF](../HANDOFF.md) records the next boundary.
+The [repository review](plans/repository-review-2026-10-08.md),
+[source-discovery plan](plans/source-discovery-v2-2026-10-05.md), and
+[database review](plans/database-review-2026-10-03.md) own completed implementation.
+No implementation phase in those historical plans remains active. Live quality
+acceptance, Windows/Python 3.11 execution and packaged delivery are separate gates.
 
-## Find prior work
+## Prior work
 
-- [Run reviews, approved repairs, and current audits](../docs/history.md#recent-reviews-and-repairs)
-- [Desktop, release, storage, and maintenance](../docs/history.md#desktop-release-and-storage)
-- [Product architecture and implementation phases](../docs/history.md#product-and-architecture)
-- [All retained plan and verification records](../docs/history.md)
-
-Historical plans preserve evidence and decisions at stable paths. The preceding status,
-handoff and plan index are in [the documentation-stage archive](../docs/archive/2026-10-08-documentation-stage-state/);
-[the archive index](../docs/archive/INDEX.md) retains earlier snapshots.
+[Grouped plan and verification history](../docs/history.md) links every retained record.
+[Archive index](../docs/archive/INDEX.md) links exact replaced document snapshots.
+The historical `.agents/PLANS/phase-00-foundation.md` path is preserved.

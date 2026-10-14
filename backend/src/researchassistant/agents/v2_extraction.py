@@ -1,0 +1,398 @@
+"""Restart-safe exact extraction for the fresh-v2 deep-analysis queue."""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Callable
+from datetime import UTC, datetime
+from hashlib import sha256
+from pathlib import Path
+from uuid import UUID
+
+from researchassistant.contracts.extraction import (
+    V2_EXTRACTION_MAX_ATTEMPTS as V2_EXTRACTION_MAX_ATTEMPTS,
+)
+from researchassistant.contracts.extraction import (
+    V2_EXTRACTION_POLICY_IDENTITY as V2_EXTRACTION_POLICY_IDENTITY,
+)
+from researchassistant.contracts.extraction import (
+    V2ExactExtractionResult as V2ExactExtractionResult,
+)
+from researchassistant.contracts.extraction import (
+    V2ExtractionInputBinding as V2ExtractionInputBinding,
+)
+from researchassistant.contracts.extraction import V2ExtractionLLMInput as V2ExtractionLLMInput
+from researchassistant.contracts.extraction import (
+    V2ExtractionPromptInput as V2ExtractionPromptInput,
+)
+from researchassistant.contracts.extraction import (
+    V2ExtractionSourceCheckpoint as V2ExtractionSourceCheckpoint,
+)
+from researchassistant.contracts.extraction import (
+    V2ExtractionSourceResult as V2ExtractionSourceResult,
+)
+from researchassistant.contracts.extraction import V2ExtractionState as V2ExtractionState
+from researchassistant.contracts.extraction import (
+    V2NumberedUntrustedSource as V2NumberedUntrustedSource,
+)
+from researchassistant.contracts.extraction import _aware as _aware
+from researchassistant.contracts.models import (
+    ProvisionalCandidate,
+    ResearchDirection,
+    SourceSnapshot,
+    Stance,
+    V2AcquisitionProbeOutput,
+    V2DiscoveryScoutOutput,
+    V2SourceSelectionQueueResult,
+    V2VerbatimQuoteSelection,
+)
+from researchassistant.evidence.evidence_core import (
+    CURRENT_QUOTE_LENGTH_POLICY,
+    assemble_quote_block_from_selected_segments,
+    filter_provisional_candidate,
+    fresh_numbered_source_text,
+    validate_snapshot_integrity,
+)
+from researchassistant.providers.llm import (
+    V2_LLM_ROUTING,
+    LLMInvocationError,
+    LLMProvider,
+    LLMRequest,
+    LLMStage,
+    ModelAlias,
+    invoke_llm,
+    is_non_retryable_provider_error,
+    load_prompt,
+    render_stage_prompt,
+)
+from researchassistant.providers.v2_budget import (
+    V2BudgetExceededError,
+    V2CancellationRequested,
+    V2SourceBudgetExceededError,
+)
+from researchassistant.providers.v2_routing import V2RoutingConfig
+from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
+
+V2_EXTRACTION_LEGACY_ARTIFACT_KEY = "phase-12-exact-extraction"
+V2_EXTRACTION_ARTIFACT_KEY = "phase-13-exact-extraction-analyzer-admission"
+V2_EXTRACTION_FILTER_VERSION = "researchassistant-v2-phase-12-post-filter-v1"
+_CLAIM_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_EXTRACTION_RETRY_GUIDANCE = (
+    "The prior attempt returned an invalid empty, short, or otherwise unusable selection. "
+    "On this retry, "
+    "return at least one source sentence range. If one relevant sentence is too short, "
+    "use a contiguous range of adjacent relevant sentences; do not return an empty array "
+    "and do not invent or paraphrase source text."
+)
+
+
+def run_v2_exact_extraction(
+    *,
+    db_path: str | Path,
+    queue_result: V2SourceSelectionQueueResult,
+    discovery_outputs: tuple[V2DiscoveryScoutOutput, ...],
+    acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
+    llm_provider: LLMProvider,
+    routing_config: V2RoutingConfig,
+    artifact_key: str = V2_EXTRACTION_ARTIFACT_KEY,
+    clock: Callable[[], datetime] | None = None,
+) -> V2ExactExtractionResult:
+    """Select exact passages for every queued survivor, preserving per-source failure."""
+    now = clock or _utc_now
+    path = str(Path(db_path).resolve())
+    identity_payload = {
+        "queue_result": queue_result.model_dump(mode="json"),
+        "discovery_outputs": [item.model_dump(mode="json") for item in discovery_outputs],
+        "acquisition_outputs": [item.model_dump(mode="json") for item in acquisition_outputs],
+        "routing_fingerprint": routing_config.fingerprint_payload(),
+    }
+    input_sha256 = sha256(
+        json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    binding_key = f"{artifact_key}-input-binding"
+    try:
+        stored_binding = read_v2_artifact(path, queue_result.run_id, binding_key)
+    except KeyError:
+        stored_binding = None
+    if stored_binding is not None:
+        binding = V2ExtractionInputBinding.model_validate_json(stored_binding.payload_json)
+        if binding.input_sha256 != input_sha256:
+            raise ValueError("persisted extraction input identity changed; use a new run")
+    try:
+        stored = read_v2_artifact(path, queue_result.run_id, artifact_key)
+    except KeyError:
+        stored = None
+    if stored is not None:
+        result = V2ExactExtractionResult.model_validate_json(stored.payload_json)
+        if result.queue_result != queue_result:
+            raise ValueError("persisted extraction result does not match the Phase-8 queue")
+        return result
+
+    if stored_binding is None:
+        binding = V2ExtractionInputBinding(run_id=queue_result.run_id, input_sha256=input_sha256)
+        insert_v2_artifact(path, binding_key, binding, _aware(now()))
+
+    route = routing_config.preflight().for_stage(LLMStage.EXTRACTOR)
+    artifact_model_name = routing_config.artifact_model_name_for_stage(LLMStage.EXTRACTOR)
+    snapshots = _snapshots_by_source(acquisition_outputs)
+    source_rows = {item.source_id: item for item in queue_result.input.survivors}
+    results: list[V2ExtractionSourceResult] = []
+    for source_id in queue_result.queued_source_ids:
+        checkpoint_key = f"{artifact_key}-source-{source_id}"
+        try:
+            checkpoint_artifact = read_v2_artifact(path, queue_result.run_id, checkpoint_key)
+        except KeyError:
+            checkpoint_artifact = None
+        if checkpoint_artifact is not None:
+            checkpoint = V2ExtractionSourceCheckpoint.model_validate_json(
+                checkpoint_artifact.payload_json
+            )
+            if checkpoint.input_sha256 != input_sha256 or checkpoint.source.source_id != source_id:
+                raise ValueError("persisted extraction source checkpoint does not match this input")
+            results.append(checkpoint.source)
+            continue
+        source = source_rows[source_id]
+        snapshot = snapshots[source_id]
+        extracted = _extract_source(
+            source_id=source_id,
+            direction=source.direction,
+            exact_claim=queue_result.input.exact_claim,
+            snapshot=snapshot,
+            query_id=source.search_provenance[0].query_id,
+            query_round=source.research_round,
+            search_rank=_search_rank(source_id, discovery_outputs),
+            llm_provider=llm_provider,
+            model_alias=route.logical_alias,
+            recorded_model_name=artifact_model_name,
+            clock=now,
+        )
+        checkpoint = V2ExtractionSourceCheckpoint(
+            run_id=queue_result.run_id,
+            input_sha256=input_sha256,
+            source=extracted,
+        )
+        insert_v2_artifact(path, checkpoint_key, checkpoint, _aware(now()))
+        results.append(extracted)
+    output = V2ExactExtractionResult(
+        run_id=queue_result.run_id,
+        queue_result=queue_result,
+        sources=tuple(results),
+        completed_at=_aware(now()),
+    )
+    insert_v2_artifact(path, artifact_key, output, output.completed_at)
+    return output
+
+
+def snapshots_by_source(
+    acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
+) -> dict[UUID, SourceSnapshot]:
+    """Return the immutable snapshot keyed by its survivor/source cluster ID."""
+    return _snapshots_by_source(acquisition_outputs)
+
+
+def _extract_source(
+    *,
+    source_id: UUID,
+    direction: ResearchDirection,
+    exact_claim: str,
+    snapshot: SourceSnapshot,
+    query_id: UUID,
+    query_round: int,
+    search_rank: int,
+    llm_provider: LLMProvider,
+    clock: Callable[[], datetime],
+    model_alias: ModelAlias = ModelAlias.MIMO_V25_PRO,
+    physical_model: str = "mimo-v2.5-pro",
+    recorded_model_name: str | None = None,
+) -> V2ExtractionSourceResult:
+    validate_snapshot_integrity(snapshot)
+    input_artifact = V2ExtractionLLMInput(
+        run_id=snapshot.run_id,
+        source_id=source_id,
+        direction=direction,
+        exact_claim=exact_claim,
+        snapshot_id=snapshot.snapshot_id,
+        snapshot_sha256=snapshot.snapshot_sha256,
+        truncated=snapshot.truncated,
+        untrusted_source_text=snapshot.normalized_text,
+        selectable_source_text=fresh_numbered_source_text(snapshot.normalized_text),
+    )
+    prompt = load_prompt(LLMStage.EXTRACTOR)
+    prompt_input = V2ExtractionPromptInput(
+        run_id=input_artifact.run_id,
+        source_id=input_artifact.source_id,
+        direction=input_artifact.direction,
+        exact_claim=input_artifact.exact_claim,
+        snapshot_id=input_artifact.snapshot_id,
+        snapshot_sha256=input_artifact.snapshot_sha256,
+        truncated=input_artifact.truncated,
+        UNTRUSTED_SOURCE_TEXT=V2NumberedUntrustedSource(
+            selectable_source_text=input_artifact.selectable_source_text,
+        ),
+    )
+    base_rendered_prompt = render_stage_prompt(prompt, prompt_input, V2VerbatimQuoteSelection)
+    last_failure = "Extractor did not return a valid selection."
+    for attempt in range(1, V2_EXTRACTION_MAX_ATTEMPTS + 1):
+        rendered_prompt = base_rendered_prompt
+        if attempt > 1:
+            rendered_prompt = (
+                f"{rendered_prompt}\n\n<RETRY_VALIDATION_GUIDANCE>\n"
+                f"{_EXTRACTION_RETRY_GUIDANCE}\n</RETRY_VALIDATION_GUIDANCE>"
+            )
+        request = LLMRequest(
+            run_id=snapshot.run_id,
+            stage=LLMStage.EXTRACTOR,
+            prompt=prompt,
+            rendered_prompt=rendered_prompt,
+            input_artifact=input_artifact,
+            input_artifact_ids=(snapshot.snapshot_id,),
+            requested_output_type=V2VerbatimQuoteSelection,
+            model_alias=model_alias,
+            generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
+            source_id=source_id,
+        )
+        try:
+            invocation = invoke_llm(llm_provider, request, clock=clock)
+            selection = invocation.output_artifact
+            if not isinstance(selection, V2VerbatimQuoteSelection):
+                raise TypeError("Extractor returned an unexpected typed artifact")
+        except V2CancellationRequested:
+            raise
+        except Exception as exc:
+            budget_failure = _budget_failure(exc)
+            if budget_failure is not None:
+                return V2ExtractionSourceResult(
+                    source_id=source_id,
+                    direction=direction,
+                    state=(
+                        V2ExtractionState.SOURCE_BUDGET_BLOCKED
+                        if isinstance(budget_failure, V2SourceBudgetExceededError)
+                        else V2ExtractionState.BUDGET_EXHAUSTED
+                    ),
+                    attempts=attempt,
+                    failure=f"{type(budget_failure).__name__}: {budget_failure}"[:1000],
+                )
+            last_failure = f"{type(exc).__name__}: {exc}"[:1000]
+            if attempt < V2_EXTRACTION_MAX_ATTEMPTS and not (
+                isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc)
+            ):
+                continue
+            return V2ExtractionSourceResult(
+                source_id=source_id,
+                direction=direction,
+                state=V2ExtractionState.FAILED,
+                attempts=attempt,
+                failure=last_failure,
+            )
+        try:
+            provisional = ProvisionalCandidate(
+                run_id=snapshot.run_id,
+                stance=(
+                    Stance.SUPPORTING if direction is ResearchDirection.SUPPORT else Stance.OPPOSING
+                ),
+                source_url=snapshot.source_url,
+                retrieval_attempt_id=snapshot.retrieval_attempt_id,
+                query_id=query_id,
+                query_round=query_round,
+                search_rank=search_rank,
+                snapshot_id=snapshot.snapshot_id,
+                snapshot_sha256=snapshot.snapshot_sha256,
+                extracted_quote_block=assemble_quote_block_from_selected_segments(
+                    snapshot.normalized_text,
+                    selection,
+                    truncated=snapshot.truncated,
+                ),
+                extraction_prompt_version=prompt.version,
+                extraction_model_name=(
+                    recorded_model_name if recorded_model_name is not None else physical_model
+                ),
+                extracted_at=_aware(clock()),
+            )
+            filtered = filter_provisional_candidate(
+                provisional,
+                snapshot,
+                claim_keywords=_claim_keywords(exact_claim),
+                post_filter_version=V2_EXTRACTION_FILTER_VERSION,
+                validation_clock=clock,
+                quote_length_policy=CURRENT_QUOTE_LENGTH_POLICY,
+            )
+            if not filtered.valid or filtered.candidate is None:
+                last_failure = filtered.rejection_message or "deterministic filter rejected quote"
+                if attempt < V2_EXTRACTION_MAX_ATTEMPTS and _is_retryable_quote_length_failure(
+                    last_failure
+                ):
+                    continue
+                return V2ExtractionSourceResult(
+                    source_id=source_id,
+                    direction=direction,
+                    state=V2ExtractionState.FAILED,
+                    attempts=attempt,
+                    failure=last_failure[:1000],
+                )
+            return V2ExtractionSourceResult(
+                source_id=source_id,
+                direction=direction,
+                state=V2ExtractionState.EXTRACTED,
+                attempts=attempt,
+                candidate=filtered.candidate,
+            )
+        except ValueError as exc:
+            return V2ExtractionSourceResult(
+                source_id=source_id,
+                direction=direction,
+                state=V2ExtractionState.FAILED,
+                attempts=attempt,
+                failure=f"{type(exc).__name__}: {exc}"[:1000],
+            )
+    raise AssertionError("bounded extraction loop did not return")
+
+
+def _budget_failure(exc: Exception) -> V2BudgetExceededError | None:
+    """Recover a typed preflight rejection through the provider exception wrapper."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, V2BudgetExceededError):
+            return current
+        current = current.__cause__
+    return None
+
+
+def _is_retryable_quote_length_failure(message: str) -> bool:
+    """Retry a short exact selection so the Extractor can extend it contiguously."""
+    return message.startswith("quoted segments contain ") and "; need " in message
+
+
+def _snapshots_by_source(
+    outputs: tuple[V2AcquisitionProbeOutput, ...],
+) -> dict[UUID, SourceSnapshot]:
+    snapshots = {
+        acquired.cluster_id: acquired.snapshot
+        for output in outputs
+        for acquired in output.acquisitions
+    }
+    return snapshots
+
+
+def _search_rank(source_id: UUID, outputs: tuple[V2DiscoveryScoutOutput, ...]) -> int:
+    for output in outputs:
+        cluster = next((item for item in output.clusters if item.cluster_id == source_id), None)
+        if cluster is None:
+            continue
+        items = {item.item_id: item for item in output.items}
+        return min(items[item_id].provider_rank for item_id in cluster.item_ids)
+    raise ValueError("queued survivor has no discovery rank provenance")
+
+
+def _claim_keywords(claim: str) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            token for token in _CLAIM_TOKEN_RE.findall(claim.casefold()) if len(token) >= 4
+        )
+    )
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)

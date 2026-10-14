@@ -286,7 +286,7 @@ def test_discovered_validator_failure_requires_a_regression_fixture(tmp_path: Pa
 
 
 def test_evaluation_does_not_modify_or_weaken_existing_validator() -> None:
-    validator_path = ROOT / "agents" / "renderer.py"
+    validator_path = ROOT / "backend/src/researchassistant/evidence/renderer.py"
     before = hashlib.sha256(validator_path.read_bytes()).hexdigest()
 
     report = evaluate_corpus(CORPUS)

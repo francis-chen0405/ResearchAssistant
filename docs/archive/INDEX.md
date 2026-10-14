@@ -20,8 +20,8 @@ evidence remains historical; the shared database-review plan owns new checks.
 The prior current-state set is preserved byte-for-byte under
 [`2026-10-02-current-state/`](2026-10-02-current-state/), including the then-current
 `AGENTS.md` and desktop guide. The user replaced the repository instructions
-with codebase-graph guidance; root [AGENTS.md](../../AGENTS.md) now contains only
-that replacement. The archived instructions are historical.
+with codebase-graph guidance; root [AGENTS.md](../../AGENTS.md) retains that guidance
+and now links current conventions and the task index. The archived instructions are historical.
 
 ## Exact documents replaced on 2026-09-26
 
@@ -29,12 +29,12 @@ Before the current-state rewrite, the following files were copied byte-for-byte 
 
 | Prior file | Current replacement |
 | --- | --- |
-| [AGENTS.md](2026-09-26-maintenance/AGENTS.md) | [Current graph instructions](../../AGENTS.md); [conventions](../../CONVENTIONS.md) for project practices. |
-| [ARCHITECTURE.md](2026-09-26-maintenance/ARCHITECTURE.md) | [current architecture](../../ARCHITECTURE.md) |
-| [CONVENTIONS.md](2026-09-26-maintenance/CONVENTIONS.md) | [current conventions](../../CONVENTIONS.md) |
-| [DECISIONS.md](2026-09-26-maintenance/DECISIONS.md) | [current decisions](../../DECISIONS.md) |
-| [STATUS.md](2026-09-26-maintenance/STATUS.md) | [current status](../../STATUS.md) |
-| [HANDOFF.md](2026-09-26-maintenance/HANDOFF.md) | [current handoff](../../HANDOFF.md) |
+| [AGENTS.md](2026-09-26-maintenance/AGENTS.md) | [Current graph instructions](../../AGENTS.md); [conventions](../project/CONVENTIONS.md) for project practices. |
+| [ARCHITECTURE.md](2026-09-26-maintenance/ARCHITECTURE.md) | [current architecture](../project/ARCHITECTURE.md) |
+| [CONVENTIONS.md](2026-09-26-maintenance/CONVENTIONS.md) | [current conventions](../project/CONVENTIONS.md) |
+| [DECISIONS.md](2026-09-26-maintenance/DECISIONS.md) | [current decisions](../project/DECISIONS.md) |
+| [STATUS.md](2026-09-26-maintenance/STATUS.md) | [current status](../project/STATUS.md) |
+| [HANDOFF.md](2026-09-26-maintenance/HANDOFF.md) | [current handoff](../project/HANDOFF.md) |
 | [README.md](2026-09-26-maintenance/README.md) | [current project guide](../../README.md) |
 | [.agent/PLANS.md](2026-09-26-maintenance/.agent/PLANS.md) | [current plan index](../../.agent/PLANS.md) |
 
@@ -42,10 +42,18 @@ The new concise documents replace accumulated chronology and stale current-state
 
 ## Earlier archives and plans
 
+- [Pre-Prompt-16 Mac delivery state](2026-10-13-mac-delivery-preceding-state/README.md) preserves the exact preceding status, handoff and plan index.
+
+- [`2026-10-11-quality-benchmark-state/`](2026-10-11-quality-benchmark-state/)
+  preserves the exact pre-Prompt-14 `docs/project/STATUS.md`, `HANDOFF.md` and
+  `.agent/PLANS.md`, including prior uncommitted delivery evidence. The
+  [quality acceptance record](../../.agent/plans/research-quality-acceptance-2026-10-11.md)
+  owns the new offline benchmark and unapproved live boundary.
+
 - [`pre-phase-2/`](pre-phase-2/) retains the first architecture, conventions, decisions, status, handoff, plan index, and README snapshot.
 - [`phase-2-handoff/`](phase-2-handoff/) retains the prior Phase 2 status and handoff.
 - [Grouped history](../history.md) links every retained plan and verification record without moving or rewriting them. Historical next-step wording in completed plans is not current authorization.
-- The active release and product constraints are summarized in the current [plan index](../../.agent/PLANS.md), [status](../../STATUS.md), and [handoff](../../HANDOFF.md).
+- The active release and product constraints are summarized in the current [plan index](../../.agent/PLANS.md), [status](../project/STATUS.md), and [handoff](../project/HANDOFF.md).
 
 The maintenance snapshot also preserves the exact prior [Mac release plan](2026-09-26-maintenance/.agent/plans/mac-release-cache-pricing.md) and [planner/Scout verification record](2026-09-26-maintenance/docs/verification/planner-scout-reliability.md). Their current versions retain the evidence and checksums while replacing obsolete download directions with historical-artifact notes. Relative links inside verbatim snapshots use their original repository locations; navigate through current documents for working links. The [grouped history](../history.md) links all retained plan and verification records at their stable paths.
 
@@ -82,4 +90,59 @@ The preceding STATUS, HANDOFF and `.agent/PLANS.md` are preserved byte-for-byte 
 source commit `15b8281`. [The documentation review](../verification/project-stage-2026-10-08.md)
 records the current-source/installed-build distinction and fresh checks. Historical
 next-phase wording elsewhere in this index describes its original snapshot only;
-[STATUS](../../STATUS.md) owns today’s completed implementation and pending acceptance.
+[STATUS](../project/STATUS.md) owns today’s completed implementation and pending acceptance.
+
+## Exact documents replaced by the October 9 root cleanup
+
+The preceding STATUS, HANDOFF, ARCHITECTURE, CONVENTIONS and `.agent/PLANS.md` are
+preserved byte-for-byte under [`2026-10-09-root-cleanup-state/`](2026-10-09-root-cleanup-state/),
+from local HEAD `94a241b`. The [cleanup record](../verification/root-cleanup-2026-10-09.md)
+supersedes stale instructions to preserve inactive root Python copies. Earlier
+archives remain unchanged.
+
+- [Folder consolidation starting state](2026-10-10-folder-consolidation-state/): exact prior README, root project records and plan index before Prompt 08.
+
+- [Before Prompt 08 review fixes](2026-10-10-folder-consolidation-state/before-review-fixes/): exact preceding STATUS, HANDOFF and plan index before the optional Streamlit corrections.
+
+- [Before Prompt 09 guidance reconciliation](2026-10-10-guidance-state/): exact preceding entry/guidance documents, stored under their repository-relative paths before current-state and test-navigation corrections.
+- [Before Prompt 10 API responsibility split](2026-10-10-api-split-state/): exact preceding STATUS, HANDOFF, architecture and plan index at their repository-relative paths.
+
+## Old guidance paths
+
+Root README and AGENTS remain stable entry points. Former root document paths are
+now owned by `docs/project/`; this table is the compatible navigation pointer for
+retained records and bookmarks. Literal GitHub/raw URLs to removed files are not
+redirected by this table. Before publishing the migration, update any external
+consumers of those URLs; this local audit cannot establish off-repository inbound use.
+Committed historical URLs remain pinned to their original revision. No duplicate
+root guidance files are added to the consolidated layout.
+
+| Former path / reference | Current navigation |
+| --- | --- |
+| `ARCHITECTURE.md` | [Architecture](../project/ARCHITECTURE.md) |
+| `CONVENTIONS.md` | [Conventions](../project/CONVENTIONS.md) |
+| `DECISIONS.md` | [Decisions](../project/DECISIONS.md) |
+| `STATUS.md` | [Sole current status owner](../project/STATUS.md) |
+| `HANDOFF.md` | [Handoff](../project/HANDOFF.md) |
+| Historical Python `frontend/README.md` | [Backend API/services](../../backend/src/researchassistant/api/README.md); [original snapshot](pre-phase-2/frontend/README.md) |
+| Historical Next.js `web/` | [Current renderer](../../frontend/README.md) |
+| Flattened archived `PLANS.md` links | Resolve from the original `.agent/PLANS.md`; [current plan index](../../.agent/PLANS.md) and [grouped history](../history.md) |
+
+The original [archive README](README.md), including its old root replacement table,
+is preserved verbatim as historical guidance. Use this index for current links.
+Other snapshot-relative links were written at their original locations; literal
+archive-location failures do not justify changing snapshot bytes. The
+[Prompt 09 audit](../verification/docs-test-navigation-2026-10-10.md#link-audit-and-compatibility-navigation)
+records the remaining exceptions precisely.
+
+- [Pre-Prompt 11 current-state documents](2026-10-10-renderer-split-state/README.md): exact preceding plan, status, handoff and architecture.
+- [Pre-Prompt 12 guidance](2026-10-10-contract-ownership-state/README.md): exact preceding plan, status, handoff, architecture, conventions and decisions at their repository-relative paths.
+
+- [Pre-Prompt 13 guidance](2026-10-11-hotspot-split-state/README.md): byte-verified starting status, handoff, architecture and plan index before backend responsibility splits.
+- [Before the Prompt 14 review repairs](2026-10-12-quality-review-state/README.md): exact preceding guidance, task record and offline report; current verification belongs to STATUS and the task record.
+
+- [Prompt 15 preceding current-state documents](2026-10-13-source-leads-preceding-state/README.md).
+
+- [Before Prompt 15 review repairs](2026-10-13-source-leads-review-state/README.md): exact preceding plan, current-state guidance, task verification and offline report.
+
+- [Before the Prompt 16 source-archive repair](2026-10-13-source-archive-review-state/INDEX.md): exact preceding current guidance and delivery records; prior incomplete source delivery remains retained separately.

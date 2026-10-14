@@ -9,14 +9,14 @@ from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
-from agents.reviewer import ReviewerDecision, ReviewerInput
-from providers.acquisition import WigoloAcquisitionAdapter
-from providers.config import LiveSmokeConfig, MimoConfig, WigoloConfig
-from providers.llm import LLMStage, ModelAlias, build_stage_request
-from providers.mimo import XiaomiMimoAdapter
-from providers.scraper import ScrapeRequest
-from providers.search import SearchRequest
-from providers.wigolo import WigoloSearchAdapter
+from researchassistant.agents.reviewer import ReviewerDecision, ReviewerInput
+from researchassistant.providers.acquisition import WigoloAcquisitionAdapter
+from researchassistant.providers.config import LiveSmokeConfig, MimoConfig, WigoloConfig
+from researchassistant.providers.llm import LLMStage, ModelAlias, build_stage_request
+from researchassistant.providers.mimo import XiaomiMimoAdapter
+from researchassistant.providers.scraper import ScrapeRequest
+from researchassistant.providers.search import SearchRequest
+from researchassistant.providers.wigolo import WigoloSearchAdapter
 
 _APPROVAL_PHRASE = "I_APPROVE_ONE_MIMO_LIVE_SMOKE"
 

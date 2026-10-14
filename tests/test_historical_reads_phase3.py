@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
+import sys
 from contextlib import closing
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -1038,3 +1040,72 @@ def test_pdf_rendering_begins_after_all_inspection_connections_are_closed(
     )
     assert result.metadata.rendered_brief_hash == sha256(_brief.encode()).hexdigest()
     assert (db.read_bytes(), db.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_history_inspection_and_export_do_not_load_historical_execution(
+    tmp_path: Path, index: int
+) -> None:
+    database, offline, expected = _august_database(tmp_path / "run", index)
+    before = database.read_bytes(), database.stat().st_mtime_ns
+    program = """
+import contextlib, io, json, sys
+from pathlib import Path
+from uuid import UUID
+class BlockHistoricalExecution:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in ('orchestrator', 'researchassistant.research.orchestrator',
+                        'researchassistant.research.historical_execution'):
+            raise AssertionError('historical executor imported: ' + fullname)
+sys.meta_path.insert(0, BlockHistoricalExecution())
+from researchassistant.api.application import create_app
+from researchassistant.api.live_history import history, research_trail
+from researchassistant.api.live_service import LiveResearchController
+from researchassistant.contracts.provider_results import ProviderRunStatus
+from researchassistant.evidence.evidence_browser import browse_evidence_run
+from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
+from researchassistant.runtime.cli import CLIExitCode, main
+from researchassistant.storage.provider_history import inspect_provider_run
+values = json.loads(sys.argv[1])
+database, run_id = Path(values['database']), UUID(values['run_id'])
+result = inspect_provider_run(database, run_id)
+assert result.status is ProviderRunStatus.RELEASED
+assert result.final_brief == values['brief']
+assert result.rendered_brief_hash == values['hash']
+assert len(history(database)) == 1
+research_trail(database, run_id)
+assert browse_evidence_run(database, run_id).released_statement_traces
+controller = LiveResearchController(environment={})
+try:
+    assert len(controller.history(database)) == 1
+    controller.research_trail(database, run_id)
+finally:
+    assert controller.shutdown()
+with contextlib.redirect_stdout(io.StringIO()):
+    assert main(['inspect-run', str(database), str(run_id)]) == CLIExitCode.RELEASED
+exported = export_released_brief(
+    database, str(run_id), values['export'], BriefExportFormat.MARKDOWN)
+assert exported.metadata.rendered_brief_hash == values['hash']
+assert values['brief'] in Path(exported.output_path).read_text()
+assert 'researchassistant.research.orchestrator' not in sys.modules
+assert 'researchassistant.research.historical_execution' not in sys.modules
+assert 'orchestrator' not in sys.modules
+"""
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            program,
+            json.dumps(
+                {
+                    "database": str(database),
+                    "run_id": str(offline.run_id),
+                    "brief": expected,
+                    "hash": sha256(expected.encode()).hexdigest(),
+                    "export": str(tmp_path / "historical.md"),
+                }
+            ),
+        ],
+        check=True,
+    )
+    assert (database.read_bytes(), database.stat().st_mtime_ns) == before

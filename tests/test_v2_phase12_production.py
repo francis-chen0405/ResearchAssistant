@@ -1771,7 +1771,9 @@ def test_running_v2_snapshot_reports_persisted_progress(tmp_path: Path) -> None:
     controller = LiveResearchController(environment={})
     before_call = controller.snapshot(db_path, run_id)
 
-    assert before_call.classification == "running"
+    assert before_call.classification == "interrupted"
+    assert before_call.persisted_status == "running"
+    assert not before_call.worker_active
     assert before_call.stage == Stage.ADAPTIVE_SEARCH.value
     assert before_call.progress_percent == 50
     assert before_call.model_calls_used == 0
@@ -1806,7 +1808,9 @@ def test_running_v2_snapshot_reports_persisted_progress(tmp_path: Path) -> None:
     )
     after_call = controller.snapshot(db_path, run_id)
 
-    assert after_call.classification == "running"
+    assert after_call.classification == "interrupted"
+    assert after_call.persisted_status == "running"
+    assert not after_call.worker_active
     assert after_call.model_calls_used == 2
     assert after_call.progress_percent == before_call.progress_percent + 1
 
@@ -1938,7 +1942,9 @@ def test_running_v2_snapshot_reuses_one_validated_read_only_connection(
 
     snapshot = LiveResearchController(environment={}).snapshot(db_path, run_id)
 
-    assert snapshot.classification == "running"
+    assert snapshot.classification == "interrupted"
+    assert snapshot.persisted_status == "running"
+    assert not snapshot.worker_active
     assert opened == 1
     assert validation_calls == 1
     assert quick_checks == ["PRAGMA quick_check"]

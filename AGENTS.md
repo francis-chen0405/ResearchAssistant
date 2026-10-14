@@ -1,3 +1,12 @@
+# Repository instructions
+
+Read [conventions](docs/project/CONVENTIONS.md), [architecture](docs/project/ARCHITECTURE.md)
+and [decisions](docs/project/DECISIONS.md) before changes. Follow the current task in
+[the plan index](.agent/PLANS.md). [STATUS](docs/project/STATUS.md) is the sole current-state
+owner; [HANDOFF](docs/project/HANDOFF.md) records the next boundary.
+Use [the test map](tests/README.md) for focused checks and full-suite discovery.
+Preserve historical archives and completed task records at their stable paths.
+
 <!-- codebase-memory-mcp:start -->
 # Codebase Knowledge Graph (codebase-memory-mcp)
 

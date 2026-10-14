@@ -119,13 +119,16 @@ def test_fixture_and_exit_contracts_keep_compatibility_imports() -> None:
 def test_fresh_v2_modules_do_not_import_legacy_agent_helpers() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     fresh_modules = [
-        repository_root / "researchassistant/research/v2_orchestrator.py",
-        *sorted((repository_root / "agents").glob("v2_*.py")),
+        repository_root / "backend/src/researchassistant/research/v2_orchestrator.py",
+        *sorted((repository_root / "backend/src/researchassistant/agents").glob("v2_*.py")),
     ]
     forbidden = {
         "agents.analyst",
         "agents.researcher",
         "agents.supportingresearcher",
+        "researchassistant.agents.analyst",
+        "researchassistant.agents.researcher",
+        "researchassistant.agents.supportingresearcher",
     }
 
     for path in fresh_modules:

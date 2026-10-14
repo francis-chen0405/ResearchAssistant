@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import ast
+import inspect
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
@@ -221,26 +221,39 @@ def test_sqlite_open_failures_become_typed_errors_without_changing_the_file(
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
 
-def test_every_path_based_store_reader_uses_the_shared_read_boundary() -> None:
-    source = Path(store.__file__).read_text(encoding="utf-8")
-    module = ast.parse(source)
+def test_every_path_based_store_reader_uses_the_shared_read_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     readers = {
-        node.name: node
-        for node in module.body
-        if isinstance(node, ast.FunctionDef)
-        and (node.name.startswith("read_") or node.name == "list_runs")
+        name: function
+        for name, function in vars(store).items()
+        if inspect.isfunction(function)
+        and (name.startswith("read_") or name == "list_runs")
         # Transaction scoping accepts only a connection; it is not a path reader.
-        and node.name != "read_snapshot_connection"
+        and name != "read_snapshot_connection"
     }
     assert readers
-    bypassing = [
-        name
-        for name, function in readers.items()
-        if not any(
-            isinstance(call, ast.Call)
-            and isinstance(call.func, ast.Name)
-            and call.func.id == "_read_connection"
-            for call in ast.walk(function)
-        )
-    ]
-    assert bypassing == []
+    path = tmp_path / "never-created.sqlite3"
+    observed: list[object] = []
+
+    class ReadBoundaryReached(RuntimeError):
+        pass
+
+    def stop_at_read_boundary(source: object) -> NoReturn:
+        observed.append(source)
+        raise ReadBoundaryReached("read boundary reached")
+
+    monkeypatch.setattr(store, "_read_connection", stop_at_read_boundary)
+    for name, function in readers.items():
+        parameters = inspect.signature(function).parameters
+        arguments: dict[str, object] = {"db_path": path}
+        for parameter in parameters.values():
+            if parameter.name != "db_path" and parameter.default is inspect.Parameter.empty:
+                arguments[parameter.name] = (
+                    "fixture-artifact" if parameter.name == "artifact_key" else uuid4()
+                )
+        observed.clear()
+        with pytest.raises(ReadBoundaryReached, match="read boundary reached"):
+            function(**arguments)
+        assert observed == [path], name
+        assert not path.exists(), name

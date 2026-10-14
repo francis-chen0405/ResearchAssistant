@@ -8,9 +8,9 @@ const http = require("node:http");
 const path = require("node:path");
 
 async function main() {
-  const root = path.resolve(__dirname, "../web/out");
+  const root = path.resolve(__dirname, "../frontend/out");
   if (!fs.existsSync(path.join(root, "index.html"))) {
-    throw new Error("Build the static web app before running this smoke (web/out/index.html is missing).");
+    throw new Error("Build the static web app before running this smoke (frontend/out/index.html is missing).");
   }
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
@@ -47,6 +47,17 @@ async function main() {
       challengeEnabled: false, sourceTarget: 10, useSerpSearch: true, useExa: true,
       useOpenAlex: true, useArxiv: false, usePubmed: false, useCrossref: true,
     };
+    let testResultRequests = false;
+    let releaseOldResult = () => {};
+    let releaseOldTrail = () => {};
+    let resultStartedResolve;
+    let trailStartedResolve;
+    const resultStarted = new Promise(resolve => { resultStartedResolve = resolve; });
+    const trailStarted = new Promise(resolve => { trailStartedResolve = resolve; });
+    const abortedResultRequests = [];
+    page.on("requestfailed", request => {
+      if (/\/(v2-result|trail)\?/.test(request.url())) abortedResultRequests.push(request.url());
+    });
     let releaseOldHistory = () => {};
     let oldHistoryStartedResolve = () => {};
     let newHistoryStartedResolve = () => {};
@@ -104,6 +115,16 @@ async function main() {
         }
       } else if (pathname === `/api/research/${runB}`) {
         body = makeRun(runB, "Latest selected run");
+        if (testResultRequests) Object.assign(body, { classification: "released", final_brief: "# Saved fallback brief" });
+      } else if (pathname === `/api/research/${runB}/v2-result`) {
+        resultStartedResolve();
+        await new Promise(resolve => { releaseOldResult = resolve; });
+        body = { run_id: runB, exact_claim: "Stale detailed result", directions: { support_enabled: true, challenge_enabled: false }, synthesis: { sections: [] }, recommended_source_ids: [], recommended_sources: [], all_surviving_sources: [], unresolved_material_gaps: [], stopping: { reason: "hard_round_limit", explanation: "Stopped", completed_rounds: 1 }, release_validation: { valid: true, rendered_output_hash: null } };
+      } else if (pathname === `/api/research/${runB}/trail`) {
+        trailStartedResolve();
+        await new Promise(resolve => { releaseOldTrail = resolve; });
+        status = 503;
+        body = { detail: "Stale trail failure" };
       } else {
         status = 404;
         body = { detail: "Unexpected API request in history race smoke." };
@@ -158,8 +179,29 @@ async function main() {
     await page.waitForTimeout(900);
     assert.equal(await page.locator(".welcome-view").count(), 1, "A late run response must not override navigation away from history");
     assert.equal(await page.locator(".result-masthead h2").count(), 0, "An unselected delayed history run must not replace the current view");
+    // Result and lazy trail reads belong to their keyed result mount. Leave
+    // while both responses are pending, then let them arrive out of order.
+    testResultRequests = true;
+    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("button", { name: /Latest selected run/ }).click();
+    await resultStarted;
+    await page.getByRole("button", { name: /Research trail/ }).click();
+    await trailStarted;
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Home", exact: true }).click();
+    await page.locator(".welcome-view").waitFor();
+    await page.waitForFunction(() => document.querySelector(".result-view") === null);
+    await page.waitForTimeout(100);
+    assert.equal(abortedResultRequests.length, 2, "Leaving a result aborts both detailed-result and trail reads");
+    releaseOldTrail();
+    releaseOldResult();
+    await page.waitForTimeout(150);
+    assert.equal(await page.getByText("Stale detailed result", { exact: true }).count(), 0);
+    assert.equal(await page.getByText("Stale trail failure", { exact: true }).count(), 0);
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    assert.equal(await page.locator(".welcome-view").count(), 1);
     assert.deepEqual(errors, []);
-    console.log("PASS: stale history responses, overlapping run opens, old-database selection cleanup, and navigation during run loading.");
+    console.log("PASS: stale history responses, overlapping run opens, old-database selection cleanup, navigation during run loading, and aborted late result/trail responses.");
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

@@ -1,0 +1,525 @@
+"""Bounded source acquisition and deterministic snapshot construction."""
+
+from __future__ import annotations
+
+import hashlib
+import ipaddress
+import re
+import socket
+from collections.abc import Callable, Sequence
+from urllib.parse import urljoin, urlsplit
+
+import httpx
+from pydantic import ConfigDict, Field
+
+from researchassistant.contracts.models import (
+    MediaTypeProvenance,
+    StrictModel,
+    SupportedOriginMediaType,
+)
+from researchassistant.contracts.scraping import (
+    ScrapeRequest,
+    ScrapeResponse,
+    VerifiedAcquisitionPreflight,
+)
+from researchassistant.providers.config import WigoloConfig
+from researchassistant.providers.normalization import (
+    NormalizationError,
+    normalize_markdown,
+    normalize_pdf,
+    normalize_plain_text,
+)
+from researchassistant.providers.scraper import ScraperProviderError, ScraperTimeoutError
+
+ACQUISITION_VERSION = "mvp6.9-acquisition-provenance-v3"
+HostResolver = Callable[[str], Sequence[str]]
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_PROHIBITED_HOST_SUFFIXES = (".localhost", ".local", ".localdomain", ".internal", ".home", ".lan")
+_CANONICAL = re.compile(
+    r"<link\b[^>]*\brel=[\"']?canonical[\"']?[^>]*\bhref=[\"']([^\"']+)[\"']",
+    re.IGNORECASE,
+)
+
+
+class AcquisitionFailureCode:
+    CONNECTION = "connection_failure"
+    AUTHENTICATION = "authentication_failure"
+    TIMEOUT = "timeout"
+    RATE_LIMIT = "rate_limit"
+    TRANSIENT = "transient_outage"
+    INACCESSIBLE = "inaccessible"
+    PAYWALL = "paywalled"
+    CHALLENGE = "challenge_blocked"
+    UNSUPPORTED = "unsupported_content"
+    TOO_LARGE = "response_too_large"
+    REDIRECT = "redirect_limit"
+    CONTENT_TYPE = "invalid_content_type"
+    MALFORMED = "malformed_response"
+    EXTRACTION = "extraction_failure"
+    WIGOLO_CONNECTION = "wigolo_connection_failure"
+    WIGOLO_TIMEOUT = "wigolo_timeout"
+
+
+class AcquisitionPreflight(StrictModel):
+    """Typed result of an independently validated source preflight."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    payload: bytes
+    media_type: SupportedOriginMediaType
+    charset: str | None = None
+    final_url: str = Field(min_length=1)
+    canonical_url: str | None = None
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    def verified_context(self, original_url: str) -> VerifiedAcquisitionPreflight:
+        return VerifiedAcquisitionPreflight(
+            original_url=original_url,
+            resolved_url=self.final_url,
+            canonical_url=self.canonical_url,
+            media_type=self.media_type,
+        )
+
+
+class WigoloAcquisitionAdapter:
+    """Preflight source metadata, then use Wigolo only for supported HTML extraction."""
+
+    def __init__(
+        self,
+        config: WigoloConfig,
+        *,
+        source_client: httpx.Client | None = None,
+        wigolo_client: httpx.Client | None = None,
+        host_resolver: HostResolver | None = None,
+    ) -> None:
+        self._config = config
+        self._source_client = source_client or httpx.Client(
+            timeout=httpx.Timeout(config.deadlines.html_fetch_seconds),
+            follow_redirects=False,
+        )
+        self._wigolo_client = wigolo_client or httpx.Client(
+            base_url=config.base_url,
+            timeout=httpx.Timeout(config.deadlines.browser_fetch_seconds),
+            follow_redirects=False,
+        )
+        self._host_resolver = host_resolver or _resolve_host_addresses
+
+    def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+        preflight = self._preflight(request)
+        media_type = preflight.media_type
+        payload = preflight.payload
+        verified_preflight = preflight.verified_context(request.url)
+        rendered = False
+        try:
+            if media_type == "application/pdf":
+                document = normalize_pdf(
+                    payload,
+                    max_pages=self._config.max_pdf_pages,
+                    deadline_seconds=self._config.deadlines.pdf_fetch_seconds,
+                )
+            elif media_type == "text/plain":
+                document = normalize_plain_text(payload, declared_charset=preflight.charset)
+            elif media_type == "text/html":
+                markdown, rendered = self._fetch_markdown(preflight.final_url)
+                document = normalize_markdown(markdown)
+            else:
+                raise ScraperProviderError(
+                    AcquisitionFailureCode.UNSUPPORTED,
+                    "source content type is unsupported",
+                    retryable=False,
+                )
+        except ScraperProviderError as exc:
+            error_type = (
+                ScraperTimeoutError
+                if isinstance(exc, ScraperTimeoutError)
+                else ScraperProviderError
+            )
+            raise error_type(
+                exc.code,
+                str(exc),
+                retryable=exc.retryable,
+                verified_preflight=verified_preflight,
+            ) from exc
+        except NormalizationError as exc:
+            raise ScraperProviderError(
+                AcquisitionFailureCode.UNSUPPORTED,
+                str(exc),
+                retryable=exc.retryable,
+                verified_preflight=verified_preflight,
+            ) from exc
+        return ScrapeResponse(
+            resolved_url=preflight.final_url,
+            original_url=request.url,
+            canonical_url=preflight.canonical_url,
+            content_type=media_type,
+            text=document.text,
+            snapshot_sha256=document.sha256,
+            word_count=document.word_count,
+            truncated=document.truncated,
+            normalization_version=document.normalization_version,
+            acquisition_version=ACQUISITION_VERSION,
+            provider_name=self._config.provider_name,
+            provider_version=self._config.provider_version,
+            rendered=rendered,
+            media_type_provenance=MediaTypeProvenance(
+                verified_media_type=media_type,
+                verified_source_url=preflight.final_url,
+            ),
+        )
+
+    def _preflight(self, request: ScrapeRequest) -> AcquisitionPreflight:
+        try:
+            current_url = request.url
+            seen_urls: set[str] = set()
+            redirects_followed = 0
+            while True:
+                _validate_public_url(current_url, resolver=self._host_resolver)
+                if current_url in seen_urls:
+                    raise _redirect_failure("source redirect loop was detected")
+                seen_urls.add(current_url)
+                with self._source_client.stream(
+                    "GET",
+                    current_url,
+                    timeout=min(
+                        request.timeout_seconds,
+                        self._config.deadlines.pdf_fetch_seconds,
+                    ),
+                    follow_redirects=False,
+                ) as response:
+                    if response.status_code in _REDIRECT_STATUSES:
+                        location = response.headers.get("location")
+                        if not location or not location.strip():
+                            raise _redirect_failure(
+                                "source redirect did not provide a valid Location header"
+                            )
+                        if redirects_followed >= self._config.max_redirects:
+                            raise _redirect_failure("source exceeded the redirect limit")
+                        try:
+                            next_url = urljoin(str(response.url), location.strip())
+                            _validate_public_url(next_url, resolver=self._host_resolver)
+                        except ScraperProviderError:
+                            raise
+                        except (TypeError, ValueError) as exc:
+                            raise _redirect_failure(
+                                "source redirect Location header was malformed"
+                            ) from exc
+                        if next_url in seen_urls:
+                            raise _redirect_failure("source redirect loop was detected")
+                        current_url = next_url
+                        redirects_followed += 1
+                        continue
+
+                    _raise_source_status(response.status_code)
+                    content_type, charset = _parse_content_type(
+                        response.headers.get("content-type")
+                    )
+                    limit = (
+                        self._config.max_pdf_bytes
+                        if content_type == "application/pdf" or current_url.lower().endswith(".pdf")
+                        else self._config.max_html_bytes
+                    )
+                    declared_length = response.headers.get("content-length")
+                    if (
+                        declared_length
+                        and declared_length.isdigit()
+                        and int(declared_length) > limit
+                    ):
+                        raise _too_large()
+                    chunks: list[bytes] = []
+                    size = 0
+                    for chunk in response.iter_bytes():
+                        size += len(chunk)
+                        if size > limit:
+                            raise _too_large()
+                        chunks.append(chunk)
+                    payload = b"".join(chunks)
+                    if payload.startswith(b"%PDF-"):
+                        content_type = "application/pdf"
+                    if content_type not in {"text/html", "text/plain", "application/pdf"}:
+                        raise ScraperProviderError(
+                            AcquisitionFailureCode.CONTENT_TYPE,
+                            "source did not return a supported content type",
+                            retryable=False,
+                        )
+                    final_url = str(response.url)
+                    canonical = _canonical_url(
+                        response.headers.get("link"), payload, final_url, content_type
+                    )
+                    if canonical is not None:
+                        _validate_public_url(canonical, resolver=self._host_resolver)
+                    break
+        except ScraperProviderError:
+            raise
+        except httpx.TimeoutException as exc:
+            raise ScraperTimeoutError(
+                AcquisitionFailureCode.TIMEOUT, "source preflight timed out", retryable=True
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ScraperProviderError(
+                AcquisitionFailureCode.CONNECTION,
+                "source preflight connection failed",
+                retryable=True,
+            ) from exc
+        return AcquisitionPreflight(
+            payload=payload,
+            media_type=content_type,
+            charset=charset,
+            final_url=final_url,
+            canonical_url=canonical,
+            payload_sha256=hashlib.sha256(payload).hexdigest(),
+        )
+
+    def _fetch_markdown(self, url: str) -> tuple[str, bool]:
+        first = self._wigolo_fetch(
+            url, render_js="never", timeout=self._config.deadlines.html_fetch_seconds
+        )
+        if first[0] == "ok":
+            return first[1], False
+        if first[0] not in {"challenge", "javascript_required"}:
+            raise _wigolo_failure(first[0])
+        second = self._wigolo_fetch(
+            url, render_js="always", timeout=self._config.deadlines.browser_fetch_seconds
+        )
+        if second[0] != "ok":
+            raise ScraperProviderError(
+                AcquisitionFailureCode.CHALLENGE,
+                "source remained inaccessible after the controlled render attempt",
+                retryable=False,
+            )
+        return second[1], True
+
+    def _wigolo_fetch(self, url: str, *, render_js: str, timeout: float) -> tuple[str, str]:
+        try:
+            response = self._wigolo_client.post(
+                "/v1/fetch",
+                json={"url": url, "render_js": render_js, "force_refresh": True},
+                timeout=timeout,
+            )
+        except httpx.TimeoutException as exc:
+            raise ScraperTimeoutError(
+                AcquisitionFailureCode.WIGOLO_TIMEOUT, "Wigolo fetch timed out", retryable=True
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ScraperProviderError(
+                AcquisitionFailureCode.WIGOLO_CONNECTION,
+                "Wigolo fetch could not connect to loopback service",
+                retryable=True,
+            ) from exc
+        if response.status_code != 200:
+            _raise_source_status(response.status_code)
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise ScraperProviderError(
+                AcquisitionFailureCode.MALFORMED,
+                "Wigolo fetch response was not valid JSON",
+                retryable=True,
+            ) from exc
+        if not isinstance(body, dict):
+            raise ScraperProviderError(
+                AcquisitionFailureCode.MALFORMED,
+                "Wigolo fetch response was not an object",
+                retryable=True,
+            )
+        status = str(body.get("status") or ("ok" if body.get("markdown") else "failed"))
+        markdown = body.get("markdown") or body.get("content") or ""
+        if status == "ok" and not isinstance(markdown, str):
+            raise ScraperProviderError(
+                AcquisitionFailureCode.MALFORMED,
+                "Wigolo fetch content was malformed",
+                retryable=True,
+            )
+        return status, markdown
+
+
+def _parse_content_type(value: str | None) -> tuple[str, str | None]:
+    if not value:
+        return "", None
+    parts = [part.strip() for part in value.split(";")]
+    media_type = parts[0].lower()
+    charset = None
+    for part in parts[1:]:
+        if part.lower().startswith("charset="):
+            charset = part.split("=", 1)[1].strip('"')
+    return media_type, charset
+
+
+def _canonical_url(link: str | None, payload: bytes, final_url: str, media_type: str) -> str | None:
+    if link:
+        for value in link.split(","):
+            if 'rel="canonical"' in value.lower() or "rel=canonical" in value.lower():
+                match = re.search(r"<([^>]+)>", value)
+                if match:
+                    return urljoin(final_url, match.group(1))
+    if media_type == "text/html":
+        match = _CANONICAL.search(payload[:262_144].decode("utf-8", errors="ignore"))
+        if match:
+            return urljoin(final_url, match.group(1))
+    return None
+
+
+def _validate_public_url(
+    url: str,
+    *,
+    resolver: HostResolver | None = None,
+) -> None:
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source URL is malformed",
+            retryable=False,
+        ) from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or port == 0
+        or any(character.isspace() or ord(character) < 32 for character in url)
+        or "\\" in url
+    ):
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source URL must be an absolute credential-free HTTP(S) URL",
+            retryable=False,
+        )
+    hostname = parsed.hostname
+    if hostname is None:
+        raise _non_public_url()
+    try:
+        lowered = hostname.rstrip(".").encode("idna").decode("ascii").casefold()
+    except UnicodeError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname is malformed",
+            retryable=False,
+        ) from exc
+    if not lowered or lowered == "localhost" or lowered.endswith(_PROHIBITED_HOST_SUFFIXES):
+        raise _non_public_url()
+    try:
+        literal = ipaddress.ip_address(lowered)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if not literal.is_global:
+            raise _non_public_url()
+        return
+    labels = lowered.split(".")
+    if (
+        len(lowered) > 253
+        or len(labels) < 2
+        or any(not _DNS_LABEL.fullmatch(label) for label in labels)
+    ):
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname is malformed or not publicly qualified",
+            retryable=False,
+        )
+    if resolver is None:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname resolver is unavailable",
+            retryable=True,
+        )
+    try:
+        addresses = tuple(resolver(lowered))
+    except Exception as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname could not be resolved",
+            retryable=True,
+        ) from exc
+    if not addresses:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname did not resolve to an address",
+            retryable=True,
+        )
+    try:
+        parsed_addresses = tuple(ipaddress.ip_address(address) for address in addresses)
+    except ValueError as exc:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.INACCESSIBLE,
+            "source hostname resolution returned an invalid address",
+            retryable=True,
+        ) from exc
+    if any(not address.is_global for address in parsed_addresses):
+        raise _non_public_url()
+
+
+def _resolve_host_addresses(hostname: str) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            sockaddr[0]
+            for _, _, _, _, sockaddr in socket.getaddrinfo(
+                hostname,
+                None,
+                type=socket.SOCK_STREAM,
+            )
+        )
+    )
+
+
+def _non_public_url() -> ScraperProviderError:
+    return ScraperProviderError(
+        AcquisitionFailureCode.INACCESSIBLE,
+        "source URL must resolve only to public internet addresses",
+        retryable=False,
+    )
+
+
+def _redirect_failure(message: str) -> ScraperProviderError:
+    return ScraperProviderError(
+        AcquisitionFailureCode.REDIRECT,
+        message,
+        retryable=False,
+    )
+
+
+def _raise_source_status(status: int) -> None:
+    if 200 <= status < 300:
+        return
+    if status in {401, 403}:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.AUTHENTICATION, "source access was denied", retryable=False
+        )
+    if status in {402, 451}:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.PAYWALL,
+            "source is paywalled or legally unavailable",
+            retryable=False,
+        )
+    if status in {408, 504}:
+        raise ScraperTimeoutError(
+            AcquisitionFailureCode.TIMEOUT, "source timed out", retryable=True
+        )
+    if status == 429:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.RATE_LIMIT, "source rate limited the request", retryable=True
+        )
+    if 500 <= status < 600:
+        raise ScraperProviderError(
+            AcquisitionFailureCode.TRANSIENT, "source is temporarily unavailable", retryable=True
+        )
+    raise ScraperProviderError(
+        AcquisitionFailureCode.INACCESSIBLE, "source request failed permanently", retryable=False
+    )
+
+
+def _too_large() -> ScraperProviderError:
+    return ScraperProviderError(
+        AcquisitionFailureCode.TOO_LARGE,
+        "source response exceeded the configured byte limit",
+        retryable=False,
+    )
+
+
+def _wigolo_failure(status: str) -> ScraperProviderError:
+    code = (
+        AcquisitionFailureCode.PAYWALL if status == "paywall" else AcquisitionFailureCode.EXTRACTION
+    )
+    return ScraperProviderError(code, "Wigolo could not extract the source", retryable=False)

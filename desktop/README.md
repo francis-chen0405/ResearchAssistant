@@ -1,18 +1,11 @@
 # Desktop application
 
-The current app was built from `27aeb95` and installed at
-`/Applications/ResearchAssistant.app` on 2026-10-09. It includes the completed
-database/schema-17 and source-discovery implementation plus repository review fixes
-through `15b8281`. Packaged identity, offline tests, historical upgrade and installed
-backend/window checks passed; see [the October 9 delivery record](../docs/verification/current-app-install-2026-10-09.md).
-The previous October 2 installed app was removed. Saved research, settings and
-Keychain credentials were preserved; the user allowed Keychain access on normal launch.
-
-This is an unsigned local Apple Silicon test build. No new DMG/ZIP or public release
-was created. The latest recorded public download remains the September 28 test release
-built from `ac49404`, which lacks the later changes. The October 2 ZIP and older
-`desktop/dist` paths below describe historical artifacts. [STATUS](../STATUS.md)
-tracks the remaining acceptance and distribution gates.
+[STATUS](../docs/project/STATUS.md#git-and-installed-delivery) owns current-source,
+installed-app and public-download provenance. The
+[October 9 installation record](../docs/verification/current-app-install-2026-10-09.md)
+retains that local unsigned build's checks and saved-data preservation evidence.
+The source layout described here is the backend/frontend consolidation; rebuilding
+resources alone does not replace the installed application.
 
 Current delivery target is a directly downloadable Apple Silicon Mac test build; no
 Mac App Store submission is planned. Windows release work is deferred.
@@ -24,7 +17,8 @@ No membership is required to build or share the unsigned test files; they are no
 signed, notarized public release. The installer declares macOS 14+, but minimum-OS
 and clean-machine acceptance still require tests on those systems.
 
-Phase 1 implementation and its release checks remain in `.agent/plans/phase-1-desktop.md`.
+Phase 1 implementation and its release checks remain in
+[the retained desktop plan](../.agent/plans/phase-1-desktop.md).
 Historical September unsigned Mac build verification is tracked in
 [the 2026-09-28 record](../docs/verification/mac-current-build-2026-09-28.md).
 That build includes the then-current database-integrity changes and GPT-6 model choices.
@@ -35,6 +29,61 @@ This is a local application: provider calls run in its bundled Python backend. T
 is no hosted application backend and no automatic paid credential test.
 
 ## Installation and data
+
+### Desktop shutdown deadline (current source)
+
+The first quit closes the owned backend's stdin exactly once. Python keeps its
+cooperative cancellation and **90-second controller drain** before service teardown.
+Electron has one **150,000 ms (150 seconds)** outer shutdown deadline from that first
+quit, including quits during startup/failure. Repeated quits never extend it. The
+additional **60 seconds** allow loopback-server shutdown, SQLite/worker cleanup and
+acquisition teardown (normally up to 25 seconds including output-reader joins).
+An engine that exits sooner releases pipes/timers and exits the shell immediately;
+renderer unload cannot veto that accepted quit. Failures emit fixed shell diagnostics;
+native error dialogs are excluded because even Promise-returning parentless dialogs
+can defer quit on macOS.
+
+Startup, from backend spawn through health and window loading, is bounded separately
+at **30,000 ms**. A startup stall then enters the same EOF-first shutdown path, giving
+an exact maximum configured spawn-to-shell-exit window of **180,000 ms (180 seconds)**.
+No pending health request, late startup response or window load can reopen the shell.
+These are application watchdog limits under a running event loop/OS, not hard
+real-time guarantees during OS suspension or kernel failure.
+
+At 150 seconds, POSIX sends `SIGKILL` only to the newly created backend process group
+and still-owned acquisition groups reported over its private stdout pipe. Acquisition
+launchers initially inherit the backend group. Electron records ownership before
+acknowledging a fresh PID/request pair on stdin; the backend then releases the launcher's
+gate to detach and execute. Confirmation has a 10-second limit; EOF, timeout or a failed
+pipe terminates the launcher. Quit never acknowledges new detachment. A delayed report
+or crashed backend therefore leaves the launcher covered by the backend group.
+Start also waits up to 10 seconds for the exact acquisition group to exist before
+returning, so immediate stop always targets its established group.
+Revoked owners are removed. Root exit also retires orphan members of its owned group.
+Windows terminates the owned `ChildProcess` handle. Before bootstrap, Python attaches
+itself to a non-inheritable kill-on-close Job Object; all descendants inherit that
+ownership, including multiple acquisition generations and nested acquisition Jobs.
+Denied Job assignment fails startup before data/vault access or child creation.
+Windows never uses PID/name scans, `taskkill`, ports or unrelated services as targets.
+The fallback exits Electron with status 1 without waiting for child/pipe events.
+
+Forced shutdown never updates saved run status, releases unknown-call reservations,
+deletes SQLite/WAL files or claims research completion. Saved work uses the existing
+SQLite recovery and exact resume-compatibility rules; an unknown provider outcome
+still needs explicit recovery. Native Windows nested-Job/forced-exit validation and
+current packaged Windows/minimum-macOS builds remain platform acceptance gates.
+
+Offline checks: `npm --prefix desktop test`,
+`npm --prefix desktop run smoke:shutdown`, and
+`python -m pytest tests/test_desktop_shutdown.py tests/test_desktop_ownership.py`.
+`node desktop/shutdown-electron-smoke.cjs`
+also checks real Electron forced quit against disposable POSIX stubs. Native POSIX smoke uses
+disposable stubs and the actual service manager (including delayed ownership reporting),
+uses an accelerated test clock, checks unrelated-process
+survival and stream cleanup, and never opens a user database. Deterministic tests use
+the exact production 150-second constant. Frozen backend/UI smoke commands below
+use temporary data; [the shutdown verification record](../docs/verification/desktop-shutdown-2026-10-10.md)
+owns actual results and platform limits.
 
 The macOS test build is a DMG/ZIP containing ResearchAssistant.app. Copy the app to
 Applications. Windows builds use a per-user NSIS installer. End users do not install
@@ -63,8 +112,8 @@ Persistent data:
 - `imports/`: explicitly imported historical databases.
 
 In current source, writable runs and resumes migrate compatible databases to schema 17.
-The installed October 9 backend includes these schema-17 changes. The following recovery
-and compatibility guidance applies to the current app. Schema 14 added nullable
+Installed-build schema provenance is recorded in [STATUS](../docs/project/STATUS.md).
+Schema 14 added nullable
 cached/uncached input-token fields; schema 15 adds nullable cache-write tokens/cost basis,
 schema 16 protects same-run ownership and referenced keys, and schema 17 adds measured
 history/evidence indexes. Existing records retain unknown cache
@@ -113,25 +162,36 @@ and budget checks. There is no automatic retry or budget refund on restart.
 ## Build and verification (developers/CI only)
 
 Use Python 3.12 and Node 24.18.0 on the target OS/architecture. Install the project and
-build requirements using `desktop/constraints.txt`; install web dependencies with the
+build requirements using `desktop/constraints.txt`; install renderer dependencies with the
 committed pnpm lock and desktop dependencies with the committed npm locks.
+Run the following from the repository root in the development environment described
+in [README](../README.md#install-and-develop).
 
 ```sh
-python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt httpx2 pytest ruff
-pnpm --dir web install --frozen-lockfile
+python -m pip install -c desktop/constraints.txt -e "./backend[dev]" -r desktop/requirements-build.txt
+python scripts/verify_distribution.py --constraints desktop/constraints.txt
+pnpm --dir frontend install --frozen-lockfile
 npm ci --prefix desktop
 node desktop/node_modules/electron/install.js
 python desktop/build.py
 python desktop/smoke.py desktop/build/resources
 node desktop/ui-smoke.cjs
-npm run package --prefix desktop
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run package --prefix desktop
 ```
 
 Artifacts are written under `desktop/dist/`; intermediate runtimes under `desktop/build/`
 are ignored by Git. The build downloads a checksum-verified standalone Node distribution,
 installs Wigolo 0.2.1 from its npm lock, and includes its exact Playwright Chromium build.
-It exports the existing Next.js page and freezes Python with source files and prompts.
-Python source hashing includes the root compatibility entries and complete
+Staging applies the reviewed `acquisition/cache-policy.mjs` connection policy to
+the exact hash-pinned upstream database module. Replacement writes fire FTS delete
+triggers; an inconsistent derived URL index is rebuilt only after core integrity
+passes. Content, vectors and migration records are preserved. Unreviewed upstream
+bytes stop the build. The installed October 9 cache findings and disposable-copy
+repair evidence are in [Mac delivery verification](../docs/verification/mac-delivery-gates-2026-10-13.md).
+It exports the existing Next.js page and freezes Python with source files and the canonical
+`backend/src/researchassistant/prompts/` resources. All 18 prompts and the PDF font must be present;
+the frozen identity rejects incomplete resources.
+Python source hashing includes the backend-owned installed facades and complete
 researchassistant/agents/providers/frontend surface and prompts, bundled PDF font bytes, plus the frozen executable
 bytes. Runtime data/credentials are never build inputs.
 
@@ -158,12 +218,40 @@ Packaging references: [Tauri sidecars](https://v2.tauri.app/develop/sidecar/),
 [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [GitHub runner targets](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
+## Local installation and public distribution
+
+The commands above produce local unsigned test artifacts. For a local Mac installation,
+first smoke-test the candidate bundle with isolated data, quit the running app, then
+replace `/Applications/ResearchAssistant.app` with the candidate. Saved data remains
+in the application-data directory above. Verify the installed backend and window;
+the [October 9 record](../docs/verification/current-app-install-2026-10-09.md) is evidence
+for that delivery, not for a newly rebuilt candidate. Keychain access may require the
+user's normal OS response. Never copy test data into saved research storage.
+
+Signed public distribution is a separate delivery task: configure Developer ID signing
+and notarization, validate the actual installer on clean/minimum-OS systems, then publish
+the verified artifacts and checksums. `npm run package` uses `--publish never`;
+neither this command nor the CI artifact upload publishes a GitHub release.
+Use [STATUS](../docs/project/STATUS.md) for the actual delivery gates and
+[the test map](../tests/README.md#desktop-and-renderer-checks) for source checks.
+
+Developer ID inputs are prepared in `release-signing.cjs` and
+`release-entitlements.plist`, validated against the pinned builder schema. This
+opt-in config refuses missing certificate-name/notary-profile inputs, requires
+signing, enables hardened runtime/JIT and requests notarization. Use an existing
+Developer ID identity in the local Keychain (`CSC_NAME`) and a locally stored
+`APPLE_KEYCHAIN_PROFILE`; never put private keys or account passwords in this
+repository or chat. No valid identity was available for the October 13 candidate.
+See the verification record for the exact secure-local commands and remaining
+clean-machine/minimum-OS tests. Signed runtime acceptance remains unverified until
+those inputs exist; configuration alone does not establish it.
+
 ## Historical Phase 2 source compatibility
 
 At the Phase 2 verification point, contract, schema, fixture and application-runtime modules
 were root-level files, with extracted `frontend/live_*` helpers covered by the then-current
 recursive packaging and identity rules. The current organization is under `researchassistant/`;
-see [architecture](../ARCHITECTURE.md) for canonical imports and ownership. Rebuild the bundle
+see [architecture](../docs/project/ARCHITECTURE.md) for canonical imports and ownership. Rebuild the bundle
 after source changes. A changed source/executable fingerprint requires a new research run under
 the exact compatibility gate; historical records remain available for inspection and export.
 Historical inspection/export was preserved; incompatible resume failed explicitly.
@@ -183,7 +271,7 @@ Do not embed this temporary path or the checkout path in application code.
 
 ## Phase 3 frontend verification and upgrade behavior
 
-After exporting `web/out`, run `node desktop/frontend-smoke.cjs`,
+After exporting `frontend/out`, run `node desktop/frontend-smoke.cjs`,
 `node desktop/frontend-poll-smoke.cjs`, and
 `node desktop/configuration-race-smoke.cjs`. They use the existing acquisition
 Playwright installation and mocked application APIs; no provider calls are made.
@@ -224,5 +312,5 @@ output and bootstrap values are not logged. The startup deadline remains 45 seco
 and shutdown remains 100 seconds. A vault permission prompt still requires an OS
 response; the harness neither grants access nor silently skips credential checks.
 
-The legacy Streamlit interface is optional: install `requirements-legacy.txt` from the
+The legacy Streamlit interface is optional: install `backend/requirements-legacy.txt` from the
 repository root only if you use it. The desktop runtime does not require Streamlit.

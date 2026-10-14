@@ -1,0 +1,264 @@
+{
+  "researchassistant.agents.supportingresearcher.ResearcherRetrievalBatch": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "d9d1ccca71d1aeb99c64cffe74176ff738b5143d06b016d1b6e505d1dc433564"
+  },
+  "researchassistant.agents.supportingresearcher.RetrievalOutcome": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "3c5e331b7b3ea596c098bd424ab97f30bbfff44f9db98007878d6ec46779aef4"
+  },
+  "researchassistant.agents.v2_extraction.V2ExactExtractionResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "dac31f315baace82db67d0ae95735c0ccb5ed0218ed430f5441b5669f6cc57f2"
+  },
+  "researchassistant.agents.v2_extraction.V2ExtractionInputBinding": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "afbf46df946b44f792a2aa27b3243a708a75a9bea5b779d50854ffd2aa344ce8"
+  },
+  "researchassistant.agents.v2_extraction.V2ExtractionLLMInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e0d5ab1ee63b512e9c7f9c1e577eb6067274b7cf575b270b2cb024ea4ac2e786"
+  },
+  "researchassistant.agents.v2_extraction.V2ExtractionPromptInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "7326d4c32fc0255ecb98388e954ceca34ac6be6d86d4cde24d2ce4128840fc81"
+  },
+  "researchassistant.agents.v2_extraction.V2ExtractionSourceCheckpoint": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "dc25b8398ad52093664bd9350c5676e935d3063521a62a6e5e51437b432b343d"
+  },
+  "researchassistant.agents.v2_extraction.V2ExtractionSourceResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e330e0c2b30270346cbb6bb1d62469ea21e00e6303c7ae290e34dea10f1ca1c0"
+  },
+  "researchassistant.agents.v2_extraction.V2ExtractionState": {
+    "values": {
+      "BUDGET_EXHAUSTED": "budget_exhausted",
+      "EXTRACTED": "extracted",
+      "FAILED": "failed",
+      "SOURCE_BUDGET_BLOCKED": "source_budget_blocked"
+    }
+  },
+  "researchassistant.agents.v2_extraction.V2NumberedUntrustedSource": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "2f54ac50fb39b18b47edf74f703d8219bc5bdf360ff51bb746d823b1b8a0b211"
+  },
+  "researchassistant.contracts.neighborhood.V2NeighborhoodCheckpoint": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true,
+      "validate_default": true
+    },
+    "schema_sha256": "c0c3d34185169d6324c87d7af7cd5703cbca0c768c6d6c5b2ce67794be8a71c7"
+  },
+  "researchassistant.contracts.query_retrieval.V2QueryPageCheckpoint": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "45ad7cb2d0071764a0f171a04c4773418150ca4320e5bd112761d26c550e6788"
+  },
+  "researchassistant.contracts.query_retrieval.V2QueryRetrievalResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "be3a35973655847080af86385200e6cb667665c54289cece6956cd5144c08ee8"
+  },
+  "researchassistant.providers.openalex_neighborhood.NeighborhoodRelation": {
+    "values": {
+      "CITING": "citing",
+      "REFERENCES": "references",
+      "RELATED": "related"
+    }
+  },
+  "researchassistant.providers.openalex_neighborhood.NeighborhoodResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e58433b3bd645d4fef8b4025518c51c466752dfeb608604fce9df78d81a31f30"
+  },
+  "researchassistant.providers.openalex_neighborhood.NeighborhoodStatus": {
+    "values": {
+      "EMPTY": "empty",
+      "MALFORMED": "malformed",
+      "RESOLVED": "resolved",
+      "UNSUPPORTED": "unsupported"
+    }
+  },
+  "researchassistant.providers.openalex_neighborhood.ResolvedOpenAlexWork": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e1d83562bcb85eada27e0a317cd8d36da3feaeddabe8c07e4713b1888d473476"
+  },
+  "researchassistant.providers.ranking.AcquiredSourceScoreComponents": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "80e39445d645344dc82f57c26f41e6c2a48b23a7c5cd2092fdea76ef43a1dd01"
+  },
+  "researchassistant.providers.ranking.DiscoveryDecision": {
+    "values": {
+      "DEFERRED": "deferred",
+      "DISCARDED": "discarded",
+      "SELECTED": "selected"
+    }
+  },
+  "researchassistant.providers.ranking.DiscoveryScoreComponents": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "56d7255bc61673f0b65ccf61d16be2ef801dc41d1507b7e777884c9d4d2ee587"
+  },
+  "researchassistant.providers.ranking.RankedAcquiredSource": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "77549cb1afd32b73c3bf5c0592606107215149d68435b6a5ee8155f0d408218c"
+  },
+  "researchassistant.providers.ranking.RankedDiscoveryResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "97fe6ef5577d8a5c4b5d8dea3e9bfedb6a63a2727a5dfe3a205ef1f787fd63a0"
+  },
+  "researchassistant.providers.scraper.ScrapeStatus": {
+    "values": {
+      "DUPLICATE_CONTENT": "duplicate_content",
+      "DUPLICATE_URL": "duplicate_url",
+      "FAILED": "failed",
+      "RETRIEVED": "retrieved",
+      "TIMEOUT": "timeout",
+      "UNSUPPORTED": "unsupported"
+    }
+  },
+  "researchassistant.providers.search.SearchDiscoveryMetadata": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "3a7042c1633c7e84e32ae0559ab30e42c2c35985a830e36cbd0b6074c9c94bec"
+  },
+  "researchassistant.providers.search.SearchEngineTelemetry": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "f9072acb31e9f9b144afb2dfc74886a8954f7ff55ad0b86b603d8445a86d176e"
+  },
+  "researchassistant.providers.search.SearchFailureCode": {
+    "values": {
+      "AUTHENTICATION": "authentication_failure",
+      "BUDGET_EXHAUSTED": "budget_exhausted",
+      "CANCELLED": "cancelled",
+      "CONNECTION": "connection_failure",
+      "EMPTY_RESULTS": "empty_results",
+      "INVALID_URL": "invalid_url",
+      "MALFORMED_RESPONSE": "malformed_success_response",
+      "MISSING_CONFIGURATION": "missing_configuration",
+      "PERMANENT_FAILURE": "permanent_request_failure",
+      "RATE_LIMIT": "rate_limit",
+      "TIMEOUT": "timeout",
+      "TRANSIENT_OUTAGE": "transient_outage"
+    }
+  },
+  "researchassistant.providers.search.SearchRequest": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "a0ddfddacd49fbe67d5625872e9cc92a8151b2f52e3eecd4ff1b7f2fe7ba9c59"
+  },
+  "researchassistant.providers.search.SearchResponse": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "dac872d1e8265cdf27d5acd6571b5ea7d2e0c2ffbc196cc123121493f8df3715"
+  },
+  "researchassistant.providers.search.SearchResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "ac73babd3be9ba837fe4e7fcb6880deb76aafd1833104fe5483ddb49a8ebb39b"
+  },
+  "researchassistant.research.orchestrator.AnalysisStageResult": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "77b6908de7095c3cdd3ed537f8bbd429e382e0109c04f402615fb910cb35ae14"
+  },
+  "researchassistant.research.orchestrator.ProviderPipelineResult": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "a048f7b05c3d19a9bc906202e32f9c72976e61b6aff3af0be489bd0d93fe27af"
+  },
+  "researchassistant.research.orchestrator.ProviderRunStatus": {
+    "values": {
+      "BLOCKED": "blocked",
+      "CANCELLED": "cancelled",
+      "FAILED": "failed",
+      "RELEASED": "released",
+      "RUNNING": "running"
+    }
+  },
+  "researchassistant.research.orchestrator.ResearcherFailure": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "2dce2e6155f6ef8f05bc31dd485ac2f99afcc809215bfc952291b39ad0db7f92"
+  },
+  "researchassistant.research.orchestrator.ResearcherPairResult": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "c1fe60036186cf8aa01eeffec143e0871b5ff4c1351203df6ac2a944e7c3ccbb"
+  },
+  "researchassistant.research.orchestrator.ResearcherSideStatus": {
+    "values": {
+      "COMPLETED": "completed",
+      "FAILED": "failed",
+      "PARTIAL": "partial",
+      "SKIPPED": "skipped"
+    }
+  },
+  "researchassistant.research.orchestrator.ResearcherStageResult": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "23541fbef42d1e286eb8323410c273f6aab27887f2d625568bf2bdbf95e796cf"
+  }
+}

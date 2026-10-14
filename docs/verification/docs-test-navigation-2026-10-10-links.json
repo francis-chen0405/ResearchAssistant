@@ -1,0 +1,163 @@
+{
+  "markdown_files": 298,
+  "local_links_checked": 1637,
+  "issues": 9,
+  "issues_by_class": {
+    "immutable_archive": 9
+  },
+  "issues_by_problem": {
+    "missing_target": 9
+  },
+  "naive_archive_relative_missing": 852,
+  "archived_original_location_resolved": 901,
+  "archived_original_location_missing": 126,
+  "issues_exact": [
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/2026-10-07-source-preview-state/PLANS.md",
+      "line": 10,
+      "target": "../STATUS.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/README.md",
+      "line": 14,
+      "target": "../../ARCHITECTURE.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/README.md",
+      "line": 15,
+      "target": "../../CONVENTIONS.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/README.md",
+      "line": 16,
+      "target": "../../DECISIONS.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/README.md",
+      "line": 17,
+      "target": "../../STATUS.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/README.md",
+      "line": 18,
+      "target": "../../HANDOFF.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/phase-2-handoff/HANDOFF.md",
+      "line": 7,
+      "target": "ARCHITECTURE.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/phase-2-handoff/HANDOFF.md",
+      "line": 7,
+      "target": "CONVENTIONS.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    },
+    {
+      "class": "immutable_archive",
+      "source": "docs/archive/phase-2-handoff/STATUS.md",
+      "line": 23,
+      "target": "ARCHITECTURE.md",
+      "problem": "missing_target",
+      "original_location_target": null
+    }
+  ],
+  "grouped_missing_targets": [
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "../../ARCHITECTURE.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/README.md:14"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "../../CONVENTIONS.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/README.md:15"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "../../DECISIONS.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/README.md:16"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "../../HANDOFF.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/README.md:18"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "../../STATUS.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/README.md:17"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "../STATUS.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/2026-10-07-source-preview-state/PLANS.md:10"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "ARCHITECTURE.md",
+      "count": 2,
+      "locations": [
+        "docs/archive/phase-2-handoff/HANDOFF.md:7",
+        "docs/archive/phase-2-handoff/STATUS.md:23"
+      ]
+    },
+    {
+      "class": "immutable_archive",
+      "problem": "missing_target",
+      "target": "CONVENTIONS.md",
+      "count": 1,
+      "locations": [
+        "docs/archive/phase-2-handoff/HANDOFF.md:7"
+      ]
+    }
+  ]
+}

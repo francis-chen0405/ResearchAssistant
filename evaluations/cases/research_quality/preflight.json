@@ -1,0 +1,33 @@
+{
+  "account_invoice_total_usd": null,
+  "aggregate_cap_usd": "2.48",
+  "allowance_id": "prompt14-2026-10-11-usd2.48",
+  "allowance_sha256": "a8434ecc5876ad78d788bc694875bd3e09e8ac3f9ea4fc7a9971f2fdab363556",
+  "authorized_live_observations": 0,
+  "frozen_inputs": {
+    "prepared.json": "28647eaa4ab95a06aec792d058216fa814472e5c45fd565fcc26009e093ede26",
+    "queries.json": "beecb8c2bea9ae7f667d51555cd6aefe4ee4217f70160c966fc163905c732d38",
+    "reference_nominations.json": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d"
+  },
+  "human_quality_judgments": "pending",
+  "incremental_paid_call_cost_usd": "0.00",
+  "native_credentials": {
+    "EXA_API_KEY": "missing",
+    "LUNA_API_KEY": "missing",
+    "OPENALEX_API_KEY": "missing",
+    "SERPSEARCH_API_KEY": "missing"
+  },
+  "new_model_calls": 0,
+  "new_provider_requests": 0,
+  "receipt_kind": "local_preflight_no_provider_transport",
+  "recorded_at": "2026-10-12T15:42:18.989397+00:00",
+  "reference_policy": "assistant_candidates_frozen_human_scores_pending",
+  "reserved_exposure_usd": "0.00",
+  "source_identity": "source-sha256:4a9ce91342ff8933f7942d83dced1cd70b56f77ac80eac017e6a632aab5b2dc4",
+  "status": "stopped_before_transport",
+  "stop_reasons": [
+    "required_native_credentials_unavailable_or_unchecked",
+    "account_terms_unverified",
+    "bounded_private_live_collector_unavailable"
+  ]
+}

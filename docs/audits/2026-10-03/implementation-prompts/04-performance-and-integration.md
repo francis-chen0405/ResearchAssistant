@@ -1,6 +1,6 @@
 # Prompt 4 of 4 — Improve database scale and consistency, then verify the complete implementation
 
-> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../../STATUS.md). The findings and instructions below retain their original scope.
+> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../project/STATUS.md). The findings and instructions below retain their original scope.
 
 Finish the four-phase ResearchAssistant database implementation. Implement I1 and I4 from `docs/audits/2026-10-03/database-review.md`, resolve interactions among the preceding three prompts, and verify every approved F1–F9, I1–I4, and X1 requirement plus the supported legacy-lock follow-up. This prompt authorizes necessary source/tests/docs changes for this scope. Do the implementation and verification; do not stop at a fresh proposal.
 

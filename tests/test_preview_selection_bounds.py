@@ -24,6 +24,7 @@ from providers.llm import (
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
+from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import (
     V2PreviewRequest,
     V2PreviewResult,
@@ -151,7 +152,7 @@ def _audit(db_path: str, run_id: UUID) -> V2SelectionShortlistAudit:
 
 def _render_full_input(selection_input: V2SourceSelectionInput) -> str:
     prompt = load_prompt_file(
-        Path(__file__).resolve().parents[1] / "prompts" / "source_selection_v3.md",
+        prompt_resource("source_selection_v3.md"),
         expected_stage=LLMStage.SOURCE_SELECTION,
     )
     return render_stage_prompt(prompt, selection_input, V2SourceSelectionModelOutput)
@@ -385,7 +386,10 @@ def test_probe_v1_v2_and_default_preview_v1_keep_historical_dump_hashes() -> Non
 
 
 def test_legacy_source_selection_prompt_bytes_remain_unchanged() -> None:
-    prompt = Path(__file__).resolve().parents[1] / "prompts" / "source_selection.md"
+    prompt = (
+        Path(__file__).resolve().parents[1]
+        / "backend/src/researchassistant/prompts/source_selection.md"
+    )
     assert (
         sha256(prompt.read_bytes()).hexdigest()
         == "c095053044ba603a939d7ef1e13a2d5531c7ca6c591134f895533b8a4cf8f974"

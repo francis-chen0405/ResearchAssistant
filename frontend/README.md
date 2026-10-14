@@ -1,29 +1,53 @@
-# Local application service
+# Renderer development
 
-The current UI is the existing Next.js application in `web/`. Electron loads its static
-export from the authenticated loopback Python API. For browser development, run
-`python -m frontend.api` from the repository root and `pnpm --dir web dev` separately.
-Use the [desktop guide](../desktop/README.md) for packaged builds and smokes.
+This folder owns the Next.js renderer. Python API/services are installed from
+`backend/` under `researchassistant.api`; the historical Python `frontend` imports
+remain backend-owned facades. See [architecture](../docs/project/ARCHITECTURE.md).
 
-`live_service.py` owns configuration preflight, worker registration, cross-process lock
-ownership, cancellation and immutable snapshots. `live_contracts.py` owns strict API/view
-contracts; `live_progress.py` projects persisted progress and conservative usage;
-`live_history.py` reads history and research trails through validated read-only sessions.
-Controller entry points and contract imports remain compatible. Shared executable identity
-comes from `researchassistant.runtime.application_runtime`; no service needs to import the
-CLI to compute it.
+From the repository root, install the backend development environment as described
+in [README](../README.md#install-and-develop), then run:
 
-`api.py` retains transport validation and desktop authentication. `service_manager.py`
-owns acquisition-service lifecycle. The existing evidence viewer, fixture tooling and
-historical export adapters remain available; they do not select a new research policy.
-Fresh research uses `researchassistant.research.v2_orchestrator` and current configured
-discovery/model routes. Use canonical `researchassistant.*` paths for backend imports;
-the root `models.py`, `store.py`, and `orchestrator.py` modules remain compatibility aliases.
+```sh
+pnpm --dir frontend install --frozen-lockfile
+.venv/bin/python -m researchassistant.api.api
+# In another terminal:
+pnpm --dir frontend dev
+```
 
-See [architecture](../ARCHITECTURE.md) for exact evidence, persistence, accounting and
-credential invariants. The workspace, settings and history workflows are implemented. Current source includes
-all six discovery phases: provider-specific queries, bounded retrieval/ranking, exact
-previews, seed expansion and frozen product controls. [STATUS](../STATUS.md) distinguishes
-this source behavior from the older installed app and pending live acceptance.
-The [original frontend README](../docs/archive/pre-phase-2/frontend/README.md) is preserved
-verbatim. This document replaces its historical MLP-only provider/launcher description.
+Use [API notes](../backend/src/researchassistant/api/README.md) for browser origins
+and configuration. [The test map](../tests/README.md#desktop-and-renderer-checks)
+lists lint, type, static export and offline browser checks; [desktop operations](../desktop/README.md)
+owns bundled builds. [STATUS](../docs/project/STATUS.md) owns verification and delivery facts.
+
+The page composes feature owners under `features/`: `research` owns start/poll/cancel,
+`history` owns database-bound lists and run selection, `preferences` owns saved
+settings/configuration and service controls, and `results` owns brief/evidence/trail
+reads. Shared presentation and shell views remain under `shared` and `shell`.
+`components/dialog.tsx` remains the native modal/focus/keyboard owner.
+
+Fast checks run independently of desktop packaging:
+
+```sh
+python frontend/scripts/generate_api_contracts.py --check
+python -m pytest tests/test_frontend_api_contracts.py
+pnpm --dir frontend lint
+pnpm --dir frontend exec tsc --noEmit
+RESEARCHASSISTANT_DESKTOP=1 NEXT_PUBLIC_RESEARCH_API_URL= NEXT_TELEMETRY_DISABLED=1 pnpm --dir frontend exec next build --webpack
+npm ci --prefix desktop/acquisition --ignore-scripts --no-audit --no-fund
+node desktop/acquisition/node_modules/playwright/cli.js install chromium
+pnpm --dir frontend smoke:offline
+```
+
+Linux CI installs Chromium's system dependencies with `install --with-deps chromium`.
+The shared runner reuses all five `desktop/*smoke.cjs` offline fixtures and their
+existing locked Playwright runtime; it needs neither frozen Python nor Electron.
+Use `PLAYWRIGHT_BROWSERS_PATH` when exercising an existing desktop browser bundle.
+No paid providers or research databases are used by these checks. With dependencies
+already installed offline, add `--config.verify-deps-before-run=false` to pnpm.
+
+Generated response types live under `lib/generated/`. Regenerate intentionally with
+`python frontend/scripts/generate_api_contracts.py`, review, then run `--check` and
+contract tests. Freeform catalog/serializer schemas are supplemented from their
+existing backend models. TypeScript checks fields/enums/nullability; backend
+validators own numerical bounds and successful JSON is not runtime-validated by the
+client. Native packaging/install/signing checks remain in [desktop operations](../desktop/README.md).

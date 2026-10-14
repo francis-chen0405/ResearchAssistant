@@ -1,0 +1,13 @@
+# Prompt 07 — make the current backend installable
+
+You are powered by GPT 6.1 Sol XHigh. Usage goes very fast. Keep doing some hands-on Sol work. But, use `gpt-6-luna` helpers with task-appropriate effort when suitable, preferably only for simple tasks, such as for searching in general! Retain Sol for hard reasoning.
+
+Prepare the existing Python source for the folder migration in prompt 08 by making it a real installable distribution **in its current checkout layout first**. Today `pyproject.toml` supplies metadata but no explicit build backend, package discovery, package data or console command; `README.md` says editable installation is unsupported. Read current AGENTS/conventions/status, `ARCHITECTURE.md`, identity code, prompt/font loading, desktop build, and tests. Check current Git state and graph freshness; verify live imports and dependencies. Preserve unrelated work.
+
+Add explicit build configuration for the current `researchassistant`, `agents`, `providers`, and Python `frontend` packages plus the four documented root compatibility modules. Supply a supported CLI entry point, and keep existing imports and launcher behavior working. Make executable prompts and PDF fonts available through package resources from an arbitrary working directory. This prompt explicitly authorizes relocating prompt files into package resources if needed, but preserve their bytes and historical policy meaning; keep one canonical copy, update source identity/packaging manifests, and test bundled-resource completeness. Do not weaken fingerprint/resume checks to make relocation pass.
+
+Prove both editable and wheel installs in isolated temporary environments outside the checkout. From an unrelated working directory, import public facades, run CLI help, construct the API without user credentials, inspect packaged resources and execute representative offline fixtures. Compare source and frozen-bundle identity surfaces as appropriate. Keep the wheel free of tests, private keys, caches, user data and archived plans. Update the developer install instructions and build CI to exercise the supported install. Run focused/full Python tests, Ruff/format, whitespace checks and resource/desktop smoke tests that the change affects.
+
+Deliver exact package contents, the new CLI invocation, compatibility implications, and the next folder-migration steps. If a specific packaging constraint forces a layout move now, keep it scoped and reviewable and adjust prompt 08's starting state in your handoff; do not claim arbitrary-directory installation until tested.
+
+Acceptance: a fresh wheel/editable install from the current tree imports and runs outside the checkout with complete prompt/font resources and the existing public imports intact.

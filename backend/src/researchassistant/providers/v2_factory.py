@@ -1,0 +1,285 @@
+"""Production provider construction for fresh ResearchAssistant v2 runs."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Mapping
+
+from pydantic import ConfigDict, model_validator
+
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, StrictModel
+from researchassistant.providers.acquisition import WigoloAcquisitionAdapter
+from researchassistant.providers.arxiv import ArxivSearchAdapter
+from researchassistant.providers.clients import ProviderClients
+from researchassistant.providers.composite_search import CompositeSearchProvider
+from researchassistant.providers.config import (
+    ArxivConfig,
+    ExaConfig,
+    FirecrawlConfig,
+    OpenAlexConfig,
+    PubMedConfig,
+    SerpSearchConfig,
+    WigoloConfig,
+)
+from researchassistant.providers.crossref import CrossrefEnricher
+from researchassistant.providers.exa import ExaSearchAdapter
+from researchassistant.providers.firecrawl import FirecrawlAcquisitionAdapter
+from researchassistant.providers.llm import ModelAlias
+from researchassistant.providers.mimo import XiaomiMimoAdapter
+from researchassistant.providers.model_choices import ACTIVE_MODEL_STAGES, StageModelSelections
+from researchassistant.providers.openalex import OpenAlexSearchAdapter
+from researchassistant.providers.pubmed import PubMedSearchAdapter
+from researchassistant.providers.scraper import ScraperProvider
+from researchassistant.providers.search import SearchProvider
+from researchassistant.providers.serpsearch import SerpSearchAdapter
+from researchassistant.providers.v2_budget import RoutedV2LLMProvider, V2RunCeilings
+from researchassistant.providers.v2_routing import V2RoutingConfig
+from researchassistant.research.product_discovery import resolve_product_discovery
+
+
+class V2ProductionFactoryConfig(StrictModel):
+    """Validated, immutable fresh-v2 provider configuration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    routing: V2RoutingConfig
+    research_controls: ResearchControls | None = None
+    ceilings: V2RunCeilings = V2RunCeilings()
+    discovery_providers: tuple[DiscoveryProvider, ...]
+    wigolo: WigoloConfig = WigoloConfig()
+    exa: ExaConfig | None = None
+    openalex: OpenAlexConfig | None = None
+    serpsearch: SerpSearchConfig | None = None
+    arxiv: ArxivConfig | None = None
+    pubmed: PubMedConfig | None = None
+    crossref_enabled: bool = False
+    firecrawl: FirecrawlConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_discovery_routes(self) -> V2ProductionFactoryConfig:
+        if self.research_controls is not None:
+            resolve_product_discovery(self.research_controls, self.discovery_providers)
+        enabled = set(self.discovery_providers)
+        if not enabled or len(enabled) != len(self.discovery_providers):
+            raise ValueError("fresh v2 discovery providers must be unique and non-empty")
+        configured = {
+            provider
+            for provider, value in (
+                (DiscoveryProvider.EXA, self.exa),
+                (DiscoveryProvider.OPENALEX, self.openalex),
+                (DiscoveryProvider.SERPSEARCH, self.serpsearch),
+                (DiscoveryProvider.ARXIV, self.arxiv),
+                (DiscoveryProvider.PUBMED, self.pubmed),
+            )
+            if value is not None
+        }
+        if configured != enabled:
+            raise ValueError("fresh v2 discovery configuration must match enabled providers")
+        return self
+
+    @classmethod
+    def from_environment(
+        cls,
+        environment: Mapping[str, str],
+        *,
+        repository_revision: str,
+        discovery_providers: tuple[DiscoveryProvider, ...],
+        ceilings: V2RunCeilings | None = None,
+        wigolo: WigoloConfig | None = None,
+        crossref_enabled: bool = False,
+        stage_models: StageModelSelections | None = None,
+        research_controls: ResearchControls | None = None,
+    ) -> V2ProductionFactoryConfig:
+        enabled = set(discovery_providers)
+        return cls(
+            routing=V2RoutingConfig.from_environment(
+                environment,
+                repository_revision=repository_revision,
+                stage_models=stage_models,
+            ),
+            ceilings=ceilings or V2RunCeilings(),
+            research_controls=research_controls,
+            discovery_providers=discovery_providers,
+            wigolo=wigolo or WigoloConfig(),
+            exa=(
+                ExaConfig.from_environment(environment)
+                if DiscoveryProvider.EXA in enabled
+                else None
+            ),
+            openalex=(
+                OpenAlexConfig.from_environment(environment)
+                if DiscoveryProvider.OPENALEX in enabled
+                else None
+            ),
+            serpsearch=(
+                SerpSearchConfig.from_environment(environment)
+                if DiscoveryProvider.SERPSEARCH in enabled
+                else None
+            ),
+            arxiv=(
+                ArxivConfig.from_environment(environment)
+                if DiscoveryProvider.ARXIV in enabled
+                else None
+            ),
+            pubmed=(
+                PubMedConfig.from_environment(environment)
+                if DiscoveryProvider.PUBMED in enabled
+                else None
+            ),
+            crossref_enabled=crossref_enabled,
+            firecrawl=FirecrawlConfig.from_environment(environment),
+        )
+
+    def semantic_fingerprint_sha256(self) -> str:
+        payload = {
+            "discovery_providers": [item.value for item in self.discovery_providers],
+            "wigolo": self.wigolo.model_dump(mode="json"),
+            "exa": self.exa.model_dump(mode="json", exclude={"api_key"}) if self.exa else None,
+            "openalex": (
+                self.openalex.model_dump(mode="json", exclude={"api_key"})
+                if self.openalex
+                else None
+            ),
+            "serpsearch": (
+                self.serpsearch.model_dump(mode="json", exclude={"api_key"})
+                if self.serpsearch
+                else None
+            ),
+            "arxiv": self.arxiv.model_dump(mode="json") if self.arxiv else None,
+            "pubmed": (
+                self.pubmed.model_dump(mode="json", exclude={"api_key"}) if self.pubmed else None
+            ),
+            "crossref_enabled": self.crossref_enabled,
+            "firecrawl": (
+                self.firecrawl.model_dump(mode="json", exclude={"api_key"})
+                if self.firecrawl
+                else None
+            ),
+        }
+        if self.research_controls is not None:
+            payload["research_controls"] = self.research_controls.model_dump(mode="json")
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+class V2ProductionProviderBundle(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    search_providers: Mapping[DiscoveryProvider, SearchProvider]
+    wigolo: ScraperProvider
+    firecrawl: ScraperProvider | None
+    llm: RoutedV2LLMProvider
+    crossref_resolver: object | None = None
+
+
+def build_v2_production_bundle(
+    config: V2ProductionFactoryConfig,
+    *,
+    clients: ProviderClients | None = None,
+) -> V2ProductionProviderBundle:
+    """Build explicitly routed search, acquisition, and three-model adapters."""
+    injected = clients or ProviderClients()
+    composite = CompositeSearchProvider(
+        exa=(ExaSearchAdapter(config.exa, client=injected.search) if config.exa else None),
+        openalex=(
+            OpenAlexSearchAdapter(config.openalex, client=injected.openalex_search)
+            if config.openalex
+            else None
+        ),
+        serpsearch=(
+            SerpSearchAdapter(config.serpsearch, client=injected.serpsearch)
+            if config.serpsearch
+            else None
+        ),
+        arxiv=(
+            ArxivSearchAdapter(config.arxiv, client=injected.arxiv_search) if config.arxiv else None
+        ),
+        pubmed=(
+            PubMedSearchAdapter(config.pubmed, client=injected.pubmed_search)
+            if config.pubmed
+            else None
+        ),
+    )
+    wigolo = WigoloAcquisitionAdapter(
+        config.wigolo,
+        source_client=injected.source,
+        wigolo_client=injected.acquisition,
+        host_resolver=injected.host_resolver,
+    )
+    firecrawl = (
+        FirecrawlAcquisitionAdapter(
+            config.firecrawl,
+            client=injected.fallback_acquisition,
+            host_resolver=injected.host_resolver,
+        )
+        if config.firecrawl is not None
+        else None
+    )
+    per_call_tokens = config.ceilings.max_total_tokens
+    per_call_cost = config.ceilings.max_total_cost_usd
+    if config.routing.stage_models is not None:
+        llm = RoutedV2LLMProvider(
+            {
+                stage: XiaomiMimoAdapter(
+                    config.routing.configuration_for_stage(stage).config,
+                    client=(
+                        injected.luna_llm or injected.llm
+                        if config.routing.configuration_for_stage(stage).route.provider_name
+                        == "openai"
+                        else injected.mimo_v25_pro_llm or injected.mimo_v25_llm or injected.llm
+                    ),
+                    price_cap=config.routing.configuration_for_stage(stage).route.price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=config.routing.configuration_for_stage(
+                        stage
+                    ).route.logical_alias,
+                )
+                for stage in ACTIVE_MODEL_STAGES
+            }
+        )
+    else:
+        assert config.routing.mimo_v25 is not None
+        assert config.routing.mimo_v25_pro is not None
+        assert config.routing.luna is not None
+        assert config.routing.mimo_v25_price_cap is not None
+        assert config.routing.mimo_v25_pro_price_cap is not None
+        assert config.routing.luna_price_cap is not None
+        llm = RoutedV2LLMProvider(
+            {
+                ModelAlias.MIMO_V25: XiaomiMimoAdapter(
+                    config.routing.mimo_v25,
+                    client=injected.mimo_v25_llm or injected.llm,
+                    price_cap=config.routing.mimo_v25_price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=ModelAlias.MIMO_V25,
+                ),
+                ModelAlias.MIMO_V25_PRO: XiaomiMimoAdapter(
+                    config.routing.mimo_v25_pro,
+                    client=injected.mimo_v25_pro_llm or injected.llm,
+                    price_cap=config.routing.mimo_v25_pro_price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=ModelAlias.MIMO_V25_PRO,
+                ),
+                ModelAlias.GPT_5_6_LUNA_HIGH: XiaomiMimoAdapter(
+                    config.routing.luna,
+                    client=injected.luna_llm or injected.llm,
+                    price_cap=config.routing.luna_price_cap,
+                    max_call_cost_usd=per_call_cost,
+                    max_call_tokens=per_call_tokens,
+                    expected_model_alias=ModelAlias.GPT_5_6_LUNA_HIGH,
+                ),
+            }
+        )
+    return V2ProductionProviderBundle(
+        search_providers={provider: composite for provider in config.discovery_providers},
+        wigolo=wigolo,
+        firecrawl=firecrawl,
+        llm=llm,
+        crossref_resolver=(
+            CrossrefEnricher(client=injected.crossref).resolve if config.crossref_enabled else None
+        ),
+    )

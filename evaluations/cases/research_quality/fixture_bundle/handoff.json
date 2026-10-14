@@ -1,0 +1,116 @@
+{
+  "query": {
+    "run_id": "10000000-0000-4000-8000-000000000014",
+    "query_id": "20000000-0000-4000-8000-000000000014",
+    "direction": "support",
+    "provider": "serpsearch",
+    "round_number": 1,
+    "strategy": "fixture",
+    "query_text": "fixture neutral claim",
+    "compiled_query": null,
+    "policy_identity": "researchassistant-v2-phase-3-initial-planner-v1",
+    "created_at": "2026-10-11T20:00:00Z"
+  },
+  "results": [
+    {
+      "original_url": "https://fixture.invalid/a",
+      "title": "a",
+      "rank": 1,
+      "relevance_score": null,
+      "snippet": null,
+      "metadata": {
+        "engine": null,
+        "provider_page": null,
+        "raw_provider_rank": null,
+        "published_at": null,
+        "display_url": null,
+        "category": null,
+        "author": null,
+        "abstract": null,
+        "external_id": null,
+        "doi": null,
+        "cited_by_count": null,
+        "is_open_access": null,
+        "work_type": null,
+        "is_retracted": null,
+        "pdf_url": null,
+        "full_text_url": null
+      }
+    },
+    {
+      "original_url": "https://fixture.invalid/a-copy",
+      "title": "a-copy",
+      "rank": 2,
+      "relevance_score": null,
+      "snippet": null,
+      "metadata": {
+        "engine": null,
+        "provider_page": null,
+        "raw_provider_rank": null,
+        "published_at": null,
+        "display_url": null,
+        "category": null,
+        "author": null,
+        "abstract": null,
+        "external_id": null,
+        "doi": null,
+        "cited_by_count": null,
+        "is_open_access": null,
+        "work_type": null,
+        "is_retracted": null,
+        "pdf_url": null,
+        "full_text_url": null
+      }
+    },
+    {
+      "original_url": "https://fixture.invalid/b",
+      "title": "b",
+      "rank": 3,
+      "relevance_score": null,
+      "snippet": null,
+      "metadata": {
+        "engine": null,
+        "provider_page": null,
+        "raw_provider_rank": null,
+        "published_at": null,
+        "display_url": null,
+        "category": null,
+        "author": null,
+        "abstract": null,
+        "external_id": null,
+        "doi": null,
+        "cited_by_count": null,
+        "is_open_access": null,
+        "work_type": null,
+        "is_retracted": null,
+        "pdf_url": null,
+        "full_text_url": null
+      }
+    },
+    {
+      "original_url": "https://fixture.invalid/c",
+      "title": "c",
+      "rank": 4,
+      "relevance_score": null,
+      "snippet": null,
+      "metadata": {
+        "engine": null,
+        "provider_page": null,
+        "raw_provider_rank": null,
+        "published_at": null,
+        "display_url": null,
+        "category": null,
+        "author": null,
+        "abstract": null,
+        "external_id": null,
+        "doi": null,
+        "cited_by_count": null,
+        "is_open_access": null,
+        "work_type": null,
+        "is_retracted": null,
+        "pdf_url": null,
+        "full_text_url": null
+      }
+    }
+  ]
+}

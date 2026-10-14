@@ -8,9 +8,9 @@ const http = require("node:http");
 const path = require("node:path");
 
 async function main() {
-  const root = path.resolve(__dirname, "../web/out");
+  const root = path.resolve(__dirname, "../frontend/out");
   if (!fs.existsSync(path.join(root, "index.html"))) {
-    throw new Error("Build the static web app before running this smoke (web/out/index.html is missing).");
+    throw new Error("Build the static web app before running this smoke (frontend/out/index.html is missing).");
   }
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;

@@ -1,0 +1,263 @@
+{
+  "date": "2026-10-13",
+  "platform": {
+    "macOS": "26.6.2",
+    "build": "25G83",
+    "architecture": "arm64",
+    "python": "3.12.14",
+    "node": "24.18.0",
+    "pyinstaller": "6.22.2",
+    "next": "16.3.1",
+    "electron": "44.2.0",
+    "electron_builder": "26.15.3",
+    "wigolo": "0.2.1",
+    "sqlite": "3.53.0",
+    "sqlite_vec": "0.1.9"
+  },
+  "app": {
+    "version": "0.1.0",
+    "candidate_bundle_version": "20261013.16",
+    "installed_path": "/Applications/ResearchAssistant.app",
+    "candidate_path": "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/desktop/dist/prompt16-20261013",
+    "head": "94a241b52f9525cab3aff52d1f85026f081b3e85",
+    "working_tree": "dirty; prior changes preserved",
+    "staged_diff_sha256": "85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2"
+  },
+  "identities": {
+    "installed": {
+      "source": "source-sha256:c8a3543a1f77f20586586e8487fb22130c6fe71f50ad3c3c582cfbfb1ba2805f",
+      "frozen": "source-sha256:66a5233ff2ffa535e7061b8cd28be65b2dcf5c4eec399ef50e34c76d04597b90"
+    },
+    "source": "source-sha256:49db1858f558ba58234ea4509ecce80266df22bda4887cf6feda6d4c9d09bf41",
+    "packaged_source": "source-sha256:49db1858f558ba58234ea4509ecce80266df22bda4887cf6feda6d4c9d09bf41",
+    "expected_frozen": "source-sha256:5b57457e0c9f3771a02907e764e2548ebff72535bef0ad70ce6d3aa49d1da128",
+    "parity_files": 290,
+    "backend_sha256": "ca47831babcb685626f01a088327544e9c092daac52a2c130ce458c195365db5",
+    "desktop_entry_sha256": "b7afa7dd08da6de9c8d3687b01406d2db70f2ac34429b195be253b44956292eb"
+  },
+  "observed_runtime_identities": {
+    "installed": {
+      "observed_identity": "source-sha256:66a5233ff2ffa535e7061b8cd28be65b2dcf5c4eec399ef50e34c76d04597b90",
+      "authenticated_health": 200
+    },
+    "candidate_from_dmg": {
+      "observed_identity": "source-sha256:5b57457e0c9f3771a02907e764e2548ebff72535bef0ad70ce6d3aa49d1da128",
+      "authenticated_health": 200
+    }
+  },
+  "installed_cache": {
+    "access": "direct installed read-only query failed: unable to open database file; quiescent byte-identical private copy then read-only SQLite backup succeeded",
+    "sourceJournal": "wal",
+    "before": {
+      "size": 15478784,
+      "mode": "600",
+      "uid": 501,
+      "gid": 20,
+      "mtimeMs": 1790984990311.173,
+      "sha256": "8b493db7055402e10c34d614e2623564d2a2abd23fb603d51eaf0fafc24e8a6f"
+    },
+    "sqlite": {
+      "version": "3.53.0"
+    },
+    "vec": {
+      "version": "v0.1.9"
+    },
+    "migrations": [
+      {
+        "name": "001-sqlite-vec"
+      },
+      {
+        "name": "002-feed-items"
+      },
+      {
+        "name": "003-crawl-etags"
+      },
+      {
+        "name": "004-watch-jobs"
+      },
+      {
+        "name": "005-tls-routing"
+      },
+      {
+        "name": "006-url-cache-http-status"
+      },
+      {
+        "name": "007-drop-lp-routing"
+      },
+      {
+        "name": "008-antibot-clearance"
+      },
+      {
+        "name": "009-content-completeness"
+      }
+    ],
+    "integrity": [
+      {
+        "integrity_check": "ok"
+      }
+    ],
+    "foreignKeys": [],
+    "counts": {
+      "url_cache": 93,
+      "search_cache": 0,
+      "feed_items": 0,
+      "vec_documents": 93,
+      "vec_id_map": 93,
+      "vec_metadata": 93
+    },
+    "references": {
+      "vectorWithoutMap": 0,
+      "mapWithoutVector": 0,
+      "metadataWithoutMap": 0,
+      "mapWithoutMetadata": 0,
+      "metadataWithoutURL": 54,
+      "mapURLMismatch": 0,
+      "metadataWithoutNormalizedURL": 0
+    },
+    "fts": {
+      "url_cache_fts": {
+        "code": "SQLITE_CORRUPT_VTAB",
+        "message": "database disk image is malformed"
+      },
+      "feed_items_fts": "external-content integrity passed on disposable backup"
+    },
+    "vectorBytes": {
+      "minimum": 1536,
+      "maximum": 1536
+    },
+    "candidateRepair": {
+      "fts": "passed",
+      "recursiveTriggers": 1,
+      "contentVectorMigrationBytesPreserved": true
+    },
+    "after": {
+      "size": 15478784,
+      "mode": "600",
+      "uid": 501,
+      "gid": 20,
+      "mtimeMs": 1790984990311.173,
+      "sha256": "8b493db7055402e10c34d614e2623564d2a2abd23fb603d51eaf0fafc24e8a6f"
+    },
+    "unchanged": true
+  },
+  "payload": {
+    "files_and_symlinks": 31127,
+    "dmg_install_parity": true,
+    "zip_parity": true,
+    "payload_manifest_sha256": "4a203750ad5d76eedffbbdff935b435b1d4426d6b40f6d2344b5a2e0f636ee01"
+  },
+  "minimum_os": {
+    "declared": "14.0",
+    "arm64_mach_o_files": 111,
+    "exceed_minimum": [],
+    "inspection_errors": [],
+    "actual_macOS14_test": false
+  },
+  "saved_data": {
+    "entries": 60,
+    "files_hashed": 30,
+    "sensitive_file_contents_read": false,
+    "unchanged": true,
+    "manifest_sha256": "a976b9846f941c22e28b4eddc2f3c2c4646476c6555dc4a41f2598e867ff71b1"
+  },
+  "tests": {
+    "pytest_passed": 2797,
+    "pytest_skipped": 5,
+    "pytest_seconds": 306.43,
+    "focused_python": 16,
+    "native_cache_regressions": 4,
+    "desktop_unit": 20,
+    "offline_browser_checks": 5,
+    "frozen_resources": true,
+    "packaged_window": true,
+    "dmg_installed_frozen": true,
+    "dmg_installed_window": true,
+    "upgrade_history_preferences_native_vault": true,
+    "dmg_integrity": true,
+    "zip_integrity": true
+  },
+  "signing": {
+    "valid_developer_id_identities": 0,
+    "signature": "ad-hoc/linker only; no TeamIdentifier or sealed resource signature",
+    "gatekeeper": "rejected: code has no resources but signature indicates they must be present",
+    "stapled_dmg_ticket": false,
+    "signing_inputs": "prepared; not executed",
+    "notarytool": "1.1.3 (42)"
+  },
+  "external_gates": [
+    "Developer ID Application identity/private key available through local Keychain, with Apple Developer access and a secure local notarization profile",
+    "Clean Apple Silicon test Mac with default Gatekeeper and actual macOS 14 environment; repeat credential-backed launch and upgrade after signing",
+    "Public publication/upload requires explicit final authorization after these gates"
+  ],
+  "artifacts": {
+    "ResearchAssistant-0.1.0-prompt16-20261013-arm64.dmg": {
+      "sha256": "db5cfd0b722cc0b58ff6be7c8e970fe0d87681130ec7a80f16356789a5a0bc3a",
+      "bytes": 699222673
+    },
+    "ResearchAssistant-0.1.0-prompt16-20261013-arm64.zip": {
+      "sha256": "f69c8b00afd852ade1169eb150a7e0d9dea5ba6bdf621faaf8cb86045c699965",
+      "bytes": 717930516
+    },
+    "ResearchAssistant-prompt16-20261013-source.tar.gz": {
+      "sha256": "c0bf6240188d0a0e71d26ef9debd154e80b5f73b144b2cebb42cb4e4e58a3a01",
+      "bytes": 4607881
+    },
+    "SOURCE-MANIFEST.json": {
+      "sha256": "bb43cb1c2c4587810de990b6d036f314221e08d6e68f50753226b59978f847f1",
+      "bytes": 97956
+    }
+  },
+  "evidence_sha256": {
+    "api-contracts.log": "2bb78356ce317b715d614dff06993dc3562177878d9dafdadf134fd761a9b65e",
+    "backend-build-retry.log": "a43a80a580c7a6aec6e27f35d50419f2e031a75c80c3621d5ac35f68f09ccf48",
+    "backend-build.log": "245d66782b3ee024cafc5a8c8a5022b22f022e9cda65183e35d34e272c845b54",
+    "boundaries-final.log": "504cebd2684317f62dde85a0352bd74406b4e54e1753df952b7e16b33e4eff3a",
+    "boundaries.log": "504cebd2684317f62dde85a0352bd74406b4e54e1753df952b7e16b33e4eff3a",
+    "cache-policy-tests-final.log": "6e77e3b37f98ddd0d81d7e4211c270d75cf4faa1c5f1ddf2e1dd7117574e5f35",
+    "cache-policy-tests.log": "f23283225e742ba6dc80f3f9c0c2639e72c94a44b3ac7d7dfc51103043629d3b",
+    "codesign-unsigned.log": "0b93e451e437c8ac7ae410e8776eefca67628db475d557c06c808158db718aee",
+    "desktop-unit.log": "2f5ecd738f2aea1f2ad5feed09b062118d7416839c822b15164696e38c9e6c60",
+    "distribution-offline.log": "54024a6b375afcf6e62a3ecb05439e944fa6fd20b072fa946dc93fff1dd0e6de",
+    "distribution.log": "7da72a1a809515e6cbfd1bd86f2dfecf3a0809a637eb5c0c4ff836e05045f089",
+    "dmg-attach.log": "75e9fa9d79cae73709ed5688fab524063070f98746be1700c0dcda7d423df715",
+    "dmg-copy.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dmg-detach.log": "7a042615bf3722a3771413c5ae0834a1153311a88abad4deef4d8ad80a5c7273",
+    "dmg-installed-frozen.log": "a3a16a26b57219cc7267b7744f06b8d3711680e06958ed09a9d65bdc2d977b4b",
+    "dmg-installed-window.log": "58b0cf1d01b8d3d1c632bf21989e3cb21e548964d2bfbe802c45905c30bdb4ce",
+    "dmg-verify.log": "af7ff13a7f28bc5d97f9de7ea2b068385ebbdcc07e104a4ee174aeff75ea92c4",
+    "evaluation-discovery.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evaluation-integrity.log": "4f4df9c2d04f3dc697dc8e12738657a5761991b432411fe79b76e1f1334ce265",
+    "evaluation-leads.log": "e35adaf5f544d0a8d64b9bbc4f235d755afa0461a8ac47455b528c09fe27ef51",
+    "evaluation-quality-fixture.log": "49b0e9a995ab8ebed22e83f6f0f632ecb65da9cb10dff882e336d886302e4c7c",
+    "evaluation-quality.log": "ce6775718d0442455a9a321ce17f62d587033103dfd3296f18b46f33b6803e7e",
+    "focused.log": "a5c82e5df0dbc45c0114de3751dfd866bf7a8b5e4f1ad1e570c7408aa2c6a113",
+    "format-final.log": "db6356a92f4715fde62bc2c03fa2d15a7272c660257c593bce62a09cdb89b970",
+    "format.log": "7b61f2fe8db45c77d6103715501aaf63dfc9194f5377e50983054674754f59c6",
+    "frontend-build.log": "391c35e0d9bf643c99d0c80df62f604c4b668a4e9071ef5d1c9e4216102c49f2",
+    "frontend-lint.log": "050c69da23536758722729aeda55a8d0fb9d557495ef6d33d70873a3b64a71c1",
+    "frontend-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frozen-smoke.log": "a3a16a26b57219cc7267b7744f06b8d3711680e06958ed09a9d65bdc2d977b4b",
+    "gatekeeper.log": "31d9736e7e84d8bf3be82ecb315d9078c52ed394057003e83117e58cf6870fd9",
+    "installed-cache-access.log": "b3f6f90adef89ea436d064a171dc2a3adb08ee4b7ceb774f45ee9f7f26e940f1",
+    "installed-cache-repair.log": "b3f6f90adef89ea436d064a171dc2a3adb08ee4b7ceb774f45ee9f7f26e940f1",
+    "offline-ui-retry.log": "b2901e31dbf5d6640fc632d78dce3181f301ea06a543b2eabf979c8fd250572d",
+    "offline-ui-unrestricted.log": "5cdba51df02de4bae39aa0ba4e4ef58330a6ce22c4cfad4ab97ee4b08b74ec13",
+    "offline-ui.log": "b2901e31dbf5d6640fc632d78dce3181f301ea06a543b2eabf979c8fd250572d",
+    "package-retry.log": "57bb9b191037db1231e3c11db66671353fed10d95c3333a6eaab339e8f8b461b",
+    "package.log": "23695e3a10eb461982f98e891960df1d1ae5ba525aa11d95f59a395fcbabd15c",
+    "pytest-final.log": "9487ef843f7fce68b80985f8a84d68eb21af07905833340b6b733b06ea8cc324",
+    "pytest.log": "1cce22878a8c89003b7d844502f5bf3248de7a2f89a2167435c799a913c2c345",
+    "ruff-final.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "runtime-identities.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "shutdown-electron.log": "c6f5a7dbdc7a7b6e27dea34332d96296c3ad0a6943dbfed36a9664a27d0ef35d",
+    "shutdown-unrestricted.log": "dc40ec2b7bcc94aab2d4b86e0b247725ea14211f894e0a4886356ca2c2605921",
+    "shutdown.log": "d56682aa0c5ebed6fab6e1ae168fd2914455e5ac25a99633b61a22cb38c5c37d",
+    "stage-candidate.log": "bfacd135aac1df384735ebe33cd81cc547a306916ff0c010fdde34e028459c14",
+    "stapler-dmg.log": "b8924590a5cee6e30b340b5367e9890422d8157d2821b38d8189ecfcb681114f",
+    "stapler-unsigned.log": "a4d4a51d776e503523727330057259d51341b96a0df0efeaf0bd3749f4265bb2",
+    "upgrade.log": "ba939baae2443b5bf428b4106f0bcb40587c0900c86afa33433bf778b8967eff",
+    "window-smoke.log": "58b0cf1d01b8d3d1c632bf21989e3cb21e548964d2bfbe802c45905c30bdb4ce",
+    "zip-verify.log": "aed7c959c56b7b879be749d1df100d6d89a89609ae974179526a0c6d0f461175"
+  }
+}

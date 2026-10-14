@@ -1,0 +1,11 @@
+# Prompt 17 — resolve Windows checks without assuming a release
+
+You are powered by GPT 6.1 Sol XHigh. Usage goes very fast. Keep doing some hands-on Sol work. But, use `gpt-6-luna` helpers with task-appropriate effort when suitable, preferably only for simple tasks, such as for searching in general! Retain Sol for hard reasoning.
+
+Investigate Windows CI and native durability at the current revision. Read AGENTS/conventions/status/HANDOFF, `.github/workflows/desktop.yml`, desktop build guide, database recovery/storage policies and the historical failing job `111064698744` at `4a1d1cc`. That old job's Python quality checks reportedly failed, but its cause was not established; verify **current** workflow/run status and logs before claiming the failure persists. Windows public release is presently deferred. Check Git/graph freshness and verify important symbols against live source.
+
+Reproduce confirmed current failures on a Windows runner or disposable Windows environment. Fix root causes in tests, dependency locks, path handling, subprocess ownership or code as evidence requires. Do not weaken assertions, skip failing checks, change evidence policy or treat a macOS success as Windows validation. Exercise actual NTFS ACL privacy, file/link publication, no-overwrite backups, interrupted upgrades, power-loss/crash recovery behavior, long/path-Unicode cases, credential manager, native process shutdown and packaged installer/smoke behavior. Keep tests isolated from real user data. Where power-loss cannot be simulated reliably, document a repeatable fault-injection limit and the unverified native property.
+
+Run the full Python suite, Ruff/format, frontend checks and Windows packaging/native smokes at the target revision; record runner OS/filesystem, artifact SHA and exact failures/results. Add CI gates only for checks that actually run and distinguish mocked from native evidence. Update STATUS/HANDOFF with current evidence and remaining release gates. Success is resolved CI and defensible native durability/security evidence; it does not imply a Windows release has been authorized or published.
+
+Acceptance: current Windows CI passes or has a verified remaining blocker, native durability results identify the platform tested, and release status reflects only demonstrated evidence.

@@ -11,16 +11,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 def test_phase0_scaffold_exists() -> None:
     expected_paths = [
         "AGENTS.md",
-        "DECISIONS.md",
-        "STATUS.md",
-        "HANDOFF.md",
+        "docs/project/DECISIONS.md",
+        "docs/project/STATUS.md",
+        "docs/project/HANDOFF.md",
         "README.md",
         "pyproject.toml",
         ".agent/PLANS.md",
         ".agent/plans/phase-00-foundation.md",
         ".agents/PLANS/phase-00-foundation.md",
-        "providers/.gitkeep",
-        "prompts/.gitkeep",
+        "backend/pyproject.toml",
+        "backend/requirements.txt",
+        "backend/requirements-legacy.txt",
+        "backend/src/providers/__init__.py",
+        "backend/src/researchassistant/prompts",
         "tests/fixtures/.gitkeep",
     ]
 
@@ -30,7 +33,7 @@ def test_phase0_scaffold_exists() -> None:
 
 
 def test_pyproject_declares_phase_dependencies() -> None:
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    pyproject = tomllib.loads((ROOT / "backend/pyproject.toml").read_text(encoding="utf-8"))
 
     assert pyproject["project"]["requires-python"] == ">=3.11,<3.13"
     assert pyproject["project"]["name"] == "researchassistant"
@@ -50,7 +53,7 @@ def test_pyproject_declares_phase_dependencies() -> None:
         "pytest-cov>=6.0,<7.0",
         "ruff>=0.8,<1.0",
     ]
-    assert (ROOT / "requirements-legacy.txt").read_text(encoding="utf-8").splitlines() == [
+    assert (ROOT / "backend/requirements-legacy.txt").read_text(encoding="utf-8").splitlines() == [
         "-r requirements.txt",
         "streamlit>=1.37,<2.0",
     ]

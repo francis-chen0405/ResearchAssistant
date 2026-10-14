@@ -539,7 +539,9 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
 
 
 def test_browser_claim_submission_trims_whitespace_before_api_request() -> None:
-    page_source = (Path(__file__).parents[1] / "web" / "app" / "page.tsx").read_text()
+    page_source = (
+        Path(__file__).parents[1] / "frontend/features/research/use-research.ts"
+    ).read_text()
 
     assert "const trimmedClaim = claim.trim();" in page_source
     assert "raw_claim: trimmedClaim" in page_source

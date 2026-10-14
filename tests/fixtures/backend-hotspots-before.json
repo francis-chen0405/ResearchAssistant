@@ -1,0 +1,923 @@
+{
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveBudgetState": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "d0b8e92954eb2447642f5ca90af863a9b6dfcd53cebdf578d503902ba6066ec4"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveContinuationResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "8b82efa4a672076e819b156d968e8a6df5b01eed05195e341806a4d747210c26"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptivePlannedRound": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "4ff5d3f03a4307830c6ca5234591f36df33b210b355e75ef2d32306eab6b1b62"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveRoundExecution": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "508e695547f2f430209c52bae195e94a4b2ea80090c05d245fec6a83c644fec9"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveRoundStatus": {
+    "enum": {
+      "CANCELLED": "cancelled",
+      "COMPLETED": "completed",
+      "DEGRADED": "degraded"
+    }
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveSearchOutcome": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "c2a5130e3d05fdc51c06754a7240bc5d5e8dac0c598dd8ee68af497a956255bf"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveSearchResults": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "c013f29d124e141d9941a681791dd83c53a9cab5a0d445c33de38ff5cd5908f1"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveStopCode": {
+    "enum": {
+      "BUDGET": "insufficient_budget",
+      "CANCELLED": "cancelled",
+      "GAP_ANALYSIS_DEGRADED": "gap_analysis_degraded",
+      "GOVERNOR_REJECTED": "governor_rejected",
+      "INVALID_SEARCH_AGENT_PLAN": "invalid_search_agent_plan",
+      "NO_ELIGIBLE_PROVIDER": "no_eligible_provider",
+      "NO_NEW_QUERY": "no_materially_new_query",
+      "PROVIDER_FAILURE": "provider_failure",
+      "ROUND_FOUR_COMPLETE": "round_four_complete",
+      "ROUND_ONE_COMPLETE": "round_one_complete",
+      "ROUND_THREE_COMPLETE": "round_three_complete",
+      "ROUND_TWO_COMPLETE": "round_two_complete"
+    }
+  },
+  "researchassistant.agents.v2_adaptive_search:V2AdaptiveStoppingDecision": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "fe3675ccaf3754fe918af584ba7699f8569fb821766129cc9e5d47e072df0533"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2MergedSurvivor": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9d6d143698a75e1603b466f78015683a162492c40ad411214c31f4198ec6acc3"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2MergedSurvivorPool": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5036d6b40f8114163172ab8b7ec82bd87edc351c1e011f36f35ccaf8295a4e8b"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2PlanningAttempt": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "820303edb25e1b9d11c6e4aa31cd7a7446f4b29a9d875153f6a0eaeaa3b8526b"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2PlanningOutcome": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "f4594c03d3c7a0fe4be53ab796b91321189552dc08a6cb3c2581edc7d0242769"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2PlanningRepairInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5bb94388e372d307b3b8ecc7cf1c078269b079259e6f9e7bf564eb42143575c0"
+  },
+  "researchassistant.agents.v2_adaptive_search:V2SearchAgentReservation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "cbbc6f48f551d921182b0fc96cf4a5587f1aad85f245e865966f5d2dd87780e3"
+  },
+  "researchassistant.agents.v2_round_four:V2RoundFourPostPlanFacts": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "274e6641c2983d8d616a41ba246369aca443ee2c41b774f9a2e63a290a4bcfcd"
+  },
+  "researchassistant.agents.v2_round_four:V2RoundFourRunResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "3518d13ca7f134646f399ac45116ee59eaf03fa7dbb9b7cb9b4ef1ccb095f26e"
+  },
+  "researchassistant.contracts.model_research:CrossrefIdentityMetadata": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "efc8e0f33188f71a47790ea5cb605ae62916122b012f541538f0dc00de009574",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:DeepAnalysisState": {
+    "enum": {
+      "BLOCKED": "blocked",
+      "COMPLETED": "completed",
+      "IN_PROGRESS": "in_progress",
+      "NOT_STARTED": "not_started",
+      "READY": "ready"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:DeepAnalysisStatus": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "85e259754f411d2023aaee343fd9b2cb4a5f7f461239b788ed2e76aed1e2e58c",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:DiscoveryMetadataEntry": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "681fdcef06b28eeb3c0b700cbe95136889997ba1cdcfa94b6db8657ce0d246ba",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:DiscoveryProvenance": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "2aa9511be6080e3e409a243b82725adf34895cc8588225f13f0d88092a5b8ab3",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:DiscoveryProviderReference": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "037dc212edab31e2a60f277be220c93de71e46d5ea6a4933e05817331ccd7681",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:GapAnalysisResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "1725d7f0e5500570baf50ffe96eabf79e32bc6788e0cd4264d829696cc820b70",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:NormalizedDiscoveryItem": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "01c75ac036cbe3cbac7b488cb2fdc2c6096bd9dc36212a9d54fffc26055c552e",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ProbePassage": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e39b94f5e3bb34a0538b63389406d0a547a7e729c18847d6b88f94e528637193",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ProbeResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9bdad04d117e4db3f6bb7e3a4a95aa0270001e2fd82f177d6d625b15fbcf826b",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ScoutBatch": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "0b108481c01a5a94021ee37d5e5e5ace94fa46d41836440d77341694e2d398e2",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ScoutBatchAudit": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "6de0023317e80a3689921e7f1d24f5ae9139943f5e4fd7d09492bd24d00b34c8",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ScoutCandidate": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "d7589d7cfa87c19dee98beecb16cdcd31118ef0607333376df07be9ba00c88b8",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ScoutDecision": {
+    "enum": {
+      "MAYBE": "maybe",
+      "RETRIEVE": "retrieve",
+      "SKIP": "skip"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:ScoutItem": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "845031e0e499520254496039fb1cd9a0b8a126e25aa9894a537a85107aaa93ef",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:SearchDirectionGapReference": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "324600eeb9d42700a5a7960fa18694dcfe005e7e8191c26cfdb2a45ee74d410d",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:SourceCluster": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9037082846a33f732c3cbbb3137c0d844845a634a609a685e5992d55b0d31006",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:SourceRecommendationResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "91c7bcd73a6b08c0869126fcaac69e77d65adfed08c4958784a48c0d815d9460",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:SurvivingSourceRecord": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "2a0fe73d65ec80febfc61185d3a2192de427f319cf2333b9a573d4f11865c596",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AcquiredSource": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "098efcf2d58d40a91d8608aca756f942fa6d0d19163dd71e37a6e8c904fcbfd6",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AcquisitionAttempt": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "eaa4f8fae397be635144cb50d9b5c9d71b66a0df16dd8fd89108640100863258",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AcquisitionPolicy": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "23edb1fb8ebf520b772378406e2a825eebd84a45dc1472c7993fe4791c9621df",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AcquisitionProbeOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "7c31ab65ebb86c04993402bbd173da26a2d83e994b69b98203ce588b1e070721",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AcquisitionProvider": {
+    "enum": {
+      "FIRECRAWL": "firecrawl",
+      "WIGOLO": "wigolo"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AdaptiveRoundPlan": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "17fb798625abb5aaa5dbc245009e1900b4e237c8ea365494f8f014039bdb2b71",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AdaptiveSearchModelOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "79974da5f2a1335319e4204c26e0a7b2e44684ea1b90fe686a649cbfcd4a2544",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AdaptiveSearchProposal": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5ecddbb26e21fdf3f2e935d913b0146a6aee5f9517b353f3ba5ac25cce6134ff",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2AdaptiveSearchQuery": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "8fa9fc86f04382cb4a58cf4155fd9284b5d1735a0f138d2a7a97a2b50ad6c1a9",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ClaimCoverageAssessment": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "6105ebd2747884243578ec045bcb564fb7fb4e3bf483d9bc742c4417a6c4f010",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ClaimCoverageDimension": {
+    "enum": {
+      "COUNTEREVIDENCE_OR_ALTERNATIVES": "counterevidence_or_alternatives",
+      "EFFECT_OR_ASSOCIATION": "effect_or_association",
+      "LIMITATIONS_AND_BOUNDARIES": "limitations_and_boundaries",
+      "MECHANISM_OR_PATHWAY": "mechanism_or_pathway",
+      "POPULATION_AND_SETTING": "population_and_setting",
+      "REPLICATION_OR_GENERALIZABILITY": "replication_or_generalizability"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ClaimCoverageFocus": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5e913b03e4dbb264e350361cacb3aa6b607bebc4a33ec5abc18f5f2b80c82b14",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ClaimCoverageKind": {
+    "enum": {
+      "CLAIM_COMPONENT": "claim_component",
+      "EVIDENCE_AUDIT": "evidence_audit"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ClaimCoverageSpecification": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5ccfe227918041fc4029c74e8c0747b3b9d766ae294c441733887b1b94e980b7",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ClaimCoverageState": {
+    "enum": {
+      "CONFLICTING": "conflicting",
+      "COVERED": "covered",
+      "MISSING": "missing",
+      "NOT_APPLICABLE": "not_applicable",
+      "PARTIAL": "partial",
+      "UNAVAILABLE": "unavailable"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2DeepAnalysisBudget": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "48269b79a52c12ece6df536d0ca432b7649e84811f4d78ff4e0fbc7e133f4071",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2DeepAnalysisBudgetReason": {
+    "enum": {
+      "BACKFILL_REPLACED": "backfill_replaced",
+      "COST_RESERVE": "cost_reserve",
+      "PHYSICAL_CALL_CEILING": "physical_call_ceiling",
+      "TOKEN_RESERVE": "token_reserve"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2DeepAnalysisQueuePlan": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "d27c1355de6f780bcbaaaab6964b001c960f71750ae55f284d1460c964ca91b1",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2DeepAnalysisSourceStatus": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "fcf229c0b3fa24247dabfdb7be1c2d79fb70f46488eab064437a6a7f760275c9",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2DeepAnalysisTokenReservation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "f346f719c2054ffc01b7933a55a387e379ae58f5fc2912116471573e95c0e408",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2DiscoveryScoutOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "f8b8afa3d444c1e4007b1092616ef16de587b32c9ea1d48dd06f75e0160d9402",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAcquisitionFailure": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "667da1d838ff3732c55db5a32ceb57f1115e08135a69d0cdf8f5fbb8a2180080",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAnalysisAttempt": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "2e7d9135aa07a015afe2578cb6cec394cebda05639048d539f3bcdb14e9652da",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAnalysisInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9776adf0fa39eea9fdd4aa8a3c0cdb071a96454d1b56d818f055a0aacbb5d332",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAnalysisModelOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "6d19ef023de9279b7b34919c4e03a3196d457d893b821db2aa82072172fc341b",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAnalysisOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "48e49bc51c40199ba9198fb825626f93c2b1f73ebcb7923b8c42519775f8f67e",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAnalysisResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "d2c22a03019e19e7c88947bdd561c06719a78c6c008c483906c07385fa79cc76",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAnalysisState": {
+    "enum": {
+      "COMPLETED": "completed",
+      "DEGRADED": "degraded"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapAttemptedQuery": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "c421991dd26ef0f68412f0fed75aeeea662b3e42072be0080237caf5032e3bd6",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapBudgetState": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9de0033604c24bcc19b2c62575ce0a76750bcf8779551cfdaf5d04b65bd45e22",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapCoverageReconciliation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "c9bf280f10095303a372afb9d94b3947e7126af21d77eef41ec311d5b7dd5f35",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapCoverageRecord": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "d171db4f42c8393ab7663954986eabdaefe5111ffcc5bb155e69a47f1ce02785",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapCoverageState": {
+    "enum": {
+      "COVERED": "covered",
+      "NOT_ATTEMPTED": "not_attempted",
+      "UNAVAILABLE": "unavailable",
+      "UNRESOLVED": "unresolved"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapDuplicatePattern": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "7915b4b304cda838a68aba947b12a6c53a88c99b783e75619d58ad230e0d0d28",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapIdentity": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e23052613f68060a6153bedab8bc4e0fbef7423d08233f482a8ad03ad30f222f",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapProbePassage": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "41b23abd29c8ea44f3edddc1af5666f1b6d4f1ebf9101c8cdac6579e689d47a2",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapReservation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "ad96594d81a1169a5d4dd809872b4ae01b4ca74adeca4a15cc60b0e945b0ee95",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapSearchDirection": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "8241ddaf567d47b2fb243560e61c7297704277c1d17ce4c538d1d4ae548fb134",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapSourceFamily": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "655926cae47bc389c66655f99f628ce4808a083cf75bb308888262f1f483a9d3",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2GapSurvivingSourceMetadata": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "a354a44d21b8d9b181f6b3deec967ecfb364c1d94709b738593b8f66c71ffe3f",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerClaimComponent": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "0a2e505e6d077a03cb4a3f4d82190b98343fe8939fe88ce4056e9bdced620f11",
+    "shared_export": false
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "451456c19923b204cc5a7d9d39c3a6eb2683c2c106be201ed841501aab44e550",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerModelOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "ad77c07a7fcd75b998abcb5f1621571f6fed9a120e8c82bcc7b1e44253ec7c2f",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5ecbf11340eb0375a5067ed55d15d608a254927ae63229ab01ac9dc7ab59ac5e",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerPolicy": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "30eb31b615cdfb8bfcd99306979a86d0432ef54c7f6a78172dd49e3f6dcbe60d",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerSearchLane": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "846e77dc5651036066767ee8aff7243c1bd991af79f2d0efa1d7db0480f15d51",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialPlannerSearchResponse": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "737876f564bee021e61c54a7775b5ea19ce6187a6df86df1faf5baedfa4310d3",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2InitialResearchPlan": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9f53f573db643ecef94ed3c919ac5ec4eff06b7dcba8da891cc4773576f08a07",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2MaterialGap": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "047835fb0f73f6f6411a20f19be600c430e33a731ff28241bd85f5b6ea2443a4",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2PersistedArtifact": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e546990960a407fdc4c64b677e26324e5c243178999346c621a332e2dab34446",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2PipelineIdentity": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e72062538a8bf23d6e236612ecd25cd20fc92666cbd228e4bc9221767c0283ea",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2PlannedSearch": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "df3018b66633309f9243d3c9327df544bb41bdcec35b09cd67ddabc9add6272e",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ProbePassage": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "dc8a66da37740fdf6105d390566376c6ff798d2c12391aa47100f21889e5daae",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ProbeResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "5d595cbee07877aa9df854cc22d4bd18aeef20edc075f5bab26f1b7261d56310",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ProviderSearchBudget": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "70528274ac639115de10990ba2a141c238195dfd358fb503b05be060c0f21c61",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2RoundFourDecisionCode": {
+    "enum": {
+      "AUTHORIZED": "authorized",
+      "CANCELLED": "cancelled",
+      "DUPLICATE_HEAVY": "duplicate_heavy",
+      "GAP_ANALYSIS_UNUSABLE": "gap_analysis_unusable",
+      "INSUFFICIENT_RESERVATION": "insufficient_reservation",
+      "NO_ELIGIBLE_PROVIDER": "no_eligible_provider",
+      "NO_MATERIAL_GAPS": "no_material_gaps",
+      "NO_NOVEL_QUERY": "no_novel_query",
+      "NO_PRODUCTIVE_SEARCH": "no_productive_search",
+      "TERMINAL_FAILURE": "terminal_failure",
+      "UNPRODUCTIVE": "unproductive"
+    },
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2RoundFourGovernorDecision": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "925fff6c45dc5d6e4f98ce8f473063380255a75af629b0d2ccabd138d2c14a93",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2RoundFourReservation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "9deb20be93e4ac8b4c770ff71d9b88997a2f62ea90d8d50312f2d7d469fec4bf",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2RoundFourTerminalOutcome": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "1e05acce20a65bc477e273e17634f1b17f3354359809679949b5f8a55a662eed",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2RoundOneSearchQuery": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "6ce93ce205ff08f722126da84ef4cea4523ed64400a176c1ec75c74833ff8f6c",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ScopeInterpretation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "699ad610804f315e30640c8c3d9638b99b0fe95c1001b28ec038bc76cef78a57",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2ScoutRequest": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "e013d18742cae05553d2730a97c5d2a2039dba80a8bfe458e9d6bd4164c763ad",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SearchAgentInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "58df22fec0a6f194aedd8ec2d238ff9750dfc5d73d20afeae0c7e6cee9bd12b5",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SearchRoundPlan": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "3c9133f4654b718c24fce72201a958ed48bf3e4cf062d8138f3a11731e447d74",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionAttempt": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "256a056dde3cb016315a3228436bee3823827c110855213d282f80c469afe369",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionCandidate": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "735510230b56793152fa99a999b0106585e6ee4a7cd0b036a950d12234d1fb49",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionGap": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "ab74f70cf05b96db5f6f77cb72b54e9ff7e11848077e9f11073b578c365db2c8",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionInput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "b31707c811c87529a29e195c91c8619d76a378b3b61d626f2001d0932a3f5364",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionModelOutput": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "afe4be8b51f72dd261b870d2f136b3db9a1734813a9cf8074dc230e2c5539535",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionProbePassage": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "f5664fedd474d085af8a12d9332430fa4eab76a675105da3d02dbc2c9826d6b7",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionQueueResult": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "c1013b2b94a6617d954d0054889b0203a7c8f47f4f224556c148a8a3e2271646",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionRecommendation": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "39d86e5764c3f8a9ca4baff90c9fce1c369904f75e56debc328386284020c553",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SourceSelectionSearchProvenance": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "48f7c122a9b25b125ec16121e72250477615f87ef83b02ff02aaff99bfe9377b",
+    "shared_export": true
+  },
+  "researchassistant.contracts.model_research:V2SurvivingSource": {
+    "config": {
+      "extra": "forbid",
+      "frozen": true
+    },
+    "schema_sha256": "7fdb78b3dfa04b479b1330bf3596337fedeca5b0ec0112d5819ac40cdf988aab",
+    "shared_export": true
+  },
+  "researchassistant.research.orchestrator:ObjectiveRoutingFailure": {
+    "shared_export": false
+  },
+  "researchassistant.research.orchestrator:OrchestrationBudget": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "478a117bba3a60c085312e005ec46e769b62daec461d7603f169a4b8f7a8a6ae",
+    "shared_export": false
+  },
+  "researchassistant.research.orchestrator:OrchestrationRetryPolicy": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "7ca0ea08d1f5e29485278a12229794da3fd7a3eafdf0e0e8d74b274b0229f579",
+    "shared_export": false
+  },
+  "researchassistant.research.orchestrator:Phase9Cancellation": {
+    "shared_export": false
+  },
+  "researchassistant.research.orchestrator:PinnedModelSnapshot": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "cbc706bd67a3c07ee8e2b262d1c173ccf950de8559e742830817c82c67dd32a9",
+    "shared_export": false
+  },
+  "researchassistant.research.orchestrator:ProviderOrchestrationConfig": {
+    "config": {
+      "extra": "forbid"
+    },
+    "schema_sha256": "2e38e1a361b42bf926490a18e3d4eff519858d00f8e4d30b0bdd148d55279187",
+    "shared_export": false
+  }
+}

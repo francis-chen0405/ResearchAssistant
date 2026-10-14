@@ -1,0 +1,930 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "raw_response",
+            "snapshot",
+            "stage",
+            "request",
+            "judgment",
+            "reference"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type",
+        "role"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "Attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "search",
+            "model",
+            "acquisition"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "endpoint": {
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "settings": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Settings",
+          "type": "object"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finished At"
+        },
+        "outcome": {
+          "enum": [
+            "success",
+            "failure",
+            "unknown"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/Artifact"
+        },
+        "request_kind": {
+          "default": "wire_request",
+          "enum": [
+            "wire_request",
+            "reservation_receipt"
+          ],
+          "title": "Request Kind",
+          "type": "string"
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Artifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "response_kind": {
+          "default": "wire_response",
+          "enum": [
+            "wire_response",
+            "completion_receipt"
+          ],
+          "title": "Response Kind",
+          "type": "string"
+        },
+        "model_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Artifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reserved_usd": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Reserved Usd"
+        },
+        "actual_usd": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Usd"
+        },
+        "cost_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Basis"
+        },
+        "tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tokens"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "category",
+        "provider",
+        "endpoint",
+        "settings",
+        "started_at",
+        "outcome",
+        "request",
+        "reserved_usd"
+      ],
+      "title": "Attempt",
+      "type": "object"
+    },
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "work_id": {
+          "minLength": 1,
+          "title": "Work Id",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "snapshot_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot Path"
+        },
+        "judgment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Judgment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dispositions": {
+          "items": {
+            "$ref": "#/$defs/Disposition"
+          },
+          "title": "Dispositions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "attempt_id",
+        "url",
+        "work_id",
+        "rank",
+        "dispositions"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "Disposition": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "enum": [
+            "returned",
+            "normalized",
+            "retained",
+            "ranked",
+            "scout",
+            "acquisition",
+            "capture",
+            "selection",
+            "extraction",
+            "analyst",
+            "admission",
+            "visible"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "kept",
+            "dropped",
+            "failed",
+            "not_reached",
+            "not_observed"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "evidence_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Path"
+        }
+      },
+      "required": [
+        "stage",
+        "outcome",
+        "reason"
+      ],
+      "title": "Disposition",
+      "type": "object"
+    },
+    "Judgment": {
+      "additionalProperties": false,
+      "properties": {
+        "reviewer": {
+          "minLength": 1,
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "authored_fixture",
+            "assistant"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "evidence_paths": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Paths",
+          "type": "array"
+        },
+        "useful": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Useful"
+        },
+        "relevant": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevant"
+        },
+        "capture": {
+          "enum": [
+            "full_text",
+            "abstract_only",
+            "partial",
+            "shell",
+            "blocked",
+            "unknown"
+          ],
+          "title": "Capture",
+          "type": "string"
+        },
+        "study_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Study Id"
+        },
+        "independence_rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Independence Rationale"
+        }
+      },
+      "required": [
+        "reviewer",
+        "kind",
+        "rationale",
+        "evidence_paths",
+        "capture"
+      ],
+      "title": "Judgment",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "observation_id": {
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "topic_id": {
+          "title": "Topic Id",
+          "type": "string"
+        },
+        "arm": {
+          "title": "Arm",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "fixture",
+            "replayed_observation",
+            "authorized_live"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "collector": {
+          "title": "Collector",
+          "type": "string"
+        },
+        "provenance_note": {
+          "minLength": 1,
+          "title": "Provenance Note",
+          "type": "string"
+        },
+        "allowance_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allowance Id"
+        },
+        "source_identity": {
+          "title": "Source Identity",
+          "type": "string"
+        },
+        "settings_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Settings Sha256",
+          "type": "string"
+        },
+        "settings_path": {
+          "title": "Settings Path",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "audit_complete": {
+          "title": "Audit Complete",
+          "type": "boolean"
+        },
+        "candidate_inventory_complete": {
+          "title": "Candidate Inventory Complete",
+          "type": "boolean"
+        },
+        "final_inventory_complete": {
+          "title": "Final Inventory Complete",
+          "type": "boolean"
+        },
+        "attempts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Attempt"
+          },
+          "title": "Attempts",
+          "type": "array"
+        },
+        "artifacts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "discovery_handoff_paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Discovery Handoff Paths",
+          "type": "array"
+        },
+        "discovery_handoff_attempts": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Discovery Handoff Attempts",
+          "type": "object"
+        },
+        "search_attempt_result_paths": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Search Attempt Result Paths",
+          "type": "object"
+        },
+        "candidates": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "statements": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Statement"
+          },
+          "title": "Statements",
+          "type": "array"
+        }
+      },
+      "required": [
+        "observation_id",
+        "topic_id",
+        "arm",
+        "origin",
+        "collector",
+        "provenance_note",
+        "source_identity",
+        "settings_sha256",
+        "settings_path",
+        "input_sha256",
+        "started_at",
+        "audit_complete",
+        "candidate_inventory_complete",
+        "final_inventory_complete"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "work_id": {
+          "title": "Work Id",
+          "type": "string"
+        },
+        "urls": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Urls",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "work_id",
+        "urls",
+        "rationale"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "ReferenceSet": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "locked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "scope": {
+          "default": "non_exhaustive",
+          "enum": [
+            "non_exhaustive",
+            "exhaustive_fixture"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "locked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locked At"
+        },
+        "reviewer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewer"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Artifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supporting_evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "title": "Supporting Evidence",
+          "type": "array"
+        },
+        "works": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "title": "Works",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "method"
+      ],
+      "title": "ReferenceSet",
+      "type": "object"
+    },
+    "Statement": {
+      "additionalProperties": false,
+      "properties": {
+        "statement_id": {
+          "title": "Statement Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "snapshot_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot Path"
+        },
+        "entailment": {
+          "enum": [
+            "supported",
+            "unsupported",
+            "mixed",
+            "unknown"
+          ],
+          "title": "Entailment",
+          "type": "string"
+        },
+        "reviewer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewer"
+        },
+        "reviewer_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "human",
+                "authored_fixture",
+                "assistant"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewer Kind"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        }
+      },
+      "required": [
+        "statement_id",
+        "text",
+        "source_ids",
+        "entailment"
+      ],
+      "title": "Statement",
+      "type": "object"
+    },
+    "Topic": {
+      "additionalProperties": false,
+      "properties": {
+        "topic_id": {
+          "title": "Topic Id",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "development",
+            "held_out"
+          ],
+          "title": "Split",
+          "type": "string"
+        },
+        "claim": {
+          "title": "Claim",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "short_query": {
+          "title": "Short Query",
+          "type": "string"
+        },
+        "concepts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "reference": {
+          "$ref": "#/$defs/ReferenceSet"
+        }
+      },
+      "required": [
+        "topic_id",
+        "split",
+        "claim",
+        "rationale",
+        "short_query",
+        "concepts",
+        "reference"
+      ],
+      "title": "Topic",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "research-quality-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "prepared_on": {
+      "title": "Prepared On",
+      "type": "string"
+    },
+    "baseline": {
+      "additionalProperties": true,
+      "title": "Baseline",
+      "type": "object"
+    },
+    "topics": {
+      "items": {
+        "$ref": "#/$defs/Topic"
+      },
+      "title": "Topics",
+      "type": "array"
+    },
+    "observations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Observation"
+      },
+      "title": "Observations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "prepared_on",
+    "baseline",
+    "topics"
+  ],
+  "title": "Benchmark",
+  "type": "object"
+}

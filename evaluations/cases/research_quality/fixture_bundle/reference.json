@@ -1,0 +1,26 @@
+{
+  "schema_version": "research-quality-reference-v1",
+  "topic_id": "arithmetic",
+  "claim_sha256": "035b83c88921e9f4f1ac97539ab28c98a850561a132aa0286926de944fead640",
+  "scope": "exhaustive_fixture",
+  "method": "Authored fixture expected useful work IDs",
+  "locked_at": "2026-10-11T19:00:00Z",
+  "reviewer": "fixture-author",
+  "works": [
+    {
+      "work_id": "work-a",
+      "urls": [
+        "https://fixture.invalid/work-a"
+      ],
+      "rationale": "Authored expected useful fixture work"
+    },
+    {
+      "work_id": "work-missing",
+      "urls": [
+        "https://fixture.invalid/work-missing"
+      ],
+      "rationale": "Authored expected useful fixture work"
+    }
+  ],
+  "supporting_evidence": []
+}

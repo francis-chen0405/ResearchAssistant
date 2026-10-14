@@ -1,6 +1,6 @@
 # Prompt 2 of 4 — Repair schema, provenance, and model-accounting integrity
 
-> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../../STATUS.md). The findings and instructions below retain their original scope.
+> Historical database audit/implementation record. The four implementation phases are complete locally; see [the shared database plan](../../../../.agent/plans/database-review-2026-10-03.md) and [phase-4 review](../../../verification/database-phase4-review.md). Installed-cache and native-platform acceptance remain limited as recorded in [current STATUS](../../../project/STATUS.md). The findings and instructions below retain their original scope.
 
 Implement F2, F3, F4, and F5 from `docs/audits/2026-10-03/database-review.md` in the ResearchAssistant repository. This is phase 2 of four sequential implementation prompts. Read the current checkout and Prompt 1's implementation and verification first; extend its backup and lock boundaries instead of duplicating them. This prompt authorizes the necessary source, regression-test, and documentation changes. Complete this scope autonomously; do not stop at proposing a plan or ask again about routine implementation choices.
 

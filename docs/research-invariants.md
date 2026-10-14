@@ -1,6 +1,6 @@
 # Research, evidence, and storage invariants
 
-These are current operational constraints for changes to the research pipeline and persisted results. Read them with [the architecture](../ARCHITECTURE.md) and [model settings](model-settings.md). This reference retains detailed current rules that do not fit the concise architecture overview.
+These are current operational constraints for changes to the research pipeline and persisted results. Read them with [the architecture](project/ARCHITECTURE.md) and [model settings](model-settings.md). This reference retains detailed current rules that do not fit the concise architecture overview.
 
 ## Frozen run identity and accounting
 

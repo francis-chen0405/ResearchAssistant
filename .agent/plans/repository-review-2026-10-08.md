@@ -70,7 +70,7 @@ use installed Node tools directly because the pnpm wrapper attempted a registry 
 No paid provider calls, application installation, installer publication or native
 Windows verification were performed. The changed source has not been built into
 a new distributable or installed application. Existing live-quality, Windows,
-cache, signing and clean-machine acceptance gates remain in [STATUS](../../STATUS.md).
+cache, signing and clean-machine acceptance gates remain in [STATUS](../../docs/project/STATUS.md).
 Source identity changes require a new run under the existing compatibility gate.
 
 Exact preceding current-state files are retained in the

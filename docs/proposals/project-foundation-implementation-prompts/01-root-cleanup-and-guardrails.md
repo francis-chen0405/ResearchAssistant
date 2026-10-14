@@ -1,0 +1,13 @@
+# Prompt 01 — finish root cleanup and add guardrails
+
+You are powered by GPT 6.1 Sol XHigh. Usage goes very fast. Keep doing some hands-on Sol work. But, use `gpt-6-luna` helpers with task-appropriate effort when suitable, preferably only for simple tasks, such as for searching in general! Retain Sol for hard reasoning.
+
+Work in the ResearchAssistant checkout. Read `AGENTS.md`, `CONVENTIONS.md`, `STATUS.md`, `HANDOFF.md`, and `docs/proposals/project-foundation-2026-10-09.md`. Check current Git status and codebase-memory index freshness; use the graph for structural discovery, then verify live source and diff. The October 9 review found **17 tracked root Python copies staged for deletion**. `HANDOFF.md` still says to preserve them; this prompt expressly asks you to resolve that stale guidance after verifying the files are inactive. Preserve all unrelated staged/unstaged work.
+
+Complete the local cleanup: inspect the staged diff and every root import/build/identity reference; confirm canonical implementation lives in `researchassistant/` and only `cli.py`, `models.py`, `orchestrator.py`, `store.py` are supported root Python entries for this stage. If any of the 17 is still needed, repair that dependency before deleting it and explain why. Add a tracked-root allowlist check that fails if an accidental `.py` copy is committed. Existing bundle/fingerprint tests already exclude inactive copies; extend those tests only where they leave a genuine gap.
+
+Add a small dependency-boundary check using an explicit, reviewed baseline of current exceptions. At minimum, stop new contracts→providers/agents and storage→agents imports, while preserving current behavior. Do not encode a blanket rule that immediately fails on known current exceptions; either migrate those exceptions in a separate focused change or ratchet them down. Keep the check fast enough for CI and document how maintainers update it intentionally.
+
+Update current status/handoff language to match the verified cleanup; preserve archived documents. Run focused tests, the full Python suite, Ruff lint/format, staged and unstaged whitespace checks, and packaging/identity tests. Report the exact Git state and whether the cleanup is only staged, committed locally, or present on the remote. Do not overwrite another contributor's work or infer push authorization from this prompt alone. Success is a reviewable cleanup with no live import/packaging dependency on the removed copies and a test that catches their reintroduction.
+
+Acceptance: the root is limited to verified entry points, CI rejects new copies and boundary regressions, and the staged deletions and documentation are consistent.

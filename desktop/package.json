@@ -6,6 +6,8 @@
   "author": "ResearchAssistant contributors",
   "main": "main.cjs",
   "scripts": {
+    "test": "node --test shutdown.test.cjs",
+    "smoke:shutdown": "node shutdown-smoke.cjs",
     "start": "electron .",
     "package": "electron-builder --publish never"
   },

@@ -18,6 +18,7 @@ from test_seed_expansion_runtime import (
     _install_gap_analysis,
     _install_round_one,
     _json_response,
+    _lane,
     _manual_action,
     _openalex_work,
 )
@@ -37,6 +38,7 @@ from researchassistant.contracts.model_research import (
 )
 from researchassistant.research.seed_expansion import (
     execute_expansion,
+    offer_expansions,
     pipeline_work_identity,
     select_seeds,
 )
@@ -229,9 +231,12 @@ def test_partial_authors_do_not_waive_exact_seed_identity_conflicts(
     assert len(sends) == 1
 
 
-def test_three_seeds_ten_neighbors_each_and_thirty_run_bound(tmp_path: Path) -> None:
+@pytest.mark.parametrize("seed_identity", ("source-seed-expansion-v2", "source-seed-expansion-v3"))
+def test_three_seeds_ten_neighbors_each_and_thirty_run_bound(
+    tmp_path: Path, seed_identity: str
+) -> None:
     path = tmp_path / "aggregate.sqlite"
-    _binding(path)
+    _binding(path, seed_identity=seed_identity)
     _install_round_one(
         path,
         tuple(
@@ -311,6 +316,16 @@ def test_three_seeds_ten_neighbors_each_and_thirty_run_bound(tmp_path: Path) -> 
     assert (
         len({edge.candidate.work.grouping_key for item in expansions for edge in item.edges}) == 30
     )
+    assert offer_expansions(str(path), RUN, 3, (_lane(),), _clock) == ()
+    exhausted = _manual_action(path, 3, "related")
+    adapter, client = _adapter(handler)
+    try:
+        assert (
+            execute_expansion(path=str(path), action=exhausted, adapter=adapter, clock=_clock) == ()
+        )
+    finally:
+        client.close()
+    assert len(sends) == 6
 
 
 def test_raw_neighbor_metadata_cannot_be_forged_with_owned_response_hash(tmp_path: Path) -> None:
@@ -432,7 +447,6 @@ def test_known_failed_seed_resolution_is_not_offered_as_another_relationship(
     from test_seed_expansion_runtime import _lane
 
     from researchassistant.research.query_execution import available_query_budgets
-    from researchassistant.research.seed_expansion import offer_expansions
 
     path = tmp_path / "failed-seed.sqlite"
     _binding(path)

@@ -9,12 +9,12 @@ API_URL="http://127.0.0.1:8765/api/health"
 EXPECTED_API_VERSION="mlp-5-v2-phase13-analyzer-admission"
 
 if [[ ! -x ".venv/bin/python" ]]; then
-  osascript -e 'display alert "ResearchAssistant is not installed" message "Create .venv and install requirements.txt, then try again." as critical'
+  osascript -e 'display alert "ResearchAssistant is not installed" message "Create .venv and install -e ./backend, then try again." as critical'
   exit 1
 fi
 
-if [[ ! -x "web/node_modules/.bin/next" || ! -f "web/.next/BUILD_ID" ]]; then
-  osascript -e 'display alert "The website is not built" message "In the web folder, run pnpm install and pnpm run build once, then try again." as critical'
+if [[ ! -x "frontend/node_modules/.bin/next" || ! -f "frontend/.next/BUILD_ID" ]]; then
+  osascript -e 'display alert "The website is not built" message "In the frontend folder, run pnpm install and pnpm run build once, then try again." as critical'
   exit 1
 fi
 
@@ -43,7 +43,7 @@ api_is_ready() {
 if ! api_is_ready; then
   for pid in ${(f)"$(/usr/sbin/lsof -nP -tiTCP:8765 -sTCP:LISTEN 2>/dev/null || true)"}; do
     process_command=$(/bin/ps -p "$pid" -o command= 2>/dev/null || true)
-    if [[ "$process_command" == *"$SCRIPT_DIR/.venv/bin/python -m frontend.api"* ]]; then
+    if [[ "$process_command" == *"$SCRIPT_DIR/.venv/bin/python -m researchassistant.api.api"* ]]; then
       kill -TERM "$pid" 2>/dev/null || true
     fi
   done
@@ -60,14 +60,14 @@ if ! api_is_ready; then
     osascript -e 'display alert "ResearchAssistant API conflict" message "Port 8765 is occupied by a different service. Stop it, then launch ResearchAssistant again." as critical'
     exit 1
   fi
-  "$SCRIPT_DIR/.venv/bin/python" -m frontend.api &
+  "$SCRIPT_DIR/.venv/bin/python" -m researchassistant.api.api &
   API_PID=$!
 fi
 
 if ! /usr/sbin/lsof -nP -iTCP:3000 -sTCP:LISTEN >/dev/null 2>&1; then
   (
-    cd "$SCRIPT_DIR/web"
-    "$SCRIPT_DIR/web/node_modules/.bin/next" start --hostname 127.0.0.1 --port 3000
+    cd "$SCRIPT_DIR/frontend"
+    "$SCRIPT_DIR/frontend/node_modules/.bin/next" start --hostname 127.0.0.1 --port 3000
   ) &
   WEB_PID=$!
 fi
