@@ -131,8 +131,11 @@ def main() -> None:
         "previous_artifact_id": PREVIOUS_ARTIFACT,
         "previous_artifact_sha256": PREVIOUS_ARCHIVE_SHA256,
         "power_loss": "unverified",
+        "result": "incomplete; check the job log for the failing stage",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
+    # Preserve the exact attempted artifact even when a later native stage fails.
+    output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     with tempfile.TemporaryDirectory(prefix="RA NSIS ") as temporary:
         folder = Path(temporary)
         destination = folder / "installé 研究" / "ResearchAssistant"

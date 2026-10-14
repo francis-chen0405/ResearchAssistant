@@ -53,6 +53,7 @@ jobs:
           tests/test_saved_research_import.py::test_saved_fixture_replay_is_private_read_only_and_keeps_unknowns
           tests/test_source_archive.py::test_archive_inventory_retains_documented_launchers_and_required_guidance
           tests/test_source_leads.py::test_full_production_pipeline_leads_keep_admission_families_and_released_bytes
+          tests/test_live_resume_status.py::test_matching_resume_is_active_and_clears_previous_rejection
           --junitxml=desktop/build/windows-evidence/regressions.xml
       - name: Upload Windows check evidence
         if: always()
@@ -60,6 +61,80 @@ jobs:
         with:
           name: windows-check-evidence
           path: desktop/build/windows-evidence/
+          if-no-files-found: error
+  windows-package:
+    name: Windows packaging and native desktop
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.19.0"
+      - name: Record native packaging runner and filesystem
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/build/windows-evidence | Out-Null
+          $os = Get-CimInstance Win32_OperatingSystem
+          $volumes = Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystemType
+          @{ os = $os.Caption; version = $os.Version; build = $os.BuildNumber; volumes = $volumes; revision = "${{ github.sha }}" } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 desktop/build/windows-evidence/environment.json
+          Get-Content desktop/build/windows-evidence/environment.json
+      - name: Install constrained build environment
+        run: python -m pip install -c desktop/constraints.txt -e "./backend[dev]" -r desktop/requirements-build.txt
+      - name: Install locked frontend and desktop dependencies
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          npm ci --prefix desktop --no-audit --no-fund
+          node desktop/node_modules/electron/install.js
+      - name: Build bundled runtimes and static frontend
+        run: python desktop/build.py
+      - name: Pinned acquisition cache regressions
+        run: node --test desktop/acquisition/cache-policy.test.cjs
+      - name: Exercise offline research interface
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/desktop/build/resources/browsers
+        run: pnpm --dir frontend smoke:offline
+      - name: Exercise frozen bundle without developer tools
+        run: python desktop/smoke.py desktop/build/resources
+      - name: Exercise desktop window
+        run: node desktop/ui-smoke.cjs
+      - name: Real Electron Windows forced process shutdown
+        run: python desktop/windows-shutdown-electron-smoke.py
+      - name: Build unsigned test installers
+        id: package
+        working-directory: desktop
+        run: npm run package
+      - name: Install, interrupt and repair the Windows candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python desktop/windows-installer-smoke.py "desktop/dist/ResearchAssistant Setup 0.1.0.exe"
+          --output desktop/build/windows-evidence/installer.json
+      - name: Upload native Windows installer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-evidence
+          path: desktop/build/windows-evidence/
+          if-no-files-found: warn
+      - name: Upload test installer even if installed smoke fails
+        if: always() && steps.package.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResearchAssistant-windows-2025
+          path: desktop/dist/*.exe
           if-no-files-found: error
   desktop:
     name: Desktop ${{ matrix.os }}
@@ -114,39 +189,30 @@ jobs:
           pnpm lint
           pnpm exec tsc --noEmit
       - name: Build bundled runtimes and static frontend
+        if: runner.os != 'Windows'
         run: python desktop/build.py
       - name: Pinned acquisition cache regressions
+        if: runner.os != 'Windows'
         run: node --test desktop/acquisition/cache-policy.test.cjs
       - name: Exercise offline research interface
+        if: runner.os != 'Windows'
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/desktop/build/resources/browsers
         run: pnpm --dir frontend smoke:offline
       - name: Exercise frozen bundle without developer tools
+        if: runner.os != 'Windows'
         run: python desktop/smoke.py desktop/build/resources
       - name: Exercise desktop window
+        if: runner.os != 'Windows'
         run: |
           node desktop/ui-smoke.cjs
           node desktop/shutdown-electron-smoke.cjs
-      - name: Real Electron Windows forced process shutdown
-        if: runner.os == 'Windows'
-        run: python desktop/windows-shutdown-electron-smoke.py
       - name: Build unsigned test installers
+        if: runner.os != 'Windows'
         working-directory: desktop
         run: npm run package
-      - name: Install, interrupt and repair the Windows candidate
-        if: runner.os == 'Windows'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python desktop/windows-installer-smoke.py "desktop/dist/ResearchAssistant Setup 0.1.0.exe" --output desktop/build/windows-evidence/installer.json
-      - name: Upload native Windows installer evidence
-        if: always() && runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer-evidence
-          path: desktop/build/windows-evidence/
-          if-no-files-found: warn
       - name: Upload test installers
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ResearchAssistant-${{ matrix.os }}

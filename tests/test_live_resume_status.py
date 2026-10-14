@@ -113,8 +113,10 @@ def _install_bundle(
     depth: int = 20,
     entered: Event | None = None,
     release: Event | None = None,
+    model: _V2Model | None = None,
 ) -> tuple[_V2Model, _Search, _Scraper]:
-    model, search, scraper = _ConceptModel(), _Search(), _Scraper()
+    model = model if model is not None else _ConceptModel()
+    search, scraper = _Search(), _Scraper()
     factory = fixture.factory.model_copy(
         update={"research_controls": fixture.request(depth=depth).research_controls}
     )
@@ -217,7 +219,15 @@ def test_matching_resume_is_active_and_clears_previous_rejection(
     _install_bundle(monkeypatch, fixture, depth=50)
     _complete_attempt(controller, fixture.request(depth=50))
     entered, release = Event(), Event()
-    model, _, _ = _install_bundle(monkeypatch, fixture, entered=entered, release=release)
+
+    class PausedModel(_ConceptModel):
+        def generate(self, request: LLMRequest) -> object:
+            result = super().generate(request)
+            entered.set()
+            assert release.wait(5)
+            return result
+
+    model, _, _ = _install_bundle(monkeypatch, fixture, model=PausedModel())
     original_audit = read_v2_physical_call_audit(fixture.path, fixture.run_id)
     try:
         assert controller.start(fixture.request()).started
@@ -229,9 +239,14 @@ def test_matching_resume_is_active_and_clears_previous_rejection(
         assert snapshot.attempt_diagnostic is None
         with controller._lock:
             active = controller._active[(str(fixture.path), fixture.run_id)]
+        # Complete the status transition through the real cancellation boundary.
+        # The ten-second guard measures draining this controlled provider call,
+        # rather than unrelated discovery/acquisition for a complete research run.
+        controller.cancel(fixture.path, fixture.run_id)
         release.set()
         result = active.future.result(timeout=10)
         assert result.classification not in {"invalid_input", "configuration_error"}
+        assert result.classification == "cancelled"
         assert model.requests, "Matching resume must pass compatibility and execute the model"
         controller._evict_completed_run((str(fixture.path), fixture.run_id), active.future)
         terminal = controller.snapshot(fixture.path, fixture.run_id)
