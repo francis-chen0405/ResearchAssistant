@@ -32,8 +32,12 @@ uses atomic records and strict PID parsing. All 22 desktop units, two complete l
 nine-scenario native runs, and 19 focused Python tests / two Windows-only skips pass.
 The same revision’s Python 3.12 CI job exceeded its 15-minute allowance at 84%.
 Only that enclosing full-test job limit is now 30 minutes; assertions and all runtime
-budgets/deadlines remain unchanged. The app source identity is unchanged; the final
-remote revision still requires CI confirmation.
+budgets/deadlines remain unchanged. The Mac job and Python 3.11 passed at `4735559`. Completed Python 3.12 exposed
+three additional PDF fixture failures: coverage imports exhausted the test deadline
+before the intended parser phase. The revised fixture preloads its double, preserves
+the original timed parser assertions and adds a separate cold-start deadline test.
+All five cases pass locally with coverage; CI runs them before the full suite.
+Application source identity is unchanged; the latest test-only revision needs remote confirmation.
 
 
 The complete Python suite passes **3,196 tests / nine existing skips** in 415.65

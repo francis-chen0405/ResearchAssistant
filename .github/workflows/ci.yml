@@ -44,6 +44,9 @@ jobs:
       - name: Check repository root and dependency boundaries
         run: python scripts/check_repository_boundaries.py
 
+      - name: PDF worker deadline regressions with coverage
+        run: python -m pytest tests/test_pdf_worker_deadline.py --cov --cov-config=tests/pyproject.toml --cov-report=
+
       - name: Run tests with branch coverage
         run: python -m pytest tests --cov --cov-config=tests/pyproject.toml --cov-report=term-missing
 

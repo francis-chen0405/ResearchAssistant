@@ -1,6 +1,6 @@
 # Handoff
 
-Inspect matching GitHub results after the [Mac smoke PID-race repair](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md).
+Inspect the focused PDF coverage gate and complete matching GitHub results after the [Mac smoke PID-race repair](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md).
 The final target also gives full Python CI 30 minutes after a confirmed 15-minute
 timeout. Keep complete atomic PID records, reject unsafe values before process operations,
 and retain all shutdown ownership/sentinel assertions. The installed app and runtime

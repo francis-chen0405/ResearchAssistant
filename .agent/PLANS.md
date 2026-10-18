@@ -4,8 +4,9 @@
 
 [Mac shutdown smoke PID race](plans/mac-smoke-pid-race-2026-10-18.md) fixes the latest
 GitHub failure: the harness read an empty PID record as zero. Atomic publication
-and strict PID parsing preserve the existing process assertions. Validate and push
-the test-only repair, then inspect the matching CI result. Preserve installed app,
+and strict PID parsing preserve the existing process assertions. The completed
+Python run also exposed PDF fixture startup timing: retain its preloaded parser and
+separate cold-start deadline checks, then inspect the final complete CI result. Preserve installed app,
 real data/credentials, all runtime policies and the folders-only root.
 
 [Windows packaging](plans/windows-ci-trigger-2026-10-18.md) remains manual-only as

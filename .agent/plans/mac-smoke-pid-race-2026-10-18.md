@@ -36,8 +36,7 @@ untracked local root `.gitignore` untouched and out of the commit.
 
 ## Additional confirmed Python CI timeout
 
-The same revision’s Python 3.12 job `117751237962` reached 84% with no reported
-assertion failure, then GitHub annotated: “The job has exceeded the maximum execution
+The same revision’s Python 3.12 job `117751237962` reached 84%, then GitHub annotated: “The job has exceeded the maximum execution
 time of 15m0s”. Its Python 3.11 peer passed in 13m42s. Increase only the enclosing
 full-test job allowance to 30 minutes, preserving every test command and assertion,
 physical research budget, shutdown deadline and Windows installer limit.
@@ -46,3 +45,28 @@ on [the job](https://github.com/francis-chen0405/ResearchAssistant/actions/runs/
 The earlier Mac harness commit is `5c16bc1`; the final CI target also includes this
 capacity correction. Verify both at the final revision rather than inheriting the
 intermediate run’s results.
+
+## PDF fixture failure exposed by the complete Python 3.12 run
+
+At `473555949297316f197975eb118ba20588ac6750`, the Mac job passed completely,
+as did Python 3.11. Python 3.12 completed with **three failures / 3,185 passed /
+17 existing skips**, 1,221.88 seconds. All three failures were missing parser-phase
+markers in `test_pdf_worker_deadline.py`: imports under coverage consumed the 1.5-second
+request deadline before the intended Reader constructor/pages/extraction stalls.
+The same failure markers were present in the earlier cancelled log and were missed
+during the first timeout inspection. The timeout correction was necessary but was
+not sufficient. Raw complete log: `/tmp/ra-github-python312-4735559.log`.
+
+The fixture now preloads its parser double, waits for explicit readiness under a
+bounded setup guard, and then times the real worker protocol/parser stall with the
+same **1.5-second request / under-five-second assertion** and killed/reaped process
+checks. Its test-only CPU-limit adapter accounts for CPU spent during that preload;
+the worker retains its original post-preload CPU allowance and unchanged memory limit.
+The application worker itself is unchanged. A separate real cold-child stall verifies
+that startup still consumes the original overall request deadline.
+
+All five PDF tests pass locally with coverage in 50.41 seconds. A focused coverage
+step runs these cases before the full CI suite, providing quick failure reports;
+the complete test command and its assertions remain intact. The new exact revision
+still needs Linux/Windows CI confirmation. Unchanged runtime identity and installed
+app/data preservation continue to apply.

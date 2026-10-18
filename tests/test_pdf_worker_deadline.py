@@ -21,6 +21,7 @@ def test_stalled_pdf_parser_is_killed_at_overall_deadline(
     original = subprocess.Popen
     processes: list[subprocess.Popen[bytes]] = []
     marker = tmp_path / "parser-phase-entered"
+    ready = tmp_path / "parser-ready"
     script = f"""
 import time
 from pathlib import Path
@@ -44,11 +45,68 @@ class Reader:
             time.sleep(10)
         return [Page()]
 normalization.PdfReader = Reader
+# This fixture preloads imports; keep the worker's real CPU allowance from main().
+import sys
+if sys.platform != "win32":
+    import math, resource
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    preload_cpu = math.ceil(usage.ru_utime + usage.ru_stime)
+    original_limit = resource.setrlimit
+    def set_parse_limit(kind: int, limits: tuple[int, int]) -> None:
+        if kind == resource.RLIMIT_CPU:
+            limits = (limits[0] + preload_cpu, limits[1] + preload_cpu)
+        original_limit(kind, limits)
+    resource.setrlimit = set_parse_limit
+Path({str(ready)!r}).write_text("ready")
 pdf_worker.main()
 """
 
+    # Preload this test's parser double before measuring its injected parser stall.
+    # Slow instrumented imports must not turn all three cases into startup tests.
+    process = original(
+        [sys.executable, "-c", script],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        startup_deadline = time.monotonic() + 20
+        while not ready.exists() or ready.read_text() != "ready":
+            assert process.poll() is None, "Parser fixture exited before readiness"
+            assert time.monotonic() < startup_deadline, "Parser fixture imports did not finish"
+            time.sleep(0.01)
+
+        def spawn(command: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
+            processes.append(process)
+            return process
+
+        monkeypatch.setattr(normalization.subprocess, "Popen", spawn)
+        started = time.monotonic()
+        with pytest.raises(normalization.NormalizationError) as error:
+            normalization.normalize_pdf(b"generated fixture", deadline_seconds=1.5)
+        assert error.value.code == normalization.NormalizationFailureCode.PDF_TIMEOUT, (
+            process.returncode,
+            marker.exists(),
+            str(error.value),
+        )
+        assert time.monotonic() - started < 5
+        assert marker.read_text() == phase
+        assert len(processes) == 1 and processes[0].poll() is not None
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.communicate()
+
+
+def test_stalled_pdf_worker_startup_is_killed_at_overall_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = subprocess.Popen
+    processes: list[subprocess.Popen[bytes]] = []
+
     def spawn(command: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
-        process = original([sys.executable, "-c", script], **kwargs)
+        # A real cold worker that never reaches the parser protocol.
+        process = original([sys.executable, "-c", "import time; time.sleep(10)"], **kwargs)
         processes.append(process)
         return process
 
@@ -58,7 +116,6 @@ pdf_worker.main()
         normalization.normalize_pdf(b"generated fixture", deadline_seconds=1.5)
     assert error.value.code == normalization.NormalizationFailureCode.PDF_TIMEOUT
     assert time.monotonic() - started < 5
-    assert marker.read_text() == phase
     assert len(processes) == 1 and processes[0].poll() is not None
 
 
