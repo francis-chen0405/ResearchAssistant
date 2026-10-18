@@ -174,15 +174,15 @@ jobs:
           npm ci --prefix desktop --no-audit --no-fund
           node desktop/node_modules/electron/install.js
       - name: Python regressions
-        run: python -m pytest
+        run: python -m pytest tests
       - name: Desktop shutdown handlers and native process ownership
         run: |
           npm --prefix desktop test
           npm --prefix desktop run smoke:shutdown
       - name: Ruff lint
-        run: python -m ruff check .
+        run: python -m ruff check --config tests/pyproject.toml .
       - name: Ruff format
-        run: python -m ruff format --check .
+        run: python -m ruff format --config tests/pyproject.toml --check .
       - name: Whitespace check
         run: git diff --check
       - name: Frontend lint and type check

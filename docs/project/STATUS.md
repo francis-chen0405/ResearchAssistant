@@ -26,8 +26,8 @@ preserved without further manual review. No absence-of-bugs claim follows.
 
 ## Current verification
 
-The complete Python suite passes **3,195 tests / nine existing skips** in 432.60
-seconds (rerun for the user-authorized master consolidation), including all 44 R56–R59 regressions. Ruff lint/format (518 files), repository
+The complete Python suite passes **3,196 tests / nine existing skips** in 415.65
+seconds (rerun for the folders-only root), including all 44 R56–R59 regressions. Ruff lint/format (517 files), repository
 boundaries, generated API types, frontend lint/types and staged/unstaged whitespace
 checks pass. Focused historical compatibility and resume checks pass.
 
@@ -76,6 +76,15 @@ The latest uninstall harness and these runtime changes have no native Windows re
 Physical power loss, Windows directory-entry flush ordering, clean/minimum-OS
 acceptance, Windows ARM64, signing/SmartScreen and Mac signing/notarization remain
 unverified. No new Electron installer acceptance is claimed. Public release is deferred.
+
+## Repository root
+
+The [folders-only layout](../../.agent/plans/root-layout-2026-10-18.md) follows the
+user’s explicit choice: ten folder owners plus README. Instructions, workspace
+configuration, launchers and Git rules are nested; CI and source archives use the
+new paths. The full suite, explicit lint/format, coverage smoke, fresh-checkout Git
+rules and real 2,151-file source archive pass. Runtime source identity and installed
+Mac build remain unchanged. Historical snapshots and actual data are preserved.
 
 ## Git consolidation and preservation
 

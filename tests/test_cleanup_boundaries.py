@@ -109,7 +109,7 @@ def test_fixture_and_exit_contracts_keep_compatibility_imports() -> None:
 
     repository_root = Path(__file__).resolve().parents[1]
     subprocess.run(
-        [sys.executable, str(repository_root / "cli.py"), "--help"],
+        [sys.executable, str(repository_root / "backend/src/cli.py"), "--help"],
         check=True,
         capture_output=True,
         text=True,

@@ -9,12 +9,12 @@ platform and explicitly opted-in checks retain their skips.
 ## Full collection and focused checks
 
 ```sh
-python -m pytest --collect-only -q
-python -m pytest
+python -m pytest tests --collect-only -q
+python -m pytest tests
 rg --files tests -g 'test_*.py'
 ```
 
-Root `pyproject.toml` discovers every `tests/test_*.py`, including milestone and
+`tests/pyproject.toml` discovers every `tests/test_*.py`, including milestone and
 review suites. The table is a starting map, not an exclusive suite list. Older
 `phase`, `mvp`, `mlp`, `v2_phase` and `audit` names describe when regressions were
 introduced; many span multiple current owners. Keep them in full collection.
@@ -39,7 +39,7 @@ Assertions, fixture bytes and cross-test helpers retain their existing meanings.
 | Broader historical pipeline/CLI/release coverage | `test_phase*.py`, `test_mvp*.py`, `test_mlp*.py`, `test_repository_runtime_review.py`, `test_v2_phase12_production.py` |
 
 Patterns in the table are discovery hints. Use concrete files from `rg --files`
-with `python -m pytest`; quoted wildcards are not pytest file arguments.
+with `python -m pytest tests`; quoted wildcards are not pytest file arguments.
 
 `test_contract_ownership.py` compares the pre-Prompt-12 schema/config/enum fixture
 and old/new object aliases, validates exact search serialization and exercises

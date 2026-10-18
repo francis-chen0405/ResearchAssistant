@@ -26,9 +26,10 @@ def _executable(path: Path, program: str) -> None:
 
 def _checkout(folder: Path, scenario: str) -> Path:
     folder.mkdir()
-    launcher = folder / "Launch ResearchAssistant.command"
+    (folder / "desktop").mkdir()
+    launcher = folder / "desktop/Launch ResearchAssistant.command"
     text = (
-        (ROOT / launcher.name)
+        (ROOT / "desktop" / launcher.name)
         .read_text()
         .replace("time.monotonic() + 45", "time.monotonic() + 3.0")
     )
@@ -131,24 +132,24 @@ def test_checkout_readiness_has_one_deadline_and_preserves_process_ownership(
         _output, errors = process.communicate(timeout=8)
         assert time.monotonic() - started < 6, errors.decode()
         assert process.returncode == (0 if scenario == "ready" else 1), errors.decode()
-        assert (launcher.parent / "open").exists() is (scenario == "ready")
+        assert (launcher.parent.parent / "open").exists() is (scenario == "ready")
         if scenario != "ready":
-            assert (launcher.parent / "osascript").exists()
+            assert (launcher.parent.parent / "osascript").exists()
         requests = [
             json.loads(line)
-            for line in (launcher.parent / "requests.jsonl").read_text().splitlines()
+            for line in (launcher.parent.parent / "requests.jsonl").read_text().splitlines()
         ]
         assert requests and all(0 < row["timeout"] <= 2.0 for row in requests)
         assert all(row["timeout"] == row["connect"] for row in requests)
         if scenario in ("web_refused", "owned_api"):
             expected = ["web"] if scenario == "web_refused" else ["api", "web"]
-            assert all((launcher.parent / (name + ".pid")).exists() for name in expected)
+            assert all((launcher.parent.parent / (name + ".pid")).exists() for name in expected)
             deadline = time.monotonic() + 2
             while time.monotonic() < deadline and any(
-                not (launcher.parent / (name + ".stopped")).exists() for name in expected
+                not (launcher.parent.parent / (name + ".stopped")).exists() for name in expected
             ):
                 time.sleep(0.01)
-            assert all((launcher.parent / (name + ".stopped")).exists() for name in expected)
+            assert all((launcher.parent.parent / (name + ".stopped")).exists() for name in expected)
         assert sentinel.poll() is None
     finally:
         try:

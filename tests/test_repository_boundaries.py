@@ -33,7 +33,7 @@ def test_root_allowlist_rejects_staged_and_committed_copies(tmp_path: Path) -> N
     subprocess.run(["git", "-C", str(tmp_path), "rm", "--cached", "untracked.py"], check=True)
     expected = [
         f"unsupported tracked root Python file: {name}"
-        for name in ("model_evidence.py", "models.py", "orchestrator.py", "store.py")
+        for name in ("cli.py", "model_evidence.py", "models.py", "orchestrator.py", "store.py")
     ]
     assert root_python_violations(tmp_path) == expected
     subprocess.run(
@@ -57,8 +57,10 @@ def test_root_allowlist_rejects_staged_and_committed_copies(tmp_path: Path) -> N
     )
     assert root_python_violations(tmp_path) == expected
     subprocess.run(["git", "-C", str(tmp_path), "rm", "model_evidence.py"], check=True)
-    assert root_python_violations(tmp_path) == expected[1:]
-    for name in ("models.py", "orchestrator.py", "store.py"):
+    assert root_python_violations(tmp_path) == [
+        row for row in expected if not row.endswith(": model_evidence.py")
+    ]
+    for name in ("cli.py", "models.py", "orchestrator.py", "store.py"):
         subprocess.run(["git", "-C", str(tmp_path), "rm", name], check=True)
     assert not root_python_violations(tmp_path)
 
@@ -139,3 +141,56 @@ def test_boundary_parser_resolves_nested_relative_packages() -> None:
     assert imported_names("from ...providers import search", "researchassistant.contracts.sub") == [
         "researchassistant.providers.search"
     ]
+
+
+def test_folder_git_rules_work_without_checkout_local_exclusions(tmp_path: Path) -> None:
+    from scripts.check_repository_boundaries import SUPPORTED_ROOT_DIRECTORIES
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    ignored: list[str] = []
+    text_paths: list[str] = []
+    for name in sorted(SUPPORTED_ROOT_DIRECTORIES):
+        folder = tmp_path / name
+        folder.mkdir()
+        for rule in (".gitignore", ".gitattributes"):
+            (folder / rule).write_bytes((ROOT / name / rule).read_bytes())
+        ignored.extend(
+            f"{name}/{path}"
+            for path in (
+                ".env",
+                ".env.local",
+                ".venv/bin/python",
+                "build/payload",
+                "node_modules/lib.js",
+            )
+        )
+        text_paths.append(f"{name}/sample.py")
+    result = subprocess.run(
+        ["git", "-C", str(tmp_path), "check-ignore", "--no-index", "--stdin"],
+        input="\n".join(ignored) + "\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.splitlines() == ignored
+    attributes = subprocess.run(
+        ["git", "-C", str(tmp_path), "check-attr", "eol", "--stdin"],
+        input="\n".join(text_paths) + "\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert attributes.stdout.splitlines() == [f"{name}: eol: lf" for name in text_paths]
+    permitted = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "check-ignore",
+            "--no-index",
+            "--quiet",
+            "backend/.env.example",
+        ],
+        check=False,
+    )
+    assert permitted.returncode == 1

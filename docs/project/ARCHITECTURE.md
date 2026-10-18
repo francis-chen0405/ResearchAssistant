@@ -47,8 +47,8 @@ failed launches close owned listeners/sockets. Unprotected local acquisition
 services are rejected before HTML refetch. Historical snapshots retain their policy.
 
 The installable distribution is owned by `backend/pyproject.toml`, with canonical
-Python implementation under `backend/src/researchassistant/`. Root `pyproject.toml`
-only configures workspace checks. Explicit discovery also includes installed historical
+Python implementation under `backend/src/researchassistant/`. `tests/pyproject.toml`
+configures workspace checks. Explicit discovery also includes installed historical
 `agents`, `providers`, Python `frontend` and four module facades under `backend/src/`.
 The console command is `researchassistant`; source, wheel and editable use the same code.
 
@@ -90,8 +90,8 @@ persistence, `platform_support/` owns host integration, `runtime/` owns CLI/appl
 entries and `common/` holds helpers. These are all backend-owned canonical modules.
 
 Installed `models`, `store`, `orchestrator`, `cli`, `agents.*`, `providers.*` and
-`frontend.*` alias their canonical module objects. Root `cli.py` remains an explicit
-transition script after installation. Historical researcher and Analyst facades preserve
+`frontend.*` alias their canonical module objects. The CLI script facade is
+`backend/src/cli.py` after installation. Historical researcher and Analyst facades preserve
 neutral evidence objects; historical retrieval remains available. Ordinary CLI/API
 construction selects v2; historical execution still requires the typed `legacy_runner`.
 The controller's older `runner` name remains a compatibility alias.

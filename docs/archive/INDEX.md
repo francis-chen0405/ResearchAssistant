@@ -154,3 +154,5 @@ records the remaining exceptions precisely.
 - [Before the October 18 local Mac replacement](2026-10-18-mac-install-preceding-state/hashes.json): exact preceding current-state documents; the user explicitly authorized replacing the installed app.
 
 - [Before October 18 master consolidation](2026-10-18-master-publish-preceding-state/hashes.json): exact preceding plan, status and handoff before user-authorized Git publication.
+
+- [Before the folders-only root](2026-10-18-root-layout-preceding-state/hashes.json): exact preceding current guidance and root settings.

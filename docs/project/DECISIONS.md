@@ -72,7 +72,7 @@ The user-approved [discrimination-run fixes](../../.agent/plans/discrimination-r
 - The completed [database integrity plan](../../.agent/plans/database-integrity-fixes.md) added schema 14 for nullable cache-token accounting fields. The [database review](../../.agent/plans/database-review-2026-10-03.md) advances writable databases through schema 18: migration 15 preserves cache-write tokens/cost basis, and migration 16 protects same-run ownership and referenced keys. Migration 17 adds measured history/evidence indexes. The approved October 15 fixes add migration 18 for v2 round-four admissions, preserving historical declarations, rows, triggers and indexes; read-only inspection supports schemas 7–18. Shared preflight rejects damaged schemas without repair; recognized writable upgrades retain verified recovery copies. History and status inspection use validated read-only access. Public reads own one validated snapshot; polling does not overlap requests. Retain full request-time validation and rollback journaling by default: the measured WAL speedup does not establish a safe checkpoint/sidecar lifecycle. Both modes have coherent-reader coverage. A one-second SQLite wait produces retryable contention diagnostics without replaying provider calls or reservations. See [SQLite status polling](../../.agent/plans/sqlite-status-polling.md).
 - Desktop credentials remain in native macOS Keychain or Windows Credential Manager. Secrets are not placed in browser storage, logs, SQLite, exports, or child arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Runtime data remains outside the application bundle and checkout.
 - Package metadata uses the Python distribution name `researchassistant`, version `0.1.0`; user-facing CLI and application copy use `ResearchAssistant`. Streamlit remains outside the base install and is installed only through `backend/requirements-legacy.txt`. The `dev` dependency set includes `httpx2` for Starlette tests; versions are constrained in `desktop/constraints.txt`.
-- Backend implementation modules use canonical `researchassistant.*` imports grouped by contracts, research, evidence, storage, platform support, runtime, and common helpers. Installed `models.py`, `store.py`, and `orchestrator.py` facades in `backend/src/` preserve legacy imports; root `cli.py` preserves the script launcher after installation. The identity surface must cover the organized package sources and bundled PDF font bytes. If a source or executable change alters the exact run identity, new research must use a new run; saved history is never rewritten and remains available for inspection/export.
+- Backend implementation modules use canonical `researchassistant.*` imports grouped by contracts, research, evidence, storage, platform support, runtime, and common helpers. Installed `models.py`, `store.py`, and `orchestrator.py` facades in `backend/src/` preserve legacy imports; `backend/src/cli.py` preserves the script launcher after installation. The identity surface must cover the organized package sources and bundled PDF font bytes. If a source or executable change alters the exact run identity, new research must use a new run; saved history is never rewritten and remains available for inspection/export.
 
 ## Source dispositions — Prompt 15
 
@@ -170,12 +170,12 @@ The Python distribution lives in `backend/`, with one canonical implementation u
 synthesizer code remains in `researchassistant.evidence`. Historical namespaces under
 `backend/src/` alias canonical module objects. The Next.js renderer owns root `frontend/`.
 
-Root `pyproject.toml` owns workspace checks; backend metadata and the self-contained
+`tests/pyproject.toml` owns workspace checks; backend metadata and the self-contained
 source-distribution build hook own installation. `scripts/build_distribution.py` remains
 a workspace facade. Installed/frozen source identity binds the new logical backend
 paths, exact configuration bytes, all source/prompt/font bytes, and frozen executable
 bytes where applicable. No stored fingerprint is converted and resume gates are unchanged.
-Root `cli.py` and the Mac command file remain transition launchers; the historical
+The CLI facade is `backend/src/cli.py` and the Mac command file is under `desktop/`; the historical
 `.agents/PLANS/` record retains its path. Native app replacement and publication are
 separate delivery actions.
 
@@ -212,3 +212,18 @@ queue accounting subtracts its recorded attempts once from its original balance;
 new calls remain subject to current durable limits. The checkout launcher uses a
 45-second monotonic readiness deadline independent of Electron. Maintain current
 guides against live schema/security/identity owners; archived records remain exact.
+
+## Folders-only root — October 18
+
+The user requested only folders and README at the repository root. Keep the ten
+existing folder owners and README; instructions live in `.agent/AGENTS.md`, linked
+from README. Workspace checks use `tests/pyproject.toml`: run `python -m pytest tests`
+and pass `--config tests/pyproject.toml` to Ruff from the repository root. CI uses
+those same explicit paths; coverage passes `--cov-config=tests/pyproject.toml`.
+
+Each owner has its own ignore and LF rules, so a fresh clone retains generated-file
+and nested private-input exclusions without a root Git configuration file. Existing
+checkout-only root data remains protected by local Git exclusions and is untouched.
+The Mac checkout launcher resolves its parent from `desktop/`; the duplicate root
+CLI wrapper is removed in favor of the byte-identical installed/backend facade.
+Backend metadata, runtime resources, source identity and the installed app are unchanged.

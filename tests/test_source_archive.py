@@ -42,9 +42,9 @@ def test_archive_inventory_retains_documented_launchers_and_required_guidance(
     source_repository: Path, tmp_path: Path
 ) -> None:
     required = {
-        "cli.py",
-        "Launch ResearchAssistant.command",
-        "AGENTS.md",
+        "backend/src/cli.py",
+        "desktop/Launch ResearchAssistant.command",
+        ".agent/AGENTS.md",
         "README.md",
         "docs/project/CONVENTIONS.md",
         "docs/project/ARCHITECTURE.md",
@@ -58,16 +58,22 @@ def test_archive_inventory_retains_documented_launchers_and_required_guidance(
         "backend/.env.example",
     }
     assert required <= {str(name) for name in REQUIRED_FILES}
-    launcher = source_repository / "Launch ResearchAssistant.command"
+    launcher = source_repository / "desktop/Launch ResearchAssistant.command"
     launcher.chmod(0o755)
-    _git(source_repository, "update-index", "--chmod=+x", "--", launcher.name)
+    _git(
+        source_repository,
+        "update-index",
+        "--chmod=+x",
+        "--",
+        str(launcher.relative_to(source_repository)),
+    )
     rows = build_source_archive(
         source_repository, tmp_path / "source.tar.gz", tmp_path / "SOURCE-MANIFEST.json"
     )
     assert required <= rows.keys()
     with tarfile.open(tmp_path / "source.tar.gz", "r:gz") as archive:
         assert required <= set(archive.getnames())
-        assert archive.getmember("Launch ResearchAssistant.command").mode == 0o755
+        assert archive.getmember("desktop/Launch ResearchAssistant.command").mode == 0o755
 
 
 def test_archive_selects_current_owned_files_from_dirty_repository(
@@ -81,8 +87,8 @@ def test_archive_selects_current_owned_files_from_dirty_repository(
     new = _write(source_repository, "backend/src/researchassistant/new.py", b"new source\n")
     historical = _write(source_repository, "docs/archive/retained/example.md")
     _write(source_repository, "unsupported-root.py")
-    with (source_repository / ".gitignore").open("a", encoding="utf-8") as stream:
-        stream.write("\nbackend/ignored-private.txt\n")
+    with (source_repository / "backend/.gitignore").open("a", encoding="utf-8") as stream:
+        stream.write("\nignored-private.txt\n")
     _write(source_repository, "backend/ignored-private.txt")
 
     selected = {
@@ -137,7 +143,7 @@ def test_archive_excludes_tracked_private_and_generated_files(source_repository:
     assert legitimate in selected
 
 
-@pytest.mark.parametrize("missing", ["cli.py", "docs/project/STATUS.md"])
+@pytest.mark.parametrize("missing", ["backend/src/cli.py", "docs/project/STATUS.md"])
 def test_missing_required_source_preserves_existing_outputs(
     source_repository: Path, tmp_path: Path, missing: str
 ) -> None:

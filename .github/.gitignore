@@ -1,0 +1,21 @@
+# Generated files and local-only inputs stay within their owning folder.
+.env
+.env.*
+!.env.example
+__pycache__/
+.venv/
+build/
+dist/
+*.egg-info/
+live-smoke-output/
+.researchassistant/
+.DS_Store
+.coverage
+.pnpm-store/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo

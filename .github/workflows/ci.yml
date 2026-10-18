@@ -45,7 +45,7 @@ jobs:
         run: python scripts/check_repository_boundaries.py
 
       - name: Run tests with branch coverage
-        run: python -m pytest --cov --cov-report=term-missing
+        run: python -m pytest tests --cov --cov-config=tests/pyproject.toml --cov-report=term-missing
 
   quality:
     name: Ruff lint and formatting
@@ -68,10 +68,10 @@ jobs:
           python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
       - name: Run Ruff lint
-        run: ruff check .
+        run: ruff check --config tests/pyproject.toml .
 
       - name: Check Ruff formatting
-        run: ruff format --check .
+        run: ruff format --config tests/pyproject.toml --check .
 
   evaluation:
     name: Offline adversarial evaluation

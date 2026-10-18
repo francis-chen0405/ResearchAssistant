@@ -1,5 +1,12 @@
 # Handoff
 
+The user-selected [folders-only root](../../.agent/plans/root-layout-2026-10-18.md)
+is verified: ten folders and README, with unchanged application source identity.
+Run full tests as
+`python -m pytest tests`; Ruff uses `--config tests/pyproject.toml` from the root.
+README links the relocated `.agent/AGENTS.md` instructions. Preserve all existing
+delivery and review boundaries below.
+
 The user-authorized [October 18 local Mac replacement](../verification/current-app-install-2026-10-18.md)
 is complete: build `20261018.59` is installed and open at
 `/Applications/ResearchAssistant.app`. The old bundle was removed after candidate,

@@ -2,15 +2,16 @@
 
 ## Current task
 
-[Consolidate and push master](plans/publish-master-2026-10-18.md) records the user’s
-explicit authorization to retire the redundant Windows CI branch and commit/push
-all current project changes. This supersedes earlier Git publication restrictions.
-Preserve the installed October 18 Mac app, real data and credentials. No paid
-research or public release is authorized.
+[Folders-only repository root](plans/root-layout-2026-10-18.md) implements the user’s
+explicit choice: the ten existing folders plus README, with launchers, instructions,
+workspace checks and Git rules inside their owners. Update GitHub after validation.
+Preserve installed Mac build `20261018.59`, real data, credentials and historical
+records. No paid research or public release is authorized.
 
-[Local Mac replacement](plans/install-current-mac-2026-10-18.md) is complete.
-The [review task](plans/full-code-review-fixes-2026-10-15.md) retains R01–R59 evidence
-and the 20 remaining current assets; historical records are excluded from review.
+The [master consolidation](plans/publish-master-2026-10-18.md) was pushed as `9080d71`;
+the redundant Windows branch was deleted. [Mac replacement](plans/install-current-mac-2026-10-18.md)
+and all approved R01–R59 fixes are complete. The remaining 20 current assets and
+historical-review exclusion remain recorded by the [review task](plans/full-code-review-fixes-2026-10-15.md).
 
 ## Preceding Windows delivery boundary
 

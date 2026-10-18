@@ -112,7 +112,7 @@ def test_launcher_defers_missing_credentials_to_local_provider_setup() -> None:
         Path(__file__)
         .resolve()
         .parents[1]
-        .joinpath("Launch ResearchAssistant.command")
+        .joinpath("desktop/Launch ResearchAssistant.command")
         .read_text(encoding="utf-8")
     )
 

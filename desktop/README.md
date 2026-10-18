@@ -334,7 +334,7 @@ response; the harness neither grants access nor silently skips credential checks
 The legacy Streamlit interface is optional: install `backend/requirements-legacy.txt` from the
 repository root only if you use it. The desktop runtime does not require Streamlit.
 
-The checkout transition launcher `Launch ResearchAssistant.command` has a separate
+The checkout transition launcher `desktop/Launch ResearchAssistant.command` has a separate
 45-second monotonic readiness deadline. Each API/web request receives at most two
 seconds and the remaining deadline. Failed readiness reports the existing startup
 error and stops only children started by that launcher. This does not change the

@@ -25,11 +25,11 @@ from scripts.check_repository_boundaries import (  # noqa: E402
 
 REQUIRED_FILES = (
     "README.md",
-    "AGENTS.md",
-    "cli.py",
-    "Launch ResearchAssistant.command",
-    "pyproject.toml",
-    ".gitignore",
+    ".agent/AGENTS.md",
+    "backend/src/cli.py",
+    "desktop/Launch ResearchAssistant.command",
+    "tests/pyproject.toml",
+    "backend/.gitignore",
     "backend/pyproject.toml",
     "backend/requirements.txt",
     "backend/requirements-legacy.txt",
@@ -43,6 +43,11 @@ REQUIRED_FILES = (
     ".agent/plans/phase-00-foundation.md",
     ".agents/PLANS/phase-00-foundation.md",
     "tests/README.md",
+    *(
+        f"{folder}/{name}"
+        for folder in sorted(SUPPORTED_ROOT_DIRECTORIES)
+        for name in (".gitignore", ".gitattributes")
+    ),
 )
 _EXCLUDED_PARTS = frozenset(
     {

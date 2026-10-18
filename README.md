@@ -1,5 +1,7 @@
 # ResearchAssistant
 
+Repository instructions: [.agent/AGENTS.md](.agent/AGENTS.md).
+
 ResearchAssistant is a local desktop application for source-backed research on a claim.
 Choose Support, Challenge, or both. It discovers sources, preserves exact evidence and
 provenance, investigates gaps within budget, and releases deterministically validated
@@ -32,7 +34,7 @@ pnpm --dir frontend dev
 ```
 
 On Windows, use `.venv\Scripts\python.exe` for the Python launcher.
-The console command, `python -m cli` and root `python cli.py` remain supported after
+The console command, `python -m cli` and `python backend/src/cli.py` are supported after
 installation. Historical `models`, `store`, `orchestrator`, `agents`, `providers` and
 Python `frontend` imports are installed facades; new code uses `researchassistant.*`.
 The Next.js folder and historical Python namespace coexist through the installed backend.
@@ -53,9 +55,12 @@ files and shell profiles are never loaded automatically.
 | `scripts/`, `.github/` | Workspace tooling and CI |
 | `.agent/` | Plan index and retained plans |
 
-Root `pyproject.toml` configures workspace tests/lint; `backend/pyproject.toml` owns
+`tests/pyproject.toml` configures workspace tests/lint; `backend/pyproject.toml` owns
 package discovery, runtime dependencies, data manifests and the console command.
-`cli.py` and `Launch ResearchAssistant.command` are explicit transition launchers.
+The Mac checkout launcher is `desktop/Launch ResearchAssistant.command`; the CLI
+facade lives in `backend/src/cli.py`. Only this README remains as a top-level file.
+Git ignore and line-ending rules live inside each folder; agent instructions live
+in `.agent/AGENTS.md`.
 The historical `.agents/PLANS/` record retains its stable path.
 
 ## Standalone source archives
@@ -86,9 +91,9 @@ Run workspace commands from the repository root with the development environment
 
 ```sh
 .venv/bin/python scripts/check_repository_boundaries.py
-.venv/bin/python -m pytest
-.venv/bin/python -m ruff check .
-.venv/bin/python -m ruff format --check .
+.venv/bin/python -m pytest tests
+.venv/bin/python -m ruff check --config tests/pyproject.toml .
+.venv/bin/python -m ruff format --config tests/pyproject.toml --check .
 git diff --check
 git diff --cached --check
 pnpm --dir frontend lint

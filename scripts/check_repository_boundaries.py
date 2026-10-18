@@ -12,18 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 # Deliberately independent of the runtime/build lists: changing a bundle must not
 # silently authorize another tracked root implementation.
-SUPPORTED_ROOT_PYTHON = frozenset({"cli.py"})
-SUPPORTED_ROOT_FILES = frozenset(
-    {
-        "README.md",
-        "AGENTS.md",
-        "pyproject.toml",
-        "cli.py",
-        "Launch ResearchAssistant.command",
-        ".gitignore",
-        ".gitattributes",
-    }
-)
+SUPPORTED_ROOT_PYTHON: frozenset[str] = frozenset()
+SUPPORTED_ROOT_FILES = frozenset({"README.md"})
 SUPPORTED_ROOT_DIRECTORIES = frozenset(
     {
         "backend",

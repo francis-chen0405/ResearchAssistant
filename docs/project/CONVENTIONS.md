@@ -18,7 +18,7 @@ Follow the current scope in the [plan index](../../.agent/PLANS.md) and its link
 - Raise clear errors or return typed failures. Do not silently return `None` on failure.
 - Pass dependencies explicitly. Fresh research workers may run independently but never share a SQLite connection, cursor, transaction, or mutable handoff. Deep-analysis waves retain their four-worker cap, budget-safe priority ordering, cancellation draining, and conservative audit behavior.
 - Use `researchassistant.*` imports for organized backend modules: contracts under `researchassistant.contracts`, pipeline execution under `researchassistant.research`, evidence under `researchassistant.evidence`, persistence under `researchassistant.storage`, host integration under `researchassistant.platform_support`, runtime entry points under `researchassistant.runtime`, and shared helpers under `researchassistant.common`.
-- Preserve public imports, frozen fields, schemas, validators, enum values, and historical meanings during code moves. Installed `models`, `store`, and `orchestrator` facades in `backend/src/` are compatibility aliases for their canonical package modules; root `cli.py` remains a transition launcher after backend installation. `researchassistant.contracts.models` owns shared public contracts, `researchassistant.storage.store` owns typed persistence, and `researchassistant.storage.store_schema` owns schema initialization and migrations.
+- Preserve public imports, frozen fields, schemas, validators, enum values, and historical meanings during code moves. Installed `models`, `store`, and `orchestrator` facades in `backend/src/` are compatibility aliases for their canonical package modules; the CLI facade is `backend/src/cli.py` after backend installation. `researchassistant.contracts.models` owns shared public contracts, `researchassistant.storage.store` owns typed persistence, and `researchassistant.storage.store_schema` owns schema initialization and migrations.
 - Add regressions for validator or integrity defects. Never weaken tests, delete assertions, hide failures, or lower acceptance criteria to make an implementation pass.
 - Avoid unrelated edits and dependencies. Any dependency change must fit the authorized scope and be recorded in the plan, status, and handoff.
 
@@ -36,7 +36,7 @@ Follow the current scope in the [plan index](../../.agent/PLANS.md) and its link
 ## Packaging and verification
 
 Run `python scripts/check_repository_boundaries.py` for the fast layout/import guard,
-also enforced by CI and `tests/test_repository_boundaries.py`. It checks tracked root ownership and staged additions, respecting pending working-tree removals, and permits only `cli.py` as a root Python transition launcher. The root owner allowlist covers README, AGENTS, workspace configuration, transition launchers and the documented owning folders; `.agents/PLANS/` is a retained historical-path exception. Put implementations
+also enforced by CI and `tests/test_repository_boundaries.py`. It checks tracked root ownership and staged additions, respecting pending working-tree removals, and permits no root Python files. The root owner allowlist covers only README and the documented owning folders; `.agents/PLANS/` is a retained historical-path exception. Put implementations
 in their owned package; do not expand the allowlist for a convenience copy.
 
 The same check scans every Python file under `backend/src/researchassistant/contracts` and
@@ -69,6 +69,6 @@ Use [the test map](../../tests/README.md) to discover owner tests, broader integ
 coverage and native/browser checks. A focused selection supplements full collection;
 historical milestone names do not define the current architecture.
 
-Before claiming completion, run `python -m pytest`, `python -m ruff check .`, `python -m ruff format --check .`, and `git diff --check`, plus the relevant frontend and desktop checks required by the active plan. Check staged whitespace with `git diff --cached --check` too. Preserve existing skips and report the target platform, artifact, and actual result. A workflow definition or a prior platform build is not evidence for the current platform/version.
+Before claiming completion, run `python -m pytest tests`, `python -m ruff check --config tests/pyproject.toml .`, `python -m ruff format --config tests/pyproject.toml --check .`, and `git diff --check`, plus the relevant frontend and desktop checks required by the active plan. Check staged whitespace with `git diff --cached --check` too. Preserve existing skips and report the target platform, artifact, and actual result. A workflow definition or a prior platform build is not evidence for the current platform/version.
 
 `STATUS.md` is the concise verified state; `HANDOFF.md` names the next boundary and remaining checks. Completed histories remain in stable plan and verification files linked from [grouped history](../history.md). The previous convention set and exact prior root documents are preserved in the maintenance archive; this file replaces older phase-specific rules that conflict with the current module layout and product boundaries.

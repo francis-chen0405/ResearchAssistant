@@ -181,7 +181,7 @@ def test_pipeline_does_not_touch_network_or_provider_surfaces(
             (_REPO_ROOT / "backend/src/researchassistant/research/orchestrator.py").read_text(
                 encoding="utf-8"
             ),
-            (_REPO_ROOT / "cli.py").read_text(encoding="utf-8"),
+            (_REPO_ROOT / "backend/src/cli.py").read_text(encoding="utf-8"),
         ]
     )
     forbidden = (
@@ -201,7 +201,7 @@ def test_cli_valid_fixture_exits_zero_and_prints_release(tmp_path: Path) -> None
     completed = subprocess.run(
         [
             sys.executable,
-            "cli.py",
+            "backend/src/cli.py",
             "run-fixture",
             str(_VALID_FIXTURE),
             "--output-dir",
@@ -224,7 +224,7 @@ def test_cli_invalid_fixture_exits_zero_and_prints_block(tmp_path: Path) -> None
     completed = subprocess.run(
         [
             sys.executable,
-            "cli.py",
+            "backend/src/cli.py",
             "run-fixture",
             str(_INVALID_FIXTURE),
             "--output-dir",
@@ -251,7 +251,7 @@ def test_cli_malformed_fixture_exits_nonzero(tmp_path: Path) -> None:
     completed = subprocess.run(
         [
             sys.executable,
-            "cli.py",
+            "backend/src/cli.py",
             "run-fixture",
             str(broken),
             "--output-dir",

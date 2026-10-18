@@ -157,7 +157,7 @@ def test_active_inspection_subprocess_returns_running_exit_code(tmp_path: Path) 
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "cli.py"),
+            str(ROOT / "backend/src/cli.py"),
             "inspect-run",
             str(db_path),
             str(RUN_ID),

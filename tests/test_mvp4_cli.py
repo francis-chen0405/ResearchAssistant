@@ -249,7 +249,7 @@ def test_inspect_run_reports_authoritative_audit_and_release(tmp_path: Path) -> 
     inspected = subprocess.run(
         [
             sys.executable,
-            "cli.py",
+            "backend/src/cli.py",
             "inspect-run",
             str(tmp_path / "mvp4.sqlite3"),
             str(run_id),
@@ -354,7 +354,7 @@ def test_second_process_cancellation_observes_active_call_boundary(tmp_path: Pat
     cancelled = subprocess.run(
         [
             sys.executable,
-            "cli.py",
+            "backend/src/cli.py",
             "cancel-run",
             str(db_path),
             str(run_id),
@@ -389,7 +389,7 @@ def test_optional_budget_capped_live_cli_smoke(tmp_path: Path) -> None:
     result = subprocess.run(
         [
             sys.executable,
-            "cli.py",
+            "backend/src/cli.py",
             "run",
             "For adults with hypertension, regular aerobic exercise lowers resting "
             "systolic blood pressure.",

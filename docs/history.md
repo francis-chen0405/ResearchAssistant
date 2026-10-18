@@ -170,3 +170,5 @@ Historical setup, next-step and approval wording in these records applies to the
 - [Current Mac replacement — October 18](verification/current-app-install-2026-10-18.md): verified R01–R59 local build, installed/window/upgrade checks, preserved data, old-app removal and a local installer.
 
 - [Master consolidation — October 18](../.agent/plans/publish-master-2026-10-18.md): redundant Windows branch comparison, preserved history and authorized commit/push.
+
+- [Folders-only root — October 18](../.agent/plans/root-layout-2026-10-18.md): nested settings, launchers and Git rules with preserved runtime identity.

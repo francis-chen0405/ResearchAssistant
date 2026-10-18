@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -eu
 
-SCRIPT_DIR="${0:A:h}"
+SCRIPT_DIR="${0:A:h:h}"
 cd "$SCRIPT_DIR"
 
 WEB_URL="http://127.0.0.1:3000/"

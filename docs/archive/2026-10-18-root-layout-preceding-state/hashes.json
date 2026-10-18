@@ -1,0 +1,12 @@
+{
+  ".agent/PLANS.md": "6bac04443dbadd84cff457135a71d7f2e40cd2cc5e6e74035606fa8dc6ad1b3a",
+  "docs/project/STATUS.md": "35bc5194d419049e14bccda4428c65bde4d5a84e4539e60f6617bf194201ca77",
+  "docs/project/HANDOFF.md": "a61f37a824c27a4102df46776921a433b1c431db061263070c86a452ad5d10b7",
+  "docs/project/CONVENTIONS.md": "095167d665841324cc180344af1b10e9f9e4264cec85cb1e543c9fc92d1f5602",
+  "docs/project/ARCHITECTURE.md": "7601dfb559206584e9972c0dfde9bde2104bde21161ee8935ec6831c43bc7ec5",
+  "docs/project/DECISIONS.md": "bc1f966d9bab34319eae8414644027e576f7d9a6712993e56aeec486d5051e41",
+  "AGENTS.md": "26062e59abe1aec4256f06186c1f83a9edfb38c5a170be9cecd67d7494287d85",
+  "pyproject.toml": "27a6fb552a41ac29308749c94dd05d34e06a1ffe4124dc5657857ee7e5170100",
+  ".gitignore": "77fbeb015072e54a4976b5b29a1b934af6c0840d698a03378cd741ace9d01f04",
+  ".gitattributes": "be2b6899457d729fe7adcef04156ac887dbf2e6076dd57a88d7005bedf6819b4"
+}
