@@ -33,3 +33,16 @@ The preceding 3,196/nine-skip Python suite remains evidence for unchanged runtim
 source; it is not claimed as rerun for this test-only fix. Push and inspect the exact
 new CI revision before claiming remote acceptance. Leave the unrelated newly
 untracked local root `.gitignore` untouched and out of the commit.
+
+## Additional confirmed Python CI timeout
+
+The same revision’s Python 3.12 job `117751237962` reached 84% with no reported
+assertion failure, then GitHub annotated: “The job has exceeded the maximum execution
+time of 15m0s”. Its Python 3.11 peer passed in 13m42s. Increase only the enclosing
+full-test job allowance to 30 minutes, preserving every test command and assertion,
+physical research budget, shutdown deadline and Windows installer limit.
+The raw log is `/tmp/ra-github-python312-ea4773c.log`; the exact annotation is available
+on [the job](https://github.com/francis-chen0405/ResearchAssistant/actions/runs/39153304572/job/117751237962).
+The earlier Mac harness commit is `5c16bc1`; the final CI target also includes this
+capacity correction. Verify both at the final revision rather than inheriting the
+intermediate run’s results.
