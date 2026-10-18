@@ -2,16 +2,17 @@
 
 ## Current task
 
-[Folders-only repository root](plans/root-layout-2026-10-18.md) implements the user’s
-explicit choice: the ten existing folders plus README, with launchers, instructions,
-workspace checks and Git rules inside their owners. Update GitHub after validation.
-Preserve installed Mac build `20261018.59`, real data, credentials and historical
-records. No paid research or public release is authorized.
+[Windows packaging trigger](plans/windows-ci-trigger-2026-10-18.md) diagnoses the
+latest Windows frozen acquisition failure and implements the user’s request to
+remove that verifier from automatic checks. Windows packaging becomes manual-only;
+all other automatic checks remain enabled. Preserve installed Mac build `20261018.59`,
+real data/credentials, historical evidence and the folders-only root. No paid research
+or public release is authorized.
 
-The [master consolidation](plans/publish-master-2026-10-18.md) was pushed as `9080d71`;
-the redundant Windows branch was deleted. [Mac replacement](plans/install-current-mac-2026-10-18.md)
-and all approved R01–R59 fixes are complete. The remaining 20 current assets and
-historical-review exclusion remain recorded by the [review task](plans/full-code-review-fixes-2026-10-15.md).
+The [folders-only root](plans/root-layout-2026-10-18.md) was pushed as `2586027`.
+[Master consolidation](plans/publish-master-2026-10-18.md), [Mac replacement](plans/install-current-mac-2026-10-18.md)
+and all approved R01–R59 fixes are complete. Remaining review boundaries belong to
+the [review task](plans/full-code-review-fixes-2026-10-15.md).
 
 ## Preceding Windows delivery boundary
 

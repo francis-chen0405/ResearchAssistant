@@ -156,3 +156,5 @@ records the remaining exceptions precisely.
 - [Before October 18 master consolidation](2026-10-18-master-publish-preceding-state/hashes.json): exact preceding plan, status and handoff before user-authorized Git publication.
 
 - [Before the folders-only root](2026-10-18-root-layout-preceding-state/hashes.json): exact preceding current guidance and root settings.
+
+- [Before manual-only Windows packaging](2026-10-18-ci-trigger-preceding-state/hashes.json): exact preceding current-state owners.

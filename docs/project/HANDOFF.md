@@ -1,5 +1,10 @@
 # Handoff
 
+Windows packaging is manual-only under the [user-authorized CI change](../../.agent/plans/windows-ci-trigger-2026-10-18.md).
+Its latest frozen smoke reports Wigolo exit 1 before reaching installer checks.
+Keep that failure open for deliberate Windows investigation; all other automatic
+checks remain enabled. Preserve the existing acceptance boundaries below.
+
 The user-selected [folders-only root](../../.agent/plans/root-layout-2026-10-18.md)
 is verified: ten folders and README, with unchanged application source identity.
 Run full tests as

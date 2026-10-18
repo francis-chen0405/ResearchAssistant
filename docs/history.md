@@ -172,3 +172,5 @@ Historical setup, next-step and approval wording in these records applies to the
 - [Master consolidation — October 18](../.agent/plans/publish-master-2026-10-18.md): redundant Windows branch comparison, preserved history and authorized commit/push.
 
 - [Folders-only root — October 18](../.agent/plans/root-layout-2026-10-18.md): nested settings, launchers and Git rules with preserved runtime identity.
+
+- [Manual-only Windows packaging — October 18](../.agent/plans/windows-ci-trigger-2026-10-18.md): exact failed job, authorized trigger change and retained acceptance limits.

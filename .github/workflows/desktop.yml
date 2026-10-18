@@ -63,7 +63,9 @@ jobs:
           path: desktop/build/windows-evidence/
           if-no-files-found: error
   windows-package:
-    name: Windows packaging and native desktop
+    # User-requested opt-in while native packaged acquisition remains unresolved.
+    if: github.event_name == 'workflow_dispatch'
+    name: Windows packaging and native desktop (manual)
     runs-on: windows-2025
     timeout-minutes: 60
     defaults:

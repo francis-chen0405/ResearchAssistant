@@ -66,6 +66,14 @@ The app remains an unsigned local build; public-release acceptance is separate.
 
 ## Windows and release boundary
 
+At `2586027`, the Windows packaging job failed earlier than installer acceptance:
+`desktop/smoke.py` reported `Owned Wigolo exited with code 1`. The deeper service
+startup cause remains undiagnosed. The user requested removing that verifier from
+automatic checks; [Windows packaging is now manual-only](../../.agent/plans/windows-ci-trigger-2026-10-18.md).
+Passing Windows native regressions and all other automatic jobs remain enabled.
+This changes CI triggering only and does not establish Windows delivery acceptance.
+
+
 [Prompt 17](../verification/windows-ci-durability-2026-10-13.md) retains historical CI
 target `44f83d9bfb7e8e2896dc44390c366e4d498be044` on
 `codex/windows-ci-durability-20261013`. Automatic CI and Mac packaging passed there;
