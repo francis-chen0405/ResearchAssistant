@@ -97,5 +97,15 @@ function harness(options = {}) {
   };
 }
 
+// A published record ends in a newline; empty/partial records are never PIDs.
+function readPidRecord(file) {
+  let text;
+  try { text = fs.readFileSync(file, "utf8"); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  if (text.length > 4096 || !/^[1-9][0-9]*(?:[,\n][1-9][0-9]*)*\n$/.test(text)) return null;
+  const pids = text.trimEnd().split(/[,\n]/).map(Number);
+  return pids.every((pid) => Number.isSafeInteger(pid) && pid > 1 && pid <= 2147483647) ? pids : null;
+}
+
 async function flush() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
-module.exports = { harness, FakeChild, FakeClock, flush };
+module.exports = { harness, FakeChild, FakeClock, flush, readPidRecord };

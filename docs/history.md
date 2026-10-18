@@ -174,3 +174,5 @@ Historical setup, next-step and approval wording in these records applies to the
 - [Folders-only root — October 18](../.agent/plans/root-layout-2026-10-18.md): nested settings, launchers and Git rules with preserved runtime identity.
 
 - [Manual-only Windows packaging — October 18](../.agent/plans/windows-ci-trigger-2026-10-18.md): exact failed job, authorized trigger change and retained acceptance limits.
+
+- [Mac shutdown smoke PID race — October 18](../.agent/plans/mac-smoke-pid-race-2026-10-18.md): atomic test records, strict PID checks and native verification.

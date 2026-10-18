@@ -6,10 +6,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFileSync } = require("node:child_process");
-const { harness, flush } = require("./shutdown-test-support.cjs");
+const { harness, flush, readPidRecord } = require("./shutdown-test-support.cjs");
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function running(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 1) return false;
   try {
     const status = execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).trim();
     return status.length > 0 && !status.startsWith("Z");
@@ -81,7 +82,8 @@ async function until(check) {
       if (mode === "normal") assert.deepEqual(h.state.exits, [0]);
       else { assert.deepEqual(h.state.exits, [1]); assert.equal(child.signalCode, "SIGKILL"); }
       assert.equal(timers.size, 0);
-      const pids = fs.readFileSync(pidFile, "utf8").trim().split(/[\n,]/).map(Number);
+      const pids = readPidRecord(pidFile);
+      assert.ok(pids, "Backend must publish a complete valid PID record");
       await until(() => pids.every((pid) => !running(pid)));
       assert.equal(running(unrelated.pid), true, "Unrelated sentinel must survive");
       assert.equal(child.stdin.destroyed && child.stdout.destroyed && child.stderr.destroyed, true);
@@ -111,7 +113,9 @@ class Ownership(DesktopOwnership):
 ownership = Ownership(sys.stdout)
 def handoff(pid, owned):
     if owned:
-        record.write_text(str(pid))
+        temporary = record.with_name(record.name + '.tmp')
+        temporary.write_text(str(pid) + chr(10))
+        os.replace(temporary, record)
         if mode == 'before-report': os.kill(os.getpid(), signal.SIGSTOP)
     ownership(pid, owned)
     if owned and mode == 'after-ack': os.kill(os.getpid(), signal.SIGSTOP)
@@ -124,7 +128,8 @@ ownership.write_message({'protocol': 1, 'origin': 'http://127.0.0.1:12345'})
 child_code = (
     "import os, pathlib, subprocess, sys, time; "
     "c=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-    f"pathlib.Path({str(record)+'.executed'!r}).write_text(str(os.getpgrp())+','+str(c.pid)); "
+    f"p=pathlib.Path({str(record)+'.executed'!r}); t=p.with_name(p.name+'.tmp'); "
+    "t.write_text(str(os.getpgrp())+','+str(c.pid)+chr(10)); os.replace(t,p); "
     "time.sleep(60)"
 )
 supervisor = (sys.executable, str(Path(acquisition_supervisor.__file__).resolve()))
@@ -166,8 +171,13 @@ time.sleep(60)
           owned.push(child); return child;
         } });
       await h.start();
-      await until(() => fs.existsSync(record));
-      const acquisition = Number(fs.readFileSync(record, "utf8"));
+      let acquisition;
+      await until(() => {
+        const pids = readPidRecord(record);
+        if (!pids || pids.length !== 1) return false;
+        [acquisition] = pids;
+        return true;
+      });
       if (mode !== "root-exit") {
         await until(() => h.state.windows.some((w) => w.shown));
         if (mode === "running") await until(() => fs.existsSync(record + ".executed"));
@@ -182,8 +192,10 @@ time.sleep(60)
       await until(() => h.state.exits.length > 0);
       await until(() => !running(acquisition));
       if (fs.existsSync(record + ".executed")) {
-        const [group, grandchild] = fs.readFileSync(record + ".executed", "utf8").split(",").map(Number);
-        fs.appendFileSync(record, "," + grandchild);
+        const executed = readPidRecord(record + ".executed");
+        assert.ok(executed && executed.length === 2, "Execution must publish its complete process pair");
+        const [group, grandchild] = executed;
+        fs.writeFileSync(record, acquisition + "," + grandchild + "\n");
         assert.equal(group, acquisition);
         await until(() => !running(grandchild));
       }
@@ -198,7 +210,7 @@ time.sleep(60)
     }
     // All entries were created by this smoke; no system/process-name discovery.
     for (const file of fs.readdirSync(temporary).filter((name) => name.endsWith(".pids"))) {
-      for (const pid of fs.readFileSync(path.join(temporary, file), "utf8").trim().split(/[\n,]/).map(Number)) {
+      for (const pid of readPidRecord(path.join(temporary, file)) || []) {
         try { process.kill(-pid, "SIGKILL"); } catch {}
         if (running(pid)) { try { process.kill(pid, "SIGKILL"); } catch {} }
       }

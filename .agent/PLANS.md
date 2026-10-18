@@ -2,17 +2,16 @@
 
 ## Current task
 
-[Windows packaging trigger](plans/windows-ci-trigger-2026-10-18.md) diagnoses the
-latest Windows frozen acquisition failure and implements the user’s request to
-remove that verifier from automatic checks. Windows packaging becomes manual-only;
-all other automatic checks remain enabled. Preserve installed Mac build `20261018.59`,
-real data/credentials, historical evidence and the folders-only root. No paid research
-or public release is authorized.
+[Mac shutdown smoke PID race](plans/mac-smoke-pid-race-2026-10-18.md) fixes the latest
+GitHub failure: the harness read an empty PID record as zero. Atomic publication
+and strict PID parsing preserve the existing process assertions. Validate and push
+the test-only repair, then inspect the matching CI result. Preserve installed app,
+real data/credentials, all runtime policies and the folders-only root.
 
-The [folders-only root](plans/root-layout-2026-10-18.md) was pushed as `2586027`.
-[Master consolidation](plans/publish-master-2026-10-18.md), [Mac replacement](plans/install-current-mac-2026-10-18.md)
-and all approved R01–R59 fixes are complete. Remaining review boundaries belong to
-the [review task](plans/full-code-review-fixes-2026-10-15.md).
+[Windows packaging](plans/windows-ci-trigger-2026-10-18.md) remains manual-only as
+requested; other automatic checks remain enabled. The [folders-only root](plans/root-layout-2026-10-18.md),
+[master consolidation](plans/publish-master-2026-10-18.md), [Mac replacement](plans/install-current-mac-2026-10-18.md)
+and approved R01–R59 fixes are complete. No paid research or public release is authorized.
 
 ## Preceding Windows delivery boundary
 

@@ -26,6 +26,13 @@ preserved without further manual review. No absence-of-bugs claim follows.
 
 ## Current verification
 
+The latest Mac CI failure at `ea4773c` was a test PID-publication race: an empty file
+became PID zero. The [test-only repair](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md)
+uses atomic records and strict PID parsing. All 22 desktop units, two complete local
+nine-scenario native runs, and 19 focused Python tests / two Windows-only skips pass.
+The app source identity is unchanged; the new remote revision still requires CI confirmation.
+
+
 The complete Python suite passes **3,196 tests / nine existing skips** in 415.65
 seconds (rerun for the folders-only root), including all 44 R56–R59 regressions. Ruff lint/format (517 files), repository
 boundaries, generated API types, frontend lint/types and staged/unstaged whitespace

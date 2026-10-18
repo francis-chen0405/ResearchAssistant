@@ -1,7 +1,7 @@
 "use strict";
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { harness, FakeChild, flush } = require("./shutdown-test-support.cjs");
+const { harness, FakeChild, flush, readPidRecord } = require("./shutdown-test-support.cjs");
 const origin = { protocol: 1, origin: "http://127.0.0.1:12345" };
 
 async function started(options) {
@@ -214,4 +214,28 @@ test("ownership is recorded before ACK; quit and invalid requests never release 
   assert.equal(writes.length, 1);
   draining.clock.advance(150000);
   assert.deepEqual(draining.state.signals.map(([pid]) => pid), [-4000, -7000]);
+});
+
+test("native PID records reject empty, partial and unsafe values before process operations", () => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "RA PID record "));
+  const record = path.join(folder, "owned.pids");
+  try {
+    assert.equal(readPidRecord(record), null);
+    // Force the same create/truncate window observed on the macOS CI runner.
+    const writer = fs.openSync(record, "w");
+    try {
+      assert.equal(readPidRecord(record), null);
+      fs.writeSync(writer, "123");
+      assert.equal(readPidRecord(record), null);
+      fs.writeSync(writer, "45\n");
+      assert.deepEqual(readPidRecord(record), [12345]);
+    } finally { fs.closeSync(writer); }
+    for (const text of ["0\n", "1\n", "-12\n", "NaN\n", "12,\n", "12\n,34", "2147483648\n"]) {
+      fs.writeFileSync(record, text);
+      assert.equal(readPidRecord(record), null, text);
+    }
+    fs.writeFileSync(record, "12345,23456\n34567\n");
+    assert.deepEqual(readPidRecord(record), [12345, 23456, 34567]);
+  } finally { fs.rmSync(folder, { recursive: true, force: true }); }
 });

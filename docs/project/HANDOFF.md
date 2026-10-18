@@ -1,5 +1,10 @@
 # Handoff
 
+Inspect matching GitHub results after the [Mac smoke PID-race repair](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md).
+Keep complete atomic PID records, reject unsafe values before process operations,
+and retain all shutdown ownership/sentinel assertions. The installed app and runtime
+source identity are unchanged.
+
 Windows packaging is manual-only under the [user-authorized CI change](../../.agent/plans/windows-ci-trigger-2026-10-18.md).
 Its latest frozen smoke reports Wigolo exit 1 before reaching installer checks.
 Keep that failure open for deliberate Windows investigation; all other automatic

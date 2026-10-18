@@ -158,3 +158,5 @@ records the remaining exceptions precisely.
 - [Before the folders-only root](2026-10-18-root-layout-preceding-state/hashes.json): exact preceding current guidance and root settings.
 
 - [Before manual-only Windows packaging](2026-10-18-ci-trigger-preceding-state/hashes.json): exact preceding current-state owners.
+
+- [Before the Mac smoke PID-race repair](2026-10-18-mac-smoke-preceding-state/hashes.json): exact preceding current-state owners.
