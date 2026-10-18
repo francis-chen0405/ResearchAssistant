@@ -24,6 +24,8 @@ from providers.llm import (
     render_stage_prompt,
 )
 from providers.pricing import conservative_token_estimate
+from researchassistant.agents.v2_stage_checkpoint import V2StageAttemptCheckpoint
+from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import (
     V2PreviewRequest,
     V2PreviewResult,
@@ -45,7 +47,7 @@ from researchassistant.contracts.research_directions import ResearchDirections
 from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
 from researchassistant.storage.store import read_v2_artifact
 
-SOURCE_SELECTION_SHORTLIST_KEY = "source-selection-preview-shortlist-v2"
+SOURCE_SELECTION_SHORTLIST_KEY = "source-selection-preview-shortlist-v3"
 SHORTLIST_CAP = 24_000
 FIXED_RUN_ID = UUID(int=9001)
 
@@ -151,7 +153,7 @@ def _audit(db_path: str, run_id: UUID) -> V2SelectionShortlistAudit:
 
 def _render_full_input(selection_input: V2SourceSelectionInput) -> str:
     prompt = load_prompt_file(
-        Path(__file__).resolve().parents[1] / "prompts" / "source_selection_v3.md",
+        prompt_resource("source_selection_v3.md"),
         expected_stage=LLMStage.SOURCE_SELECTION,
     )
     return render_stage_prompt(prompt, selection_input, V2SourceSelectionModelOutput)
@@ -196,11 +198,26 @@ def test_large_selection_uses_deterministic_audited_shortlist_with_full_reservat
         if candidate.source_id not in set(first_audit.included_source_ids)
     }
     assert all(row.disposition == "input_cap" for row in first_audit.omitted)
-    for provider, result in ((first_provider, first), (second_provider, second)):
-        request, minimum, actual = next(
-            estimate for estimate in provider.estimates if estimate[0] == provider.requests[0]
+    for provider, result, path in (
+        (first_provider, first, first_path),
+        (second_provider, second, second_path),
+    ):
+        attempt = V2StageAttemptCheckpoint.model_validate_json(
+            read_v2_artifact(
+                path, selection_input.run_id, "selection-checkpoint-v1/attempt-1"
+            ).payload_json
         )
-        assert request == provider.requests[0]
+        request, minimum, actual = next(
+            estimate
+            for estimate in provider.estimates
+            if estimate[0].model_copy(
+                update={"input_artifact_ids": (*estimate[0].input_artifact_ids, attempt.attempt_id)}
+            )
+            == provider.requests[0]
+        )
+        assert (*request.input_artifact_ids, attempt.attempt_id) == (
+            provider.requests[0].input_artifact_ids
+        )
         assert first_audit.rendered_input_tokens == actual
         assert actual == conservative_token_estimate(request.rendered_prompt) + 83
         assert minimum == conservative_token_estimate(request.rendered_prompt)
@@ -385,7 +402,10 @@ def test_probe_v1_v2_and_default_preview_v1_keep_historical_dump_hashes() -> Non
 
 
 def test_legacy_source_selection_prompt_bytes_remain_unchanged() -> None:
-    prompt = Path(__file__).resolve().parents[1] / "prompts" / "source_selection.md"
+    prompt = (
+        Path(__file__).resolve().parents[1]
+        / "backend/src/researchassistant/prompts/source_selection.md"
+    )
     assert (
         sha256(prompt.read_bytes()).hexdigest()
         == "c095053044ba603a939d7ef1e13a2d5531c7ca6c591134f895533b8a4cf8f974"

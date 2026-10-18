@@ -1,0 +1,15 @@
+✔ preferences expose read failure/retry and never reload over post-load choices (552.974416ms)
+✔ superseded and disposed preferences reads cannot publish late values (83.438792ms)
+✔ a successful trail retry clears the failure that previously hid its rows (35.368708ms)
+✔ active-run reconnection validates snapshot ownership: owned (30.880625ms)
+✔ active-run reconnection validates snapshot ownership: different-worker (26.674792ms)
+✔ active-run reconnection validates snapshot ownership: missing (26.771083ms)
+✔ active-run reconnection validates snapshot ownership: wrong-run (27.246375ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1035.0145

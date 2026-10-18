@@ -1,0 +1,25 @@
+from __future__ import annotations
+import json
+from datetime import UTC,datetime
+from pathlib import Path
+from uuid import uuid4
+from researchassistant.contracts.discovery_v2 import V2PreviewRequest,discovery_id
+from researchassistant.evidence.evidence_core import build_source_snapshot
+from researchassistant.research.source_preview import build_claim_preview
+
+def main() -> None:
+    rows=[]
+    for heading in ('Materials and methods','Methods and materials'):
+        text=f'{heading}: We randomized enrolled adult participants to the program and control groups and measured course completion outcomes after six months. Results: The program increased course completion among enrolled adults from 48 percent to 62 percent in the controlled comparison. Conclusion: These findings concern the sampled adult cohort.'
+        now=datetime.now(UTC)
+        run_id,snapshot_id=uuid4(),uuid4()
+        snapshot=build_source_snapshot(run_id=run_id,retrieval_attempt_id=uuid4(),snapshot_id=snapshot_id,source_url='https://example.test/generated-study',retrieved_at=now,normalized_text=text,truncated=False,created_at=now)
+        key='generated-inline-methods'
+        request=V2PreviewRequest(run_id=run_id,artifact_id=discovery_id(run_id,'V2PreviewRequest',key),identity_key=key,exact_claim='The program increases course completion.',direction='support',directions={'support_enabled':True,'challenge_enabled':False},source_id=uuid4(),snapshot_id=snapshot_id,snapshot_hash=snapshot.snapshot_sha256,preview_identity='source-claim-preview-v2')
+        preview=build_claim_preview(request,snapshot)
+        rows.append({'heading':heading,'observed_sections':preview.observed_sections,'missing_sections':preview.missing_sections,'selected_sections':[span.section for span in preview.spans]})
+    observed={'results':rows,'method':'Actual current preview construction from two equivalent generated flattened method headings; no database/provider activity.'}
+    Path('/tmp/ra-review-inline-methods-heading.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

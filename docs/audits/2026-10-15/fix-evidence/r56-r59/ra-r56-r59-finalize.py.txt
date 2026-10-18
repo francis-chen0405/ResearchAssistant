@@ -1,0 +1,289 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import shutil
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+
+from researchassistant.runtime.application_runtime import repository_identity
+
+root = Path.cwd()
+audit = root / 'docs/audits/2026-10-15'
+log = Path('/tmp/ra-r56-r59-full-final.log').read_text()
+match = re.search(r'(\d+) passed, (\d+) skipped in ([\d.]+)s', log)
+assert match is not None and 'FAILED ' not in log, 'Final full suite has not passed'
+passed, skipped, seconds = int(match[1]), int(match[2]), float(match[3])
+assert (passed, skipped) == (3195, 9)
+identity = repository_identity()
+assert identity == 'source-sha256:fe0cc617eaba0753c9895d0a5f4a983f07946c594c7054d9696775250dcf937c'
+post = json.loads((audit / 'post-fix-evidence.json').read_text())
+raw = audit / 'fix-evidence'
+for name, expected in post['raw_evidence_sha256'].items():
+    assert hashlib.sha256((raw / name).read_bytes()).hexdigest() == expected, name
+preceding_hashes = len(post['raw_evidence_sha256'])
+evidence = raw / 'r56-r59'
+evidence.mkdir()
+sources = list(Path('/tmp').glob('ra-r56-r59-*.log'))
+sources += list(Path('/tmp').glob('ra-r58-*.log'))
+sources += [Path('/tmp') / name for name in (
+    'ra-r56-production-fixed.log', 'ra-r57-production-fixed.log',
+    'ra-reviewed-selection-precommit-fixed.json', 'ra-reviewed-planner-precommit-fixed.json',
+    'ra-r58-native-fixed.json', 'ra-r59-guide-check.log',
+    'ra-reviewed-frozen-artifact-r56-r59.json', 'ra-review-doc-batch-59.log', 'ra-review-doc-batch-60.log',
+)]
+sources += [Path('/tmp') / name for name in (
+    'ra-reviewed-selection-precommit-fixed.py', 'ra-reviewed-planner-precommit-fixed.py',
+    'ra-r58-native-fixed.py', 'ra-r59-guide-check.py', 'ra-r56-r59-frozen-build.py',
+    'ra-r56-r59-frozen-check.py', 'ra-r56-r59-frozen-pdf-check.py',
+    'ra-r56-r59-coverage.py',
+)]
+for path in dict.fromkeys(sources):
+    assert path.is_file(), path
+    name = path.name + ('.txt' if path.suffix == '.py' else '')
+    target = evidence / name
+    shutil.copyfile(path, target)
+    post['raw_evidence_sha256']['r56-r59/' + name] = hashlib.sha256(target.read_bytes()).hexdigest()
+frozen = json.loads(Path('/tmp/ra-reviewed-frozen-artifact-r56-r59.json').read_text())
+assert frozen['source_identity'] == identity
+wheel_dir = Path('/tmp/researchassistant-review-r56-r59-distribution')
+wheel = next((wheel_dir / 'dist').glob('researchassistant-*.whl'))
+assert 'Verified exact 304-file wheel and both isolated installs' in (
+    Path('/tmp/ra-r56-r59-distribution.log').read_text()
+)
+assert 'PASS: frozen UI/backend' in Path('/tmp/ra-r56-r59-frozen-smoke.log').read_text()
+assert 'PASS: final frozen PDF worker' in Path('/tmp/ra-r56-r59-frozen-pdf.log').read_text()
+assert 'All checks passed!' in Path('/tmp/ra-r56-r59-lint-confirmed.log').read_text()
+assert '518 files already formatted' in Path('/tmp/ra-r56-r59-format-confirmed.log').read_text()
+post.update(verified_at_utc=datetime.now(UTC).isoformat(), source_identity=identity,
+            approved_findings=[f'R{number:02d}' for number in range(1, 60)],
+            python={'passed': passed, 'skipped': skipped, 'seconds': seconds},
+            frozen_mac_resources=frozen)
+post['wheel']['sha256'] = hashlib.sha256(wheel.read_bytes()).hexdigest()
+post['remaining_gates'] = [item for item in post['remaining_gates']
+                           if not re.match(r'R5[6-9]\b', item)]
+post['frontend']['full_python_scope'] = (
+    'R01–R59 source. Current lint/types and generated API contracts pass. Renderer/Node '
+    'bytes remain unchanged from R29; exact-byte static export, hook/browser and '
+    'desktop/shutdown evidence is retained and was not rerun for R56–R59.'
+)
+record = {
+    'scope': 'Exact Source Selection input/shortlist/budget and bounded attempts; initial Planner '
+             'input/one-attempt/outcome/original plan timestamp; safe publication recovery; '
+             'bounded checkout readiness and maintained operational guides.',
+    'full_python': f'{passed} passed / {skipped} existing skips / {seconds} seconds',
+    'full_python_log': 'fix-evidence/r56-r59/ra-r56-r59-full-final.log',
+    'new_cases': 44, 'focused': '90 passed / 42.27 seconds',
+    'corrected_resume_selection': '59 passed / 32.60 seconds',
+    'format_files': 518, 'preceding_raw_hashes_rechecked': preceding_hashes,
+    'distribution_work_directory': str(wheel_dir),
+    'source_identity': identity, 'frozen_identity': frozen['frozen_identity'],
+    'native': 'Fresh exact 304-file wheel/editable installs; separate frozen Mac '
+              'authentication/smoke-only vault cleanup/settings/acquisition/DNS/PDF pass. '
+              'Actual launcher/curl stalls exit with diagnostics at 3.898/3.755 seconds '
+              'under a 3-second test readiness budget, including process/interpreter/alert '
+              'overhead. No native Windows rerun or installer acceptance.',
+    'diagnostics': [
+        'Initial launcher test used a 1.2-second test budget that expired before the '
+        'owned web process started. The corrected 3-second fixture asserts both process '
+        'startup and cleanup; five scenarios pass.',
+        'Initial new-test insertion misplaced an existing final assertion; restored '
+        'its original owner. The legacy relational-only fixture now explicitly uses '
+        'the original contract without unavailable coverage/compiled fields.',
+        'Shortlist regression compares every original request field plus the exact '
+        'new durable attempt ID; reservation and token estimates remain exact.',
+        'First full suite: 3194 passed, one obsolete unknown-Planner retry expectation, '
+        'nine skips. The corrected test pauses before model dispatch and preserves '
+        'its active-status/cancellation assertions while requiring zero repeated '
+        'provider/search/acquisition calls and exactly unchanged unknown audit.',
+    ],
+    'remaining_findings': [], 'literal_every_line_review_complete': False,
+    'latest_graph_refresh': {'nodes': 35131, 'edges': 110444,
+                             'expected_nodes': 35131, 'expected_edges': 110444,
+                             'persistence': False},
+}
+post['r56_r59_verification'] = record
+(audit / 'post-fix-evidence.json').write_text(json.dumps(post, indent=2) + '\n')
+continued_path = audit / 'continued-review-evidence.json'
+continued = json.loads(continued_path.read_text())
+continued['scope'] = ('Continued current-source review. R01–R59 approved, implemented and '
+                      'verified. Original pre-fix probes/hashes remain retained. Literal '
+                      'every-file/every-line manual review remains incomplete.')
+for finding in continued['findings']:
+    if finding['id'] in {'R56', 'R57', 'R58', 'R59'}:
+        finding['status'] = 'approved; implemented and verified'
+        finding['repair_verification'] = 'post-fix-evidence.json#r56_r59_verification'
+continued['graph_refresh'] = record['latest_graph_refresh']
+continued_path.write_text(json.dumps(continued, indent=2) + '\n')
+guide = root / 'tests/README.md'
+guide.write_text(guide.read_text() + '''
+`test_selection_planner_checkpoint_resume.py` covers Source Selection and initial
+Planner intent/outcome/publication interruptions, exact request ownership, original
+selection estimates/budgets, exhausted-attempt replay and conservative unknown usage.
+It includes actual generated production and validated historical projection recovery.
+`test_checkout_launcher_readiness.py` executes the actual checkout launcher against
+isolated process/transport doubles: stalled API/web checks, refused listeners,
+successful opening and owned-child cleanup with an unrelated surviving process.
+The compatible-resume status test now pauses before execution: an unknown initial
+Planner intent must never be dispatched again, even under matching controls.
+''')
+ledger_path = audit / 'manual-coverage.json'
+ledger = json.loads(ledger_path.read_text())
+for entry in ledger['files']:
+    if entry['path'] == 'tests/README.md':
+        entry['sha256'] = hashlib.sha256(guide.read_bytes()).hexdigest()
+        entry['inspected_ranges'] = [[1, len(guide.read_text().splitlines())]]
+ledger['summary']['fully_inspected_current_lines'] = sum(
+    entry['inspected_ranges'][0][1] for entry in ledger['files']
+)
+ledger_path.write_text(json.dumps(ledger, indent=2) + '\n')
+count = ledger['summary']['fully_inspected_current_files']
+lines = ledger['summary']['fully_inspected_current_lines']
+remaining_path = audit / 'remaining-file-review.json'
+remaining = json.loads(remaining_path.read_text())
+remaining['fully_inspected_current_lines'] = lines
+remaining_path.write_text(json.dumps(remaining, indent=2) + '\n')
+status_path = root / 'docs/project/STATUS.md'
+status = status_path.read_text().replace('R01–R55 fixes', 'R01–R59 fixes')
+start = status.index('R53–R55 retain')
+end = status.index('The literal every-file/every-line')
+status = status[:start] + '''R53–R57 retain exact bounded-stage inputs and attempts, replay known results and
+stop on unknown outcomes without repeating calls. Selection keeps its original
+budget/shortlist; initial planning preserves its plan date and valid publication
+prefixes. Fresh labels follow admitted evidence relationships. R58 bounds checkout
+readiness; R59 aligns maintained schema/security/link/identity guidance. All 44 new
+R56–R59 regressions and current source/distribution/frozen checks pass.
+
+''' + status[end:]
+status = re.sub(r'\d+ current files / [\d,]+ lines', f'{count} current files / {lines:,} lines', status)
+status = status.replace('in the broader file review.',
+    f'in the broader file review ({remaining["remaining_original_files"]} original files pending).')
+status = status.replace('**3,151 tests / nine existing skips** in 400.22',
+                        f'**{passed:,} tests / nine existing skips** in {seconds}')
+status = status.replace('all 39 R53–R55 regressions. Ruff lint/format (515 files)',
+                        'all 44 R56–R59 regressions. Ruff lint/format (518 files)')
+status = status.replace('were not rerun for R53–R55', 'were not rerun for R56–R59')
+status = status.replace('source-sha256:9f1c3e19607ed1d9b393457dcb629ccebb290be11cb6d4db0e76c2798c181189', identity)
+status_path.write_text(status)
+handoff_path = root / 'docs/project/HANDOFF.md'
+handoff = handoff_path.read_text()
+handoff = re.sub(r'beyond the \d+\nfiles / [\d,]+ lines', f'beyond the {count}\nfiles / {lines:,} lines', handoff)
+start = handoff.index('R01–R55 are approved')
+end = handoff.index('For old ranking-only checkpoints')
+handoff = handoff[:start] + '''R01–R59 are approved, implemented and verified. [STATUS](STATUS.md) owns current
+verification; the [repair record](../verification/full-review-fixes-2026-10-15.md)
+retains exact source, fresh installs and separate disposable frozen Mac checks.
+Continue the unfinished literal manual pass: 365 original data/lockfile/historical
+files remain in the pending inventory. New findings still require user approval.
+Known Scout/Gap/Selection/Planner outcomes replay exactly; unknown intents stop
+without repeating model calls or refunding reservations. Initial Planner recovery
+preserves original plan dates; Source Selection subtracts its saved attempts once.
+Checkout readiness has one monotonic deadline and owned-child cleanup.
+''' + handoff[end:]
+handoff_path.write_text(handoff)
+plan_index = root / '.agent/PLANS.md'
+text = plan_index.read_text().replace(
+    'R56–R59 are approved for implementation; R01–R55 are implemented and verified.',
+    'R01–R59 are implemented and verified; the literal manual review remains active.')
+plan_index.write_text(text)
+plan_path = root / '.agent/plans/full-code-review-fixes-2026-10-15.md'
+text = plan_path.read_text()
+for number in range(56, 60):
+    text = text.replace(f'- [ ] R{number}:', f'- [x] R{number}:')
+text = text.replace('approved; implement bounded exact-input/outcome recovery.',
+                    'approved; exact input/outcome recovery and accounting verified.')
+text = text.replace('approved; implement exact input/attempt/outcome and plan-publication recovery.',
+                    'approved; exact input/attempt/outcome and plan-publication recovery verified.')
+text = text.replace('approved; implement one bounded startup deadline and owned cleanup regressions.',
+                    'approved; bounded startup and owned cleanup verified.')
+text = text.replace('approved; implement current-guide alignment with historical records preserved.',
+                    'approved; current guides aligned and historical records preserved.')
+text = text.replace('R56 awaits approval; the literal manual pass remains active.',
+                    'R56–R59 are verified below; the literal manual pass remains active.')
+text += f'''
+## R56–R59 verification
+
+All 44 new cases pass in the final {passed:,}-test suite (nine existing skips;
+{seconds} seconds). The 90-check focused selection, 59-check resume confirmation,
+lint/format (518 files), types/contracts, boundaries/whitespace, fresh exact 304-file
+wheel/editable installs and separate frozen Mac resources pass. Actual launcher/curl
+stalls exit under the accelerated test bound; original accounting and unknown
+reservations remain intact. The first full-suite failure and corrected obsolete
+unknown-Planner retry expectation are retained in exact evidence. Manual coverage is
+{count} files / {lines:,} lines; 365 original files remain. Windows and release gates remain open.
+'''
+plan_path.write_text(text)
+report_path = audit / 'full-code-review.md'
+text = report_path.read_text().replace(
+    'R01–R55 are implemented and verified; R56–R59 are approved; implementation and verification are in progress.',
+    'R01–R59 are implemented and verified; the literal manual review remains incomplete.')
+text = text.replace('**Approved; implementation in progress.**', '**Approved; implemented and verified.**')
+text = text.replace('R56–R59 are approved; implementation and verification are in progress.',
+                    'R56–R59 are implemented and verified.')
+marker = '## Findings and proposed fixes'
+text = text.replace(
+    '**Coverage limit:** all inventory entries were hashed and project code received automated checks, but manual inspection was targeted. This report does **not** establish that every one of the 147,198 lines has received an independent manual review, or that every bug has been found. The requested literal every-line manual review remains incomplete. The inventory records what exists; it must not be presented as a manual-review completion ledger.',
+    '**Coverage limit:** the inventory and automated checks are distinct from full-read evidence. The [manual ledger](manual-coverage.json) records actual inspected current bytes/ranges and reviewed edits. The requested whole-repository manual pass remains incomplete; large data, lockfiles and historical records are still pending. This report does not establish that every bug has been found.'
+)
+text = text.replace(marker, f'''Current explicit manual coverage is **{count} files / {lines:,} lines**, including
+all current owned application/tooling/test code, prompts and reviewed configurations.
+The pending inventory retains **365 original files**, chiefly data, lockfiles and
+historical records. Generated evidence/archive provenance remains separate; no
+whole-repository completion or absence-of-bugs claim follows.
+
+{marker}''')
+report_path.write_text(text)
+verification_path = root / 'docs/verification/full-review-fixes-2026-10-15.md'
+text = verification_path.read_text().replace('All user-approved R01–R55', 'All user-approved R01–R59')
+text = text.replace('## Current verification', '''| R56 | Selection freezes exact bounded input, estimate, shortlist and original budget; replay reuses known recommendations and cumulative attempts without double subtraction. | Actual production/preaggregate cuts, exhausted budgets, invalid recommendations, exact invocation ownership and unknown reservations |
+| R57 | Initial Planner saves exact input/one intent/typed outcome and original date; valid publication prefixes recover without another call. | Every request/publication boundary, known/unknown outcomes, original/modern partial projections and completed invocation requirements |
+| R58–R59 | Checkout readiness shares one monotonic deadline; maintained guides match current security/schema/identity behavior. | Five launcher process scenarios, actual Mac curl stalls, owned cleanup and 89 resolved guide targets |
+
+## Current verification''')
+start = text.index('- Complete Python suite:')
+end = text.index('- Exact 304-file wheel audit')
+text = text[:start] + f'''- Complete Python suite: **{passed:,} passed / nine existing skips**, {seconds} seconds;
+  all 44 R56–R59 new cases pass. Focused selection: 90 pass; corrected resume
+  confirmation: 59 pass. Prior compatibility evidence is retained.
+- Ruff lint/format: 518 files; repository boundaries and staged/unstaged whitespace pass.
+- Current frontend lint/types and generated API contracts pass. Renderer/Node bytes
+  remain unchanged from R29; its exact static export, 17 hook checks, six offline
+  browsers, 38 desktop/acquisition units and nine native shutdown scenarios remain
+  retained and were not rerun for R56–R59.
+''' + text[end:]
+text = text.replace('source-sha256:9f1c3e19607ed1d9b393457dcb629ccebb290be11cb6d4db0e76c2798c181189', identity)
+text = text.replace('source-sha256:314b3168e0ee6e832a06cfef1ae9104351d7cfedeac881d3a8991d5735a75c28', frozen['frozen_identity'])
+text = text.replace('researchassistant-review-r53-r55-frozen', 'researchassistant-review-r56-r59-frozen')
+text = text.replace('fix-evidence/r53-r55/ra-reviewed-frozen-artifact-r53-r55.json',
+                    'fix-evidence/r56-r59/ra-reviewed-frozen-artifact-r56-r59.json')
+text = text.replace('Scout/Gap journal intent', 'Scout/Gap/Selection/Planner journal intent')
+start = text.index('The [manual ledger]')
+end = text.index('R53–R55 diagnostics', start)
+text = text[:start] + f'''The [manual ledger](../audits/2026-10-15/manual-coverage.json) records {count} current
+files / {lines:,} lines. All owned application/tooling/test code has full reads;
+365 original data/lockfile/historical files remain. Hashes/tests do not establish
+literal manual completion or absence of bugs.
+
+''' + text[end:]
+text = text.replace('R56 remains reproduced and awaiting approval; its repair is not implemented.',
+'''R56–R59 are implemented and verified. The first full run retained one obsolete
+unknown-Planner retry expectation (3,194 pass / one failure / nine skips). Its
+replacement preserves active/cancelled UI checks and requires zero repeated calls
+and exactly unchanged unknown accounting. Final full validation passes all 3,195.
+Original probes, intermediate fixture failures and all 349 preceding raw evidence
+hashes remain retained; updated guides resolve 89 local path targets.''')
+verification_path.write_text(text)
+# Current owner text has changed; keep remaining original paths' measured hashes accurate.
+for row in remaining['files']:
+    path = root / row['path']
+    row['current_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+    row['current_bytes'] = path.stat().st_size
+remaining_path.write_text(json.dumps(remaining, indent=2) + '\n')
+assert hashlib.sha256(subprocess.check_output(['git', 'diff', '--cached', '--binary'])).hexdigest() == (
+    '85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2'
+)
+print(json.dumps({'python_passed': passed, 'existing_skips': skipped, 'seconds': seconds,
+                  'source_identity': identity, 'manual_files': count, 'manual_lines': lines,
+                  'remaining_original_files': 365, 'new_retained_evidence_files': len(sources)}, indent=2))

@@ -1,0 +1,5 @@
+No broken requirements found.
+{"identity": "source-sha256:ca44cfe01c287e223e2e431e60c26f92f677251b8fd0c3397189b7e9a30d6905", "prompts": 18, "pdf_pages": 3, "pdf_worker": "completed", "dns_worker": "completed and reaped", "api": "constructed without credentials", "fixtures": ["released", "blocked"], "binding": "fresh and replayed"}
+No broken requirements found.
+{"identity": "source-sha256:ca44cfe01c287e223e2e431e60c26f92f677251b8fd0c3397189b7e9a30d6905", "prompts": 18, "pdf_pages": 3, "pdf_worker": "completed", "dns_worker": "completed and reaped", "api": "constructed without credentials", "fixtures": ["released", "blocked"], "binding": "fresh and replayed"}
+Verified exact 303-file wheel and both isolated installs: /private/tmp/researchassistant-review-20261016-r33-distribution

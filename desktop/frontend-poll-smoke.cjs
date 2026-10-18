@@ -11,7 +11,7 @@ const path = require("node:path");
 const WAIT = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function main() {
-  const root = path.resolve(__dirname, "../web/out");
+  const root = path.resolve(__dirname, "../frontend/out");
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
     const file = path.join(root, pathname === "/" ? "index.html" : pathname);
@@ -35,6 +35,8 @@ async function main() {
     const database = "/example/history.sqlite3";
     const runId = "22222222-2222-4222-8222-222222222222";
     const replacementRunId = "33333333-3333-4333-8333-333333333333";
+    const rejectedResumeRunId = "44444444-4444-4444-8444-444444444444";
+    const interruptedRunId = "55555555-5555-4555-8555-555555555555";
     let preferences = {
       modelProfile: "configurable-2026-09",
       stageModels: {
@@ -71,7 +73,7 @@ async function main() {
       snapshotStarted = new Promise((resolve) => { snapshotStartedResolve = resolve; });
     };
     const progress = { status: "running", model_attempts: 1, retrieval_attempts: 1, usable_snapshots: 1, candidates: 1 };
-    const makeSnapshot = (classification, snapshotRunId = runId) => ({
+    const makeSnapshot = (classification, snapshotRunId = runId, overrides = {}) => ({
       run_id: snapshotRunId,
       db_path: database,
       raw_claim: started?.raw_claim ?? "A deterministic polling test claim",
@@ -103,8 +105,16 @@ async function main() {
       provider_identity: null,
       model_identity: null,
       fingerprint: null,
-      research_controls: { research_mode: "balanced", sources_per_stance_per_round: 10, discovery_providers: ["arxiv"] },
-      v2_diagnostics: null,
+      research_controls: { research_mode: "balanced", sources_per_stance_per_round: 10, discovery_providers: ["arxiv"], metadata_depth: 20 },
+      v2_diagnostics: classification === "running" ? {
+        logical_discovery_operations: 3,
+        physical_search_requests: 3,
+        retained_metadata_records: 12,
+        sources_survived_probe: 2,
+        approved_evidence_records: 1,
+        diagnostic_messages: ["Offline saved coverage warning."],
+      } : null,
+      ...overrides,
     });
 
     await page.route("**/api/**", async (route) => {
@@ -168,10 +178,51 @@ async function main() {
             status: "released",
             stage: "validation",
             updated_at: "2026-09-20T00:00:00Z",
+          }, {
+            run_id: rejectedResumeRunId,
+            raw_claim: "A run with a rejected resume attempt",
+            status: "running",
+            stage: "discovery",
+            updated_at: "2026-09-21T00:00:00Z",
+          }, {
+            run_id: interruptedRunId,
+            raw_claim: "A run interrupted before restart",
+            status: "running",
+            stage: "discovery",
+            updated_at: "2026-09-22T00:00:00Z",
           }],
         };
       } else if (pathname === `/api/research/${replacementRunId}`) {
-        body = makeSnapshot("released", replacementRunId);
+        body = makeSnapshot("released", replacementRunId, {
+          persisted_status: "completed",
+          worker_active: false,
+          attempt_diagnostic: {
+            classification: "invalid_input",
+            exit_code: 2,
+            message: "A completed run rejected changed settings.",
+            diagnostic_component: "startup",
+          },
+        });
+      } else if (pathname === `/api/research/${rejectedResumeRunId}`) {
+        snapshotCalls += 1;
+        body = makeSnapshot("invalid_input", rejectedResumeRunId, {
+          persisted_status: "running",
+          worker_active: false,
+          message: "Discovery settings changed; start a new run.",
+          attempt_diagnostic: {
+            classification: "invalid_input",
+            exit_code: 2,
+            message: "Discovery settings changed; start a new run.",
+            diagnostic_component: "resume",
+          },
+        });
+      } else if (pathname === `/api/research/${interruptedRunId}`) {
+        snapshotCalls += 1;
+        body = makeSnapshot("interrupted", interruptedRunId, {
+          persisted_status: "running",
+          worker_active: false,
+          message: "No active worker in this app. Saved progress and reservations are unchanged; resume with the original settings or start a new run.",
+        });
       } else if (pathname === `/api/research/${runId}`) {
         const call = ++snapshotCalls;
         activeSnapshots += 1;
@@ -218,6 +269,11 @@ async function main() {
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
     await page.getByText("Temporary status outage", { exact: true }).waitFor();
+    const discovery = page.getByRole("region", { name: "Discovery activity", exact: true });
+    await discovery.waitFor();
+    assert.match(await discovery.innerText(), /Physical provider requests\/pages\s*3/);
+    assert.match(await discovery.innerText(), /Retained metadata records\s*12/);
+    await discovery.getByText("Offline saved coverage warning.", { exact: true }).waitFor();
     await page.getByText("Poll smoke result", { exact: true }).waitFor({ timeout: 10000 });
 
     assert.equal(maxActiveSnapshots, 1, "Delayed status responses must never overlap");
@@ -238,6 +294,26 @@ async function main() {
     await page.getByText("Poll smoke result", { exact: true }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeReplacement, "Run replacement must cancel old follow-up polling");
+    await page.getByText("Latest execution attempt: A completed run rejected changed settings.", { exact: true }).waitFor();
+
+    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByText("A run with a rejected resume attempt", { exact: true }).click();
+    await page.getByText("Discovery settings changed; start a new run.", { exact: true }).first().waitFor();
+    const frozenMetadataDepth = page.getByText("Metadata depth", { exact: true }).locator("xpath=..");
+    await frozenMetadataDepth.waitFor();
+    assert.match(await frozenMetadataDepth.innerText(), /Metadata depth\s*20/);
+    assert.equal(await page.getByRole("button", { name: "Cancel run", exact: true }).count(), 0, "A rejected resume with no worker must not show Cancel run");
+    const rejectedResumePollCount = snapshotCalls;
+    await WAIT(1800);
+    assert.equal(snapshotCalls, rejectedResumePollCount, "A rejected resume attempt must stop polling");
+
+    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByText("A run interrupted before restart", { exact: true }).click();
+    await page.getByText("No active worker in this app. Saved progress and reservations are unchanged; resume with the original settings or start a new run.", { exact: true }).first().waitFor();
+    assert.equal(await page.getByRole("button", { name: "Cancel run", exact: true }).count(), 0, "An interrupted run with no worker must not show Cancel run");
+    const interruptedPollCount = snapshotCalls;
+    await WAIT(1800);
+    assert.equal(snapshotCalls, interruptedPollCount, "An interrupted run after restart must stop polling");
 
     await page.getByRole("button", { name: "Start new research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does unmount cancel scheduled polling?");
@@ -251,7 +327,7 @@ async function main() {
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeUnmount, "Unmount must cancel the delayed follow-up");
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${snapshotCalls} deterministic snapshots, max same-run concurrency ${verifiedSameRunConcurrency}, terminal stop, run replacement and unmount cleanup.`);
+    console.log(`PASS: ${snapshotCalls} deterministic snapshots, live discovery counts/warnings, max same-run concurrency ${verifiedSameRunConcurrency}, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement and unmount cleanup.`);
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

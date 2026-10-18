@@ -1,0 +1,19 @@
+✔ preferences expose read failure/retry and never reload over post-load choices (571.758042ms)
+✔ superseded and disposed preferences reads cannot publish late values (93.156375ms)
+✔ history import uses the latest callback and ignores duplicate clicks (21.526041ms)
+✔ history import preserves selection when closed (21.601041ms)
+✔ history import preserves selection when active (22.6785ms)
+✔ history import preserves selection when database-changed (14.587584ms)
+✔ a successful trail retry clears the failure that previously hid its rows (22.881875ms)
+✔ active-run reconnection validates snapshot ownership: owned (26.414375ms)
+✔ active-run reconnection validates snapshot ownership: different-worker (24.833209ms)
+✔ active-run reconnection validates snapshot ownership: missing (21.689ms)
+✔ active-run reconnection validates snapshot ownership: wrong-run (18.739333ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1102.340208

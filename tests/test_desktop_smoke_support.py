@@ -126,3 +126,17 @@ def test_monitor_stops_started_backend_through_parent_pipe() -> None:
         assert monitor.startup(timeout=5) == "ready\n"
         monitor.stop()
         assert monitor.process.returncode == 0
+
+
+def test_monitor_acknowledges_private_acquisition_gate() -> None:
+    code = (
+        "import json, sys\n"
+        "print('ready', flush=True)\n"
+        "print(json.dumps({'owned_pid': 5000, 'owned': True, "
+        "'ownership_request': 'a' * 32}), flush=True)\n"
+        "ack = json.loads(sys.stdin.readline())\n"
+        "assert ack == {'owned_pid': 5000, 'ownership_ack': 'a' * 32}\n"
+    )
+    with child(code) as monitor:
+        assert monitor.startup(timeout=5) == "ready\n"
+        monitor.wait_exit(timeout=5)

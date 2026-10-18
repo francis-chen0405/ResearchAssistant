@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const ts = require("../web/node_modules/typescript");
+const ts = require("../frontend/node_modules/typescript");
 
 function client(fetch) {
   let now = 0;
@@ -15,7 +15,7 @@ function client(fetch) {
     Date: { now: () => now },
     setTimeout: (resolve, delay) => { now += delay; resolve(); },
   };
-  const source = fs.readFileSync(path.join(__dirname, "../web/lib/api.ts"), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "../frontend/lib/api.ts"), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInNewContext(compiled, context);
   return exports.researchApi;
@@ -25,7 +25,7 @@ const response = (body) => ({ ok: true, json: async () => body });
 const diagnostic = (state) => ({ state, wigolo_ready: state === "healthy", message: state });
 
 async function main() {
-  const configSource = fs.readFileSync(path.join(__dirname, "../web/next.config.ts"), "utf8");
+  const configSource = fs.readFileSync(path.join(__dirname, "../frontend/next.config.ts"), "utf8");
   const configCode = ts.transpileModule(configSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
   for (const apiAddress of [undefined, "http://127.0.0.1:8765", ""]) {
     const exports = {};

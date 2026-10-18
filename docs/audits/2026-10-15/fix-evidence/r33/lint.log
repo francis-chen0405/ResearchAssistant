@@ -1,0 +1,67 @@
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/agents/v2_adaptive_search.py:651:101
+    |
+649 |     except LLMResponseValidationError as exc:
+650 |         reason = V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
+651 |         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, authorization_time())
+    |                                                                                                     ^^^^
+652 |         insert_v2_artifact(
+653 |             path,
+    |
+
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/agents/v2_adaptive_search.py:682:101
+    |
+680 |     except V2AdaptivePlanValidationError as exc:
+681 |         reason = V2RoundThreeReasonCode.INVALID_SEARCH_AGENT_PLAN
+682 |         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, authorization_time())
+    |                                                                                                     ^^^^
+683 |         insert_v2_artifact(
+684 |             path,
+    |
+
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/agents/v2_adaptive_search.py:702:101
+    |
+700 |     except V2AdaptiveNoEligibleProviderError as exc:
+701 |         reason = V2RoundThreeReasonCode.NO_ELIGIBLE_PROVIDER
+702 |         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, authorization_time())
+    |                                                                                                     ^^^^
+703 |         insert_v2_artifact(
+704 |             path,
+    |
+
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/agents/v2_adaptive_search.py:722:101
+    |
+720 |     except V2AdaptiveBudgetError as exc:
+721 |         reason = V2RoundThreeReasonCode.PROTECTED_BUDGET
+722 |         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, authorization_time())
+    |                                                                                                     ^^^^
+723 |         insert_v2_artifact(
+724 |             path,
+    |
+
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/agents/v2_adaptive_search.py:742:101
+    |
+740 |     except V2AdaptiveNoContinuationError:
+741 |         reason = V2RoundThreeReasonCode.LUNA_STOP
+742 |         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, authorization_time())
+    |                                                                                                     ^^^^
+743 |         insert_v2_artifact(
+744 |             path,
+    |
+
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/agents/v2_adaptive_search.py:762:101
+    |
+760 |     except (LookupError, ValueError):
+761 |         reason = V2RoundThreeReasonCode.NO_NEW_QUERY
+762 |         decision = _rejected_governor(initial_plan.run_id, reason, duplicate_rate, authorization_time())
+    |                                                                                                     ^^^^
+763 |         insert_v2_artifact(
+764 |             path,
+    |
+
+Found 6 errors.

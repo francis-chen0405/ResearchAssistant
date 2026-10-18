@@ -82,6 +82,15 @@ def test_source_title_projection_uses_readable_fallback_and_retains_captured_tit
     tmp_path: Path,
 ) -> None:
     _path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    record = reviewer_result.source_results[0].ledger_record
+    assert record is not None
+    # Give the generated source a PDF URL throughout its evidence chain; changing
+    # only the output URL would deliberately contradict the admitted provenance.
+    reviewer_result = type(reviewer_result).model_validate_json(
+        reviewer_result.model_dump_json().replace(
+            record.source_url, "https://example.org/paper.pdf"
+        )
+    )
     output = build_v2_final_research_output(
         reviewer_result=reviewer_result,
         continuation=_continuation(reviewer_result.run_id),
@@ -93,7 +102,6 @@ def test_source_title_projection_uses_readable_fallback_and_retains_captured_tit
     source_with_citation_heading = source.model_copy(
         update={
             "title": captured_title,
-            "source_url": "https://example.org/paper.pdf",
         }
     )
     titled_output = output.model_copy(

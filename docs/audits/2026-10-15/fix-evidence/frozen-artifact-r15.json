@@ -1,0 +1,46 @@
+{
+  "path": "/tmp/researchassistant-review-20261015-frozen/resources",
+  "source_identity": "source-sha256:0cd486b049ee8d5192ba6e5bc318cb4eb195302530a7aaa21f688c54039a0835",
+  "frozen_identity": "source-sha256:02316e7154a631e2b036017dd0bad8a0dd284c98e8dc352467761c9f276b5736",
+  "node_version": "v24.18.0",
+  "files": {
+    "backend/researchassistant-backend": {
+      "bytes": 12606496,
+      "sha256": "b7ed5f84da35ba973ad749149b6901791017ce12fea0d43d2d2956184654c120"
+    },
+    "node/bin/node": {
+      "bytes": 120965360,
+      "sha256": "ee6fb0e015284d83a91e8ec5213f43a157f8a392b58555301682892ba928c04a"
+    },
+    "frontend/index.html": {
+      "bytes": 5876,
+      "sha256": "74335b9804d428b7785bf6dd5642b4a047d2f9a113f0b5a08bb2abfb878fc16c"
+    },
+    "acquisition/network-policy.mjs": {
+      "bytes": 8348,
+      "sha256": "9e66794716ec3e6edb242b199ad4ed6e03060661415b448e32cd02224a396aee"
+    },
+    "acquisition/network-preload.mjs": {
+      "bytes": 2178,
+      "sha256": "459c1a5fd10306798009eb999ac57e7e936c7b597577e478ad21816fce3448f3"
+    },
+    "acquisition/network-proxy.mjs": {
+      "bytes": 7477,
+      "sha256": "b86cd3edecb324a66702922f75704ab1f15258d510c3400b3758978efde53435"
+    },
+    "acquisition/package-lock.json": {
+      "bytes": 207245,
+      "sha256": "aecd036296f02cc1738e3c0563fc85b23836810de26feb7d13ef47a1ac524258"
+    },
+    "browsers/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell": {
+      "bytes": 157792208,
+      "sha256": "aa25f2e795c02d5cb5ef5d6987745cc5bbe7d8bea58827390c7a4c81c8d2dd7b"
+    },
+    "browsers/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing": {
+      "bytes": 68624,
+      "sha256": "2447c7bdea8e8ad38b52594f1ba53e18821c05445e8a07ad1cf3b0f23931d89d"
+    }
+  },
+  "node_and_chromium_origin": "Copied unchanged from the preceding October 13 candidate; current backend/acquisition/frontend rebuilt or restaged.",
+  "frontend_revision": "R15 preference readiness, retry and stale-response ownership"
+}

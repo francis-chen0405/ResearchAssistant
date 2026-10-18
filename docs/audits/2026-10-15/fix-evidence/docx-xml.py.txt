@@ -1,0 +1,39 @@
+from __future__ import annotations
+import json
+import tempfile
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+from hashlib import sha256
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.evidence.brief_export import export_released_brief, BriefExportFormat
+
+def main() -> None:
+    original=product.production.CLAIM
+    product.production.CLAIM=original+' \x01'
+    try:
+        with tempfile.TemporaryDirectory(prefix='ra-docx-xml-review-') as temporary:
+            database=Path(temporary)/'generated.sqlite3'
+            result,_,_=product._run(database,ResearchControls(discovery_providers=(DiscoveryProvider.EXA,)))
+            assert result.state.value=='released',result.failure_reason
+            before=database.read_bytes()
+            path=Path(temporary)/'released.docx'
+            exported=export_released_brief(database,str(result.run_id),path,BriefExportFormat.DOCX)
+            with zipfile.ZipFile(path) as archive:
+                document=archive.read('word/document.xml')
+            try:
+                ET.fromstring(document)
+            except ET.ParseError as error:
+                observed={'finding':'R28','actual_released_run':True,'export_reported_success':True,'content_hash_matches_report':sha256(path.read_bytes()).hexdigest()==exported.content_sha256,'document_xml_parse_error':str(error),'control_character_present':b'\x01' in document,'database_unchanged':database.read_bytes()==before,'method':'Generated offline released run with an accepted U+0001 claim character; actual public DOCX export; standard XML parser rejects word/document.xml. No real data or provider work.'}
+            else:
+                raise AssertionError('Expected malformed DOCX XML')
+    finally:
+        product.production.CLAIM=original
+    Path('/tmp/ra-review-docx-xml.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+
+if __name__=='__main__':
+    main()

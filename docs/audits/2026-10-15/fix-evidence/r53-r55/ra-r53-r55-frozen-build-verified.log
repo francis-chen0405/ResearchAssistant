@@ -1,0 +1,167 @@
+56 INFO: PyInstaller: 6.22.2, contrib hooks: 2026.7
+56 INFO: Python: 3.12.14
+69 INFO: Platform: macOS-26.6.2-arm64-arm-64bit
+69 INFO: Python environment: /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv
+70 INFO: wrote /tmp/researchassistant-review-r53-r55-frozen/build/researchassistant-backend.spec
+75 INFO: Removing temporary files and cleaning cache in /tmp/researchassistant-review-r53-r55-frozen/cache/pyinstaller-current/pyinstaller
+545 INFO: Module search paths (PYTHONPATH):
+['/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant',
+ '/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python312.zip',
+ '/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12',
+ '/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/lib-dynload',
+ '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages',
+ '__editable__.researchassistant-0.1.0.finder.__path_hook__',
+ '/tmp/researchassistant-review-r53-r55-frozen',
+ '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src']
+797 INFO: Appending 'datas' from .spec
+806 INFO: checking Analysis
+806 INFO: Building Analysis because Analysis-00.toc is non existent
+806 INFO: Looking for Python shared library...
+820 INFO: Using Python shared library: /Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/libpython3.12.dylib
+820 INFO: Running Analysis Analysis-00.toc
+820 INFO: Target bytecode optimization level: 0
+820 INFO: Initializing module dependency graph...
+820 INFO: Initializing module graph hook caches...
+837 INFO: Analyzing modules for base_library.zip ...
+1445 INFO: Processing standard module hook 'hook-encodings.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+1822 INFO: Processing standard module hook 'hook-math.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+2689 INFO: Processing standard module hook 'hook-pickle.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+3435 INFO: Processing standard module hook 'hook-heapq.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+3745 INFO: Caching module dependency graph...
+3774 INFO: Analyzing /tmp/researchassistant-review-r53-r55-frozen/backend.py
+3787 INFO: Processing standard module hook 'hook-uvicorn.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+4100 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+4208 INFO: Processing standard module hook 'hook-xml.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+4367 INFO: Processing standard module hook 'hook-_ctypes.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+4740 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+4742 INFO: SetuptoolsInfo: initializing cached setuptools info...
+5129 INFO: Processing standard module hook 'hook-platform.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+5429 INFO: Processing standard module hook 'hook-difflib.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+5505 INFO: Processing standard module hook 'hook-webbrowser.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+5620 INFO: Processing standard module hook 'hook-websockets.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+6306 INFO: Processing standard module hook 'hook-anyio.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+6887 INFO: Processing standard module hook 'hook-pydantic.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+7361 INFO: Processing standard module hook 'hook-zoneinfo.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+7381 INFO: Processing standard module hook 'hook-sysconfig.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+7391 INFO: Processing standard module hook 'hook-_osx_support.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+8772 INFO: Processing standard module hook 'hook-sqlite3.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+9399 INFO: Processing standard module hook 'hook-certifi.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+9626 INFO: Processing standard module hook 'hook-pygments.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+10830 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+10980 INFO: Processing standard module hook 'hook-PIL.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+11078 INFO: Processing standard module hook 'hook-PIL.Image.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+11237 INFO: Processing standard module hook 'hook-numpy.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+12794 INFO: Processing standard module hook 'hook-charset_normalizer.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+13040 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+13156 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+14441 INFO: Analyzing hidden import 'agents'
+14441 INFO: Analyzing hidden import 'agents.analyst'
+14442 INFO: Analyzing hidden import 'agents.opposingresearcher'
+14444 INFO: Analyzing hidden import 'agents.planner'
+14444 INFO: Analyzing hidden import 'agents.renderer'
+14444 INFO: Analyzing hidden import 'agents.researcher'
+14445 INFO: Analyzing hidden import 'agents.reviewer'
+14445 INFO: Analyzing hidden import 'agents.supportingresearcher'
+14446 INFO: Analyzing hidden import 'agents.synthesizer'
+14446 INFO: Analyzing hidden import 'agents.v2_acquisition'
+14446 INFO: Analyzing hidden import 'agents.v2_adaptive_search'
+14447 INFO: Analyzing hidden import 'agents.v2_coverage'
+14447 INFO: Analyzing hidden import 'agents.v2_deep_analysis'
+14447 INFO: Analyzing hidden import 'agents.v2_discovery'
+14448 INFO: Analyzing hidden import 'agents.v2_evidence_admission'
+14448 INFO: Analyzing hidden import 'agents.v2_evidence_analyst'
+14449 INFO: Analyzing hidden import 'agents.v2_extraction'
+14449 INFO: Analyzing hidden import 'agents.v2_final_output'
+14450 INFO: Analyzing hidden import 'agents.v2_gap_analysis'
+14450 INFO: Analyzing hidden import 'agents.v2_initial_planner'
+14450 INFO: Analyzing hidden import 'agents.v2_post_analysis'
+14451 INFO: Analyzing hidden import 'agents.v2_reviewer_ledger'
+14451 INFO: Analyzing hidden import 'agents.v2_round_four'
+14451 INFO: Analyzing hidden import 'agents.v2_source_selection'
+14452 INFO: Analyzing hidden import 'providers'
+14452 INFO: Analyzing hidden import 'providers.acquisition'
+14453 INFO: Analyzing hidden import 'providers.arxiv'
+14453 INFO: Analyzing hidden import 'providers.clients'
+14453 INFO: Analyzing hidden import 'providers.composite_search'
+14454 INFO: Analyzing hidden import 'providers.config'
+14454 INFO: Analyzing hidden import 'providers.crossref'
+14454 INFO: Analyzing hidden import 'providers.discovery_transport'
+14455 INFO: Analyzing hidden import 'providers.exa'
+14456 INFO: Analyzing hidden import 'providers.firecrawl'
+14456 INFO: Analyzing hidden import 'providers.llm'
+14456 INFO: Analyzing hidden import 'providers.mimo'
+14457 INFO: Analyzing hidden import 'providers.mimo_factory'
+14457 INFO: Analyzing hidden import 'providers.model_choices'
+14458 INFO: Analyzing hidden import 'providers.model_profiles'
+14458 INFO: Analyzing hidden import 'providers.normalization'
+14458 INFO: Analyzing hidden import 'providers.openalex'
+14459 INFO: Analyzing hidden import 'providers.openalex_neighborhood'
+14459 INFO: Analyzing hidden import 'providers.pricing'
+14460 INFO: Analyzing hidden import 'providers.pubmed'
+14461 INFO: Analyzing hidden import 'providers.ranking'
+14461 INFO: Analyzing hidden import 'providers.scraper'
+14462 INFO: Analyzing hidden import 'providers.search'
+14462 INFO: Analyzing hidden import 'providers.serpsearch'
+14463 INFO: Analyzing hidden import 'providers.v2_budget'
+14463 INFO: Analyzing hidden import 'providers.v2_factory'
+14463 INFO: Analyzing hidden import 'providers.v2_routing'
+14464 INFO: Analyzing hidden import 'providers.wigolo'
+14464 INFO: Analyzing hidden import 'frontend'
+14464 INFO: Processing module hooks (post-graph stage)...
+14669 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14670 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+14675 INFO: Processing standard module hook 'hook-setuptools.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+14685 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14703 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14704 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
+14712 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14713 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+14807 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14950 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+14952 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14973 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+14973 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+15595 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/pre_safe_import_module'
+15596 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+16125 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks'
+17996 INFO: Performing binary vs. data reclassification (303 entries)
+18065 INFO: Looking for ctypes DLLs
+18107 INFO: Analyzing run-time hooks ...
+18113 INFO: Including run-time hook 'pyi_rth_inspect.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/rthooks'
+18115 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/rthooks'
+18117 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/rthooks'
+18119 INFO: Including run-time hook 'pyi_rth_setuptools.py' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/hooks/rthooks'
+18141 INFO: Creating base_library.zip...
+18157 INFO: Looking for dynamic libraries
+18603 INFO: Warnings written to /tmp/researchassistant-review-r53-r55-frozen/build/pyinstaller/researchassistant-backend/warn-researchassistant-backend.txt
+18680 INFO: Graph cross-reference written to /tmp/researchassistant-review-r53-r55-frozen/build/pyinstaller/researchassistant-backend/xref-researchassistant-backend.html
+18770 INFO: checking PYZ
+18770 INFO: Building PYZ because PYZ-00.toc is non existent
+18771 INFO: Building PYZ (ZlibArchive) /tmp/researchassistant-review-r53-r55-frozen/build/pyinstaller/researchassistant-backend/PYZ-00.pyz
+20541 INFO: Building PYZ (ZlibArchive) /tmp/researchassistant-review-r53-r55-frozen/build/pyinstaller/researchassistant-backend/PYZ-00.pyz completed successfully.
+20563 INFO: EXE target arch: arm64
+20563 INFO: Code signing identity: None
+20568 INFO: checking PKG
+20568 INFO: Building PKG because PKG-00.toc is non existent
+20568 INFO: Building PKG (CArchive) researchassistant-backend.pkg
+20587 INFO: Building PKG (CArchive) researchassistant-backend.pkg completed successfully.
+20588 INFO: Bootloader /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/bootloader/Darwin-64bit/run
+20588 INFO: checking EXE
+20588 INFO: Building EXE because EXE-00.toc is non existent
+20588 INFO: Building EXE from EXE-00.toc
+20588 INFO: Copying bootloader EXE to /tmp/researchassistant-review-r53-r55-frozen/build/pyinstaller/researchassistant-backend/researchassistant-backend
+20591 INFO: Converting EXE to target arch (arm64)
+20712 INFO: Removing signature(s) from EXE
+20733 INFO: Modifying Mach-O image UUID(s) in EXE
+20745 INFO: Appending PKG archive to EXE
+20749 INFO: Fixing EXE headers for code signing
+20753 INFO: Rewriting the executable's macOS SDK version (26.2.0) to match the SDK version of the Python library (15.0.0) in order to avoid inconsistent behavior and potential UI issues in the frozen application.
+20754 INFO: Re-signing the EXE
+20788 INFO: Building EXE from EXE-00.toc completed successfully.
+20792 INFO: checking COLLECT
+20792 INFO: Building COLLECT because COLLECT-00.toc is non existent
+20792 INFO: Removing dir /tmp/researchassistant-review-r53-r55-frozen/build/python/researchassistant-backend
+20821 INFO: Building COLLECT COLLECT-00.toc
+22802 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+22808 INFO: Build complete! The results are available in: /tmp/researchassistant-review-r53-r55-frozen/build/python
+Desktop resources prepared: /tmp/researchassistant-review-r53-r55-frozen/resources

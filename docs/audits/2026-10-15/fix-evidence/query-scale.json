@@ -1,0 +1,9 @@
+{
+  "finding": "R51",
+  "returncode": 1,
+  "json_measurement_emitted": false,
+  "inconsistent_migration_history": true,
+  "failure_stage": "legacy browser reads the generated downgraded fixture",
+  "real_database_changes": 0,
+  "external_provider_calls": 0
+}

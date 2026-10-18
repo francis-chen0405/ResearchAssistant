@@ -1,0 +1,10 @@
+{
+  "docs/project/STATUS.md": "effc36e33d775167b9b585628a910ad6d273e3702bc3108677c35ea38cdbef1c",
+  "docs/project/HANDOFF.md": "7cae2f406e4dfe27a60b1b5e388fc216686d799d00b316561c71387db985589a",
+  "docs/project/ARCHITECTURE.md": "282ba112bdd39dcc258ea5b517eefacde3fcff7be7ec621e8ca9eafec4813b29",
+  "docs/project/DECISIONS.md": "19b9b9aae60b40a8f12bd97ecca1539ca82baf1fe26a6e50b99379cf1bc2d5fe",
+  ".agent/PLANS.md": "197503967e7f011b4a59b7fddfdc37826100cb7a321f85a6e94177c51307ec13",
+  ".agent/plans/full-code-review-fixes-2026-10-15.md": "09344ece819062c12482eb6e2c7cf0f96588b10f62cff3fac40321175a737a29",
+  "docs/verification/full-review-fixes-2026-10-15.md": "c068a5bd50ca3b876d9a39b7427e0ba74d9c244e12205af3c59a670e49772600",
+  "docs/audits/2026-10-15/post-fix-evidence.json": "639ba2b42b2e868c346a52341464007b288fbf8efc5fa67498f792a82f2bae14"
+}

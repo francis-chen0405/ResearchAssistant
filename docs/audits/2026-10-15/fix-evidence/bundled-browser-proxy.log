@@ -1,0 +1,1 @@
+PASS: real Chromium private HTTP/WebSockets are blocked; public dedicated/shared-worker rendering uses the proxy; zero private connections

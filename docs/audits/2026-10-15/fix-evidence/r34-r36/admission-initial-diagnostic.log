@@ -1,0 +1,51 @@
+................F...............................................         [100%]
+=================================== FAILURES ===================================
+____ test_round_four_reconciliation_preserves_exact_targeted_gap_provenance ____
+
+obj = <module 'researchassistant.agents.v2_evidence_admission' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/agents/v2_evidence_admission.py'>
+name = 'insert_v2_evidence_admission', ann = 'agents.v2_evidence_admission'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+>           obj = getattr(obj, name)
+                  ^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'researchassistant.agents.v2_evidence_admission' has no attribute 'insert_v2_evidence_admission'. Did you mean: 'read_v2_evidence_admission'?
+
+.venv/lib/python3.12/site-packages/_pytest/monkeypatch.py:90: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1377/test_round_four_reconciliation0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b820a10>
+
+    def test_round_four_reconciliation_preserves_exact_targeted_gap_provenance(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+>       monkeypatch.setattr(
+            "agents.v2_evidence_admission.insert_v2_evidence_admission",
+            lambda *args, **kwargs: None,
+        )
+
+tests/test_v2_phase12_production.py:1093: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/_pytest/monkeypatch.py:104: in derive_importpath
+    annotated_getattr(target, attr, ann=module)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+obj = <module 'researchassistant.agents.v2_evidence_admission' from '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/agents/v2_evidence_admission.py'>
+name = 'insert_v2_evidence_admission', ann = 'agents.v2_evidence_admission'
+
+    def annotated_getattr(obj: object, name: str, ann: str) -> object:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError as e:
+>           raise AttributeError(
+                f"{type(obj).__name__!r} object at {ann} has no attribute {name!r}"
+            ) from e
+E           AttributeError: 'module' object at agents.v2_evidence_admission has no attribute 'insert_v2_evidence_admission'
+
+.venv/lib/python3.12/site-packages/_pytest/monkeypatch.py:92: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_v2_phase12_production.py::test_round_four_reconciliation_preserves_exact_targeted_gap_provenance
+1 failed, 63 passed in 18.88s

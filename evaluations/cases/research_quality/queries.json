@@ -1,0 +1,805 @@
+{
+  "per_topic_arm_order": "Rotate variants left by pilot topic index; fixed before collection.",
+  "pilot_topics": [
+    "alpr-crime",
+    "congestion",
+    "school-start",
+    "green-roofs"
+  ],
+  "prepared_on": "2026-10-11",
+  "queries": [
+    {
+      "compiled_action_sha256": "7579dcfc3837017acecc49a1498144733e8a9c32be335503a423e0dc174f8d1f",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "development",
+      "topic_id": "alpr-crime",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"license plate readers\" \"vehicle theft\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"license plate readers\" \"vehicle theft\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "license plate readers vehicle theft"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "license plate readers vehicle theft"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "license plate readers vehicle theft evaluation"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "34644a851c37910b529eec0d19f0568e53a119a347af53ddbd90c0c346acd79a",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "development",
+      "topic_id": "alpr-equity",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"license plate readers\" \"racial disparities\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"license plate readers\" \"racial disparities\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "license plate readers racial disparities"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "license plate readers racial disparities"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "license plate reader deployment racial disparities study"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "adc7089d3463907b9533443ffdd173fd22e4997ed8e1975ead69f560b8fcea55",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "development",
+      "topic_id": "cbt-depression",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"cognitive behavioral therapy\" \"depression\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"cognitive behavioral therapy\" \"depression\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "cognitive behavioral therapy depression"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "cognitive behavioral therapy depression"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "cognitive behavioral therapy adult depression usual care trial"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "ad49f92452266aeb04fbf332ff493d06b066d495b3f46288cbec136e3f51511d",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "development",
+      "topic_id": "homework",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"homework\" \"primary school\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"homework\" \"primary school\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "homework primary school"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "homework primary school"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "homework primary school achievement evidence"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "87571991774e57de731894d7146aa975101c84baa77f277a375b4869c7b315a3",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "development",
+      "topic_id": "heat-pumps",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"air source heat pumps\" \"cold climates\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"air source heat pumps\" \"cold climates\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "air source heat pumps cold climates"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "air source heat pumps cold climates"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "air source heat pump cold climate household energy costs study"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "5273e7bb51a9b47c79621adc3529f30c3da428d21d3e36a7da7cdff2a172b527",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "development",
+      "topic_id": "congestion",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"congestion pricing\" \"traffic\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"congestion pricing\" \"traffic\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "congestion pricing traffic"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "congestion pricing traffic"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "congestion pricing traffic evaluation"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "780e8b786d24f1a6cbe27851ea875adacc7ac67686b447a99510c2b4256f9f92",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "held_out",
+      "topic_id": "school-start",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"school start times\" \"adolescent sleep\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"school start times\" \"adolescent sleep\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "school start times adolescent sleep"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "school start times adolescent sleep"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "later school start times adolescent sleep study"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    },
+    {
+      "compiled_action_sha256": "aa7adcd49feaeba1a5bff81dab19f75a41b01eadad919b636bbe931b99f60bcd",
+      "concept_provenance": "Author-predeclared benchmark concepts; not an observed Planner output.",
+      "current_compiler_identity": "source-query-compiler-v3",
+      "split": "held_out",
+      "topic_id": "green-roofs",
+      "variants": [
+        {
+          "arm": "quoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "\"green roofs\" \"cooling energy\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "quoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "\"green roofs\" \"cooling energy\""
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-verbatim",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": true,
+            "page": 1,
+            "query": "green roofs cooling energy"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "unquoted-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "green roofs cooling energy"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        },
+        {
+          "arm": "short-ordinary",
+          "endpoint": "https://api.serpsearch.com/api/v1/search",
+          "locale": {
+            "country": null,
+            "language": null,
+            "location": null
+          },
+          "method": "GET",
+          "model": null,
+          "parameters": {
+            "exact_match": false,
+            "page": 1,
+            "query": "green roofs building cooling energy summer field study"
+          },
+          "requested_results": 10,
+          "reserved_usd": "0.01"
+        }
+      ]
+    }
+  ],
+  "status": "unexecuted; no paid allowance"
+}

@@ -1,0 +1,88 @@
+"""Exercise real offline CLI writers against disposable input/output collisions."""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import shutil
+import sys
+import tempfile
+from contextlib import redirect_stdout
+from pathlib import Path
+
+sys.path.insert(0, str(Path.cwd()))
+
+from evaluations.run_evaluations import DEFAULT_CORPUS_PATH, main as phase10_main
+from evaluations.source_discovery import DEFAULT_MANIFEST, main as discovery_main
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main() -> None:
+    results = []
+    original_hashes = {str(path): digest(path) for path in (DEFAULT_CORPUS_PATH, DEFAULT_MANIFEST)}
+    with tempfile.TemporaryDirectory(prefix="ra-review-evaluation-collisions-") as directory:
+        root = Path(directory)
+        discovery_input = root / "discovery-input.json"
+        shutil.copyfile(DEFAULT_MANIFEST, discovery_input)
+        before = digest(discovery_input)
+        with redirect_stdout(io.StringIO()):
+            code = discovery_main([
+                "--manifest", str(discovery_input),
+                "--json-output", str(discovery_input),
+                "--summary-output", str(root / "discovery-summary.md"),
+            ])
+        results.append({
+            "entry": "evaluations.source_discovery.main",
+            "returncode": code,
+            "input_overwritten": digest(discovery_input) != before,
+            "original_schema_lost": "manifest_version" not in json.loads(discovery_input.read_text()),
+        })
+        corpus = root / "phase10-corpus.json"
+        shutil.copyfile(DEFAULT_CORPUS_PATH, corpus)
+        shutil.copytree(DEFAULT_CORPUS_PATH.parent / "regression-fixtures", root / "regression-fixtures")
+        before = digest(corpus)
+        with redirect_stdout(io.StringIO()):
+            code = phase10_main([
+                "--corpus", str(corpus),
+                "--json-output", str(corpus),
+                "--summary-output", str(root / "phase10-summary.md"),
+            ])
+        results.append({
+            "entry": "evaluations.run_evaluations.main",
+            "returncode": code,
+            "input_overwritten": digest(corpus) != before,
+            "original_schema_lost": "route_operations" not in json.loads(corpus.read_text()),
+        })
+        shared = root / "both-reports.json"
+        with redirect_stdout(io.StringIO()):
+            code = phase10_main([
+                "--corpus", str(DEFAULT_CORPUS_PATH),
+                "--json-output", str(shared),
+                "--summary-output", str(shared),
+            ])
+        results.append({
+            "entry": "evaluations.run_evaluations.main",
+            "case": "same machine/human output path",
+            "returncode": code,
+            "machine_output_replaced_by_markdown": shared.read_text().startswith("# Phase 10"),
+        })
+    assert all(result["returncode"] == 0 for result in results)
+    assert all(result["input_overwritten"] for result in results[:2])
+    assert all(digest(Path(path)) == value for path, value in original_hashes.items())
+    report = {
+        "finding": "R52", "cases": results,
+        "original_input_files_unchanged": True,
+        "external_provider_calls": 0, "real_database_changes": 0,
+    }
+    Path("/tmp/ra-review-evaluation-output-collisions.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(report, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

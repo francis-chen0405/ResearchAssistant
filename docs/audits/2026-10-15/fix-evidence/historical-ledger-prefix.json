@@ -1,0 +1,8 @@
+{
+  "boundary": "Historical Phase-10 Reviewer bridge, directly invoked with its existing generated fixture; ordinary fresh production uses analyzer admission instead.",
+  "state": "failed",
+  "error": "IntegrityError: v2 Ledger admission is immutable",
+  "new_provider_calls": 0,
+  "original_admission_unchanged": true,
+  "method": "Actual relational admission commit interrupted before source checkpoint; advancing UTC clock, exact original Analyst result on resume. Generated offline providers only; no artifact edits or real data."
+}

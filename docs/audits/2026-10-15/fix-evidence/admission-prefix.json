@@ -1,0 +1,14 @@
+{
+  "finding": "R34",
+  "partial_status": "running",
+  "resume_state": "released",
+  "failure_reason": null,
+  "saved_admission_unchanged": true,
+  "model_requests_on_resume": 0,
+  "search_requests_on_resume": 0,
+  "method": "Actual generated offline research with an advancing UTC clock; interruption after a relational evidence-admission commit before its source checkpoint. No SQL edits, artifact substitution, real data or external calls.",
+  "deep_analysis_failure": "IntegrityError: v2 evidence admission is immutable",
+  "interrupted_source_state": "analyst_failed",
+  "interrupted_source_failure": "Deep analysis stopped before an Analyst result was produced.",
+  "interrupted_admission_in_final_release": false
+}

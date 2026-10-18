@@ -1,0 +1,10 @@
+{
+  "python_passed": 3195,
+  "existing_skips": 9,
+  "seconds": 445.73,
+  "source_identity": "source-sha256:fe0cc617eaba0753c9895d0a5f4a983f07946c594c7054d9696775250dcf937c",
+  "manual_files": 704,
+  "manual_lines": 164805,
+  "remaining_original_files": 365,
+  "new_retained_evidence_files": 53
+}

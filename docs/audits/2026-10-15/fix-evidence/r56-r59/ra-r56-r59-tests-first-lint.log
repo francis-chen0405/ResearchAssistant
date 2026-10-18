@@ -1,0 +1,31 @@
+E501 Line too long (102 > 100)
+  --> tests/test_selection_planner_checkpoint_resume.py:59:101
+   |
+57 |             V2SourceSelectionModelOutput(
+58 |                 recommendations=(
+59 |                     V2SourceSelectionRecommendation(source_id=source_id, rationale="Direct evidence"),
+   |                                                                                                     ^^
+60 |                 )
+61 |             )
+   |
+
+E501 Line too long (105 > 100)
+   --> tests/test_selection_planner_checkpoint_resume.py:227:101
+    |
+225 |     result = execute()
+226 |     assert result.used_fallback and result.selection_attempts == 2
+227 |     assert all(not attempt.succeeded and attempt.failure for attempt in result.selection_attempt_records)
+    |                                                                                                     ^^^^^
+228 |     assert len(provider.requests) == 2
+    |
+
+E501 Line too long (102 > 100)
+   --> tests/test_selection_planner_checkpoint_resume.py:249:101
+    |
+248 |     module = selection if stage == "source_selection" else planner
+249 |     name = "insert_v2_artifact" if stage == "source_selection" else "insert_v2_initial_planner_output"
+    |                                                                                                     ^^
+250 |     insert = getattr(module, name)
+    |
+
+Found 3 errors.

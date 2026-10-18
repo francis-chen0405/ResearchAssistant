@@ -50,6 +50,29 @@ def _build(
     return snapshot, build_claim_preview(request, snapshot)
 
 
+@pytest.mark.parametrize(
+    "heading",
+    ["Materials and methods", "Methods and materials", "Methods", "Method", "Methodology"],
+)
+def test_supported_flattened_method_headings_keep_methods_diagnostics(heading: str) -> None:
+    text = (
+        f"{heading}: We randomized adults to the intervention and comparison groups "
+        "and measured depression symptoms after six months. Results: The intervention "
+        "reduced depression symptoms compared with usual care in the sampled population. "
+        "Conclusion: These findings concern the sampled adults. "
+        "References: 1. Smith et al. (2024), DOI 10.1000/123."
+    )
+    snapshot, preview = _build(text)
+    assert "methods" in preview.observed_sections
+    assert "methods" not in preview.missing_sections
+    assert "bibliography" in preview.observed_sections
+    assert any(span.section == "methods" for span in preview.spans)
+    assert all("10.1000/123" not in span.text for span in preview.spans)
+    assert all(
+        snapshot.normalized_text[span.start : span.end] == span.text for span in preview.spans
+    )
+
+
 def test_flat_abstract_with_inline_doi_and_reference_heading_keeps_only_abstract() -> None:
     text = (
         "The intervention and depression symptoms\n"

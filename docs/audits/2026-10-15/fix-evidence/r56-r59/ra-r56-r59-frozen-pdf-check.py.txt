@@ -1,0 +1,16 @@
+from __future__ import annotations
+import json
+import os
+import subprocess
+import tempfile
+from researchassistant.evidence.pdf_render import render_pdf_text
+from researchassistant.providers.normalization import NormalizedDocument
+
+pdf=render_pdf_text('Generated frozen worker check.\nOriginal Unicode: Résumé 中文.')
+header=json.dumps({'max_words':3000,'max_pages':100,'deadline_seconds':10}).encode()+b'\n'
+with tempfile.TemporaryDirectory(prefix='ra-frozen-pdf-r56-r59-') as folder:
+    result=subprocess.run(['/tmp/researchassistant-review-r56-r59-frozen/resources/backend/researchassistant-backend','--pdf-worker'],input=header+pdf,capture_output=True,cwd=folder,env={'PATH':'','HOME':os.environ['HOME']},timeout=20,check=True)
+    document=NormalizedDocument.model_validate_json(result.stdout)
+    assert 'Generated frozen worker check.' in document.text
+    assert 'Résumé 中文.' in document.text
+print('PASS: final frozen PDF worker, unrelated cwd, empty PATH, generated Unicode source')

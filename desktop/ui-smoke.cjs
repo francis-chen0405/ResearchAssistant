@@ -13,7 +13,7 @@ async function quitNormally(desktop) {
   let timer;
   try {
     await Promise.race([exited, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Normal desktop shutdown timed out")), 100000);
+      timer = setTimeout(() => reject(new Error("Normal desktop shutdown timed out")), 155000);
     })]);
   } finally { clearTimeout(timer); }
 }

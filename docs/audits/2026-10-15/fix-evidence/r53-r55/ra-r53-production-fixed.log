@@ -1,0 +1,11 @@
+{
+  "state": "released",
+  "failure_reason": null,
+  "identical_first_batch_calls": 1,
+  "configured_attempts_per_batch": 2,
+  "completed_first_batch_calls_before_final_resume": 1,
+  "repeated_identical_prompt_hash": "f5e6ab0b0aa3c2e9ce185def6fc89140628b154d7f3cef7a59471594704dd85b",
+  "physical_audit_prefix_preserved": true,
+  "new_search_calls_after_interruption": 1,
+  "method": "Two actual generated production interruptions after successful Scout and before the first atomic stage pair commit; exact-source resume and unchanged fixture inputs. No artifact edits, real data, credentials, paid research or external calls."
+}

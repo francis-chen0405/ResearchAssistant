@@ -10,6 +10,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(_REPOSITORY_ROOT))
 
 from evaluations.evaluator import evaluate_corpus, write_evaluation_outputs  # noqa: E402
+from evaluations.output_publication import validate_output_paths  # noqa: E402
 from evaluations.schema import LiveEvaluationProvider  # noqa: E402
 
 DEFAULT_CORPUS_PATH = Path(__file__).resolve().parent / "cases" / "offline-corpus.json"
@@ -39,6 +40,8 @@ def main(
 ) -> int:
     args = build_parser().parse_args(argv)
     try:
+        # Refuse collisions before an embedding application can invoke live work.
+        validate_output_paths((args.json_output, args.summary_output))
         report = evaluate_corpus(
             args.corpus,
             live_enabled=args.enable_live,

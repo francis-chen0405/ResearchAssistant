@@ -338,6 +338,44 @@ def test_crossref_adapter_success_and_failure_are_non_evidentiary() -> None:
         failed.resolve("10.1000/abc")
 
 
+@pytest.mark.parametrize("returned", [None, "malformed", "10.9999/different-work"])
+def test_crossref_rejects_missing_malformed_and_different_identifiers(returned: str | None) -> None:
+    enricher = CrossrefEnricher(
+        client=httpx.Client(
+            base_url="https://api.crossref.org",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, json={"message": {"DOI": returned, "title": ["Different work"]}}
+                )
+            ),
+        )
+    )
+    with pytest.raises(CrossrefEnrichmentError, match="identifier"):
+        enricher.resolve("10.1000/abc")
+
+
+@pytest.mark.parametrize("verified", [True, False])
+def test_crossref_callback_cannot_relabel_an_owned_candidate(verified: bool) -> None:
+    run_id = uuid4()
+    response = _response(run_id, DiscoveryProvider.EXA)
+
+    def mismatch(doi: str) -> CrossrefIdentityMetadata:
+        return CrossrefIdentityMetadata(
+            doi="10.9999/different-work", canonical_title="Different work", verified=verified
+        )
+
+    items = normalize_discovery_responses(
+        run_id=run_id,
+        directions=ResearchDirections(),
+        responses=(response,),
+        discovered_at=NOW,
+        crossref_resolver=mismatch,
+    )
+    assert items[0].doi == "10.1000/abc"
+    assert items[0].title == response.results[0].title
+    assert items[0].crossref is not None and not items[0].crossref.verified
+
+
 def test_v2_scout_batches_twenty_items_retries_falls_back_and_persists(tmp_path: Path) -> None:
     run_id = uuid4()
     directions = ResearchDirections(support_enabled=True, challenge_enabled=False)

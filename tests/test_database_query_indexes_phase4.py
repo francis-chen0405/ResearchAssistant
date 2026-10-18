@@ -56,7 +56,8 @@ def test_query_indexes_are_required_on_committed_schema(tmp_path: Path) -> None:
 
 def test_pending_index_migration_is_atomic_and_can_reuse_valid_indexes(tmp_path: Path) -> None:
     path = tmp_path / "pending-indexes.sqlite3"
-    init_db(str(path))
+    with _connect(path) as connection:
+        store_schema._initialize_schema(connection, target_version=17)
     _query_indexes(path)
     with _connect(path) as connection:
         connection.execute("DELETE FROM schema_migrations WHERE version = 17")
@@ -83,4 +84,4 @@ def test_pending_index_migration_is_atomic_and_can_reuse_valid_indexes(tmp_path:
 
     assert set(_query_indexes(path)) >= set(store_schema._REQUIRED_INDEXES)
     with open_read_only_store(path) as reader:
-        assert reader.compatibility.schema_version == store_schema.CURRENT_SCHEMA_VERSION
+        assert reader.compatibility.schema_version == 17

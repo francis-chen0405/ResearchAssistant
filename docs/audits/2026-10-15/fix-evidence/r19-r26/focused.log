@@ -1,0 +1,32 @@
+........................................F............................... [ 75%]
+........................                                                 [100%]
+=================================== FAILURES ===================================
+_______ test_public_ipv6_candidate_is_acquired_over_numeric_ipv6_socket ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a0d5070>
+
+    def test_public_ipv6_candidate_is_acquired_over_numeric_ipv6_socket(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        wire = WireSocket()
+        families: list[int] = []
+    
+        def make_socket(family: int, kind: int) -> WireSocket:
+            families.append(family)
+            assert kind == socket.SOCK_STREAM
+            return wire
+    
+        monkeypatch.setattr(socket, "socket", make_socket)
+        adapter = WigoloAcquisitionAdapter(WigoloConfig())
+        try:
+>           result = adapter.scrape(ScrapeRequest(url="http://[2606:4700:4700::1111]:8443/paper"))
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for ScrapeRequest
+E           timeout_seconds
+E             Field required [type=missing, input_value={'url': 'http://[2606:470...4700::1111]:8443/paper'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.13/v/missing
+
+tests/test_public_source_transport.py:123: ValidationError
+=========================== short test summary info ============================
+FAILED tests/test_public_source_transport.py::test_public_ipv6_candidate_is_acquired_over_numeric_ipv6_socket
+1 failed, 95 passed in 28.37s

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/tmp/ra-review-resume-adaptive-prefix.py", line 53, in <module>
+    main()
+  File "/tmp/ra-review-resume-adaptive-prefix.py", line 49, in main
+    assert resumed.state.value=='failed' and 'already exists with different data' in resumed.failure_reason,observed
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'finding': 'R33', 'same_source_and_settings': True, 'saved_artifacts_modified_by_probe': False, 'interrupted_after': 'phase-7-round-2-execution', 'partial_status': 'running', 'resume_state': 'released', 'failure_reason': None, 'model_requests_on_resume': 9, 'search_requests_on_resume': 1, 'method': 'Actual generated offline pipeline with an advancing UTC clock; interruption immediately after the Round-2 execution commit, followed by unchanged production resume. No SQL edits, artifact substitution, real data or external calls.'}

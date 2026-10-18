@@ -1,0 +1,10 @@
+E501 Line too long (104 > 100)
+   --> backend/src/researchassistant/research/discovery_policy.py:143:101
+    |
+141 |     if doi is not None:
+142 |         return f"doi:{normalize_doi(doi)}"
+143 |     return f"url:{discovery_hash(canonical_discovery_url(canonical_url, version=url_identity_version))}"
+    |                                                                                                     ^^^^
+    |
+
+Found 1 error.

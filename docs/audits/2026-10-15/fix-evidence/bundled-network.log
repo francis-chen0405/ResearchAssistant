@@ -1,0 +1,21 @@
+✔ locked upstream fetch and PDF probe load the protected policy (301.998583ms)
+✔ public socket lookup is pinned and retains TLS identity (24.942ms)
+✔ private or mixed DNS set is rejected before a request: 127.0.0.1 (2.644791ms)
+✔ private or mixed DNS set is rejected before a request: 93.184.216.34,10.0.0.1 (0.2205ms)
+✔ private or mixed DNS set is rejected before a request: ::ffff:127.0.0.1 (0.922125ms)
+✔ private or mixed DNS set is rejected before a request: ::1 (0.224625ms)
+✔ browser requests use the pinned fetch and private redirects cannot continue (1.730041ms)
+✔ failed browser launches and browser disconnection close their owned proxies (0.237208ms)
+✔ forward proxy preserves original URL and body while removing proxy credentials (49.643958ms)
+✔ proxy rejects private, mixed DNS and invalid CONNECT/upgrade targets before dialing (9.085542ms)
+✔ CONNECT pins one public DNS result, preserves tunnel bytes and closes owned sockets (3.475375ms)
+✔ CONNECT rejects a socket whose peer disagrees with its validated address (1.109542ms)
+✔ closing the proxy aborts pending DNS and prevents a late connection (0.726208ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 396.141583

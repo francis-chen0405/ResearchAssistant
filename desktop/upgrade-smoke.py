@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import sqlite3
 import subprocess
@@ -32,6 +33,7 @@ _SCHEMA13_MIGRATION_DESCRIPTIONS = {
     15: "persist model cache-write tokens and usage cost basis",
     16: "protect same-run provenance ownership and keys on update",
     17: "index history ordering and native evidence trail lookups",
+    18: "allow round-four v2 Ledger admissions without changing historical rows",
 }
 _SCHEMA17_INDEXES = (
     "runs_updated_history",
@@ -61,7 +63,38 @@ _SCHEMA13_USAGE_COLUMNS = (
 
 
 def _remove_post_schema13_objects(conn: sqlite3.Connection, version: int) -> None:
-    """Remove only schema 14–17 objects from an isolated compatibility fixture."""
+    """Remove only schema 14–18 changes from an isolated compatibility fixture."""
+    if version >= 18:
+        # This conversion is only for disposable generated installer fixtures.
+        # Do not discard or relabel real round-four admissions.
+        if conn.execute("SELECT 1 FROM v2_ledger_admissions WHERE discovery_round=4").fetchone():
+            raise ValueError("Cannot discard round-four admissions from the upgrade fixture")
+        definition = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name='v2_ledger_admissions'"
+        ).fetchone()[0]
+        triggers = [
+            row[0]
+            for row in conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' "
+                "AND tbl_name='v2_ledger_admissions'"
+            )
+        ]
+        rows = conn.execute("SELECT * FROM v2_ledger_admissions").fetchall()
+        if "discovery_round between 1 and 4" not in definition.lower():
+            raise ValueError("Unrecognized schema-18 admission constraint")
+        definition = re.sub(
+            r"discovery_round\s+between\s+1\s+and\s+4",
+            "discovery_round BETWEEN 1 AND 3",
+            definition,
+            flags=re.IGNORECASE,
+        )
+        conn.execute("DROP TABLE v2_ledger_admissions")
+        conn.execute(definition)
+        conn.executemany(
+            "INSERT INTO v2_ledger_admissions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+        )
+        for trigger in triggers:
+            conn.execute(trigger)
     if version >= 16:
         for table in _SCHEMA13_PROVENANCE_GUARD_TABLES:
             conn.execute(f"DROP TRIGGER {table}_provenance_immutable_update")
@@ -81,7 +114,7 @@ def _schema13_attempt_columns(conn: sqlite3.Connection) -> set[str]:
 
 
 def _prepare_schema13_fixture(database: Path) -> None:
-    """Convert a recognized generated schema 14–17 DB into a schema-13 fixture."""
+    """Convert a recognized generated schema 14–18 DB into a schema-13 fixture."""
     conn = sqlite3.connect(database)
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -92,10 +125,8 @@ def _prepare_schema13_fixture(database: Path) -> None:
             raise ValueError("Cannot make a schema-13 fixture without migration records")
         versions = [row[0] for row in rows]
         version = versions[-1]
-        if version not in (14, 15, 16, 17) or versions != list(range(1, version + 1)):
-            raise ValueError(
-                f"Expected a complete recognized schema 14, 15, 16, or 17; found {version}"
-            )
+        if version not in (14, 15, 16, 17, 18) or versions != list(range(1, version + 1)):
+            raise ValueError(f"Expected a complete recognized schema 14–18; found {version}")
         descriptions = {row[0]: row[1] for row in rows}
         for introduced_version, expected in _SCHEMA13_MIGRATION_DESCRIPTIONS.items():
             if introduced_version <= version and descriptions.get(introduced_version) != expected:

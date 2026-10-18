@@ -1,0 +1,40 @@
+{
+  "seeded_deduplication": {
+    "results": [
+      {
+        "alias": "original",
+        "scrape_calls": 1,
+        "outcome": "duplicate_url",
+        "attempts_made": 1,
+        "seeded_resolved_aliases": 0
+      },
+      {
+        "alias": "resolved",
+        "scrape_calls": 1,
+        "outcome": "duplicate_url",
+        "attempts_made": 1,
+        "seeded_resolved_aliases": 0
+      }
+    ],
+    "method": "Actual retained deduplication seeding from its real completed generated researcher artifact, followed by ordinary retrieval of the same original/resolved source URL. No database modifications or external calls."
+  },
+  "duplicate_rate": {
+    "actual_status_counts": {
+      "retrieved": 2,
+      "duplicate_content": 16
+    },
+    "actual_duplicate_outcomes": 16,
+    "reported_duplicate_count": 0,
+    "reported_result_count": 18,
+    "method": "Actual retained Governor fact derivation using fully typed generated researcher/analysis artifacts; no new requests, budget edits or database writes."
+  },
+  "reviewer_prefix": {
+    "status": "failed",
+    "failure_reason": "existing Phase 9 Reviewer decision differs from fixture artifact",
+    "new_model_calls": 0,
+    "new_search_calls": 0,
+    "new_scrape_calls": 0,
+    "original_review_unchanged": true,
+    "method": "Actual retained provider runner with advancing UTC clock, interrupted immediately after native Reviewer row commit; exact-source resume with no saved-artifact edits. All providers generated offline."
+  }
+}

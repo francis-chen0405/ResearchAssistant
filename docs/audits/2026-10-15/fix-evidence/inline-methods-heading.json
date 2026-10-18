@@ -1,0 +1,38 @@
+{
+  "results": [
+    {
+      "heading": "Materials and methods",
+      "observed_sections": [
+        "conclusion",
+        "results",
+        "unknown"
+      ],
+      "missing_sections": [
+        "abstract",
+        "methods",
+        "discussion"
+      ],
+      "selected_sections": [
+        "unknown",
+        "results"
+      ]
+    },
+    {
+      "heading": "Methods and materials",
+      "observed_sections": [
+        "conclusion",
+        "methods",
+        "results"
+      ],
+      "missing_sections": [
+        "abstract",
+        "discussion"
+      ],
+      "selected_sections": [
+        "methods",
+        "results"
+      ]
+    }
+  ],
+  "method": "Actual current preview construction from two equivalent generated flattened method headings; no database/provider activity."
+}

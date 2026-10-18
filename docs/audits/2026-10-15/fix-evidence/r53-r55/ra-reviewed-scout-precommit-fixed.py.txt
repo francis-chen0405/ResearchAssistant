@@ -1,0 +1,55 @@
+from __future__ import annotations
+import hashlib
+import json
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+sys.path.insert(0, str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+import researchassistant.agents.v2_discovery as discovery
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.providers.llm import LLMRequest, LLMStage
+from researchassistant.providers.v2_budget import read_v2_physical_call_audit
+from researchassistant.storage.store import list_runs
+
+
+def main() -> None:
+    entry=product.production._ConceptModel.generate
+    requests=[]
+    def observed(self: Any, request: LLMRequest) -> object:
+        value=entry(self, request)
+        if request.stage is LLMStage.SCOUT:
+            requests.append({'prompt_sha256':hashlib.sha256(request.rendered_prompt.encode()).hexdigest(),'item_ids':[str(item.item_id) for item in request.input_artifact.candidates]})
+        return value
+    original=discovery.insert_v2_artifact_batch
+    def interrupted(*args: Any, **kwargs: Any) -> object:
+        if args[1][0][0]=='phase-3-metadata-ranking-round-1':
+            raise KeyboardInterrupt('generated interruption after Scout, before stage pair commit')
+        return original(*args, **kwargs)
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    with tempfile.TemporaryDirectory(prefix='ra-scout-precommit-') as folder:
+        path=Path(folder)/'generated.sqlite3'; run_id=None
+        with patch.object(product.production._ConceptModel,'generate',observed):
+            for _ in range(2):
+                with patch.object(discovery,'insert_v2_artifact_batch',interrupted):
+                    try:
+                        product._run(path,controls,run_id=run_id)
+                    except KeyboardInterrupt:
+                        pass
+                    else:
+                        raise AssertionError('expected precommit interruption')
+                run_id=list_runs(path)[0].run_id
+            before=read_v2_physical_call_audit(path,run_id)
+            saved=tuple(requests)
+            result,model,search=product._run(path,controls,run_id=run_id)
+            matched=[item for item in requests if item==saved[0]]
+            after=read_v2_physical_call_audit(path,run_id)
+            output={'state':result.state.value,'failure_reason':result.failure_reason,'identical_first_batch_calls':len(matched),'configured_attempts_per_batch':2,'completed_first_batch_calls_before_final_resume':sum(item.stage=='scout' for item in before.starts),'repeated_identical_prompt_hash':saved[0]['prompt_sha256'],'physical_audit_prefix_preserved':after.starts[:len(before.starts)]==before.starts,'new_search_calls_after_interruption':len(search.requests),'method':'Two actual generated production interruptions after successful Scout and before the first atomic stage pair commit; exact-source resume and unchanged fixture inputs. No artifact edits, real data, credentials, paid research or external calls.'}
+    Path('/tmp/ra-reviewed-scout-precommit-fixed.json').write_text(json.dumps(output,indent=2)+'\n')
+    print(json.dumps(output,indent=2))
+
+
+if __name__=='__main__':
+    main()

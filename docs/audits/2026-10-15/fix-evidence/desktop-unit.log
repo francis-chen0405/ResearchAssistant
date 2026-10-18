@@ -1,0 +1,29 @@
+✔ external sources permit credential-free HTTP(S) without opening an app window (7.451292ms)
+✔ normal quit allows the full drain, clears timers and releases streams (1.477ms)
+✔ stuck backend exits at exactly 150 seconds; repeated quit cannot extend it (0.9375ms)
+✔ startup bootstrap stall initiates bounded EOF shutdown (0.870292ms)
+✔ startup health stall initiates bounded EOF shutdown (0.787375ms)
+✔ startup window stall initiates bounded EOF shutdown (0.718042ms)
+✔ quit before app ready cannot subsequently spawn a backend (0.481167ms)
+✔ startup failure reports a fixed diagnostic without a native dialog (0.668459ms)
+✔ invalid response releases resources and has no unbounded quit (0.719708ms)
+✔ spawn error releases resources and has no unbounded quit (0.69975ms)
+✔ startup exit releases resources and has no unbounded quit (0.691125ms)
+✔ load error releases resources and has no unbounded quit (0.670916ms)
+✔ backend exit while the shutdown timer is being installed cancels that timer (0.628167ms)
+✔ synchronous exit on stdin.end and thrown/broken stdin are bounded (1.229834ms)
+✔ multiple acquisition owners cleaned on normal exit; revoked/invalid owners untouched (1.229042ms)
+✔ multiple acquisition owners cleaned on forced exit; revoked/invalid owners untouched (0.635667ms)
+✔ Windows kills only the owned child HANDLE; never uses group/PID/name scans (0.573292ms)
+✔ already observed OS root exit only cleans the owned group at the deadline (0.5755ms)
+✔ quit clears a pending health retry and aborts fetch without leaving timers (0.64075ms)
+✔ signals throwing still release streams and exit without waiting (0.609917ms)
+✔ ownership is recorded before ACK; quit and invalid requests never release a gate (1.353917ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 82.039375

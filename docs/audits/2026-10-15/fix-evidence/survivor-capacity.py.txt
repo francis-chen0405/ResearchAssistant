@@ -1,0 +1,39 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, ResearchDirections, ResearchMode, ResearchDirection, V2GapAnalysisModelOutput
+from researchassistant.research.v2_orchestrator import run_v2_production_pipeline
+from researchassistant.storage.store import read_v2_artifact
+
+class BalancedModel(product.production._ConceptModel):
+    def generate(self,request: object) -> object:
+        result=super().generate(request)
+        if isinstance(result,V2GapAnalysisModelOutput) and result.continue_research:
+            gaps=tuple(item.model_copy(update={'gap_id':'challenge-'+item.gap_id,'direction':ResearchDirection.CHALLENGE}) for item in result.material_gaps)
+            directions=tuple(item.model_copy(update={'gap_id':'challenge-'+item.gap_id,'direction':ResearchDirection.CHALLENGE}) for item in result.new_search_directions)
+            return V2GapAnalysisModelOutput.model_validate({**result.model_dump(),'material_gaps':(*result.material_gaps,*gaps),'new_search_directions':(*result.new_search_directions,*directions)})
+        return result
+
+def main() -> None:
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,DiscoveryProvider.OPENALEX),research_mode=ResearchMode.BALANCED,sources_per_stance_per_round=20)
+    model=BalancedModel(completed_rounds=4)
+    search=product._WideSearch()
+    with tempfile.TemporaryDirectory(prefix='ra-survivor-capacity-') as folder:
+        path=Path(folder)/'generated.sqlite3'
+        result=run_v2_production_pipeline(product.production.CLAIM,db_path=path,directions=ResearchDirections(support_enabled=True,challenge_enabled=True),discovery_providers=controls.discovery_providers,search_providers={provider:search for provider in controls.discovery_providers},wigolo_provider=product.phase12._Scraper(),llm_provider=model,routing_config=product.phase12._routing(),ceilings=product.production.CEILINGS,research_controls=controls,clock=lambda:product.phase12.NOW)
+        observed={'state':result.state.value,'failure_reason':result.failure_reason,'model_calls':len(model.requests),'search_calls':len(search.requests),'source_counts':{},'method':'Generated offline balanced research with twenty requested sources per direction, two providers, unique metadata and both-direction gaps. No external calls or real data.'}
+        for key in ('phase-7-merged-survivor-pool','post-phase-13-round-4-completion-v1'):
+            try:
+                payload=json.loads(read_v2_artifact(path,result.run_id,key).payload_json)
+                pool=payload if 'sources' in payload else payload['continuation']['merged_survivors']
+                observed['source_counts'][key]=len(pool['sources'])
+            except KeyError:
+                pass
+    Path('/tmp/ra-review-survivor-capacity.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

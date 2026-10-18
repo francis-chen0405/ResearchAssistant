@@ -1,0 +1,1 @@
+PASS: 7 deterministic snapshots, live discovery counts/warnings, max same-run concurrency 1, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement and unmount cleanup.

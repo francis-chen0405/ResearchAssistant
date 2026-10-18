@@ -1,0 +1,5 @@
+{
+  "admission_method": "analyzer_admitted",
+  "coverage_warning": "Evidence coverage: This brief is not balanced; no Reviewer-approved opposing evidence was available.",
+  "method": "Actual current renderer, strict synthesis and current analyzer-admitted fixture record; generated offline source only. No real data or provider traffic."
+}

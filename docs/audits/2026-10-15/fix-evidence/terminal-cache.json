@@ -1,0 +1,12 @@
+{
+  "finding": "R26",
+  "replacement_database_has_requested_run": false,
+  "returned_classifications": [
+    "released",
+    "released"
+  ],
+  "returned_old_brief_and_hash": true,
+  "terminal_cache_remains_after_repeated_reads": true,
+  "replacement_unchanged_by_inspection": true,
+  "method": "Generated offline release, actual completed-future eviction/cache path, original file preserved by rename and fresh empty generated database at the same path; no real data or calls."
+}

@@ -18,6 +18,7 @@ from test_v2_phase12_production import (
 )
 
 import agents.v2_deep_analysis as v2_deep_analysis
+import researchassistant.research.v2_orchestrator as v2_orchestrator
 from agents.v2_deep_analysis import (
     V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY,
     V2DeepAnalysisSourceEnvelope,
@@ -371,34 +372,59 @@ def test_worker_bound_rejects_oversized_submitted_wave() -> None:
         )
 
 
-def test_cancellation_drains_in_flight_work_and_writes_no_aggregate(tmp_path: Path) -> None:
+def test_cancellation_drains_in_flight_work_and_writes_no_aggregate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cancellation = Event()
     model = _CancellingDeepModel(cancellation)
     results: list[V2ProductionPipelineResult] = []
+    errors: list[Exception] = []
+    setup_finished = Event()
+    original_deep_analysis = v2_orchestrator.run_v2_deep_analysis_with_backfill
+
+    def start_deep_analysis(**kwargs: object) -> V2DeepAnalysisBackfillResult:
+        # The five-second entry guard measures deep analysis, after discovery,
+        # acquisition and selection have finished their unrelated database work.
+        setup_finished.set()
+        return original_deep_analysis(**kwargs)
+
+    monkeypatch.setattr(v2_orchestrator, "run_v2_deep_analysis_with_backfill", start_deep_analysis)
 
     def run_pipeline() -> None:
-        results.append(
-            _run(
-                tmp_path / "cancelled-concurrent-deep.sqlite3",
-                model,
-                _Search(unique_results=True),
-                _Scraper(),
-                ceilings=V2RunCeilings(
-                    max_physical_calls=100,
-                    max_total_tokens=500_000,
-                    max_total_cost_usd=Decimal("5"),
-                ),
-                cancellation_requested=cancellation.is_set,
+        try:
+            results.append(
+                _run(
+                    tmp_path / "cancelled-concurrent-deep.sqlite3",
+                    model,
+                    _Search(unique_results=True),
+                    _Scraper(),
+                    ceilings=V2RunCeilings(
+                        max_physical_calls=100,
+                        max_total_tokens=500_000,
+                        max_total_cost_usd=Decimal("5"),
+                    ),
+                    cancellation_requested=cancellation.is_set,
+                )
             )
-        )
+        except Exception as error:
+            errors.append(error)
+        finally:
+            setup_finished.set()
 
     thread = Thread(target=run_pipeline)
     thread.start()
-    assert model.first_deep_call_started.wait(timeout=5)
-    model.release.set()
-    thread.join(timeout=10)
+    try:
+        assert setup_finished.wait(timeout=60), "pipeline setup did not finish"
+        if errors:
+            raise errors[0]
+        assert model.first_deep_call_started.wait(timeout=5)
+    finally:
+        model.release.set()
+        thread.join(timeout=10)
 
     assert not thread.is_alive()
+    if errors:
+        raise errors[0]
     assert len(results) == 1
     result = results[0]
     assert result.state is V2ProductionState.CANCELLED

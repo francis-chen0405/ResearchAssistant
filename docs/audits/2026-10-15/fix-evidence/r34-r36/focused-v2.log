@@ -1,0 +1,182 @@
+FFFFFF.............................                                      [100%]
+=================================== FAILURES ===================================
+_ test_historical_selection_keeps_its_original_limit[researchassistant-v2-phase-8-source-selection-v1] _
+
+policy = 'researchassistant-v2-phase-8-source-selection-v1'
+
+    @pytest.mark.parametrize(
+        "policy", [V2_SOURCE_SELECTION_POLICY_IDENTITY, V2_PREVIEW_SELECTION_LEGACY_POLICY_IDENTITY]
+    )
+    def test_historical_selection_keeps_its_original_limit(policy: str) -> None:
+>       current = _capacity_input(76)
+                  ^^^^^^^^^^^^^^^^^^^
+
+tests/test_four_round_survivor_capacity.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_four_round_survivor_capacity.py:43: in _capacity_input
+    "survivors": tuple(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <range_iterator object at 0x1077a5ec0>
+
+            "survivors": tuple(
+>               _candidate(UUID(int=index + 1), family=f"family-{index}") for index in range(count)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            ),
+        }
+    )
+E   TypeError: _candidate() missing 1 required keyword-only argument: 'probe_score'
+
+tests/test_four_round_survivor_capacity.py:44: TypeError
+_ test_historical_selection_keeps_its_original_limit[researchassistant-v2-phase-8-source-selection-v2] _
+
+policy = 'researchassistant-v2-phase-8-source-selection-v2'
+
+    @pytest.mark.parametrize(
+        "policy", [V2_SOURCE_SELECTION_POLICY_IDENTITY, V2_PREVIEW_SELECTION_LEGACY_POLICY_IDENTITY]
+    )
+    def test_historical_selection_keeps_its_original_limit(policy: str) -> None:
+>       current = _capacity_input(76)
+                  ^^^^^^^^^^^^^^^^^^^
+
+tests/test_four_round_survivor_capacity.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_four_round_survivor_capacity.py:43: in _capacity_input
+    "survivors": tuple(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <range_iterator object at 0x10965a370>
+
+            "survivors": tuple(
+>               _candidate(UUID(int=index + 1), family=f"family-{index}") for index in range(count)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            ),
+        }
+    )
+E   TypeError: _candidate() missing 1 required keyword-only argument: 'probe_score'
+
+tests/test_four_round_survivor_capacity.py:44: TypeError
+_________ test_current_selection_rejects_more_than_one_hundred_sources _________
+
+    def test_current_selection_rejects_more_than_one_hundred_sources() -> None:
+>       assert len(_capacity_input(100).survivors) == 100
+                   ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_four_round_survivor_capacity.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_four_round_survivor_capacity.py:43: in _capacity_input
+    "survivors": tuple(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <range_iterator object at 0x10965af10>
+
+            "survivors": tuple(
+>               _candidate(UUID(int=index + 1), family=f"family-{index}") for index in range(count)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            ),
+        }
+    )
+E   TypeError: _candidate() missing 1 required keyword-only argument: 'probe_score'
+
+tests/test_four_round_survivor_capacity.py:44: TypeError
+___ test_current_shortlist_dispositions_every_source_without_raising_budgets ___
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1379/test_current_shortlist_disposi0')
+
+    def test_current_shortlist_dispositions_every_source_without_raising_budgets(
+        tmp_path: Path,
+    ) -> None:
+>       selection = _capacity_input(100)
+                    ^^^^^^^^^^^^^^^^^^^^
+
+tests/test_four_round_survivor_capacity.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_four_round_survivor_capacity.py:43: in _capacity_input
+    "survivors": tuple(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <range_iterator object at 0x10965b870>
+
+            "survivors": tuple(
+>               _candidate(UUID(int=index + 1), family=f"family-{index}") for index in range(count)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            ),
+        }
+    )
+E   TypeError: _candidate() missing 1 required keyword-only argument: 'probe_score'
+
+tests/test_four_round_survivor_capacity.py:44: TypeError
+____ test_legacy_claim_preview_keeps_its_shortlist_policy_and_exact_resume _____
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1379/test_legacy_claim_preview_keep0')
+
+    def test_legacy_claim_preview_keeps_its_shortlist_policy_and_exact_resume(tmp_path: Path) -> None:
+        from test_v2_phase8_source_selection import NOW, _budget, _routing
+    
+        selection = V2SourceSelectionInput.model_validate(
+            {
+>               **_capacity_input(5).model_dump(),
+                  ^^^^^^^^^^^^^^^^^^
+                "policy_identity": V2_PREVIEW_SELECTION_LEGACY_POLICY_IDENTITY,
+            }
+        )
+
+tests/test_four_round_survivor_capacity.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_four_round_survivor_capacity.py:43: in _capacity_input
+    "survivors": tuple(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <range_iterator object at 0x10964a070>
+
+            "survivors": tuple(
+>               _candidate(UUID(int=index + 1), family=f"family-{index}") for index in range(count)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            ),
+        }
+    )
+E   TypeError: _candidate() missing 1 required keyword-only argument: 'probe_score'
+
+tests/test_four_round_survivor_capacity.py:44: TypeError
+_ test_balanced_four_round_run_releases_all_eighty_retained_source_dispositions _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1379/test_balanced_four_round_run_r0')
+
+    def test_balanced_four_round_run_releases_all_eighty_retained_source_dispositions(
+        tmp_path: Path,
+    ) -> None:
+        path = tmp_path / "generated.sqlite3"
+        controls = ResearchControls(
+            discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX),
+            research_mode=ResearchMode.BALANCED,
+            sources_per_stance_per_round=20,
+        )
+        model, search = _BalancedModel(completed_rounds=4), product._WideSearch()
+        result = run_v2_production_pipeline(
+            product.production.CLAIM,
+            db_path=path,
+            directions=ResearchDirections(support_enabled=True, challenge_enabled=True),
+            discovery_providers=controls.discovery_providers,
+            search_providers={provider: search for provider in controls.discovery_providers},
+            wigolo_provider=product.phase12._Scraper(),
+            llm_provider=model,
+            routing_config=product.phase12._routing(),
+            ceilings=product.production.CEILINGS,
+            research_controls=controls,
+            clock=lambda: product.phase12.NOW,
+        )
+>       assert result.state is V2ProductionState.RELEASED, result.failure_reason
+E       AssertionError: ValueError: search provenance Gap ID 'gap-round-3' has mismatched direction
+E       assert <V2ProductionState.FAILED: 'failed'> is <V2ProductionState.RELEASED: 'released'>
+E        +  where <V2ProductionState.FAILED: 'failed'> = V2ProductionPipelineResult(run_id=UUID('39cc2bcf-6f78-4000-95ff-775a0df1644c'), db_path='/private/var/folders/_h/hjz63...ost_remaining_usd=Decimal('4.99842')), completed_at=datetime.datetime(2026, 8, 21, 0, 0, tzinfo=datetime.timezone.utc)).state
+E        +  and   <V2ProductionState.RELEASED: 'released'> = V2ProductionState.RELEASED
+
+tests/test_four_round_survivor_capacity.py:172: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_four_round_survivor_capacity.py::test_historical_selection_keeps_its_original_limit[researchassistant-v2-phase-8-source-selection-v1]
+FAILED tests/test_four_round_survivor_capacity.py::test_historical_selection_keeps_its_original_limit[researchassistant-v2-phase-8-source-selection-v2]
+FAILED tests/test_four_round_survivor_capacity.py::test_current_selection_rejects_more_than_one_hundred_sources
+FAILED tests/test_four_round_survivor_capacity.py::test_current_shortlist_dispositions_every_source_without_raising_budgets
+FAILED tests/test_four_round_survivor_capacity.py::test_legacy_claim_preview_keeps_its_shortlist_policy_and_exact_resume
+FAILED tests/test_four_round_survivor_capacity.py::test_balanced_four_round_run_releases_all_eighty_retained_source_dispositions
+6 failed, 29 passed in 33.95s

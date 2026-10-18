@@ -1,0 +1,21 @@
+{
+  "cases": [
+    {
+      "relationship": "challenges",
+      "release_valid": true,
+      "evidence_quality": 4,
+      "claim_fit": 5,
+      "coverage_label": "Admitted relationships: 0 supports, 1 challenges, 0 qualifies.",
+      "factual_item_label": "- Direct supporting evidence: Among surveyed regional-program adults, 62% reported course completion within six months, versus 48% among matched adults receiving standard materials."
+    },
+    {
+      "relationship": "qualifies",
+      "release_valid": true,
+      "evidence_quality": 4,
+      "claim_fit": 5,
+      "coverage_label": "Admitted relationships: 0 supports, 0 challenges, 1 qualifies.",
+      "factual_item_label": "- Direct supporting evidence: Among surveyed regional-program adults, 62% reported course completion within six months, versus 48% among matched adults receiving standard materials."
+    }
+  ],
+  "method": "Actual current deterministic synthesis and final rendering, using complete generated typed Analyst/admission fixtures with explicit challenging/qualifying relationship. No record edits, real data, provider transport or paid research."
+}

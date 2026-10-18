@@ -1,0 +1,1 @@
+PASS: real Chromium blocks private HTTP, WebSocket and service-worker paths

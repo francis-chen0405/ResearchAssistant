@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/ra-review-launcher-readiness.py", line 68, in <module>
+    main()
+  File "/tmp/ra-review-launcher-readiness.py", line 18, in main
+    server.bind(('127.0.0.1', 0))
+PermissionError: [Errno 1] Operation not permitted

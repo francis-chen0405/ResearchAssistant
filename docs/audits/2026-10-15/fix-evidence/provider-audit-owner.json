@@ -1,0 +1,11 @@
+{
+  "finding": "R30",
+  "generated_released_run": true,
+  "checksum_valid_completion_with_other_operation_accepted": true,
+  "audit_start_operation": "669be888-aef2-51ca-a59c-0a56416a37b8",
+  "audit_completion_operation": "585cf516-9b26-5a55-b998-10123144be2d",
+  "returned_snapshot_classification": "released",
+  "physical_search_requests": 6,
+  "database_unchanged_by_inspection": true,
+  "method": "Generated offline released research; substitute only one physical completion operation ID and recompute its envelope checksum; restore original immutability trigger. No real data or external calls."
+}

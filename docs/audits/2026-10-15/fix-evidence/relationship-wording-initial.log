@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/ra-review-relationship-wording.py", line 30, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "/tmp/ra-review-relationship-wording.py", line 25, in main
+    observed.append({'relationship':relation.value,'release_valid':final.release_validation.valid,'evidence_quality':record.evidence_quality,'claim_fit':record.claim_fit,'coverage_label':next(line for line in rendered.splitlines() if line.startswith('Admitted relationships:')),'factual_item_label':next(line for line in rendered.splitlines() if line.startswith('- Direct'))})
+                                                                                                                                                                                                                                                                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+StopIteration

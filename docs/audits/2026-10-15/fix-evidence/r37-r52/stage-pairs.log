@@ -1,0 +1,89 @@
+.F...............                                                        [100%]
+=================================== FAILURES ===================================
+_ test_stage_pairs_resume_without_repeating_completed_requests[v2_discovery-phase-3-metadata-ranking-round-1-True] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1399/test_stage_pairs_resume_withou1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d6f15e0>
+legacy_prefix = True, owner = 'v2_discovery'
+key = 'phase-3-metadata-ranking-round-1'
+
+    @pytest.mark.parametrize("legacy_prefix", [False, True])
+    @pytest.mark.parametrize(
+        ("owner", "key"),
+        [
+            ("v2_discovery", "phase-3-metadata-ranking-round-1"),
+            ("v2_acquisition", "metadata-acquisition-v2-round-1"),
+            ("round_four_summary", "post-phase-13-round-4-post-plan-facts-v1"),
+        ],
+    )
+    def test_stage_pairs_resume_without_repeating_completed_requests(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        legacy_prefix: bool,
+        owner: str,
+        key: str,
+    ) -> None:
+        path = tmp_path / "generated.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        entry = product.run_v2_production_pipeline
+    
+        def advancing(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+            kwargs["clock"] = lambda: datetime.now(UTC)
+            return entry(*args, **kwargs)
+    
+        monkeypatch.setattr(product, "run_v2_production_pipeline", advancing)
+        module = import_module("researchassistant.agents." + owner)
+        original = module.insert_v2_artifact_batch
+        captured = []
+    
+        def interrupt(
+            database: str, artifacts: tuple[tuple[str, StrictModel, datetime], ...]
+        ) -> object:
+            if not captured and artifacts[0][0] == key:
+                captured.append(artifacts)
+                if legacy_prefix:
+                    insert_v2_artifact(database, *artifacts[0])
+                else:
+                    original(database, artifacts)
+                raise KeyboardInterrupt("generated interruption after " + key)
+            return original(database, artifacts)
+    
+        monkeypatch.setattr(module, "insert_v2_artifact_batch", interrupt)
+        with pytest.raises(KeyboardInterrupt):
+            product._run(path, controls)
+        monkeypatch.setattr(module, "insert_v2_artifact_batch", original)
+        partial = list_runs(path)[0]
+        before = _saved_rows(path)
+        assert key in before
+        assert (captured[0][1][0] in before) is (not legacy_prefix)
+        audit = read_v2_physical_call_audit(path, partial.run_id)
+        resumed, model, search = product._run(path, controls, run_id=partial.run_id)
+        assert resumed.state is V2ProductionState.RELEASED, resumed.failure_reason
+        after = _saved_rows(path)
+        assert {name: after[name] for name in before} == before
+        current = read_v2_physical_call_audit(path, partial.run_id)
+        assert current.starts[: len(audit.starts)] == audit.starts
+        assert current.completions[: len(audit.completions)] == audit.completions
+        assert resumed.budget.physical_calls_used == len(audit.starts) + len(model.requests)
+        if owner in {"v2_discovery", "v2_acquisition"}:
+            assert all(
+                request.compiled_query.conceptual_query.round_number > 1 for request in search.requests
+            )
+            first_round_items = set(
+                item.item_id
+                for item in V2DiscoveryScoutOutput.model_validate_json(
+                    read_v2_artifact(path, partial.run_id, "phase-4-discovery-scout").payload_json
+                ).items
+            )
+>           assert not any(
+                request.stage is LLMStage.SCOUT
+                and any(item.item_id in first_round_items for item in request.input_artifact.candidates)
+                for request in model.requests
+            )
+E           assert not True
+E            +  where True = any(<generator object test_stage_pairs_resume_without_repeating_completed_requests.<locals>.<genexpr> at 0x10d925700>)
+
+tests/test_stage_pair_checkpoint_resume.py:102: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_stage_pair_checkpoint_resume.py::test_stage_pairs_resume_without_repeating_completed_requests[v2_discovery-phase-3-metadata-ranking-round-1-True]
+1 failed, 16 passed in 10.92s

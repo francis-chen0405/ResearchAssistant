@@ -1,0 +1,29 @@
+from __future__ import annotations
+import json,sys,tempfile
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+from researchassistant.contracts.models import DiscoveryProvider,ResearchControls
+from researchassistant.research.v2_orchestrator import run_v2_production_pipeline
+from researchassistant.storage.store import read_v2_artifact
+
+class AuthorSearch(product.phase12._Search):
+    def search(self,request:product.phase12.SearchRequest) -> product.phase12.SearchResponse:
+        response=super().search(request)
+        return response.model_copy(update={'results':[item.model_copy(update={'metadata':item.metadata.model_copy(update={'doi':'10.1234/generated-course-study','published_at':'2023-01-01','work_type':'article','author':', '.join(f'Generated Researcher {index:02}' for index in range(20)) if request.provider is DiscoveryProvider.ARXIV else None})}) for item in response.results]})
+
+def main() -> None:
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.OPENALEX,DiscoveryProvider.ARXIV))
+    model,search=product.production._ConceptModel(completed_rounds=4),AuthorSearch(unique_results=True)
+    with tempfile.TemporaryDirectory(prefix='ra-long-author-seed-') as folder:
+        path=Path(folder)/'generated.sqlite3'
+        result=run_v2_production_pipeline(product.production.CLAIM,db_path=path,directions=product.production.DIRECTIONS,discovery_providers=controls.discovery_providers,search_providers={provider:search for provider in controls.discovery_providers},wigolo_provider=product.phase12._Scraper(),llm_provider=model,routing_config=product.phase12._routing(),ceilings=product.production.CEILINGS,research_controls=controls,clock=lambda:product.phase12.NOW)
+        observed={'state':result.state.value,'failure_reason':result.failure_reason,'model_calls':len(model.requests),'search_calls':len(search.requests),'author_display_characters':len(', '.join(f'Generated Researcher {index:02}' for index in range(20))),'method':'Actual generated offline production; arXiv-style comma-joined author display with valid DOI/year/type and an enabled OpenAlex seed provider. No external calls, real data or saved-artifact edits.'}
+        try:
+            observed['continuation']=json.loads(read_v2_artifact(path,result.run_id,'phase-7-adaptive-search-completion').payload_json)['stopping_decision']
+        except KeyError:
+            pass
+    Path('/tmp/ra-review-long-author-seed.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

@@ -286,7 +286,7 @@ def test_discovered_validator_failure_requires_a_regression_fixture(tmp_path: Pa
 
 
 def test_evaluation_does_not_modify_or_weaken_existing_validator() -> None:
-    validator_path = ROOT / "agents" / "renderer.py"
+    validator_path = ROOT / "backend/src/researchassistant/evidence/renderer.py"
     before = hashlib.sha256(validator_path.read_bytes()).hexdigest()
 
     report = evaluate_corpus(CORPUS)
@@ -335,13 +335,26 @@ def test_script_exit_codes_distinguish_pass_failure_and_execution_error(
 
 def test_script_exit_code_distinguishes_unexpected_internal_error(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def raise_unexpected(*args: object, **kwargs: object) -> object:
         raise AssertionError("unexpected evaluator defect")
 
     monkeypatch.setattr("evaluations.run_evaluations.evaluate_corpus", raise_unexpected)
 
-    assert main(["--corpus", str(CORPUS)]) == 3
+    assert (
+        main(
+            [
+                "--corpus",
+                str(CORPUS),
+                "--json-output",
+                str(tmp_path / "results.json"),
+                "--summary-output",
+                str(tmp_path / "summary.md"),
+            ]
+        )
+        == 3
+    )
 
 
 def test_same_corpus_produces_byte_identical_outputs(tmp_path: Path) -> None:

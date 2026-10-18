@@ -29,6 +29,11 @@ sys.path.insert(0, str(ROOT))
 import researchassistant.evidence.evidence_browser as current_browser  # noqa: E402
 from researchassistant.research.fixture_pipeline import run_fixture_pipeline  # noqa: E402
 from researchassistant.storage.store import init_db, list_runs  # noqa: E402
+from researchassistant.storage.store_schema import (  # noqa: E402
+    CURRENT_SCHEMA_VERSION,
+    _canonical_boundaries,
+    validate_recorded_database,
+)
 
 BASE_REVISION = "b25df1d"
 QUERY_INDEXES = (
@@ -218,9 +223,39 @@ def _add_history_runs(connection: Connection, count: int) -> None:
 
 def _downgrade_to_16(database: Path) -> None:
     with connect(database) as connection:
+        connection.row_factory = Row
+        if validate_recorded_database(connection, allow_pending=False) != CURRENT_SCHEMA_VERSION:
+            raise ValueError("benchmark downgrade requires a validated current generated fixture")
+        if connection.execute(
+            "SELECT 1 FROM v2_ledger_admissions WHERE discovery_round > 3 LIMIT 1"
+        ).fetchone():
+            raise ValueError("schema-16 benchmark cannot represent Round-4 admissions")
+        definition = next(
+            sql
+            for kind, name, sql in _canonical_boundaries()[16]
+            if kind == "table" and name == "v2_ledger_admissions"
+        )
+        objects = tuple(
+            row[0]
+            for row in connection.execute(
+                "SELECT sql FROM sqlite_master WHERE tbl_name='v2_ledger_admissions' "
+                "AND type IN ('index','trigger') AND sql IS NOT NULL"
+            )
+        )
+        rows = tuple(tuple(row) for row in connection.execute("SELECT * FROM v2_ledger_admissions"))
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DROP TABLE v2_ledger_admissions")
+        connection.execute(definition)
+        connection.executemany(
+            "INSERT INTO v2_ledger_admissions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+        )
+        for sql in objects:
+            connection.execute(sql)
         for name in QUERY_INDEXES:
             connection.execute(f'DROP INDEX "{name}"')
-        connection.execute("DELETE FROM schema_migrations WHERE version=17")
+        connection.execute("DELETE FROM schema_migrations WHERE version>16")
+        if validate_recorded_database(connection, allow_pending=False) != 16:
+            raise AssertionError("benchmark fixture does not match the actual schema-16 boundary")
 
 
 def _traced_browser(
@@ -300,6 +335,8 @@ def main() -> None:
     legacy = _legacy_browser()
     report: dict[str, object] = {
         "baseline_revision": BASE_REVISION,
+        "baseline_schema": 16,
+        "current_schema": CURRENT_SCHEMA_VERSION,
         "fixture": "tests/fixtures/basic_valid_run",
         "history_runs": 501,
         "source_text_bytes_per_snapshot": 65536,
@@ -322,7 +359,7 @@ def main() -> None:
 
         for candidate_count in (2, 10, 40, 1000):
             before = root / f"schema16-{candidate_count}.sqlite3"
-            after = root / f"schema17-{candidate_count}.sqlite3"
+            after = root / f"schema{CURRENT_SCHEMA_VERSION}-{candidate_count}.sqlite3"
             copyfile(base, before)
             with connect(before) as connection:
                 connection.row_factory = Row
@@ -348,7 +385,7 @@ def main() -> None:
             }
 
         report["schema16_query_plans"] = _plans(before, str(run_id), quote_id)
-        report["schema17_query_plans"] = _plans(after, str(run_id), quote_id)
+        report[f"schema{CURRENT_SCHEMA_VERSION}_query_plans"] = _plans(after, str(run_id), quote_id)
         started = time.perf_counter()
         returned = len(list_runs(str(after), limit=100))
         report["history_listing"] = {

@@ -1,0 +1,27 @@
+{
+  "ledger": {
+    "fully_inspected_current_files": 704,
+    "fully_inspected_current_lines": 164795,
+    "starting_code_files": 527,
+    "starting_code_lines": 147198,
+    "note": "Current coverage includes newly added files and many small compatibility facades. File count does not imply equivalent coverage of the larger implementation or test files."
+  },
+  "remaining_original_files": 365,
+  "new_full_reads_including_tests": 55,
+  "reviewed_deltas": [
+    "Launch ResearchAssistant.command",
+    "backend/src/researchassistant/agents/v2_initial_planner.py",
+    "backend/src/researchassistant/agents/v2_source_selection.py",
+    "backend/src/researchassistant/agents/v2_stage_checkpoint.py",
+    "backend/src/researchassistant/storage/v2_transactions.py",
+    "desktop/README.md",
+    "docs/project/ARCHITECTURE.md",
+    "docs/project/DECISIONS.md",
+    "docs/project/database-recovery.md",
+    "docs/research-invariants.md",
+    "frontend/README.md",
+    "tests/test_live_resume_status.py",
+    "tests/test_preview_selection_bounds.py"
+  ],
+  "whole_repository_manual_review_complete": false
+}

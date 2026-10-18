@@ -1,0 +1,20 @@
+from __future__ import annotations
+import json
+from datetime import UTC,datetime
+from pathlib import Path
+from uuid import uuid4
+from researchassistant.contracts.models import SelectedSentenceRange,V2VerbatimQuoteSelection
+from researchassistant.evidence.evidence_core import assemble_quote_block_from_selected_segments,build_source_snapshot,find_segment_offsets,fresh_sentence_spans,parse_extracted_quote_block,validate_bracket_context
+
+def main() -> None:
+    text='This observational sample excludes residents older than 65.5 years. Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials. No improvement was measured above the 0.5 mg dose threshold.'
+    selection=V2VerbatimQuoteSelection(selected_sentence_ranges=(SelectedSentenceRange(start_sentence=2,end_sentence=2),))
+    quote=assemble_quote_block_from_selected_segments(text,selection,truncated=False)
+    parsed=parse_extracted_quote_block(quote)
+    now=datetime.now(UTC)
+    snapshot=build_source_snapshot(run_id=uuid4(),retrieval_attempt_id=uuid4(),snapshot_id=uuid4(),source_url='https://example.test/generated',retrieved_at=now,normalized_text=text,truncated=False,created_at=now)
+    observed={'fresh_sentences':[span.text for span in fresh_sentence_spans(text)],'assembled_quote':quote,'actual_preceding_context':parsed.preceding_context,'actual_following_context':parsed.following_context,'accepted_by_context_validator':validate_bracket_context(snapshot,parsed,find_segment_offsets(text,parsed.segments)),'method':'Actual current fresh selection, assembler and deterministic context validator, called by fresh v2 extraction. Generated source only; no database or provider activity.'}
+    Path('/tmp/ra-review-fresh-quote-context.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

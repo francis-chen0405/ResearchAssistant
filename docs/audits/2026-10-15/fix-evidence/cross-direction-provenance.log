@@ -1,0 +1,531 @@
+{
+  "state": "failed",
+  "failure_reason": "ValueError: search provenance Gap ID 'gap-round-3' has mismatched direction",
+  "selection_survivors": 80,
+  "source_statuses": 80,
+  "conflicting_cross_direction_provenance": [
+    {
+      "source_id": "83fdb5bf-0237-5c7d-a688-480d31db2259",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "b8247a06-494f-503b-a589-1f5b773b37e7",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "2377f0aa-c735-5373-bb5b-e237c30b681a",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "a9deab12-f1b4-5fd2-9adf-95927960bfd8",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "ac88d779-1f65-540b-b3d6-6684d6bb0b54",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "a1e08b52-647a-5c8d-b550-8e60b48c4ba0",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "1b82d412-75b4-5591-b381-e6e6050c95ac",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "c7c602df-5e44-565b-9a35-19343852ba3c",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "b1a10c29-e6a8-59e7-abf7-67b96a6d47a8",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "12b1ce34-3a8e-5017-b0e2-8c00eedd157b",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "cf32d7c5-dd28-516e-9d79-78fc56e827d7",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "2acbf128-0700-5ddc-a195-991748add0e1",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "772c600b-c441-5c59-9683-6f087e1dfa74",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "2616609c-75df-531e-b5d5-1d4658fe3d5b",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "f83fd2a7-209c-532b-832a-769445e29944",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "a82b0ddd-2d83-5585-8eb0-4deb5ef33bcd",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "4c6caf9a-97a7-52dc-aa26-4f4927dba260",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "1abf5eb1-77cf-531d-9897-a4a61e515553",
+      "survivor_direction": "challenge",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        },
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "8cdd0fe9-6463-5b77-864d-ab3c901530bd",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "98f89798-e42e-57b3-9bc2-1b1a4d369f24",
+      "survivor_direction": "support",
+      "round": 2,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        },
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "07576ff8-2e6f-5710-afc1-b2b0043c84c3",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "9cd8fb1b-c1f5-5b29-927d-d81ae31981a9",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "cced918d-5806-5389-89d6-7b492eeaac4d",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "9c276c93-567c-5c74-8fe4-1f0fab35e20d",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "abb10e98-4f10-5c33-aa00-a37cf9bb0a07",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "85b68d63-900c-5bc1-badf-8dc80d490a2b",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "5a3a3082-5263-5aa0-b421-48ad10c4f898",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "76d03e02-45cc-5357-8123-301dadcdbc8b",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "5a84a777-dc6a-5ba9-96f5-e1727104243a",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "0a3756d0-e591-5b67-baff-764e743e0048",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "162ae7c1-067d-5cdc-bb9c-def08f063fb1",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "268efdc5-00fa-5d23-932b-5e4afd8e5729",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    },
+    {
+      "source_id": "9a0ee535-1d3e-54b6-9261-d62e74e20c36",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "b18b3b72-fd55-5809-a35d-b5d86e01943f",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "725b7fcc-eb7b-507f-a25f-8ff4dd08cd53",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "d0fe0881-94c2-50a7-8aab-dcd70fcf4e5d",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "6a356d4e-c711-5da5-8115-549ce7869f90",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "f44b30a8-20ea-50f1-b94c-2d4497e24f82",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "beae45ab-5456-58cf-b211-2414e3ccdfff",
+      "survivor_direction": "challenge",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "gap-round-3",
+          "direction": "support"
+        }
+      ]
+    },
+    {
+      "source_id": "9b125ee3-9d6f-57bc-b2ae-15ee17a44c62",
+      "survivor_direction": "support",
+      "round": 4,
+      "targeted_gaps": [
+        {
+          "gap_id": "challenge-gap-round-3",
+          "direction": "challenge"
+        }
+      ]
+    }
+  ],
+  "model_calls": 158,
+  "search_calls": 16,
+  "method": "Actual offline production with valid both-direction gaps and duplicate paper titles returned in both directions. Discovery legitimately preserves all contributing query provenance. No saved-artifact edits, real data, paid research or external calls."
+}

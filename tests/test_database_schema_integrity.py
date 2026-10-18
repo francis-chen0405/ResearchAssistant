@@ -121,8 +121,9 @@ def test_malformed_future_table_does_not_record_its_migration(tmp_path: Path) ->
 def test_cache_migration_preserves_old_unknowns_and_rolls_back_on_failure(tmp_path: Path) -> None:
     path = tmp_path / "upgrade.db"
     init_db(str(path))
-    assert CURRENT_SCHEMA_VERSION == 17
+    assert CURRENT_SCHEMA_VERSION == 18
     with _connection(path) as conn:
+        _restore_round_three_constraint(conn)
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall():
             if store_schema._object_version("trigger", row["name"]) > 13:
                 conn.execute(f'DROP TRIGGER "{row["name"]}"')
@@ -157,6 +158,8 @@ def test_supported_historical_schema_reads_unchanged_and_upgrades(
     init_db(str(path))
     with _connection(path) as conn:
         conn.execute("PRAGMA foreign_keys = OFF")
+        if 13 <= version < 18:
+            _restore_round_three_constraint(conn)
         for kind, name, _sql in reversed(store_schema._canonical_schema()):
             if store_schema._object_version(kind, name) > version and kind in {"trigger", "index"}:
                 conn.execute(f'DROP {kind.upper()} IF EXISTS "{name}"')
@@ -176,6 +179,88 @@ def test_supported_historical_schema_reads_unchanged_and_upgrades(
     init_db(str(path))
     with open_read_only_store(path) as reader:
         assert reader.compatibility.schema_version == CURRENT_SCHEMA_VERSION
+
+
+def _restore_round_three_constraint(conn: sqlite3.Connection) -> None:
+    """Construct the actual historical table, rather than only relabeling its ledger."""
+    triggers = [
+        row[0]
+        for row in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name='v2_ledger_admissions'"
+        )
+    ]
+    definition = next(
+        sql
+        for kind, name, sql in store_schema._canonical_boundaries()[13]
+        if kind == "table" and name == "v2_ledger_admissions"
+    )
+    rows = [tuple(row) for row in conn.execute("SELECT * FROM v2_ledger_admissions")]
+    conn.execute("DROP TABLE v2_ledger_admissions")
+    conn.execute(definition)
+    conn.executemany(
+        "INSERT INTO v2_ledger_admissions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+    )
+    for trigger in triggers:
+        conn.execute(trigger)
+
+
+def test_round_four_migration_preserves_rows_and_rolls_back_atomically(tmp_path: Path) -> None:
+    from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved, _run
+
+    database, _admitted = _run(tmp_path, Phase10Provider([_approved()]))
+    path = Path(database)
+    with _connection(path) as conn:
+        original = [tuple(row) for row in conn.execute("SELECT * FROM v2_ledger_admissions")]
+        assert original
+        _restore_round_three_constraint(conn)
+        conn.execute("DELETE FROM schema_migrations WHERE version=18")
+        conn.execute("CREATE INDEX custom_admission_run ON v2_ledger_admissions(run_id)")
+        conn.execute(
+            "CREATE TRIGGER reject_round_four BEFORE INSERT ON schema_migrations "
+            "WHEN NEW.version=18 BEGIN SELECT RAISE(ABORT, 'injected failure'); END"
+        )
+    before = path.read_bytes()
+    with open_read_only_store(path) as reader:
+        assert reader.compatibility.schema_version == 17
+    assert path.read_bytes() == before
+    with pytest.raises(sqlite3.IntegrityError, match="injected failure"):
+        init_db(str(path))
+    with _connection(path) as conn:
+        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 17
+        assert (
+            "BETWEEN 1 AND 3"
+            in conn.execute(
+                "SELECT sql FROM sqlite_master WHERE name='v2_ledger_admissions'"
+            ).fetchone()[0]
+        )
+        assert [
+            tuple(row) for row in conn.execute("SELECT * FROM v2_ledger_admissions")
+        ] == original
+        conn.execute("DROP TRIGGER reject_round_four")
+    init_db(str(path))
+    with _connection(path) as conn:
+        assert [
+            tuple(row) for row in conn.execute("SELECT * FROM v2_ledger_admissions")
+        ] == original
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='custom_admission_run'"
+        ).fetchone()
+        changed = list(original[0])
+        changed[0] = str(uuid4())
+        changed[2] = str(uuid4())
+        changed[4] = 4
+        conn.execute(
+            "INSERT INTO v2_ledger_admissions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", changed
+        )
+        changed[0] = str(uuid4())
+        changed[2] = str(uuid4())
+        changed[4] = 5
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+            conn.execute(
+                "INSERT INTO v2_ledger_admissions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", changed
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            conn.execute("DELETE FROM v2_ledger_admissions")
 
 
 @pytest.mark.parametrize("fragment", ["NOT NULL", "PRIMARY KEY (run_id, ledger_claim_id)"])

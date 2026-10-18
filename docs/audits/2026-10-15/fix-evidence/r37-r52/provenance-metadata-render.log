@@ -1,0 +1,40 @@
+.....F.                                                                  [100%]
+=================================== FAILURES ===================================
+_______ test_long_arxiv_author_display_does_not_stop_follow_up_planning ________
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1402/test_long_arxiv_author_display0')
+
+    def test_long_arxiv_author_display_does_not_stop_follow_up_planning(tmp_path: Path) -> None:
+        controls = ResearchControls(
+            discovery_providers=(DiscoveryProvider.OPENALEX, DiscoveryProvider.ARXIV)
+        )
+        search = LongAuthorSearch(unique_results=True)
+        result = run_v2_production_pipeline(
+            product.production.CLAIM,
+            db_path=tmp_path / "generated.sqlite3",
+            directions=product.production.DIRECTIONS,
+            discovery_providers=controls.discovery_providers,
+            search_providers={provider: search for provider in controls.discovery_providers},
+            wigolo_provider=product.phase12._Scraper(),
+            llm_provider=product.production._ConceptModel(completed_rounds=4),
+            routing_config=product.phase12._routing(),
+            ceilings=product.production.CEILINGS,
+            research_controls=controls,
+            clock=lambda: NOW,
+        )
+        assert result.state is V2ProductionState.RELEASED, result.failure_reason
+>       assert {
+            request.compiled_query.conceptual_query.round_number for request in search.requests
+        } == {1, 2, 3, 4}
+E       assert {1} == {1, 2, 3, 4}
+E         
+E         Extra items in the right set:
+E         2
+E         3
+E         4
+E         Use -v to get more diff
+
+tests/test_discovery_provenance_and_metadata_review.py:213: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_discovery_provenance_and_metadata_review.py::test_long_arxiv_author_display_does_not_stop_follow_up_planning
+1 failed, 6 passed in 17.26s

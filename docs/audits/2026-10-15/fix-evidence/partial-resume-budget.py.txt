@@ -1,0 +1,51 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+import researchassistant.research.v2_orchestrator as coordinator
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.storage.store import list_runs, read_run, read_v2_artifact
+from researchassistant.contracts.models import V2GapAnalysisOutput
+
+def main() -> None:
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    with tempfile.TemporaryDirectory(prefix='ra-partial-resume-budget-') as temporary:
+        path=Path(temporary)/'generated.sqlite3'
+        with patch.object(coordinator,'_persist_terminal',side_effect=KeyboardInterrupt('synthetic interruption immediately before terminal commit')):
+            try:
+                product._run(path,controls)
+            except KeyboardInterrupt:
+                pass
+            else:
+                raise AssertionError('Expected synthetic interruption')
+        partial=list_runs(path)[0]
+        assert partial.status.value=='running'
+        compared: dict[str, object] = {}
+        original_gap=coordinator.run_v2_gap_analysis
+        def track_gap(**kwargs: Any) -> V2GapAnalysisOutput:
+            previous=V2GapAnalysisOutput.model_validate_json(read_v2_artifact(path,partial.run_id,'phase-6-gap-analysis').payload_json).input
+            incoming=kwargs['gap_input']
+            compared['changed_gap_input_fields']=[name for name in type(previous).model_fields if getattr(previous,name)!=getattr(incoming,name)]
+            compared['saved_remaining_budget']=previous.remaining_budget.model_dump(mode='json')
+            compared['incoming_remaining_budget']=incoming.remaining_budget.model_dump(mode='json')
+            return original_gap(**kwargs)
+        with patch.object(coordinator,'run_v2_gap_analysis',side_effect=track_gap):
+            resumed,model,search=product._run(path,controls,run_id=partial.run_id)
+        observed={
+            **compared, 'finding':'R32','partial_status':partial.status.value,'partial_stage':partial.current_stage.value,
+            'same_source_and_settings':True,'saved_artifacts_modified_by_probe':False,
+            'resume_state':resumed.state.value,'failure_reason':resumed.failure_reason,
+            'model_requests_on_resume':len(model.requests),'search_requests_on_resume':len(search.requests),
+            'manifest_after_resume':read_run(path,partial.run_id).status.value,
+            'method':'Actual generated offline run interrupted immediately before terminal commit, then resumed with identical source/settings. No artifact substitution, database edits, real data or external calls.',
+        }
+        assert observed['resume_state']=='failed' and 'Gap Analysis input' in observed['failure_reason']
+    Path('/tmp/ra-review-partial-resume-budget.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

@@ -1,0 +1,2 @@
+PASS: frozen UI/backend, authentication, native vault cleanup, durable settings, owned Wigolo lifecycle
+PASS: frozen owned DNS parent/worker, empty-PATH dispatch and resource identity

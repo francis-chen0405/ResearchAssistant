@@ -1,0 +1,14 @@
+{
+  "results": [
+    {
+      "owner": "round_four_summary",
+      "checkpoint": "post-phase-13-round-4-post-plan-facts-v1",
+      "state": "failed",
+      "failure_reason": "ValueError: persisted Round-4 post-plan facts do not match the execution",
+      "original_sidecar_unchanged": true,
+      "new_model_calls": 0,
+      "new_search_calls": 0
+    }
+  ],
+  "method": "Advancing UTC clock; actual production interrupted immediately after committed Round-4 post-plan facts; identical-source resume without artifact edits. Generated offline providers only, no real data or credentials."
+}

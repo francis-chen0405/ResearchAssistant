@@ -1,0 +1,1964 @@
+"""Schema definitions, migration order and integrity checks; no artifact readers.
+
+The caller supplies the connection factory. Initialization owns and closes that
+connection; read-only inspection never invokes initialization or migrations.
+"""
+
+from __future__ import annotations
+
+import re
+import sqlite3
+from collections.abc import Callable
+from functools import lru_cache
+from pathlib import Path
+from typing import TYPE_CHECKING
+from urllib.parse import quote
+
+from researchassistant.common.money import canonical_usd, parse_canonical_usd, parse_exact_usd
+from researchassistant.storage.sqlite_policy import connect_database, is_busy_error
+
+if TYPE_CHECKING:
+    from researchassistant.storage.database_recovery import BackupPolicy
+
+CURRENT_SCHEMA_VERSION = 18
+
+ROUND_FOUR_ADMISSIONS_SCHEMA_VERSION = 18
+
+COMPLETE_USAGE_SCHEMA_VERSION = 15
+
+UPDATE_PROVENANCE_SCHEMA_VERSION = 16
+
+QUERY_INDEXES_SCHEMA_VERSION = 17
+
+CACHE_USAGE_SCHEMA_VERSION = 14
+
+RAW_CLAIM_SCHEMA_VERSION = 5
+
+MVP68_SCHEMA_VERSION = 6
+
+MVP69_SCHEMA_VERSION = 7
+
+MVP10_SCHEMA_VERSION = 8
+
+MVP11_SCHEMA_VERSION = 9
+
+MLP4_SCHEMA_VERSION = 10
+
+V2_PHASE1_SCHEMA_VERSION = 11
+
+V2_PHASE3_SCHEMA_VERSION = 12
+
+V2_PHASE10_SCHEMA_VERSION = 13
+
+RAW_CLAIM_TRIGGER_NAME = "runs_raw_claim_immutable"
+
+RAW_CLAIM_TRIGGER_ERROR = "runs.raw_claim is immutable"
+
+IMMUTABLE_ARTIFACT_TRIGGERS = {
+    "snapshots_immutable_update": ("snapshots", "UPDATE", "snapshots rows are immutable"),
+    "snapshots_immutable_delete": ("snapshots", "DELETE", "snapshots rows are immutable"),
+    "ledger_records_immutable_update": (
+        "ledger_records",
+        "UPDATE",
+        "ledger_records rows are immutable",
+    ),
+    "ledger_records_immutable_delete": (
+        "ledger_records",
+        "DELETE",
+        "ledger_records rows are immutable",
+    ),
+}
+
+MIGRATION_DESCRIPTIONS = {
+    1: "phase-2 initial sqlite schema",
+    2: "phase-9 orchestration audit and checkpoint schema",
+    3: "mvp-3a provider fingerprints and budget reservations",
+    4: "same-run provenance protection triggers",
+    5: "database-enforced immutable runs.raw_claim",
+    6: "immutable snapshots and Ledger with exact decimal model costs",
+    7: "snapshot acquisition and media-type provenance",
+    8: "mvp-10 evidence portfolio and trail",
+    9: "mvp-11 bounded research governor records",
+    10: "mlp-4 provider-specific discovery query provenance",
+    11: "researchassistant-v2 phase-1 artifact foundation",
+    12: "researchassistant-v2 phase-3 initial planner and round-1 searches",
+    13: "researchassistant-v2 phase-10 reviewer Ledger provenance",
+    14: "persist cached and uncached model input-token usage",
+    15: "persist model cache-write tokens and usage cost basis",
+    16: "protect same-run provenance ownership and keys on update",
+    17: "index history ordering and native evidence trail lookups",
+    18: "allow round-four v2 Ledger admissions without changing historical rows",
+}
+
+# Every relationship protected by a migration-4 insert guard. Ownership and
+# referenced keys are stable; scores, statuses and completion data stay mutable.
+_SAME_RUN_RELATIONSHIPS = (
+    ("retrieval_attempts", "query_id", "search_queries", "query_id"),
+    ("snapshots", "retrieval_attempt_id", "retrieval_attempts", "retrieval_attempt_id"),
+    (
+        "provisional_extractions",
+        "retrieval_attempt_id",
+        "retrieval_attempts",
+        "retrieval_attempt_id",
+    ),
+    ("provisional_extractions", "query_id", "search_queries", "query_id"),
+    ("provisional_extractions", "snapshot_id", "snapshots", "snapshot_id"),
+    ("candidates", "retrieval_attempt_id", "retrieval_attempts", "retrieval_attempt_id"),
+    ("candidates", "query_id", "search_queries", "query_id"),
+    ("candidates", "snapshot_id", "snapshots", "snapshot_id"),
+    ("analyst_decisions", "quote_block_id", "candidates", "quote_block_id"),
+    ("statement_drafts", "quote_block_id", "candidates", "quote_block_id"),
+    ("statement_review_attempts", "statement_draft_id", "statement_drafts", "statement_draft_id"),
+    ("statement_review_attempts", "quote_block_id", "candidates", "quote_block_id"),
+    ("ledger_records", "quote_block_id", "candidates", "quote_block_id"),
+    ("ledger_records", "retrieval_attempt_id", "retrieval_attempts", "retrieval_attempt_id"),
+    ("ledger_records", "snapshot_id", "snapshots", "snapshot_id"),
+    ("ledger_records", "reviewer_approval_id", "statement_review_attempts", "reviewer_approval_id"),
+    ("synthesis_items", "ledger_claim_id", "ledger_records", "ledger_claim_id"),
+)
+
+
+class RecordedSchemaError(sqlite3.DatabaseError):
+    """Shared non-mutating preflight diagnostic, translated by public readers."""
+
+    def __init__(
+        self, message: str, *, version: int | None = None, issue: str = "corrupt_schema"
+    ) -> None:
+        self.version = version
+        self.issue = issue
+        super().__init__(message)
+
+
+_REQUIRED_TABLES = {
+    "schema_migrations",
+    "runs",
+    "planner_outputs",
+    "claim_definitions",
+    "ambiguities",
+    "search_queries",
+    "retrieval_attempts",
+    "snapshots",
+    "provisional_extractions",
+    "candidates",
+    "analyst_decisions",
+    "statement_drafts",
+    "statement_review_attempts",
+    "ledger_records",
+    "synthesis_attempts",
+    "synthesis_sections",
+    "synthesis_items",
+    "validation_runs",
+    "validation_errors",
+    "model_invocations",
+    "orchestration_checkpoints",
+    "orchestration_stage_artifacts",
+    "provider_run_contracts",
+    "model_route_attempts",
+    "run_cancellations",
+    "source_family_members",
+    "evidence_trail_entries",
+    "portfolio_items",
+    "portfolio_coverage_assessments",
+    "research_round_records",
+    "research_governor_decisions",
+    "research_terminal_results",
+}
+
+_REQUIRED_TRIGGERS = {
+    "retrieval_attempt_same_run",
+    "snapshot_same_run",
+    "provisional_extraction_same_run",
+    "candidate_same_run",
+    "analyst_decision_same_run",
+    "statement_draft_same_run",
+    "statement_review_same_run",
+    "ledger_record_same_run",
+    "synthesis_item_same_run",
+    RAW_CLAIM_TRIGGER_NAME,
+    *IMMUTABLE_ARTIFACT_TRIGGERS,
+}
+
+_MVP11_TRIGGERS = {
+    "research_round_records_immutable_update",
+    "research_round_records_immutable_delete",
+    "research_governor_decisions_immutable_update",
+    "research_governor_decisions_immutable_delete",
+    "research_terminal_results_immutable_update",
+    "research_terminal_results_immutable_delete",
+}
+
+_V2_PHASE1_TABLES = {"v2_run_identities", "v2_artifacts"}
+
+_V2_PHASE1_TRIGGERS = {
+    "v2_run_identities_immutable_update",
+    "v2_run_identities_immutable_delete",
+    "v2_artifacts_immutable_update",
+    "v2_artifacts_immutable_delete",
+}
+
+_V2_PHASE3_TABLES = {"v2_initial_planner_outputs", "v2_round_one_search_queries"}
+
+_V2_PHASE3_TRIGGERS = {
+    "v2_initial_planner_outputs_immutable_update",
+    "v2_initial_planner_outputs_immutable_delete",
+    "v2_round_one_search_queries_immutable_update",
+    "v2_round_one_search_queries_immutable_delete",
+}
+
+_V2_PHASE10_TABLES = {"v2_ledger_admissions"}
+
+_V2_PHASE10_TRIGGERS = {
+    "v2_ledger_admissions_immutable_update",
+    "v2_ledger_admissions_immutable_delete",
+}
+
+_REQUIRED_INDEXES = {
+    "provisional_extractions_run_snapshot_stance",
+    "model_route_attempts_run_operation",
+    "runs_updated_history",
+    "candidates_run_extracted_quote",
+    "statement_drafts_run_quote_drafted",
+    "statement_reviews_run_quote_reviewed",
+    "ledger_records_run_quote_claim",
+}
+
+
+def initialize_database(
+    db_path: str,
+    *,
+    connect: Callable[[str], sqlite3.Connection],
+    lock_owned: bool = False,
+    backup_policy: BackupPolicy | None = None,
+) -> None:
+    """Validate existing structure before performing any writable upgrade."""
+    from researchassistant.storage import database_recovery
+    from researchassistant.storage.database_lock import database_lock
+
+    path = Path(db_path).expanduser().resolve()
+    with database_lock(path, lock_owned=lock_owned):
+        recovery_path: Path | None = None
+        if path.exists():
+            uri = f"file:{quote(path.as_posix(), safe='/')}?mode=ro"
+            source = connect_database(uri, uri=True)
+            source.row_factory = sqlite3.Row
+            try:
+                source.execute("PRAGMA query_only=ON")
+                source.execute("BEGIN")
+                version = validate_recorded_database(source)
+                versions = (
+                    {row[0] for row in source.execute("SELECT version FROM schema_migrations")}
+                    if version
+                    else set()
+                )
+                if versions == set(MIGRATION_DESCRIPTIONS):
+                    return  # No DDL, ledger update, backup, or write-capable open.
+                if version:
+                    recovery_path = database_recovery.create_upgrade_backup(
+                        path, source, version, policy=backup_policy
+                    ).path
+            finally:
+                source.close()
+        try:
+            conn = connect(str(path))
+            try:
+                _validate_before_upgrade(conn)
+                _initialize_schema(conn)
+                validate_recorded_database(conn)
+            finally:
+                conn.close()
+        except BaseException as exc:
+            if recovery_path is not None:
+                recovery_message = (
+                    f"Verified recovery backup retained at {recovery_path}; "
+                    "use restore-backup to restore into a new database path"
+                )
+                exc.add_note(recovery_message)
+                if isinstance(exc, Exception):
+                    exc.args = (f"{exc}; {recovery_message}",)
+            raise
+        if recovery_path is not None:
+            try:
+                database_recovery.prune_backups(path, policy=backup_policy)
+            except (OSError, ValueError, sqlite3.Error):
+                # A cleanup failure never invalidates the committed upgrade.
+                import logging
+
+                logging.getLogger(__name__).warning("Recovery retention cleanup failed")
+
+
+def _initialize_schema(conn: sqlite3.Connection, *, target_version: int | None = None) -> None:
+    """Install the canonical schema; callers validate existing databases first."""
+    conn.executescript(
+        """
+        BEGIN IMMEDIATE;
+        -- schema migrations -------------------------------------------
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version      INTEGER PRIMARY KEY,
+            description  TEXT NOT NULL,
+            applied_at   TEXT NOT NULL
+        );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                1,
+                'phase-2 initial sqlite schema',
+                '2026-06-26T00:00:00+00:00'
+            );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                4,
+                'same-run provenance protection triggers',
+                '2026-08-01T00:00:00+00:00'
+            );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                2,
+                'phase-9 orchestration audit and checkpoint schema',
+                '2026-07-17T00:00:00+00:00'
+            );
+
+        INSERT OR IGNORE INTO schema_migrations
+            (version, description, applied_at)
+            VALUES (
+                3,
+                'mvp-3a provider fingerprints and budget reservations',
+                '2026-07-24T00:00:00+00:00'
+            );
+
+        -- runs --------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS runs (
+            run_id          TEXT PRIMARY KEY,
+            status          TEXT NOT NULL,
+            raw_claim       TEXT NOT NULL,
+            current_stage   TEXT NOT NULL,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            completed_at    TEXT
+        );
+
+        -- planner outputs ----------------------------------------------
+        CREATE TABLE IF NOT EXISTS planner_outputs (
+            run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
+            planner_prompt_version  TEXT NOT NULL,
+            planner_model_name      TEXT NOT NULL,
+            planned_at              TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS claim_definitions (
+            run_id                          TEXT PRIMARY KEY REFERENCES planner_outputs(run_id),
+            claim_text                      TEXT NOT NULL,
+            population                      TEXT NOT NULL,
+            jurisdiction                    TEXT NOT NULL,
+            time_period                     TEXT NOT NULL,
+            comparison_baseline             TEXT NOT NULL,
+            intervention_or_exposure        TEXT NOT NULL,
+            causal_or_comparative_meaning   TEXT NOT NULL,
+            created_at                      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ambiguities (
+            ambiguity_id    TEXT PRIMARY KEY,
+            run_id          TEXT NOT NULL REFERENCES planner_outputs(run_id),
+            description     TEXT NOT NULL,
+            impact          TEXT NOT NULL,
+            created_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS search_queries (
+            query_id            TEXT PRIMARY KEY,
+            run_id              TEXT NOT NULL REFERENCES planner_outputs(run_id),
+            stance              TEXT NOT NULL,
+            provider            TEXT NOT NULL DEFAULT 'exa',
+            intent              TEXT NOT NULL DEFAULT 'broad_web',
+            query_round         INTEGER NOT NULL,
+            strategy            TEXT NOT NULL,
+            query_text          TEXT NOT NULL,
+            exclusion_parameters TEXT NOT NULL,
+            created_at          TEXT NOT NULL
+        );
+
+        -- retrieval attempts -------------------------------------------
+        CREATE TABLE IF NOT EXISTS retrieval_attempts (
+            retrieval_attempt_id TEXT PRIMARY KEY,
+            run_id               TEXT NOT NULL REFERENCES runs(run_id),
+            query_id             TEXT NOT NULL REFERENCES search_queries(query_id),
+            query_round          INTEGER NOT NULL,
+            query_text           TEXT NOT NULL,
+            search_rank          INTEGER NOT NULL,
+            source_url           TEXT NOT NULL,
+            resolved_url         TEXT NOT NULL,
+            status               TEXT NOT NULL,
+            retrieved_at         TEXT NOT NULL
+        );
+
+        -- snapshots (INSERT-ONLY) --------------------------------------
+        CREATE TABLE IF NOT EXISTS snapshots (
+            snapshot_id           TEXT PRIMARY KEY,
+            run_id                TEXT NOT NULL REFERENCES runs(run_id),
+            retrieval_attempt_id  TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            source_url            TEXT NOT NULL,
+            retrieved_at          TEXT NOT NULL,
+            normalized_text       TEXT NOT NULL,
+            snapshot_sha256       TEXT NOT NULL,
+            word_count            INTEGER NOT NULL,
+            truncated             INTEGER NOT NULL,
+            created_at            TEXT NOT NULL
+        );
+
+        -- provisional extractions --------------------------------------
+        CREATE TABLE IF NOT EXISTS provisional_extractions (
+            run_id                   TEXT NOT NULL REFERENCES runs(run_id),
+            stance                   TEXT NOT NULL,
+            source_url               TEXT NOT NULL,
+            retrieval_attempt_id     TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            query_id                 TEXT NOT NULL REFERENCES search_queries(query_id),
+            query_round              INTEGER NOT NULL,
+            search_rank              INTEGER NOT NULL,
+            snapshot_id              TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+            snapshot_sha256          TEXT NOT NULL,
+            extracted_quote_block    TEXT NOT NULL,
+            extraction_prompt_version TEXT NOT NULL,
+            extraction_model_name    TEXT NOT NULL,
+            extracted_at             TEXT NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            provisional_extractions_run_snapshot_stance
+            ON provisional_extractions(run_id, snapshot_id, stance);
+
+        -- candidates ---------------------------------------------------
+        CREATE TABLE IF NOT EXISTS candidates (
+            quote_block_id            TEXT PRIMARY KEY,
+            run_id                    TEXT NOT NULL REFERENCES runs(run_id),
+            stance                    TEXT NOT NULL,
+            source_url                TEXT NOT NULL,
+            retrieval_attempt_id      TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            query_id                  TEXT NOT NULL REFERENCES search_queries(query_id),
+            query_round               INTEGER NOT NULL,
+            search_rank               INTEGER NOT NULL,
+            retrieved_at              TEXT NOT NULL,
+            snapshot_id               TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+            snapshot_sha256           TEXT NOT NULL,
+            snapshot_created_at       TEXT NOT NULL,
+            extracted_quote_block     TEXT NOT NULL,
+            segment_offsets           TEXT NOT NULL,
+            raw_segment_word_count    INTEGER NOT NULL,
+            has_statistical_markers   INTEGER NOT NULL,
+            claim_keyword_match_count INTEGER NOT NULL,
+            truncated                 INTEGER NOT NULL,
+            extraction_prompt_version TEXT NOT NULL,
+            extraction_model_name     TEXT NOT NULL,
+            extracted_at              TEXT NOT NULL,
+            post_filter_version       TEXT NOT NULL,
+            post_filter_validated_at  TEXT NOT NULL
+        );
+
+        -- analyst decisions --------------------------------------------
+        CREATE TABLE IF NOT EXISTS analyst_decisions (
+            run_id                  TEXT NOT NULL REFERENCES runs(run_id),
+            quote_block_id          TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            evidence_quality        INTEGER NOT NULL,
+            claim_fit               INTEGER NOT NULL,
+            ledger_score            INTEGER,
+            placement               TEXT,
+            approved                INTEGER NOT NULL,
+            rationale               TEXT NOT NULL,
+            analyst_prompt_version  TEXT NOT NULL,
+            analyst_model_name      TEXT NOT NULL,
+            scored_at               TEXT NOT NULL,
+            PRIMARY KEY (run_id, quote_block_id)
+        );
+
+        -- statement review attempts ------------------------------------
+        CREATE TABLE IF NOT EXISTS statement_drafts (
+            statement_draft_id  TEXT PRIMARY KEY,
+            run_id              TEXT NOT NULL REFERENCES runs(run_id),
+            quote_block_id      TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            stance              TEXT NOT NULL,
+            draft_statement     TEXT NOT NULL,
+            claim_fit           INTEGER NOT NULL,
+            analyst_prompt_version TEXT NOT NULL,
+            analyst_model_name  TEXT NOT NULL,
+            drafted_at          TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS statement_review_attempts (
+            run_id                       TEXT NOT NULL REFERENCES runs(run_id),
+            statement_draft_id           TEXT NOT NULL
+                REFERENCES statement_drafts(statement_draft_id),
+            quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            approved                     INTEGER NOT NULL,
+            reviewer_approval_id         TEXT UNIQUE,
+            approved_factual_statement   TEXT,
+            failure_code                 TEXT,
+            rationale                    TEXT NOT NULL,
+            reviewer_prompt_version      TEXT NOT NULL,
+            reviewer_model_name          TEXT NOT NULL,
+            reviewed_at                  TEXT NOT NULL,
+            PRIMARY KEY (run_id, statement_draft_id)
+        );
+
+        -- ledger (INSERT-ONLY) -----------------------------------------
+        CREATE TABLE IF NOT EXISTS ledger_records (
+            ledger_claim_id              TEXT PRIMARY KEY,
+            run_id                       TEXT NOT NULL REFERENCES runs(run_id),
+            quote_block_id               TEXT NOT NULL REFERENCES candidates(quote_block_id),
+            stance                       TEXT NOT NULL,
+            approved_factual_statement   TEXT NOT NULL,
+            approved_claim_text          TEXT NOT NULL,
+            evidence_quality             INTEGER NOT NULL,
+            claim_fit                    INTEGER NOT NULL,
+            ledger_score                 INTEGER NOT NULL,
+            placement                    TEXT NOT NULL,
+            entailment                   TEXT NOT NULL,
+            source_url                   TEXT NOT NULL,
+            retrieval_attempt_id         TEXT NOT NULL
+                REFERENCES retrieval_attempts(retrieval_attempt_id),
+            snapshot_id                  TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+            snapshot_sha256              TEXT NOT NULL,
+            segment_offsets              TEXT NOT NULL,
+            analyst_prompt_version       TEXT NOT NULL,
+            analyst_model_name           TEXT NOT NULL,
+            analyst_completed_at         TEXT NOT NULL,
+            reviewer_prompt_version      TEXT NOT NULL,
+            reviewer_model_name          TEXT NOT NULL,
+            reviewed_at                  TEXT NOT NULL,
+            reviewer_approval_id         TEXT NOT NULL
+                REFERENCES statement_review_attempts(reviewer_approval_id),
+            ledger_validated_at          TEXT NOT NULL
+        );
+
+        -- synthesis attempts -------------------------------------------
+        CREATE TABLE IF NOT EXISTS synthesis_attempts (
+            run_id                        TEXT PRIMARY KEY REFERENCES runs(run_id),
+            synthesizer_prompt_version    TEXT NOT NULL,
+            synthesizer_model_name        TEXT NOT NULL,
+            created_at                    TEXT NOT NULL,
+            title                         TEXT NOT NULL,
+            claim_definition              TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS synthesis_sections (
+            run_id          TEXT NOT NULL REFERENCES synthesis_attempts(run_id),
+            section_type    TEXT NOT NULL,
+            heading         TEXT NOT NULL,
+            section_order   INTEGER NOT NULL,
+            PRIMARY KEY (run_id, section_order)
+        );
+
+        CREATE TABLE IF NOT EXISTS synthesis_items (
+            run_id                       TEXT NOT NULL REFERENCES synthesis_attempts(run_id),
+            section_order                INTEGER NOT NULL,
+            item_order                   INTEGER NOT NULL,
+            connective_template_id       TEXT NOT NULL,
+            ledger_claim_id              TEXT NOT NULL
+                REFERENCES ledger_records(ledger_claim_id),
+            reviewer_approval_id         TEXT NOT NULL,
+            stance                       TEXT NOT NULL,
+            placement                    TEXT NOT NULL,
+            entailment                   TEXT NOT NULL,
+            approved_factual_statement   TEXT NOT NULL,
+            PRIMARY KEY (run_id, section_order, item_order),
+            FOREIGN KEY (run_id, section_order)
+                REFERENCES synthesis_sections(run_id, section_order)
+        );
+
+        -- validation runs ----------------------------------------------
+        CREATE TABLE IF NOT EXISTS validation_runs (
+            run_id                    TEXT PRIMARY KEY REFERENCES runs(run_id),
+            valid                     INTEGER NOT NULL,
+            validator_config_version  TEXT NOT NULL,
+            validated_at              TEXT NOT NULL,
+            rendered_brief_hash       TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS validation_errors (
+            run_id          TEXT NOT NULL REFERENCES validation_runs(run_id),
+            error_order     INTEGER NOT NULL,
+            code            TEXT NOT NULL,
+            location        TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            PRIMARY KEY (run_id, error_order)
+        );
+
+        -- model invocations --------------------------------------------
+        CREATE TABLE IF NOT EXISTS model_invocations (
+            invocation_id        TEXT PRIMARY KEY,
+            run_id               TEXT NOT NULL REFERENCES runs(run_id),
+            stage                TEXT NOT NULL,
+            prompt_version       TEXT NOT NULL,
+            model_name           TEXT NOT NULL,
+            input_artifact_id    TEXT NOT NULL,
+            output_artifact_id   TEXT,
+            status               TEXT NOT NULL,
+            invoked_at           TEXT NOT NULL
+        );
+
+        -- Phase 9 orchestration ---------------------------------------
+        CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
+            run_id          TEXT NOT NULL REFERENCES runs(run_id),
+            stage_key       TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            failure_reason  TEXT,
+            updated_at      TEXT NOT NULL,
+            PRIMARY KEY (run_id, stage_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS orchestration_stage_artifacts (
+            run_id          TEXT NOT NULL REFERENCES runs(run_id),
+            artifact_key    TEXT NOT NULL,
+            artifact_type   TEXT NOT NULL,
+            payload_json    TEXT NOT NULL,
+            created_at      TEXT NOT NULL,
+            PRIMARY KEY (run_id, artifact_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS provider_run_contracts (
+            run_id                  TEXT PRIMARY KEY REFERENCES runs(run_id),
+            fingerprint_sha256      TEXT NOT NULL,
+            provider_identity       TEXT NOT NULL,
+            adapter_identity        TEXT NOT NULL,
+            model_identity          TEXT NOT NULL,
+            prompt_identity         TEXT NOT NULL,
+            schema_identity         TEXT NOT NULL,
+            normalization_identity  TEXT NOT NULL,
+            policy_identity         TEXT NOT NULL,
+            repository_revision     TEXT NOT NULL,
+            payload_json            TEXT NOT NULL,
+            created_at              TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS model_route_attempts (
+            attempt_id              TEXT PRIMARY KEY,
+            run_id                  TEXT NOT NULL REFERENCES runs(run_id),
+            operation_id            TEXT NOT NULL,
+            stage                   TEXT NOT NULL,
+            output_type             TEXT NOT NULL,
+            model_alias             TEXT NOT NULL,
+            pinned_model_snapshot   TEXT,
+            route_index             INTEGER NOT NULL,
+            attempt_number          INTEGER NOT NULL,
+            input_artifact_ids      TEXT NOT NULL,
+            status                  TEXT NOT NULL,
+            retry_reason            TEXT,
+            escalation_reason       TEXT,
+            failure_code            TEXT,
+            failure_reason          TEXT,
+            started_at              TEXT NOT NULL,
+            ended_at                TEXT,
+            latency_ms              REAL,
+            reserved_tokens         INTEGER,
+            reserved_cost_usd       REAL,
+            input_tokens            INTEGER,
+            output_tokens           INTEGER,
+            total_tokens            INTEGER,
+            cost_usd                REAL,
+            output_json             TEXT,
+            UNIQUE (
+                run_id,
+                operation_id,
+                route_index,
+                attempt_number
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS model_route_attempts_run_operation
+            ON model_route_attempts(run_id, operation_id, route_index, attempt_number);
+
+        CREATE TABLE IF NOT EXISTS run_cancellations (
+            run_id          TEXT PRIMARY KEY REFERENCES runs(run_id),
+            requested_at    TEXT NOT NULL,
+            reason          TEXT NOT NULL
+        );
+
+        -- Same-run provenance guards ------------------------------------
+        CREATE TRIGGER IF NOT EXISTS retrieval_attempt_same_run
+        BEFORE INSERT ON retrieval_attempts
+        WHEN (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'retrieval query belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS snapshot_same_run
+        BEFORE INSERT ON snapshots
+        WHEN (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'snapshot retrieval belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS provisional_extraction_same_run
+        BEFORE INSERT ON provisional_extractions
+        WHEN (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+          OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+          OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'provisional provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS candidate_same_run
+        BEFORE INSERT ON candidates
+        WHEN (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+          OR (SELECT run_id FROM search_queries WHERE query_id = NEW.query_id) != NEW.run_id
+          OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'candidate provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS analyst_decision_same_run
+        BEFORE INSERT ON analyst_decisions
+        WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'analyst candidate belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS statement_draft_same_run
+        BEFORE INSERT ON statement_drafts
+        WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'draft candidate belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS statement_review_same_run
+        BEFORE INSERT ON statement_review_attempts
+        WHEN (SELECT run_id FROM statement_drafts
+              WHERE statement_draft_id = NEW.statement_draft_id) != NEW.run_id
+          OR (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'review provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS ledger_record_same_run
+        BEFORE INSERT ON ledger_records
+        WHEN (SELECT run_id FROM candidates WHERE quote_block_id = NEW.quote_block_id)
+             != NEW.run_id
+          OR (SELECT run_id FROM retrieval_attempts
+              WHERE retrieval_attempt_id = NEW.retrieval_attempt_id) != NEW.run_id
+          OR (SELECT run_id FROM snapshots WHERE snapshot_id = NEW.snapshot_id) != NEW.run_id
+          OR (SELECT run_id FROM statement_review_attempts
+              WHERE reviewer_approval_id = NEW.reviewer_approval_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'Ledger provenance belongs to another run'); END;
+
+        CREATE TRIGGER IF NOT EXISTS synthesis_item_same_run
+        BEFORE INSERT ON synthesis_items
+        WHEN (SELECT run_id FROM ledger_records
+              WHERE ledger_claim_id = NEW.ledger_claim_id) != NEW.run_id
+        BEGIN SELECT RAISE(ABORT, 'synthesis Ledger record belongs to another run'); END;
+        """
+    )
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+    if "reserved_tokens" not in columns:
+        conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_tokens INTEGER")
+    if "reserved_cost_usd" not in columns:
+        conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd REAL")
+    # Only the explicitly recognized pre-v5 metadata is converted during its
+    # upgrade. A committed current description must never be repaired here.
+    conn.execute(
+        "UPDATE schema_migrations SET description = ? WHERE version = 4 "
+        "AND description = ? AND NOT EXISTS "
+        "(SELECT 1 FROM schema_migrations WHERE version = 5)",
+        (MIGRATION_DESCRIPTIONS[4], "same-run provenance triggers and immutable raw claim"),
+    )
+    conn.commit()
+    for version, migration in _migration_steps():
+        if target_version is None or version <= target_version:
+            migration(conn)
+
+
+def _migration_steps() -> tuple[tuple[int, Callable[[sqlite3.Connection], None]], ...]:
+    return (
+        (5, _apply_raw_claim_immutability_migration),
+        (6, _apply_mvp68_integrity_migration),
+        (7, _apply_mvp69_provenance_migration),
+        (8, _apply_mvp10_evidence_portfolio_migration),
+        (9, _apply_mvp11_research_governor_migration),
+        (10, _apply_mlp4_discovery_query_migration),
+        (11, _apply_v2_phase1_artifact_migration),
+        (12, _apply_v2_phase3_initial_planner_migration),
+        (13, _apply_v2_phase10_reviewer_ledger_migration),
+        (14, _apply_cache_usage_migration),
+        (15, _apply_complete_usage_migration),
+        (16, _apply_update_provenance_migration),
+        (17, _apply_query_indexes_migration),
+        (18, _apply_round_four_admissions_migration),
+    )
+
+
+def _apply_round_four_admissions_migration(conn: sqlite3.Connection) -> None:
+    """Atomically widen the v2-only round constraint, preserving immutable rows."""
+    version = ROUND_FOUR_ADMISSIONS_SCHEMA_VERSION
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (version,)
+    ).fetchone()
+    if row is not None:
+        if row[0] != MIGRATION_DESCRIPTIONS[version]:
+            raise sqlite3.DatabaseError("migration 18 description is inconsistent")
+        return
+    definition = " ".join(
+        _sql_tokens(
+            conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='v2_ledger_admissions'"
+            ).fetchone()[0]
+        )
+    )
+    dependent_objects = [
+        row[0]
+        for row in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type IN ('trigger', 'index') "
+            "AND tbl_name='v2_ledger_admissions' AND sql IS NOT NULL"
+        )
+    ]
+    replacement = definition.replace(
+        "v2_ledger_admissions", "v2_ledger_admissions_round_four", 1
+    ).replace("discovery_round between 1 and 3", "discovery_round between 1 and 4")
+    if replacement == definition or "between 1 and 4" not in replacement:
+        raise sqlite3.DatabaseError("unrecognized round-three admission constraint")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(replacement)
+        conn.execute(
+            "INSERT INTO v2_ledger_admissions_round_four SELECT * FROM v2_ledger_admissions"
+        )
+        conn.execute("DROP TABLE v2_ledger_admissions")
+        conn.execute("ALTER TABLE v2_ledger_admissions_round_four RENAME TO v2_ledger_admissions")
+        for statement in dependent_objects:
+            conn.execute(statement)
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (
+                version,
+                MIGRATION_DESCRIPTIONS[version],
+                "2026-10-15T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def _apply_query_indexes_migration(conn: sqlite3.Connection) -> None:
+    """Add indexes backed by history/evidence plans without changing stored rows."""
+    version = QUERY_INDEXES_SCHEMA_VERSION
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (version,)
+    ).fetchone()
+    definitions = (
+        (
+            "runs_updated_history",
+            "CREATE INDEX runs_updated_history ON runs(updated_at DESC, run_id ASC)",
+        ),
+        (
+            "candidates_run_extracted_quote",
+            "CREATE INDEX candidates_run_extracted_quote "
+            "ON candidates(run_id, extracted_at, quote_block_id)",
+        ),
+        (
+            "statement_drafts_run_quote_drafted",
+            "CREATE INDEX statement_drafts_run_quote_drafted "
+            "ON statement_drafts(run_id, quote_block_id, drafted_at)",
+        ),
+        (
+            "statement_reviews_run_quote_reviewed",
+            "CREATE INDEX statement_reviews_run_quote_reviewed "
+            "ON statement_review_attempts("
+            "run_id, quote_block_id, reviewed_at, statement_draft_id)",
+        ),
+        (
+            "ledger_records_run_quote_claim",
+            "CREATE INDEX ledger_records_run_quote_claim "
+            "ON ledger_records(run_id, quote_block_id, ledger_claim_id)",
+        ),
+    )
+    if row is not None:
+        if row[0] != MIGRATION_DESCRIPTIONS[version]:
+            raise sqlite3.DatabaseError(f"migration {version} description is inconsistent")
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for name, statement in definitions:
+            conn.execute(statement.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ", 1))
+            installed = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name = ?", (name,)
+            ).fetchone()
+            if installed is None or _sql_tokens(installed[0]) != _sql_tokens(statement):
+                raise sqlite3.DatabaseError(f"index {name} has an invalid definition")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (version, MIGRATION_DESCRIPTIONS[version], "2026-10-04T00:00:00+00:00"),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def _raw_claim_trigger_sql() -> str:
+    return f"""CREATE TRIGGER {RAW_CLAIM_TRIGGER_NAME}
+        BEFORE UPDATE OF raw_claim ON runs
+        WHEN NEW.raw_claim IS NOT OLD.raw_claim
+        BEGIN
+            SELECT RAISE(ABORT, '{RAW_CLAIM_TRIGGER_ERROR}');
+        END"""
+
+
+def _is_expected_raw_claim_trigger(sql: str | None) -> bool:
+    if sql is None:
+        return False
+    return _sql_tokens(sql) == _sql_tokens(_raw_claim_trigger_sql())
+
+
+def _apply_raw_claim_immutability_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (RAW_CLAIM_SCHEMA_VERSION,),
+    ).fetchone()
+    trigger = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+        (RAW_CLAIM_TRIGGER_NAME,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[RAW_CLAIM_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 5 description is inconsistent")
+        if trigger is None or not _is_expected_raw_claim_trigger(trigger["sql"]):
+            raise sqlite3.DatabaseError("migration 5 trigger is missing or inconsistent")
+        return
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(_raw_claim_trigger_sql())
+        installed = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+            (RAW_CLAIM_TRIGGER_NAME,),
+        ).fetchone()
+        if installed is None or not _is_expected_raw_claim_trigger(installed["sql"]):
+            raise sqlite3.DatabaseError("migration 5 trigger installation verification failed")
+        conn.execute(
+            """INSERT INTO schema_migrations (version, description, applied_at)
+               VALUES (?, ?, ?)""",
+            (
+                RAW_CLAIM_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[RAW_CLAIM_SCHEMA_VERSION],
+                "2026-08-09T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _immutable_trigger_sql(
+    name: str,
+    table: str,
+    operation: str,
+    error: str,
+) -> str:
+    return f"""CREATE TRIGGER {name}
+        BEFORE {operation} ON {table}
+        BEGIN
+            SELECT RAISE(ABORT, '{error}');
+        END"""
+
+
+def _is_expected_immutable_trigger(
+    sql: str | None,
+    name: str,
+    table: str,
+    operation: str,
+    error: str,
+) -> bool:
+    if sql is None:
+        return False
+    return _sql_tokens(sql) == _sql_tokens(_immutable_trigger_sql(name, table, operation, error))
+
+
+def _verify_mvp68_schema(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+    }
+    if not {"reserved_cost_usd_exact", "cost_usd_exact"} <= columns:
+        raise sqlite3.DatabaseError("migration 6 exact-cost columns are missing")
+    for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items():
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
+        ).fetchone()
+        if row is None or not _is_expected_immutable_trigger(
+            row["sql"], name, table, operation, error
+        ):
+            raise sqlite3.DatabaseError(f"migration 6 trigger {name} is missing or inconsistent")
+
+
+def _apply_mvp68_integrity_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (MVP68_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP68_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 6 description is inconsistent")
+        _verify_mvp68_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {
+            item["name"]
+            for item in conn.execute("PRAGMA table_info(model_route_attempts)").fetchall()
+        }
+        if "reserved_cost_usd_exact" not in columns:
+            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN reserved_cost_usd_exact TEXT")
+        if "cost_usd_exact" not in columns:
+            conn.execute("ALTER TABLE model_route_attempts ADD COLUMN cost_usd_exact TEXT")
+        rows = conn.execute(
+            """SELECT attempt_id, reserved_cost_usd, cost_usd,
+                      reserved_cost_usd_exact, cost_usd_exact
+               FROM model_route_attempts"""
+        ).fetchall()
+        for existing in rows:
+            reserved_exact = existing["reserved_cost_usd_exact"]
+            cost_exact = existing["cost_usd_exact"]
+            if reserved_exact is not None:
+                parse_canonical_usd(reserved_exact)
+            elif existing["reserved_cost_usd"] is not None:
+                reserved_exact = canonical_usd(parse_exact_usd(existing["reserved_cost_usd"]))
+            if cost_exact is not None:
+                parse_canonical_usd(cost_exact)
+            elif existing["cost_usd"] is not None:
+                cost_exact = canonical_usd(parse_exact_usd(existing["cost_usd"]))
+            conn.execute(
+                """UPDATE model_route_attempts
+                   SET reserved_cost_usd_exact = ?, cost_usd_exact = ?
+                   WHERE attempt_id = ?""",
+                (reserved_exact, cost_exact, existing["attempt_id"]),
+            )
+        for name, (table, operation, error) in IMMUTABLE_ARTIFACT_TRIGGERS.items():
+            conn.execute(_immutable_trigger_sql(name, table, operation, error))
+        _verify_mvp68_schema(conn)
+        conn.execute(
+            """INSERT INTO schema_migrations (version, description, applied_at)
+               VALUES (?, ?, ?)""",
+            (
+                MVP68_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP68_SCHEMA_VERSION],
+                "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+_SNAPSHOT_PROVENANCE_COLUMNS = {
+    "original_url": "TEXT",
+    "canonical_url": "TEXT",
+    "normalization_version": "TEXT",
+    "acquisition_version": "TEXT",
+    "provider_name": "TEXT",
+    "provider_version": "TEXT",
+    "media_type_provenance_json": "TEXT",
+}
+
+
+def _verify_mvp69_schema(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(snapshots)").fetchall()}
+    missing = sorted(set(_SNAPSHOT_PROVENANCE_COLUMNS) - columns)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 7 snapshot provenance columns are missing: {', '.join(missing)}"
+        )
+
+
+def _apply_mvp69_provenance_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (MVP69_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP69_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 7 description is inconsistent")
+        _verify_mvp69_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {item["name"] for item in conn.execute("PRAGMA table_info(snapshots)").fetchall()}
+        for name, declaration in _SNAPSHOT_PROVENANCE_COLUMNS.items():
+            if name not in columns:
+                conn.execute(f"ALTER TABLE snapshots ADD COLUMN {name} {declaration}")
+        _verify_mvp69_schema(conn)
+        conn.execute(
+            """INSERT INTO schema_migrations (version, description, applied_at)
+               VALUES (?, ?, ?)""",
+            (
+                MVP69_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP69_SCHEMA_VERSION],
+                "2026-08-10T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+_MVP10_TABLES = {
+    "source_family_members",
+    "evidence_trail_entries",
+    "portfolio_items",
+    "portfolio_coverage_assessments",
+}
+
+_MVP11_TABLES = {
+    "research_round_records",
+    "research_governor_decisions",
+    "research_terminal_results",
+}
+
+
+def _verify_mvp10_schema(conn: sqlite3.Connection) -> None:
+    present = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_MVP10_TABLES - present)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 8 portfolio tables are missing: {', '.join(missing)}"
+        )
+
+
+def _apply_mvp10_evidence_portfolio_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (MVP10_SCHEMA_VERSION,)
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP10_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 8 description is inconsistent")
+        _verify_mvp10_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS source_family_members (
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                retrieval_attempt_id TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                source_family_id TEXT NOT NULL,
+                family_key TEXT NOT NULL,
+                identification_basis TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, retrieval_attempt_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS evidence_trail_entries (
+                trail_entry_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                retrieval_attempt_id TEXT NOT NULL
+                    REFERENCES retrieval_attempts(retrieval_attempt_id),
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (run_id, retrieval_attempt_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS portfolio_items (
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                ledger_claim_id TEXT NOT NULL REFERENCES ledger_records(ledger_claim_id),
+                source_family_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (run_id, ledger_claim_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS portfolio_coverage_assessments (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                payload_json TEXT NOT NULL,
+                assessed_at TEXT NOT NULL
+            )""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_mvp10_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                MVP10_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP10_SCHEMA_VERSION],
+                "2026-08-11T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_mvp11_schema(conn: sqlite3.Connection) -> None:
+    """Verify the bounded append-only Research Governor tables and constraints."""
+    present = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_MVP11_TABLES - present)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 9 research governor tables are missing: {', '.join(missing)}"
+        )
+    sql_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'research_round_records'"
+    ).fetchone()
+    normalized = " ".join((sql_row["sql"] if sql_row is not None else "").lower().split())
+    if "check (research_round between 1 and 3)" not in normalized:
+        raise sqlite3.DatabaseError("migration 9 research round bound is missing or inconsistent")
+
+
+def _apply_mvp11_research_governor_migration(conn: sqlite3.Connection) -> None:
+    """Install idempotent append-only MVP-11 Governor persistence transactionally."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?", (MVP11_SCHEMA_VERSION,)
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MVP11_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 9 description is inconsistent")
+        _verify_mvp11_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS research_round_records (
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                research_round INTEGER NOT NULL CHECK (research_round BETWEEN 1 AND 3),
+                payload_json TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, research_round)
+            )""",
+            """CREATE TABLE IF NOT EXISTS research_governor_decisions (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                payload_json TEXT NOT NULL,
+                decided_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS research_terminal_results (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                payload_json TEXT NOT NULL,
+                finalized_at TEXT NOT NULL
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS research_round_records_immutable_update
+                BEFORE UPDATE ON research_round_records
+                BEGIN SELECT RAISE(ABORT, 'research round records are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_round_records_immutable_delete
+                BEFORE DELETE ON research_round_records
+                BEGIN SELECT RAISE(ABORT, 'research round records are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_governor_decisions_immutable_update
+                BEFORE UPDATE ON research_governor_decisions
+                BEGIN SELECT RAISE(ABORT, 'research governor decisions are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_governor_decisions_immutable_delete
+                BEFORE DELETE ON research_governor_decisions
+                BEGIN SELECT RAISE(ABORT, 'research governor decisions are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_terminal_results_immutable_update
+                BEFORE UPDATE ON research_terminal_results
+                BEGIN SELECT RAISE(ABORT, 'research terminal results are append-only'); END""",
+            """CREATE TRIGGER IF NOT EXISTS research_terminal_results_immutable_delete
+                BEFORE DELETE ON research_terminal_results
+                BEGIN SELECT RAISE(ABORT, 'research terminal results are append-only'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_mvp11_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                MVP11_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MVP11_SCHEMA_VERSION],
+                "2026-08-11T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_mlp4_discovery_query_schema(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(search_queries)").fetchall()}
+    missing = sorted({"provider", "intent"} - columns)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 10 search query columns are missing: {', '.join(missing)}"
+        )
+
+
+def _apply_mlp4_discovery_query_migration(conn: sqlite3.Connection) -> None:
+    """Persist provider and intent without rewriting legacy Planner artifacts."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (MLP4_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[MLP4_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 10 description is inconsistent")
+        _verify_mlp4_discovery_query_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {
+            item["name"] for item in conn.execute("PRAGMA table_info(search_queries)").fetchall()
+        }
+        if "provider" not in columns:
+            conn.execute(
+                "ALTER TABLE search_queries ADD COLUMN provider TEXT NOT NULL DEFAULT 'exa'"
+            )
+        if "intent" not in columns:
+            conn.execute(
+                "ALTER TABLE search_queries ADD COLUMN intent TEXT NOT NULL DEFAULT 'broad_web'"
+            )
+        _verify_mlp4_discovery_query_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                MLP4_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[MLP4_SCHEMA_VERSION],
+                "2026-08-15T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_v2_phase1_artifact_schema(conn: sqlite3.Connection) -> None:
+    """Verify the additive, immutable v2 artifact persistence boundary."""
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_V2_PHASE1_TABLES - tables)
+    if missing:
+        raise sqlite3.DatabaseError(f"migration 11 v2 tables are missing: {', '.join(missing)}")
+    triggers = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+    }
+    missing_triggers = sorted(_V2_PHASE1_TRIGGERS - triggers)
+    if missing_triggers:
+        raise sqlite3.DatabaseError(
+            f"migration 11 v2 immutable triggers are missing: {', '.join(missing_triggers)}"
+        )
+
+
+def _apply_v2_phase1_artifact_migration(conn: sqlite3.Connection) -> None:
+    """Add v2 identities and append-only artifacts without touching historical rows."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (V2_PHASE1_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[V2_PHASE1_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 11 description is inconsistent")
+        _verify_v2_phase1_artifact_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS v2_run_identities (
+                run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+                pipeline_identity TEXT NOT NULL,
+                policy_identity TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS v2_artifacts (
+                run_id TEXT NOT NULL REFERENCES v2_run_identities(run_id),
+                artifact_key TEXT NOT NULL,
+                artifact_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, artifact_key)
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS v2_run_identities_immutable_update
+                BEFORE UPDATE ON v2_run_identities
+                BEGIN SELECT RAISE(ABORT, 'v2 run identities are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_run_identities_immutable_delete
+                BEFORE DELETE ON v2_run_identities
+                BEGIN SELECT RAISE(ABORT, 'v2 run identities are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_artifacts_immutable_update
+                BEFORE UPDATE ON v2_artifacts
+                BEGIN SELECT RAISE(ABORT, 'v2 artifacts are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_artifacts_immutable_delete
+                BEFORE DELETE ON v2_artifacts
+                BEGIN SELECT RAISE(ABORT, 'v2 artifacts are immutable'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_v2_phase1_artifact_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                V2_PHASE1_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[V2_PHASE1_SCHEMA_VERSION],
+                "2026-08-20T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_v2_phase3_initial_planner_schema(conn: sqlite3.Connection) -> None:
+    """Verify v2 Round-1 planner persistence without altering historical artifacts."""
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    missing = sorted(_V2_PHASE3_TABLES - tables)
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 12 v2 planner tables are missing: {', '.join(missing)}"
+        )
+    triggers = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+    }
+    missing_triggers = sorted(_V2_PHASE3_TRIGGERS - triggers)
+    if missing_triggers:
+        raise sqlite3.DatabaseError(
+            f"migration 12 v2 planner triggers are missing: {', '.join(missing_triggers)}"
+        )
+
+
+def _apply_v2_phase3_initial_planner_migration(conn: sqlite3.Connection) -> None:
+    """Persist only fresh-v2 initial plans and their Round-1 queries append-only."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (V2_PHASE3_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[V2_PHASE3_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 12 description is inconsistent")
+        _verify_v2_phase3_initial_planner_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS v2_initial_planner_outputs (
+                run_id TEXT PRIMARY KEY REFERENCES v2_run_identities(run_id),
+                raw_claim TEXT NOT NULL,
+                directions_json TEXT NOT NULL,
+                discovery_providers_json TEXT NOT NULL,
+                policy_identity TEXT NOT NULL,
+                scope_interpretations_json TEXT NOT NULL,
+                planner_prompt_version TEXT NOT NULL,
+                planner_model_name TEXT NOT NULL,
+                planned_at TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS v2_round_one_search_queries (
+                query_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES v2_initial_planner_outputs(run_id),
+                direction TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                round_number INTEGER NOT NULL CHECK (round_number = 1),
+                strategy TEXT NOT NULL,
+                query_text TEXT NOT NULL,
+                policy_identity TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (run_id, direction, provider, round_number, strategy)
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS v2_initial_planner_outputs_immutable_update
+                BEFORE UPDATE ON v2_initial_planner_outputs
+                BEGIN SELECT RAISE(ABORT, 'v2 initial planner outputs are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_initial_planner_outputs_immutable_delete
+                BEFORE DELETE ON v2_initial_planner_outputs
+                BEGIN SELECT RAISE(ABORT, 'v2 initial planner outputs are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_round_one_search_queries_immutable_update
+                BEFORE UPDATE ON v2_round_one_search_queries
+                BEGIN SELECT RAISE(ABORT, 'v2 Round-1 search queries are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_round_one_search_queries_immutable_delete
+                BEFORE DELETE ON v2_round_one_search_queries
+                BEGIN SELECT RAISE(ABORT, 'v2 Round-1 search queries are immutable'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_v2_phase3_initial_planner_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                V2_PHASE3_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[V2_PHASE3_SCHEMA_VERSION],
+                "2026-08-20T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _verify_v2_phase10_reviewer_ledger_schema(conn: sqlite3.Connection) -> None:
+    """Verify the isolated immutable v2 Ledger-provenance boundary."""
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    triggers = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+    }
+    missing = sorted((_V2_PHASE10_TABLES - tables) | (_V2_PHASE10_TRIGGERS - triggers))
+    if missing:
+        raise sqlite3.DatabaseError(
+            f"migration 13 v2 Reviewer/Ledger schema is missing: {', '.join(missing)}"
+        )
+
+
+def _apply_v2_phase10_reviewer_ledger_migration(conn: sqlite3.Connection) -> None:
+    """Add append-only v2 Ledger provenance without altering historical Ledger rows."""
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (V2_PHASE10_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[V2_PHASE10_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 13 description is inconsistent")
+        _verify_v2_phase10_reviewer_ledger_schema(conn)
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        statements = (
+            """CREATE TABLE IF NOT EXISTS v2_ledger_admissions (
+                ledger_claim_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES v2_run_identities(run_id),
+                source_id TEXT NOT NULL,
+                research_direction TEXT NOT NULL,
+                discovery_round INTEGER NOT NULL CHECK (discovery_round BETWEEN 1 AND 3),
+                source_family_id TEXT NOT NULL,
+                recommended INTEGER NOT NULL CHECK (recommended IN (0, 1)),
+                relevant_gap_ids_json TEXT NOT NULL,
+                ledger_record_json TEXT NOT NULL,
+                provenance_json TEXT NOT NULL,
+                admitted_at TEXT NOT NULL,
+                UNIQUE (run_id, source_id)
+            )""",
+            """CREATE TRIGGER IF NOT EXISTS v2_ledger_admissions_immutable_update
+                BEFORE UPDATE ON v2_ledger_admissions
+                BEGIN SELECT RAISE(ABORT, 'v2 Ledger admission rows are immutable'); END""",
+            """CREATE TRIGGER IF NOT EXISTS v2_ledger_admissions_immutable_delete
+                BEFORE DELETE ON v2_ledger_admissions
+                BEGIN SELECT RAISE(ABORT, 'v2 Ledger admission rows are immutable'); END""",
+        )
+        for statement in statements:
+            conn.execute(statement)
+        _verify_v2_phase10_reviewer_ledger_schema(conn)
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?, ?, ?)",
+            (
+                V2_PHASE10_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[V2_PHASE10_SCHEMA_VERSION],
+                "2026-08-20T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _apply_cache_usage_migration(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT description FROM schema_migrations WHERE version = ?",
+        (CACHE_USAGE_SCHEMA_VERSION,),
+    ).fetchone()
+    if row is not None:
+        if row["description"] != MIGRATION_DESCRIPTIONS[CACHE_USAGE_SCHEMA_VERSION]:
+            raise sqlite3.DatabaseError("migration 14 description is inconsistent")
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)")}
+        for name in ("cached_input_tokens", "uncached_input_tokens"):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE model_route_attempts ADD COLUMN {name} INTEGER")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (
+                CACHE_USAGE_SCHEMA_VERSION,
+                MIGRATION_DESCRIPTIONS[CACHE_USAGE_SCHEMA_VERSION],
+                "2026-09-27T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def _apply_complete_usage_migration(conn: sqlite3.Connection) -> None:
+    if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 15").fetchone():
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)")}
+        for name, declaration in (("cache_write_tokens", "INTEGER"), ("usage_cost_basis", "TEXT")):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE model_route_attempts ADD COLUMN {name} {declaration}")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (15, MIGRATION_DESCRIPTIONS[15], "2026-10-04T00:00:00+00:00"),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+def _provenance_update_definitions() -> tuple[tuple[str, str], ...]:
+    fields: dict[str, set[str]] = {}
+    for child, reference, parent, key in _SAME_RUN_RELATIONSHIPS:
+        fields.setdefault(child, set()).update(("run_id", reference))
+        fields.setdefault(parent, set()).update(("run_id", key))
+    definitions: list[tuple[str, str]] = []
+    for table, columns in sorted(fields.items()):
+        name = f"{table}_provenance_immutable_update"
+        changed = " OR ".join(f"NEW.{column} IS NOT OLD.{column}" for column in sorted(columns))
+        definitions.append(
+            (
+                name,
+                f"""CREATE TRIGGER {name}
+            BEFORE UPDATE OF {", ".join(sorted(columns))} ON {table}
+            WHEN {changed}
+            BEGIN
+                SELECT RAISE(ABORT, '{table} provenance ownership and keys are immutable');
+            END""",
+            )
+        )
+    return tuple(definitions)
+
+
+def validate_same_run_provenance(conn: sqlite3.Connection, versions: set[int]) -> None:
+    if 4 not in versions:
+        return
+    for child, reference, parent, key in _SAME_RUN_RELATIONSHIPS:
+        if (
+            conn.execute(
+                f"SELECT 1 FROM {child} AS child JOIN {parent} AS parent "
+                f"ON child.{reference} = parent.{key} "
+                "WHERE child.run_id IS NOT parent.run_id LIMIT 1"
+            ).fetchone()
+            is not None
+        ):
+            raise sqlite3.DatabaseError(
+                f"same-run provenance integrity check failed: {child}.{reference}"
+            )
+
+
+def _apply_update_provenance_migration(conn: sqlite3.Connection) -> None:
+    if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 16").fetchone():
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        validate_same_run_provenance(conn, {4})
+        for name, definition in _provenance_update_definitions():
+            installed = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
+            ).fetchone()
+            if installed is None:
+                conn.execute(definition)
+            elif _sql_tokens(installed["sql"]) != _sql_tokens(definition):
+                raise sqlite3.DatabaseError(f"trigger {name} has an invalid definition")
+        conn.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+            (16, MIGRATION_DESCRIPTIONS[16], "2026-10-04T00:00:00+00:00"),
+        )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+@lru_cache(maxsize=512)
+def _sql_tokens(sql: str) -> tuple[str, ...]:
+    """Compare complete SQLite definitions while retaining string-literal meaning."""
+    tokens = re.findall(
+        r"'(?:(?:'')|[^'])*'|\"(?:(?:\"\")|[^\"])*\"|`[^`]*`|\[[^\]]*\]|--[^\n]*|/\*.*?\*/|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s]",
+        sql,
+        re.DOTALL,
+    )
+    normalized: list[str] = []
+    for token in tokens:
+        if token.startswith(("--", "/*")):
+            continue
+        if token.startswith("'"):
+            normalized.append(token)
+        elif token.startswith(('"', "`", "[")):
+            normalized.append(token[1:-1].replace('""', '"').lower())
+        else:
+            normalized.append(token.lower())
+    if normalized and normalized[-1] == ";":
+        normalized.pop()
+    return tuple(normalized)
+
+
+@lru_cache(maxsize=128)
+def _table_declarations(sql: str) -> tuple[tuple[str, ...], ...]:
+    tokens = _sql_tokens(sql)
+    start = tokens.index("(")
+    depth = 0
+    declarations: list[tuple[str, ...]] = []
+    current: list[str] = []
+    for token in tokens[start + 1 :]:
+        if token == ")" and depth == 0:
+            if current:
+                declarations.append(tuple(current))
+            break
+        if token == "," and depth == 0:
+            declarations.append(tuple(current))
+            current = []
+            continue
+        current.append(token)
+        depth += (token == "(") - (token == ")")
+    return tuple(declarations)
+
+
+@lru_cache(maxsize=128)
+def _table_options(sql: str) -> tuple[str, ...]:
+    """Retain constraints such as STRICT and WITHOUT ROWID after the body."""
+    tokens = _sql_tokens(sql)
+    start = tokens.index("(")
+    depth = 0
+    for index in range(start, len(tokens)):
+        depth += (tokens[index] == "(") - (tokens[index] == ")")
+        if depth == 0:
+            return tokens[index + 1 :]
+    raise sqlite3.DatabaseError("table definition has an incomplete body")
+
+
+@lru_cache(maxsize=1)
+def _canonical_boundaries() -> dict[int, tuple[tuple[str, str, str], ...]]:
+    """Derive introduction requirements by executing migrations on an empty DB."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    try:
+        _initialize_schema(conn, target_version=4)
+
+        def snapshot() -> tuple[tuple[str, str, str], ...]:
+            return tuple(
+                (row["type"], row["name"], row["sql"])
+                for row in conn.execute(
+                    "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL "
+                    "AND name NOT LIKE 'sqlite_%'"
+                )
+            )
+
+        baseline = snapshot()
+        boundaries = {
+            version: tuple(
+                item for item in baseline if _baseline_object_version(item[0], item[1]) <= version
+            )
+            for version in range(1, 5)
+        }
+        for version, migration in _migration_steps():
+            migration(conn)
+            boundaries[version] = snapshot()
+        return boundaries
+    finally:
+        conn.close()
+
+
+def _canonical_schema() -> tuple[tuple[str, str, str], ...]:
+    """Only static definitions are cached; source validation always runs afresh."""
+    return _canonical_boundaries()[CURRENT_SCHEMA_VERSION]
+
+
+def _column_version(table: str, column: str) -> int:
+    if table == "model_route_attempts":
+        if column in {"cache_write_tokens", "usage_cost_basis"}:
+            return COMPLETE_USAGE_SCHEMA_VERSION
+        if column in {"cached_input_tokens", "uncached_input_tokens"}:
+            return CACHE_USAGE_SCHEMA_VERSION
+        if column in {"reserved_cost_usd_exact", "cost_usd_exact"}:
+            return MVP68_SCHEMA_VERSION
+        if column in {"reserved_tokens", "reserved_cost_usd"}:
+            return 3
+    if table == "snapshots" and column in _SNAPSHOT_PROVENANCE_COLUMNS:
+        return MVP69_SCHEMA_VERSION
+    if table == "search_queries" and column in {"provider", "intent"}:
+        return MLP4_SCHEMA_VERSION
+    return 0
+
+
+def validate_schema_structure(
+    conn: sqlite3.Connection, version: int, *, pending_migrations: frozenset[int] = frozenset()
+) -> None:
+    """Reject malformed known objects, including constraints and inert triggers."""
+    actual = {
+        (row["type"], row["name"]): row["sql"]
+        for row in conn.execute("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL")
+    }
+    for kind, name, expected_sql in _canonical_schema():
+        # Schema 18 changes a constraint rather than adding an optional column.
+        # Older readers validate the original declaration exactly.
+        if name == "v2_ledger_admissions" and (
+            version < ROUND_FOUR_ADMISSIONS_SCHEMA_VERSION
+            or ROUND_FOUR_ADMISSIONS_SCHEMA_VERSION in pending_migrations
+        ):
+            expected_sql = next(
+                sql
+                for item_kind, item_name, sql in _canonical_boundaries()[13]
+                if item_kind == kind and item_name == name
+            )
+        sql = actual.get((kind, name))
+        if sql is None:
+            continue  # Version-specific callers verify required object presence.
+        if kind == "table":
+            if _table_options(sql) != _table_options(expected_sql):
+                raise sqlite3.DatabaseError(f"table {name} has invalid options or constraints")
+            expected = _table_declarations(expected_sql)
+            present = set(_table_declarations(sql))
+            column_names = {part[0] for part in present}
+            required = (
+                part
+                for part in expected
+                if (
+                    _column_version(name, part[0]) <= version
+                    and _column_version(name, part[0]) not in pending_migrations
+                )
+                or part[0] in column_names
+            )
+            if any(part not in present for part in required) or present - set(expected):
+                raise sqlite3.DatabaseError(f"table {name} has invalid columns or constraints")
+        elif kind in {"trigger", "index"} and _sql_tokens(sql) != _sql_tokens(expected_sql):
+            raise sqlite3.DatabaseError(f"{kind} {name} has an invalid definition")
+    if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise sqlite3.DatabaseError("database foreign-key integrity check failed")
+
+
+def _validate_before_upgrade(conn: sqlite3.Connection) -> None:
+    validate_recorded_database(conn)
+
+
+def _baseline_object_version(kind: str, name: str) -> int:
+    """The retained baseline installs migrations 1–4 in one executable script."""
+    if kind == "trigger":
+        return 4
+    if name in {
+        "provider_run_contracts",
+        "model_route_attempts",
+        "run_cancellations",
+        "model_route_attempts_run_operation",
+    }:
+        return 3
+    if name in {"orchestration_checkpoints", "orchestration_stage_artifacts"}:
+        return 2
+    return 1
+
+
+@lru_cache(maxsize=128)
+def _object_version(kind: str, name: str) -> int:
+    """Find introduction from executable snapshots, including future migrators."""
+    for version, definitions in _canonical_boundaries().items():
+        if any(
+            object_kind == kind and object_name == name
+            for object_kind, object_name, _ in definitions
+        ):
+            return version
+    return 1  # Unknown extension objects are not part of required schema checks.
+
+
+def validate_recorded_database(conn: sqlite3.Connection, *, allow_pending: bool = True) -> int:
+    """Read-only upgrade preflight, including recognized pre-schema-7 inputs.
+
+    Historical migration-boundary fixtures may retain later additive objects or
+    omit one pending migration; validate committed objects and pending shapes.
+    Public read-only inspection keeps its independent schema-7 lower boundary.
+    """
+    if [row[0] for row in conn.execute("PRAGMA quick_check")] != ["ok"]:
+        raise sqlite3.DatabaseError("database integrity check failed")
+    migration_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'"
+    ).fetchone()
+    latest = 0
+    versions: set[int] = set()
+    if migration_table is not None:
+        try:
+            rows = list(conn.execute("SELECT version, description FROM schema_migrations"))
+        except sqlite3.DatabaseError as exc:
+            raise RecordedSchemaError("schema migration records are unreadable") from exc
+        if any(type(row[0]) is not int for row in rows):
+            raise RecordedSchemaError("schema migration versions are invalid")
+        latest = max((row[0] for row in rows), default=0)
+        if latest > CURRENT_SCHEMA_VERSION:
+            raise RecordedSchemaError(
+                f"database schema version {latest} is newer than supported "
+                f"version {CURRENT_SCHEMA_VERSION}",
+                version=latest,
+                issue="newer_schema",
+            )
+        if any(row[0] not in MIGRATION_DESCRIPTIONS for row in rows):
+            raise RecordedSchemaError("schema migration versions are invalid")
+        versions = {row[0] for row in rows}
+        for version, description in rows:
+            # This exact pre-v5 description is covered by the retained v4 fixture.
+            historical_v4 = (
+                version == 4
+                and 5 not in versions
+                and description == "same-run provenance triggers and immutable raw claim"
+            )
+            if description != MIGRATION_DESCRIPTIONS[version] and not historical_v4:
+                raise RecordedSchemaError(
+                    f"migration {version} description is inconsistent", version=latest
+                )
+    objects = {
+        (row[0], row[1])
+        for row in conn.execute(
+            "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        )
+    }
+    if latest == 0:
+        # Dropping every user object does not make a previously used database
+        # a fresh bootstrap. VACUUM can remove its free pages, but it retains
+        # the schema cookie. Also reject unrelated application/version markers.
+        fresh_layout = (
+            conn.execute("PRAGMA page_count").fetchone()[0] <= 1
+            and conn.execute("PRAGMA freelist_count").fetchone()[0] == 0
+            and conn.execute("PRAGMA schema_version").fetchone()[0] == 0
+            and conn.execute("PRAGMA user_version").fetchone()[0] == 0
+            and conn.execute("PRAGMA application_id").fetchone()[0] == 0
+        )
+        if objects or not fresh_layout:
+            raise RecordedSchemaError("nonempty database has no recognized migration records")
+        return 0
+    pending = set(range(1, latest + 1)) - versions
+    # Retained legacy accounting fixtures represent migration 6 pending while
+    # later additive migrations are recorded. Recognize only its whole absent
+    # boundary, never a dropped ledger row on an otherwise committed schema.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(model_route_attempts)")}
+    sparse_six = (
+        pending == {6}
+        and not ({"cost_usd_exact", "reserved_cost_usd_exact"} & columns)
+        and not any(("trigger", name) in objects for name in IMMUTABLE_ARTIFACT_TRIGGERS)
+    )
+    if pending and not sparse_six:
+        raise RecordedSchemaError(
+            "schema migration records are incomplete or inconsistent", version=latest
+        )
+    if sparse_six and not allow_pending:
+        raise RecordedSchemaError(
+            "database requires migration 6; a writable run or resume is required",
+            version=latest,
+            issue="older_schema",
+        )
+    required = {(kind, name) for kind, name, _ in _canonical_boundaries()[latest]}
+    if sparse_six:
+        required -= {("trigger", name) for name in IMMUTABLE_ARTIFACT_TRIGGERS}
+    missing = required - objects
+    if missing:
+        raise RecordedSchemaError(
+            "required schema object is missing: " + ", ".join(sorted(name for _, name in missing)),
+            version=latest,
+        )
+    try:
+        validate_schema_structure(
+            conn, latest, pending_migrations=frozenset(set(MIGRATION_DESCRIPTIONS) - versions)
+        )
+        validate_same_run_provenance(conn, versions)
+    except sqlite3.DatabaseError as exc:
+        if is_busy_error(exc):
+            raise
+        raise RecordedSchemaError(str(exc), version=latest) from exc
+    return latest

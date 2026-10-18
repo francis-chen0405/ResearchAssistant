@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+import tempfile
+from concurrent.futures import Future
+from pathlib import Path
+
+sys.path.insert(0, str(Path.cwd() / 'tests'))
+from test_product_discovery_pipeline import _run
+
+from researchassistant.api.live_service import LiveResearchController, _ActiveRun, _DatabaseLock
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.storage.store import init_db
+
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix='ra-terminal-cache-') as temporary:
+        database = Path(temporary) / 'generated.sqlite3'
+        result, _, _ = _run(database, ResearchControls(discovery_providers=(DiscoveryProvider.EXA,)))
+        controller = LiveResearchController(environment={})
+        try:
+            saved = controller.snapshot(database, result.run_id)
+            assert saved.classification == 'released' and saved.final_brief
+            key = (str(database.resolve()), result.run_id)
+            future = Future()
+            future.set_result(saved)
+            controller._active[key] = _ActiveRun(future, _DatabaseLock(database))
+            controller._evict_completed_run(key, future)
+            preserved = database.with_name('preserved-original.sqlite3')
+            database.rename(preserved)
+            init_db(database)
+            before = hashlib.sha256(database.read_bytes()).hexdigest()
+            states = [controller.snapshot(database, result.run_id) for _ in range(2)]
+            assert all(state.classification == 'released' for state in states)
+            assert all(state.final_brief == saved.final_brief for state in states)
+            assert before == hashlib.sha256(database.read_bytes()).hexdigest()
+            with controller._lock:
+                retained = key in controller._early_results
+            observed = {
+                'finding': 'R26', 'replacement_database_has_requested_run': False,
+                'returned_classifications': [s.classification for s in states],
+                'returned_old_brief_and_hash': all(s.rendered_brief_hash == saved.rendered_brief_hash for s in states),
+                'terminal_cache_remains_after_repeated_reads': retained,
+                'replacement_unchanged_by_inspection': True,
+                'method': 'Generated offline release, actual completed-future eviction/cache path, original file preserved by rename and fresh empty generated database at the same path; no real data or calls.',
+            }
+        finally:
+            controller.shutdown(timeout=1)
+    Path('/tmp/ra-review-terminal-cache.json').write_text(json.dumps(observed, indent=2)+'\n')
+    print(json.dumps(observed, indent=2))
+
+
+if __name__ == '__main__':
+    main()

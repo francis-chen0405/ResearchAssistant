@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path.cwd() / "tests"))
+import test_product_discovery_pipeline as product
+import researchassistant.agents.v2_gap_analysis as gap
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.providers.llm import LLMRequest, LLMStage
+from researchassistant.providers.v2_budget import read_v2_physical_call_audit
+from researchassistant.storage.store import list_runs
+
+
+def main() -> None:
+    original_generate = product.production._ConceptModel.generate
+    requests: list[dict[str, object]] = []
+
+    def observed(self: Any, request: LLMRequest) -> object:
+        value = original_generate(self, request)
+        if request.stage is LLMStage.GAP_ANALYSIS:
+            requests.append({
+                "completed_round": request.input_artifact.completed_round,
+                "prompt_sha256": hashlib.sha256(request.rendered_prompt.encode()).hexdigest(),
+                "nonbudget_input_sha256": hashlib.sha256(
+                    json.dumps(request.input_artifact.model_dump(mode="json", exclude={"remaining_budget"}), sort_keys=True).encode()
+                ).hexdigest(),
+            })
+        return value
+
+    original_insert = gap.insert_v2_artifact
+
+    def interrupted(*args: Any, **kwargs: Any) -> object:
+        if args[1] == "phase-6-luna-gap-analysis":
+            raise KeyboardInterrupt("generated interruption after Gap Analysis, before stage commit")
+        return original_insert(*args, **kwargs)
+
+    controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    with tempfile.TemporaryDirectory(prefix="ra-gap-precommit-") as folder:
+        path = Path(folder) / "generated.sqlite3"
+        run_id = None
+        with patch.object(product.production._ConceptModel, "generate", observed):
+            for _ in range(2):
+                with patch.object(gap, "insert_v2_artifact", interrupted):
+                    try:
+                        product._run(path, controls, run_id=run_id)
+                    except KeyboardInterrupt:
+                        pass
+                    else:
+                        raise AssertionError("expected precommit interruption")
+                run_id = list_runs(path)[0].run_id
+            before = read_v2_physical_call_audit(path, run_id)
+            result, model, search = product._run(path, controls, run_id=run_id)
+            after = read_v2_physical_call_audit(path, run_id)
+            first = [item for item in requests if item["completed_round"] == 1]
+            output = {
+                "state": result.state.value,
+                "failure_reason": result.failure_reason,
+                "completed_round_one_gap_calls": len(first),
+                "configured_attempts_per_stage": gap.V2_GAP_ANALYSIS_MAX_ATTEMPTS,
+                "same_nonbudget_input": len({item["nonbudget_input_sha256"] for item in first}) == 1,
+                "requests": requests,
+                "physical_audit_prefix_preserved": after.starts[:len(before.starts)] == before.starts,
+                "all_preinterruption_calls_completed": all(item is not None for item in before.completions),
+                "new_search_calls_after_interruption": len(search.requests),
+                "method": "Two actual generated production interruptions after successful Round-1 Gap Analysis and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls.",
+            }
+    assert len(first) == 3, output
+    assert output["same_nonbudget_input"] is True, output
+    Path("/tmp/ra-review-gap-precommit.json").write_text(json.dumps(output, indent=2) + "\n")
+    print(json.dumps(output, indent=2))
+
+
+if __name__ == "__main__":
+    main()

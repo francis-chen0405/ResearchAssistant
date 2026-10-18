@@ -1,0 +1,12 @@
+{
+  "fresh_sentences": [
+    "This observational sample excludes residents older than 65.5 years.",
+    "Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.",
+    "No improvement was measured above the 0.5 mg dose threshold."
+  ],
+  "assembled_quote": "[5 years.] \"Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.\" [No improvement was measured above the 0.]",
+  "actual_preceding_context": "5 years.",
+  "actual_following_context": "No improvement was measured above the 0.",
+  "accepted_by_context_validator": true,
+  "method": "Actual current fresh selection, assembler and deterministic context validator, called by fresh v2 extraction. Generated source only; no database or provider activity."
+}

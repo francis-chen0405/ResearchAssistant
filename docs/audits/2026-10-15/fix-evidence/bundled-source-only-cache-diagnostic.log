@@ -1,0 +1,61 @@
+{"ts":"2026-10-15T19:49:09.009Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"001-sqlite-vec"}}
+{"ts":"2026-10-15T19:49:09.010Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"002-feed-items"}}
+{"ts":"2026-10-15T19:49:09.011Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"003-crawl-etags"}}
+{"ts":"2026-10-15T19:49:09.011Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"004-watch-jobs"}}
+{"ts":"2026-10-15T19:49:09.011Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"005-tls-routing"}}
+{"ts":"2026-10-15T19:49:09.012Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"006-url-cache-http-status"}}
+{"ts":"2026-10-15T19:49:09.012Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"007-drop-lp-routing"}}
+{"ts":"2026-10-15T19:49:09.013Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"008-antibot-clearance"}}
+{"ts":"2026-10-15T19:49:09.013Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"009-content-completeness"}}
+{"ts":"2026-10-15T19:49:09.021Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"001-sqlite-vec"}}
+{"ts":"2026-10-15T19:49:09.021Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"002-feed-items"}}
+{"ts":"2026-10-15T19:49:09.021Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"003-crawl-etags"}}
+{"ts":"2026-10-15T19:49:09.021Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"004-watch-jobs"}}
+{"ts":"2026-10-15T19:49:09.022Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"005-tls-routing"}}
+{"ts":"2026-10-15T19:49:09.022Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"006-url-cache-http-status"}}
+{"ts":"2026-10-15T19:49:09.022Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"007-drop-lp-routing"}}
+{"ts":"2026-10-15T19:49:09.023Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"008-antibot-clearance"}}
+{"ts":"2026-10-15T19:49:09.024Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"009-content-completeness"}}
+✖ pinned replacement writes reproduce stale FTS; policy repairs only derived index (29.251333ms)
+✔ healthy cache and repeated initialization preserve content and FTS (9.50175ms)
+✔ unrecognized SQLite errors fail without index rebuild (0.776083ms)
+✔ core corruption refuses derived-index rebuild (0.221375ms)
+✔ locked upstream fetch and PDF probe load the protected policy (305.653875ms)
+✔ public socket lookup is pinned and retains TLS identity (28.290833ms)
+✔ private or mixed DNS set is rejected before a request: 127.0.0.1 (3.62725ms)
+✔ private or mixed DNS set is rejected before a request: 93.184.216.34,10.0.0.1 (0.387375ms)
+✔ private or mixed DNS set is rejected before a request: ::ffff:127.0.0.1 (1.27ms)
+✔ private or mixed DNS set is rejected before a request: ::1 (0.337625ms)
+✔ browser requests use the pinned fetch and private redirects cannot continue (2.187375ms)
+✔ failed browser launches and browser disconnection close their owned proxies (0.286958ms)
+✔ forward proxy preserves original URL and body while removing proxy credentials (40.0145ms)
+✔ proxy rejects private, mixed DNS and invalid CONNECT/upgrade targets before dialing (10.718ms)
+✔ CONNECT pins one public DNS result, preserves tunnel bytes and closes owned sockets (4.687208ms)
+✔ CONNECT rejects a socket whose peer disagrees with its validated address (1.577708ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 15
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 405.428292
+
+✖ failing tests:
+
+test at ../../../../../../../private/tmp/researchassistant-review-20261015-frozen/resources/acquisition/cache-policy.test.cjs:20:1
+✖ pinned replacement writes reproduce stale FTS; policy repairs only derived index (29.251333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (/private/tmp/researchassistant-review-20261015-frozen/resources/acquisition/cache-policy.test.cjs:22:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

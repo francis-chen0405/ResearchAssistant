@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import json
+import socket
+import time
+from pathlib import Path
+from unittest.mock import patch
+from uuid import uuid4
+
+import httpx
+from pydantic import SecretStr
+
+from researchassistant.agents.reviewer import ReviewerDecision, ReviewerInput
+from researchassistant.providers.config import DeadlineConfig, MimoConfig
+from researchassistant.providers.llm import DIRECT_MIMO_ROUTING, LLMStage, build_stage_request
+from researchassistant.providers.mimo import MimoFailureCode, MimoProviderError, XiaomiMimoAdapter
+
+
+class ModelWire:
+    def __init__(self) -> None:
+        self.timeout: float | None = None
+        self.budgets: list[float | None] = []
+        self.header_pending = True
+        self.body = b'{}          '
+        self.closed = False
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeout = timeout
+
+    def setsockopt(self, *args: object) -> None:
+        pass
+
+    def fileno(self) -> int:
+        return -1
+
+    def send(self, buffer: bytes) -> int:
+        return len(buffer)
+
+    def recv(self, count: int) -> bytes:
+        self.budgets.append(self.timeout)
+        if self.header_pending:
+            self.header_pending = False
+            return b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\n'
+        if self.body:
+            assert self.timeout is not None and self.timeout > 0.005
+            time.sleep(0.005)
+            value, self.body = self.body[:1], self.body[1:]
+            return value
+        return b''
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def main() -> None:
+    request = build_stage_request(
+        stage=LLMStage.REVIEWER,
+        input_artifact=ReviewerInput(
+            extracted_quote_block='[Start of Text] "Generated evidence." [End of Text]',
+            preceding_context='Start of Text', following_context='End of Text',
+            draft_statement='Generated evidence.', claim_fit=3,
+        ),
+        requested_output_type=ReviewerDecision,
+        input_artifact_ids=(uuid4(),), routing=DIRECT_MIMO_ROUTING, run_id=uuid4(),
+    )
+    wire = ModelWire()
+    with httpx.Client(base_url='http://api.example', trust_env=False) as client:
+        adapter = XiaomiMimoAdapter(
+            MimoConfig(api_key=SecretStr('generated-offline-fixture'),
+                       deadlines=DeadlineConfig(reviewer_seconds=0.02)), client=client,
+        )
+        with patch.object(socket, 'create_connection', return_value=wire):
+            started = time.monotonic()
+            try:
+                adapter.generate(request)
+            except MimoProviderError as error:
+                elapsed = time.monotonic() - started
+                code = error.code
+            else:
+                raise AssertionError('generated response is intentionally missing a model')
+    assert elapsed > 0.05 and code == MimoFailureCode.MODEL_MISMATCH
+    result = {
+        'finding': 'R22', 'stage_deadline_seconds': 0.02, 'elapsed_seconds': elapsed,
+        'returned_error': code.value, 'read_budgets': wire.budgets,
+        'closed_after_owner_cleanup': wire.closed,
+        'real_network_model_or_credential_calls': 0,
+        'method': 'Actual model adapter and HTTPX/httpcore; generated trickling socket and synthetic key. The payload is parsed only after exceeding the stage deadline.',
+    }
+    Path('/tmp/ra-review-model-deadline.json').write_text(json.dumps(result, indent=2)+'\n')
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()

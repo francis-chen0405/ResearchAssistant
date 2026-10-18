@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -106,13 +108,17 @@ def test_keychain_load_returns_typed_credentials_without_logging_secrets(
 
 
 def test_launcher_defers_missing_credentials_to_local_provider_setup() -> None:
-    launcher = credential_store.PROJECT_ROOT.joinpath("Launch ResearchAssistant.command").read_text(
-        encoding="utf-8"
+    launcher = (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+        .joinpath("Launch ResearchAssistant.command")
+        .read_text(encoding="utf-8")
     )
 
     assert "display dialog" not in launcher
     assert "Enter MIMO_API_KEY" not in launcher
-    assert "frontend.api" in launcher
+    assert "researchassistant.api.api" in launcher
     assert 'next" start' in launcher
     assert "127.0.0.1:3000" in launcher
     assert 'EXPECTED_API_VERSION="mlp-5-v2-phase13-analyzer-admission"' in launcher

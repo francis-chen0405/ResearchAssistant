@@ -198,7 +198,10 @@ def test_batched_artifacts_preserve_legacy_timestamp_tie_order(tmp_path: Path) -
             "ledger_records_run_quote_claim",
         ):
             connection.execute(f'DROP INDEX "{name}"')
-        connection.execute("DELETE FROM schema_migrations WHERE version=17")
+        from test_database_schema_integrity import _restore_round_three_constraint
+
+        _restore_round_three_constraint(connection)
+        connection.execute("DELETE FROM schema_migrations WHERE version>=17")
         connection.commit()
         review_plan = tuple(
             row[3]

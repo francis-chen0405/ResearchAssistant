@@ -1,0 +1,51 @@
+from __future__ import annotations
+import importlib
+import json
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult
+from researchassistant.storage.store import list_runs, read_v2_artifact
+
+def main() -> None:
+    results = []
+    entry = product.run_v2_production_pipeline
+    def advancing(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+        kwargs['clock'] = lambda: datetime.now(UTC)
+        return entry(*args, **kwargs)
+    for owner, checkpoint in (('round_four_summary','post-phase-13-round-4-post-plan-facts-v1'),):
+        module = importlib.import_module('researchassistant.agents.'+owner)
+        original = module.insert_v2_artifact
+        captured: list[str] = []
+        def interrupt(*args: Any, **kwargs: Any) -> Any:
+            result = original(*args, **kwargs)
+            if args[1] == checkpoint and not captured:
+                captured.append(checkpoint)
+                raise KeyboardInterrupt('generated interruption after post-plan facts commit')
+            return result
+        with tempfile.TemporaryDirectory(prefix='ra-stage-prefix-') as folder:
+            path = Path(folder)/'generated.sqlite3'
+            controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+            with patch.object(product,'run_v2_production_pipeline',advancing):
+                with patch.object(module,'insert_v2_artifact',interrupt):
+                    try:
+                        product._run(path,controls)
+                    except KeyboardInterrupt:
+                        pass
+                    else:
+                        raise AssertionError('interruption not reached')
+                partial = list_runs(path)[0]
+                saved = read_v2_artifact(path,partial.run_id,checkpoint)
+                resumed,model,search = product._run(path,controls,run_id=partial.run_id)
+                results.append({'owner':owner,'checkpoint':checkpoint,'state':resumed.state.value,'failure_reason':resumed.failure_reason,'original_sidecar_unchanged':read_v2_artifact(path,partial.run_id,checkpoint)==saved,'new_model_calls':len(model.requests),'new_search_calls':len(search.requests)})
+    observed={'results':results,'method':'Advancing UTC clock; actual production interrupted immediately after committed Round-4 post-plan facts; identical-source resume without artifact edits. Generated offline providers only, no real data or credentials.'}
+    Path('/tmp/ra-review-round-four-facts-prefix.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

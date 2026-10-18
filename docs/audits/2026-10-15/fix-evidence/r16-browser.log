@@ -1,0 +1,1 @@
+PASS: settings loading/error/retry gates editing/start; exact post-load values are saved/submitted; import preserves edits, rejects duplicates and ignores closed-panel completion. Screenshots: /var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-preferences-smoke-e4rCDq

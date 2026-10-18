@@ -1,6 +1,6 @@
 # Research, evidence, and storage invariants
 
-These are current operational constraints for changes to the research pipeline and persisted results. Read them with [the architecture](../ARCHITECTURE.md) and [model settings](model-settings.md). This reference retains detailed current rules that do not fit the concise architecture overview.
+These are current operational constraints for changes to the research pipeline and persisted results. Read them with [the architecture](project/ARCHITECTURE.md) and [model settings](model-settings.md). This reference retains detailed current rules that do not fit the concise architecture overview.
 
 ## Frozen run identity and accounting
 
@@ -19,7 +19,7 @@ These are current operational constraints for changes to the research pipeline a
 
 ## Source snapshots and quotations
 
-- Source snapshots, Ledger records, and final artifacts are immutable. Preserve original, final, and canonical URLs and independently verified media provenance. Missing historical provenance remains unknown. Public URL/redirect validation is required; transport DNS is not socket-pinned. Digital PDFs require usable embedded text; OCR is not performed.
+- Source snapshots, Ledger records, and final artifacts are immutable. Preserve original, final, and canonical URLs and independently verified media provenance. Missing historical provenance remains unknown. Public URL/redirect validation binds source connections to validated numeric public destinations while preserving Host/TLS identity. Chromium browser requests and worker sockets use the protected owned proxy; unprotected HTML refetch fails closed. Digital PDFs require usable embedded text; OCR is not performed.
 - Normalize supported source text deterministically and retain the 3,000-word snapshot cap. Search snippets, abstracts, recommendations, and Probe passages are not factual evidence.
 - A quote must be an exact ordered passage from stored normalized text. Recheck its hash, offsets, immediate context, and explicit boundary/truncation markers. Do not fuzzy-repair, pad, replace a source, or paraphrase.
 - The current word policy is 20 words for statistical claims and 30 for other claims. Frozen legacy fixture policy remains 50/100. Statistical classification requires both a digit and a whole-token marker. Keyword counts remain audit metadata even when zero.
@@ -34,7 +34,7 @@ These are current operational constraints for changes to the research pipeline a
 
 ## SQLite, compatibility, and read-only access
 
-- The database-review plan advances writable databases to schema 17 with measured history/evidence indexes, nullable cache-write tokens/cost basis and immutable same-run ownership/reference keys, preserving historical data and earlier migration identities. `ReadOnlyStore` supports compatible schema 7–17 databases using encoded URI `mode=ro`, foreign keys, and `query_only`, then validates schema, physical/FK integrity and same-run provenance. Shared preflight rejects damaged or unrecognized schemas before mutation; recognized writable upgrades retain verified recovery copies.
+- The database-review plan advances writable databases to schema 18, retaining measured history/evidence indexes, nullable cache-write tokens/cost basis and immutable same-run ownership/reference keys and extending only v2 admission rounds through four, preserving historical data and earlier migration identities. `ReadOnlyStore` supports compatible schema 7–18 databases using encoded URI `mode=ro`, foreign keys, and `query_only`, then validates schema, physical/FK integrity and same-run provenance. Shared preflight rejects damaged or unrecognized schemas before mutation; recognized writable upgrades retain verified recovery copies.
 - Read-only history/status/export never initializes or migrates, creates a missing file, or falls back to writable access. Do not use `immutable=1` where WAL writers may exist. Intentional writable run/resume is the existing migration boundary.
 - Each v2 status request owns one validated read-only session and passes its connection through all status, progress, diagnostic, budget, provider, and terminal reconstruction readers. The session and validation result do not survive the request. Imported terminal results use the database path the user opened. Later polls see new commits.
 - The browser starts its next poll 1.5 seconds after the preceding request completes, stops after terminal state, and cancels pending work on run replacement or unmount. Rollback journaling remains the default; existing WAL databases remain supported. SQLite policy connections use a one-second busy timeout and typed retryable contention errors without replaying provider work.
@@ -44,4 +44,4 @@ These are current operational constraints for changes to the research pipeline a
 
 - Credentials use native macOS Keychain or Windows Credential Manager. They do not enter logs, SQLite, exports, browser storage, or child-process arguments. OpenAlex and optional PubMed API keys are sent as query parameters to their upstream HTTPS APIs; other provider credentials use authorization headers. No automatic `.env` or shell-profile loading is permitted.
 - The database-scoped `.mvp5.lock` covers an entire fresh run. The controller transfers ownership explicitly. Application workers use owned process groups/jobs; cancellation is cooperative at existing boundaries and an in-flight provider request may run to its deadline.
-- Packaged identity covers root Python modules, recursive `researchassistant`, `agents`, `providers`, and `frontend` sources, `prompts`, and bundled PDF font bytes. Frozen builds also hash executable bytes. Source/executable identity changes require new runs under the exact resume check; historical inspection/export remains available.
+- Packaged identity covers exact `backend/pyproject.toml` bytes and the canonical `backend/src/` implementation, installed compatibility facades, prompts and bundled PDF font. Root transition launchers remain outside installed runtime identity. Frozen builds also hash executable bytes. Source/executable identity changes require new runs under the exact resume check; historical inspection/export remains available.

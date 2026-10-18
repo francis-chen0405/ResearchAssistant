@@ -1,0 +1,23 @@
+{
+  "state": "released",
+  "failure_reason": null,
+  "completed_round_one_gap_calls": 1,
+  "configured_attempts_per_stage": 2,
+  "same_nonbudget_input": true,
+  "requests": [
+    {
+      "completed_round": 1,
+      "prompt_sha256": "9836422c2912f14d3435c136c3d0da43ca2e5dfd8a486676a3ff7d51ffbb6471",
+      "nonbudget_input_sha256": "cd9ef8bc1f4e7e370ec3e551766a9c8890393d68c13bc88e82763935cc7b90b9"
+    },
+    {
+      "completed_round": 2,
+      "prompt_sha256": "bd8d5efdcd528ab041cc3a6dd8a640a34707437220b1fbcfda9985b6feb3705e",
+      "nonbudget_input_sha256": "1250feee4e847e128e5e383330d9893a574dcc3959cc26b83b75ba71159f807d"
+    }
+  ],
+  "physical_audit_prefix_preserved": true,
+  "all_preinterruption_calls_completed": true,
+  "new_search_calls_after_interruption": 1,
+  "method": "Two actual generated production interruptions after successful Round-1 Gap Analysis and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls."
+}

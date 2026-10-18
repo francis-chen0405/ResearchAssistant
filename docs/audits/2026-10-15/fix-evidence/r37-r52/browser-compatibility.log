@@ -1,0 +1,2622 @@
+FF.FFFF.FF...........................FFFF...F.FF                         [100%]
+=================================== FAILURES ===================================
+_____ test_evidence_browser_batches_related_rows_for_small_and_large_runs ______
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_evidence_browser_batches_0/release/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_evidence_browser_batches_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1093f9250>
+
+    def test_evidence_browser_batches_related_rows_for_small_and_large_runs(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result = run_fixture_pipeline(_FIXTURE, output_dir=tmp_path / "release")
+        database = Path(result.db_path)
+        _add_candidates(database, str(result.run_id), 38)
+    
+        statements: list[str] = []
+        original = evidence_browser.open_read_only_store
+    
+        @contextmanager
+        def traced(path: str | Path) -> Iterator[object]:
+            with original(path) as reader:
+                reader.connection.set_trace_callback(statements.append)
+                yield reader
+    
+        monkeypatch.setattr(evidence_browser, "open_read_only_store", traced)
+>       browser = evidence_browser.browse_evidence_run(database, result.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_evidence_browser_batching.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_evidence_browser_batches_0/release/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_____ test_evidence_browser_chunks_candidate_keys_below_sqlite_bind_limit ______
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_evidence_browser_chunks_c0/release/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_evidence_browser_chunks_c0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1093fa030>
+
+    def test_evidence_browser_chunks_candidate_keys_below_sqlite_bind_limit(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result = run_fixture_pipeline(_FIXTURE, output_dir=tmp_path / "release")
+        database = Path(result.db_path)
+        _add_candidates(database, str(result.run_id), 998)
+    
+        statements: list[str] = []
+        original = evidence_browser.open_read_only_store
+    
+        @contextmanager
+        def traced(path: str | Path) -> Iterator[object]:
+            with original(path) as reader:
+                reader.connection.set_trace_callback(statements.append)
+                yield reader
+    
+        monkeypatch.setattr(evidence_browser, "open_read_only_store", traced)
+>       browser = evidence_browser.browse_evidence_run(database, result.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_evidence_browser_batching.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_evidence_browser_chunks_c0/release/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+__________ test_batched_artifacts_preserve_legacy_timestamp_tie_order __________
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_batched_artifacts_preserv0/release/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...st_model_name='deterministic-fixture', drafted_at=datetime.datetime(2026, 10, 4, 12, 0, tzinfo=datetime.timezone.utc)))
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('5109d461-46a0-4e4...r_model_name='deterministic-fixture', reviewed_at=datetime.datetime(2026, 10, 4, 12, 0, tzinfo=datetime.timezone.utc)))
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_batched_artifacts_preserv0')
+
+    def test_batched_artifacts_preserve_legacy_timestamp_tie_order(tmp_path: Path) -> None:
+        result = run_fixture_pipeline(_FIXTURE, output_dir=tmp_path / "release")
+        database = Path(result.db_path)
+        quote_id = str(result.candidates[0].quote_block_id)
+        run_id = str(result.run_id)
+        with sqlite3.connect(database) as connection:
+            connection.row_factory = sqlite3.Row
+            draft = connection.execute(
+                "SELECT * FROM statement_drafts WHERE run_id=? AND quote_block_id=? LIMIT 1",
+                (run_id, quote_id),
+            ).fetchone()
+            review = connection.execute(
+                "SELECT * FROM statement_review_attempts WHERE run_id=? AND quote_block_id=? LIMIT 1",
+                (run_id, quote_id),
+            ).fetchone()
+            assert draft is not None and review is not None
+            timestamp = "2026-10-04T12:00:00+00:00"
+            connection.execute(
+                "UPDATE statement_drafts SET drafted_at=? WHERE statement_draft_id=?",
+                (timestamp, draft["statement_draft_id"]),
+            )
+            connection.execute(
+                "UPDATE statement_review_attempts SET reviewed_at=? WHERE statement_draft_id=?",
+                (timestamp, review["statement_draft_id"]),
+            )
+            for _ in range(2):
+                draft_id = str(uuid4())
+                values = {name: draft[name] for name in draft.keys()}
+                values.update(statement_draft_id=draft_id, drafted_at=timestamp)
+                columns = tuple(values)
+                connection.execute(
+                    f"INSERT INTO statement_drafts ({', '.join(columns)}) "
+                    f"VALUES ({', '.join('?' for _ in columns)})",
+                    tuple(values[name] for name in columns),
+                )
+                review_values = {name: review[name] for name in review.keys()}
+                review_values.update(
+                    statement_draft_id=draft_id,
+                    reviewer_approval_id=None,
+                    approved=0,
+                    approved_factual_statement=None,
+                    failure_code="not_entailed",
+                    reviewed_at=timestamp,
+                )
+                columns = tuple(review_values)
+                connection.execute(
+                    f"INSERT INTO statement_review_attempts ({', '.join(columns)}) "
+                    f"VALUES ({', '.join('?' for _ in columns)})",
+                    tuple(review_values[name] for name in columns),
+                )
+            connection.commit()
+            for name in (
+                "runs_updated_history",
+                "candidates_run_extracted_quote",
+                "statement_drafts_run_quote_drafted",
+                "statement_reviews_run_quote_reviewed",
+                "ledger_records_run_quote_claim",
+            ):
+                connection.execute(f'DROP INDEX "{name}"')
+            from test_database_schema_integrity import _restore_round_three_constraint
+    
+            _restore_round_three_constraint(connection)
+            connection.execute("DELETE FROM schema_migrations WHERE version>=17")
+            connection.commit()
+            review_plan = tuple(
+                row[3]
+                for row in connection.execute(
+                    "EXPLAIN QUERY PLAN SELECT statement_draft_id FROM statement_review_attempts "
+                    "WHERE run_id=? AND quote_block_id=? ORDER BY reviewed_at",
+                    (run_id, quote_id),
+                )
+            )
+            assert any("USE TEMP B-TREE FOR ORDER BY" in item for item in review_plan)
+            expected_drafts = tuple(
+                row[0]
+                for row in connection.execute(
+                    "SELECT statement_draft_id FROM statement_drafts "
+                    "WHERE run_id=? AND quote_block_id=? ORDER BY drafted_at",
+                    (run_id, quote_id),
+                )
+            )
+            expected_reviews = tuple(
+                row[0]
+                for row in connection.execute(
+                    "SELECT statement_draft_id FROM statement_review_attempts "
+                    "WHERE run_id=? AND quote_block_id=? ORDER BY reviewed_at",
+                    (run_id, quote_id),
+                )
+            )
+    
+        init_db(str(database))
+    
+        trail = next(
+            item
+>           for item in evidence_browser.browse_evidence_run(database, result.run_id).trails
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            if item.candidate.quote_block_id == result.candidates[0].quote_block_id
+        )
+
+tests/test_evidence_browser_batching.py:236: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_batched_artifacts_preserv0/release/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_____ test_browser_traces_each_released_statement_to_snapshot_and_approval _____
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_traces_each_relea0/released/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_traces_each_relea0')
+
+    def test_browser_traces_each_released_statement_to_snapshot_and_approval(tmp_path: Path) -> None:
+        result = run_fixture_pipeline(_VALID, output_dir=tmp_path / "released")
+    
+>       browser = browse_evidence_run(result.db_path, result.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_mvp8_2_evidence_browser.py:25: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_traces_each_relea0/released/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+________ test_browser_filters_by_stance_stage_url_approval_and_release _________
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_filters_by_stance0/released/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance='supporting', stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_filters_by_stance0')
+
+    def test_browser_filters_by_stance_stage_url_approval_and_release(tmp_path: Path) -> None:
+        result = run_fixture_pipeline(_VALID, output_dir=tmp_path / "released")
+        first = result.candidates[0]
+    
+        assert (
+            len(
+>               browse_evidence_run(
+                    result.db_path,
+                    result.run_id,
+                    EvidenceBrowserFilter(stance=first.stance.value),
+                ).trails
+            )
+            == 1
+        )
+
+tests/test_mvp8_2_evidence_browser.py:46: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_filters_by_stance0/released/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance='supporting', stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+___ test_blocked_run_is_labeled_not_released_and_rejected_label_is_explicit ____
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_blocked_run_is_labeled_no0/blocked/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000002')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000002')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000002'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000002'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000002'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000002'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000002'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000002'), ledger_claim_id=UUID('7e6cce42-bcea-5e5e-b2cc-abe3a...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_blocked_run_is_labeled_no0')
+
+    def test_blocked_run_is_labeled_not_released_and_rejected_label_is_explicit(
+        tmp_path: Path,
+    ) -> None:
+        result = run_fixture_pipeline(_INVALID, output_dir=tmp_path / "blocked")
+    
+>       browser = browse_evidence_run(result.db_path, result.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_mvp8_2_evidence_browser.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_blocked_run_is_labeled_no0/blocked/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000002')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000002: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+______ test_browser_redacts_provider_request_material_by_not_exposing_it _______
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_redacts_provider_0/released/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_redacts_provider_0')
+
+    def test_browser_redacts_provider_request_material_by_not_exposing_it(tmp_path: Path) -> None:
+        result = run_fixture_pipeline(_VALID, output_dir=tmp_path / "released")
+    
+>       browser = browse_evidence_run(result.db_path, result.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_mvp8_2_evidence_browser.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = '/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_redacts_provider_0/released/researchassistant.research.fixture_pipeline.sqlite3'
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_________________ test_browser_does_not_mutate_database_bytes __________________
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_does_not_mutate_d0/released/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_does_not_mutate_d0')
+
+    def test_browser_does_not_mutate_database_bytes(tmp_path: Path) -> None:
+        result = run_fixture_pipeline(_VALID, output_dir=tmp_path / "released")
+        database = Path(result.db_path)
+        before = database.read_bytes()
+    
+>       browse_evidence_run(database, result.run_id)
+
+tests/test_mvp8_2_evidence_browser.py:115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_browser_does_not_mutate_d0/released/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_ test_historical_browser_provider_inspection_and_export_reconstruct_released_identity[0] _
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_provid0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_provid0')
+index = 0
+
+    @pytest.mark.parametrize("index", [0, 1])
+    def test_historical_browser_provider_inspection_and_export_reconstruct_released_identity(
+        tmp_path: Path,
+        index: int,
+    ) -> None:
+        db, offline, expected = _august_database(tmp_path / "run", index)
+        before = db.read_bytes(), db.stat().st_mtime_ns
+        assert len(history(db)) == 1
+>       browser = browse_evidence_run(db, offline.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_historical_reads_phase3.py:806: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_provid0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_ test_historical_browser_provider_inspection_and_export_reconstruct_released_identity[1] _
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_provid1/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_provid1')
+index = 1
+
+    @pytest.mark.parametrize("index", [0, 1])
+    def test_historical_browser_provider_inspection_and_export_reconstruct_released_identity(
+        tmp_path: Path,
+        index: int,
+    ) -> None:
+        db, offline, expected = _august_database(tmp_path / "run", index)
+        before = db.read_bytes(), db.stat().st_mtime_ns
+        assert len(history(db)) == 1
+>       browser = browse_evidence_run(db, offline.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_historical_reads_phase3.py:806: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_provid1/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_____ test_historical_browser_loads_ledger_only_snapshot_in_bounded_batch ______
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_loads_0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_loads_0')
+
+    def test_historical_browser_loads_ledger_only_snapshot_in_bounded_batch(tmp_path: Path) -> None:
+        db, offline, _brief = _august_database(tmp_path / "run", 0)
+        ledger_id = str(offline.ledger_records[0].ledger_claim_id)
+        with closing(sqlite3.connect(db)) as connection:
+            connection.row_factory = sqlite3.Row
+            ledger = connection.execute(
+                "SELECT * FROM ledger_records WHERE ledger_claim_id=?", (ledger_id,)
+            ).fetchone()
+            assert ledger is not None
+            snapshot = connection.execute(
+                "SELECT * FROM snapshots WHERE snapshot_id=?", (ledger["snapshot_id"],)
+            ).fetchone()
+            assert snapshot is not None
+            snapshot_id = str(uuid4())
+            values = dict(snapshot)
+            values["snapshot_id"] = snapshot_id
+            columns = tuple(values)
+            connection.execute(
+                f"INSERT INTO snapshots ({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)})",
+                tuple(values[name] for name in columns),
+            )
+            triggers = connection.execute(
+                "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='ledger_records'"
+            ).fetchall()
+            for name, _sql in triggers:
+                connection.execute(f'DROP TRIGGER "{name}"')
+            connection.execute(
+                "UPDATE ledger_records SET snapshot_id=? WHERE ledger_claim_id=?",
+                (snapshot_id, ledger_id),
+            )
+            for _name, sql in triggers:
+                connection.execute(sql)
+            connection.commit()
+    
+        before = db.read_bytes(), db.stat().st_mtime_ns
+>       browser = browse_evidence_run(db, offline.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_historical_reads_phase3.py:883: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_historical_browser_loads_0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_ test_unknown_record_is_reported_without_hiding_unrelated_history_or_evidence _
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_unknown_record_is_reporte0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_unknown_record_is_reporte0')
+
+    def test_unknown_record_is_reported_without_hiding_unrelated_history_or_evidence(
+        tmp_path: Path,
+    ) -> None:
+        db, offline, _brief = _august_database(tmp_path / "run", 0)
+        with closing(sqlite3.connect(db)) as conn:
+            # Permit disposable-fixture corruption only, restoring canonical schema guards.
+            triggers = conn.execute(
+                "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='ledger_records'"
+            ).fetchall()
+            for name, _sql in triggers:
+                conn.execute(f'DROP TRIGGER "{name}"')
+            conn.execute(
+                "UPDATE ledger_records SET analyst_prompt_version='unknown-prompt' "
+                "WHERE ledger_claim_id=?",
+                (str(offline.ledger_records[0].ledger_claim_id),),
+            )
+            for _name, sql in triggers:
+                conn.execute(sql)
+            conn.commit()
+        before = db.read_bytes(), db.stat().st_mtime_ns
+>       browser = browse_evidence_run(db, offline.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_historical_reads_phase3.py:919: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_unknown_record_is_reporte0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+_______ test_native_snapshot_hash_failure_leaves_other_records_readable ________
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_native_snapshot_hash_fail0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+>               trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/src/researchassistant/evidence/evidence_browser.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/researchassistant/evidence/evidence_browser.py:276: in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+candidate = CandidateQuoteBlock(run_id=UUID('60000000-0000-0000-0000-000000000001'), stance=<Stance.SUPPORTING: 'supporting'>, quo...ter-50-100-v1', post_filter_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 100000, tzinfo=datetime.timezone.utc))
+snapshot = SourceSnapshot(run_id=UUID('60000000-0000-0000-0000-000000000001'), retrieval_attempt_id=UUID('60000000-0000-0000-0000...one, provider_declared_media_type=None), created_at=datetime.datetime(2026, 7, 4, 12, 0, tzinfo=datetime.timezone.utc))
+analyst = ScoreDecision(run_id=UUID('60000000-0000-0000-0000-000000000001'), quote_block_id=UUID('9d23236b-f2d5-5478-a812-3f5d02..._name='deterministic-fixture', scored_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 200000, tzinfo=datetime.timezone.utc))
+drafts = (StatementDraft(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-0000-0000-...me='deterministic-fixture', drafted_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 300000, tzinfo=datetime.timezone.utc)),)
+reviews = (StatementReviewResult(run_id=UUID('60000000-0000-0000-0000-000000000001'), statement_draft_id=UUID('60000000-0000-000...e='deterministic-fixture', reviewed_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 400000, tzinfo=datetime.timezone.utc)),)
+ledgers = (LedgerRecord(run_id=UUID('60000000-0000-0000-0000-000000000001'), ledger_claim_id=UUID('7ca5fabd-50d1-577a-83bb-322a8...00-000000000401'), ledger_validated_at=datetime.datetime(2026, 7, 4, 12, 0, 0, 500000, tzinfo=datetime.timezone.utc)),)
+
+    def _validate_trail_links(
+        run_id: UUID,
+        candidate: CandidateQuoteBlock,
+        snapshot: SourceSnapshot,
+        analyst: ScoreDecision | None,
+        drafts: tuple[StatementDraft, ...],
+        reviews: tuple[StatementReviewResult, ...],
+        ledgers: tuple[LedgerRecord | AugustLedgerRecord, ...],
+    ) -> None:
+        """Verify saved source relationships without imposing new admission/scoring policy."""
+        validate_snapshot_integrity(snapshot)
+        if (
+            candidate.run_id != run_id
+            or snapshot.run_id != run_id
+            or any(
+                getattr(candidate, field) != getattr(snapshot, snapshot_field)
+                for field, snapshot_field in (
+                    ("snapshot_id", "snapshot_id"),
+                    ("snapshot_sha256", "snapshot_sha256"),
+                    ("retrieval_attempt_id", "retrieval_attempt_id"),
+                    ("source_url", "source_url"),
+                    ("retrieved_at", "retrieved_at"),
+                    ("snapshot_created_at", "created_at"),
+                    ("truncated", "truncated"),
+                )
+            )
+        ):
+            raise ValueError("candidate/snapshot provenance mismatch")
+        parsed = parse_extracted_quote_block(candidate.extracted_quote_block)
+        if len(parsed.segments) != len(candidate.segment_offsets) or any(
+            snapshot.normalized_text[offset.start_char : offset.end_char] != segment
+            for segment, offset in zip(parsed.segments, candidate.segment_offsets)
+        ):
+            raise ValueError("candidate quotation differs from its exact snapshot offsets")
+        validate_bracket_context(
+            snapshot,
+            parsed,
+            candidate.segment_offsets,
+            fresh_sentences=candidate.post_filter_version == FRESH_QUOTE_CONTEXT_FILTER_VERSION,
+        )
+        for record in (*((analyst,) if analyst is not None else ()), *drafts, *reviews, *ledgers):
+            if record.run_id != run_id or record.quote_block_id != candidate.quote_block_id:
+                raise ValueError("evidence decision belongs to another run or quotation")
+        drafts_by_id = {draft.statement_draft_id: draft for draft in drafts}
+        for review in reviews:
+            draft = drafts_by_id.get(review.statement_draft_id)
+            if draft is None or (
+                review.approved and review.approved_factual_statement != draft.draft_statement
+            ):
+                raise ValueError("Reviewer decision differs from its original statement draft")
+        for record in ledgers:
+            if (
+                record.snapshot_id != snapshot.snapshot_id
+                or record.retrieval_attempt_id != snapshot.retrieval_attempt_id
+                or record.snapshot_sha256 != snapshot.snapshot_sha256
+                or record.source_url != snapshot.source_url
+                or record.stance != candidate.stance
+                or record.segment_offsets != candidate.segment_offsets
+                or record.approved_claim_text != candidate.extracted_quote_block
+            ):
+>               raise ValueError("Ledger source/quotation provenance mismatch")
+E               ValueError: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:354: ValueError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_native_snapshot_hash_fail0')
+
+    def test_native_snapshot_hash_failure_leaves_other_records_readable(tmp_path: Path) -> None:
+        db, offline, _brief = _august_database(tmp_path / "run", 0)
+        with closing(sqlite3.connect(db)) as conn:
+            triggers = conn.execute(
+                "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='snapshots'"
+            ).fetchall()
+            for name, _sql in triggers:
+                conn.execute(f'DROP TRIGGER "{name}"')
+            conn.execute(
+                "UPDATE snapshots SET normalized_text=normalized_text || 'tampered' "
+                "WHERE snapshot_id=?",
+                (str(offline.ledger_records[0].snapshot_id),),
+            )
+            for _name, sql in triggers:
+                conn.execute(sql)
+            conn.commit()
+        before = db.read_bytes(), db.stat().st_mtime_ns
+>       browser = browse_evidence_run(db, offline.run_id)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_historical_reads_phase3.py:1004: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_native_snapshot_hash_fail0/run/researchassistant.research.fixture_pipeline.sqlite3')
+run_id = UUID('60000000-0000-0000-0000-000000000001')
+filters = EvidenceBrowserFilter(stance=None, stage=None, source_url=None, approved=None, released=None, outcome=None, role=None, research_round=None, cost_incurred=None)
+
+    def browse_evidence_run(
+        db_path: str | Path,
+        run_id: UUID,
+        filters: EvidenceBrowserFilter = DEFAULT_EVIDENCE_BROWSER_FILTER,
+    ) -> EvidenceBrowserRun:
+        """Read one compatible existing run without creating or mutating anything."""
+        try:
+            with open_read_only_store(db_path) as reader:
+                manifest = read_run(reader.connection, run_id)
+                validation = _optional_validation(reader.connection, run_id)
+                compatibility_issues: list[RecordCompatibilityResult] = []
+                trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+                filtered = tuple(trail for trail in trails if _matches(trail, filters))
+                traces = _released_traces(filtered, validation)
+                evidence_trail = tuple(
+                    entry
+                    for entry in read_evidence_trail_entries(reader.connection, run_id)
+                    if _matches_mvp10(entry, filters)
+                )
+                return EvidenceBrowserRun(
+                    manifest=manifest,
+                    final_validation=validation,
+                    trails=filtered,
+                    compatibility_issues=tuple(compatibility_issues),
+                    released_statement_traces=traces,
+                    evidence_trail=evidence_trail,
+                    portfolio_coverage=read_portfolio_coverage_assessment(reader.connection, run_id),
+                    research_rounds=read_research_round_records(reader.connection, run_id),
+                    governor_decision=read_research_governor_decision(reader.connection, run_id),
+                    terminal_research_result=read_research_terminal_result(reader.connection, run_id),
+                )
+        except DatabaseCompatibilityError as exc:
+            raise EvidenceBrowserError(
+                f"evidence browser cannot open this database safely: {exc}"
+            ) from exc
+        except (KeyError, ValueError) as exc:
+>           raise EvidenceBrowserError(
+                f"evidence browser could not reconstruct run {run_id}: {exc}"
+            ) from exc
+E           researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+
+backend/src/researchassistant/evidence/evidence_browser.py:171: EvidenceBrowserError
+____ test_history_inspection_and_export_do_not_load_historical_execution[0] ____
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex0')
+index = 0
+
+    @pytest.mark.parametrize("index", [0, 1])
+    def test_history_inspection_and_export_do_not_load_historical_execution(
+        tmp_path: Path, index: int
+    ) -> None:
+        database, offline, expected = _august_database(tmp_path / "run", index)
+        before = database.read_bytes(), database.stat().st_mtime_ns
+        program = """
+    import contextlib, io, json, sys
+    from pathlib import Path
+    from uuid import UUID
+    class BlockHistoricalExecution:
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname in ('orchestrator', 'researchassistant.research.orchestrator',
+                            'researchassistant.research.historical_execution'):
+                raise AssertionError('historical executor imported: ' + fullname)
+    sys.meta_path.insert(0, BlockHistoricalExecution())
+    from researchassistant.api.application import create_app
+    from researchassistant.api.live_history import history, research_trail
+    from researchassistant.api.live_service import LiveResearchController
+    from researchassistant.contracts.provider_results import ProviderRunStatus
+    from researchassistant.evidence.evidence_browser import browse_evidence_run
+    from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
+    from researchassistant.runtime.cli import CLIExitCode, main
+    from researchassistant.storage.provider_history import inspect_provider_run
+    values = json.loads(sys.argv[1])
+    database, run_id = Path(values['database']), UUID(values['run_id'])
+    result = inspect_provider_run(database, run_id)
+    assert result.status is ProviderRunStatus.RELEASED
+    assert result.final_brief == values['brief']
+    assert result.rendered_brief_hash == values['hash']
+    assert len(history(database)) == 1
+    research_trail(database, run_id)
+    assert browse_evidence_run(database, run_id).released_statement_traces
+    controller = LiveResearchController(environment={})
+    try:
+        assert len(controller.history(database)) == 1
+        controller.research_trail(database, run_id)
+    finally:
+        assert controller.shutdown()
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert main(['inspect-run', str(database), str(run_id)]) == CLIExitCode.RELEASED
+    exported = export_released_brief(
+        database, str(run_id), values['export'], BriefExportFormat.MARKDOWN)
+    assert exported.metadata.rendered_brief_hash == values['hash']
+    assert values['brief'] in Path(exported.output_path).read_text()
+    assert 'researchassistant.research.orchestrator' not in sys.modules
+    assert 'researchassistant.research.historical_execution' not in sys.modules
+    assert 'orchestrator' not in sys.modules
+    """
+>       subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                program,
+                json.dumps(
+                    {
+                        "database": str(database),
+                        "run_id": str(offline.run_id),
+                        "brief": expected,
+                        "hash": sha256(expected.encode()).hexdigest(),
+                        "export": str(tmp_path / "historical.md"),
+                    }
+                ),
+            ],
+            check=True,
+        )
+
+tests/test_historical_reads_phase3.py:1094: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/bin/pyth.../hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex0/historical.md"}'],)
+kwargs = {}
+process = <Popen: returncode: 1 args: ['/Users/francischen/Library/CloudStorage/OneDri...>
+stdout = None, stderr = None, retcode = 1
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/bin/python', '-c', "\nimport contextlib, io, json, sys\nfrom pathlib import Path\nfrom uuid import UUID\nclass BlockHistoricalExecution:\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in ('orchestrator', 'researchassistant.research.orchestrator',\n                        'researchassistant.research.historical_execution'):\n            raise AssertionError('historical executor imported: ' + fullname)\nsys.meta_path.insert(0, BlockHistoricalExecution())\nfrom researchassistant.api.application import create_app\nfrom researchassistant.api.live_history import history, research_trail\nfrom researchassistant.api.live_service import LiveResearchController\nfrom researchassistant.contracts.provider_results import ProviderRunStatus\nfrom researchassistant.evidence.evidence_browser import browse_evidence_run\nfrom researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief\nfrom researchassistant.runtime.cli import CLIExitCode, main\nfrom researchassistant.storage.provider_history import inspect_provider_run\nvalues = json.loads(sys.argv[1])\ndatabase, run_id = Path(values['database']), UUID(values['run_id'])\nresult = inspect_provider_run(database, run_id)\nassert result.status is ProviderRunStatus.RELEASED\nassert result.final_brief == values['brief']\nassert result.rendered_brief_hash == values['hash']\nassert len(history(database)) == 1\nresearch_trail(database, run_id)\nassert browse_evidence_run(database, run_id).released_statement_traces\ncontroller = LiveResearchController(environment={})\ntry:\n    assert len(controller.history(database)) == 1\n    controller.research_trail(database, run_id)\nfinally:\n    assert controller.shutdown()\nwith contextlib.redirect_stdout(io.StringIO()):\n    assert main(['inspect-run', str(database), str(run_id)]) == CLIExitCode.RELEASED\nexported = export_released_brief(\n    database, str(run_id), values['export'], BriefExportFormat.MARKDOWN)\nassert exported.metadata.rendered_brief_hash == values['hash']\nassert values['brief'] in Path(exported.output_path).read_text()\nassert 'researchassistant.research.orchestrator' not in sys.modules\nassert 'researchassistant.research.historical_execution' not in sys.modules\nassert 'orchestrator' not in sys.modules\n", '{"database": "/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex0/run/researchassistant.research.fixture_pipeline.sqlite3", "run_id": "60000000-0000-0000-0000-000000000001", "brief": "# Research Brief\\n\\nClaim under review: The fixture policy improves student outcomes.\\n\\n## Supporting Evidence\\n- Supporting evidence: Schools reported higher completion rates compared with baseline classes. [source: https://example.test/phase6/support-source]\\n\\n## Opposing Evidence\\n- Opposing evidence: Surveyed families reported a 20% decline in student satisfaction after the fixture rollout. [source: https://example.test/phase6/oppose-source]\\n", "hash": "7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f", "export": "/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex0/historical.md"}']' returned non-zero exit status 1.
+
+../../../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py:571: CalledProcessError
+----------------------------- Captured stderr call -----------------------------
+Traceback (most recent call last):
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 146, in browse_evidence_run
+    trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 276, in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 354, in _validate_trail_links
+    raise ValueError("Ledger source/quotation provenance mismatch")
+ValueError: Ledger source/quotation provenance mismatch
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<string>", line 27, in <module>
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 171, in browse_evidence_run
+    raise EvidenceBrowserError(
+researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+____ test_history_inspection_and_export_do_not_load_historical_execution[1] ____
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex1')
+index = 1
+
+    @pytest.mark.parametrize("index", [0, 1])
+    def test_history_inspection_and_export_do_not_load_historical_execution(
+        tmp_path: Path, index: int
+    ) -> None:
+        database, offline, expected = _august_database(tmp_path / "run", index)
+        before = database.read_bytes(), database.stat().st_mtime_ns
+        program = """
+    import contextlib, io, json, sys
+    from pathlib import Path
+    from uuid import UUID
+    class BlockHistoricalExecution:
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname in ('orchestrator', 'researchassistant.research.orchestrator',
+                            'researchassistant.research.historical_execution'):
+                raise AssertionError('historical executor imported: ' + fullname)
+    sys.meta_path.insert(0, BlockHistoricalExecution())
+    from researchassistant.api.application import create_app
+    from researchassistant.api.live_history import history, research_trail
+    from researchassistant.api.live_service import LiveResearchController
+    from researchassistant.contracts.provider_results import ProviderRunStatus
+    from researchassistant.evidence.evidence_browser import browse_evidence_run
+    from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
+    from researchassistant.runtime.cli import CLIExitCode, main
+    from researchassistant.storage.provider_history import inspect_provider_run
+    values = json.loads(sys.argv[1])
+    database, run_id = Path(values['database']), UUID(values['run_id'])
+    result = inspect_provider_run(database, run_id)
+    assert result.status is ProviderRunStatus.RELEASED
+    assert result.final_brief == values['brief']
+    assert result.rendered_brief_hash == values['hash']
+    assert len(history(database)) == 1
+    research_trail(database, run_id)
+    assert browse_evidence_run(database, run_id).released_statement_traces
+    controller = LiveResearchController(environment={})
+    try:
+        assert len(controller.history(database)) == 1
+        controller.research_trail(database, run_id)
+    finally:
+        assert controller.shutdown()
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert main(['inspect-run', str(database), str(run_id)]) == CLIExitCode.RELEASED
+    exported = export_released_brief(
+        database, str(run_id), values['export'], BriefExportFormat.MARKDOWN)
+    assert exported.metadata.rendered_brief_hash == values['hash']
+    assert values['brief'] in Path(exported.output_path).read_text()
+    assert 'researchassistant.research.orchestrator' not in sys.modules
+    assert 'researchassistant.research.historical_execution' not in sys.modules
+    assert 'orchestrator' not in sys.modules
+    """
+>       subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                program,
+                json.dumps(
+                    {
+                        "database": str(database),
+                        "run_id": str(offline.run_id),
+                        "brief": expected,
+                        "hash": sha256(expected.encode()).hexdigest(),
+                        "export": str(tmp_path / "historical.md"),
+                    }
+                ),
+            ],
+            check=True,
+        )
+
+tests/test_historical_reads_phase3.py:1094: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/bin/pyth.../hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex1/historical.md"}'],)
+kwargs = {}
+process = <Popen: returncode: 1 args: ['/Users/francischen/Library/CloudStorage/OneDri...>
+stdout = None, stderr = None, retcode = 1
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/bin/python', '-c', "\nimport contextlib, io, json, sys\nfrom pathlib import Path\nfrom uuid import UUID\nclass BlockHistoricalExecution:\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in ('orchestrator', 'researchassistant.research.orchestrator',\n                        'researchassistant.research.historical_execution'):\n            raise AssertionError('historical executor imported: ' + fullname)\nsys.meta_path.insert(0, BlockHistoricalExecution())\nfrom researchassistant.api.application import create_app\nfrom researchassistant.api.live_history import history, research_trail\nfrom researchassistant.api.live_service import LiveResearchController\nfrom researchassistant.contracts.provider_results import ProviderRunStatus\nfrom researchassistant.evidence.evidence_browser import browse_evidence_run\nfrom researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief\nfrom researchassistant.runtime.cli import CLIExitCode, main\nfrom researchassistant.storage.provider_history import inspect_provider_run\nvalues = json.loads(sys.argv[1])\ndatabase, run_id = Path(values['database']), UUID(values['run_id'])\nresult = inspect_provider_run(database, run_id)\nassert result.status is ProviderRunStatus.RELEASED\nassert result.final_brief == values['brief']\nassert result.rendered_brief_hash == values['hash']\nassert len(history(database)) == 1\nresearch_trail(database, run_id)\nassert browse_evidence_run(database, run_id).released_statement_traces\ncontroller = LiveResearchController(environment={})\ntry:\n    assert len(controller.history(database)) == 1\n    controller.research_trail(database, run_id)\nfinally:\n    assert controller.shutdown()\nwith contextlib.redirect_stdout(io.StringIO()):\n    assert main(['inspect-run', str(database), str(run_id)]) == CLIExitCode.RELEASED\nexported = export_released_brief(\n    database, str(run_id), values['export'], BriefExportFormat.MARKDOWN)\nassert exported.metadata.rendered_brief_hash == values['hash']\nassert values['brief'] in Path(exported.output_path).read_text()\nassert 'researchassistant.research.orchestrator' not in sys.modules\nassert 'researchassistant.research.historical_execution' not in sys.modules\nassert 'orchestrator' not in sys.modules\n", '{"database": "/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex1/run/researchassistant.research.fixture_pipeline.sqlite3", "run_id": "60000000-0000-0000-0000-000000000001", "brief": "# Research Brief\\n\\nClaim under review: The fixture policy improves student outcomes.\\n\\n## Supporting Evidence\\n- Supporting evidence: Schools reported higher completion rates compared with baseline classes. [source: https://example.test/phase6/support-source]\\n\\n## Opposing Evidence\\n- Opposing evidence: Surveyed families reported a 20% decline in student satisfaction after the fixture rollout. [source: https://example.test/phase6/oppose-source]\\n", "hash": "7fecea19e1b9f01ff3fe68ef9a2b3a79cf88f0a6fe82897332548c258cb9e89f", "export": "/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1393/test_history_inspection_and_ex1/historical.md"}']' returned non-zero exit status 1.
+
+../../../../../.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py:571: CalledProcessError
+----------------------------- Captured stderr call -----------------------------
+Traceback (most recent call last):
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 146, in browse_evidence_run
+    trails = _trails(reader.connection, run_id, validation, compatibility_issues)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 276, in _trails
+    _validate_trail_links(run_id, candidate, snapshot, analyst, drafts, reviews, ledger)
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 354, in _validate_trail_links
+    raise ValueError("Ledger source/quotation provenance mismatch")
+ValueError: Ledger source/quotation provenance mismatch
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<string>", line 27, in <module>
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/evidence/evidence_browser.py", line 171, in browse_evidence_run
+    raise EvidenceBrowserError(
+researchassistant.evidence.evidence_browser.EvidenceBrowserError: evidence browser could not reconstruct run 60000000-0000-0000-0000-000000000001: Ledger source/quotation provenance mismatch
+=========================== short test summary info ============================
+FAILED tests/test_evidence_browser_batching.py::test_evidence_browser_batches_related_rows_for_small_and_large_runs
+FAILED tests/test_evidence_browser_batching.py::test_evidence_browser_chunks_candidate_keys_below_sqlite_bind_limit
+FAILED tests/test_evidence_browser_batching.py::test_batched_artifacts_preserve_legacy_timestamp_tie_order
+FAILED tests/test_mvp8_2_evidence_browser.py::test_browser_traces_each_released_statement_to_snapshot_and_approval
+FAILED tests/test_mvp8_2_evidence_browser.py::test_browser_filters_by_stance_stage_url_approval_and_release
+FAILED tests/test_mvp8_2_evidence_browser.py::test_blocked_run_is_labeled_not_released_and_rejected_label_is_explicit
+FAILED tests/test_mvp8_2_evidence_browser.py::test_browser_redacts_provider_request_material_by_not_exposing_it
+FAILED tests/test_mvp8_2_evidence_browser.py::test_browser_does_not_mutate_database_bytes
+FAILED tests/test_historical_reads_phase3.py::test_historical_browser_provider_inspection_and_export_reconstruct_released_identity[0]
+FAILED tests/test_historical_reads_phase3.py::test_historical_browser_provider_inspection_and_export_reconstruct_released_identity[1]
+FAILED tests/test_historical_reads_phase3.py::test_historical_browser_loads_ledger_only_snapshot_in_bounded_batch
+FAILED tests/test_historical_reads_phase3.py::test_unknown_record_is_reported_without_hiding_unrelated_history_or_evidence
+FAILED tests/test_historical_reads_phase3.py::test_native_snapshot_hash_failure_leaves_other_records_readable
+FAILED tests/test_historical_reads_phase3.py::test_history_inspection_and_export_do_not_load_historical_execution[0]
+FAILED tests/test_historical_reads_phase3.py::test_history_inspection_and_export_do_not_load_historical_execution[1]
+15 failed, 33 passed in 4.70s

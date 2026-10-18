@@ -1,0 +1,25 @@
+{
+  "reviewed_files": 633,
+  "reviewed_lines": 161535,
+  "unread_owned_source_code_files": 0,
+  "remaining_original_noncode_files": 434,
+  "json_files_parsed": 328,
+  "json_parse_failures": [],
+  "retained_evidence_hashes_checked": 348,
+  "staged_diff_sha256": "85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2",
+  "graph_refresh": {
+    "nodes": 32036,
+    "edges": 106092,
+    "expected_nodes": 32036,
+    "expected_edges": 106092,
+    "persistence": false
+  },
+  "unapproved_findings": [
+    "R56",
+    "R57",
+    "R58",
+    "R59"
+  ],
+  "runtime_changed_since_R53_R55_verification": false,
+  "full_repository_manual_review_complete": false
+}

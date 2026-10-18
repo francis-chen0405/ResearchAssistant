@@ -1,0 +1,63 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Lock
+from typing import Any
+from unittest.mock import patch
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+import researchassistant.agents.v2_evidence_admission as admission
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, V2EvidenceAdmissionRecord
+from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult
+from researchassistant.storage.store import list_runs, read_v2_evidence_admission
+
+def main() -> None:
+    entry=product.run_v2_production_pipeline
+    def advancing_clock(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+        kwargs['clock']=lambda: datetime.now(UTC)
+        return entry(*args,**kwargs)
+    insert=admission.insert_v2_evidence_admission
+    captured: list[V2EvidenceAdmissionRecord]=[]
+    mutex=Lock()
+    def interrupt(*args: Any, **kwargs: Any) -> None:
+        insert(*args,**kwargs)
+        with mutex:
+            if not captured:
+                captured.append(args[1])
+                raise KeyboardInterrupt('generated interruption after durable evidence admission')
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    with tempfile.TemporaryDirectory(prefix='ra-admission-prefix-') as temporary:
+        path=Path(temporary)/'generated.sqlite3'
+        with patch.object(product,'run_v2_production_pipeline',side_effect=advancing_clock):
+            with patch.object(admission,'insert_v2_evidence_admission',side_effect=interrupt):
+                try:
+                    product._run(path,controls)
+                except KeyboardInterrupt:
+                    pass
+                else:
+                    raise AssertionError('Expected generated interruption')
+            partial=list_runs(path)[0]
+            saved=read_v2_evidence_admission(path,captured[0].ledger_claim_id)
+            resumed,model,search=product._run(path,controls,run_id=partial.run_id)
+            after=read_v2_evidence_admission(path,captured[0].ledger_claim_id)
+        observed={'finding':'R34','partial_status':partial.status.value,'resume_state':resumed.state.value,'failure_reason':resumed.failure_reason,'saved_admission_unchanged':saved==after,'model_requests_on_resume':len(model.requests),'search_requests_on_resume':len(search.requests),'method':'Actual generated offline research with an advancing UTC clock; interruption after a relational evidence-admission commit before its source checkpoint. No SQL edits, artifact substitution, real data or external calls.'}
+        if resumed.final_output is not None:
+            final=admission.V2EvidenceAdmissionBatchResult.model_validate_json(admission.read_v2_artifact(path,partial.run_id,admission.V2_EVIDENCE_ADMISSION_ARTIFACT_KEY).payload_json)
+            interrupted_id=saved[1].source_id
+            interrupted=next(row for row in final.source_results if row.source_id==interrupted_id)
+            from researchassistant.agents.v2_deep_analysis import V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY
+            from researchassistant.contracts.models import V2DeepAnalysisBackfillResult
+            backfill=V2DeepAnalysisBackfillResult.model_validate_json(admission.read_v2_artifact(path,partial.run_id,V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY).payload_json)
+            execution=next(row for row in backfill.source_executions if row.source_id==interrupted_id)
+            observed['deep_analysis_failure']=execution.failure_reason
+            observed['interrupted_source_state']=interrupted.state.value
+            observed['interrupted_source_failure']=interrupted.failure
+            observed['interrupted_admission_in_final_release']=any(row.ledger_claim_id==captured[0].ledger_claim_id for section in resumed.final_output.synthesis.sections for row in section.items)
+    assert not observed.get('interrupted_admission_in_final_release',True) or observed['resume_state']=='failed',observed
+    Path('/tmp/ra-review-admission-prefix.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

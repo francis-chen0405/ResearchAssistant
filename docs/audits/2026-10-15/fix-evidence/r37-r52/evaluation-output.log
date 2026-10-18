@@ -1,0 +1,24 @@
+............................F.............................               [100%]
+=================================== FAILURES ===================================
+________ test_script_exit_code_distinguishes_unexpected_internal_error _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10951b9b0>
+
+    def test_script_exit_code_distinguishes_unexpected_internal_error(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def raise_unexpected(*args: object, **kwargs: object) -> object:
+            raise AssertionError("unexpected evaluator defect")
+    
+        monkeypatch.setattr("evaluations.run_evaluations.evaluate_corpus", raise_unexpected)
+    
+>       assert main(["--corpus", str(CORPUS)]) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = main(['--corpus', '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/evaluations/cases/offline-corpus.json'])
+
+tests/test_phase10.py:344: AssertionError
+----------------------------- Captured stderr call -----------------------------
+evaluation failed: report output exists; choose fresh output paths
+=========================== short test summary info ============================
+FAILED tests/test_phase10.py::test_script_exit_code_distinguishes_unexpected_internal_error
+1 failed, 57 passed in 14.81s

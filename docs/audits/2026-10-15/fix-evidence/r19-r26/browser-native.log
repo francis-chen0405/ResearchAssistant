@@ -1,0 +1,9 @@
+Preview loop: 10490ms
+Verified preview and provider setup
+Verified keyboard dialog
+PASS: automatic offline preview/recovery, hover/focus pause, static reduced motion, desktop viewport fit, 7 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.
+PASS: 7 deterministic snapshots, max same-run concurrency 1, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement and unmount cleanup.
+Verified stale configuration success/failure ownership, protected pending key inputs and late-save refresh of the latest models.
+PASS: settings loading/error/retry gates editing/start; exact post-load values are saved/submitted; import preserves edits, rejects duplicates and ignores closed-panel completion. Screenshots: /var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-preferences-smoke-6XZqy1
+Verified bounded service readiness and ordered preference commits, including failure recovery.
+PASS: stale history responses, overlapping run opens, old-database selection cleanup, navigation during run loading, and aborted late result/trail responses.

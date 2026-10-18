@@ -1,0 +1,298 @@
+...............FFFFFFF.                                                  [100%]
+=================================== FAILURES ===================================
+_ test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_gap_analysis] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_completed_stage_interrupt0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bc54140>
+stage = 'run_v2_gap_analysis'
+
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "run_v2_gap_analysis",
+            "run_v2_adaptive_search_continuation",
+            "run_v2_round_four_continuation",
+            "run_v2_source_selection_and_queue",
+            "run_v2_deep_analysis_with_backfill",
+            "run_v2_final_research_output",
+        ],
+    )
+    def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        path = tmp_path / "partial.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original: Callable[..., Any] = getattr(coordinator, stage)
+        captured: dict[str, Any] = {}
+    
+        def interrupt_after_commit(**kwargs: Any) -> object:
+            captured["stage"] = original(**kwargs)
+            captured["model"] = kwargs["llm_provider"].provider
+            raise KeyboardInterrupt("generated interruption after completed stage")
+    
+        monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+>       with pytest.raises(KeyboardInterrupt):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'KeyboardInterrupt'>
+
+tests/test_v2_resume_integrity.py:209: Failed
+_ test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_adaptive_search_continuation] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_completed_stage_interrupt1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bc8d7c0>
+stage = 'run_v2_adaptive_search_continuation'
+
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "run_v2_gap_analysis",
+            "run_v2_adaptive_search_continuation",
+            "run_v2_round_four_continuation",
+            "run_v2_source_selection_and_queue",
+            "run_v2_deep_analysis_with_backfill",
+            "run_v2_final_research_output",
+        ],
+    )
+    def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        path = tmp_path / "partial.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original: Callable[..., Any] = getattr(coordinator, stage)
+        captured: dict[str, Any] = {}
+    
+        def interrupt_after_commit(**kwargs: Any) -> object:
+            captured["stage"] = original(**kwargs)
+            captured["model"] = kwargs["llm_provider"].provider
+            raise KeyboardInterrupt("generated interruption after completed stage")
+    
+        monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+>       with pytest.raises(KeyboardInterrupt):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'KeyboardInterrupt'>
+
+tests/test_v2_resume_integrity.py:209: Failed
+_ test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_round_four_continuation] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_completed_stage_interrupt2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bc8c500>
+stage = 'run_v2_round_four_continuation'
+
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "run_v2_gap_analysis",
+            "run_v2_adaptive_search_continuation",
+            "run_v2_round_four_continuation",
+            "run_v2_source_selection_and_queue",
+            "run_v2_deep_analysis_with_backfill",
+            "run_v2_final_research_output",
+        ],
+    )
+    def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        path = tmp_path / "partial.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original: Callable[..., Any] = getattr(coordinator, stage)
+        captured: dict[str, Any] = {}
+    
+        def interrupt_after_commit(**kwargs: Any) -> object:
+            captured["stage"] = original(**kwargs)
+            captured["model"] = kwargs["llm_provider"].provider
+            raise KeyboardInterrupt("generated interruption after completed stage")
+    
+        monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+>       with pytest.raises(KeyboardInterrupt):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'KeyboardInterrupt'>
+
+tests/test_v2_resume_integrity.py:209: Failed
+_ test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_source_selection_and_queue] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_completed_stage_interrupt3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bc8c320>
+stage = 'run_v2_source_selection_and_queue'
+
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "run_v2_gap_analysis",
+            "run_v2_adaptive_search_continuation",
+            "run_v2_round_four_continuation",
+            "run_v2_source_selection_and_queue",
+            "run_v2_deep_analysis_with_backfill",
+            "run_v2_final_research_output",
+        ],
+    )
+    def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        path = tmp_path / "partial.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original: Callable[..., Any] = getattr(coordinator, stage)
+        captured: dict[str, Any] = {}
+    
+        def interrupt_after_commit(**kwargs: Any) -> object:
+            captured["stage"] = original(**kwargs)
+            captured["model"] = kwargs["llm_provider"].provider
+            raise KeyboardInterrupt("generated interruption after completed stage")
+    
+        monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+>       with pytest.raises(KeyboardInterrupt):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'KeyboardInterrupt'>
+
+tests/test_v2_resume_integrity.py:209: Failed
+_ test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_deep_analysis_with_backfill] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_completed_stage_interrupt4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10956fda0>
+stage = 'run_v2_deep_analysis_with_backfill'
+
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "run_v2_gap_analysis",
+            "run_v2_adaptive_search_continuation",
+            "run_v2_round_four_continuation",
+            "run_v2_source_selection_and_queue",
+            "run_v2_deep_analysis_with_backfill",
+            "run_v2_final_research_output",
+        ],
+    )
+    def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        path = tmp_path / "partial.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original: Callable[..., Any] = getattr(coordinator, stage)
+        captured: dict[str, Any] = {}
+    
+        def interrupt_after_commit(**kwargs: Any) -> object:
+            captured["stage"] = original(**kwargs)
+            captured["model"] = kwargs["llm_provider"].provider
+            raise KeyboardInterrupt("generated interruption after completed stage")
+    
+        monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+>       with pytest.raises(KeyboardInterrupt):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'KeyboardInterrupt'>
+
+tests/test_v2_resume_integrity.py:209: Failed
+_ test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_final_research_output] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_completed_stage_interrupt5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bb9fb00>
+stage = 'run_v2_final_research_output'
+
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "run_v2_gap_analysis",
+            "run_v2_adaptive_search_continuation",
+            "run_v2_round_four_continuation",
+            "run_v2_source_selection_and_queue",
+            "run_v2_deep_analysis_with_backfill",
+            "run_v2_final_research_output",
+        ],
+    )
+    def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        path = tmp_path / "partial.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original: Callable[..., Any] = getattr(coordinator, stage)
+        captured: dict[str, Any] = {}
+    
+        def interrupt_after_commit(**kwargs: Any) -> object:
+            captured["stage"] = original(**kwargs)
+            captured["model"] = kwargs["llm_provider"].provider
+            raise KeyboardInterrupt("generated interruption after completed stage")
+    
+        monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+>       with pytest.raises(KeyboardInterrupt):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'KeyboardInterrupt'>
+
+tests/test_v2_resume_integrity.py:209: Failed
+_____ test_gap_replay_preserves_saved_budget_but_rejects_changed_research ______
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1367/test_gap_replay_preserves_save0')
+
+    def test_gap_replay_preserves_saved_budget_but_rejects_changed_research(tmp_path: Path) -> None:
+        request = gap_fixture._input()
+        path = tmp_path / "gap.sqlite3"
+        gap_fixture._prepare_db(path, request.run_id)
+        provider = gap_fixture.FakeLuna([gap_fixture._stop()])
+        first = run_v2_gap_analysis(
+            db_path=path,
+            gap_input=request,
+            llm_provider=provider,
+            routing_config=gap_fixture._routing(),
+            clock=lambda: gap_fixture.NOW,
+        )
+        current = request.model_copy(
+            update={
+                "remaining_budget": V2GapBudgetState(
+                    model_calls_remaining=0, tokens_remaining=0, cost_remaining_usd=Decimal("0")
+                )
+            }
+        )
+        before = path.read_bytes(), path.stat().st_mtime_ns
+        resumed = run_v2_gap_analysis(
+            db_path=path,
+            gap_input=current,
+            llm_provider=provider,
+            routing_config=gap_fixture._routing(),
+            clock=lambda: gap_fixture.NOW + timedelta(days=1),
+        )
+>       assert resumed.resumed and resumed.output == first.output
+                                   ^^^^^^^^^^^^^^
+
+tests/test_v2_resume_integrity.py:253: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = V2GapAnalysisRunResult(run_id=UUID('2f2de995-f993-46a2-99b2-5712110c5786'), input=V2GapAnalysisInput(run_id=UUID('2f2d...e_continuation=True, completed_at=datetime.datetime(2026, 8, 20, 0, 0, tzinfo=TzInfo(0)), invocations=(), resumed=True)
+item = 'output'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'V2GapAnalysisRunResult' object has no attribute 'output'
+
+.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_v2_resume_integrity.py::test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_gap_analysis]
+FAILED tests/test_v2_resume_integrity.py::test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_adaptive_search_continuation]
+FAILED tests/test_v2_resume_integrity.py::test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_round_four_continuation]
+FAILED tests/test_v2_resume_integrity.py::test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_source_selection_and_queue]
+FAILED tests/test_v2_resume_integrity.py::test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_deep_analysis_with_backfill]
+FAILED tests/test_v2_resume_integrity.py::test_completed_stage_interruption_resumes_without_repeating_saved_calls[run_v2_final_research_output]
+FAILED tests/test_v2_resume_integrity.py::test_gap_replay_preserves_saved_budget_but_rejects_changed_research
+7 failed, 16 passed in 10.42s

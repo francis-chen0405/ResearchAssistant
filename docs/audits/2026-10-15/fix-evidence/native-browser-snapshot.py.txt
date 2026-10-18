@@ -1,0 +1,31 @@
+from __future__ import annotations
+import hashlib,json,sqlite3,tempfile
+from pathlib import Path
+from researchassistant.evidence.evidence_browser import browse_evidence_run
+from researchassistant.research.fixture_pipeline import run_fixture_pipeline
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix='ra-native-browser-integrity-') as folder:
+        result=run_fixture_pipeline(Path.cwd()/'tests/fixtures/basic_valid_run',output_dir=Path(folder)/'generated')
+        path=Path(result.db_path)
+        original=browse_evidence_run(path,result.run_id)
+        assert original.released_statement_traces
+        with sqlite3.connect(path) as connection:
+            triggers=connection.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='snapshots'").fetchall()
+            for name,_ in triggers:
+                connection.execute('DROP TRIGGER "'+name.replace('"','""')+'"')
+            connection.execute("UPDATE snapshots SET normalized_text=normalized_text || ? WHERE run_id=?",('\nGenerated altered source text.',str(result.run_id)))
+            for _,sql in triggers:
+                connection.execute(sql)
+        before=path.read_bytes(),path.stat().st_mtime_ns
+        try:
+            browser=browse_evidence_run(path,result.run_id)
+        except Exception as exc:
+            observed={'state':'rejected','error':f'{type(exc).__name__}: {exc}'}
+        else:
+            observed={'state':'accepted','released_traces':len(browser.released_statement_traces),'released_trails':sum(trail.released for trail in browser.trails),'snapshot_hashes_match':[hashlib.sha256(trail.snapshot.normalized_text.encode()).hexdigest()==trail.snapshot.snapshot_sha256 for trail in browser.trails],'compatibility_issues':[issue.model_dump(mode='json') for issue in browser.compatibility_issues],'snapshot_label':browser.trusted_snapshot_text_label}
+        observed.update(database_unchanged_by_inspection=(path.read_bytes(),path.stat().st_mtime_ns)==before,method='Actual fixture-pipeline released native run; simulate source-text corruption only in its disposable generated database, restoring original triggers before actual read-only browsing. No real data or provider activity.')
+    Path('/tmp/ra-review-native-browser-snapshot.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

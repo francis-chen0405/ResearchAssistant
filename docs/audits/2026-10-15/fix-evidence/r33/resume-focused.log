@@ -1,0 +1,217 @@
+....FFF...........................                                       [100%]
+=================================== FAILURES ===================================
+_ test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting[adaptive_execution-phase-7-round-3-execution-False] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1372/test_partial_checkpoint_prefix4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b47a6c0>
+owner = 'adaptive_execution', key = 'phase-7-round-3-execution'
+empty_round = False
+
+    @pytest.mark.parametrize(
+        ("owner", "key", "empty_round"),
+        [
+            ("v2_source_selection", "phase-13-complete-survivor-pool-analyzer-admission", False),
+            ("v2_source_selection", "source-selection-preview-shortlist-v2", False),
+            ("v2_source_selection", "phase-13-source-statuses-analyzer-admission", False),
+            ("adaptive_execution", "phase-7-round-2-execution", False),
+            ("adaptive_execution", "phase-7-round-3-execution", False),
+            ("adaptive_summary", "phase-7-merged-survivor-pool", False),
+            ("adaptive_summary", "phase-7-stopping-decision", False),
+            ("adaptive_execution", "phase-7-round-2-discovery-scout", True),
+            ("adaptive_execution", "phase-7-round-2-acquisition-probe", True),
+        ],
+    )
+    def test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, owner: str, key: str, empty_round: bool
+    ) -> None:
+        path = tmp_path / "generated.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original_entry = product.run_v2_production_pipeline
+    
+        def advancing_clock(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+            kwargs["clock"] = lambda: datetime.now(UTC)
+            return original_entry(*args, **kwargs)
+    
+        monkeypatch.setattr(product, "run_v2_production_pipeline", advancing_clock)
+        if empty_round:
+            original_search = product.phase12._Search.search
+    
+            def failed_second_round(self: Any, request: Any) -> object:
+                if request.compiled_query.conceptual_query.round_number == 2:
+                    raise SearchProviderError(
+                        SearchFailureCode.PERMANENT_FAILURE, "generated empty second round"
+                    )
+                return original_search(self, request)
+    
+            monkeypatch.setattr(product.phase12._Search, "search", failed_second_round)
+        module = import_module("researchassistant.agents." + owner)
+        original_insert = module.insert_v2_artifact
+    
+        def interrupt_after_commit(*args: Any, **kwargs: Any) -> object:
+            saved = original_insert(*args, **kwargs)
+            if args[1] == key:
+                raise KeyboardInterrupt("generated interruption after " + key)
+            return saved
+    
+        monkeypatch.setattr(module, "insert_v2_artifact", interrupt_after_commit)
+        with pytest.raises(KeyboardInterrupt):
+            product._run(path, controls)
+        monkeypatch.setattr(module, "insert_v2_artifact", original_insert)
+        partial = list_runs(path)[0]
+        assert partial.status.value == "running"
+        before = _saved_rows(path)
+        assert key in before
+        audit = read_v2_physical_call_audit(path, partial.run_id)
+        resumed, model, search = product._run(path, controls, run_id=partial.run_id)
+>       assert resumed.state is V2ProductionState.RELEASED, resumed.failure_reason
+E       AssertionError: IntegrityError: v2 artifact phase-7-round-3-governor-decision already exists with different data
+E       assert <V2ProductionState.FAILED: 'failed'> is <V2ProductionState.RELEASED: 'released'>
+E        +  where <V2ProductionState.FAILED: 'failed'> = V2ProductionPipelineResult(run_id=UUID('450204d3-2b5c-478d-a619-7d50fd67f2a7'), db_path='/private/var/folders/_h/hjz63...usd=Decimal('4.99992')), completed_at=datetime.datetime(2026, 10, 16, 23, 13, 4, 649139, tzinfo=datetime.timezone.utc)).state
+E        +  and   <V2ProductionState.RELEASED: 'released'> = V2ProductionState.RELEASED
+
+tests/test_v2_checkpoint_resume.py:90: AssertionError
+_ test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting[adaptive_summary-phase-7-merged-survivor-pool-False] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1372/test_partial_checkpoint_prefix5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10dbae0c0>
+owner = 'adaptive_summary', key = 'phase-7-merged-survivor-pool'
+empty_round = False
+
+    @pytest.mark.parametrize(
+        ("owner", "key", "empty_round"),
+        [
+            ("v2_source_selection", "phase-13-complete-survivor-pool-analyzer-admission", False),
+            ("v2_source_selection", "source-selection-preview-shortlist-v2", False),
+            ("v2_source_selection", "phase-13-source-statuses-analyzer-admission", False),
+            ("adaptive_execution", "phase-7-round-2-execution", False),
+            ("adaptive_execution", "phase-7-round-3-execution", False),
+            ("adaptive_summary", "phase-7-merged-survivor-pool", False),
+            ("adaptive_summary", "phase-7-stopping-decision", False),
+            ("adaptive_execution", "phase-7-round-2-discovery-scout", True),
+            ("adaptive_execution", "phase-7-round-2-acquisition-probe", True),
+        ],
+    )
+    def test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, owner: str, key: str, empty_round: bool
+    ) -> None:
+        path = tmp_path / "generated.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original_entry = product.run_v2_production_pipeline
+    
+        def advancing_clock(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+            kwargs["clock"] = lambda: datetime.now(UTC)
+            return original_entry(*args, **kwargs)
+    
+        monkeypatch.setattr(product, "run_v2_production_pipeline", advancing_clock)
+        if empty_round:
+            original_search = product.phase12._Search.search
+    
+            def failed_second_round(self: Any, request: Any) -> object:
+                if request.compiled_query.conceptual_query.round_number == 2:
+                    raise SearchProviderError(
+                        SearchFailureCode.PERMANENT_FAILURE, "generated empty second round"
+                    )
+                return original_search(self, request)
+    
+            monkeypatch.setattr(product.phase12._Search, "search", failed_second_round)
+        module = import_module("researchassistant.agents." + owner)
+        original_insert = module.insert_v2_artifact
+    
+        def interrupt_after_commit(*args: Any, **kwargs: Any) -> object:
+            saved = original_insert(*args, **kwargs)
+            if args[1] == key:
+                raise KeyboardInterrupt("generated interruption after " + key)
+            return saved
+    
+        monkeypatch.setattr(module, "insert_v2_artifact", interrupt_after_commit)
+        with pytest.raises(KeyboardInterrupt):
+            product._run(path, controls)
+        monkeypatch.setattr(module, "insert_v2_artifact", original_insert)
+        partial = list_runs(path)[0]
+        assert partial.status.value == "running"
+        before = _saved_rows(path)
+        assert key in before
+        audit = read_v2_physical_call_audit(path, partial.run_id)
+        resumed, model, search = product._run(path, controls, run_id=partial.run_id)
+>       assert resumed.state is V2ProductionState.RELEASED, resumed.failure_reason
+E       AssertionError: IntegrityError: v2 artifact phase-7-round-3-governor-decision already exists with different data
+E       assert <V2ProductionState.FAILED: 'failed'> is <V2ProductionState.RELEASED: 'released'>
+E        +  where <V2ProductionState.FAILED: 'failed'> = V2ProductionPipelineResult(run_id=UUID('3e006dda-3a40-488d-986e-64ab8e1cb8b0'), db_path='/private/var/folders/_h/hjz63...usd=Decimal('4.99992')), completed_at=datetime.datetime(2026, 10, 16, 23, 13, 6, 142481, tzinfo=datetime.timezone.utc)).state
+E        +  and   <V2ProductionState.RELEASED: 'released'> = V2ProductionState.RELEASED
+
+tests/test_v2_checkpoint_resume.py:90: AssertionError
+_ test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting[adaptive_summary-phase-7-stopping-decision-False] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1372/test_partial_checkpoint_prefix6')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10dbd16d0>
+owner = 'adaptive_summary', key = 'phase-7-stopping-decision'
+empty_round = False
+
+    @pytest.mark.parametrize(
+        ("owner", "key", "empty_round"),
+        [
+            ("v2_source_selection", "phase-13-complete-survivor-pool-analyzer-admission", False),
+            ("v2_source_selection", "source-selection-preview-shortlist-v2", False),
+            ("v2_source_selection", "phase-13-source-statuses-analyzer-admission", False),
+            ("adaptive_execution", "phase-7-round-2-execution", False),
+            ("adaptive_execution", "phase-7-round-3-execution", False),
+            ("adaptive_summary", "phase-7-merged-survivor-pool", False),
+            ("adaptive_summary", "phase-7-stopping-decision", False),
+            ("adaptive_execution", "phase-7-round-2-discovery-scout", True),
+            ("adaptive_execution", "phase-7-round-2-acquisition-probe", True),
+        ],
+    )
+    def test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, owner: str, key: str, empty_round: bool
+    ) -> None:
+        path = tmp_path / "generated.sqlite3"
+        controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+        original_entry = product.run_v2_production_pipeline
+    
+        def advancing_clock(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+            kwargs["clock"] = lambda: datetime.now(UTC)
+            return original_entry(*args, **kwargs)
+    
+        monkeypatch.setattr(product, "run_v2_production_pipeline", advancing_clock)
+        if empty_round:
+            original_search = product.phase12._Search.search
+    
+            def failed_second_round(self: Any, request: Any) -> object:
+                if request.compiled_query.conceptual_query.round_number == 2:
+                    raise SearchProviderError(
+                        SearchFailureCode.PERMANENT_FAILURE, "generated empty second round"
+                    )
+                return original_search(self, request)
+    
+            monkeypatch.setattr(product.phase12._Search, "search", failed_second_round)
+        module = import_module("researchassistant.agents." + owner)
+        original_insert = module.insert_v2_artifact
+    
+        def interrupt_after_commit(*args: Any, **kwargs: Any) -> object:
+            saved = original_insert(*args, **kwargs)
+            if args[1] == key:
+                raise KeyboardInterrupt("generated interruption after " + key)
+            return saved
+    
+        monkeypatch.setattr(module, "insert_v2_artifact", interrupt_after_commit)
+        with pytest.raises(KeyboardInterrupt):
+            product._run(path, controls)
+        monkeypatch.setattr(module, "insert_v2_artifact", original_insert)
+        partial = list_runs(path)[0]
+        assert partial.status.value == "running"
+        before = _saved_rows(path)
+        assert key in before
+        audit = read_v2_physical_call_audit(path, partial.run_id)
+        resumed, model, search = product._run(path, controls, run_id=partial.run_id)
+>       assert resumed.state is V2ProductionState.RELEASED, resumed.failure_reason
+E       AssertionError: IntegrityError: v2 artifact phase-7-round-3-governor-decision already exists with different data
+E       assert <V2ProductionState.FAILED: 'failed'> is <V2ProductionState.RELEASED: 'released'>
+E        +  where <V2ProductionState.FAILED: 'failed'> = V2ProductionPipelineResult(run_id=UUID('00416c04-23c9-46d3-bdfb-acca13855279'), db_path='/private/var/folders/_h/hjz63...usd=Decimal('4.99992')), completed_at=datetime.datetime(2026, 10, 16, 23, 13, 7, 439886, tzinfo=datetime.timezone.utc)).state
+E        +  and   <V2ProductionState.RELEASED: 'released'> = V2ProductionState.RELEASED
+
+tests/test_v2_checkpoint_resume.py:90: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_v2_checkpoint_resume.py::test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting[adaptive_execution-phase-7-round-3-execution-False]
+FAILED tests/test_v2_checkpoint_resume.py::test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting[adaptive_summary-phase-7-merged-survivor-pool-False]
+FAILED tests/test_v2_checkpoint_resume.py::test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting[adaptive_summary-phase-7-stopping-decision-False]
+3 failed, 31 passed in 30.14s

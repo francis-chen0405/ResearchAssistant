@@ -1,0 +1,28 @@
+{
+  "finding": "R51 companion regression gap",
+  "cases": [
+    {
+      "requested_case_version": 14,
+      "actual_input_versions": [
+        14
+      ],
+      "test_passed": true
+    },
+    {
+      "requested_case_version": 15,
+      "actual_input_versions": [
+        15
+      ],
+      "test_passed": true
+    },
+    {
+      "requested_case_version": 16,
+      "actual_input_versions": [
+        18
+      ],
+      "test_passed": true
+    }
+  ],
+  "external_provider_calls": 0,
+  "real_database_changes": 0
+}

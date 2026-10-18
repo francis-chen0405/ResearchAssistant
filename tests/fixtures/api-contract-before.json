@@ -1,0 +1,6017 @@
+{
+  "openapi": {
+    "components": {
+      "schemas": {
+        "AcquiredSourceScoreBreakdown": {
+          "additionalProperties": false,
+          "properties": {
+            "claim_term_coverage": {
+              "maximum": 35.0,
+              "minimum": 0.0,
+              "title": "Claim Term Coverage",
+              "type": "integer"
+            },
+            "document_specificity": {
+              "maximum": 25.0,
+              "minimum": 0.0,
+              "title": "Document Specificity",
+              "type": "integer"
+            },
+            "evidence_language": {
+              "maximum": 15.0,
+              "minimum": 0.0,
+              "title": "Evidence Language",
+              "type": "integer"
+            },
+            "penalties": {
+              "maximum": 0.0,
+              "minimum": -20.0,
+              "title": "Penalties",
+              "type": "integer"
+            },
+            "readability": {
+              "maximum": 25.0,
+              "minimum": 0.0,
+              "title": "Readability",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "readability",
+            "claim_term_coverage",
+            "document_specificity",
+            "evidence_language",
+            "penalties"
+          ],
+          "title": "AcquiredSourceScoreBreakdown",
+          "type": "object"
+        },
+        "ApiHealth": {
+          "additionalProperties": false,
+          "properties": {
+            "api_version": {
+              "default": "mlp-5-v2-phase13-analyzer-admission",
+              "title": "Api Version",
+              "type": "string"
+            },
+            "product": {
+              "default": "ResearchAssistant",
+              "title": "Product",
+              "type": "string"
+            },
+            "status": {
+              "default": "ok",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "title": "ApiHealth",
+          "type": "object"
+        },
+        "CancelResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "cancelled": {
+              "default": true,
+              "title": "Cancelled",
+              "type": "boolean"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "title": "CancelResponse",
+          "type": "object"
+        },
+        "ConfigurationCheckInput": {
+          "additionalProperties": false,
+          "description": "Typed offline setup check for a selected model mix and source lanes.",
+          "properties": {
+            "model_profile": {
+              "default": "configurable-2026-09",
+              "enum": [
+                "standard-2026-09",
+                "configurable-2026-09"
+              ],
+              "title": "Model Profile",
+              "type": "string"
+            },
+            "stage_models": {
+              "$ref": "#/components/schemas/StageModelSelections",
+              "default": {
+                "analyst": "gpt-6-luna-xhigh",
+                "extractor": "gpt-6-luna-high",
+                "gap_analysis": "gpt-6-luna-xhigh",
+                "planner": "gpt-6-luna-xhigh",
+                "scout": "gpt-6-luna-high",
+                "search_agent": "gpt-6-luna-xhigh",
+                "source_selection": "gpt-6-luna-xhigh"
+              }
+            },
+            "use_arxiv": {
+              "default": false,
+              "title": "Use Arxiv",
+              "type": "boolean"
+            },
+            "use_exa": {
+              "default": true,
+              "title": "Use Exa",
+              "type": "boolean"
+            },
+            "use_openalex": {
+              "default": true,
+              "title": "Use Openalex",
+              "type": "boolean"
+            },
+            "use_pubmed": {
+              "default": false,
+              "title": "Use Pubmed",
+              "type": "boolean"
+            },
+            "use_serpsearch": {
+              "default": true,
+              "title": "Use Serpsearch",
+              "type": "boolean"
+            }
+          },
+          "title": "ConfigurationCheckInput",
+          "type": "object"
+        },
+        "ConfigurationResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "configured": {
+              "title": "Configured",
+              "type": "boolean"
+            },
+            "default_db_path": {
+              "minLength": 1,
+              "title": "Default Db Path",
+              "type": "string"
+            },
+            "firecrawl_enabled": {
+              "title": "Firecrawl Enabled",
+              "type": "boolean"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            },
+            "saved_credentials": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Saved Credentials",
+              "type": "array"
+            },
+            "saved_settings": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Saved Settings",
+              "type": "array"
+            },
+            "service": {
+              "$ref": "#/components/schemas/ServiceDiagnostic"
+            }
+          },
+          "required": [
+            "configured",
+            "message",
+            "default_db_path",
+            "firecrawl_enabled",
+            "service"
+          ],
+          "title": "ConfigurationResponse",
+          "type": "object"
+        },
+        "ConnectionCheck": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "title": "Message",
+              "type": "string"
+            },
+            "provider": {
+              "title": "Provider",
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "missing",
+                "connected",
+                "rejected",
+                "unavailable",
+                "saved"
+              ],
+              "title": "State",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "state",
+            "message"
+          ],
+          "title": "ConnectionCheck",
+          "type": "object"
+        },
+        "ConnectionCheckInput": {
+          "additionalProperties": false,
+          "description": "The exact model selection whose account access should be checked.",
+          "properties": {
+            "model_profile": {
+              "enum": [
+                "standard-2026-09",
+                "configurable-2026-09"
+              ],
+              "title": "Model Profile",
+              "type": "string"
+            },
+            "stage_models": {
+              "$ref": "#/components/schemas/StageModelSelections"
+            }
+          },
+          "required": [
+            "model_profile",
+            "stage_models"
+          ],
+          "title": "ConnectionCheckInput",
+          "type": "object"
+        },
+        "CredentialSetupRequest": {
+          "additionalProperties": false,
+          "properties": {
+            "exa_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exa Api Key"
+            },
+            "firecrawl_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Firecrawl Api Key"
+            },
+            "luna_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Luna Api Key"
+            },
+            "luna_base_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Luna Base Url"
+            },
+            "luna_input_usd_per_million": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Luna Input Usd Per Million"
+            },
+            "luna_model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Luna Model"
+            },
+            "luna_output_usd_per_million": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Luna Output Usd Per Million"
+            },
+            "mimo_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mimo Api Key"
+            },
+            "mimo_v25_input_usd_per_million": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mimo V25 Input Usd Per Million"
+            },
+            "mimo_v25_output_usd_per_million": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mimo V25 Output Usd Per Million"
+            },
+            "model_profile": {
+              "default": "configurable-2026-09",
+              "enum": [
+                "standard-2026-09",
+                "configurable-2026-09"
+              ],
+              "title": "Model Profile",
+              "type": "string"
+            },
+            "openalex_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Openalex Api Key"
+            },
+            "pubmed_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pubmed Api Key"
+            },
+            "serpsearch_api_key": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Serpsearch Api Key"
+            },
+            "stage_models": {
+              "$ref": "#/components/schemas/StageModelSelections",
+              "default": {
+                "analyst": "gpt-6-luna-xhigh",
+                "extractor": "gpt-6-luna-high",
+                "gap_analysis": "gpt-6-luna-xhigh",
+                "planner": "gpt-6-luna-xhigh",
+                "scout": "gpt-6-luna-high",
+                "search_agent": "gpt-6-luna-xhigh",
+                "source_selection": "gpt-6-luna-xhigh"
+              }
+            }
+          },
+          "title": "CredentialSetupRequest",
+          "type": "object"
+        },
+        "CredentialSetupResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "configured": {
+              "title": "Configured",
+              "type": "boolean"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "saved": {
+              "title": "Saved",
+              "type": "boolean"
+            },
+            "saved_settings": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Saved Settings",
+              "type": "array"
+            }
+          },
+          "required": [
+            "saved",
+            "configured",
+            "message"
+          ],
+          "title": "CredentialSetupResponse",
+          "type": "object"
+        },
+        "DiscoveryProvider": {
+          "enum": [
+            "serpsearch",
+            "exa",
+            "openalex",
+            "arxiv",
+            "pubmed",
+            "serper"
+          ],
+          "title": "DiscoveryProvider",
+          "type": "string"
+        },
+        "DiscoveryScoreBreakdown": {
+          "additionalProperties": false,
+          "properties": {
+            "directness": {
+              "maximum": 15.0,
+              "minimum": 0.0,
+              "title": "Directness",
+              "type": "integer"
+            },
+            "intent_match": {
+              "maximum": 20.0,
+              "minimum": 0.0,
+              "title": "Intent Match",
+              "type": "integer"
+            },
+            "likely_accessibility": {
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Likely Accessibility",
+              "type": "integer"
+            },
+            "metadata_completeness": {
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Metadata Completeness",
+              "type": "integer"
+            },
+            "penalties": {
+              "maximum": 0.0,
+              "minimum": -45.0,
+              "title": "Penalties",
+              "type": "integer"
+            },
+            "relevance": {
+              "maximum": 35.0,
+              "minimum": 0.0,
+              "title": "Relevance",
+              "type": "integer"
+            },
+            "source_novelty": {
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Source Novelty",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "relevance",
+            "intent_match",
+            "directness",
+            "metadata_completeness",
+            "likely_accessibility",
+            "source_novelty",
+            "penalties"
+          ],
+          "title": "DiscoveryScoreBreakdown",
+          "type": "object"
+        },
+        "Entailment": {
+          "enum": [
+            "Strong",
+            "Partial",
+            "Weak"
+          ],
+          "title": "Entailment",
+          "type": "string"
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "title": "Detail",
+              "type": "array"
+            }
+          },
+          "title": "HTTPValidationError",
+          "type": "object"
+        },
+        "HistoryImportResult": {
+          "additionalProperties": false,
+          "properties": {
+            "db_path": {
+              "title": "Db Path",
+              "type": "string"
+            },
+            "run_count": {
+              "title": "Run Count",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "db_path",
+            "run_count"
+          ],
+          "title": "HistoryImportResult",
+          "type": "object"
+        },
+        "HistoryResponse": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/LiveHistoryItem"
+              },
+              "title": "Items",
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "title": "HistoryResponse",
+          "type": "object"
+        },
+        "InterfaceSettings": {
+          "additionalProperties": false,
+          "properties": {
+            "challengeEnabled": {
+              "default": false,
+              "title": "Challengeenabled",
+              "type": "boolean"
+            },
+            "dbPath": {
+              "default": "",
+              "title": "Dbpath",
+              "type": "string"
+            },
+            "maxCalls": {
+              "default": 160,
+              "maximum": 160.0,
+              "minimum": 1.0,
+              "title": "Maxcalls",
+              "type": "integer"
+            },
+            "maxCost": {
+              "default": "0.20",
+              "pattern": "^\\d+(?:\\.\\d+)?$",
+              "title": "Maxcost",
+              "type": "string"
+            },
+            "maxTokens": {
+              "default": 500000,
+              "maximum": 500000.0,
+              "minimum": 1.0,
+              "title": "Maxtokens",
+              "type": "integer"
+            },
+            "metadataDepth": {
+              "default": 20,
+              "enum": [
+                10,
+                20,
+                50
+              ],
+              "title": "Metadatadepth",
+              "type": "integer"
+            },
+            "modelProfile": {
+              "default": "configurable-2026-09",
+              "enum": [
+                "standard-2026-09",
+                "configurable-2026-09"
+              ],
+              "title": "Modelprofile",
+              "type": "string"
+            },
+            "scholarlySearchMode": {
+              "default": "lexical",
+              "enum": [
+                "lexical",
+                "semantic",
+                "auto"
+              ],
+              "title": "Scholarlysearchmode",
+              "type": "string"
+            },
+            "seedExpansionEnabled": {
+              "default": true,
+              "title": "Seedexpansionenabled",
+              "type": "boolean"
+            },
+            "sourceTarget": {
+              "default": 10,
+              "enum": [
+                5,
+                10,
+                15,
+                20
+              ],
+              "title": "Sourcetarget",
+              "type": "integer"
+            },
+            "stageModels": {
+              "$ref": "#/components/schemas/StageModelSelections",
+              "default": {
+                "analyst": "gpt-6-luna-xhigh",
+                "extractor": "gpt-6-luna-high",
+                "gap_analysis": "gpt-6-luna-xhigh",
+                "planner": "gpt-6-luna-xhigh",
+                "scout": "gpt-6-luna-high",
+                "search_agent": "gpt-6-luna-xhigh",
+                "source_selection": "gpt-6-luna-xhigh"
+              }
+            },
+            "supportEnabled": {
+              "default": true,
+              "title": "Supportenabled",
+              "type": "boolean"
+            },
+            "useArxiv": {
+              "default": false,
+              "title": "Usearxiv",
+              "type": "boolean"
+            },
+            "useCrossref": {
+              "default": true,
+              "title": "Usecrossref",
+              "type": "boolean"
+            },
+            "useExa": {
+              "default": true,
+              "title": "Useexa",
+              "type": "boolean"
+            },
+            "useOpenAlex": {
+              "default": true,
+              "title": "Useopenalex",
+              "type": "boolean"
+            },
+            "usePubmed": {
+              "default": false,
+              "title": "Usepubmed",
+              "type": "boolean"
+            },
+            "useSerpSearch": {
+              "default": true,
+              "title": "Useserpsearch",
+              "type": "boolean"
+            }
+          },
+          "title": "InterfaceSettings",
+          "type": "object"
+        },
+        "LiveAttemptDiagnostic": {
+          "additionalProperties": false,
+          "description": "Ephemeral execution failure, separate from the immutable saved run.",
+          "properties": {
+            "classification": {
+              "enum": [
+                "invalid_input",
+                "configuration_error",
+                "failed"
+              ],
+              "title": "Classification",
+              "type": "string"
+            },
+            "diagnostic_component": {
+              "minLength": 1,
+              "title": "Diagnostic Component",
+              "type": "string"
+            },
+            "exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exit Code"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "classification",
+            "message",
+            "diagnostic_component"
+          ],
+          "title": "LiveAttemptDiagnostic",
+          "type": "object"
+        },
+        "LiveCostBasisCount": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModelUsageCostBasis"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "physical_calls": {
+              "minimum": 0.0,
+              "title": "Physical Calls",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "basis",
+            "physical_calls"
+          ],
+          "title": "LiveCostBasisCount",
+          "type": "object"
+        },
+        "LiveHistoryItem": {
+          "additionalProperties": false,
+          "properties": {
+            "compatibility_issues": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/RecordCompatibilityResult"
+              },
+              "title": "Compatibility Issues",
+              "type": "array"
+            },
+            "completed_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Completed At"
+            },
+            "raw_claim": {
+              "minLength": 1,
+              "title": "Raw Claim",
+              "type": "string"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "stage": {
+              "minLength": 1,
+              "title": "Stage",
+              "type": "string"
+            },
+            "status": {
+              "minLength": 1,
+              "title": "Status",
+              "type": "string"
+            },
+            "updated_at": {
+              "minLength": 1,
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "raw_claim",
+            "status",
+            "stage",
+            "updated_at"
+          ],
+          "title": "LiveHistoryItem",
+          "type": "object"
+        },
+        "LiveModelUsageDetails": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_write_tokens": {
+              "$ref": "#/components/schemas/LiveTokenCount"
+            },
+            "cached_input_tokens": {
+              "$ref": "#/components/schemas/LiveTokenCount"
+            },
+            "cost_basis_counts": {
+              "items": {
+                "$ref": "#/components/schemas/LiveCostBasisCount"
+              },
+              "title": "Cost Basis Counts",
+              "type": "array"
+            },
+            "input_tokens": {
+              "$ref": "#/components/schemas/LiveTokenCount"
+            },
+            "output_tokens": {
+              "$ref": "#/components/schemas/LiveTokenCount"
+            }
+          },
+          "required": [
+            "input_tokens",
+            "output_tokens",
+            "cached_input_tokens",
+            "cache_write_tokens",
+            "cost_basis_counts"
+          ],
+          "title": "LiveModelUsageDetails",
+          "type": "object"
+        },
+        "LiveRunSnapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "attempt_diagnostic": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/LiveAttemptDiagnostic"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "classification": {
+              "enum": [
+                "starting",
+                "running",
+                "interrupted",
+                "released",
+                "blocked",
+                "failed",
+                "cancelled",
+                "configuration_error",
+                "invalid_input",
+                "duplicate_active"
+              ],
+              "title": "Classification",
+              "type": "string"
+            },
+            "completed_checkpoints": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Completed Checkpoints",
+              "type": "integer"
+            },
+            "conservative_reserved_cost_usd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "0",
+              "title": "Conservative Reserved Cost Usd"
+            },
+            "conservative_reserved_tokens": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 0,
+              "title": "Conservative Reserved Tokens"
+            },
+            "cost_usage_complete": {
+              "default": true,
+              "title": "Cost Usage Complete",
+              "type": "boolean"
+            },
+            "current_research_round": {
+              "default": 1,
+              "maximum": 4.0,
+              "minimum": 1.0,
+              "title": "Current Research Round",
+              "type": "integer"
+            },
+            "db_path": {
+              "minLength": 1,
+              "title": "Db Path",
+              "type": "string"
+            },
+            "diagnostic_component": {
+              "minLength": 1,
+              "title": "Diagnostic Component",
+              "type": "string"
+            },
+            "exit_code": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exit Code"
+            },
+            "final_brief": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final Brief"
+            },
+            "fingerprint": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fingerprint"
+            },
+            "known_cost_subtotal_usd": {
+              "default": "0",
+              "title": "Known Cost Subtotal Usd",
+              "type": "string"
+            },
+            "known_token_subtotal": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Known Token Subtotal",
+              "type": "integer"
+            },
+            "latest_checkpoint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latest Checkpoint"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "model_calls_used": {
+              "minimum": 0.0,
+              "title": "Model Calls Used",
+              "type": "integer"
+            },
+            "model_identity": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Identity"
+            },
+            "model_usage_details": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/LiveModelUsageDetails"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "opposing": {
+              "$ref": "#/components/schemas/ResearchProgress"
+            },
+            "persisted_status": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Persisted Status"
+            },
+            "progress_percent": {
+              "default": 0,
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "title": "Progress Percent",
+              "type": "integer"
+            },
+            "provider_identity": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider Identity"
+            },
+            "raw_claim": {
+              "minLength": 1,
+              "title": "Raw Claim",
+              "type": "string"
+            },
+            "rendered_brief_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rendered Brief Hash"
+            },
+            "research_controls": {
+              "$ref": "#/components/schemas/ResearchControls",
+              "default": {
+                "depth": "standard",
+                "discovery_providers": [
+                  "serpsearch",
+                  "exa",
+                  "openalex"
+                ],
+                "length": "report",
+                "research_mode": "focused",
+                "sources_per_stance_per_round": 10,
+                "tone": "neutral"
+              }
+            },
+            "retrieval_attempts_used": {
+              "minimum": 0.0,
+              "title": "Retrieval Attempts Used",
+              "type": "integer"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "stage": {
+              "minLength": 1,
+              "title": "Stage",
+              "type": "string"
+            },
+            "supporting": {
+              "$ref": "#/components/schemas/ResearchProgress"
+            },
+            "token_usage_complete": {
+              "default": true,
+              "title": "Token Usage Complete",
+              "type": "boolean"
+            },
+            "total_checkpoints": {
+              "default": 5,
+              "minimum": 1.0,
+              "title": "Total Checkpoints",
+              "type": "integer"
+            },
+            "total_cost_usd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "0",
+              "title": "Total Cost Usd"
+            },
+            "total_tokens": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 0,
+              "title": "Total Tokens"
+            },
+            "unassigned_retrieval_attempts_used": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Unassigned Retrieval Attempts Used",
+              "type": "integer"
+            },
+            "v2_diagnostics": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2RunDiagnostics"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "validation_errors": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Validation Errors",
+              "type": "array"
+            },
+            "worker_active": {
+              "default": false,
+              "title": "Worker Active",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "run_id",
+            "db_path",
+            "raw_claim",
+            "classification",
+            "stage",
+            "message",
+            "diagnostic_component",
+            "model_calls_used",
+            "retrieval_attempts_used",
+            "supporting",
+            "opposing"
+          ],
+          "title": "LiveRunSnapshot",
+          "type": "object"
+        },
+        "LiveStartResult": {
+          "additionalProperties": false,
+          "properties": {
+            "classification": {
+              "enum": [
+                "starting",
+                "running",
+                "interrupted",
+                "released",
+                "blocked",
+                "failed",
+                "cancelled",
+                "configuration_error",
+                "invalid_input",
+                "duplicate_active"
+              ],
+              "title": "Classification",
+              "type": "string"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "started": {
+              "title": "Started",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "started",
+            "run_id",
+            "classification",
+            "message"
+          ],
+          "title": "LiveStartResult",
+          "type": "object"
+        },
+        "LiveTokenCount": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "title": "Complete",
+              "type": "boolean"
+            },
+            "known_subtotal": {
+              "minimum": 0.0,
+              "title": "Known Subtotal",
+              "type": "integer"
+            },
+            "total": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Total"
+            }
+          },
+          "required": [
+            "known_subtotal",
+            "complete"
+          ],
+          "title": "LiveTokenCount",
+          "type": "object"
+        },
+        "MetadataRank": {
+          "additionalProperties": false,
+          "description": "Deterministic, metadata-only rank; scores never represent evidence quality.",
+          "properties": {
+            "directness": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Directness"
+            },
+            "diversity": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Diversity"
+            },
+            "gap_fit": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gap Fit"
+            },
+            "identity_completeness": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity Completeness"
+            },
+            "item_id": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "lane_direction": {
+              "$ref": "#/components/schemas/ResearchDirection"
+            },
+            "lane_provider": {
+              "$ref": "#/components/schemas/DiscoveryProvider"
+            },
+            "method_fit": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Fit"
+            },
+            "novelty": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Novelty"
+            },
+            "rank": {
+              "maximum": 300.0,
+              "minimum": 1.0,
+              "title": "Rank",
+              "type": "integer"
+            },
+            "rationale": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 6,
+              "title": "Rationale",
+              "type": "array"
+            },
+            "score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Score",
+              "type": "number"
+            },
+            "work_key": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Work Key",
+              "type": "string"
+            }
+          },
+          "required": [
+            "item_id",
+            "rank",
+            "score",
+            "work_key",
+            "lane_direction",
+            "lane_provider"
+          ],
+          "title": "MetadataRank",
+          "type": "object"
+        },
+        "MetadataRankingWeights": {
+          "additionalProperties": false,
+          "description": "Bounded, frozen contribution weights for common metadata signals.",
+          "properties": {
+            "directness": {
+              "default": 5.0,
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Directness",
+              "type": "number"
+            },
+            "diversity": {
+              "default": 1.0,
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Diversity",
+              "type": "number"
+            },
+            "gap_fit": {
+              "default": 2.0,
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Gap Fit",
+              "type": "number"
+            },
+            "identity_completeness": {
+              "default": 1.0,
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Identity Completeness",
+              "type": "number"
+            },
+            "method_fit": {
+              "default": 3.0,
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Method Fit",
+              "type": "number"
+            },
+            "novelty": {
+              "default": 1.0,
+              "maximum": 10.0,
+              "minimum": 0.0,
+              "title": "Novelty",
+              "type": "number"
+            }
+          },
+          "title": "MetadataRankingWeights",
+          "type": "object"
+        },
+        "ModelChoice": {
+          "enum": [
+            "gpt-6-luna-high",
+            "gpt-6-luna-xhigh",
+            "mimo-v2.6-pro",
+            "mimo-v2.6-flash",
+            "gpt-6-sol-high",
+            "gpt-5.6-terra-high"
+          ],
+          "title": "ModelChoice",
+          "type": "string"
+        },
+        "ModelProfile": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "default": "MiMo discovery and extraction \u00b7 Luna High analysis",
+              "title": "Description",
+              "type": "string"
+            },
+            "id": {
+              "default": "standard-2026-09",
+              "enum": [
+                "standard-2026-09",
+                "configurable-2026-09"
+              ],
+              "title": "Id",
+              "type": "string"
+            },
+            "models": {
+              "items": {
+                "$ref": "#/components/schemas/SupportedModel"
+              },
+              "title": "Models",
+              "type": "array"
+            },
+            "name": {
+              "default": "Standard research",
+              "title": "Name",
+              "type": "string"
+            },
+            "pricing_reviewed": {
+              "default": "2026-09-17",
+              "title": "Pricing Reviewed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "models"
+          ],
+          "title": "ModelProfile",
+          "type": "object"
+        },
+        "ModelUsageCostBasis": {
+          "enum": [
+            "published_cache_prices_reported_writes",
+            "published_cache_prices_assumed_all_uncached_writes",
+            "configured_price_cap"
+          ],
+          "title": "ModelUsageCostBasis",
+          "type": "string"
+        },
+        "Placement": {
+          "enum": [
+            "primary",
+            "secondary",
+            "supporting",
+            "qualified_only"
+          ],
+          "title": "Placement",
+          "type": "string"
+        },
+        "PresentationTone": {
+          "enum": [
+            "neutral",
+            "executive",
+            "academic",
+            "plain_language"
+          ],
+          "title": "PresentationTone",
+          "type": "string"
+        },
+        "RecordCompatibilityResult": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_type": {
+              "title": "Artifact Type",
+              "type": "string"
+            },
+            "compatible": {
+              "default": false,
+              "title": "Compatible",
+              "type": "boolean"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            },
+            "record_key": {
+              "title": "Record Key",
+              "type": "string"
+            }
+          },
+          "required": [
+            "record_key",
+            "artifact_type",
+            "message"
+          ],
+          "title": "RecordCompatibilityResult",
+          "type": "object"
+        },
+        "ReportLength": {
+          "enum": [
+            "brief",
+            "report"
+          ],
+          "title": "ReportLength",
+          "type": "string"
+        },
+        "ResearchControls": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "ResearchDepth": {
+          "enum": [
+            "focused",
+            "standard"
+          ],
+          "title": "ResearchDepth",
+          "type": "string"
+        },
+        "ResearchDirection": {
+          "enum": [
+            "support",
+            "challenge"
+          ],
+          "title": "ResearchDirection",
+          "type": "string"
+        },
+        "ResearchDirections": {
+          "additionalProperties": false,
+          "description": "The complete, independent direction selection for a fresh v2 run.",
+          "properties": {
+            "challenge_enabled": {
+              "default": false,
+              "title": "Challenge Enabled",
+              "type": "boolean"
+            },
+            "support_enabled": {
+              "default": true,
+              "title": "Support Enabled",
+              "type": "boolean"
+            }
+          },
+          "title": "ResearchDirections",
+          "type": "object"
+        },
+        "ResearchFocus": {
+          "additionalProperties": false,
+          "description": "Explicit optional planner constraints; never inferred from the claim.",
+          "properties": {
+            "analytical_lens": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Analytical Lens"
+            },
+            "geographic_area": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Geographic Area"
+            },
+            "population": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Population"
+            },
+            "timeframe": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timeframe"
+            }
+          },
+          "title": "ResearchFocus",
+          "type": "object"
+        },
+        "ResearchMode": {
+          "enum": [
+            "focused",
+            "balanced"
+          ],
+          "title": "ResearchMode",
+          "type": "string"
+        },
+        "ResearchProgress": {
+          "additionalProperties": false,
+          "properties": {
+            "acquired_sources": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Acquired Sources",
+              "type": "integer"
+            },
+            "candidates": {
+              "minimum": 0.0,
+              "title": "Candidates",
+              "type": "integer"
+            },
+            "model_attempts": {
+              "minimum": 0.0,
+              "title": "Model Attempts",
+              "type": "integer"
+            },
+            "retrieval_attempts": {
+              "minimum": 0.0,
+              "title": "Retrieval Attempts",
+              "type": "integer"
+            },
+            "stance": {
+              "enum": [
+                "supporting",
+                "opposing"
+              ],
+              "title": "Stance",
+              "type": "string"
+            },
+            "status": {
+              "minLength": 1,
+              "title": "Status",
+              "type": "string"
+            },
+            "usable_snapshots": {
+              "minimum": 0.0,
+              "title": "Usable Snapshots",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "stance",
+            "status",
+            "model_attempts",
+            "retrieval_attempts",
+            "usable_snapshots",
+            "candidates"
+          ],
+          "title": "ResearchProgress",
+          "type": "object"
+        },
+        "ResearchStartInput": {
+          "additionalProperties": false,
+          "properties": {
+            "acknowledged_public": {
+              "title": "Acknowledged Public",
+              "type": "boolean"
+            },
+            "challenge_enabled": {
+              "default": false,
+              "title": "Challenge Enabled",
+              "type": "boolean"
+            },
+            "db_path": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Path"
+            },
+            "include_counterevidence": {
+              "default": false,
+              "title": "Include Counterevidence",
+              "type": "boolean"
+            },
+            "max_cost_usd": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 20.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "default": "0.20",
+              "title": "Max Cost Usd"
+            },
+            "max_llm_calls": {
+              "default": 160,
+              "maximum": 160.0,
+              "minimum": 1.0,
+              "title": "Max Llm Calls",
+              "type": "integer"
+            },
+            "max_tokens": {
+              "default": 500000,
+              "maximum": 500000.0,
+              "minimum": 1.0,
+              "title": "Max Tokens",
+              "type": "integer"
+            },
+            "metadata_depth": {
+              "default": 20,
+              "enum": [
+                10,
+                20,
+                50
+              ],
+              "title": "Metadata Depth",
+              "type": "integer"
+            },
+            "model_profile": {
+              "default": "configurable-2026-09",
+              "enum": [
+                "standard-2026-09",
+                "configurable-2026-09"
+              ],
+              "title": "Model Profile",
+              "type": "string"
+            },
+            "raw_claim": {
+              "minLength": 1,
+              "title": "Raw Claim",
+              "type": "string"
+            },
+            "run_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            },
+            "scholarly_search_mode": {
+              "default": "lexical",
+              "enum": [
+                "lexical",
+                "semantic",
+                "auto"
+              ],
+              "title": "Scholarly Search Mode",
+              "type": "string"
+            },
+            "seed_expansion_enabled": {
+              "default": true,
+              "title": "Seed Expansion Enabled",
+              "type": "boolean"
+            },
+            "sources_per_stance_per_round": {
+              "default": 10,
+              "enum": [
+                5,
+                10,
+                15,
+                20
+              ],
+              "title": "Sources Per Stance Per Round",
+              "type": "integer"
+            },
+            "stage_models": {
+              "$ref": "#/components/schemas/StageModelSelections",
+              "default": {
+                "analyst": "gpt-6-luna-xhigh",
+                "extractor": "gpt-6-luna-high",
+                "gap_analysis": "gpt-6-luna-xhigh",
+                "planner": "gpt-6-luna-xhigh",
+                "scout": "gpt-6-luna-high",
+                "search_agent": "gpt-6-luna-xhigh",
+                "source_selection": "gpt-6-luna-xhigh"
+              }
+            },
+            "support_enabled": {
+              "default": true,
+              "title": "Support Enabled",
+              "type": "boolean"
+            },
+            "use_arxiv": {
+              "default": false,
+              "title": "Use Arxiv",
+              "type": "boolean"
+            },
+            "use_crossref": {
+              "default": true,
+              "title": "Use Crossref",
+              "type": "boolean"
+            },
+            "use_exa": {
+              "default": true,
+              "title": "Use Exa",
+              "type": "boolean"
+            },
+            "use_openalex": {
+              "default": true,
+              "title": "Use Openalex",
+              "type": "boolean"
+            },
+            "use_pubmed": {
+              "default": false,
+              "title": "Use Pubmed",
+              "type": "boolean"
+            },
+            "use_serpsearch": {
+              "default": true,
+              "title": "Use Serpsearch",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "raw_claim",
+            "acknowledged_public"
+          ],
+          "title": "ResearchStartInput",
+          "type": "object"
+        },
+        "ResearchTrail": {
+          "additionalProperties": false,
+          "properties": {
+            "compatibility_issues": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/RecordCompatibilityResult"
+              },
+              "title": "Compatibility Issues",
+              "type": "array"
+            },
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ResearchTrailItem"
+              },
+              "title": "Items",
+              "type": "array"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "items"
+          ],
+          "title": "ResearchTrail",
+          "type": "object"
+        },
+        "ResearchTrailItem": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "RunLocator": {
+          "additionalProperties": false,
+          "properties": {
+            "db_path": {
+              "minLength": 1,
+              "title": "Db Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "db_path"
+          ],
+          "title": "RunLocator",
+          "type": "object"
+        },
+        "SectionType": {
+          "enum": [
+            "supporting",
+            "opposing",
+            "limitations"
+          ],
+          "title": "SectionType",
+          "type": "string"
+        },
+        "ServiceDiagnostic": {
+          "additionalProperties": false,
+          "properties": {
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "owned_process": {
+              "default": false,
+              "title": "Owned Process",
+              "type": "boolean"
+            },
+            "pid": {
+              "anyOf": [
+                {
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pid"
+            },
+            "recent_output": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Recent Output",
+              "type": "array"
+            },
+            "searxng_readiness": {
+              "enum": [
+                "configured",
+                "not_confirmed",
+                "unavailable"
+              ],
+              "title": "Searxng Readiness",
+              "type": "string"
+            },
+            "started_at_monotonic": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Started At Monotonic"
+            },
+            "state": {
+              "enum": [
+                "healthy",
+                "unhealthy",
+                "wrong_service",
+                "starting",
+                "exited",
+                "launch_failed",
+                "stopped"
+              ],
+              "title": "State",
+              "type": "string"
+            },
+            "wigolo_ready": {
+              "title": "Wigolo Ready",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "state",
+            "wigolo_ready",
+            "searxng_readiness",
+            "message"
+          ],
+          "title": "ServiceDiagnostic",
+          "type": "object"
+        },
+        "StageModelSelections": {
+          "additionalProperties": false,
+          "description": "One immutable model choice for every active fresh-v2 model stage.",
+          "properties": {
+            "analyst": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-xhigh"
+            },
+            "extractor": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-high"
+            },
+            "gap_analysis": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-xhigh"
+            },
+            "planner": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-xhigh"
+            },
+            "scout": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-high"
+            },
+            "search_agent": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-xhigh"
+            },
+            "source_selection": {
+              "$ref": "#/components/schemas/ModelChoice",
+              "default": "gpt-6-luna-xhigh"
+            }
+          },
+          "title": "StageModelSelections",
+          "type": "object"
+        },
+        "Stance": {
+          "enum": [
+            "supporting",
+            "opposing"
+          ],
+          "title": "Stance",
+          "type": "string"
+        },
+        "StudyLineageNotice": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "enum": [
+                "matching_doi",
+                "matching_title",
+                "matching_archive_id"
+              ],
+              "title": "Basis",
+              "type": "string"
+            },
+            "explanation": {
+              "minLength": 1,
+              "title": "Explanation",
+              "type": "string"
+            },
+            "source_ids": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "minItems": 2,
+              "title": "Source Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "source_ids",
+            "basis",
+            "explanation"
+          ],
+          "title": "StudyLineageNotice",
+          "type": "object"
+        },
+        "SupportedModel": {
+          "additionalProperties": false,
+          "properties": {
+            "completion_limit": {
+              "default": 4096,
+              "title": "Completion Limit",
+              "type": "integer"
+            },
+            "input_per_million": {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "title": "Input Per Million",
+              "type": "string"
+            },
+            "model": {
+              "title": "Model",
+              "type": "string"
+            },
+            "output_contract": {
+              "default": "Strict typed JSON; existing adapter validation",
+              "title": "Output Contract",
+              "type": "string"
+            },
+            "output_per_million": {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "title": "Output Per Million",
+              "type": "string"
+            },
+            "roles": {
+              "title": "Roles",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "roles",
+            "input_per_million",
+            "output_per_million"
+          ],
+          "title": "SupportedModel",
+          "type": "object"
+        },
+        "SynthesisItem": {
+          "additionalProperties": false,
+          "properties": {
+            "admission_method": {
+              "$ref": "#/components/schemas/V2AdmissionMethod",
+              "default": "reviewer_approved"
+            },
+            "approved_factual_statement": {
+              "minLength": 1,
+              "title": "Approved Factual Statement",
+              "type": "string"
+            },
+            "connective_template_id": {
+              "minLength": 1,
+              "title": "Connective Template Id",
+              "type": "string"
+            },
+            "entailment": {
+              "$ref": "#/components/schemas/Entailment"
+            },
+            "ledger_claim_id": {
+              "format": "uuid",
+              "title": "Ledger Claim Id",
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/components/schemas/Placement"
+            },
+            "reviewer_approval_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "pattern": "^rappr_v1_[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reviewer Approval Id"
+            },
+            "stance": {
+              "$ref": "#/components/schemas/Stance"
+            }
+          },
+          "required": [
+            "connective_template_id",
+            "ledger_claim_id",
+            "stance",
+            "placement",
+            "entailment",
+            "approved_factual_statement"
+          ],
+          "title": "SynthesisItem",
+          "type": "object"
+        },
+        "SynthesisOutput": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "sections": {
+              "items": {
+                "$ref": "#/components/schemas/SynthesisSection"
+              },
+              "title": "Sections",
+              "type": "array"
+            },
+            "synthesizer_model_name": {
+              "minLength": 1,
+              "title": "Synthesizer Model Name",
+              "type": "string"
+            },
+            "synthesizer_prompt_version": {
+              "minLength": 1,
+              "title": "Synthesizer Prompt Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "synthesizer_prompt_version",
+            "synthesizer_model_name",
+            "created_at",
+            "sections"
+          ],
+          "title": "SynthesisOutput",
+          "type": "object"
+        },
+        "SynthesisSection": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/SynthesisItem"
+              },
+              "title": "Items",
+              "type": "array"
+            },
+            "section_type": {
+              "$ref": "#/components/schemas/SectionType"
+            }
+          },
+          "required": [
+            "section_type",
+            "items"
+          ],
+          "title": "SynthesisSection",
+          "type": "object"
+        },
+        "V2AdmissionMethod": {
+          "description": "Semantic boundary that admitted a v2 evidence record.",
+          "enum": [
+            "analyzer_admitted",
+            "reviewer_approved"
+          ],
+          "title": "V2AdmissionMethod",
+          "type": "string"
+        },
+        "V2ClaimCoverageAssessment": {
+          "additionalProperties": false,
+          "description": "Luna's bounded coverage assessment; it cannot decide whether the claim is true.",
+          "properties": {
+            "claim_component": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Claim Component",
+              "type": "string"
+            },
+            "coverage_state": {
+              "$ref": "#/components/schemas/V2ClaimCoverageState"
+            },
+            "dimension": {
+              "$ref": "#/components/schemas/V2ClaimCoverageDimension"
+            },
+            "evidence_summary": {
+              "maxLength": 1000,
+              "minLength": 1,
+              "title": "Evidence Summary",
+              "type": "string"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2ClaimCoverageKind"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "searchable": {
+              "default": true,
+              "title": "Searchable",
+              "type": "boolean"
+            },
+            "unavailable_reason": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unavailable Reason"
+            }
+          },
+          "required": [
+            "dimension",
+            "claim_component",
+            "coverage_state",
+            "evidence_summary"
+          ],
+          "title": "V2ClaimCoverageAssessment",
+          "type": "object"
+        },
+        "V2ClaimCoverageDimension": {
+          "enum": [
+            "effect_or_association",
+            "population_and_setting",
+            "mechanism_or_pathway",
+            "limitations_and_boundaries",
+            "counterevidence_or_alternatives",
+            "replication_or_generalizability"
+          ],
+          "title": "V2ClaimCoverageDimension",
+          "type": "string"
+        },
+        "V2ClaimCoverageKind": {
+          "description": "Whether a coverage dimension describes the claim or audits its evidence boundary.",
+          "enum": [
+            "claim_component",
+            "evidence_audit"
+          ],
+          "title": "V2ClaimCoverageKind",
+          "type": "string"
+        },
+        "V2ClaimCoverageState": {
+          "enum": [
+            "covered",
+            "partial",
+            "missing",
+            "conflicting",
+            "not_applicable",
+            "unavailable"
+          ],
+          "title": "V2ClaimCoverageState",
+          "type": "string"
+        },
+        "V2DeepAnalysisBudgetReason": {
+          "enum": [
+            "physical_call_ceiling",
+            "token_reserve",
+            "cost_reserve",
+            "backfill_replaced"
+          ],
+          "title": "V2DeepAnalysisBudgetReason",
+          "type": "string"
+        },
+        "V2DiscoveryPolicy": {
+          "additionalProperties": false,
+          "properties": {
+            "max_acquisition_per_round": {
+              "default": 25,
+              "maximum": 25.0,
+              "minimum": 1.0,
+              "title": "Max Acquisition Per Round",
+              "type": "integer"
+            },
+            "max_expansion_per_run": {
+              "default": 30,
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "title": "Max Expansion Per Run",
+              "type": "integer"
+            },
+            "max_hops": {
+              "const": 1,
+              "default": 1,
+              "title": "Max Hops",
+              "type": "integer"
+            },
+            "max_neighbors_per_seed": {
+              "default": 10,
+              "maximum": 10.0,
+              "minimum": 1.0,
+              "title": "Max Neighbors Per Seed",
+              "type": "integer"
+            },
+            "max_pages_per_operation": {
+              "default": 3,
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Max Pages Per Operation",
+              "type": "integer"
+            },
+            "max_raw_per_round": {
+              "default": 300,
+              "maximum": 300.0,
+              "minimum": 1.0,
+              "title": "Max Raw Per Round",
+              "type": "integer"
+            },
+            "max_raw_per_run": {
+              "default": 1000,
+              "maximum": 1000.0,
+              "minimum": 1.0,
+              "title": "Max Raw Per Run",
+              "type": "integer"
+            },
+            "max_scout_per_round": {
+              "default": 60,
+              "maximum": 60.0,
+              "minimum": 1.0,
+              "title": "Max Scout Per Round",
+              "type": "integer"
+            },
+            "max_seeds_per_run": {
+              "default": 3,
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Max Seeds Per Run",
+              "type": "integer"
+            },
+            "metadata_depth": {
+              "default": 20,
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "title": "Metadata Depth",
+              "type": "integer"
+            },
+            "policy_identity": {
+              "const": "source-discovery-v2-2026-10-05-v1",
+              "default": "source-discovery-v2-2026-10-05-v1",
+              "title": "Policy Identity",
+              "type": "string"
+            },
+            "unknown_request_recovery": {
+              "const": "stop",
+              "default": "stop",
+              "title": "Unknown Request Recovery",
+              "type": "string"
+            }
+          },
+          "title": "V2DiscoveryPolicy",
+          "type": "object"
+        },
+        "V2EvidenceDisplay": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/V2EvidenceDisplayItem"
+              },
+              "title": "Items",
+              "type": "array"
+            },
+            "post_analysis_assessment": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2PostAnalysisAssessment"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "research_status": {
+              "$ref": "#/components/schemas/V2ResearchStatusDisplay"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "shared_website_groups": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/V2SharedWebsiteGroup"
+              },
+              "title": "Shared Website Groups",
+              "type": "array"
+            },
+            "source_budget_outcomes": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/V2SourceBudgetOutcomeDisplay"
+              },
+              "title": "Source Budget Outcomes",
+              "type": "array"
+            },
+            "source_titles": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/V2SourceTitleDisplay"
+              },
+              "title": "Source Titles",
+              "type": "array"
+            },
+            "study_lineage": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/StudyLineageNotice"
+              },
+              "title": "Study Lineage",
+              "type": "array"
+            }
+          },
+          "required": [
+            "run_id",
+            "items",
+            "research_status"
+          ],
+          "title": "V2EvidenceDisplay",
+          "type": "object"
+        },
+        "V2EvidenceDisplayItem": {
+          "additionalProperties": false,
+          "description": "Read-only evidence detail suitable for the v2 result page.",
+          "properties": {
+            "approved_factual_statement": {
+              "minLength": 1,
+              "title": "Approved Factual Statement",
+              "type": "string"
+            },
+            "claim_fit": {
+              "anyOf": [
+                {
+                  "maximum": 5.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Claim Fit"
+            },
+            "direction": {
+              "minLength": 1,
+              "title": "Direction",
+              "type": "string"
+            },
+            "evidence_summary": {
+              "minLength": 1,
+              "title": "Evidence Summary",
+              "type": "string"
+            },
+            "gap_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Gap Ids",
+              "type": "array"
+            },
+            "ledger_claim_id": {
+              "format": "uuid",
+              "title": "Ledger Claim Id",
+              "type": "string"
+            },
+            "limitations": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Limitations",
+              "type": "array"
+            },
+            "quote_passage": {
+              "minLength": 1,
+              "title": "Quote Passage",
+              "type": "string"
+            },
+            "recommendation_status": {
+              "minLength": 1,
+              "title": "Recommendation Status",
+              "type": "string"
+            },
+            "relationship_to_claim": {
+              "$ref": "#/components/schemas/V2EvidenceRelationship"
+            },
+            "selection_rationale": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Selection Rationale"
+            },
+            "source_context_notice": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Context Notice"
+            },
+            "source_family": {
+              "minLength": 1,
+              "title": "Source Family",
+              "type": "string"
+            },
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            },
+            "source_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            },
+            "source_url": {
+              "minLength": 1,
+              "title": "Source Url",
+              "type": "string"
+            },
+            "supporting_proposition": {
+              "minLength": 1,
+              "title": "Supporting Proposition",
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Title"
+            },
+            "validation_status": {
+              "minLength": 1,
+              "title": "Validation Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "ledger_claim_id",
+            "source_url",
+            "source_family",
+            "direction",
+            "relationship_to_claim",
+            "approved_factual_statement",
+            "recommendation_status",
+            "evidence_summary",
+            "supporting_proposition",
+            "quote_passage",
+            "validation_status"
+          ],
+          "title": "V2EvidenceDisplayItem",
+          "type": "object"
+        },
+        "V2EvidenceRelationship": {
+          "description": "How a source-supported proposition relates to the requested claim.",
+          "enum": [
+            "supports",
+            "challenges",
+            "qualifies",
+            "unrelated"
+          ],
+          "title": "V2EvidenceRelationship",
+          "type": "string"
+        },
+        "V2FinalResearchOutput": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2GapCoverageReconciliation": {
+          "additionalProperties": false,
+          "description": "Deterministic post-admission reconciliation; it never makes another model call.",
+          "properties": {
+            "claim_coverage_map": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/V2ClaimCoverageAssessment"
+              },
+              "maxItems": 6,
+              "title": "Claim Coverage Map",
+              "type": "array"
+            },
+            "completed_at": {
+              "format": "date-time",
+              "title": "Completed At",
+              "type": "string"
+            },
+            "post_round_three_gap_artifact_key": {
+              "minLength": 1,
+              "title": "Post Round Three Gap Artifact Key",
+              "type": "string"
+            },
+            "records": {
+              "items": {
+                "$ref": "#/components/schemas/V2GapCoverageRecord"
+              },
+              "title": "Records",
+              "type": "array"
+            },
+            "round_four_attempted": {
+              "title": "Round Four Attempted",
+              "type": "boolean"
+            },
+            "round_four_governor_decision": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2RoundFourGovernorDecision"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "post_round_three_gap_artifact_key",
+            "round_four_attempted",
+            "records",
+            "completed_at"
+          ],
+          "title": "V2GapCoverageReconciliation",
+          "type": "object"
+        },
+        "V2GapCoverageRecord": {
+          "additionalProperties": false,
+          "description": "One post-Round-3 gap and the exact analyzer-admitted evidence that can cover it.",
+          "properties": {
+            "gap": {
+              "$ref": "#/components/schemas/V2MaterialGap"
+            },
+            "ledger_claim_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ledger Claim Id"
+            },
+            "query_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query Id"
+            },
+            "source_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Id"
+            },
+            "state": {
+              "$ref": "#/components/schemas/V2GapCoverageState"
+            }
+          },
+          "required": [
+            "gap",
+            "state"
+          ],
+          "title": "V2GapCoverageRecord",
+          "type": "object"
+        },
+        "V2GapCoverageState": {
+          "enum": [
+            "not_attempted",
+            "covered",
+            "unresolved",
+            "unavailable"
+          ],
+          "title": "V2GapCoverageState",
+          "type": "string"
+        },
+        "V2GraphNeighborAction": {
+          "additionalProperties": false,
+          "properties": {
+            "action_type": {
+              "const": "graph_neighbors",
+              "default": "graph_neighbors",
+              "title": "Action Type",
+              "type": "string"
+            },
+            "artifact_id": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            },
+            "capabilities": {
+              "$ref": "#/components/schemas/V2ProviderCapabilities"
+            },
+            "contract_identity": {
+              "const": "source-discovery-contracts-v1",
+              "default": "source-discovery-contracts-v1",
+              "title": "Contract Identity",
+              "type": "string"
+            },
+            "direction": {
+              "$ref": "#/components/schemas/ResearchDirection"
+            },
+            "hop": {
+              "const": 1,
+              "default": 1,
+              "title": "Hop",
+              "type": "integer"
+            },
+            "identity_key": {
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,239}$",
+              "title": "Identity Key",
+              "type": "string"
+            },
+            "policy": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2DiscoveryPolicy"
+                },
+                {
+                  "$ref": "#/components/schemas/V2MetadataDiscoveryPolicy"
+                },
+                {
+                  "$ref": "#/components/schemas/V2ProductDiscoveryPolicy"
+                }
+              ],
+              "title": "Policy"
+            },
+            "provider": {
+              "enum": [
+                "openalex",
+                "arxiv",
+                "pubmed",
+                "exa",
+                "serpsearch"
+              ],
+              "title": "Provider",
+              "type": "string"
+            },
+            "relationship": {
+              "enum": [
+                "references",
+                "citing",
+                "related"
+              ],
+              "title": "Relationship",
+              "type": "string"
+            },
+            "requested_depth": {
+              "maximum": 10.0,
+              "minimum": 1.0,
+              "title": "Requested Depth",
+              "type": "integer"
+            },
+            "round_number": {
+              "maximum": 4.0,
+              "minimum": 1.0,
+              "title": "Round Number",
+              "type": "integer"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "seed": {
+              "$ref": "#/components/schemas/V2SeedEligibility"
+            },
+            "seed_identity": {
+              "default": "source-seed-expansion-v1",
+              "enum": [
+                "source-seed-expansion-v1",
+                "source-seed-expansion-v2",
+                "source-seed-expansion-v3"
+              ],
+              "title": "Seed Identity",
+              "type": "string"
+            },
+            "target_gap_ids": {
+              "default": [],
+              "items": {
+                "maxLength": 240,
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "maxItems": 6,
+              "title": "Target Gap Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "run_id",
+            "artifact_id",
+            "identity_key",
+            "seed",
+            "relationship",
+            "provider",
+            "direction",
+            "round_number",
+            "requested_depth",
+            "policy",
+            "capabilities"
+          ],
+          "title": "V2GraphNeighborAction",
+          "type": "object"
+        },
+        "V2MaterialGap": {
+          "additionalProperties": false,
+          "description": "One specific missing-evidence condition, in an enabled research direction.",
+          "properties": {
+            "claim_dimension": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2ClaimCoverageDimension"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "direction": {
+              "$ref": "#/components/schemas/ResearchDirection"
+            },
+            "gap_id": {
+              "minLength": 1,
+              "title": "Gap Id",
+              "type": "string"
+            },
+            "missing_evidence": {
+              "minLength": 1,
+              "title": "Missing Evidence",
+              "type": "string"
+            },
+            "rationale": {
+              "minLength": 1,
+              "title": "Rationale",
+              "type": "string"
+            },
+            "unsupported_claim_component": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unsupported Claim Component"
+            }
+          },
+          "required": [
+            "gap_id",
+            "direction",
+            "missing_evidence",
+            "rationale"
+          ],
+          "title": "V2MaterialGap",
+          "type": "object"
+        },
+        "V2MetadataDiscoveryPolicy": {
+          "additionalProperties": false,
+          "description": "Successor policy for paged metadata depth/ranking; historical v1 stays exact.",
+          "properties": {
+            "max_acquisition_per_round": {
+              "default": 25,
+              "maximum": 25.0,
+              "minimum": 1.0,
+              "title": "Max Acquisition Per Round",
+              "type": "integer"
+            },
+            "max_expansion_per_run": {
+              "default": 30,
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "title": "Max Expansion Per Run",
+              "type": "integer"
+            },
+            "max_hops": {
+              "const": 1,
+              "default": 1,
+              "title": "Max Hops",
+              "type": "integer"
+            },
+            "max_neighbors_per_seed": {
+              "default": 10,
+              "maximum": 10.0,
+              "minimum": 1.0,
+              "title": "Max Neighbors Per Seed",
+              "type": "integer"
+            },
+            "max_pages_per_operation": {
+              "default": 3,
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Max Pages Per Operation",
+              "type": "integer"
+            },
+            "max_raw_per_round": {
+              "default": 300,
+              "maximum": 300.0,
+              "minimum": 1.0,
+              "title": "Max Raw Per Round",
+              "type": "integer"
+            },
+            "max_raw_per_run": {
+              "default": 1000,
+              "maximum": 1000.0,
+              "minimum": 1.0,
+              "title": "Max Raw Per Run",
+              "type": "integer"
+            },
+            "max_scout_per_round": {
+              "default": 60,
+              "maximum": 60.0,
+              "minimum": 1.0,
+              "title": "Max Scout Per Round",
+              "type": "integer"
+            },
+            "max_seeds_per_run": {
+              "default": 3,
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Max Seeds Per Run",
+              "type": "integer"
+            },
+            "metadata_depth": {
+              "default": 20,
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "title": "Metadata Depth",
+              "type": "integer"
+            },
+            "metadata_page_size": {
+              "const": 20,
+              "default": 20,
+              "title": "Metadata Page Size",
+              "type": "integer"
+            },
+            "policy_identity": {
+              "const": "source-discovery-v2-2026-10-07-v2",
+              "default": "source-discovery-v2-2026-10-07-v2",
+              "title": "Policy Identity",
+              "type": "string"
+            },
+            "ranking_weights": {
+              "$ref": "#/components/schemas/MetadataRankingWeights"
+            },
+            "unknown_request_recovery": {
+              "const": "stop",
+              "default": "stop",
+              "title": "Unknown Request Recovery",
+              "type": "string"
+            }
+          },
+          "title": "V2MetadataDiscoveryPolicy",
+          "type": "object"
+        },
+        "V2PostAnalysisAssessment": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2PreviewRequest": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2PreviewResult": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2PreviewSpan": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2ProductDiscoveryPolicy": {
+          "additionalProperties": false,
+          "description": "Fresh product controls; v1/v2 retain exact historical serialization.",
+          "properties": {
+            "max_acquisition_per_round": {
+              "default": 25,
+              "maximum": 25.0,
+              "minimum": 1.0,
+              "title": "Max Acquisition Per Round",
+              "type": "integer"
+            },
+            "max_expansion_per_run": {
+              "default": 30,
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "title": "Max Expansion Per Run",
+              "type": "integer"
+            },
+            "max_hops": {
+              "const": 1,
+              "default": 1,
+              "title": "Max Hops",
+              "type": "integer"
+            },
+            "max_neighbors_per_seed": {
+              "default": 10,
+              "maximum": 10.0,
+              "minimum": 1.0,
+              "title": "Max Neighbors Per Seed",
+              "type": "integer"
+            },
+            "max_pages_per_operation": {
+              "default": 3,
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Max Pages Per Operation",
+              "type": "integer"
+            },
+            "max_raw_per_round": {
+              "default": 300,
+              "maximum": 300.0,
+              "minimum": 1.0,
+              "title": "Max Raw Per Round",
+              "type": "integer"
+            },
+            "max_raw_per_run": {
+              "default": 1000,
+              "maximum": 1000.0,
+              "minimum": 1.0,
+              "title": "Max Raw Per Run",
+              "type": "integer"
+            },
+            "max_scout_per_round": {
+              "default": 60,
+              "maximum": 60.0,
+              "minimum": 1.0,
+              "title": "Max Scout Per Round",
+              "type": "integer"
+            },
+            "max_seeds_per_run": {
+              "default": 3,
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Max Seeds Per Run",
+              "type": "integer"
+            },
+            "metadata_depth": {
+              "default": 20,
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "title": "Metadata Depth",
+              "type": "integer"
+            },
+            "metadata_page_size": {
+              "const": 20,
+              "default": 20,
+              "title": "Metadata Page Size",
+              "type": "integer"
+            },
+            "policy_identity": {
+              "const": "source-discovery-v2-2026-10-08-v3",
+              "default": "source-discovery-v2-2026-10-08-v3",
+              "title": "Policy Identity",
+              "type": "string"
+            },
+            "ranking_weights": {
+              "$ref": "#/components/schemas/MetadataRankingWeights"
+            },
+            "scholarly_search_mode": {
+              "default": "lexical",
+              "enum": [
+                "lexical",
+                "semantic",
+                "auto"
+              ],
+              "title": "Scholarly Search Mode",
+              "type": "string"
+            },
+            "seed_expansion_enabled": {
+              "default": true,
+              "title": "Seed Expansion Enabled",
+              "type": "boolean"
+            },
+            "sources_per_direction_per_round": {
+              "default": 10,
+              "enum": [
+                5,
+                7,
+                10,
+                15,
+                20
+              ],
+              "title": "Sources Per Direction Per Round",
+              "type": "integer"
+            },
+            "unknown_request_recovery": {
+              "const": "stop",
+              "default": "stop",
+              "title": "Unknown Request Recovery",
+              "type": "string"
+            }
+          },
+          "title": "V2ProductDiscoveryPolicy",
+          "type": "object"
+        },
+        "V2ProviderCapabilities": {
+          "additionalProperties": false,
+          "properties": {
+            "capability_identity": {
+              "default": "source-provider-capabilities-v1",
+              "enum": [
+                "source-provider-capabilities-v1",
+                "source-provider-capabilities-v2",
+                "source-provider-capabilities-v3",
+                "source-provider-capabilities-v4"
+              ],
+              "title": "Capability Identity",
+              "type": "string"
+            },
+            "documentation_urls": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Documentation Urls",
+              "type": "array"
+            },
+            "executable_identity_lookup": {
+              "default": false,
+              "title": "Executable Identity Lookup",
+              "type": "boolean"
+            },
+            "executable_pagination": {
+              "default": "none",
+              "enum": [
+                "none",
+                "page",
+                "offset",
+                "cursor"
+              ],
+              "title": "Executable Pagination",
+              "type": "string"
+            },
+            "executable_relationships": {
+              "default": [],
+              "items": {
+                "enum": [
+                  "references",
+                  "citing",
+                  "related"
+                ],
+                "type": "string"
+              },
+              "title": "Executable Relationships",
+              "type": "array"
+            },
+            "executable_search_modes": {
+              "items": {
+                "enum": [
+                  "lexical",
+                  "semantic",
+                  "provider_default"
+                ],
+                "type": "string"
+              },
+              "title": "Executable Search Modes",
+              "type": "array"
+            },
+            "fields": {
+              "default": [],
+              "items": {
+                "maxLength": 240,
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "title": "Fields",
+              "type": "array"
+            },
+            "identity_lookup": {
+              "title": "Identity Lookup",
+              "type": "boolean"
+            },
+            "max_metadata_per_operation": {
+              "maximum": 10000.0,
+              "minimum": 1.0,
+              "title": "Max Metadata Per Operation",
+              "type": "integer"
+            },
+            "max_metadata_per_page": {
+              "maximum": 10000.0,
+              "minimum": 1.0,
+              "title": "Max Metadata Per Page",
+              "type": "integer"
+            },
+            "operators": {
+              "default": [],
+              "items": {
+                "maxLength": 240,
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "title": "Operators",
+              "type": "array"
+            },
+            "pagination": {
+              "enum": [
+                "none",
+                "page",
+                "offset",
+                "cursor"
+              ],
+              "title": "Pagination",
+              "type": "string"
+            },
+            "physical_requests_per_page": {
+              "default": 1,
+              "maximum": 2.0,
+              "minimum": 1.0,
+              "title": "Physical Requests Per Page",
+              "type": "integer"
+            },
+            "provider": {
+              "enum": [
+                "openalex",
+                "arxiv",
+                "pubmed",
+                "exa",
+                "serpsearch"
+              ],
+              "title": "Provider",
+              "type": "string"
+            },
+            "relationships": {
+              "default": [],
+              "items": {
+                "enum": [
+                  "references",
+                  "citing",
+                  "related"
+                ],
+                "type": "string"
+              },
+              "title": "Relationships",
+              "type": "array"
+            },
+            "restrictions": {
+              "default": [],
+              "items": {
+                "maxLength": 240,
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "title": "Restrictions",
+              "type": "array"
+            },
+            "search_modes": {
+              "items": {
+                "enum": [
+                  "lexical",
+                  "semantic",
+                  "provider_default"
+                ],
+                "type": "string"
+              },
+              "title": "Search Modes",
+              "type": "array"
+            },
+            "unsupported_features": {
+              "default": [],
+              "items": {
+                "maxLength": 240,
+                "minLength": 1,
+                "pattern": "^\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "title": "Unsupported Features",
+              "type": "array"
+            }
+          },
+          "required": [
+            "provider",
+            "search_modes",
+            "max_metadata_per_page",
+            "max_metadata_per_operation",
+            "pagination",
+            "identity_lookup",
+            "executable_search_modes",
+            "documentation_urls"
+          ],
+          "title": "V2ProviderCapabilities",
+          "type": "object"
+        },
+        "V2ProviderRunDiagnostics": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2ReleaseValidation": {
+          "additionalProperties": false,
+          "description": "The v2 release decision hashes the complete rendered output, not just evidence text.",
+          "properties": {
+            "errors": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "title": "Errors",
+              "type": "array"
+            },
+            "evidence_validation": {
+              "$ref": "#/components/schemas/ValidationResult"
+            },
+            "rendered_output_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rendered Output Hash"
+            },
+            "valid": {
+              "title": "Valid",
+              "type": "boolean"
+            },
+            "validated_at": {
+              "format": "date-time",
+              "title": "Validated At",
+              "type": "string"
+            },
+            "validator_config_version": {
+              "minLength": 1,
+              "title": "Validator Config Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "evidence_validation",
+            "valid",
+            "errors",
+            "validator_config_version",
+            "validated_at"
+          ],
+          "title": "V2ReleaseValidation",
+          "type": "object"
+        },
+        "V2ResearchStatusDisplay": {
+          "additionalProperties": false,
+          "description": "Read-only current governor/coverage summary alongside the frozen brief.",
+          "properties": {
+            "actionable_gap_count": {
+              "minimum": 0.0,
+              "title": "Actionable Gap Count",
+              "type": "integer"
+            },
+            "explanation": {
+              "minLength": 1,
+              "title": "Explanation",
+              "type": "string"
+            },
+            "partial_coverage_count": {
+              "minimum": 0.0,
+              "title": "Partial Coverage Count",
+              "type": "integer"
+            },
+            "reason_code": {
+              "minLength": 1,
+              "title": "Reason Code",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "persisted_governor",
+                "final_output"
+              ],
+              "title": "Source",
+              "type": "string"
+            },
+            "unavailable_coverage_count": {
+              "minimum": 0.0,
+              "title": "Unavailable Coverage Count",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "reason_code",
+            "explanation",
+            "actionable_gap_count",
+            "partial_coverage_count",
+            "unavailable_coverage_count",
+            "source"
+          ],
+          "title": "V2ResearchStatusDisplay",
+          "type": "object"
+        },
+        "V2ResearchStoppingDisclosure": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_rounds": {
+              "maximum": 4.0,
+              "minimum": 1.0,
+              "title": "Completed Rounds",
+              "type": "integer"
+            },
+            "explanation": {
+              "minLength": 1,
+              "title": "Explanation",
+              "type": "string"
+            },
+            "reason": {
+              "$ref": "#/components/schemas/V2ResearchStoppingReason"
+            }
+          },
+          "required": [
+            "reason",
+            "explanation",
+            "completed_rounds"
+          ],
+          "title": "V2ResearchStoppingDisclosure",
+          "type": "object"
+        },
+        "V2ResearchStoppingReason": {
+          "enum": [
+            "sufficient_source_pool",
+            "no_useful_new_direction",
+            "no_actionable_material_gap",
+            "no_productive_new_search",
+            "duplicate_heavy",
+            "provider_eligibility_exhausted",
+            "budget",
+            "cancelled",
+            "hard_round_limit",
+            "degraded_gap_search_agent",
+            "invalid_search_agent_plan"
+          ],
+          "title": "V2ResearchStoppingReason",
+          "type": "string"
+        },
+        "V2ResultSource": {
+          "additionalProperties": false,
+          "description": "Presentation-safe source metadata; it contains no source-derived factual prose.",
+          "properties": {
+            "budget_prevented_reason": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2DeepAnalysisBudgetReason"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "direction": {
+              "$ref": "#/components/schemas/ResearchDirection"
+            },
+            "discovery_providers": {
+              "items": {
+                "$ref": "#/components/schemas/DiscoveryProvider"
+              },
+              "title": "Discovery Providers",
+              "type": "array"
+            },
+            "discovery_round": {
+              "maximum": 4.0,
+              "minimum": 1.0,
+              "title": "Discovery Round",
+              "type": "integer"
+            },
+            "ledger_claim_ids": {
+              "default": [],
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Ledger Claim Ids",
+              "type": "array"
+            },
+            "publication_date": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Publication Date"
+            },
+            "queue_rank": {
+              "anyOf": [
+                {
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Queue Rank"
+            },
+            "recommendation_rank": {
+              "anyOf": [
+                {
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recommendation Rank"
+            },
+            "recommended": {
+              "title": "Recommended",
+              "type": "boolean"
+            },
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            },
+            "source_type": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            },
+            "source_url": {
+              "minLength": 1,
+              "title": "Source Url",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/components/schemas/V2ResultSourceStatus"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Title"
+            }
+          },
+          "required": [
+            "source_id",
+            "direction",
+            "source_url",
+            "discovery_providers",
+            "discovery_round",
+            "recommended",
+            "status"
+          ],
+          "title": "V2ResultSource",
+          "type": "object"
+        },
+        "V2ResultSourceStatus": {
+          "enum": [
+            "recommended_analyzed",
+            "recommended_analyzer_admitted",
+            "recommended_analyzer_rejected",
+            "recommended_analyzer_failed",
+            "recommended_no_ledger_evidence",
+            "surviving_analyzed",
+            "surviving_analyzer_admitted",
+            "surviving_analyzer_rejected",
+            "surviving_analyzer_failed",
+            "surviving_not_deeply_analyzed",
+            "budget_prevented_analysis"
+          ],
+          "title": "V2ResultSourceStatus",
+          "type": "string"
+        },
+        "V2RoundFourDecisionCode": {
+          "description": "Stable fail-closed outcomes for the one permitted post-Round-3 continuation.",
+          "enum": [
+            "authorized",
+            "no_material_gaps",
+            "no_productive_search",
+            "gap_analysis_unusable",
+            "no_novel_query",
+            "no_eligible_provider",
+            "duplicate_heavy",
+            "unproductive",
+            "insufficient_reservation",
+            "cancelled",
+            "terminal_failure"
+          ],
+          "title": "V2RoundFourDecisionCode",
+          "type": "string"
+        },
+        "V2RoundFourGovernorDecision": {
+          "additionalProperties": false,
+          "description": "Application-owned authorization for the one bounded fourth research round.",
+          "properties": {
+            "authorization_kind": {
+              "const": "preauthorization",
+              "default": "preauthorization",
+              "title": "Authorization Kind",
+              "type": "string"
+            },
+            "authorized": {
+              "title": "Authorized",
+              "type": "boolean"
+            },
+            "decided_at": {
+              "format": "date-time",
+              "title": "Decided At",
+              "type": "string"
+            },
+            "explanation": {
+              "minLength": 1,
+              "title": "Explanation",
+              "type": "string"
+            },
+            "policy_identity": {
+              "const": "researchassistant-v2-post-phase-13-round-four-v1",
+              "default": "researchassistant-v2-post-phase-13-round-four-v1",
+              "title": "Policy Identity",
+              "type": "string"
+            },
+            "reason_code": {
+              "$ref": "#/components/schemas/V2RoundFourDecisionCode"
+            },
+            "reservation": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/V2RoundFourReservation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "authorized",
+            "reason_code",
+            "explanation",
+            "decided_at"
+          ],
+          "title": "V2RoundFourGovernorDecision",
+          "type": "object"
+        },
+        "V2RoundFourReservation": {
+          "additionalProperties": false,
+          "description": "Auditable conservative envelope that keeps optional work out of downstream reserve.",
+          "properties": {
+            "acquisition_cluster_capacity": {
+              "minimum": 0.0,
+              "title": "Acquisition Cluster Capacity",
+              "type": "integer"
+            },
+            "available_calls": {
+              "minimum": 0.0,
+              "title": "Available Calls",
+              "type": "integer"
+            },
+            "available_cost_usd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Available Cost Usd"
+            },
+            "available_tokens": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Available Tokens"
+            },
+            "consumed_gap_attempt_calls": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Consumed Gap Attempt Calls",
+              "type": "integer"
+            },
+            "future_optional_calls": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Future Optional Calls",
+              "type": "integer"
+            },
+            "future_optional_cost_usd": {
+              "default": "0",
+              "title": "Future Optional Cost Usd",
+              "type": "string"
+            },
+            "future_optional_tokens": {
+              "default": 0,
+              "minimum": 0.0,
+              "title": "Future Optional Tokens",
+              "type": "integer"
+            },
+            "gap_attempt_calls": {
+              "minimum": 0.0,
+              "title": "Gap Attempt Calls",
+              "type": "integer"
+            },
+            "optional_calls": {
+              "minimum": 0.0,
+              "title": "Optional Calls",
+              "type": "integer"
+            },
+            "optional_cost_usd": {
+              "title": "Optional Cost Usd",
+              "type": "string"
+            },
+            "optional_tokens": {
+              "minimum": 0.0,
+              "title": "Optional Tokens",
+              "type": "integer"
+            },
+            "post_gap_available_calls": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Post Gap Available Calls"
+            },
+            "post_gap_available_cost_usd": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Post Gap Available Cost Usd"
+            },
+            "post_gap_available_tokens": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Post Gap Available Tokens"
+            },
+            "protected_downstream_calls": {
+              "minimum": 0.0,
+              "title": "Protected Downstream Calls",
+              "type": "integer"
+            },
+            "protected_downstream_cost_usd": {
+              "title": "Protected Downstream Cost Usd",
+              "type": "string"
+            },
+            "protected_downstream_tokens": {
+              "minimum": 0.0,
+              "title": "Protected Downstream Tokens",
+              "type": "integer"
+            },
+            "provider_search_calls": {
+              "minimum": 0.0,
+              "title": "Provider Search Calls",
+              "type": "integer"
+            },
+            "scout_calls": {
+              "minimum": 0.0,
+              "title": "Scout Calls",
+              "type": "integer"
+            },
+            "search_agent_calls": {
+              "minimum": 0.0,
+              "title": "Search Agent Calls",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "protected_downstream_calls",
+            "protected_downstream_tokens",
+            "protected_downstream_cost_usd",
+            "gap_attempt_calls",
+            "search_agent_calls",
+            "scout_calls",
+            "provider_search_calls",
+            "acquisition_cluster_capacity",
+            "optional_calls",
+            "optional_tokens",
+            "optional_cost_usd",
+            "available_calls"
+          ],
+          "title": "V2RoundFourReservation",
+          "type": "object"
+        },
+        "V2RunDiagnostics": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "V2SeedEligibility": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_id": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            },
+            "candidate_id": {
+              "format": "uuid",
+              "title": "Candidate Id",
+              "type": "string"
+            },
+            "contract_identity": {
+              "const": "source-discovery-contracts-v1",
+              "default": "source-discovery-contracts-v1",
+              "title": "Contract Identity",
+              "type": "string"
+            },
+            "eligible": {
+              "title": "Eligible",
+              "type": "boolean"
+            },
+            "identity_key": {
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,239}$",
+              "title": "Identity Key",
+              "type": "string"
+            },
+            "reason": {
+              "maxLength": 240,
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "title": "Reason",
+              "type": "string"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "seed_identity": {
+              "default": "source-seed-expansion-v1",
+              "enum": [
+                "source-seed-expansion-v1",
+                "source-seed-expansion-v2",
+                "source-seed-expansion-v3"
+              ],
+              "title": "Seed Identity",
+              "type": "string"
+            },
+            "snapshot_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Snapshot Id"
+            },
+            "source_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Id"
+            },
+            "work": {
+              "$ref": "#/components/schemas/V2WorkIdentity"
+            }
+          },
+          "required": [
+            "run_id",
+            "artifact_id",
+            "identity_key",
+            "candidate_id",
+            "work",
+            "eligible",
+            "reason"
+          ],
+          "title": "V2SeedEligibility",
+          "type": "object"
+        },
+        "V2SharedWebsiteGroup": {
+          "additionalProperties": false,
+          "description": "Admitted sources sharing a website host, without implying source identity.",
+          "properties": {
+            "explanation": {
+              "minLength": 1,
+              "title": "Explanation",
+              "type": "string"
+            },
+            "host": {
+              "minLength": 1,
+              "title": "Host",
+              "type": "string"
+            },
+            "source_ids": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "minItems": 2,
+              "title": "Source Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "host",
+            "source_ids",
+            "explanation"
+          ],
+          "title": "V2SharedWebsiteGroup",
+          "type": "object"
+        },
+        "V2SourceBudgetOutcomeDisplay": {
+          "additionalProperties": false,
+          "description": "Read-only source-local budget outcome from persisted execution evidence.",
+          "properties": {
+            "outcome": {
+              "enum": [
+                "source_budget_blocked",
+                "token_cap_blocked",
+                "physical_call_cap_blocked"
+              ],
+              "title": "Outcome",
+              "type": "string"
+            },
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "outcome"
+          ],
+          "title": "V2SourceBudgetOutcomeDisplay",
+          "type": "object"
+        },
+        "V2SourceTitleDisplay": {
+          "additionalProperties": false,
+          "description": "Readable source heading plus the captured title for expanded provenance.",
+          "properties": {
+            "captured_title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Captured Title"
+            },
+            "display_title": {
+              "minLength": 1,
+              "title": "Display Title",
+              "type": "string"
+            },
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "display_title"
+          ],
+          "title": "V2SourceTitleDisplay",
+          "type": "object"
+        },
+        "V2UnresolvedMaterialGap": {
+          "additionalProperties": false,
+          "description": "A persisted strategy gap, disclosed without inventing an answer.",
+          "properties": {
+            "assessed_after_round": {
+              "maximum": 3.0,
+              "minimum": 1.0,
+              "title": "Assessed After Round",
+              "type": "integer"
+            },
+            "direction": {
+              "$ref": "#/components/schemas/ResearchDirection"
+            },
+            "gap_id": {
+              "minLength": 1,
+              "title": "Gap Id",
+              "type": "string"
+            },
+            "missing_evidence": {
+              "minLength": 1,
+              "title": "Missing Evidence",
+              "type": "string"
+            }
+          },
+          "required": [
+            "gap_id",
+            "direction",
+            "missing_evidence",
+            "assessed_after_round"
+          ],
+          "title": "V2UnresolvedMaterialGap",
+          "type": "object"
+        },
+        "V2WorkIdentity": {
+          "additionalProperties": false,
+          "properties": {
+            "authors": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maxLength": 240,
+                    "minLength": 1,
+                    "pattern": "^\\S(?:.*\\S)?$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authors"
+            },
+            "doi": {
+              "anyOf": [
+                {
+                  "maxLength": 240,
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Doi"
+            },
+            "grouping_key": {
+              "maxLength": 240,
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "title": "Grouping Key",
+              "type": "string"
+            },
+            "provider_work_id": {
+              "anyOf": [
+                {
+                  "maxLength": 240,
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider Work Id"
+            },
+            "publication_year": {
+              "anyOf": [
+                {
+                  "maximum": 9999.0,
+                  "minimum": 1000.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Publication Year"
+            },
+            "resolution": {
+              "enum": [
+                "verified_identifiers",
+                "provider_identity",
+                "unresolved"
+              ],
+              "title": "Resolution",
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Title"
+            }
+          },
+          "required": [
+            "grouping_key",
+            "resolution"
+          ],
+          "title": "V2WorkIdentity",
+          "type": "object"
+        },
+        "ValidationError": {
+          "properties": {
+            "ctx": {
+              "title": "Context",
+              "type": "object"
+            },
+            "input": {
+              "title": "Input"
+            },
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "title": "Location",
+              "type": "array"
+            },
+            "msg": {
+              "title": "Message",
+              "type": "string"
+            },
+            "type": {
+              "title": "Error Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError",
+          "type": "object"
+        },
+        "ValidationErrorCode": {
+          "enum": [
+            "ledger_mismatch",
+            "invalid_section",
+            "invalid_template",
+            "altered_statement",
+            "schema_error"
+          ],
+          "title": "ValidationErrorCode",
+          "type": "string"
+        },
+        "ValidationResult": {
+          "additionalProperties": false,
+          "properties": {
+            "errors": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "title": "Errors",
+              "type": "array"
+            },
+            "rendered_brief_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rendered Brief Hash"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            },
+            "valid": {
+              "title": "Valid",
+              "type": "boolean"
+            },
+            "validated_at": {
+              "format": "date-time",
+              "title": "Validated At",
+              "type": "string"
+            },
+            "validator_config_version": {
+              "minLength": 1,
+              "title": "Validator Config Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "valid",
+            "errors",
+            "validator_config_version",
+            "validated_at"
+          ],
+          "title": "ValidationResult",
+          "type": "object"
+        }
+      }
+    },
+    "info": {
+      "title": "ResearchAssistant local API",
+      "version": "mlp-5-v2-phase13-analyzer-admission"
+    },
+    "openapi": "3.1.0",
+    "paths": {
+      "/api/configuration": {
+        "get": {
+          "operationId": "configuration_api_configuration_get",
+          "parameters": [
+            {
+              "in": "query",
+              "name": "model_profile",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "standard-2026-09",
+                      "configurable-2026-09"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Model Profile"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_serpsearch",
+              "required": false,
+              "schema": {
+                "default": true,
+                "title": "Use Serpsearch",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_exa",
+              "required": false,
+              "schema": {
+                "default": true,
+                "title": "Use Exa",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_openalex",
+              "required": false,
+              "schema": {
+                "default": true,
+                "title": "Use Openalex",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_arxiv",
+              "required": false,
+              "schema": {
+                "default": false,
+                "title": "Use Arxiv",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_pubmed",
+              "required": false,
+              "schema": {
+                "default": false,
+                "title": "Use Pubmed",
+                "type": "boolean"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConfigurationResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Configuration"
+        }
+      },
+      "/api/configuration/check": {
+        "post": {
+          "description": "Check selected model routes and enabled source credentials without a call.",
+          "operationId": "configuration_check_api_configuration_check_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationCheckInput"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConfigurationResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Configuration Check"
+        }
+      },
+      "/api/credentials": {
+        "post": {
+          "operationId": "store_credentials_api_credentials_post",
+          "parameters": [
+            {
+              "in": "query",
+              "name": "use_serpsearch",
+              "required": false,
+              "schema": {
+                "default": true,
+                "title": "Use Serpsearch",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_exa",
+              "required": false,
+              "schema": {
+                "default": true,
+                "title": "Use Exa",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_openalex",
+              "required": false,
+              "schema": {
+                "default": true,
+                "title": "Use Openalex",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_arxiv",
+              "required": false,
+              "schema": {
+                "default": false,
+                "title": "Use Arxiv",
+                "type": "boolean"
+              }
+            },
+            {
+              "in": "query",
+              "name": "use_pubmed",
+              "required": false,
+              "schema": {
+                "default": false,
+                "title": "Use Pubmed",
+                "type": "boolean"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialSetupRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CredentialSetupResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Store Credentials"
+        }
+      },
+      "/api/credentials/{name}/check": {
+        "post": {
+          "operationId": "validate_connection_api_credentials__name__check_post",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "name",
+              "required": true,
+              "schema": {
+                "title": "Name",
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConnectionCheckInput"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Payload"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConnectionCheck"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Validate Connection"
+        }
+      },
+      "/api/credentials/{name}/remove": {
+        "post": {
+          "operationId": "delete_credential_api_credentials__name__remove_post",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "name",
+              "required": true,
+              "schema": {
+                "title": "Name",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": {
+                      "type": "boolean"
+                    },
+                    "title": "Response Delete Credential Api Credentials  Name  Remove Post",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Delete Credential"
+        }
+      },
+      "/api/health": {
+        "get": {
+          "operationId": "health_api_health_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ApiHealth"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Health"
+        }
+      },
+      "/api/history": {
+        "get": {
+          "operationId": "history_api_history_get",
+          "parameters": [
+            {
+              "in": "query",
+              "name": "db_path",
+              "required": false,
+              "schema": {
+                "default": "/fixture/live.sqlite3",
+                "minLength": 1,
+                "title": "Db Path",
+                "type": "string"
+              }
+            },
+            {
+              "in": "query",
+              "name": "limit",
+              "required": false,
+              "schema": {
+                "default": 100,
+                "maximum": 500,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HistoryResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "History"
+        }
+      },
+      "/api/history/import": {
+        "post": {
+          "operationId": "copy_history_api_history_import_post",
+          "parameters": [
+            {
+              "in": "query",
+              "name": "source",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "title": "Source",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HistoryImportResult"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Copy History"
+        }
+      },
+      "/api/model-options": {
+        "get": {
+          "description": "Return the selectable per-stage model catalog and defaults.",
+          "operationId": "model_options_api_model_options_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": true,
+                    "title": "Response Model Options Api Model Options Get",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Model Options"
+        }
+      },
+      "/api/model-profiles": {
+        "get": {
+          "operationId": "model_profiles_api_model_profiles_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/ModelProfile"
+                    },
+                    "title": "Response Model Profiles Api Model Profiles Get",
+                    "type": "array"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Model Profiles"
+        }
+      },
+      "/api/preferences": {
+        "get": {
+          "operationId": "preferences_api_preferences_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InterfaceSettings"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Preferences"
+        },
+        "post": {
+          "operationId": "save_preferences_api_preferences_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterfaceSettings"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InterfaceSettings"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Save Preferences"
+        }
+      },
+      "/api/research/start": {
+        "post": {
+          "operationId": "start_research_api_research_start_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchStartInput"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/LiveStartResult"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Start Research"
+        }
+      },
+      "/api/research/{run_id}": {
+        "get": {
+          "operationId": "research_snapshot_api_research__run_id__get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "run_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            {
+              "in": "query",
+              "name": "db_path",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "title": "Db Path",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/LiveRunSnapshot"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Research Snapshot"
+        }
+      },
+      "/api/research/{run_id}/cancel": {
+        "post": {
+          "operationId": "cancel_research_api_research__run_id__cancel_post",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "run_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "title": "Run Id",
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunLocator"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CancelResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Cancel Research"
+        }
+      },
+      "/api/research/{run_id}/trail": {
+        "get": {
+          "operationId": "research_trail_api_research__run_id__trail_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "run_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            {
+              "in": "query",
+              "name": "db_path",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "title": "Db Path",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ResearchTrail"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "Research Trail"
+        }
+      },
+      "/api/research/{run_id}/v2-evidence": {
+        "get": {
+          "operationId": "v2_evidence_api_research__run_id__v2_evidence_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "run_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            {
+              "in": "query",
+              "name": "db_path",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "title": "Db Path",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/V2EvidenceDisplay"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "V2 Evidence"
+        }
+      },
+      "/api/research/{run_id}/v2-result": {
+        "get": {
+          "operationId": "v2_result_api_research__run_id__v2_result_get",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "run_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "title": "Run Id",
+                "type": "string"
+              }
+            },
+            {
+              "in": "query",
+              "name": "db_path",
+              "required": true,
+              "schema": {
+                "minLength": 1,
+                "title": "Db Path",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/V2FinalResearchOutput"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "422": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              },
+              "description": "Validation Error"
+            }
+          },
+          "summary": "V2 Result"
+        }
+      },
+      "/api/service": {
+        "get": {
+          "operationId": "service_status_api_service_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServiceDiagnostic"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Service Status"
+        }
+      },
+      "/api/service/start": {
+        "post": {
+          "operationId": "start_service_api_service_start_post",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServiceDiagnostic"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Start Service"
+        }
+      },
+      "/api/service/stop": {
+        "post": {
+          "operationId": "stop_service_api_service_stop_post",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServiceDiagnostic"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            }
+          },
+          "summary": "Stop Service"
+        }
+      }
+    }
+  },
+  "responses": [
+    {
+      "body": {
+        "api_version": "mlp-5-v2-phase13-analyzer-admission",
+        "product": "ResearchAssistant",
+        "status": "ok"
+      },
+      "method": "GET",
+      "path": "/api/health",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": [
+        {
+          "description": "MiMo discovery and extraction \u00b7 Luna High analysis",
+          "id": "standard-2026-09",
+          "models": [
+            {
+              "completion_limit": 4096,
+              "input_per_million": "0.15",
+              "model": "mimo-v2.5",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "0.30",
+              "roles": "Source scouting"
+            },
+            {
+              "completion_limit": 8192,
+              "input_per_million": "0.50",
+              "model": "mimo-v2.5-pro",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "1.00",
+              "roles": "Planning, search, selection and exact extraction"
+            },
+            {
+              "completion_limit": 16384,
+              "input_per_million": "0.50",
+              "model": "gpt-5.6-luna",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "1.80",
+              "roles": "Gap analysis and evidence analysis \u00b7 High"
+            }
+          ],
+          "name": "Standard research",
+          "pricing_reviewed": "2026-09-17"
+        },
+        {
+          "description": "Six supported choices for each active model step",
+          "id": "configurable-2026-09",
+          "models": [
+            {
+              "completion_limit": 16384,
+              "input_per_million": "0.25",
+              "model": "gpt-6-luna-high",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "0.75",
+              "roles": "Any active model step"
+            },
+            {
+              "completion_limit": 16384,
+              "input_per_million": "0.25",
+              "model": "gpt-6-luna-xhigh",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "0.75",
+              "roles": "Any active model step"
+            },
+            {
+              "completion_limit": 16384,
+              "input_per_million": "0.50",
+              "model": "mimo-v2.6-pro",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "1.00",
+              "roles": "Any active model step"
+            },
+            {
+              "completion_limit": 16384,
+              "input_per_million": "0.15",
+              "model": "mimo-v2.6-flash",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "0.30",
+              "roles": "Any active model step"
+            },
+            {
+              "completion_limit": 16384,
+              "input_per_million": "5.00",
+              "model": "gpt-6-sol-high",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "15.00",
+              "roles": "Any active model step"
+            },
+            {
+              "completion_limit": 16384,
+              "input_per_million": "5.00",
+              "model": "gpt-5.6-terra-high",
+              "output_contract": "Strict typed JSON; existing adapter validation",
+              "output_per_million": "18.00",
+              "roles": "Any active model step"
+            }
+          ],
+          "name": "Choose each research model",
+          "pricing_reviewed": "2026-09-25"
+        }
+      ],
+      "method": "GET",
+      "path": "/api/model-profiles",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "id": "gpt-6-luna-high",
+            "input_per_million": "0.10",
+            "label": "GPT-6 Luna \u00b7 High",
+            "output_per_million": "0.50",
+            "provider": "openai"
+          },
+          {
+            "id": "gpt-6-luna-xhigh",
+            "input_per_million": "0.10",
+            "label": "GPT-6 Luna \u00b7 XHigh",
+            "output_per_million": "0.50",
+            "provider": "openai"
+          },
+          {
+            "id": "mimo-v2.6-pro",
+            "input_per_million": "0.435",
+            "label": "MiMo v2.6 Pro",
+            "output_per_million": "0.87",
+            "provider": "mimo"
+          },
+          {
+            "id": "mimo-v2.6-flash",
+            "input_per_million": "0.14",
+            "label": "MiMo v2.6 Flash",
+            "output_per_million": "0.28",
+            "provider": "mimo"
+          },
+          {
+            "id": "gpt-6-sol-high",
+            "input_per_million": "2.00",
+            "label": "GPT-6 Sol \u00b7 High",
+            "output_per_million": "10.00",
+            "provider": "openai"
+          },
+          {
+            "id": "gpt-5.6-terra-high",
+            "input_per_million": "2.00",
+            "label": "GPT-5.6 Terra \u00b7 High",
+            "output_per_million": "12.00",
+            "provider": "openai"
+          }
+        ],
+        "defaults": {
+          "analyst": "gpt-6-luna-xhigh",
+          "extractor": "gpt-6-luna-high",
+          "gap_analysis": "gpt-6-luna-xhigh",
+          "planner": "gpt-6-luna-xhigh",
+          "scout": "gpt-6-luna-high",
+          "search_agent": "gpt-6-luna-xhigh",
+          "source_selection": "gpt-6-luna-xhigh"
+        }
+      },
+      "method": "GET",
+      "path": "/api/model-options",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "configured": false,
+        "default_db_path": "/fixture/live.sqlite3",
+        "firecrawl_enabled": false,
+        "message": "OpenAI API key is required by the selected model steps",
+        "saved_credentials": [],
+        "saved_settings": [],
+        "service": {
+          "message": "Service is unhealthy.",
+          "owned_process": false,
+          "pid": null,
+          "recent_output": [],
+          "searxng_readiness": "unavailable",
+          "started_at_monotonic": null,
+          "state": "unhealthy",
+          "wigolo_ready": false
+        }
+      },
+      "method": "GET",
+      "path": "/api/configuration",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "configured": false,
+        "default_db_path": "/fixture/live.sqlite3",
+        "firecrawl_enabled": false,
+        "message": "OpenAI API key is required by the selected model steps",
+        "saved_credentials": [],
+        "saved_settings": [],
+        "service": {
+          "message": "Service is unhealthy.",
+          "owned_process": false,
+          "pid": null,
+          "recent_output": [],
+          "searxng_readiness": "unavailable",
+          "started_at_monotonic": null,
+          "state": "unhealthy",
+          "wigolo_ready": false
+        }
+      },
+      "method": "POST",
+      "path": "/api/configuration/check",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "challengeEnabled": false,
+        "dbPath": "",
+        "maxCalls": 160,
+        "maxCost": "0.20",
+        "maxTokens": 500000,
+        "metadataDepth": 20,
+        "modelProfile": "configurable-2026-09",
+        "scholarlySearchMode": "lexical",
+        "seedExpansionEnabled": true,
+        "sourceTarget": 10,
+        "stageModels": {
+          "analyst": "gpt-6-luna-xhigh",
+          "extractor": "gpt-6-luna-high",
+          "gap_analysis": "gpt-6-luna-xhigh",
+          "planner": "gpt-6-luna-xhigh",
+          "scout": "gpt-6-luna-high",
+          "search_agent": "gpt-6-luna-xhigh",
+          "source_selection": "gpt-6-luna-xhigh"
+        },
+        "supportEnabled": true,
+        "useArxiv": false,
+        "useCrossref": true,
+        "useExa": true,
+        "useOpenAlex": true,
+        "usePubmed": false,
+        "useSerpSearch": true
+      },
+      "method": "GET",
+      "path": "/api/preferences",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "challengeEnabled": false,
+        "dbPath": "",
+        "maxCalls": 160,
+        "maxCost": "0.20",
+        "maxTokens": 500000,
+        "metadataDepth": 20,
+        "modelProfile": "configurable-2026-09",
+        "scholarlySearchMode": "lexical",
+        "seedExpansionEnabled": true,
+        "sourceTarget": 10,
+        "stageModels": {
+          "analyst": "gpt-6-luna-xhigh",
+          "extractor": "gpt-6-luna-high",
+          "gap_analysis": "gpt-6-luna-xhigh",
+          "planner": "gpt-6-luna-xhigh",
+          "scout": "gpt-6-luna-high",
+          "search_agent": "gpt-6-luna-xhigh",
+          "source_selection": "gpt-6-luna-xhigh"
+        },
+        "supportEnabled": true,
+        "useArxiv": false,
+        "useCrossref": true,
+        "useExa": true,
+        "useOpenAlex": true,
+        "usePubmed": false,
+        "useSerpSearch": true
+      },
+      "method": "POST",
+      "path": "/api/preferences",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "message": "Offline check.",
+        "provider": "openai",
+        "state": "unavailable"
+      },
+      "method": "POST",
+      "path": "/api/credentials/openai/check",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "removed": true
+      },
+      "method": "POST",
+      "path": "/api/credentials/MIMO_API_KEY/remove",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "configured": false,
+        "message": "Provider keys saved securely in the operating system credential vault. Provider configuration is incomplete.",
+        "saved": true,
+        "saved_settings": []
+      },
+      "method": "POST",
+      "path": "/api/credentials",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "db_path": "/fixture/import.sqlite3",
+        "run_count": 0
+      },
+      "method": "POST",
+      "path": "/api/history/import",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "classification": "starting",
+        "message": "Research started.",
+        "run_id": "00000000-0000-0000-0000-000000000001",
+        "started": true
+      },
+      "method": "POST",
+      "path": "/api/research/start",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "attempt_diagnostic": null,
+        "classification": "running",
+        "completed_checkpoints": 0,
+        "conservative_reserved_cost_usd": "0",
+        "conservative_reserved_tokens": 0,
+        "cost_usage_complete": true,
+        "current_research_round": 1,
+        "db_path": "/fixture/absent.sqlite3",
+        "diagnostic_component": "research",
+        "exit_code": null,
+        "final_brief": null,
+        "fingerprint": null,
+        "known_cost_subtotal_usd": "0",
+        "known_token_subtotal": 0,
+        "latest_checkpoint": null,
+        "message": "Research is running.",
+        "model_calls_used": 1,
+        "model_identity": null,
+        "model_usage_details": null,
+        "opposing": {
+          "acquired_sources": 0,
+          "candidates": 1,
+          "model_attempts": 1,
+          "retrieval_attempts": 2,
+          "stance": "opposing",
+          "status": "running",
+          "usable_snapshots": 1
+        },
+        "persisted_status": null,
+        "progress_percent": 0,
+        "provider_identity": null,
+        "raw_claim": "A public claim",
+        "rendered_brief_hash": null,
+        "research_controls": {
+          "depth": "standard",
+          "discovery_providers": [
+            "serpsearch",
+            "exa",
+            "openalex"
+          ],
+          "focus": null,
+          "length": "report",
+          "research_mode": "focused",
+          "sources_per_stance_per_round": 10,
+          "tone": "neutral"
+        },
+        "retrieval_attempts_used": 2,
+        "run_id": "00000000-0000-0000-0000-000000000001",
+        "stage": "research",
+        "supporting": {
+          "acquired_sources": 0,
+          "candidates": 1,
+          "model_attempts": 1,
+          "retrieval_attempts": 2,
+          "stance": "supporting",
+          "status": "running",
+          "usable_snapshots": 1
+        },
+        "token_usage_complete": true,
+        "total_checkpoints": 5,
+        "total_cost_usd": "0",
+        "total_tokens": 0,
+        "unassigned_retrieval_attempts_used": 0,
+        "v2_diagnostics": null,
+        "validation_errors": [],
+        "worker_active": false
+      },
+      "method": "GET",
+      "path": "/api/research/00000000-0000-0000-0000-000000000001",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "cancelled": true,
+        "message": "Cancellation persisted."
+      },
+      "method": "POST",
+      "path": "/api/research/00000000-0000-0000-0000-000000000001/cancel",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "compatibility_issues": [],
+        "items": [],
+        "run_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "method": "GET",
+      "path": "/api/research/00000000-0000-0000-0000-000000000001/trail",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "detail": {
+          "issue": "missing_file",
+          "message": "inspection database does not exist: /fixture/absent.sqlite3",
+          "retryable": false
+        }
+      },
+      "method": "GET",
+      "path": "/api/research/00000000-0000-0000-0000-000000000001/v2-result",
+      "retry_after": null,
+      "status": 400
+    },
+    {
+      "body": {
+        "detail": {
+          "issue": "missing_file",
+          "message": "inspection database does not exist: /fixture/absent.sqlite3",
+          "retryable": false
+        }
+      },
+      "method": "GET",
+      "path": "/api/research/00000000-0000-0000-0000-000000000001/v2-evidence",
+      "retry_after": null,
+      "status": 400
+    },
+    {
+      "body": {
+        "items": [
+          {
+            "compatibility_issues": [],
+            "completed_at": null,
+            "raw_claim": "A public claim",
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "stage": "research",
+            "status": "running",
+            "updated_at": "2026-08-14T12:00:00+00:00"
+          }
+        ]
+      },
+      "method": "GET",
+      "path": "/api/history",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "message": "Service is unhealthy.",
+        "owned_process": false,
+        "pid": null,
+        "recent_output": [],
+        "searxng_readiness": "unavailable",
+        "started_at_monotonic": null,
+        "state": "unhealthy",
+        "wigolo_ready": false
+      },
+      "method": "GET",
+      "path": "/api/service",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "message": "Service is healthy.",
+        "owned_process": true,
+        "pid": null,
+        "recent_output": [],
+        "searxng_readiness": "configured",
+        "started_at_monotonic": null,
+        "state": "healthy",
+        "wigolo_ready": true
+      },
+      "method": "POST",
+      "path": "/api/service/start",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "message": "Service is stopped.",
+        "owned_process": false,
+        "pid": null,
+        "recent_output": [],
+        "searxng_readiness": "unavailable",
+        "started_at_monotonic": null,
+        "state": "stopped",
+        "wigolo_ready": false
+      },
+      "method": "POST",
+      "path": "/api/service/stop",
+      "retry_after": null,
+      "status": 200
+    },
+    {
+      "body": {
+        "detail": "Invalid request fields."
+      },
+      "method": "POST",
+      "path": "/api/credentials",
+      "retry_after": null,
+      "status": 422
+    },
+    {
+      "body": {
+        "detail": "Confirm that the claim is public and non-sensitive and that you will review the result."
+      },
+      "method": "POST",
+      "path": "/api/research/start",
+      "retry_after": null,
+      "status": 422
+    },
+    {
+      "body": {
+        "detail": "Local origin required."
+      },
+      "method": "GET",
+      "path": "/api/health",
+      "retry_after": null,
+      "status": 403
+    }
+  ],
+  "routes": [
+    [
+      "GET",
+      "/api/configuration",
+      "configuration",
+      200
+    ],
+    [
+      "GET",
+      "/api/health",
+      "health",
+      200
+    ],
+    [
+      "GET",
+      "/api/history",
+      "history",
+      200
+    ],
+    [
+      "GET",
+      "/api/model-options",
+      "model_options",
+      200
+    ],
+    [
+      "GET",
+      "/api/model-profiles",
+      "model_profiles",
+      200
+    ],
+    [
+      "GET",
+      "/api/preferences",
+      "preferences",
+      200
+    ],
+    [
+      "GET",
+      "/api/research/{run_id}",
+      "research_snapshot",
+      200
+    ],
+    [
+      "GET",
+      "/api/research/{run_id}/trail",
+      "research_trail",
+      200
+    ],
+    [
+      "GET",
+      "/api/research/{run_id}/v2-evidence",
+      "v2_evidence",
+      200
+    ],
+    [
+      "GET",
+      "/api/research/{run_id}/v2-result",
+      "v2_result",
+      200
+    ],
+    [
+      "GET",
+      "/api/service",
+      "service_status",
+      200
+    ],
+    [
+      "POST",
+      "/api/configuration/check",
+      "configuration_check",
+      200
+    ],
+    [
+      "POST",
+      "/api/credentials",
+      "store_credentials",
+      200
+    ],
+    [
+      "POST",
+      "/api/credentials/{name}/check",
+      "validate_connection",
+      200
+    ],
+    [
+      "POST",
+      "/api/credentials/{name}/remove",
+      "delete_credential",
+      200
+    ],
+    [
+      "POST",
+      "/api/history/import",
+      "copy_history",
+      200
+    ],
+    [
+      "POST",
+      "/api/preferences",
+      "save_preferences",
+      200
+    ],
+    [
+      "POST",
+      "/api/research/start",
+      "start_research",
+      200
+    ],
+    [
+      "POST",
+      "/api/research/{run_id}/cancel",
+      "cancel_research",
+      200
+    ],
+    [
+      "POST",
+      "/api/service/start",
+      "start_service",
+      200
+    ],
+    [
+      "POST",
+      "/api/service/stop",
+      "stop_service",
+      200
+    ]
+  ]
+}

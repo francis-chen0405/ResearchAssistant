@@ -1,0 +1,43 @@
+{
+  "finding": "R29",
+  "actual_http_status": 200,
+  "classification": "running",
+  "worker_active": true,
+  "actual_v2_diagnostics": null,
+  "computed_diagnostics": {
+    "configured_providers": [
+      "exa"
+    ],
+    "provider_outcomes": [
+      {
+        "provider": "exa",
+        "query_attempts": 3,
+        "non_empty_queries": 3,
+        "empty_queries": 0,
+        "timeout_queries": 0,
+        "failed_queries": 0,
+        "search_results": 3,
+        "surviving_sources": 0
+      }
+    ],
+    "search_attempts": 3,
+    "search_results": 3,
+    "acquisition_attempts": 0,
+    "sources_acquired": 0,
+    "sources_survived_probe": 0,
+    "sources_queued_for_analysis": 0,
+    "sources_analyzed": 0,
+    "approved_evidence_records": 0,
+    "logical_discovery_operations": 3,
+    "physical_search_requests": 3,
+    "retained_metadata_records": 3,
+    "deduplicated_work_candidates": 3,
+    "seed_derived_candidates": 0,
+    "diagnostic_messages": [
+      "Some provider searches ended early; counts include only retained results.",
+      "OpenAlex was not selected; citation graph expansion was unavailable."
+    ]
+  },
+  "database_unchanged_by_inspection": true,
+  "method": "Actual fresh controller worker with offline generated providers, paused during acquisition after saved discovery; actual HTTP polling. No external calls or real data."
+}

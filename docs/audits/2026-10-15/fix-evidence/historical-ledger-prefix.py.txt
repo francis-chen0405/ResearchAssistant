@@ -1,0 +1,47 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import patch
+from uuid import uuid4
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_v2_phase10_reviewer_ledger as fixture
+import researchassistant.agents.v2_reviewer_ledger as reviewer
+from researchassistant.agents.v2_evidence_analyst import run_v2_evidence_analyst
+from researchassistant.contracts.models import LedgerRecord,V2LedgerProvenance
+from researchassistant.storage.store import read_v2_ledger_admission
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix='ra-historical-ledger-prefix-') as folder:
+        run_id=uuid4()
+        path=fixture._prepare_db(Path(folder),run_id)
+        provider=fixture.Phase10Provider([fixture._approved()])
+        analyst=run_v2_evidence_analyst(db_path=path,batch_input=fixture._batch_input(run_id),llm_provider=provider,routing_config=fixture._routing(),clock=lambda:fixture.NOW)
+        original=reviewer.insert_v2_ledger_admission
+        captured:list[LedgerRecord]=[]
+        def interrupted(database:str,record:LedgerRecord,provenance:V2LedgerProvenance) -> None:
+            original(database,record,provenance)
+            captured.append(record)
+            raise KeyboardInterrupt('generated interruption after historical Ledger admission')
+        with patch.object(reviewer,'insert_v2_ledger_admission',interrupted):
+            try:
+                reviewer.run_v2_reviewer_ledger(db_path=path,analyst_result=analyst,llm_provider=provider,routing_config=fixture._routing(),clock=lambda:datetime.now(UTC))
+            except KeyboardInterrupt:
+                pass
+            else:
+                raise AssertionError('expected interruption')
+        before=read_v2_ledger_admission(path,captured[0].ledger_claim_id)
+        resumed=fixture.Phase10Provider([])
+        try:
+            result=reviewer.run_v2_reviewer_ledger(db_path=path,analyst_result=analyst,llm_provider=resumed,routing_config=fixture._routing(),clock=lambda:datetime.now(UTC))
+        except Exception as exc:
+            state,error='failed',f'{type(exc).__name__}: {exc}'
+        else:
+            state,error='completed',str(result.source_results[0].state)
+        observed={'boundary':'Historical Phase-10 Reviewer bridge, directly invoked with its existing generated fixture; ordinary fresh production uses analyzer admission instead.','state':state,'error':error,'new_provider_calls':len(resumed.requests),'original_admission_unchanged':read_v2_ledger_admission(path,captured[0].ledger_claim_id)==before,'method':'Actual relational admission commit interrupted before source checkpoint; advancing UTC clock, exact original Analyst result on resume. Generated offline providers only; no artifact edits or real data.'}
+    Path('/tmp/ra-review-historical-ledger-prefix.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

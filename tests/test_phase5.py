@@ -569,6 +569,9 @@ def test_valid_output_produces_stable_hash() -> None:
         "39ad6b8bad395870a3e3ff50e242cf4ce163c1d53a5334e73612dd9f7ecef2a0"
     )
     assert set(APPROVED_CONNECTIVE_TEMPLATES) == {
+        "analyzer_supports",
+        "analyzer_challenges",
+        "analyzer_qualifies",
         "supporting_evidence",
         "opposing_evidence",
         "limitation",

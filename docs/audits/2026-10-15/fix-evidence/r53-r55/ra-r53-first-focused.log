@@ -1,0 +1,154 @@
+.....................F.......                                            [100%]
+=================================== FAILURES ===================================
+_______________ test_ranked_run_persists_sidecar_and_resumes_it ________________
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1407/test_ranked_run_persists_sidec0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d2f47d0>
+
+    def test_ranked_run_persists_sidecar_and_resumes_it(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from agents import v2_discovery
+    
+        run_id = uuid4()
+        directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+        queries = (
+            V2RoundOneSearchQuery(
+                run_id=run_id,
+                query_id=uuid4(),
+                direction=ResearchDirection.SUPPORT,
+                provider=DiscoveryProvider.OPENALEX,
+                strategy="academic_studies",
+                query_text="randomized study of intervention",
+                created_at=NOW,
+            ),
+        )
+        plan = V2InitialPlannerOutput(
+            run_id=run_id,
+            raw_claim="A claim about an intervention.",
+            directions=directions,
+            discovery_providers=(DiscoveryProvider.OPENALEX,),
+            searches=queries,
+            planner_prompt_version="test-v2",
+            planned_at=NOW,
+        )
+        response = V2DiscoveryResponse(
+            query=queries[0],
+            results=(
+                SearchResult(
+                    original_url="https://journals.example.test/paper",
+                    title="A randomized intervention study",
+                    snippet="study findings",
+                    rank=12,
+                    metadata=SearchDiscoveryMetadata(
+                        engine="openalex",
+                        doi="10.3000/study",
+                        abstract="A primary randomized study.",
+                        work_type="article",
+                    ),
+                ),
+            ),
+        )
+        path = tmp_path / "ranked-run.sqlite"
+        init_db(str(path))
+        insert_run(
+            str(path),
+            RunManifest(
+                run_id=run_id,
+                status=RunStatus.PLANNED,
+                raw_claim=plan.raw_claim,
+                current_stage=Stage.CLAIM_PLANNER,
+                created_at=NOW,
+                updated_at=NOW,
+            ),
+        )
+        insert_v2_pipeline_identity(str(path), run_id, V2PipelineIdentity(), NOW)
+        policy = V2MetadataDiscoveryPolicy()
+        binding = type(
+            "Binding",
+            (),
+            {
+                "exact_claim": plan.raw_claim,
+                "policy": policy,
+                "ranking_identity": "source-candidate-ranking-v2",
+            },
+        )()
+        monkeypatch.setattr(v2_discovery, "_fresh_ranked_binding", lambda _path, _run: binding)
+        inserted_keys: list[str] = []
+        insert_artifacts = v2_discovery.insert_v2_artifact_batch
+    
+        def record_artifacts(
+            db_path: str, artifacts: tuple[tuple[str, StrictModel, datetime], ...]
+        ) -> object:
+            inserted_keys.extend(key for key, _, _ in artifacts)
+            return insert_artifacts(db_path, artifacts)
+    
+        monkeypatch.setattr(v2_discovery, "insert_v2_artifact_batch", record_artifacts)
+        scout = _RecallScout()
+>       result = v2_discovery.run_v2_discovery_and_scout(
+            db_path=path,
+            planner_output=plan,
+            responses=(response,),
+            llm_provider=scout,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+            budget_snapshot=lambda: _snapshot(10),
+        )
+
+tests/test_v2_ranked_scout.py:557: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def run_v2_discovery_and_scout(
+        *,
+        db_path: str | Path,
+        planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan,
+        responses: Sequence[V2DiscoveryResponse],
+        llm_provider: LLMProvider,
+        routing_config: V2RoutingConfig,
+        clock: Callable[[], datetime] | None = None,
+        crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
+        cancellation_requested: Callable[[], bool] | None = None,
+        budget_snapshot: Callable[[], V2BudgetSnapshot] | None = None,
+        downstream_input_tokens: Mapping[LLMStage, int] | None = None,
+    ) -> V2DiscoveryScoutRunResult:
+        """Persist or resume one round of normalized discovery and batched Scout decisions."""
+        now = clock or _utc_now
+        completed_at = now()
+        _require_aware(completed_at, "clock result")
+        try:
+            existing = read_v2_artifact(
+                str(db_path), planner_output.run_id, _artifact_key(planner_output)
+            )
+        except KeyError:
+            existing = None
+        if existing is not None:
+            output = V2DiscoveryScoutOutput.model_validate_json(existing.payload_json)
+            if output.directions != planner_output.directions:
+                raise ValueError("persisted discovery output directions do not match the initial plan")
+            return V2DiscoveryScoutRunResult(
+                output=output,
+                resumed=True,
+                ranking_artifact=_read_ranking_artifact(db_path, planner_output, output),
+            )
+        routing_config.preflight()
+        binding = _fresh_ranked_binding(db_path, planner_output.run_id)
+        checkpoint_key = "scout-checkpoint-v1/" + _artifact_key(planner_output)
+        input_hash = checkpoint_hash(
+            {
+                "planner": planner_output.model_dump(mode="json"),
+                "responses": [response.model_dump(mode="json") for response in responses],
+>               "binding": binding.model_dump(mode="json") if binding is not None else None,
+                           ^^^^^^^^^^^^^^^^^^
+                "routing": routing_config.preflight().model_dump(mode="json"),
+                "prompt": load_prompt_file(
+                    V2_SCOUT_V2_PROMPT_PATH if binding is not None else V2_SCOUT_PROMPT_PATH,
+                    expected_stage=LLMStage.SCOUT,
+                ).sha256,
+            }
+        )
+E       AttributeError: 'Binding' object has no attribute 'model_dump'
+
+backend/src/researchassistant/agents/v2_discovery.py:383: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_v2_ranked_scout.py::test_ranked_run_persists_sidecar_and_resumes_it
+1 failed, 28 passed in 11.98s

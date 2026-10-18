@@ -1,0 +1,52 @@
+.....................................F.................................. [ 31%]
+........................................................................ [ 63%]
+........................................................................ [ 95%]
+..........                                                               [100%]
+=================================== FAILURES ===================================
+___ test_fresh_v2_synthesis_is_deterministic_and_preserves_admission_method ____
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1409/test_fresh_v2_synthesis_is_det0')
+
+    def test_fresh_v2_synthesis_is_deterministic_and_preserves_admission_method(
+        tmp_path: Path,
+    ) -> None:
+        run_id = uuid4()
+        db_path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=db_path,
+            batch_input=_batch_input(run_id),
+            llm_provider=FakeLunaAnalyst([_assessment()]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(
+            db_path=db_path,
+            analyst_result=analyst,
+            clock=lambda: NOW,
+        )
+    
+        final = run_v2_final_research_output(
+            db_path=db_path,
+            admission_result=admission,
+            continuation=_continuation(run_id),
+            llm_provider=object(),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+    
+        assert final.final_output.release_validation.valid
+        assert final.final_output.synthesis.synthesizer_model_name == "deterministic-v2-assembler"
+>       assert final.final_output.synthesis.synthesizer_prompt_version == (
+            "phase13-deterministic-synthesizer-v1"
+        )
+E       AssertionError: assert 'phase13-dete...relationships' == 'phase13-dete...ynthesizer-v1'
+E         
+E         - phase13-deterministic-synthesizer-v1
+E         ?                                    ^
+E         + phase13-deterministic-synthesizer-v2-relationships
+E         ?                                    ^^^^^^^^^^^^^^^
+
+tests/test_v2_phase13_analyzer_admission.py:368: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_v2_phase13_analyzer_admission.py::test_fresh_v2_synthesis_is_deterministic_and_preserves_admission_method
+1 failed, 225 passed in 9.09s

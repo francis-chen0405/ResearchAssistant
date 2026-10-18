@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+root = Path.cwd()
+sys.path.insert(0, str(root / 'tests'))
+from test_checkout_launcher_readiness import _checkout
+
+observations = []
+for scenario in ('api_stall', 'web_stall'):
+    stop = threading.Event()
+    accepted = threading.Event()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if scenario == 'api_stall' or self.path != '/api/health':
+                accepted.set()
+                stop.wait(10)
+                return
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"api_version":"mlp-5-v2-phase13-analyzer-admission"}')
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    worker = threading.Thread(target=server.serve_forever)
+    worker.start()
+    try:
+        with tempfile.TemporaryDirectory(prefix='ra-launcher-native-') as temporary:
+            folder = Path(temporary) / 'checkout with spaces'
+            launcher = _checkout(folder, scenario)
+            source = launcher.read_text().replace(
+                f'"{folder / "bin/curl"}"', '/usr/bin/curl'
+            ).replace('127.0.0.1:8765', f'127.0.0.1:{server.server_port}').replace(
+                '127.0.0.1:3000', f'127.0.0.1:{server.server_port}'
+            )
+            launcher.write_text(source)
+            process = subprocess.Popen(
+                ['/bin/zsh', str(launcher)], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, start_new_session=True,
+            )
+            started = time.monotonic()
+            try:
+                output, errors = process.communicate(timeout=8)
+                elapsed = time.monotonic() - started
+                assert accepted.is_set() and elapsed < 6, (output, errors, elapsed)
+                assert process.returncode == 1 and (folder / 'osascript').exists()
+                assert not (folder / 'open').exists()
+                observations.append({'scenario': scenario, 'elapsed_seconds': round(elapsed, 3),
+                                     'exit_code': process.returncode, 'real_curl': True})
+            finally:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.communicate(timeout=2)
+    finally:
+        stop.set()
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=2)
+        assert not worker.is_alive()
+result = {'observations': observations, 'scope': 'Actual checkout launcher and macOS curl, '
+          '3-second test startup budget, generated prerequisites and owned loopback listeners. '
+          'No installed application, real credentials, paid providers or real research data.'}
+Path('/tmp/ra-r58-native-fixed.json').write_text(json.dumps(result, indent=2) + '\n')
+print(json.dumps(result, indent=2))

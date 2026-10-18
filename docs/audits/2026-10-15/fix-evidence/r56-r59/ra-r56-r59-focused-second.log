@@ -1,0 +1,148 @@
+.............................F.F........................................ [ 85%]
+.....F......                                                             [100%]
+=================================== FAILURES ===================================
+_ test_initial_planner_recovers_valid_legacy_projection_without_new_request[generic] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1424/test_initial_planner_recovers_0')
+missing = 'generic'
+
+    @pytest.mark.parametrize("missing", ("generic", "relational"))
+    def test_initial_planner_recovers_valid_legacy_projection_without_new_request(
+        tmp_path: Path, missing: str
+    ) -> None:
+        path = tmp_path / "legacy.sqlite3"
+        provider = FakeInitialPlanner()
+        run_id = uuid4()
+    
+        def execute() -> planner.V2InitialPlannerRunResult:
+            return planner.run_v2_initial_planner(
+                "A public claim.",
+                db_path=path,
+                directions=ResearchDirections(),
+                discovery_providers=(DiscoveryProvider.EXA,),
+                llm_provider=provider,
+                routing_config=_planner_routing(),
+                run_id=run_id,
+                legacy_prompt=True,
+                clock=_advancing_clock(),
+            )
+    
+        original = execute()
+        with closing(sqlite3.connect(path)) as connection, connection:
+            tables = (
+                ("v2_artifacts",)
+                if missing == "generic"
+                else ("v2_round_one_search_queries", "v2_initial_planner_outputs")
+            )
+            for table in {"v2_artifacts", *tables}:
+                trigger_name = f"{table}_immutable_delete"
+                trigger = connection.execute(
+                    "SELECT sql FROM sqlite_master WHERE name=?", (trigger_name,)
+                ).fetchone()[0]
+                connection.execute(f"DROP TRIGGER {trigger_name}")
+                if table == "v2_artifacts":
+                    connection.execute(
+                        "DELETE FROM v2_artifacts WHERE artifact_key LIKE 'initial-planner-checkpoint-v1%'"
+                    )
+                    if missing == "generic":
+                        connection.execute(
+                            "DELETE FROM v2_artifacts WHERE artifact_key='phase-3-initial-round-1-plan'"
+                        )
+                else:
+                    connection.execute(f"DELETE FROM {table} WHERE run_id=?", (str(run_id),))
+                connection.execute(trigger)
+        before = _prefix(str(path))
+        resumed = execute()
+>       assert resumed.resumed and resumed.planner_output == original.planner_output
+E       assert (True and V2InitialPlan...timezone.utc)) == V2InitialPlan...timezone.utc))
+E        +  where True = V2InitialPlannerRunResult(planner_output=V2InitialPlannerOutput(run_id=UUID('473c84ea-0126-44bb-9e7d-70e9e2a947aa'), r...b"}', created_at=datetime.datetime(2026, 8, 20, 0, 0, 1, tzinfo=datetime.timezone.utc)), invocation=None, resumed=True).resumed
+E         
+E         Use -v to get more diff)
+
+tests/test_selection_planner_checkpoint_resume.py:379: AssertionError
+_____________ test_failed_initial_planner_attempt_remains_consumed _____________
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1424/test_failed_initial_planner_at0')
+
+    def test_failed_initial_planner_attempt_remains_consumed(tmp_path: Path) -> None:
+        class FailingPlanner(FakeConceptPlanner):
+            def generate(self, request: LLMRequest) -> object:
+                self.requests.append(request)
+                raise RuntimeError("known provider failure")
+    
+        provider = FailingPlanner()
+        path = tmp_path / "failed.sqlite3"
+        run_id = uuid4()
+        for _ in range(3):
+            with pytest.raises(RuntimeError, match="known provider failure"):
+                planner.run_v2_initial_planner(
+                    "A public claim.",
+                    db_path=path,
+                    directions=ResearchDirections(),
+                    discovery_providers=(DiscoveryProvider.EXA,),
+                    llm_provider=provider,
+                    routing_config=_planner_routing(),
+                    run_id=run_id,
+                    clock=_advancing_clock(),
+                )
+        assert len(provider.requests) == 1
+>       assert result.result == execute(_budget()).result
+               ^^^^^^
+E       NameError: name 'result' is not defined
+
+tests/test_selection_planner_checkpoint_resume.py:406: NameError
+_ test_large_selection_uses_deterministic_audited_shortlist_with_full_reservation _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1424/test_large_selection_uses_dete0')
+
+    def test_large_selection_uses_deterministic_audited_shortlist_with_full_reservation(
+        tmp_path: Path,
+    ) -> None:
+        selection_input = _large_selection_input()
+        full_prompt = _render_full_input(selection_input)
+        assert conservative_token_estimate(full_prompt) > SHORTLIST_CAP
+    
+        providers = (
+            BoundedSourceSelector(estimator_overhead=83),
+            BoundedSourceSelector(estimator_overhead=83),
+        )
+        runs = []
+        for index, provider in enumerate(providers):
+            run_dir = tmp_path / f"run-{index}"
+            run_dir.mkdir()
+            result, db_path = _run(run_dir, selection_input, provider)
+            runs.append((result, db_path, provider))
+    
+        first, first_path, first_provider = runs[0]
+        second, second_path, second_provider = runs[1]
+        first_audit = _audit(first_path, selection_input.run_id)
+        second_audit = _audit(second_path, selection_input.run_id)
+        assert first_audit == second_audit
+        assert first_audit.input_token_cap == SHORTLIST_CAP
+        assert 0 < first_audit.rendered_input_tokens <= SHORTLIST_CAP
+        assert first_audit.total_sources == len(selection_input.survivors)
+        assert len(first_audit.included_source_ids) == len(
+            first_provider.requests[0].input_artifact.survivors
+        )
+        assert first_audit.included_source_ids == tuple(
+            candidate.source_id for candidate in first_provider.requests[0].input_artifact.survivors
+        )
+        assert first_audit.omitted
+        assert {row.source_id for row in first_audit.omitted} == {
+            candidate.source_id
+            for candidate in selection_input.survivors
+            if candidate.source_id not in set(first_audit.included_source_ids)
+        }
+        assert all(row.disposition == "input_cap" for row in first_audit.omitted)
+        for provider, result in ((first_provider, first), (second_provider, second)):
+>           request, minimum, actual = next(
+                estimate for estimate in provider.estimates if estimate[0] == provider.requests[0]
+            )
+E           StopIteration
+
+tests/test_preview_selection_bounds.py:201: StopIteration
+=========================== short test summary info ============================
+FAILED tests/test_selection_planner_checkpoint_resume.py::test_initial_planner_recovers_valid_legacy_projection_without_new_request[generic]
+FAILED tests/test_selection_planner_checkpoint_resume.py::test_failed_initial_planner_attempt_remains_consumed
+FAILED tests/test_preview_selection_bounds.py::test_large_selection_uses_deterministic_audited_shortlist_with_full_reservation
+3 failed, 81 passed in 23.69s

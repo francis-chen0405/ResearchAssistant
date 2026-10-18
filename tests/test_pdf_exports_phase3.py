@@ -74,3 +74,16 @@ def test_unsupported_glyph_or_shaping_is_explicit() -> None:
     for text in ("unsupported 😀", "العربية", "\x00"):
         with pytest.raises(PDFTextCompatibilityError, match="coverage"):
             _pdf(text)
+
+
+@pytest.mark.parametrize("text", ["\x00", "\x01", "\x0b", "\x0c", "\ufffe", "\uffff"])
+def test_xml_invalid_text_recommends_only_markdown(text: str) -> None:
+    with pytest.raises(PDFTextCompatibilityError, match="use Markdown") as error:
+        _pdf(text)
+    assert "DOCX" not in str(error.value)
+
+
+@pytest.mark.parametrize("text", ["unsupported 😀", "العربية"])
+def test_xml_representable_text_can_still_use_docx(text: str) -> None:
+    with pytest.raises(PDFTextCompatibilityError, match="use Markdown or DOCX"):
+        _pdf(text)

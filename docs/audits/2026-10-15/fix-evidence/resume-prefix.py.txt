@@ -1,0 +1,53 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+sys.path.insert(0, str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+import researchassistant.agents.v2_source_selection as selection
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult
+from researchassistant.storage.store import list_runs
+
+def main() -> None:
+    original_entry = product.run_v2_production_pipeline
+    def live_clock_entry(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:
+        kwargs['clock'] = lambda: datetime.now(UTC)
+        return original_entry(*args, **kwargs)
+    original_insert = selection.insert_v2_artifact
+    def interrupted_insert(*args: Any, **kwargs: Any) -> object:
+        result=original_insert(*args, **kwargs)
+        if args[1] == selection.V2_SOURCE_SELECTION_POOL_KEY:
+            raise KeyboardInterrupt('generated interruption after survivor pool commit')
+        return result
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    with tempfile.TemporaryDirectory(prefix='ra-resume-prefix-') as temporary:
+        path=Path(temporary)/'generated.sqlite3'
+        with patch.object(product, 'run_v2_production_pipeline', side_effect=live_clock_entry):
+            with patch.object(selection, 'insert_v2_artifact', side_effect=interrupted_insert):
+                try:
+                    product._run(path,controls)
+                except KeyboardInterrupt:
+                    pass
+                else:
+                    raise AssertionError('Expected interruption')
+            partial=list_runs(path)[0]
+            resumed,model,search=product._run(path,controls,run_id=partial.run_id)
+    observed={
+        'finding':'R33', 'same_source_and_settings':True,
+        'saved_artifacts_modified_by_probe':False,
+        'interrupted_after':selection.V2_SOURCE_SELECTION_POOL_KEY,
+        'partial_status':partial.status.value,'resume_state':resumed.state.value,
+        'failure_reason':resumed.failure_reason,
+        'model_requests_on_resume':len(model.requests),'search_requests_on_resume':len(search.requests),
+        'method':'Actual generated offline pipeline with an advancing UTC clock; interruption immediately after the source-selection pool commit, followed by unchanged production resume. No SQL edits, artifact substitution, real data or external calls.',
+    }
+    assert resumed.state.value=='failed' and 'already exists with different data' in resumed.failure_reason,observed
+    Path('/tmp/ra-review-resume-prefix.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

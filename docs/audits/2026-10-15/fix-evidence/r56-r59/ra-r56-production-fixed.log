@@ -1,0 +1,18 @@
+{
+  "state": "released",
+  "failure_reason": null,
+  "completed_selection_calls": 1,
+  "configured_attempts_per_stage": 2,
+  "same_nonbudget_input": true,
+  "requests": [
+    {
+      "stage": "source_selection",
+      "prompt_sha256": "049d2381a603c9fb94d1f078cbd5b10d67ab97746c7dc91c4b8af071ce1f9000",
+      "nonbudget_input_sha256": "7520ca0d803c8232bd452f1669e99afb70b0736d9ce1726a43a3276a88f07a26"
+    }
+  ],
+  "physical_audit_prefix_preserved": true,
+  "all_preinterruption_calls_completed": true,
+  "new_search_calls_after_interruption": 0,
+  "method": "Two actual generated production interruptions after successful Source Selection and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls."
+}

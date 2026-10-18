@@ -1,0 +1,30 @@
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+from urllib.parse import unquote
+
+names = ('desktop/README.md', 'frontend/README.md', 'docs/project/database-recovery.md',
+         'docs/research-invariants.md', 'docs/project/ARCHITECTURE.md',
+         'docs/project/DECISIONS.md')
+count = 0
+for name in names:
+    path = Path(name)
+    for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', path.read_text()):
+        if target.startswith(('https:', 'http:', '#')):
+            continue
+        local = target.split('#', 1)[0].split('?', 1)[0].strip('<>')
+        assert (path.parent / unquote(local)).exists(), (name, target)
+        count += 1
+desktop = Path('desktop/README.md').read_text()
+invariants = Path('docs/research-invariants.md').read_text()
+assert 'schemas 7–18' in desktop and 'schemas 14–18' in desktop
+assert 'credential-free HTTP(S)' in desktop
+assert 'schema 7–18' in invariants and 'validated numeric public destinations' in invariants
+assert 'backend/src/' in invariants and 'backend/pyproject.toml' in invariants
+assert 'all six' in Path('frontend/README.md').read_text()
+assert 'schemas 7–18' in Path('docs/project/database-recovery.md').read_text()
+print(json.dumps({'maintained_guides': len(names), 'local_path_targets_resolved': count,
+                  'current_schema_security_identity_statements': 'pass',
+                  'historical_archives_modified': False}, indent=2))

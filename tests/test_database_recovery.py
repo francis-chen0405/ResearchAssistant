@@ -47,6 +47,7 @@ _MIGRATIONS = (
     store_schema._apply_complete_usage_migration,
     store_schema._apply_update_provenance_migration,
     store_schema._apply_query_indexes_migration,
+    store_schema._apply_round_four_admissions_migration,
 )
 
 

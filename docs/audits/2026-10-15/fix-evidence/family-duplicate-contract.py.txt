@@ -1,0 +1,35 @@
+from __future__ import annotations
+import json
+from datetime import UTC,datetime
+from pathlib import Path
+from uuid import uuid4
+from researchassistant.agents.supportingresearcher import DeduplicationState,_retrieve_result
+from researchassistant.contracts.models import SearchQuery
+from researchassistant.contracts.scraping import RetryPolicy,ScrapeRequest,ScrapeResponse
+
+class GeneratedScraper:
+    def __init__(self) -> None:
+        self.calls=0
+    def scrape(self,request:ScrapeRequest) -> ScrapeResponse:
+        self.calls+=1
+        return ScrapeResponse(resolved_url=request.url,original_url=request.url,canonical_url='https://doi.org/10.1234/generated-study',content_type='text/html',text=f'Capture {self.calls} contains different generated study text and the same paper identity.',provider_name='generated',provider_version='v1')
+
+def main() -> None:
+    now=datetime.now(UTC)
+    run_id=uuid4()
+    query=SearchQuery(run_id=run_id,query_id=uuid4(),stance='supporting',provider='openalex',intent='academic_study',query_round=1,strategy='academic_studies',query_text='course completion',exclusion_parameters='',created_at=now)
+    scraper=GeneratedScraper()
+    state=DeduplicationState()
+    first,snapshot=_retrieve_result(run_id,query,1,'https://example.test/study/landing',scraper,RetryPolicy(),lambda:now,state,None)
+    assert snapshot is not None
+    try:
+        second,_=_retrieve_result(run_id,query,2,'https://example.test/study.pdf',scraper,RetryPolicy(),lambda:now,state,None)
+    except Exception as exc:
+        observed={'state':'failed','error':f'{type(exc).__name__}: {exc}'}
+    else:
+        observed={'state':'completed','duplicate_status':second.scrape_status.value,'failure_code':second.failure_code}
+    observed.update(first_status=first.scrape_status.value,scrape_calls=scraper.calls,method='Actual retained retrieval/deduplication path, generated distinct captures at two URLs with the same canonical DOI. No database, provider traffic or real data.')
+    Path('/tmp/ra-review-family-duplicate-contract.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

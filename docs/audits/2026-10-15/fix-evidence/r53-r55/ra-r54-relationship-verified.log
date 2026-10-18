@@ -1,0 +1,48 @@
+.....................F                                                   [100%]
+=================================== FAILURES ===================================
+______ test_historical_reviewer_items_cannot_claim_analyzer_relationships ______
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1415/test_historical_reviewer_items0')
+
+    def test_historical_reviewer_items_cannot_claim_analyzer_relationships(tmp_path: Path) -> None:
+        from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved, _run
+        from test_v2_phase11_final_output import _synthesis
+    
+        from researchassistant.evidence.renderer import validate_final_release
+    
+        _path, reviewer = _run(tmp_path, Phase10Provider([_approved()]))
+        synthesis = _synthesis(reviewer)
+        section = synthesis.sections[0]
+        forged = synthesis.model_copy(
+            update={
+                "sections": [
+                    section.model_copy(
+                        update={
+                            "items": [
+                                section.items[0].model_copy(
+                                    update={"connective_template_id": "analyzer_supports"}
+                                )
+                            ]
+                        }
+                    )
+                ]
+            }
+        )
+        records = tuple(
+            source.ledger_record for source in reviewer.source_results if source.ledger_record
+        )
+        result = validate_final_release(
+            forged,
+            records,
+            authoritative_claim=reviewer.analyst_result.input.exact_claim,
+            validated_at=NOW,
+        )
+        assert not result.valid
+>       assert any("Analyzer-admitted" in error.message for error in result.errors)
+E       assert False
+E        +  where False = any(<generator object test_historical_reviewer_items_cannot_claim_analyzer_relationships.<locals>.<genexpr> at 0x10d1b65a0>)
+
+tests/test_relationship_rendering_review.py:236: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_relationship_rendering_review.py::test_historical_reviewer_items_cannot_claim_analyzer_relationships
+1 failed, 21 passed in 1.62s

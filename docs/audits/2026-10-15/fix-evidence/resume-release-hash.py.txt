@@ -1,0 +1,46 @@
+from __future__ import annotations
+import hashlib
+import json
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+from researchassistant.agents.v2_final_output import render_v2_final_output
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, canonical_v2_artifact_json, v2_payload_fingerprint
+from researchassistant.research.v2_orchestrator import V2_PRODUCTION_ARTIFACT_KEY, V2ProductionPipelineResult
+
+def main() -> None:
+    controls=ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    with tempfile.TemporaryDirectory(prefix='ra-resume-release-hash-') as temporary:
+        path=Path(temporary)/'generated.sqlite3'
+        original,_,_=product._run(path,controls)
+        assert original.state.value=='released'
+        values=original.model_dump(mode='json')
+        values['final_output']['release_validation']['rendered_output_hash']='f'*64
+        substituted=V2ProductionPipelineResult.model_validate(values)
+        payload=canonical_v2_artifact_json(substituted)
+        with sqlite3.connect(path) as connection:
+            trigger=connection.execute("SELECT sql FROM sqlite_master WHERE name='v2_artifacts_immutable_update'").fetchone()[0]
+            connection.execute('DROP TRIGGER v2_artifacts_immutable_update')
+            row=connection.execute('UPDATE v2_artifacts SET payload_json=?,payload_sha256=? WHERE run_id=? AND artifact_key=?',(payload,v2_payload_fingerprint(payload),str(original.run_id),V2_PRODUCTION_ARTIFACT_KEY))
+            assert row.rowcount==1
+            connection.execute(trigger)
+        before=path.read_bytes()
+        resumed,model,search=product._run(path,controls,run_id=original.run_id)
+        text=render_v2_final_output(resumed.final_output)
+        observed={
+            'finding':'R31','resumed_state':resumed.state.value,
+            'saved_release_hash':resumed.final_output.release_validation.rendered_output_hash,
+            'actual_rendered_hash':hashlib.sha256(text.encode()).hexdigest(),
+            'hash_mismatch_accepted':resumed.final_output.release_validation.rendered_output_hash!=hashlib.sha256(text.encode()).hexdigest(),
+            'model_requests_on_resume':len(model.requests),'search_requests_on_resume':len(search.requests),
+            'database_unchanged_by_resume':path.read_bytes()==before,
+            'method':'Generate offline released research, replace only the cached production-result release hash, update envelope checksum and restore the exact immutability trigger; invoke actual production resume under identical settings/source. No real data or external calls.',
+        }
+        assert observed['hash_mismatch_accepted'] and resumed.state.value=='released'
+    Path('/tmp/ra-review-resume-release-hash.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

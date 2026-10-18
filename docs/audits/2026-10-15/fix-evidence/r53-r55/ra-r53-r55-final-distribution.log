@@ -1,0 +1,182 @@
+Processing /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: researchassistant
+  Building wheel for researchassistant (pyproject.toml): started
+  Building wheel for researchassistant (pyproject.toml): finished with status 'done'
+  Created wheel for researchassistant: filename=researchassistant-0.1.0-py3-none-any.whl size=3963767 sha256=97a0b3a06da23d538c06c51ef3347d7b21b5e99c6dbdd80f702d7e2ed0b81fb4
+  Stored in directory: /private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pip-ephem-wheel-cache-q2nj2xjd/wheels/3c/a7/b9/67cca8500bd7569225a09c85cc4f6e546a80d7002f431b5ec4
+Successfully built researchassistant
+
+[notice] A new release of pip is available: 26.1.2 -> 26.2.1
+[notice] To update, run: /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/bin/python -m pip install --upgrade pip
+Processing ./dist/researchassistant-0.1.0-py3-none-any.whl
+Collecting fastapi<1.0,>=0.115 (from researchassistant==0.1.0)
+  Downloading fastapi-0.141.1-py3-none-any.whl.metadata (27 kB)
+Collecting httpx<1.0,>=0.27 (from researchassistant==0.1.0)
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting httpcore<1.1,>=1.0.9 (from researchassistant==0.1.0)
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting markdown-it-py<4.0,>=3.0 (from researchassistant==0.1.0)
+  Downloading markdown_it_py-3.0.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting pydantic<3.0,>=2.0 (from researchassistant==0.1.0)
+  Downloading pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+Collecting pypdf<6.0,>=5.0 (from researchassistant==0.1.0)
+  Downloading pypdf-5.9.0-py3-none-any.whl.metadata (7.1 kB)
+Collecting reportlab<5.0,>=4.4.9 (from researchassistant==0.1.0)
+  Downloading reportlab-4.4.9-py3-none-any.whl.metadata (1.7 kB)
+Collecting uvicorn<1.0,>=0.30 (from researchassistant==0.1.0)
+  Downloading uvicorn-0.51.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting starlette>=0.46.0 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Downloading starlette-1.3.1-py3-none-any.whl.metadata (6.4 kB)
+Collecting typing-extensions>=4.8.0 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting typing-inspection>=0.4.2 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting annotated-doc>=0.0.2 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi (from httpcore<1.1,>=1.0.9->researchassistant==0.1.0)
+  Downloading certifi-2026.6.17-py3-none-any.whl.metadata (2.5 kB)
+Collecting h11>=0.16 (from httpcore<1.1,>=1.0.9->researchassistant==0.1.0)
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting anyio (from httpx<1.0,>=0.27->researchassistant==0.1.0)
+  Downloading anyio-4.14.1-py3-none-any.whl.metadata (4.6 kB)
+Collecting idna (from httpx<1.0,>=0.27->researchassistant==0.1.0)
+  Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+Collecting mdurl~=0.1 (from markdown-it-py<4.0,>=3.0->researchassistant==0.1.0)
+  Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<3.0,>=2.0->researchassistant==0.1.0)
+  Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.4 (from pydantic<3.0,>=2.0->researchassistant==0.1.0)
+  Downloading pydantic_core-2.46.4-cp312-cp312-macosx_11_0_arm64.whl.metadata (6.6 kB)
+Collecting pillow>=9.0.0 (from reportlab<5.0,>=4.4.9->researchassistant==0.1.0)
+  Downloading pillow-12.3.0-cp312-cp312-macosx_11_0_arm64.whl.metadata (9.1 kB)
+Collecting charset-normalizer (from reportlab<5.0,>=4.4.9->researchassistant==0.1.0)
+  Downloading charset_normalizer-3.4.9-cp312-cp312-macosx_10_13_universal2.whl.metadata (41 kB)
+Collecting click>=7.0 (from uvicorn<1.0,>=0.30->researchassistant==0.1.0)
+  Downloading click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+Downloading fastapi-0.141.1-py3-none-any.whl (131 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading markdown_it_py-3.0.0-py3-none-any.whl (87 kB)
+Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+Downloading pydantic_core-2.46.4-cp312-cp312-macosx_11_0_arm64.whl (2.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 11.7 MB/s eta 0:00:00
+Downloading pypdf-5.9.0-py3-none-any.whl (313 kB)
+Downloading reportlab-4.4.9-py3-none-any.whl (2.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 17.2 MB/s eta 0:00:00
+Downloading uvicorn-0.51.0-py3-none-any.whl (73 kB)
+Downloading annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Downloading click-8.4.2-py3-none-any.whl (119 kB)
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Downloading pillow-12.3.0-cp312-cp312-macosx_11_0_arm64.whl (4.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 16.8 MB/s eta 0:00:00
+Downloading starlette-1.3.1-py3-none-any.whl (73 kB)
+Downloading anyio-4.14.1-py3-none-any.whl (124 kB)
+Downloading idna-3.18-py3-none-any.whl (65 kB)
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Downloading certifi-2026.6.17-py3-none-any.whl (133 kB)
+Downloading charset_normalizer-3.4.9-cp312-cp312-macosx_10_13_universal2.whl (319 kB)
+Installing collected packages: typing-extensions, pypdf, pillow, mdurl, idna, h11, click, charset-normalizer, certifi, annotated-types, annotated-doc, uvicorn, typing-inspection, reportlab, pydantic-core, markdown-it-py, httpcore, anyio, starlette, pydantic, httpx, fastapi, researchassistant
+Successfully installed annotated-doc-0.0.5 annotated-types-0.7.0 anyio-4.14.1 certifi-2026.6.17 charset-normalizer-3.4.9 click-8.4.2 fastapi-0.141.1 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.18 markdown-it-py-3.0.0 mdurl-0.1.2 pillow-12.3.0 pydantic-2.13.4 pydantic-core-2.46.4 pypdf-5.9.0 reportlab-4.4.9 researchassistant-0.1.0 starlette-1.3.1 typing-extensions-4.16.0 typing-inspection-0.4.2 uvicorn-0.51.0
+
+[notice] A new release of pip is available: 25.0.1 -> 26.2.1
+[notice] To update, run: /private/tmp/researchassistant-review-r53-r55-final-distribution/wheel-venv/bin/python -m pip install --upgrade pip
+No broken requirements found.
+{"identity": "source-sha256:9f1c3e19607ed1d9b393457dcb629ccebb290be11cb6d4db0e76c2798c181189", "prompts": 18, "pdf_pages": 3, "pdf_worker": "completed", "dns_worker": "completed and reaped", "api": "constructed without credentials", "fixtures": ["released", "blocked"], "binding": "fresh and replayed"}
+Obtaining file:///Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting fastapi<1.0,>=0.115 (from researchassistant==0.1.0)
+  Using cached fastapi-0.141.1-py3-none-any.whl.metadata (27 kB)
+Collecting httpx<1.0,>=0.27 (from researchassistant==0.1.0)
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting httpcore<1.1,>=1.0.9 (from researchassistant==0.1.0)
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting markdown-it-py<4.0,>=3.0 (from researchassistant==0.1.0)
+  Using cached markdown_it_py-3.0.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting pydantic<3.0,>=2.0 (from researchassistant==0.1.0)
+  Using cached pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+Collecting pypdf<6.0,>=5.0 (from researchassistant==0.1.0)
+  Using cached pypdf-5.9.0-py3-none-any.whl.metadata (7.1 kB)
+Collecting reportlab<5.0,>=4.4.9 (from researchassistant==0.1.0)
+  Using cached reportlab-4.4.9-py3-none-any.whl.metadata (1.7 kB)
+Collecting uvicorn<1.0,>=0.30 (from researchassistant==0.1.0)
+  Using cached uvicorn-0.51.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting starlette>=0.46.0 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Using cached starlette-1.3.1-py3-none-any.whl.metadata (6.4 kB)
+Collecting typing-extensions>=4.8.0 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting typing-inspection>=0.4.2 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting annotated-doc>=0.0.2 (from fastapi<1.0,>=0.115->researchassistant==0.1.0)
+  Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi (from httpcore<1.1,>=1.0.9->researchassistant==0.1.0)
+  Using cached certifi-2026.6.17-py3-none-any.whl.metadata (2.5 kB)
+Collecting h11>=0.16 (from httpcore<1.1,>=1.0.9->researchassistant==0.1.0)
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting anyio (from httpx<1.0,>=0.27->researchassistant==0.1.0)
+  Using cached anyio-4.14.1-py3-none-any.whl.metadata (4.6 kB)
+Collecting idna (from httpx<1.0,>=0.27->researchassistant==0.1.0)
+  Using cached idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+Collecting mdurl~=0.1 (from markdown-it-py<4.0,>=3.0->researchassistant==0.1.0)
+  Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<3.0,>=2.0->researchassistant==0.1.0)
+  Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.4 (from pydantic<3.0,>=2.0->researchassistant==0.1.0)
+  Using cached pydantic_core-2.46.4-cp312-cp312-macosx_11_0_arm64.whl.metadata (6.6 kB)
+Collecting pillow>=9.0.0 (from reportlab<5.0,>=4.4.9->researchassistant==0.1.0)
+  Using cached pillow-12.3.0-cp312-cp312-macosx_11_0_arm64.whl.metadata (9.1 kB)
+Collecting charset-normalizer (from reportlab<5.0,>=4.4.9->researchassistant==0.1.0)
+  Using cached charset_normalizer-3.4.9-cp312-cp312-macosx_10_13_universal2.whl.metadata (41 kB)
+Collecting click>=7.0 (from uvicorn<1.0,>=0.30->researchassistant==0.1.0)
+  Using cached click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+Using cached fastapi-0.141.1-py3-none-any.whl (131 kB)
+Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Using cached markdown_it_py-3.0.0-py3-none-any.whl (87 kB)
+Using cached pydantic-2.13.4-py3-none-any.whl (472 kB)
+Using cached pydantic_core-2.46.4-cp312-cp312-macosx_11_0_arm64.whl (2.0 MB)
+Using cached pypdf-5.9.0-py3-none-any.whl (313 kB)
+Using cached reportlab-4.4.9-py3-none-any.whl (2.0 MB)
+Using cached uvicorn-0.51.0-py3-none-any.whl (73 kB)
+Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+Using cached annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Using cached click-8.4.2-py3-none-any.whl (119 kB)
+Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Using cached mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Using cached pillow-12.3.0-cp312-cp312-macosx_11_0_arm64.whl (4.8 MB)
+Using cached starlette-1.3.1-py3-none-any.whl (73 kB)
+Using cached anyio-4.14.1-py3-none-any.whl (124 kB)
+Using cached idna-3.18-py3-none-any.whl (65 kB)
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Using cached certifi-2026.6.17-py3-none-any.whl (133 kB)
+Using cached charset_normalizer-3.4.9-cp312-cp312-macosx_10_13_universal2.whl (319 kB)
+Building wheels for collected packages: researchassistant
+  Building editable for researchassistant (pyproject.toml): started
+  Building editable for researchassistant (pyproject.toml): finished with status 'done'
+  Created wheel for researchassistant: filename=researchassistant-0.1.0-0.editable-py3-none-any.whl size=3847 sha256=d474f229b2d03b910b8b0f391bad973cb3d242b47142ecb169de9b989920ef30
+  Stored in directory: /private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pip-ephem-wheel-cache-x6w2_ulp/wheels/3c/a7/b9/67cca8500bd7569225a09c85cc4f6e546a80d7002f431b5ec4
+Successfully built researchassistant
+Installing collected packages: typing-extensions, pypdf, pillow, mdurl, idna, h11, click, charset-normalizer, certifi, annotated-types, annotated-doc, uvicorn, typing-inspection, reportlab, pydantic-core, markdown-it-py, httpcore, anyio, starlette, pydantic, httpx, fastapi, researchassistant
+Successfully installed annotated-doc-0.0.5 annotated-types-0.7.0 anyio-4.14.1 certifi-2026.6.17 charset-normalizer-3.4.9 click-8.4.2 fastapi-0.141.1 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.18 markdown-it-py-3.0.0 mdurl-0.1.2 pillow-12.3.0 pydantic-2.13.4 pydantic-core-2.46.4 pypdf-5.9.0 reportlab-4.4.9 researchassistant-0.1.0 starlette-1.3.1 typing-extensions-4.16.0 typing-inspection-0.4.2 uvicorn-0.51.0
+
+[notice] A new release of pip is available: 25.0.1 -> 26.2.1
+[notice] To update, run: /private/tmp/researchassistant-review-r53-r55-final-distribution/editable-venv/bin/python -m pip install --upgrade pip
+No broken requirements found.
+{"identity": "source-sha256:9f1c3e19607ed1d9b393457dcb629ccebb290be11cb6d4db0e76c2798c181189", "prompts": 18, "pdf_pages": 3, "pdf_worker": "completed", "dns_worker": "completed and reaped", "api": "constructed without credentials", "fixtures": ["released", "blocked"], "binding": "fresh and replayed"}
+Verified exact 304-file wheel and both isolated installs: /private/tmp/researchassistant-review-r53-r55-final-distribution

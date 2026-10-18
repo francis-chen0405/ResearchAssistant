@@ -1,0 +1,87 @@
+{
+  "collection": "Eight public pages opened; no source text redistributed or copied into production evidence.",
+  "prepared_on": "2026-10-11",
+  "provenance": "Assistant nominations from zero-cost public documentation browsing; not application provider observations, human usefulness judgments, or a locked useful reference denominator.",
+  "references": [
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Primary randomized report nomination; distinguish vehicle recovery from theft incidence.",
+      "title": "Combating Auto Theft in Arizona",
+      "topic_id": "alpr-crime",
+      "url": "https://www.ojp.gov/library/publications/combating-auto-theft-arizona-randomized-experiment-license-plate-recognition",
+      "work_id": "ojp:248635"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Original records/data nomination; does not by itself establish racial deployment disparities.",
+      "title": "EFF and MuckRock ALPR records",
+      "topic_id": "alpr-equity",
+      "url": "https://www.eff.org/deeplinks/2018/11/eff-and-muckrock-release-records-and-data-200-law-enforcement-agencies-automated",
+      "work_id": "eff:alpr-records-2018"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Synthesis nomination with a narrower treatment-resistant population; do not generalize automatically.",
+      "title": "Psychological therapies for treatment-resistant depression in adults",
+      "topic_id": "cbt-depression",
+      "url": "https://www.cochrane.org/evidence/CD010558_are-psychological-therapies-effective-treating-depression-did-not-get-better-previous-treatment",
+      "work_id": "doi:10.1002/14651858.CD010558.pub2"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Author commentary nomination for tracing primary synthesis and age-specific/correlational limitations.",
+      "title": "Does Homework Improve Academic Achievement?",
+      "topic_id": "homework",
+      "url": "https://today.duke.edu/2006/09/homework_oped.html",
+      "work_id": "duke:homework-cooper-2006"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Government laboratory technical brochure nomination; not a household cost experiment.",
+      "title": "Air Source Heat Pumps in Cold Climates",
+      "topic_id": "heat-pumps",
+      "url": "https://research-hub.nlr.gov/en/publications/air-source-heat-pumps-in-cold-climates/",
+      "work_id": "nrel:94722"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Official measured traffic report nomination; seasonality and historical baseline require review.",
+      "title": "MTA performance metrics document",
+      "topic_id": "congestion",
+      "url": "https://www.mta.info/document/192266",
+      "work_id": "mta:192266"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Public-access review nomination; inspect underlying cohorts before independence grouping.",
+      "title": "School Start Times, Sleep, Behavioral, Health, and Academic Outcomes",
+      "topic_id": "school-start",
+      "url": "https://stacks.cdc.gov/view/cdc/38887",
+      "work_id": "doi:10.1111/josh.12388"
+    },
+    {
+      "human_relevant": null,
+      "human_study_id": null,
+      "human_useful": null,
+      "screening_note": "Primary technical report nomination; distinguish roof-only heat flow from whole-building energy.",
+      "title": "Evaluating rooftop and vertical gardens as an adaptation strategy for urban areas",
+      "topic_id": "green-roofs",
+      "url": "https://nrc-publications.canada.ca/eng/view/ft/?id=7825a6d3-761f-45fd-a845-b1f783ca36b5",
+      "work_id": "nrc:7825a6d3-761f-45fd-a845-b1f783ca36b5"
+    }
+  ]
+}

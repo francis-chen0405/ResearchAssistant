@@ -1,0 +1,38 @@
+........F..............                                                  [100%]
+=================================== FAILURES ===================================
+___________ test_missing_configuration_keeps_useful_safe_diagnostic ____________
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1378/test_missing_configuration_kee0')
+capsys = <_pytest.capture.CaptureFixture object at 0x10b226960>
+
+    def test_missing_configuration_keeps_useful_safe_diagnostic(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        path = tmp_path / "never-created.sqlite3"
+        args = _build_parser().parse_args(
+            [
+                "run",
+                "A generated public claim.",
+                "--db-path",
+                str(path),
+                "--max-tokens",
+                "1000",
+            ]
+        )
+        result = _run_live_command(
+            args,
+            environment={},
+            legacy_runner=None,
+            identity_provider=lambda: "offline-probe",
+        )
+        output = capsys.readouterr()
+        assert result is CLIExitCode.CONFIGURATION_ERROR
+>       assert "required" in output.err and "KEY" in output.err
+E       AssertionError: assert ('required' in 'configuration error: OpenAI API key is required by the selected model steps\n' and 'KEY' in 'configuration error: OpenAI API key is required by the selected model steps\n')
+E        +  where 'configuration error: OpenAI API key is required by the selected model steps\n' = CaptureResult(out='', err='configuration error: OpenAI API key is required by the selected model steps\n').err
+E        +  and   'configuration error: OpenAI API key is required by the selected model steps\n' = CaptureResult(out='', err='configuration error: OpenAI API key is required by the selected model steps\n').err
+
+tests/test_cli_configuration_redaction.py:91: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cli_configuration_redaction.py::test_missing_configuration_keeps_useful_safe_diagnostic
+1 failed, 22 passed in 6.63s

@@ -1,0 +1,9 @@
+PASS: native normal, backend/descendants/owned acquisition groups gone, unrelated process alive, resources released
+PASS: native stuck, backend/descendants/owned acquisition groups gone, unrelated process alive, resources released
+PASS: native startup, backend/descendants/owned acquisition groups gone, unrelated process alive, resources released
+PASS: actual manager before-report, gated/acknowledged acquisition and descendants gone
+PASS: actual manager after-report, gated/acknowledged acquisition and descendants gone
+PASS: actual manager after-ack, gated/acknowledged acquisition and descendants gone
+PASS: actual manager running, gated/acknowledged acquisition and descendants gone
+PASS: actual manager root-exit, gated/acknowledged acquisition and descendants gone
+PASS: actual manager immediate-stop, gated/acknowledged acquisition and descendants gone

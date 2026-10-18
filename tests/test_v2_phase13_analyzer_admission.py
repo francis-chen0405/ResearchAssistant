@@ -366,7 +366,7 @@ def test_fresh_v2_synthesis_is_deterministic_and_preserves_admission_method(
     assert final.final_output.release_validation.valid
     assert final.final_output.synthesis.synthesizer_model_name == "deterministic-v2-assembler"
     assert final.final_output.synthesis.synthesizer_prompt_version == (
-        "phase13-deterministic-synthesizer-v1"
+        "phase13-deterministic-synthesizer-v2-relationships"
     )
     item = final.final_output.synthesis.sections[0].items[0]
     assert item.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED

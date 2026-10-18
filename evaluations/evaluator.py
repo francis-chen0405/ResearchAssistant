@@ -9,18 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from uuid import UUID
 
-from agents.renderer import SUPPORTING_EVIDENCE_TEMPLATE_ID, validate_final_release
-from agents.researcher import (
-    build_source_snapshot,
-    parse_extracted_quote_block,
-    validate_bracket_context,
-    validate_snapshot_integrity,
-)
-from agents.supportingresearcher import (
-    UNTRUSTED_SOURCE_INSTRUCTION_POLICY,
-    UNTRUSTED_SOURCE_LABEL,
-    build_extraction_llm_input,
-)
+from evaluations.output_publication import publish_outputs
 from evaluations.schema import (
     MIMO_NORMAL_ALIAS,
     MIMO_PRO_ALIAS,
@@ -57,7 +46,17 @@ from evaluations.schema import (
     SafetyMetrics,
     StageRouteMetrics,
 )
-from providers.llm import DEFAULT_LLM_ROUTING, LLMStage
+from researchassistant.agents.researcher import (
+    build_source_snapshot,
+    parse_extracted_quote_block,
+    validate_bracket_context,
+    validate_snapshot_integrity,
+)
+from researchassistant.agents.supportingresearcher import (
+    UNTRUSTED_SOURCE_INSTRUCTION_POLICY,
+    UNTRUSTED_SOURCE_LABEL,
+    build_extraction_llm_input,
+)
 from researchassistant.contracts.models import (
     AmbiguityRecord,
     ClaimDefinition,
@@ -73,6 +72,11 @@ from researchassistant.contracts.models import (
     SynthesisOutput,
     SynthesisSection,
 )
+from researchassistant.evidence.renderer import (
+    SUPPORTING_EVIDENCE_TEMPLATE_ID,
+    validate_final_release,
+)
+from researchassistant.providers.llm import DEFAULT_LLM_ROUTING, LLMStage
 
 EVALUATION_VERSION = "phase10-offline-evaluation-v1"
 MIMO_NORMAL = MIMO_NORMAL_ALIAS
@@ -1135,8 +1139,5 @@ def write_evaluation_outputs(
     summary = render_human_summary(report)
     if not verify_summary_agreement(report, summary):
         raise RuntimeError("machine-readable and human-readable evaluation outputs disagree")
-    json_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
     machine = json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
-    json_path.write_text(machine, encoding="utf-8")
-    summary_path.write_text(summary, encoding="utf-8")
+    publish_outputs(((json_path, machine.encode("utf-8")), (summary_path, summary.encode("utf-8"))))

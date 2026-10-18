@@ -1,0 +1,87 @@
+.....F.................................................................. [ 40%]
+........................................................................ [ 80%]
+...........F..F...................                                       [100%]
+=================================== FAILURES ===================================
+_ test_balanced_four_round_run_releases_all_eighty_retained_source_dispositions _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1381/test_balanced_four_round_run_r0')
+
+    def test_balanced_four_round_run_releases_all_eighty_retained_source_dispositions(
+        tmp_path: Path,
+    ) -> None:
+        path = tmp_path / "generated.sqlite3"
+        controls = ResearchControls(
+            discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX),
+            research_mode=ResearchMode.BALANCED,
+            sources_per_stance_per_round=10,
+        )
+        model, search = _BalancedModel(completed_rounds=4), _DistinctSearch()
+        result = run_v2_production_pipeline(
+            product.production.CLAIM,
+            db_path=path,
+            directions=ResearchDirections(support_enabled=True, challenge_enabled=True),
+            discovery_providers=controls.discovery_providers,
+            search_providers={provider: search for provider in controls.discovery_providers},
+            wigolo_provider=product.phase12._Scraper(),
+            llm_provider=model,
+            routing_config=product.phase12._routing(),
+            ceilings=product.production.CEILINGS,
+            research_controls=controls,
+            clock=lambda: product.phase12.NOW,
+        )
+        assert result.state is V2ProductionState.RELEASED, result.failure_reason
+        selection = V2SourceSelectionQueueResult.model_validate_json(
+            read_v2_artifact(
+                path, result.run_id, "phase-13-source-selection-deep-analysis-queue-analyzer-admission"
+            ).payload_json
+        )
+        assert selection.input.policy_identity == V2_PREVIEW_SELECTION_POLICY_IDENTITY
+>       assert len(selection.input.survivors) == len(selection.source_statuses) == 80
+E       AssertionError: assert 70 == 80
+E        +  where 70 = len((V2DeepAnalysisSourceStatus(source_id=UUID('2b1edec5-2217-5cea-bfd9-0ef45c839996'), direction=<ResearchDirection.CHALL...ysis=False, queue_rank=None, budget_prevented_reason=<V2DeepAnalysisBudgetReason.TOKEN_RESERVE: 'token_reserve'>), ...))
+E        +    where (V2DeepAnalysisSourceStatus(source_id=UUID('2b1edec5-2217-5cea-bfd9-0ef45c839996'), direction=<ResearchDirection.CHALL...ysis=False, queue_rank=None, budget_prevented_reason=<V2DeepAnalysisBudgetReason.TOKEN_RESERVE: 'token_reserve'>), ...) = V2SourceSelectionQueueResult(run_id=UUID('d2b989e9-73e5-47fd-ac3f-5681b2aaed6a'), input=V2SourceSelectionInput(run_id=...lysisBudgetReason.TOKEN_RESERVE: 'token_reserve'>, completed_at=datetime.datetime(2026, 8, 21, 0, 0, tzinfo=TzInfo(0))).source_statuses
+
+tests/test_four_round_survivor_capacity.py:193: AssertionError
+_ test_public_handoff_preserves_schema_config_and_identity[researchassistant.contracts.model_research:V2SourceSelectionInput] _
+
+qualified = 'researchassistant.contracts.model_research:V2SourceSelectionInput'
+
+    @pytest.mark.parametrize("qualified", BEFORE)
+    def test_public_handoff_preserves_schema_config_and_identity(qualified: str) -> None:
+        module_name, name = qualified.split(":")
+        module = importlib.import_module(module_name)
+        contract = getattr(module, name)
+        expected = BEFORE[qualified]
+        if "schema_sha256" in expected:
+            schema = json.dumps(contract.model_json_schema(), sort_keys=True).encode()
+>           assert sha256(schema).hexdigest() == expected["schema_sha256"]
+E           AssertionError: assert 'b950b1cf6c99...dd7d7ebb4e95d' == 'b31707c811c8...1d0932a3f5364'
+E             
+E             - b31707c811c87529a29e195c91c8619d76a378b3b61d626f2001d0932a3f5364
+E             + b950b1cf6c99f0566503aa9a49c4fade58e979ca847e2fc41dedd7d7ebb4e95d
+
+tests/test_backend_hotspot_compatibility.py:29: AssertionError
+_ test_public_handoff_preserves_schema_config_and_identity[researchassistant.contracts.model_research:V2SourceSelectionQueueResult] _
+
+qualified = 'researchassistant.contracts.model_research:V2SourceSelectionQueueResult'
+
+    @pytest.mark.parametrize("qualified", BEFORE)
+    def test_public_handoff_preserves_schema_config_and_identity(qualified: str) -> None:
+        module_name, name = qualified.split(":")
+        module = importlib.import_module(module_name)
+        contract = getattr(module, name)
+        expected = BEFORE[qualified]
+        if "schema_sha256" in expected:
+            schema = json.dumps(contract.model_json_schema(), sort_keys=True).encode()
+>           assert sha256(schema).hexdigest() == expected["schema_sha256"]
+E           AssertionError: assert 'c0f814973d94...abbda5afd725a' == 'c1013b2b94a6...8a8a3e2271646'
+E             
+E             - c1013b2b94a6617d954d0054889b0203a7c8f47f4f224556c148a8a3e2271646
+E             + c0f814973d94b7445507e44968272bc8d9ddfb6da87c1690374abbda5afd725a
+
+tests/test_backend_hotspot_compatibility.py:29: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_four_round_survivor_capacity.py::test_balanced_four_round_run_releases_all_eighty_retained_source_dispositions
+FAILED tests/test_backend_hotspot_compatibility.py::test_public_handoff_preserves_schema_config_and_identity[researchassistant.contracts.model_research:V2SourceSelectionInput]
+FAILED tests/test_backend_hotspot_compatibility.py::test_public_handoff_preserves_schema_config_and_identity[researchassistant.contracts.model_research:V2SourceSelectionQueueResult]
+3 failed, 175 passed in 38.13s

@@ -1,0 +1,11 @@
+{
+  "launcher_web_readiness_options": [
+    "--fail",
+    "--silent"
+  ],
+  "nominal_loop_iterations": 45,
+  "first_request_completed": false,
+  "elapsed_seconds": 46.024,
+  "method": "Exact launcher curl arguments against one owned loopback server that accepts but never responds. The full launcher, API, frontend and installed app are not started. The probe terminates/reaps only its own curl process and closes its own temporary socket."
+}
+

@@ -1,0 +1,24 @@
+{
+  "finding": "R22",
+  "stage_deadline_seconds": 0.02,
+  "elapsed_seconds": 0.07723404187709093,
+  "returned_error": "returned_model_mismatch",
+  "read_budgets": [
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02
+  ],
+  "closed_after_owner_cleanup": true,
+  "real_network_model_or_credential_calls": 0,
+  "method": "Actual model adapter and HTTPX/httpcore; generated trickling socket and synthetic key. The payload is parsed only after exceeding the stage deadline."
+}

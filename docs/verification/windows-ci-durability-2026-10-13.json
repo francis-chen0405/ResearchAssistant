@@ -1,0 +1,484 @@
+{
+  "artifacts": {
+    "installer_evidence": {
+      "artifact_id": 11935657150,
+      "github_expires_at": "2027-01-12T23:09:50Z",
+      "zip_sha256": "b70e5e994c04273277c3ae2625612dfcdfb7005d1c1abc32cea0907e48b44af1"
+    },
+    "installer_evidence_attempt2": {
+      "artifact_id": 11938070049,
+      "download_digest_verified": true,
+      "zip_sha256": "69f9aa704f5b4b9eccc053601bc5369577512353842abc0f49b38aaf55dd39a2"
+    },
+    "macos_ci_test_archive": {
+      "artifact_id": 11936151800,
+      "artifact_zip_sha256": "af6c8862727d9314b22c59820cc595dcd1637caa3cecce0e9eecb7314c42a25a",
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044",
+      "scope": "separate Mac CI packaging result; not Windows evidence or adopted installed app"
+    },
+    "native_evidence": {
+      "artifact_id": 11935870777,
+      "github_expires_at": "2027-01-12T23:09:50Z",
+      "zip_sha256": "94b177da9f8d74051923cbee687561704cf54eeb124a5d1f0957b067b3f15b1a"
+    },
+    "unsigned_windows_installer": {
+      "artifact_id": 11938020157,
+      "artifact_zip_sha256": "48ac8cb41176054850c2fefe4251d1f64d6f6ba4f568dbd2fb2912bebe1abfb5",
+      "attempt": 2,
+      "hash_source": "native installer.json; GitHub artifact metadata for ZIP",
+      "independently_downloaded_and_hashed": false,
+      "installed_smoke": "failed during repair after interrupted upgrade",
+      "installer_sha256": "6f82a5a17dc234f6f5da2eba92981fba3c093ac4d6d9c49296a1d14023f89525",
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044"
+    },
+    "unsigned_windows_installer_attempt1": {
+      "artifact_id": 11935168730,
+      "artifact_zip_sha256": "57a79a1992a56aef590d1647984259be3b01165999fcb6a16d099f0fe8f4ce9a",
+      "embedded_pe_certificate_table_size": 0,
+      "github_expires_at": "2027-01-12T23:09:50Z",
+      "independently_downloaded_and_hashed": true,
+      "installed_smoke": "failed before historical comparison installed",
+      "installer_sha256": "50f5af62a6de6a59f93a41f1536e3b5a7e33d58cad65effb90304bcee6bd9fd7",
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044"
+    }
+  },
+  "checks": {
+    "automatic_ci_workflow": "all five jobs passed",
+    "automatic_python311": {
+      "branch_coverage": true,
+      "failed": 0,
+      "job": 116153846528,
+      "os": "Ubuntu 24.04 x64",
+      "passed": 2810,
+      "python": "3.11.17",
+      "seconds": 621.48,
+      "skipped": 15
+    },
+    "automatic_python311_312": "passed at 44f83d9; both branch-coverage suites",
+    "automatic_python312": {
+      "branch_coverage": true,
+      "failed": 0,
+      "job": 116153846501,
+      "os": "Ubuntu 24.04 x64",
+      "passed": 2814,
+      "python": "3.12.15",
+      "seconds": 783.37,
+      "skipped": 11
+    },
+    "local_boundaries": "passed",
+    "local_frontend_contracts_lint_types_static_export": "passed",
+    "local_full_python": {
+      "failed": 0,
+      "passed": 2816,
+      "seconds": 249.45,
+      "skipped": 9
+    },
+    "local_offline_browser_smokes": {
+      "native_process_smoke": "passed; unsandboxed loopback/process access",
+      "passed": 5
+    },
+    "local_ruff": "passed; 477 files formatted",
+    "macos_ci_desktop": "passed; locked dependencies, distribution, frontend/browser, frozen vault/settings/acquisition, window, forced POSIX Electron, unsigned DMG/ZIP; not Windows evidence",
+    "macos_ci_full_python": {
+      "failed": 0,
+      "job": 116153955258,
+      "passed": 2815,
+      "seconds": 281.02,
+      "skipped": 10
+    },
+    "preceding_automatic_python311": {
+      "branch_coverage": true,
+      "failed": 0,
+      "job": 116142278380,
+      "os": "Ubuntu 24.04 x64",
+      "passed": 2810,
+      "python": "3.11.17",
+      "seconds": 340.57,
+      "skipped": 15
+    },
+    "preceding_automatic_python312": {
+      "branch_coverage": true,
+      "failed": 0,
+      "job": 116142278343,
+      "os": "Ubuntu 24.04 x64",
+      "passed": 2814,
+      "python": "3.12.15",
+      "seconds": 770.11,
+      "skipped": 11
+    },
+    "windows_cli_diagnostic": {
+      "existing_assertion_timeout_seconds": 30,
+      "released": true,
+      "returncode": 0,
+      "seconds": 11.438
+    },
+    "windows_desktop_shutdown_units": {
+      "mocked": true,
+      "native_windows_jobs": "separate native selection and real Electron smoke",
+      "passed": 20
+    },
+    "windows_focused_regressions": {
+      "failed": 0,
+      "job": 116153955294,
+      "passed": 11,
+      "seconds": 32.68
+    },
+    "windows_full_python": {
+      "failed": 0,
+      "filesystem": "not separately queried in full-suite job; dedicated native/packaging jobs record C:/D: NTFS",
+      "job": 116153954923,
+      "os": "Windows Server 2025 10.0.26100 x64",
+      "passed": 2810,
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044",
+      "runner_image": "windows-2025-vs2026 / 20260925.250.1",
+      "seconds": 1880.66,
+      "skipped": 15
+    },
+    "windows_native_selection": {
+      "failed": 0,
+      "job": 116153955294,
+      "mocked_bootstrap_ordering_cases": 2,
+      "native_operation_cases": 16,
+      "passed": 18,
+      "seconds": 8.45
+    },
+    "windows_packaging_attempt1": {
+      "attempt": 1,
+      "build_cache_offline_browser_frozen_vault_window_forced_electron": "passed",
+      "failed_stage": "install historical comparison artifact",
+      "failure": "subprocess.TimeoutExpired: previous-installer.exe /S /currentuser /D=<isolated Unicode path>; 240 seconds",
+      "job": 116153955494,
+      "not_reached": [
+        "interrupted upgrade",
+        "repair",
+        "installed frozen/runtime/window",
+        "historical data/vault upgrade",
+        "uninstall"
+      ],
+      "result": "failed",
+      "underlying_cause": "not established by retained log",
+      "unsigned_nsis_build": "passed"
+    },
+    "windows_packaging_diagnostic_repeat": {
+      "attempt": 2,
+      "completed_utc": "2026-10-15T00:05:12Z",
+      "failed_stage": "repair candidate after interruption",
+      "job": 116165774688,
+      "passed_stages_so_far": [
+        "build",
+        "native cache",
+        "offline interface",
+        "frozen vault/settings/acquisition",
+        "desktop window",
+        "real forced Electron shutdown"
+      ],
+      "result": "failed",
+      "runner_debug_logging": true,
+      "same_source_revision": true,
+      "status": "completed",
+      "timeout_seconds": 240
+    },
+    "windows_packaging_installer": {
+      "attempt": 2,
+      "build_cache_offline_browser_frozen_vault_window_forced_electron": "passed",
+      "failed_stage": "repair candidate after interruption",
+      "failure": "subprocess.TimeoutExpired: current ResearchAssistant Setup 0.1.0.exe /S /currentuser /D=<isolated Unicode path>; 240 seconds",
+      "historical_comparison_install": "passed",
+      "interruption_checkpoint": "old executable absent while upgrade root alive; owned Job closed; process wait returned",
+      "interruption_oracle_limits": [
+        "nonzero root exit not asserted/recorded",
+        "NSIS descendant handles not inventoried",
+        "partial-tree state after Job close not retained"
+      ],
+      "job": 116165774688,
+      "not_reached": [
+        "installed frozen/runtime/window",
+        "historical data/vault upgrade",
+        "uninstall"
+      ],
+      "result": "failed",
+      "source_line": 167,
+      "source_revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044",
+      "underlying_cause": "not established by retained job/runner logs",
+      "unsigned_nsis_build": "passed"
+    },
+    "windows_quality_after_full_suite": {
+      "desktop_shutdown_unit_cases": 20,
+      "distribution_verification": "passed",
+      "format": "477 files already formatted",
+      "frontend_lint_and_types": "passed",
+      "posix_native_group_smoke": "explicit platform skip; native Windows Jobs are separately tested",
+      "ruff": "passed"
+    }
+  },
+  "fault_injection": {
+    "generated_data_only": true,
+    "installer_checkpoint_limits": [
+      "nonzero root exit not asserted/recorded",
+      "NSIS descendant handles not inventoried",
+      "partial-tree state after Job close not retained"
+    ],
+    "power_loss_limit": "OS/controller caches remain alive after process termination. Windows directory-entry flush ordering is unverified.",
+    "storage_and_termination_native": true,
+    "timing_mocked": true,
+    "unknown_reservation_tokens": 12500,
+    "unknown_reservation_usd": "0.25",
+    "upgrade_journal": "delete; generated schema-16 fixture",
+    "upgrade_phases": [
+      "backup-file-flushed",
+      "backup-linked",
+      "marker-linked",
+      "migration-uncommitted",
+      "migration-committed"
+    ],
+    "writer_journals": [
+      "delete",
+      "wal"
+    ]
+  },
+  "graph": {
+    "advisory_verified_against_live_source": true,
+    "edges": 76940,
+    "nodes": 12464,
+    "project": "ResearchAssistant",
+    "refreshed_without_persistence": true
+  },
+  "installed_mac_backend_sha256": "12e1705b6790b2532e8284ce5baa32e25f09b83de701dd15ce6d0415945c03f5",
+  "local_platform": {
+    "architecture": "arm64",
+    "build": "25G83",
+    "node": "24.18.0",
+    "os": "macOS 26.6.2",
+    "pnpm": "11.19.0",
+    "python": "3.12.14"
+  },
+  "native_platform": {
+    "build": "26100",
+    "filesystems": {
+      "C:": "NTFS",
+      "D:": "NTFS"
+    },
+    "long_paths": "Python native library paths >300 characters passed; frozen/installed >300-character paths not exercised",
+    "os": "Microsoft Windows Server 2025 Datacenter",
+    "physical_power_loss_test": false,
+    "python": "3.12.10",
+    "python_abi": "x64",
+    "runner": "windows-2025",
+    "version": "10.0.26100",
+    "windows_client_test": false
+  },
+  "observations": {
+    "baseline_source_lead_assertion": "Windows baseline omitted expected URL 1; e6ed4fa full suite omitted expected URL 5. Several focused/full runs passed unchanged. Intermittent cause remains unestablished; the separate source-6 round-four constraint does not explain these omissions.",
+    "installer_attempts": "Attempt 1 historical comparison install timed out; attempt 2 historical install passed, reached interruption checkpoint, then candidate repair timed out. Each wait retained original 240-second bound. Causes unestablished.",
+    "round_four_source": "Ten disposable Mac product pipelines released; an additional round-four source hit an existing discovery_round BETWEEN 1 AND 3 schema constraint. Target Windows diagnostics confirm this same constraint. Evidence/schema policy was not changed."
+  },
+  "publication": {
+    "installed_app_replaced": false,
+    "release_published": false,
+    "windows_public_release": "deferred"
+  },
+  "raw_evidence_aliases": {
+    "44-installer-evidence.zip": {
+      "artifact": 11935657150,
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044"
+    },
+    "44-native-evidence.zip": {
+      "artifact": 11935870777,
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044"
+    },
+    "44-repeat-installer-evidence.zip": {
+      "artifact": 11938070049,
+      "attempt": 2,
+      "revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044"
+    },
+    "baseline-full-windows.log": {
+      "job": 115654396513,
+      "revision": "7a76ce2f040510851b7335b1d58daf3ecc54ec47"
+    },
+    "current-full-windows.log": {
+      "job": 115674063033,
+      "revision": "ce846d8d7d8b6ed0bb761418aeb648de7b5ac96a"
+    },
+    "diagnostic-final-windows.log": {
+      "job": 115674063464,
+      "revision": "ce846d8d7d8b6ed0bb761418aeb648de7b5ac96a"
+    },
+    "historical-windows.log": {
+      "job": 111064698744,
+      "revision": "4a1d1cce38959c61acee07ca6bd5f3edfc7db397"
+    },
+    "latest-windows.log": {
+      "job": 113690628365,
+      "revision": "27aeb95ca0b6c6999ba34b2cfd60c5b84a49200c"
+    },
+    "target-native-evidence.zip": {
+      "artifact": 11933501652,
+      "revision": "987c5aaeccd6d9cb46862678da9929cd00687f1a"
+    },
+    "target-native-windows.log": {
+      "job": 116139739122,
+      "revision": "987c5aaeccd6d9cb46862678da9929cd00687f1a"
+    }
+  },
+  "raw_evidence_sha256": {
+    "44-installer-binary-inspection.json": "65e8d1d56c19a45da44802d6fe878342a123e636dfad5ec7df67b2907db5e7e9",
+    "44-installer-evidence.zip": "b70e5e994c04273277c3ae2625612dfcdfb7005d1c1abc32cea0907e48b44af1",
+    "44-installer-evidence/environment.json": "57af09ecfc6ecd9c8c425470fab09eb6fc309f9a05c79d32ae720e0b2b56de35",
+    "44-installer-evidence/installer.json": "297841dd51462a15f7cd20159a597b5a510aa2c7623ebc859222439b02a50141",
+    "44-native-evidence.zip": "94b177da9f8d74051923cbee687561704cf54eeb124a5d1f0957b067b3f15b1a",
+    "44-native-evidence/diagnostics.json": "983690830c96cedc8627aa573583390a5729d580b7c8eb3ebaf647abd0125804",
+    "44-native-evidence/environment.json": "86647e7e93747c2d5da5958c8ff5e2fbcaff97979becd94c994ca39404635c17",
+    "44-native-evidence/native.xml": "b7e8144bf989b1fec646584375f5212d00f0302fd6977851025dfc0d1726eeae",
+    "44-native-evidence/regressions.xml": "951c519b753cedca1af4e0391829ccd02fce1c6876b533bbae2732961d4e956a",
+    "44-repeat-installer-evidence.zip": "69f9aa704f5b4b9eccc053601bc5369577512353842abc0f49b38aaf55dd39a2",
+    "44-repeat-installer-evidence/environment.json": "260a7aa4d09fcf299beeb7513cbb09ee2268b489d2dc2784736ef2334a7bbcbd",
+    "44-repeat-installer-evidence/installer.json": "f15250c781983674851d4d398c2da8cdab560b4f2087022355357111df8123bb",
+    "44-rerun-diagnostic-logs.zip": "d231671e566c6544572c33c053ae73a8001012d1d68c531eb716cd9f0fafed2e",
+    "baseline-full-windows.log": "1107312ed58b012c70f3dd777c0b7d41b62a2f55be4f92c3137d65c3de670f17",
+    "cache-macos.log": "c5fb432d7b235a676bb9425345735effae80145818c1285952d79e9b6c608878",
+    "current-full-windows.log": "a60637f8fd9e8f413b053ea2222b9c2acd53a4aad699d90ec864f44738c1f4dc",
+    "current-reproduction-windows.log": "09f93a3379b4aaa9a02f7d883909e39563eab2f5e71c37816e363cafe1bb0351",
+    "diagnostic-final-windows.log": "5c3105e8ffcf2081e0786b0d082445c873103ae6efb97c2426c94a7e65e2d8a7",
+    "final-desktop-run.json": "12d676a513ea143dcfc97be2a8da6475ca2bb6977114df284c989b00cbee85dd",
+    "final-local-snapshot-differences.json": "85af4b55f238d4e99e44c21057074e41c99ae59c0f0a88b3bf288eee8bef9223",
+    "final-remote-master.json": "cd09eafc5e2214da655cc75bef8cc0f9b885dea642ee572bc1de637d043d8291",
+    "final-remote-verification-branch.json": "2df12b91f1e5f3524a3dffd25fcd7fd8db43f2c23bf309fbea7592563a77cf92",
+    "frontend-macos-build.log": "c10fa9ea5f13e1a450e5fc72ebcb1e8dba2d22b8822a0122d3918f93734328ac",
+    "frontend-macos-unsandboxed.log": "ecc0f42fa7cc276205fab7f20720d399e4520422ae716bed9da53d8eae4a8bdf",
+    "frontend-macos.log": "b2901e31dbf5d6640fc632d78dce3181f301ea06a543b2eabf979c8fd250572d",
+    "historical-windows.log": "3a57e37cc8dad19c4d5c98454eff33262c9629fcff67274c8bc7cadef2c51a83",
+    "job-116139738857.log": "e14b1c1a4c6fc3ce8e485d2307d833066b4c5e8a43d40b8a1660739d315bce7d",
+    "job-116139739059.log": "ba608753d9f49c94f86c443b72c3ef8e150e64bbe72f73f74a6b0e169d6bc3d2",
+    "job-116139739122.log": "a53d93fe1f22cf5367b6ffba6d3bca8f578686459f4a76018ee41c8c824fc590",
+    "job-116142278254.log": "cf1c423aa60412b3a307f30f2dd206179fa9cceb202e3613ea955076faa6a4d1",
+    "job-116142278343.log": "cfada00316352b30dfc993bf3420c2eecdba18b0a64c10752d6bef9967669c84",
+    "job-116142278380.log": "40b6b3133735b06af2ff03e1df66c8cf5aa391eec5d6a38225b0582b8db756fd",
+    "job-116142278392.log": "b8ac5774f4fef115001c0374229a7a29480060516781d639015211b78515918e",
+    "job-116142278546.log": "da4d5fa1752226e7935c6f0dcd9b30ac71fb28e6cce70f72e1f4e08cf3b3a488",
+    "job-116142367049.log": "9fe23033e7afe89d34fffbb240819504952e7860766de87f0476139a3cf4a847",
+    "job-116142367399.log": "37be6c276bf50198131507a4f5754eae72fce6f24334499f3884b12875c911d2",
+    "job-116142367469.log": "c2e7f3d010b61b50eb61fcbe5349464f7d4043454adbc903d3485cf3e6c1c029",
+    "job-116153846410.log": "4750a17629140371348e9195f897a0c20e6dbb8d3921ed3771dbb4716cf819d6",
+    "job-116153846482.log": "75d28a8699d6b3e7f2372e568cb4ade8cfe35d6e86313801b14d55fca29211bd",
+    "job-116153846501.log": "29536b38555d2238fae40041ba6eff93b262e4c24f91d63eecd840988e3c4917",
+    "job-116153846528.log": "513f97155a36686654fc66080d45902e55db35846d695bebb320393f3be7a922",
+    "job-116153846541.log": "98bbd2c5cfb09f54bf43cd597bb99ce61050c191f730ac58996bfb0e32682fff",
+    "job-116153954923.log": "ba0f49a2722460342ff9eac94410e9150e454f30c988d11612527c08aa97ecf3",
+    "job-116153955258.log": "7ec8503d873a3d8865cdce22c26d4f472499bb7cc2fc3e1b4fbd3c442990fc92",
+    "job-116153955294.log": "d0f300a1f9d044a7cce152b2fda388ff617f5a5032651fc557c3c17347dc5228",
+    "job-116153955494.log": "2c9248c6eb93043a175119eb3df96b3ae4f08e167dff1e0366b0eeb0a7060017",
+    "job-116165774688.log": "55bb0604d68f72f3e6b16abb082b6d2ac791a093425e7739e9b687cb7597e420",
+    "job-116165776303.log": "7ec8503d873a3d8865cdce22c26d4f472499bb7cc2fc3e1b4fbd3c442990fc92",
+    "job-116165777154.log": "ba0f49a2722460342ff9eac94410e9150e454f30c988d11612527c08aa97ecf3",
+    "job-116165815103.log": "d0f300a1f9d044a7cce152b2fda388ff617f5a5032651fc557c3c17347dc5228",
+    "latest-windows.log": "91fa7ab3685b8be9f131619957b9ec81af0eb0ed804e173832291cdf9f8a0ae9",
+    "native-candidate-windows.log": "b3f6f71b9bd69be4c317a439e1dd14690748682d679308d0b380a922b1224556",
+    "native-final-windows.log": "61633f80eae341ee41a9716344122114db22b0d6288c9e69b4a387a3d5510c74",
+    "preceding-quality-python311.log": "83d543529fa40399d95946546c9c09b27e97bb9f789fcf8e5220de3e6e25912a",
+    "preceding-quality-python312.log": "b96331d408eaf8d5484cde32c2d4915b72d3e8ea2a8aeda330610f791548ede2",
+    "privacy-fixed-full-windows.log": "35d5bd82b2a293106520ea5ec3dbc5d3c00f399f8a1c07e29010b2851078b867",
+    "python-macos-candidate.log": "646b97f71a268dcf7472cb0f384b92fda3099bd8625a9758dd18036514603671",
+    "python-macos-final.log": "893ed73c4f528881d6a309e6251e826ea381c44132521fc5b1a9be6fc8fa932f",
+    "python-macos.log": "d42292ec3874e1e4451ed7af7139feb5dfbb7369a65125ba7101ea8c3b4118ee",
+    "run-38652359869-artifacts-attempt2.json": "bd1322497263b9e5d93b909aaa8f65bed14c8b598302ff676622a5830e7f1fcd",
+    "run-38652359869-jobs.json": "1c7349b7f80a3debd1fe0db9fac433797006809292aa4459d4564de4e82f0f40",
+    "shutdown-macos.log": "dc40ec2b7bcc94aab2d4b86e0b247725ea14211f894e0a4886356ca2c2605921",
+    "source-lead-macos-repetitions.log": "08d79681ff976a8d3b0be7c8262808f9ef5cd7506409ce700cefb585af17f418",
+    "target-git-snapshot-byte-differences.json": "40b93b3204a1dfb71953af255d50d1fb769c495d5fedc3f598759eaae9a00344",
+    "target-native-windows.log": "a53d93fe1f22cf5367b6ffba6d3bca8f578686459f4a76018ee41c8c824fc590"
+  },
+  "remaining_gates": [
+    "Resolve native candidate repair timeout after controlled upgrade interruption; prove installed runtime/window, generated data/vault upgrade and uninstall",
+    "Preceding intermittent CLI timeout and expected-admission omission did not reproduce in final full Windows run; underlying causes remain unestablished",
+    "Existing round-four ledger-admission schema constraint rejects an additional generated source; separate from missing expected source-1/5 observations",
+    "Physical-device power-loss durability",
+    "Clean consumer Windows client/minimum OS/normal-user acceptance",
+    "Signing/SmartScreen acceptance",
+    "Windows ARM64 acceptance",
+    "Mac Developer ID/notarization and clean-machine/macOS 14",
+    "Explicit public publication authorization"
+  ],
+  "review_fixes": {
+    "evidence_hash_correction": {
+      "all_raw_evidence_hashes_verified": 65,
+      "file": "python-macos-final.log",
+      "previous_recorded_sha256": "cf1db440f913812dfe8151502bd88253e4305f4fe06441be41930b4a4676f62a",
+      "retained_log_result": "2816 passed, 9 skipped in 249.45s",
+      "retained_log_sha256": "893ed73c4f528881d6a309e6251e826ea381c44132521fc5b1a9be6fc8fa932f"
+    },
+    "files": [
+      "desktop/windows-installer-smoke.py",
+      "tests/test_desktop_windows_installer.py"
+    ],
+    "local_checks": {
+      "desktop_shutdown_units": 20,
+      "focused_installer_type_build_checks": 8,
+      "format": "478 files already formatted",
+      "full_python": {
+        "failed": 0,
+        "log": "desktop/build/prompt17-evidence/python-macos-review-fixes.log",
+        "log_sha256": "76b8f3511eee533fd65c1a9d21c05898933726d78688f7b194173801171b3e12",
+        "passed": 2820,
+        "seconds": 260.64,
+        "skipped": 9
+      },
+      "native_windows_execution": false,
+      "offline_installer_regressions": 4,
+      "platform": "macOS arm64 / Python 3.12.14",
+      "repository_boundaries": "passed",
+      "ruff": "passed",
+      "staged_unstaged_whitespace": "passed"
+    },
+    "native_execution": "not rerun; earlier repair-install timeout remains unresolved",
+    "scope": "Local Prompt 17 review fixes; not part of native CI revision 44f83d9",
+    "uninstall": "Final unquoted _?= tail; require installed payload removal and unchanged separate generated data before success"
+  },
+  "runs": {
+    "automatic_ci": 38652325933,
+    "desktop": 38652359869,
+    "desktop_attempt1_result": "failure; only packaging installed smoke failed; all other jobs passed",
+    "desktop_final_result": "attempt 2 completed failure; packaging repair timeout; successful jobs retained from attempt 1",
+    "historical_requested_job": 111064698744,
+    "packaging_rerun_attempt": 2,
+    "packaging_rerun_job": 116165774688,
+    "packaging_rerun_original_job": 116153955494,
+    "preceding_pinned_automatic_ci": 38648822561,
+    "preceding_pinned_target": 38648848338,
+    "preceding_runtime_target": 38648050855
+  },
+  "source": {
+    "archive_sha256": "fd9abb267fc7df139e922d4d2c83fc679aab0b8267576d667238b5afb900404f",
+    "git_refs_rechecked_utc": "2026-10-15T00:09:09.855777+00:00",
+    "git_snapshot_byte_difference": [
+      "docs/audits/2026-10-01/coverage.csv; CRLF normalized to LF by existing Git attributes; non-executable historical audit"
+    ],
+    "guidance_companion": "Final documentation follows the tested source snapshot. Local installer-harness/test review fixes listed in review_fixes are outside the native-tested target; runtime backend bytes remain unchanged.",
+    "guidance_companion_differences": [
+      ".agent/PLANS.md",
+      ".agent/plans/windows-ci-durability-2026-10-13.md",
+      "desktop/README.md",
+      "docs/archive/2026-10-13-windows-preceding-state/INDEX.md",
+      "docs/archive/INDEX.md",
+      "docs/history.md",
+      "docs/project/ARCHITECTURE.md",
+      "docs/project/DECISIONS.md",
+      "docs/project/HANDOFF.md",
+      "docs/project/STATUS.md",
+      "docs/project/database-recovery.md",
+      "tests/README.md"
+    ],
+    "manifest_sha256": "9bd1f0f42ee0941e5b14ed064cb08e8061ae1d7df916b470918adc93da24b975",
+    "observed_remote_master": "27aeb95ca0b6c6999ba34b2cfd60c5b84a49200c",
+    "parent_checkout_head": "94a241b52f9525cab3aff52d1f85026f081b3e85",
+    "parent_staged_diff_sha256": "85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2",
+    "runtime_identity": "source-sha256:c87e0a2eddcf9d79ea5737a770e9db5c6a7648484352a20f96c5af4dbfd552b6",
+    "runtime_identity_recomputed_for_parent_and_ci_clone": true,
+    "source_files": 1012,
+    "target_revision": "44f83d9bfb7e8e2896dc44390c366e4d498be044",
+    "verification_branch": "codex/windows-ci-durability-20261013"
+  },
+  "started": "2026-10-13",
+  "task": "Prompt 17 Windows CI and native durability",
+  "updated": "2026-10-14",
+  "verified_through_utc": "2026-10-15T00:07:46.704217+00:00"
+}

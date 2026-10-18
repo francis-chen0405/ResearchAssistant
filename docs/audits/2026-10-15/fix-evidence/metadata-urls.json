@@ -1,0 +1,18 @@
+{
+  "finding": "R24",
+  "results": [
+    {
+      "provider": "openalex",
+      "exception": "ValueError",
+      "message": "Invalid IPv6 URL",
+      "valid_results_not_returned": 2
+    },
+    {
+      "provider": "arxiv",
+      "exception": "ValueError",
+      "message": "Invalid IPv6 URL",
+      "valid_results_not_returned": 1
+    }
+  ],
+  "external_provider_calls": 0
+}

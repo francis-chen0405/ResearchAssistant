@@ -1,0 +1,70 @@
+F....................................................................... [ 80%]
+..................                                                       [100%]
+=================================== FAILURES ===================================
+_________ test_routes_schemas_and_offline_responses_match_before_split _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1093d1070>
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1353/test_routes_schemas_and_offlin0')
+
+    def test_routes_schemas_and_offline_responses_match_before_split(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        before = json.loads((Path(__file__).parent / "fixtures/api-contract-before.json").read_text())
+        after = contract_inventory(monkeypatch, tmp_path)
+        # Prompt 15 adds one independent read-only projection. Preserve the frozen
+        # inventory of every pre-existing route/schema/response byte-for-byte.
+        routes = after["routes"]
+        assert len(routes) == len({(method, path) for method, path, _, _ in routes}) == 22
+        lead_path = "/api/research/{run_id}/source-leads"
+        assert [row for row in routes if row[1] == lead_path] == [
+            ["GET", lead_path, "source_leads", 200]
+        ]
+        after["routes"] = [row for row in routes if row[1] != lead_path]
+        after["openapi"]["paths"].pop(lead_path)
+        for name in ("SourceLead", "SourceLeadStage", "SourceLeadsPage"):
+            after["openapi"]["components"]["schemas"].pop(name)
+        # R21 documents the existing catalog wire projection without changing any
+        # response bytes. Compare the rest of the original inventory unchanged.
+        for name in ("ModelOptionDisplay", "ModelOptionsResponse"):
+            assert name in after["openapi"]["components"]["schemas"]
+            after["openapi"]["components"]["schemas"].pop(name)
+        catalog = after["openapi"]["paths"]["/api/model-options"]["get"]["responses"]["200"]
+        assert catalog["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/ModelOptionsResponse"
+        }
+        catalog["content"]["application/json"]["schema"] = before["openapi"]["paths"][
+            "/api/model-options"
+        ]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        # R27 corrects only the previously documented 422 validation envelopes.
+        schemas = after["openapi"]["components"]["schemas"]
+        assert schemas.pop("RequestErrorResponse") == {
+            "additionalProperties": False,
+            "properties": {"detail": {"title": "Detail", "type": "string"}},
+            "required": ["detail"],
+            "title": "RequestErrorResponse",
+            "description": "Redacted HTTP input error; never includes submitted fields or values.",
+            "type": "object",
+        }
+        assert "HTTPValidationError" not in schemas
+        for path, methods in before["openapi"]["paths"].items():
+            for method, operation in methods.items():
+                previous = operation["responses"].get("422")
+                current = after["openapi"]["paths"][path][method]["responses"]
+                if previous is not None:
+                    assert current["422"] == {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/RequestErrorResponse"}
+                            }
+                        },
+                    }
+                    current["422"] = previous
+        for name in ("HTTPValidationError", "ValidationError"):
+>           assert name not in schemas
+E           AssertionError: assert 'ValidationError' not in {'AcquiredSourceScoreBreakdown': {'additionalProperties': False, 'properties': {'claim_term_coverage': {'maximum': 35....se_exa': {'default': True, 'title': 'Use Exa', 'type': 'boolean'}, ...}, 'title': 'ConfigurationCheckInput', ...}, ...}
+
+tests/test_api_module_split.py:82: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_api_module_split.py::test_routes_schemas_and_offline_responses_match_before_split
+1 failed, 89 passed in 7.27s

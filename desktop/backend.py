@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import ipaddress
 import os
 import secrets
 import socket
@@ -15,11 +15,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import Field, SecretStr
 
 import researchassistant.platform_support.credential_store as credential_store
-from frontend.api import create_app, create_default_runtime
-from frontend.service_manager import WigoloLaunchConfig, WigoloServiceManager
-from providers.config import WigoloConfig
+from researchassistant.api.api import create_app, create_default_runtime
+from researchassistant.api.service_manager import WigoloLaunchConfig, WigoloServiceManager
 from researchassistant.contracts.models import StrictModel
+from researchassistant.platform_support import acquisition_supervisor
+from researchassistant.platform_support.desktop_ownership import DesktopOwnership
 from researchassistant.platform_support.desktop_paths import application_data_dir
+from researchassistant.platform_support.windows_job import WindowsJob
+from researchassistant.providers.config import WigoloConfig
 from researchassistant.runtime.application_runtime import repository_identity
 
 
@@ -38,6 +41,26 @@ def smoke_phase(name: str) -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "--dns-worker":
+        from researchassistant.providers.dns_worker import main as dns_worker_main
+
+        dns_worker_main()
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "--pdf-worker":
+        from researchassistant.providers.pdf_worker import main as pdf_worker_main
+
+        pdf_worker_main()
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "--acquisition-supervisor":
+        acquisition_supervisor.run_supervised_command(sys.argv[2:])
+        return
+    if sys.platform == "win32":
+        # Keep this non-inheritable handle alive until process exit. Electron uses
+        # the owned child HANDLE to terminate us; OS handle closure then kills every
+        # descendant, even during startup or a stalled acquisition Job assignment.
+        # Do not close it in a finally block: closing it also terminates this process.
+        backend_job = WindowsJob()
+        backend_job.attach_current_process()
     smoke_phase("bootstrap")
     bootstrap = Bootstrap.model_validate_json(sys.stdin.readline())
     if len(bootstrap.token.get_secret_value()) < 32:
@@ -45,6 +68,14 @@ def main() -> None:
     resources = bootstrap.resources.resolve(strict=True)
     self_test = "--self-test" in sys.argv
     if self_test:
+        from researchassistant.providers.bounded_resolver import resolve_host_addresses
+
+        smoke_phase("dns-worker")
+        if not all(
+            ipaddress.ip_address(value).is_loopback
+            for value in resolve_host_addresses("localhost", timeout=5)
+        ):
+            raise RuntimeError("Owned frozen DNS helper failed")
         credential_store.KEYCHAIN_SERVICE_PREFIX = (
             "ResearchAssistant.Smoke." + (bootstrap.smoke_namespace or secrets.token_hex(12)) + "."
         )
@@ -86,9 +117,11 @@ def main() -> None:
     if not node.is_file() or not wigolo.is_file():
         raise RuntimeError("Bundled acquisition runtime is missing")
 
-    def ownership_changed(pid: int, owned: bool) -> None:
+    ownership = DesktopOwnership(sys.stdout)
+
+    def windows_ownership_changed(pid: int, owned: bool) -> None:
         try:
-            print(json.dumps({"owned_pid": pid, "owned": owned}), flush=True)
+            ownership.write_message({"owned_pid": pid, "owned": owned})
         except BrokenPipeError:
             # The parent may have crashed; local process cleanup must still complete.
             pass
@@ -100,13 +133,26 @@ def main() -> None:
     runtime.services = WigoloServiceManager(
         config=WigoloConfig(base_url=runtime.environment["WIGOLO_BASE_URL"]),
         launch=WigoloLaunchConfig(
-            command=(str(node), str(wigolo), "serve"),
+            command=(
+                str(node),
+                "--import",
+                str(resources / "acquisition/network-preload.mjs"),
+                str(wigolo),
+                "serve",
+            ),
             port=acquisition_port,
             require_ownership=True,
             browser_dir=resources / "browsers",
         ),
         base_environment=runtime.environment,
-        ownership_changed=ownership_changed,
+        ownership_changed=windows_ownership_changed if sys.platform == "win32" else ownership,
+        supervisor_command=(
+            None
+            if sys.platform == "win32"
+            else (sys.executable, "--acquisition-supervisor")
+            if getattr(sys, "frozen", False)
+            else (sys.executable, str(Path(acquisition_supervisor.__file__).resolve()))
+        ),
     )
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", 0))
@@ -117,27 +163,29 @@ def main() -> None:
         allowed_hosts=("127.0.0.1",),
         allowed_origins=(origin,),
         session_token=bootstrap.token.get_secret_value(),
+        shutdown_controller_on_exit=False,
     )
-    app.mount("/", StaticFiles(directory=resources / "web", html=True), name="desktop")
+    app.mount("/", StaticFiles(directory=resources / "frontend", html=True), name="desktop")
     server = uvicorn.Server(uvicorn.Config(app, log_level="critical", access_log=False))
 
     def parent_closed() -> None:
         # Pipe EOF is authoritative even if the shell crashes without a shutdown message.
-        sys.stdin.read()
-        server.should_exit = True
+        try:
+            for line in sys.stdin:
+                ownership.accept_acknowledgement(line)
+        finally:
+            ownership.close()
+            server.should_exit = True
 
     Thread(target=parent_closed, daemon=True).start()
     smoke_phase("identity")
-    print(
-        json.dumps(
-            {
-                "protocol": 1,
-                "origin": origin,
-                "self_test": self_test,
-                "identity": repository_identity(),
-            }
-        ),
-        flush=True,
+    ownership.write_message(
+        {
+            "protocol": 1,
+            "origin": origin,
+            "self_test": self_test,
+            "identity": repository_identity(),
+        }
     )
     try:
         smoke_phase("server")

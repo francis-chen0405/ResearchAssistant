@@ -1,0 +1,119 @@
+from __future__ import annotations
+
+import json
+import socket
+import time
+from pathlib import Path
+from unittest.mock import patch
+
+import httpx
+
+from researchassistant.providers.acquisition import WigoloAcquisitionAdapter
+from researchassistant.providers.bounded_network import DeadlineHTTPTransport
+from researchassistant.providers.config import WigoloConfig
+from researchassistant.providers.discovery_transport import bounded_send
+from researchassistant.providers.scraper import ScrapeRequest
+
+
+class TrickleSocket:
+    def __init__(self) -> None:
+        self.destination: tuple[str, int] | None = None
+        self.timeout: float | None = None
+        self.budgets: list[float | None] = []
+        self.closed = False
+        self.header_pending = True
+        self.remaining = 12
+
+    def connect(self, destination: tuple[str, int]) -> None:
+        self.destination = destination
+
+    def getpeername(self) -> tuple[str, int]:
+        assert self.destination is not None
+        return self.destination
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeout = timeout
+
+    def setsockopt(self, *args: object) -> None:
+        pass
+
+    def fileno(self) -> int:
+        return -1
+
+    def send(self, buffer: bytes) -> int:
+        return len(buffer)
+
+    def recv(self, count: int) -> bytes:
+        self.budgets.append(self.timeout)
+        if self.header_pending:
+            self.header_pending = False
+            return b'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\n'
+        if self.remaining:
+            # Each read obeys its socket timeout; the total is deliberately longer.
+            assert self.timeout is not None and self.timeout > 0.005
+            time.sleep(0.005)
+            self.remaining -= 1
+            return b'x'
+        return b''
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def stalled_dns(*args: object, **kwargs: object) -> list[object]:
+    time.sleep(0.12)
+    raise socket.gaierror('generated stalled DNS fixture')
+
+
+def main() -> None:
+    wire = TrickleSocket()
+    adapter = WigoloAcquisitionAdapter(
+        WigoloConfig(), host_resolver=lambda _: ('93.184.216.34',)
+    )
+    try:
+        with patch.object(socket, 'socket', return_value=wire):
+            started = time.monotonic()
+            result = adapter.scrape(
+                ScrapeRequest(url='http://source.example/article', timeout_seconds=0.02)
+            )
+            elapsed = time.monotonic() - started
+        assert result.text == 'x' * 12 and elapsed >= 0.05
+    finally:
+        adapter._source_client.close()
+        adapter._wigolo_client.close()
+    acquisition = {
+        'configured_timeout_seconds': 0.02,
+        'elapsed_seconds': elapsed,
+        'successful_after_deadline': True,
+        'read_budgets': wire.budgets,
+        'closed_after_owner_cleanup': wire.closed,
+    }
+    with httpx.Client(transport=DeadlineHTTPTransport()) as client:
+        with patch.object(socket, 'getaddrinfo', stalled_dns):
+            started = time.monotonic()
+            try:
+                bounded_send(
+                    client, 'GET', 'http://api.example/search',
+                    expected_base_url='http://api.example', timeout=0.02,
+                )
+            except httpx.ConnectError:
+                dns_elapsed = time.monotonic() - started
+            else:
+                raise AssertionError('expected generated resolver failure')
+    assert dns_elapsed >= 0.10
+    output = {
+        'R19': acquisition,
+        'R20': {
+            'configured_absolute_deadline_seconds': 0.02,
+            'elapsed_seconds': dns_elapsed,
+            'error': 'ConnectError after generated stalled getaddrinfo returned',
+        },
+        'real_network_provider_or_credential_calls': 0,
+        'method': 'Actual HTTPX/httpcore transport; generated socket for R19, patched resolver for R20. No real sockets connect.',
+    }
+    Path('/tmp/ra-review-transport-gaps.json').write_text(json.dumps(output, indent=2)+'\n')
+    print(json.dumps(output, indent=2))
+
+
+if __name__ == '__main__':
+    main()

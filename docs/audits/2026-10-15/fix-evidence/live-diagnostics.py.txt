@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+from pathlib import Path
+from threading import Event
+from types import SimpleNamespace
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path.cwd() / 'tests'))
+import test_query_production as production
+import test_v2_phase12_production as fixtures
+from fastapi.testclient import TestClient
+from test_mlp3_api import FakeServices
+
+from researchassistant.api import live_service
+from researchassistant.api.api import ApiRuntime, create_app
+from researchassistant.api.discovery_diagnostics import enrich_discovery_diagnostics
+from researchassistant.api.live_contracts import LiveRunRequest
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+from researchassistant.providers.config import ExaConfig
+from researchassistant.providers.scraper import ScrapeRequest, ScrapeResponse
+from researchassistant.providers.v2_factory import V2ProductionFactoryConfig
+from researchassistant.research.v2_orchestrator import build_v2_run_diagnostics_or_empty
+from researchassistant.storage.store import open_read_only_store
+
+entered = Event()
+release = Event()
+
+class PausedScraper(fixtures._Scraper):
+    def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+        entered.set()
+        if not release.wait(20):
+            raise RuntimeError('offline probe did not release scraper')
+        return super().scrape(request)
+
+
+def main() -> None:
+    controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,), metadata_depth=10)
+    config = V2ProductionFactoryConfig(
+        routing=fixtures._routing(), ceilings=production.CEILINGS,
+        discovery_providers=controls.discovery_providers, research_controls=controls,
+        exa=ExaConfig(api_key='offline-fixture'),
+    )
+    bundle = SimpleNamespace(
+        search_providers={DiscoveryProvider.EXA: fixtures._Search(unique_results=True)},
+        wigolo=PausedScraper(), firecrawl=None, crossref_resolver=None,
+        llm=production._ConceptModel(completed_rounds=1),
+    )
+    with tempfile.TemporaryDirectory(prefix='ra-live-diagnostics-') as temporary:
+        path = Path(temporary) / 'generated.sqlite3'
+        with patch.object(V2ProductionFactoryConfig, 'from_environment', return_value=config), patch.object(live_service, 'build_v2_production_bundle', return_value=bundle):
+            controller = live_service.LiveResearchController(environment={})
+            try:
+                started = controller.start(LiveRunRequest(
+                    raw_claim=production.CLAIM, db_path=str(path), max_tokens=500_000,
+                    max_cost_usd=5, research_controls=controls,
+                ))
+                assert started.started, started.message
+                assert entered.wait(15), 'generated acquisition did not start'
+                before = path.read_bytes()
+                with open_read_only_store(path) as store:
+                    expected = enrich_discovery_diagnostics(
+                        store.connection, started.run_id,
+                        build_v2_run_diagnostics_or_empty(store.connection, started.run_id, controls.discovery_providers),
+                    )
+                app = create_app(ApiRuntime(controller=controller, services=FakeServices(), environment={}), load_keychain_on_start=False, allowed_hosts=('testserver',))
+                response = TestClient(app).get(f'/api/research/{started.run_id}', params={'db_path':str(path)})
+                assert response.status_code == 200, response.text
+                actual = response.json()
+                observed = {
+                    'finding':'R29', 'actual_http_status':response.status_code,
+                    'classification':actual['classification'], 'worker_active':actual['worker_active'],
+                    'actual_v2_diagnostics':actual['v2_diagnostics'],
+                    'computed_diagnostics': expected.model_dump(mode='json'),
+                    'database_unchanged_by_inspection':path.read_bytes()==before,
+                    'method':'Actual fresh controller worker with offline generated providers, paused during acquisition after saved discovery; actual HTTP polling. No external calls or real data.',
+                }
+                assert actual['classification']=='running' and actual['worker_active']
+                assert expected.physical_search_requests > 0
+                assert actual['v2_diagnostics'] is None
+            finally:
+                release.set()
+                assert controller.shutdown(timeout=20)
+    Path('/tmp/ra-review-live-diagnostics.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+
+if __name__ == '__main__':
+    main()

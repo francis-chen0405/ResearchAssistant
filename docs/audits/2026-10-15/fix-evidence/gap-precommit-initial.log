@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/ra-review-gap-precommit.py", line 80, in <module>
+    main()
+  File "/tmp/ra-review-gap-precommit.py", line 55, in main
+    raise AssertionError("expected precommit interruption")
+AssertionError: expected precommit interruption

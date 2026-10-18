@@ -1,0 +1,9 @@
+{
+  "same_ledger_id_has_different_statements": true,
+  "released_statement": "Among surveyed regional-program adults, 62% reported course completion versus 48% among matched adults receiving standard materials.",
+  "evidence_display_statement": "A substituted statement that was never in the released brief.",
+  "released_hash_unchanged": true,
+  "inconsistent_approved_claim_was_accepted": true,
+  "database_unchanged_by_inspection": true,
+  "method": "Generated offline research, checksum-valid same-run admission substitution, original immutability trigger restored. No real data or provider calls."
+}

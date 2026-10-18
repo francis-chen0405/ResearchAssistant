@@ -1,0 +1,15 @@
+{
+  "finding": "R27",
+  "http_status": 422,
+  "actual_body": {
+    "detail": "Invalid request fields."
+  },
+  "documented_detail_schema": {
+    "items": {
+      "$ref": "#/components/schemas/ValidationError"
+    },
+    "type": "array",
+    "title": "Detail"
+  },
+  "method": "Actual offline FastAPI request with missing required fields; no lifespan, database, credentials or provider work."
+}

@@ -1,0 +1,8 @@
+Preview loop: 10504ms
+Verified preview and provider setup
+Verified keyboard dialog
+PASS: automatic offline preview/recovery, hover/focus pause, static reduced motion, desktop viewport fit, 7 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.
+PASS: 7 deterministic snapshots, max same-run concurrency 1, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement and unmount cleanup.
+Verified stale configuration success and failure are ignored after selection changes.
+Verified bounded service readiness and ordered preference commits, including failure recovery.
+PASS: stale history responses, overlapping run opens, old-database selection cleanup, navigation during run loading, and aborted late result/trail responses.

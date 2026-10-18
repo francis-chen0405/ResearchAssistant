@@ -1,0 +1,38 @@
+53 INFO: PyInstaller: 6.22.2, contrib hooks: 2026.7
+53 INFO: Python: 3.12.14
+65 INFO: Platform: macOS-26.6.2-arm64-arm-64bit
+65 INFO: Python environment: /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv
+66 INFO: wrote /tmp/researchassistant-review-r53-r55-frozen/build/researchassistant-backend.spec
+69 INFO: Removing temporary files and cleaning cache in /Users/francischen/Library/Application Support/pyinstaller
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/__main__.py", line 321, in <module>
+    run()
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/__main__.py", line 215, in run
+    run_build(pyi_config, spec_file, **vars(args))
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/__main__.py", line 70, in run_build
+    PyInstaller.building.build_main.main(pyi_config, spec_file, **kwargs)
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/building/build_main.py", line 1275, in main
+    build(specfile, distpath, workpath, clean_build)
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/lib/python3.12/site-packages/PyInstaller/building/build_main.py", line 1168, in build
+    shutil.rmtree(f)
+  File "/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/shutil.py", line 759, in rmtree
+    _rmtree_safe_fd(stack, onexc)
+  File "/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/shutil.py", line 703, in _rmtree_safe_fd
+    onexc(func, path, err)
+  File "/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/shutil.py", line 700, in _rmtree_safe_fd
+    onexc(os.unlink, fullname, err)
+  File "/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/shutil.py", line 698, in _rmtree_safe_fd
+    os.unlink(entry.name, dir_fd=topfd)
+PermissionError: [Errno 1] Operation not permitted: '/Users/francischen/Library/Application Support/pyinstaller/bincache00py31264bit/arm64/adhoc/no-entitlements'
+Traceback (most recent call last):
+  File "/tmp/ra-r53-r55-frozen-build.py", line 13, in <module>
+    build.main()
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/desktop/build.py", line 187, in main
+    run(command)
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/desktop/build.py", line 24, in run
+    subprocess.run(args, cwd=cwd, env=env, check=True)
+  File "/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/.venv/bin/python', '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'researchassistant-backend', '--paths', '/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src', '--distpath', '/tmp/researchassistant-review-r53-r55-frozen/build/python', '--workpath', '/tmp/researchassistant-review-r53-r55-frozen/build/pyinstaller', '--specpath', '/tmp/researchassistant-review-r53-r55-frozen/build', '--collect-submodules', 'agents', '--collect-submodules', 'providers', '--collect-submodules', 'frontend', '--exclude-module', 'streamlit', '--exclude-module', 'pytest', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/cli.py:backend/src', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/models.py:backend/src', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/orchestrator.py:backend/src', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/store.py:backend/src', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/pyproject.toml:backend', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/agents:backend/src/agents', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/providers:backend/src/providers', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/frontend:backend/src/frontend', '--add-data', '/tmp/researchassistant-review-r53-r55-frozen/build/source-data/backend/src/researchassistant:backend/src/researchassistant', '/tmp/researchassistant-review-r53-r55-frozen/backend.py']' returned non-zero exit status 1.

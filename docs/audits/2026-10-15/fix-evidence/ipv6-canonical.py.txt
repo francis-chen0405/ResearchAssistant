@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
+from researchassistant.contracts.discovery_v2 import V2MetadataDiscoveryPolicy
+from researchassistant.contracts.model_contracts import DiscoveryProvider
+from researchassistant.contracts.model_research import DiscoveryProvenance, NormalizedDiscoveryItem, ResearchDirection
+from researchassistant.providers.acquisition import _validate_public_url
+from researchassistant.providers.ranking import canonical_discovery_url
+from researchassistant.research.metadata_ranking import rank_metadata
+
+
+def main() -> None:
+    cases: list[dict[str, object]] = []
+    for suffix in ('/paper', ':8443/paper'):
+        url = 'https://[2606:4700:4700::1111]' + suffix
+        assert _validate_public_url(url) == ('2606:4700:4700::1111',)
+        canonical = canonical_discovery_url(url)
+        query_id = uuid4()
+        item = NormalizedDiscoveryItem(
+            run_id=uuid4(), item_id=uuid4(), provider=DiscoveryProvider.EXA,
+            query_id=query_id, query_text='generated study', direction=ResearchDirection.SUPPORT,
+            round_number=1, provider_rank=1, source_url=url, canonical_url=canonical,
+            title='Generated study', provenance_chain=(DiscoveryProvenance(
+                provider=DiscoveryProvider.EXA, query_id=query_id, query_text='generated study',
+                direction=ResearchDirection.SUPPORT, round_number=1, provider_rank=1, original_url=url,
+            ),), discovered_at=datetime.now(UTC),
+        )
+        try:
+            rank_metadata((item,), exact_claim='Generated study', policy=V2MetadataDiscoveryPolicy())
+        except ValueError as error:
+            cases.append({'valid_public_url': url, 'canonical_url': canonical,
+                          'ranking_error': str(error)})
+        else:
+            raise AssertionError('expected broken IPv6 authority')
+    result = {'finding': 'R25', 'cases': cases, 'network_or_provider_calls': 0}
+    Path('/tmp/ra-review-ipv6-canonical.json').write_text(json.dumps(result, indent=2)+'\n')
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()

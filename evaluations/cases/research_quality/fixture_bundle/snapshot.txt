@@ -1,0 +1,1 @@
+This is authored fixture text. The measured fixture outcome was unchanged.

@@ -1,0 +1,370 @@
+FFFFFF................                                                   [100%]
+=================================== FAILURES ===================================
+_ test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-supports-support] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1411/test_fresh_relationship_wordin0')
+direction = <ResearchDirection.SUPPORT: 'support'>
+relationship = <V2EvidenceRelationship.SUPPORTS: 'supports'>, claim_fit = 3
+
+    @pytest.mark.parametrize("direction", tuple(ResearchDirection))
+    @pytest.mark.parametrize(
+        "relationship",
+        (
+            V2EvidenceRelationship.SUPPORTS,
+            V2EvidenceRelationship.CHALLENGES,
+            V2EvidenceRelationship.QUALIFIES,
+        ),
+    )
+    @pytest.mark.parametrize("claim_fit", (3, 4, 5))
+    def test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding(
+        tmp_path: Path,
+        direction: ResearchDirection,
+        relationship: V2EvidenceRelationship,
+        claim_fit: int,
+    ) -> None:
+        run_id = uuid4()
+        path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=path,
+            batch_input=_batch_input(run_id, direction=direction),
+            llm_provider=FakeLunaAnalyst([_assessment(relationship=relationship, claim_fit=claim_fit)]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(db_path=path, analyst_result=analyst, clock=lambda: NOW)
+        continuation = _continuation(run_id)
+        projection = build_v2_synthesizer_input(admission, continuation)
+        assert projection.approved_ledger_items[0].relationship_to_claim is relationship
+        synthesis = build_v2_synthesis_output(synthesis_input=projection, created_at=NOW)
+        output = build_v2_final_research_output(
+            admission_result=admission,
+            continuation=continuation,
+            synthesis=synthesis,
+            created_at=NOW,
+        )
+        assert output.release_validation.valid, output.release_validation.errors
+        rendered = render_v2_final_output(output)
+        assert "Direct supporting evidence:" not in rendered
+        assert "Direct opposing evidence:" not in rendered
+        if claim_fit == 5:
+            wording = {
+                V2EvidenceRelationship.SUPPORTS: "supporting",
+                V2EvidenceRelationship.CHALLENGES: "challenging",
+                V2EvidenceRelationship.QUALIFIES: "qualifying",
+            }[relationship]
+            assert f"- Evidence {wording} the claim:" in rendered
+        elif claim_fit == 4:
+            assert "Indirect evidence—relevant but not independently decisive:" in rendered
+        else:
+>           assert "Contextual evidence—does not independently establish the claim:" in rendered
+E           AssertionError: assert 'Contextual evidence—does not independently establish the claim:' in '# Research Brief\n\nClaim under review: The regional program increases course completion.\n\nResearch direction: supp...\n## Research Stopping Reason\n- sufficient_source_pool: The persisted research governor selected this stopping point.'
+
+tests/test_relationship_rendering_review.py:86: AssertionError
+_ test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-supports-challenge] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1411/test_fresh_relationship_wordin1')
+direction = <ResearchDirection.CHALLENGE: 'challenge'>
+relationship = <V2EvidenceRelationship.SUPPORTS: 'supports'>, claim_fit = 3
+
+    @pytest.mark.parametrize("direction", tuple(ResearchDirection))
+    @pytest.mark.parametrize(
+        "relationship",
+        (
+            V2EvidenceRelationship.SUPPORTS,
+            V2EvidenceRelationship.CHALLENGES,
+            V2EvidenceRelationship.QUALIFIES,
+        ),
+    )
+    @pytest.mark.parametrize("claim_fit", (3, 4, 5))
+    def test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding(
+        tmp_path: Path,
+        direction: ResearchDirection,
+        relationship: V2EvidenceRelationship,
+        claim_fit: int,
+    ) -> None:
+        run_id = uuid4()
+        path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=path,
+            batch_input=_batch_input(run_id, direction=direction),
+            llm_provider=FakeLunaAnalyst([_assessment(relationship=relationship, claim_fit=claim_fit)]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(db_path=path, analyst_result=analyst, clock=lambda: NOW)
+        continuation = _continuation(run_id)
+        projection = build_v2_synthesizer_input(admission, continuation)
+        assert projection.approved_ledger_items[0].relationship_to_claim is relationship
+        synthesis = build_v2_synthesis_output(synthesis_input=projection, created_at=NOW)
+        output = build_v2_final_research_output(
+            admission_result=admission,
+            continuation=continuation,
+            synthesis=synthesis,
+            created_at=NOW,
+        )
+        assert output.release_validation.valid, output.release_validation.errors
+        rendered = render_v2_final_output(output)
+        assert "Direct supporting evidence:" not in rendered
+        assert "Direct opposing evidence:" not in rendered
+        if claim_fit == 5:
+            wording = {
+                V2EvidenceRelationship.SUPPORTS: "supporting",
+                V2EvidenceRelationship.CHALLENGES: "challenging",
+                V2EvidenceRelationship.QUALIFIES: "qualifying",
+            }[relationship]
+            assert f"- Evidence {wording} the claim:" in rendered
+        elif claim_fit == 4:
+            assert "Indirect evidence—relevant but not independently decisive:" in rendered
+        else:
+>           assert "Contextual evidence—does not independently establish the claim:" in rendered
+E           AssertionError: assert 'Contextual evidence—does not independently establish the claim:' in '# Research Brief\n\nClaim under review: The regional program increases course completion.\n\nResearch direction: chal...\n## Research Stopping Reason\n- sufficient_source_pool: The persisted research governor selected this stopping point.'
+
+tests/test_relationship_rendering_review.py:86: AssertionError
+_ test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-challenges-support] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1411/test_fresh_relationship_wordin2')
+direction = <ResearchDirection.SUPPORT: 'support'>
+relationship = <V2EvidenceRelationship.CHALLENGES: 'challenges'>, claim_fit = 3
+
+    @pytest.mark.parametrize("direction", tuple(ResearchDirection))
+    @pytest.mark.parametrize(
+        "relationship",
+        (
+            V2EvidenceRelationship.SUPPORTS,
+            V2EvidenceRelationship.CHALLENGES,
+            V2EvidenceRelationship.QUALIFIES,
+        ),
+    )
+    @pytest.mark.parametrize("claim_fit", (3, 4, 5))
+    def test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding(
+        tmp_path: Path,
+        direction: ResearchDirection,
+        relationship: V2EvidenceRelationship,
+        claim_fit: int,
+    ) -> None:
+        run_id = uuid4()
+        path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=path,
+            batch_input=_batch_input(run_id, direction=direction),
+            llm_provider=FakeLunaAnalyst([_assessment(relationship=relationship, claim_fit=claim_fit)]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(db_path=path, analyst_result=analyst, clock=lambda: NOW)
+        continuation = _continuation(run_id)
+        projection = build_v2_synthesizer_input(admission, continuation)
+        assert projection.approved_ledger_items[0].relationship_to_claim is relationship
+        synthesis = build_v2_synthesis_output(synthesis_input=projection, created_at=NOW)
+        output = build_v2_final_research_output(
+            admission_result=admission,
+            continuation=continuation,
+            synthesis=synthesis,
+            created_at=NOW,
+        )
+        assert output.release_validation.valid, output.release_validation.errors
+        rendered = render_v2_final_output(output)
+        assert "Direct supporting evidence:" not in rendered
+        assert "Direct opposing evidence:" not in rendered
+        if claim_fit == 5:
+            wording = {
+                V2EvidenceRelationship.SUPPORTS: "supporting",
+                V2EvidenceRelationship.CHALLENGES: "challenging",
+                V2EvidenceRelationship.QUALIFIES: "qualifying",
+            }[relationship]
+            assert f"- Evidence {wording} the claim:" in rendered
+        elif claim_fit == 4:
+            assert "Indirect evidence—relevant but not independently decisive:" in rendered
+        else:
+>           assert "Contextual evidence—does not independently establish the claim:" in rendered
+E           AssertionError: assert 'Contextual evidence—does not independently establish the claim:' in '# Research Brief\n\nClaim under review: The regional program increases course completion.\n\nResearch direction: supp...\n## Research Stopping Reason\n- sufficient_source_pool: The persisted research governor selected this stopping point.'
+
+tests/test_relationship_rendering_review.py:86: AssertionError
+_ test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-challenges-challenge] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1411/test_fresh_relationship_wordin3')
+direction = <ResearchDirection.CHALLENGE: 'challenge'>
+relationship = <V2EvidenceRelationship.CHALLENGES: 'challenges'>, claim_fit = 3
+
+    @pytest.mark.parametrize("direction", tuple(ResearchDirection))
+    @pytest.mark.parametrize(
+        "relationship",
+        (
+            V2EvidenceRelationship.SUPPORTS,
+            V2EvidenceRelationship.CHALLENGES,
+            V2EvidenceRelationship.QUALIFIES,
+        ),
+    )
+    @pytest.mark.parametrize("claim_fit", (3, 4, 5))
+    def test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding(
+        tmp_path: Path,
+        direction: ResearchDirection,
+        relationship: V2EvidenceRelationship,
+        claim_fit: int,
+    ) -> None:
+        run_id = uuid4()
+        path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=path,
+            batch_input=_batch_input(run_id, direction=direction),
+            llm_provider=FakeLunaAnalyst([_assessment(relationship=relationship, claim_fit=claim_fit)]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(db_path=path, analyst_result=analyst, clock=lambda: NOW)
+        continuation = _continuation(run_id)
+        projection = build_v2_synthesizer_input(admission, continuation)
+        assert projection.approved_ledger_items[0].relationship_to_claim is relationship
+        synthesis = build_v2_synthesis_output(synthesis_input=projection, created_at=NOW)
+        output = build_v2_final_research_output(
+            admission_result=admission,
+            continuation=continuation,
+            synthesis=synthesis,
+            created_at=NOW,
+        )
+        assert output.release_validation.valid, output.release_validation.errors
+        rendered = render_v2_final_output(output)
+        assert "Direct supporting evidence:" not in rendered
+        assert "Direct opposing evidence:" not in rendered
+        if claim_fit == 5:
+            wording = {
+                V2EvidenceRelationship.SUPPORTS: "supporting",
+                V2EvidenceRelationship.CHALLENGES: "challenging",
+                V2EvidenceRelationship.QUALIFIES: "qualifying",
+            }[relationship]
+            assert f"- Evidence {wording} the claim:" in rendered
+        elif claim_fit == 4:
+            assert "Indirect evidence—relevant but not independently decisive:" in rendered
+        else:
+>           assert "Contextual evidence—does not independently establish the claim:" in rendered
+E           AssertionError: assert 'Contextual evidence—does not independently establish the claim:' in '# Research Brief\n\nClaim under review: The regional program increases course completion.\n\nResearch direction: chal...\n## Research Stopping Reason\n- sufficient_source_pool: The persisted research governor selected this stopping point.'
+
+tests/test_relationship_rendering_review.py:86: AssertionError
+_ test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-qualifies-support] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1411/test_fresh_relationship_wordin4')
+direction = <ResearchDirection.SUPPORT: 'support'>
+relationship = <V2EvidenceRelationship.QUALIFIES: 'qualifies'>, claim_fit = 3
+
+    @pytest.mark.parametrize("direction", tuple(ResearchDirection))
+    @pytest.mark.parametrize(
+        "relationship",
+        (
+            V2EvidenceRelationship.SUPPORTS,
+            V2EvidenceRelationship.CHALLENGES,
+            V2EvidenceRelationship.QUALIFIES,
+        ),
+    )
+    @pytest.mark.parametrize("claim_fit", (3, 4, 5))
+    def test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding(
+        tmp_path: Path,
+        direction: ResearchDirection,
+        relationship: V2EvidenceRelationship,
+        claim_fit: int,
+    ) -> None:
+        run_id = uuid4()
+        path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=path,
+            batch_input=_batch_input(run_id, direction=direction),
+            llm_provider=FakeLunaAnalyst([_assessment(relationship=relationship, claim_fit=claim_fit)]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(db_path=path, analyst_result=analyst, clock=lambda: NOW)
+        continuation = _continuation(run_id)
+        projection = build_v2_synthesizer_input(admission, continuation)
+        assert projection.approved_ledger_items[0].relationship_to_claim is relationship
+        synthesis = build_v2_synthesis_output(synthesis_input=projection, created_at=NOW)
+        output = build_v2_final_research_output(
+            admission_result=admission,
+            continuation=continuation,
+            synthesis=synthesis,
+            created_at=NOW,
+        )
+        assert output.release_validation.valid, output.release_validation.errors
+        rendered = render_v2_final_output(output)
+        assert "Direct supporting evidence:" not in rendered
+        assert "Direct opposing evidence:" not in rendered
+        if claim_fit == 5:
+            wording = {
+                V2EvidenceRelationship.SUPPORTS: "supporting",
+                V2EvidenceRelationship.CHALLENGES: "challenging",
+                V2EvidenceRelationship.QUALIFIES: "qualifying",
+            }[relationship]
+            assert f"- Evidence {wording} the claim:" in rendered
+        elif claim_fit == 4:
+            assert "Indirect evidence—relevant but not independently decisive:" in rendered
+        else:
+>           assert "Contextual evidence—does not independently establish the claim:" in rendered
+E           AssertionError: assert 'Contextual evidence—does not independently establish the claim:' in '# Research Brief\n\nClaim under review: The regional program increases course completion.\n\nResearch direction: supp...\n## Research Stopping Reason\n- sufficient_source_pool: The persisted research governor selected this stopping point.'
+
+tests/test_relationship_rendering_review.py:86: AssertionError
+_ test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-qualifies-challenge] _
+
+tmp_path = PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1411/test_fresh_relationship_wordin5')
+direction = <ResearchDirection.CHALLENGE: 'challenge'>
+relationship = <V2EvidenceRelationship.QUALIFIES: 'qualifies'>, claim_fit = 3
+
+    @pytest.mark.parametrize("direction", tuple(ResearchDirection))
+    @pytest.mark.parametrize(
+        "relationship",
+        (
+            V2EvidenceRelationship.SUPPORTS,
+            V2EvidenceRelationship.CHALLENGES,
+            V2EvidenceRelationship.QUALIFIES,
+        ),
+    )
+    @pytest.mark.parametrize("claim_fit", (3, 4, 5))
+    def test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding(
+        tmp_path: Path,
+        direction: ResearchDirection,
+        relationship: V2EvidenceRelationship,
+        claim_fit: int,
+    ) -> None:
+        run_id = uuid4()
+        path = _prepare_db(tmp_path, run_id)
+        analyst = run_v2_evidence_analyst(
+            db_path=path,
+            batch_input=_batch_input(run_id, direction=direction),
+            llm_provider=FakeLunaAnalyst([_assessment(relationship=relationship, claim_fit=claim_fit)]),
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+        admission = run_v2_evidence_admission(db_path=path, analyst_result=analyst, clock=lambda: NOW)
+        continuation = _continuation(run_id)
+        projection = build_v2_synthesizer_input(admission, continuation)
+        assert projection.approved_ledger_items[0].relationship_to_claim is relationship
+        synthesis = build_v2_synthesis_output(synthesis_input=projection, created_at=NOW)
+        output = build_v2_final_research_output(
+            admission_result=admission,
+            continuation=continuation,
+            synthesis=synthesis,
+            created_at=NOW,
+        )
+        assert output.release_validation.valid, output.release_validation.errors
+        rendered = render_v2_final_output(output)
+        assert "Direct supporting evidence:" not in rendered
+        assert "Direct opposing evidence:" not in rendered
+        if claim_fit == 5:
+            wording = {
+                V2EvidenceRelationship.SUPPORTS: "supporting",
+                V2EvidenceRelationship.CHALLENGES: "challenging",
+                V2EvidenceRelationship.QUALIFIES: "qualifying",
+            }[relationship]
+            assert f"- Evidence {wording} the claim:" in rendered
+        elif claim_fit == 4:
+            assert "Indirect evidence—relevant but not independently decisive:" in rendered
+        else:
+>           assert "Contextual evidence—does not independently establish the claim:" in rendered
+E           AssertionError: assert 'Contextual evidence—does not independently establish the claim:' in '# Research Brief\n\nClaim under review: The regional program increases course completion.\n\nResearch direction: chal...\n## Research Stopping Reason\n- sufficient_source_pool: The persisted research governor selected this stopping point.'
+
+tests/test_relationship_rendering_review.py:86: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_relationship_rendering_review.py::test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-supports-support]
+FAILED tests/test_relationship_rendering_review.py::test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-supports-challenge]
+FAILED tests/test_relationship_rendering_review.py::test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-challenges-support]
+FAILED tests/test_relationship_rendering_review.py::test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-challenges-challenge]
+FAILED tests/test_relationship_rendering_review.py::test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-qualifies-support]
+FAILED tests/test_relationship_rendering_review.py::test_fresh_relationship_wording_and_qualifications_match_the_admitted_finding[3-qualifies-challenge]
+6 failed, 16 passed in 1.83s

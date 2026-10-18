@@ -2,9 +2,24 @@
 
 This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current task and completed implementation records are identified in [the plan index](../.agent/PLANS.md).
 
-There are 83 plan records and 22 verification records. Historical setup, next-step and approval wording in these records applies to their dated scope; [STATUS](../STATUS.md) and [HANDOFF](../HANDOFF.md) own the present stage.
+Historical setup, next-step and approval wording in these records applies to their dated scope; [STATUS](project/STATUS.md) and [HANDOFF](project/HANDOFF.md) own the present stage.
 
 ## Recent reviews and repairs
+
+- [Prompt 17 Windows CI and native durability](verification/windows-ci-durability-2026-10-13.md): current-source Windows reproductions, NTFS privacy/publication, process-crash recovery, isolated native vault/Jobs and explicit power-loss/release limits.
+- [Prompt 16 Mac delivery and source-archive repair candidate and installed-cache gates](verification/mac-delivery-gates-2026-10-13.md): exact current-source DMG/ZIP, confirmed FTS repair on disposable cache, preserved October 9 installation and named external signing/platform prerequisites.
+- [Prompt 15 source coverage/dispositions](../.agent/plans/source-leads-quality-2026-10-13.md): same-run read-only source leads and four review repairs; live usefulness remains unmeasured.
+
+- [Current research-quality acceptance — Prompt 14](../.agent/plans/research-quality-acceptance-2026-10-11.md): reproducible offline observation harness, provenance/unknown denominators, frozen current baseline and a separately authorized bounded live protocol.
+
+- [Backend responsibility splits — Prompt 13](verification/backend-hotspot-split-2026-10-11.md): adaptive search, bounded Round 4, atomic storage aggregates, stage contracts and historical execution isolation.
+- [Neutral contracts and historical inspection — Prompt 12](verification/contract-ownership-2026-10-10.md): dependency ownership, public shape/byte compatibility, isolated reads and ratcheted import guard.
+- [Renderer feature split — Prompt 11](verification/renderer-split-2026-10-10.md): feature controllers/views, generated contracts and independent offline frontend checks.
+- [Python API responsibility split — Prompt 10](verification/api-module-split-2026-10-10.md): route ownership, compatibility facades, unchanged HTTP inventory and read/lifecycle verification.
+- [Current guidance and test navigation — Prompt 09](verification/docs-test-navigation-2026-10-10.md): installed/public provenance, owner-based test discovery, active links and preserved historical navigation.
+- [October 9 current-source Mac installation](verification/current-app-install-2026-10-09.md): verified local unsigned replacement and preserved saved data; public distribution remains separate.
+
+- [Owning-folder consolidation — Prompt 08](verification/folder-consolidation-2026-10-10.md): backend/src distribution, renderer rename, installed facades, resource/identity and final verification.
 
 ### Plans
 
@@ -26,6 +41,20 @@ There are 83 plan records and 22 verification records. Historical setup, next-st
 - [validator-and-current-docs-2026-10-02](../.agent/plans/validator-and-current-docs-2026-10-02.md)
 
 ### Verification records
+
+- [backend-installability-2026-10-10](verification/backend-installability-2026-10-10.md) — current-layout distribution, exact wheel inventory, preserved prompt bytes, arbitrary-cwd wheel/editable and native frozen verification; Prompt 08 starting state.
+
+- [desktop-shutdown-2026-10-10](verification/desktop-shutdown-2026-10-10.md) — bounded EOF-first quit/startup, owned process escalation, SQLite recovery and native Mac/Windows verification boundaries.
+
+- [service-lifecycle-2026-10-10](verification/service-lifecycle-2026-10-10.md) — atomic stop/admission and confirmed credential/import guards, barrier/accounting checks and measured contention.
+
+- [resume-status-2026-10-10](verification/resume-status-2026-10-10.md) — first-poll rejection diagnostics, explicit worker ownership/restart presentation and unchanged historical run accounting.
+
+- [acquisition-usable-fallback-2026-10-09](verification/acquisition-usable-fallback-2026-10-09.md) — reproduced shell source-loss, bounded Probe-v4 fallback and immutable capture/replay checks.
+
+- [citation-expansion-limits-2026-10-09](verification/citation-expansion-limits-2026-10-09.md) — reproduced retention/replay failures, versioned correction and offline quota matrix.
+
+- [root-cleanup-2026-10-09](verification/root-cleanup-2026-10-09.md) — inactive root-copy removal and CI layout/dependency guardrails.
 
 - [project-stage-2026-10-08](verification/project-stage-2026-10-08.md) — review of all existing repository Markdown, reconciliation with current source/installed backend, and fresh offline checks.
 - [alpr-equity-run-review-2026-10-02](../docs/verification/alpr-equity-run-review-2026-10-02.md)
@@ -133,3 +162,11 @@ There are 83 plan records and 22 verification records. Historical setup, next-st
 - [phase-2](../docs/verification/phase-2.md)
 - [phase-3](../docs/verification/phase-3.md)
 - [planner-scout-reliability](../docs/verification/planner-scout-reliability.md)
+
+- [Prompt 11 renderer feature split and independent checks](verification/renderer-split-2026-10-10.md).
+
+- [Prompt 15 source dispositions, review repairs and quality boundary](../.agent/plans/source-leads-quality-2026-10-13.md).
+
+- [Current Mac replacement — October 18](verification/current-app-install-2026-10-18.md): verified R01–R59 local build, installed/window/upgrade checks, preserved data, old-app removal and a local installer.
+
+- [Master consolidation — October 18](../.agent/plans/publish-master-2026-10-18.md): redundant Windows branch comparison, preserved history and authorized commit/push.

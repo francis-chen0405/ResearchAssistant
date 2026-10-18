@@ -123,8 +123,11 @@ def _connect(path: Path) -> sqlite3.Connection:
 
 
 def _downgrade_to_v14(path: Path) -> None:
+    from test_database_schema_integrity import _restore_round_three_constraint
+
     with closing(_connect(path)) as connection:
         connection.execute("PRAGMA foreign_keys = OFF")
+        _restore_round_three_constraint(connection)
         canonical = store_schema._canonical_schema()
         for kind, name, _sql in reversed(canonical):
             if store_schema._object_version(kind, name) > 14 and kind in {"trigger", "index"}:

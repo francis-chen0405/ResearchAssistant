@@ -390,6 +390,8 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(service_manager_module.sys, "platform", "darwin")
+    # This test simulates POSIX on Windows too; host signal exports differ.
+    monkeypatch.setattr(service_manager_module.signal, "SIGKILL", 9, raising=False)
     captured: dict[str, object] = {}
 
     class FakeProcess:
@@ -433,6 +435,7 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     )
     manager = WigoloServiceManager(
         popen=popen,
+        launch=service_manager_module.WigoloLaunchConfig(),
         base_environment={"PATH": "/usr/bin", "HOME": "/tmp/home", "MIMO_API_KEY": SECRET},
     )
 
@@ -451,6 +454,8 @@ def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     assert stopped.state == "stopped"
     assert stopped.pid == process.pid
     assert killed and killed[0][0] == process.pid
+    assert all(pid == process.pid for pid, _sig in killed)
+    assert killed[-1] == (process.pid, service_manager_module.signal.SIGKILL)
 
 
 def test_stop_never_kills_unowned_listener(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -467,26 +472,32 @@ def test_stop_never_kills_unowned_listener(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
-    source = (ROOT / "web" / "app" / "page.tsx").read_text(encoding="utf-8")
-
-    assert all(
-        expected in source
-        for expected in (
+    owners = {
+        "app/page.tsx": ("HistoryView", "ProviderSetup", "AdvancedPanel"),
+        "features/shell/views.tsx": (
             "Research a claim.",
             "See the whole picture.",
-            "History",
             "Provider setup",
-            "ProviderSetup",
-            "Advanced",
-            "Begin research",
+        ),
+        "features/research/composer.tsx": ("Begin research",),
+        "features/preferences/panel.tsx": (
             "Research preferences",
             "Token ceiling",
             "Model cost ceiling",
             "Call ceiling",
             "Run ID",
             "SQLite database",
-        )
-    )
+        ),
+    }
+    for path, expected_labels in owners.items():
+        owner_source = " ".join((ROOT / "frontend" / path).read_text(encoding="utf-8").split())
+        assert all(expected in owner_source for expected in expected_labels), path
+    page = (ROOT / "frontend/app/page.tsx").read_text(encoding="utf-8")
+    feature_sources = [
+        path.read_text(encoding="utf-8") for path in (ROOT / "frontend/features").rglob("*.tsx")
+    ]
+    source = " ".join((page + "\n" + "\n".join(feature_sources)).split())
+
     assert "disabled={!claim.trim() || !acknowledged || busy}" in source
     assert all(
         removed not in source
@@ -509,7 +520,7 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
 
 
 def test_provider_setup_modal_keeps_its_save_action_reachable_on_short_screens() -> None:
-    stylesheet = (ROOT / "web" / "app" / "globals.css").read_text(encoding="utf-8")
+    stylesheet = (ROOT / "frontend" / "app" / "globals.css").read_text(encoding="utf-8")
 
     assert ".modal {" in stylesheet
     assert "max-height: calc(100dvh - 40px)" in stylesheet
@@ -517,7 +528,9 @@ def test_provider_setup_modal_keeps_its_save_action_reachable_on_short_screens()
 
 
 def test_live_next_provider_setup_uses_password_fields() -> None:
-    source = (ROOT / "web" / "components" / "provider-setup.tsx").read_text(encoding="utf-8")
+    source = " ".join(
+        (ROOT / "frontend/components/provider-setup.tsx").read_text(encoding="utf-8").split()
+    )
 
     assert all(
         label in source

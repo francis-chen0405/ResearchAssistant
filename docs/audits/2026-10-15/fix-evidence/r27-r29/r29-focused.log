@@ -1,0 +1,43 @@
+.F........................                                               [100%]
+=================================== FAILURES ===================================
+_____ test_active_polling_returns_saved_discovery_diagnostics[acquisition] _____
+
+run_fixture = _RunFixture(path=PosixPath('/private/var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/pytest-of-francischen/pytest-1356...izer_seconds=180.0)), openalex=None, serpsearch=None, arxiv=None, pubmed=None, crossref_enabled=False, firecrawl=None))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109c37890>
+pause_stage = 'acquisition'
+
+    @pytest.mark.parametrize("pause_stage", ["search", "acquisition"])
+    def test_active_polling_returns_saved_discovery_diagnostics(
+        run_fixture: _RunFixture, monkeypatch: pytest.MonkeyPatch, pause_stage: str
+    ) -> None:
+        entered, release = Event(), Event()
+        _, search, scraper = _install_bundle(monkeypatch, run_fixture)
+        original_search, original_scrape = search.search, scraper.scrape
+    
+        def paused_search(request: SearchRequest) -> SearchResponse:
+            if pause_stage == "search":
+                entered.set()
+                assert release.wait(20)
+            return original_search(request)
+    
+        def paused_scrape(request: ScrapeRequest) -> ScrapeResponse:
+            if pause_stage == "acquisition":
+                entered.set()
+                assert release.wait(20)
+            return original_scrape(request)
+    
+        monkeypatch.setattr(search, "search", paused_search)
+        monkeypatch.setattr(scraper, "scrape", paused_scrape)
+        controller = live.LiveResearchController(environment={})
+        try:
+            started = controller.start(run_fixture.request())
+            assert started.started, started.message
+>           assert entered.wait(10)
+E           assert False
+E            +  where False = wait(10)
+E            +    where wait = <threading.Event at 0x109c35e50: unset>.wait
+
+tests/test_live_resume_status.py:176: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_live_resume_status.py::test_active_polling_returns_saved_discovery_diagnostics[acquisition]
+1 failed, 25 passed in 22.04s

@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+import shutil
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+sys.path.insert(0, str(root / 'desktop'))
+import build
+
+stage = Path('/tmp/researchassistant-review-r56-r59-frozen')
+stage.mkdir()
+prior = Path('/tmp/researchassistant-review-r53-r55-frozen/resources')
+for name in ('node', 'browsers', 'acquisition', 'frontend'):
+    source = prior / name
+    if source.is_dir():
+        shutil.copytree(source, stage / 'resources' / name, symlinks=True)
+    else:
+        (stage / 'resources').mkdir(exist_ok=True)
+        shutil.copyfile(source, stage / 'resources' / name)
+build.DESKTOP = stage
+build.RESOURCES = stage / 'resources'
+shutil.copyfile(root / 'desktop/backend.py', stage / 'backend.py')
+sys.argv = ['build.py', '--backend-only']
+build.main()

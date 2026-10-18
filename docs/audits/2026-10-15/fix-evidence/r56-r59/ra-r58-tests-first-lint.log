@@ -1,0 +1,32 @@
+E501 Line too long (104 > 100)
+  --> tests/test_checkout_launcher_readiness.py:30:101
+   |
+28 |     folder.mkdir()
+29 |     launcher = folder / "Launch ResearchAssistant.command"
+30 |     text = (ROOT / launcher.name).read_text().replace("time.monotonic() + 45", "time.monotonic() + 1.2")
+   |                                                                                                     ^^^^
+31 |     for name, original in (("curl", "/usr/bin/curl"), ("lsof", "/usr/sbin/lsof")):
+32 |         text = text.replace(original, f'"{folder / "bin" / name}"')
+   |
+
+E501 Line too long (105 > 100)
+  --> tests/test_checkout_launcher_readiness.py:89:101
+   |
+87 | connect_timeout = float(args[args.index('--connect-timeout') + 1])
+88 | with (root / 'requests.jsonl').open('a') as output:
+89 |     output.write(json.dumps({{'timeout': timeout, 'connect': connect_timeout, 'url': args[-1]}}) + '\\n')
+   |                                                                                                     ^^^^^
+90 | api = '8765' in args[-1]
+91 | if api:
+   |
+
+E501 Line too long (101 > 100)
+   --> tests/test_checkout_launcher_readiness.py:113:101
+    |
+113 | @pytest.mark.parametrize("scenario", ("api_stall", "web_stall", "web_refused", "owned_api", "ready"))
+    |                                                                                                     ^
+114 | def test_checkout_readiness_has_one_deadline_and_preserves_process_ownership(
+115 |     tmp_path: Path, scenario: str
+    |
+
+Found 3 errors.

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 import time
 from queue import Empty, Queue
-from threading import Thread
+from threading import Lock, Thread
 from typing import TextIO
 
 import httpx
@@ -35,6 +37,7 @@ class BackendMonitor:
         self.stderr_characters = 0
         self.announced = False
         self.lines: Queue[str] = Queue(maxsize=1)
+        self._stdin_lock = Lock()
         assert process.stdout is not None and process.stderr is not None
         self.threads = (
             Thread(target=self._stdout, args=(process.stdout,), daemon=True),
@@ -45,9 +48,32 @@ class BackendMonitor:
 
     def _stdout(self, stream: TextIO) -> None:
         self.lines.put(stream.readline(8193))
-        # Ownership notifications may follow startup. Keep the pipe writable.
-        while stream.read(4096):
-            pass
+        # Act as the shell for frozen lifecycle checks, including its ownership ACK.
+        while line := stream.readline(8193):
+            try:
+                message = json.loads(line)
+                if not isinstance(message, dict):
+                    continue
+                request = message.get("ownership_request")
+                pid = message.get("owned_pid")
+                if (
+                    message.get("owned") is not True
+                    or type(pid) is not int
+                    or pid <= 1
+                    or not isinstance(request, str)
+                    or re.fullmatch(r"[a-f0-9]{32}", request) is None
+                ):
+                    continue
+                with self._stdin_lock:
+                    stream_in = self.process.stdin
+                    if stream_in is not None and not stream_in.closed:
+                        stream_in.write(
+                            json.dumps({"owned_pid": pid, "ownership_ack": request}) + "\n"
+                        )
+                        stream_in.flush()
+            except (ValueError, OSError):
+                # Closed parent input denies the gate; still drain backend output.
+                pass
 
     def _stderr(self, stream: TextIO) -> None:
         while line := stream.readline(4096):
@@ -86,7 +112,8 @@ class BackendMonitor:
         if self.process.poll() is None:
             if self.announced and self.process.stdin is not None:
                 try:
-                    self.process.stdin.close()
+                    with self._stdin_lock:
+                        self.process.stdin.close()
                 except BrokenPipeError:
                     pass
                 try:

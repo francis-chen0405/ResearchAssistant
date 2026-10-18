@@ -21,6 +21,21 @@ RUN_ID = UUID("9a254ee0-3373-4f7e-8b89-6b2efbb8e9be")
 CLAIM = "The camera enforcement intervention reduces traffic injuries."
 
 
+@pytest.mark.parametrize("cue", ["methods", "results", "analysis", "records"])
+def test_version_three_normalizes_method_cues_without_rewriting_version_two(cue: str) -> None:
+    item = _item(0, title=cue, abstract=None, source_type=None)
+    options = {"exact_claim": CLAIM, "policy": V2MetadataDiscoveryPolicy()}
+    current = rank_metadata((item,), **options)[0]
+    historical = rank_metadata((item,), ranking_identity="source-candidate-ranking-v2", **options)[
+        0
+    ]
+    assert current.method_fit == pytest.approx(0.6)
+    assert historical.method_fit is None
+    previous = rank_metadata((item,), ranking_identity="source-candidate-ranking-v3", **options)[0]
+    assert previous == current
+    assert metadata_ranking.RANKING_IDENTITY == "source-candidate-ranking-v4"
+
+
 def _item(
     index: int,
     *,

@@ -120,6 +120,8 @@ def test_verified_primary_preflight_type_survives_firecrawl_fallback_conflict() 
         )
 
     def wigolo_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/ra/network-policy":
+            return httpx.Response(200, json={"identity": "ra-public-network-v1"})
         return httpx.Response(200, content=b"not-json", request=request)
 
     def firecrawl_handler(request: httpx.Request) -> httpx.Response:
@@ -362,7 +364,7 @@ def test_snapshot_persistence_reconstructs_media_type_provenance(tmp_path: Path)
     assert historical.media_type_provenance == MediaTypeProvenance()
     assert historical.original_url is None
     assert historical.acquisition_version is None
-    assert CURRENT_SCHEMA_VERSION == 17
+    assert CURRENT_SCHEMA_VERSION == 18
     assert {
         "original_url",
         "canonical_url",
@@ -387,7 +389,7 @@ def _parse_environment_example(path: Path) -> dict[str, str]:
 
 
 def test_environment_example_constructs_supported_legacy_smoke_offline(tmp_path: Path) -> None:
-    environment = _parse_environment_example(Path(".env.example"))
+    environment = _parse_environment_example(Path("backend/.env.example"))
     assert environment["MIMO_API_KEY"] == ""
     assert environment["RESEARCH_ASSISTANT_SMOKE_OUTPUT"] == ""
     environment |= {
@@ -419,12 +421,12 @@ def test_environment_example_constructs_supported_legacy_smoke_offline(tmp_path:
 
 
 def test_current_acquisition_and_fingerprint_identities_are_explicit() -> None:
-    assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
+    assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v5"
     assert MIMO_FINGERPRINT_VERSION == "mlp5-provider-selection-v1"
 
 
 def test_package_description_is_durable_and_phase_neutral() -> None:
-    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+    project = tomllib.loads(Path("backend/pyproject.toml").read_text(encoding="utf-8"))["project"]
     description = project["description"]
     assert "ResearchAssistant" in description
     assert "MVP-" not in description

@@ -1,0 +1,17 @@
+{
+  "observations": [
+    {
+      "scenario": "api_stall",
+      "elapsed_seconds": 3.898,
+      "exit_code": 1,
+      "real_curl": true
+    },
+    {
+      "scenario": "web_stall",
+      "elapsed_seconds": 3.755,
+      "exit_code": 1,
+      "real_curl": true
+    }
+  ],
+  "scope": "Actual checkout launcher and macOS curl, 3-second test startup budget, generated prerequisites and owned loopback listeners. No installed application, real credentials, paid providers or real research data."
+}

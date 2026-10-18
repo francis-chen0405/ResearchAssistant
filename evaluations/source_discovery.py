@@ -13,6 +13,7 @@ from uuid import UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from evaluations.output_publication import publish_outputs, validate_output_paths
 from researchassistant.contracts.discovery_v2 import (
     V2ConceptGroup,
     V2ConceptualQuery,
@@ -583,15 +584,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--summary-output", type=Path)
     args = parser.parse_args(argv)
     try:
+        validate_output_paths(
+            tuple(path for path in (args.json_output, args.summary_output) if path is not None)
+        )
         report = evaluate_manifest(args.manifest)
         machine = json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
         summary = render_report(report)
-        if args.json_output:
-            args.json_output.parent.mkdir(parents=True, exist_ok=True)
-            args.json_output.write_text(machine, encoding="utf-8")
-        if args.summary_output:
-            args.summary_output.parent.mkdir(parents=True, exist_ok=True)
-            args.summary_output.write_text(summary, encoding="utf-8")
+        publish_outputs(
+            tuple(
+                (path, content.encode("utf-8"))
+                for path, content in ((args.json_output, machine), (args.summary_output, summary))
+                if path is not None
+            )
+        )
         if not args.json_output and not args.summary_output:
             print(summary)
         return 0 if all(row.budget_compliant for row in report.scenarios) else 1

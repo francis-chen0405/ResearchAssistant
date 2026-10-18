@@ -1,0 +1,4986 @@
+{
+  "scope": "Conservative explicit full-file coverage: full reads plus reviewed edits to those files. Earlier unrecorded targeted inspections and automated equivalence/hash/test checks are not full-file credit.",
+  "complete_repository_manual_review": false,
+  "files": [
+    {
+      "path": "backend/_build/__init__.py",
+      "sha256": "6138132b91f3197ead8a9ce32cab2f2a591ac5a509c03d894196f64565e36055",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/_build/build_distribution.py",
+      "sha256": "ac20b1e5fa89285456c0bcd0619b19592662eed53d43576b76d1e39f30fe1bfb",
+      "inspected_ranges": [
+        [
+          1,
+          22
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/__init__.py",
+      "sha256": "e7b1a6810b334d0b2a2103c7ad5b6894d3d3b7e0d896f656d1c09658be8369d1",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/analyst.py",
+      "sha256": "c1474f2b0cab2bc94d572497618eedc5e1a4fa2117cf67c437b0ef394223e1d9",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/opposingresearcher.py",
+      "sha256": "bf25e9d18190b359d9a9a467b5638b331c7f456651836a4986528fdede1b12e9",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/planner.py",
+      "sha256": "19e4e956aaac07e03765851460684a16c7772e2cdfb26f2f8506d559a5b46899",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/renderer.py",
+      "sha256": "95c47dcdd6caa5447c6a66b3e64383fabf579b552a8fd3e7ff77b2f3671eb4eb",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/researcher.py",
+      "sha256": "006f8792766b9abbbb6844842160c4f2adfd9f2cafb4157758f5aaec94a807ed",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/reviewer.py",
+      "sha256": "40ee05d24a91d60157ee96fd9bf4e00771aab952c86611b08042bdd811a2b428",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/supportingresearcher.py",
+      "sha256": "8a91df047285335b4f62172e70e2e74b8c9f40d5754fc822a0346175d3f694dd",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/synthesizer.py",
+      "sha256": "03c18af63142d74029c184ffc11cff980b2efce2b79864e9772d6fdd984af341",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_acquisition.py",
+      "sha256": "f281f0eec757851daa74137e478f2657d692d8a9a20d2f8e91edee985e381205",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_adaptive_search.py",
+      "sha256": "859fae6d80f7d183f93034b3f890b20893d664808bc097e079ea19b81ddfed23",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_coverage.py",
+      "sha256": "5d1275e66c64eef49bba31e7e5b3f8d281bf6a732b7abbce8233465936b80f44",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_deep_analysis.py",
+      "sha256": "7d764b02857b3d95c19c99b511da637364e9fe5591ab81495d21b2e4c2cd4ff0",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_discovery.py",
+      "sha256": "f1d93e1b3648d26f3665d2baa630201e3bfa8082d2a808606a2730095f6f2841",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_evidence_admission.py",
+      "sha256": "4e3537eb582ee41f9532e144003f84f484e60112ddbdbe18b8d6031adb50a3af",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_evidence_analyst.py",
+      "sha256": "8ac48888210f6af46b5d9bc5e8ddb06b5685c66e2d37e47b7b5236e085aa3c03",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_extraction.py",
+      "sha256": "df9a8d5473196372163cfa81f313e632566233081ac3ef9c01f6e9509de60e8b",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_final_output.py",
+      "sha256": "0d185095a9a487275317d0dbffbe851a19d366135ef6131a3bcb9132756622d1",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_gap_analysis.py",
+      "sha256": "aa986c10df7aa497c2c90cff6e611598cdfd673dadf633a651292b3ea34b223c",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_initial_planner.py",
+      "sha256": "a16fa444c4cf24dc069948187846a8dd9680d75dce745a3206b35b7b4cd5ea4f",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_post_analysis.py",
+      "sha256": "94f2e790046e727ba00e2d41723789a9bd20601087178ca9ce86364e9ea8a870",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_reviewer_ledger.py",
+      "sha256": "f0c4ac0cfe2fe88474d7344470c91fa24dd6bbc8a5c2c66b23355f345cb71575",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_round_four.py",
+      "sha256": "9dacbcdfeec36df49bd4e25b24981c61c90c8ae3e0c0ee0893b0031804d59527",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/agents/v2_source_selection.py",
+      "sha256": "66b7f2b696bc0c4aa888d627147408db5fc9564c8577fbf086eff89d1d33a116",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/cli.py",
+      "sha256": "e7be60eed1f4eac0a1adbd1215c2cef9e51d6da2275d93e289eb0d35ded9e214",
+      "inspected_ranges": [
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/__init__.py",
+      "sha256": "5470e8c2811aec1d7716e9b70c36e731d2217698279b49dcb08e446d7765cc94",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/api.py",
+      "sha256": "e5e79cee07621936850d3248e4d71141ab0623a9be77f9d13cc1bcdd363c94c6",
+      "inspected_ranges": [
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/discovery_diagnostics.py",
+      "sha256": "dc81f9746dc480a42964e55ab8c3c64192d19c90eedb2f0a4e518e835f6e95b3",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/evidence_browser_app.py",
+      "sha256": "a2e5d7f1d57464b4e8be76dc16dbd061ba88e65f8ad75760d9fc4df30b2b359c",
+      "inspected_ranges": [
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/live_contracts.py",
+      "sha256": "9f16316ae83f3336ea8a669cfc1181059965763b022091b307aa6a47a93ce467",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/live_history.py",
+      "sha256": "bf5f2330d9382f3914ad1ed657b72ad7f9d59479cea127df576946f17f1f7aad",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/live_lifecycle.py",
+      "sha256": "f97aebe4113ff1f6cf0eb8ab7548631e5578853984f6b26a7e017c4b8a075e8c",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/live_progress.py",
+      "sha256": "24e5bae2a66e5b3a13ada9992e937e612c2082c4c61630f2cac4242af730ae35",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/live_service.py",
+      "sha256": "2a97f9dab489adfe707badd78670d0de0b2a73614a8143b3b60bfd9a8c847fa5",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/profile_preflight.py",
+      "sha256": "fbf4594d934a3d849d67883aea1d0bc668984d605c06ac21246bd5e21b0cb419",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/provider_connections.py",
+      "sha256": "2d82ab9ca212e2092780046cbd25f38e95ebe155bb67569b202b74fe5b496105",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/security.py",
+      "sha256": "34e0af3a27889ac8c2dfa66948a4b1fe9c60e57e121fc763ec3e356779c6503a",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/service_manager.py",
+      "sha256": "beb5a2b76c6f83cd4947e1accedd582dd269f4383453c57c4cac5aff6aa5d0ed",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/frontend/streamlit_app.py",
+      "sha256": "af31715f3aebf4e5337feb7aaabdb79ed6cb0154da6adb01f3d1b0be455e33c7",
+      "inspected_ranges": [
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/models.py",
+      "sha256": "98d0b34ef32f1f9ef8e77e42781e71a8158dae26140b5b979d66ad663c709033",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/orchestrator.py",
+      "sha256": "d6e32bc9755ce384607aac0a842fd56abc7f5a4abce6b03231718e1eb28facbe",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/__init__.py",
+      "sha256": "da311fa05d457bd71d68710f005e96ac0c6fa458ad5e9823cd543e5dfaba9184",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/acquisition.py",
+      "sha256": "845dec502bc2f49d9b663a89cf5f8f9757638459dcd139bb6dd09d8069e1c88e",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/arxiv.py",
+      "sha256": "539ae44d53b93546b829ccd892dd841527d7d4c65dc0aeb569e6a64449ef349a",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/clients.py",
+      "sha256": "df6f9c6159e49ca86ff45edf298ff6056b170cd3266f62cdf58761ddae032c32",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/composite_search.py",
+      "sha256": "a9a1015b1b90940e762b3e870cf70a937a76426ffd6ec8bc33cb9d21272b5372",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/config.py",
+      "sha256": "86b1b7b9cf3aa7f47caa40db675172169a4fc95e7202a26449ab3b051b749672",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/crossref.py",
+      "sha256": "b3ff2ee6233a2854bb6fd0733781b7c0732d48042debc459719710ec48a89847",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/discovery_transport.py",
+      "sha256": "e386fa218857748c437386723175be878efdfccb4381e149ec6d75257b77adbf",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/exa.py",
+      "sha256": "a2bc760177ae39afae2fbbae4796c9f656f660ebed9c39ac292741631d8757d3",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/firecrawl.py",
+      "sha256": "1baa86871433ff62afe5ab67e4e058c3b210d4d6df366478fd6109fb962e5d43",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/llm.py",
+      "sha256": "e84fc07dd65c7b2be7246c242fab8297ee06597488a6b683ee153ef5bae9720f",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/mimo.py",
+      "sha256": "af17a9b8b7b27d0c10a11fac8c4651e741e4f984f06092b6d72339bcb5b15623",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/mimo_factory.py",
+      "sha256": "313d1e16beec6310bd8de0dc2c7c1ae277b9f2aac22d8730729df30c85a4230c",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/model_choices.py",
+      "sha256": "8658c592634a6cc581c15e44b2217afe317d43cd0a294c92577eda14dad5b61c",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/model_profiles.py",
+      "sha256": "496ac61ece77189c25d2be0d17ad610186a9720f6bf7812763d7747c5f0f4658",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/normalization.py",
+      "sha256": "73278ea671e09d6c5902b80660e7c85066c6b5da756d0a4b44228b371c4c7d24",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/openalex.py",
+      "sha256": "f46084a55e5288a812920ddd97e812b9dcb60da201b8da3da2bf68f86765e15b",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/openalex_neighborhood.py",
+      "sha256": "737cad949d306b524ab026357fb354cef1542912daf2fd23dd99eca33f4494b1",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/pricing.py",
+      "sha256": "2e2d4d1e09a226b7e7f1dce27a40746cd1a76104ebcf6c3047350525bb088139",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/pubmed.py",
+      "sha256": "65edc4d253ab205ce5a7780983ba4a14249d5833522e7308f475a68c2166d48c",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/ranking.py",
+      "sha256": "a91308f148d0210ffacd9e8ccd430ea08bd48749ddbdee9e3a6aa8ff262a25bc",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/scraper.py",
+      "sha256": "05850097195f028285f026ce151d418597c1564339844408567793eb53953d42",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/search.py",
+      "sha256": "af628fa96b0bda77e7801cc56bd777f6c600dacaa3aaa479b983ce3acd3bbf92",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/serpsearch.py",
+      "sha256": "55866ba45a1d19ba7531dd5d91c7a8267d9d13e3ed0b47aec85f87ba492d99ec",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/v2_budget.py",
+      "sha256": "6a60b8c8f834cf8835f61489a854b0f37e760960237d9d20eacf12efdfd42df8",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/v2_factory.py",
+      "sha256": "98b750fedcf786017bfa31f5b1cedd6dfb795d3fe3c50355570f43e067c57c45",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/v2_routing.py",
+      "sha256": "9f4f71bb9e8704aeab9d45d86825a513f34bf94feeef2a3c908527ae49b85309",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/providers/wigolo.py",
+      "sha256": "4ffa135ec33ed55bbd70967cb9fd17e5b6c45cf07b87910a4bb9771b969a84fa",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/__init__.py",
+      "sha256": "9ee6e289c88faf020105c7570c20f1159528e89e31cf852e41dd156db3235e6f",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/__init__.py",
+      "sha256": "b4a5970708d47c8beff7536916e858e5ad62db2b53050a93e905f53f87449cfc",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/adaptive_execution.py",
+      "sha256": "a73861b38cb859d29499b93f4197a4f6579d06a1c9c25bbc4a0cb7ad47aedd58",
+      "inspected_ranges": [
+        [
+          1,
+          308
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/adaptive_handoffs.py",
+      "sha256": "e05ad355e7968bc19596e1e88b6853bbbe22f5cb780fcb359192206157e87144",
+      "inspected_ranges": [
+        [
+          1,
+          298
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/adaptive_planning.py",
+      "sha256": "2a1241d63126ddf97fb23dfba703a7b8379693050b41fdda1851510dc5dabe06",
+      "inspected_ranges": [
+        [
+          1,
+          914
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/adaptive_summary.py",
+      "sha256": "8a8c2b65f77691be4e8edb585a7d37cbee89c1d7dd62486d0b19d9d47685f033",
+      "inspected_ranges": [
+        [
+          1,
+          274
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/analyst.py",
+      "sha256": "8fd7211a720116a0d0ad9c9cb84a6e6ed7c1ffcd24b23fbed703418b743e08ac",
+      "inspected_ranges": [
+        [
+          1,
+          45
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/opposingresearcher.py",
+      "sha256": "a6bad780c005e646f84f9438dc9025b728476cb50e1de8498c61fa33a295e269",
+      "inspected_ranges": [
+        [
+          1,
+          47
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/planner.py",
+      "sha256": "62078d084d71c721b3cd930945ad42f85bd8ca167997277aa413f9d6ae7dedee",
+      "inspected_ranges": [
+        [
+          1,
+          22
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/researcher.py",
+      "sha256": "e615c90e4432eed8fa3d87faab14a32dacfb2630a70477f97e50f18d315f6078",
+      "inspected_ranges": [
+        [
+          1,
+          67
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/reviewer.py",
+      "sha256": "b1bb40a09b7f4c8906b1ca28c3002373631e13e0006955d8cf418c69dd7f0afc",
+      "inspected_ranges": [
+        [
+          1,
+          203
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/round_four_authorization.py",
+      "sha256": "7a362f10d941f257a0fa495ae3ae3123ae77fd5fe16394993c06cdf167e43c34",
+      "inspected_ranges": [
+        [
+          1,
+          294
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/round_four_handoffs.py",
+      "sha256": "310c717c18b252ef8122ceaf3459c003aafad562d0f04920f08e2243e4180418",
+      "inspected_ranges": [
+        [
+          1,
+          134
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/round_four_planning.py",
+      "sha256": "569413193f6d68a5e81bd12220b79d19befc48b8115b5d121ac0b22de16930e8",
+      "inspected_ranges": [
+        [
+          1,
+          297
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/round_four_reconciliation.py",
+      "sha256": "de3daaa0fc79e42a7db1f760f71839383c28c510cf2484f3a8e41feabe87e002",
+      "inspected_ranges": [
+        [
+          1,
+          418
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/round_four_summary.py",
+      "sha256": "407f3201f859562df139a6e55342c48d1651e63e389d0f99aacc802a51d99771",
+      "inspected_ranges": [
+        [
+          1,
+          461
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/supportingresearcher.py",
+      "sha256": "9ad88b7a9fe125ef5e2bc6947d1816e15815b122643609af70b0c321af8d4934",
+      "inspected_ranges": [
+        [
+          1,
+          1012
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_acquisition.py",
+      "sha256": "68ef0b34a2edcc409fd36e8a1db81a9cb25aaf65203fbff03d3f7b4bc9642991",
+      "inspected_ranges": [
+        [
+          1,
+          1141
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_adaptive_search.py",
+      "sha256": "0954eb07d4657fa3d65b719405d1ab60092a3097c93c0460c5ddddafa558a55b",
+      "inspected_ranges": [
+        [
+          1,
+          1156
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_coverage.py",
+      "sha256": "b29d7e4ee6559a851c3920acde1e72065083aa2802cb18bda31a55b456f3af7a",
+      "inspected_ranges": [
+        [
+          1,
+          37
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_deep_analysis.py",
+      "sha256": "a0c61e0f2b5710d9b32bdbee1b3c20ca5b412b4d27548f54cae0f8020ef32d2a",
+      "inspected_ranges": [
+        [
+          1,
+          989
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_discovery.py",
+      "sha256": "0d5b14f37ea644a4b689a26e75d10a5b15d901545fb8cb8f86fb5470b1840507",
+      "inspected_ranges": [
+        [
+          1,
+          1138
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_evidence_admission.py",
+      "sha256": "190d98a32c575f1e3955dd733fa909852a4c925d3b78a2e4d796b554ab8e0ce3",
+      "inspected_ranges": [
+        [
+          1,
+          336
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_evidence_analyst.py",
+      "sha256": "4e8b6cb8e5ba4816dde638a13ecbcad804022288abfee6701a1af7609001180a",
+      "inspected_ranges": [
+        [
+          1,
+          924
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_extraction.py",
+      "sha256": "ac214e7470ed3edbe146607b2e9a9a49b2fc5dfdb972cf4e62d78d393986eb95",
+      "inspected_ranges": [
+        [
+          1,
+          399
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_final_output.py",
+      "sha256": "ada415413b076933b58a35a9ef123239371f5f08bede4b105e265d40c88fecae",
+      "inspected_ranges": [
+        [
+          1,
+          1180
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_gap_analysis.py",
+      "sha256": "f1b7d8a921b2e4aed1cfdb564d6901655f1f00d9ae059580ca42e83610dad905",
+      "inspected_ranges": [
+        [
+          1,
+          389
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_initial_planner.py",
+      "sha256": "249fae9a5cf83768cc2a0ea78b383e03ad143954f47a1ed1de8b21618594a401",
+      "inspected_ranges": [
+        [
+          1,
+          331
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_post_analysis.py",
+      "sha256": "176627d0755f8da4e499f1683ae5c47cb9ab74b33ff0ba1041961dc50bed895b",
+      "inspected_ranges": [
+        [
+          1,
+          146
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_reviewer_ledger.py",
+      "sha256": "3940ab9624fc42298766afeb83fcab24e761d910b90c37fb42571f47529a5d70",
+      "inspected_ranges": [
+        [
+          1,
+          542
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_round_four.py",
+      "sha256": "f1941adb719b23ce69ca32948ceffa4eb073dd8629039afdbebb27bea26fac1a",
+      "inspected_ranges": [
+        [
+          1,
+          674
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/agents/v2_source_selection.py",
+      "sha256": "4d35444a1d3d90e9007543b59580a421dc297d6c5aa46af38972ace9a4f6a745",
+      "inspected_ranges": [
+        [
+          1,
+          924
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/api/__init__.py",
+      "sha256": "71cb03b7ff9cd6b1e650daa1fca2dca0627d86a6db9dfeeac3e53726cdd9e010",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/api.py",
+      "sha256": "53c1010493eca074b2a6669cf05a20bcdcb42a3c0b6b433e8d2e5bb0f591b7e7",
+      "inspected_ranges": [
+        [
+          1,
+          354
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/application.py",
+      "sha256": "e6b7b81ffda9de31a4ebefc043100ac4513d31436974c1d1d22e890eb1e29215",
+      "inspected_ranges": [
+        [
+          1,
+          120
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/application_services/__init__.py",
+      "sha256": "7608484664f87591afb4400b2f5e330ea8020d5e08adbb245f35f1dd6a10ac0b",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/application_services/configuration.py",
+      "sha256": "c59838227f9c1b9d041b2d92032840e76a2de423b6b7b1c7e48968384e4fe194",
+      "inspected_ranges": [
+        [
+          1,
+          218
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/application_services/evidence_projection.py",
+      "sha256": "d986d35626cb65a35b973c1b41252218fcd20172add5e422a76c7fc707ce4c16",
+      "inspected_ranges": [
+        [
+          1,
+          433
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/application_services/result_reads.py",
+      "sha256": "1ce9c31f71e75746b4c9f73ef294c863c11559799b45cb8e494472a21e538d14",
+      "inspected_ranges": [
+        [
+          1,
+          128
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/constants.py",
+      "sha256": "cc1cf5efcd5bccacb6acbf4d2f0504c224528d44c4b812e7f87e13a2f0b73b7b",
+      "inspected_ranges": [
+        [
+          1,
+          19
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/dependencies.py",
+      "sha256": "94043a00bda3c08fa064972e7702f56f58e280d97287ffaffbfcb3c6b8de5a1d",
+      "inspected_ranges": [
+        [
+          1,
+          28
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/discovery_diagnostics.py",
+      "sha256": "428742760fe7d361e554f293765d65a2ebbc714210a6c5d806329ba986d22fd0",
+      "inspected_ranges": [
+        [
+          1,
+          288
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/evidence_browser_app.py",
+      "sha256": "151ace697da10c2e34245c742c902ef049bea1ec8a03e2a94631e4fa5dcc4d80",
+      "inspected_ranges": [
+        [
+          1,
+          151
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/http_contracts.py",
+      "sha256": "54ef3870662dac03e1c69e881b0c2152690bd104cd5f65258e118b1c64ddcdcb",
+      "inspected_ranges": [
+        [
+          1,
+          183
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/http_errors.py",
+      "sha256": "b0d7d2fd3e56d51d23f03451d9954b703ef28d4bd32fe08a14748e2bf0333a02",
+      "inspected_ranges": [
+        [
+          1,
+          36
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/http_security.py",
+      "sha256": "b1e8705f0dcd3ee67b6149140692cd3872f452ef87ab7ead3976ac2333b02ec7",
+      "inspected_ranges": [
+        [
+          1,
+          45
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/inspection_contracts.py",
+      "sha256": "4db11d176801637314e6c7e7f28dd90b20a5909d5ec65bf50a9e6d3a26c76c69",
+      "inspected_ranges": [
+        [
+          1,
+          81
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/live_contracts.py",
+      "sha256": "75ede5364217e316775332098d96bcda83ca002642fd447dec830cb8cef9b065",
+      "inspected_ranges": [
+        [
+          1,
+          243
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/live_history.py",
+      "sha256": "8cfdbe28c80cb2fdce7885ed25f60065a993371fe8a21f1e4be61a4459e573b0",
+      "inspected_ranges": [
+        [
+          1,
+          600
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/live_lifecycle.py",
+      "sha256": "a632c13c52263ad16092880c032f346ba1852ce592f5457e76d7e6f77393a805",
+      "inspected_ranges": [
+        [
+          1,
+          54
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/live_progress.py",
+      "sha256": "8e74d3c8f550a4184e71901b6415df74aa2eeab2eb10668bea4fa2d49b5fad36",
+      "inspected_ranges": [
+        [
+          1,
+          929
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/live_service.py",
+      "sha256": "fce1f08d8c2d90709ff3dc9bf7aaa8bdca48101d25bac37602ef29a6c93e70a2",
+      "inspected_ranges": [
+        [
+          1,
+          841
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/profile_preflight.py",
+      "sha256": "80fadeca9f75f75398f9214c44b8efa0503d4f5eb6762c0a2f4f4093983abad2",
+      "inspected_ranges": [
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/provider_connections.py",
+      "sha256": "301f06a6639fedc9aaa99a1081286f30ef5f72f5656015efcc1a04f856ba2ee1",
+      "inspected_ranges": [
+        [
+          1,
+          144
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/__init__.py",
+      "sha256": "fabcdb1083dd353f622ac79322b3ac5bfd2a03b32e6f73b17732d8ee1b8acc4a",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/credentials.py",
+      "sha256": "d223a0325af775e10a8306a24e08b667de2551d0a94c0bcd298c9515e636e6c6",
+      "inspected_ranges": [
+        [
+          1,
+          189
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/health.py",
+      "sha256": "de441805a4c45fa5f5fda73bc71d4ef7cd28e8c7cd4c59c884c92bc92239cd3d",
+      "inspected_ranges": [
+        [
+          1,
+          19
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/history.py",
+      "sha256": "da3d839987f18432cb7747cbe7d2af21f704c04a967a8f0326f87c920b535833",
+      "inspected_ranges": [
+        [
+          1,
+          49
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/inspection.py",
+      "sha256": "8a74a91a0fe48d15d2c42633c6ad60f02f29e25b9cb3c91a6d03b88449568271",
+      "inspected_ranges": [
+        [
+          1,
+          73
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/research.py",
+      "sha256": "841491d1bb821b99dee4d0ed5900e1ef164751cbf3217d523d03c8bc3dea6093",
+      "inspected_ranges": [
+        [
+          1,
+          105
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/services.py",
+      "sha256": "f26740da48b513178fc3a886d17bdb5ab6d8951b8c2d586c7cd1bbe7fa364063",
+      "inspected_ranges": [
+        [
+          1,
+          34
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/routes/settings.py",
+      "sha256": "9e5e2e04bcaf043cc1dfd84fd5f3c892bf029b9752c0178b697f18e4467cfe6c",
+      "inspected_ranges": [
+        [
+          1,
+          69
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/runtime.py",
+      "sha256": "514a03b31a6f8c07d5cef37ef61165072535809ee377b2f4d09e5826f9480ad8",
+      "inspected_ranges": [
+        [
+          1,
+          101
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/security.py",
+      "sha256": "3ac780dfad8df623d4ae33d6fe48d4c72f97e3b0c63aa22eca4d266d1051a88a",
+      "inspected_ranges": [
+        [
+          1,
+          25
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/service_manager.py",
+      "sha256": "42ad780c2d27a47baeba0b5e7cf38be42640a4aaf80eb8fd510122d631f0778b",
+      "inspected_ranges": [
+        [
+          1,
+          438
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/api/streamlit_app.py",
+      "sha256": "7d2a1959307b3bfe3213407b6d553b43fb0982d992cdb29d59aa5bf20356cf8f",
+      "inspected_ranges": [
+        [
+          1,
+          283
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/common/__init__.py",
+      "sha256": "0a8013ec87a3dcfdcd1b61ffedb37616fa8081ce631c77669b8be9c7f29c11d5",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/common/discovery_identity.py",
+      "sha256": "f5dc246c06c8df460bd03ed07c9d5e93e6ff8cf1a6193e948b5a7b633ab4e5b2",
+      "inspected_ranges": [
+        [
+          1,
+          179
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/common/money.py",
+      "sha256": "b1534b09fda555e62d7398936fe885ceef1643687446615992905fdbdf6f7198",
+      "inspected_ranges": [
+        [
+          1,
+          74
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/common/pipeline_errors.py",
+      "sha256": "574b747c70edb7601941ae50f911b076f453a80e78010564884ebf95e40a443c",
+      "inspected_ranges": [
+        [
+          1,
+          21
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/common/resources.py",
+      "sha256": "2a6fe85ce35bed877084c59e77fc3af772815beaf496c20dbed15672241baa2a",
+      "inspected_ranges": [
+        [
+          1,
+          51
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/common/utils.py",
+      "sha256": "4ab37e3f545938a22cd9978fc7a550838e9b103453240f36093cb2a3a2f83a35",
+      "inspected_ranges": [
+        [
+          1,
+          36
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/__init__.py",
+      "sha256": "44f09bf3b2a9237b20f3b4d9d30a8f023bc273acce1fb76b3ed634821f023513",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/acquisition_capture.py",
+      "sha256": "d4e812a3a825374326723e6dac6a361074ba05e82b88fc857e2819e9a8aa26ce",
+      "inspected_ranges": [
+        [
+          1,
+          98
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/acquisition_ranking.py",
+      "sha256": "7ae894790ab0a5728599ecb148b0710ecab91c576d2d2e4d026d8ac3ff9c3fab",
+      "inspected_ranges": [
+        [
+          1,
+          79
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/artifact_keys.py",
+      "sha256": "1cbfad16637cccfb88d27d038951ce9362eefbad692b3ec6f5c764f4d72a95e0",
+      "inspected_ranges": [
+        [
+          1,
+          40
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/discovery_capabilities.py",
+      "sha256": "d70fd9f38f387d51722e53d6d8f2c7f414faabb940b0dba03a8a71ff8cc703d0",
+      "inspected_ranges": [
+        [
+          1,
+          333
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/discovery_ranking.py",
+      "sha256": "c064391446fdf9afe535f6174d44a50cbc81a7a623a4e83536b1d468a586d221",
+      "inspected_ranges": [
+        [
+          1,
+          107
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/discovery_v2.py",
+      "sha256": "b5a00adb1871b6ed11ec65292a4d879ed1b31dc00c32cd6af6beb7f721c0545e",
+      "inspected_ranges": [
+        [
+          1,
+          960
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/extraction.py",
+      "sha256": "7b1efe0abbe8b98cc15b6f7133024cafddfccfc3518ff2ae20f6611f9f743576",
+      "inspected_ranges": [
+        [
+          1,
+          170
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/historical.py",
+      "sha256": "4565bb0e769e0e00ebf14f19ccd0356d6611ba303e906f7fe1403260a34d78ba",
+      "inspected_ranges": [
+        [
+          1,
+          43
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/metadata_ranking.py",
+      "sha256": "009034fb9504aa860905dc2743fad05a64d2d1fab0c84337e79f08648a5c01ab",
+      "inspected_ranges": [
+        [
+          1,
+          125
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/model_contracts.py",
+      "sha256": "875b321715ded934cf3863716362e8b5579ff810b9e59bf5157696a9d1ccb930",
+      "inspected_ranges": [
+        [
+          1,
+          1586
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/model_evidence.py",
+      "sha256": "75cde1f5e0d35c4c422f2b43e1397bdba165cf02249b590fa73e6b0736e7b626",
+      "inspected_ranges": [
+        [
+          1,
+          1166
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/model_research.py",
+      "sha256": "fb917610942df624648d655533176a84ab6a5c57ff42d050b1c383e367358a2d",
+      "inspected_ranges": [
+        [
+          1,
+          418
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/models.py",
+      "sha256": "ab87285ffe307c07fd5d25d1aba1a4d1a727b9f1f55c3a1fa7ae5bcaa16c36e4",
+      "inspected_ranges": [
+        [
+          1,
+          552
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/neighborhood.py",
+      "sha256": "972c03505e1314bbdeab62aa27790abbe51d0bccefaf04d8f6b01f05ccada77d",
+      "inspected_ranges": [
+        [
+          1,
+          109
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/neighborhood_results.py",
+      "sha256": "2ca049663824240f11265b88c15b7f7e0716658f03cee0bab4c865b34906a5d0",
+      "inspected_ranges": [
+        [
+          1,
+          55
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/provider_contract.py",
+      "sha256": "73c1c32274dbb8bf773d56e28f197aabad1ebe59449ecace78fdff19e53d5b4f",
+      "inspected_ranges": [
+        [
+          1,
+          80
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/provider_results.py",
+      "sha256": "aff95781113cc9b8693160fa9780d65e821a0e389faa0091e41403a421f1a30f",
+      "inspected_ranges": [
+        [
+          1,
+          294
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/query_compiler.py",
+      "sha256": "918b4a09a9d3169859be39cad01b4df0caca194f9187197f32120239fe8d7509",
+      "inspected_ranges": [
+        [
+          1,
+          234
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/query_planning.py",
+      "sha256": "7d38fb16e23f7f3c5dd22bace5fb553e4232da1fdebc81e46ec4fa8f98bf6945",
+      "inspected_ranges": [
+        [
+          1,
+          193
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/query_retrieval.py",
+      "sha256": "aa17ba84612db0a528a7713c32cb2e6472ea5ca7b19a24f4c776cc00828f12d9",
+      "inspected_ranges": [
+        [
+          1,
+          81
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_acquisition.py",
+      "sha256": "b718ef958237c96f330cad6252586b358e38b96d5a6dca19b782cfc49ad0ecf1",
+      "inspected_ranges": [
+        [
+          1,
+          269
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_coverage.py",
+      "sha256": "66ace13e9b2baacd631d8df41a45753127d83cae4aebc659a58656f8a38b051a",
+      "inspected_ranges": [
+        [
+          1,
+          298
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_directions.py",
+      "sha256": "8132f390f73bb95cbf4ac0c64adcf2fb0be3697aa6e74bc3cc71f37ed17b3ae2",
+      "inspected_ranges": [
+        [
+          1,
+          53
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_discovery.py",
+      "sha256": "9e476e927bcfa5286ea3c51cb47eaeb39e3edd1b298d317e29ddaf09e0013d2b",
+      "inspected_ranges": [
+        [
+          1,
+          349
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_gaps.py",
+      "sha256": "1439591b2eb7a4642cb355fc024a520c1d971985ff7927fd190e9de5b325aa39",
+      "inspected_ranges": [
+        [
+          1,
+          490
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_historical.py",
+      "sha256": "2760a5179ef4aac1265406ba64df02d72661782bbde697516c6460da3194d4bf",
+      "inspected_ranges": [
+        [
+          1,
+          142
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_planning.py",
+      "sha256": "0443e58fae463bd9188120b6bf01dc6846369609b175b8718fc2a42c2ae02814",
+      "inspected_ranges": [
+        [
+          1,
+          633
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_policy.py",
+      "sha256": "cf8be9271030b6967af714e1beac31c8ef56bee07461ea970a45a2668e8e4831",
+      "inspected_ranges": [
+        [
+          1,
+          162
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_round_four.py",
+      "sha256": "410a21b783ec6623f293ecee960fc19a82fc5d0d20762c6e2f7b8d88193901c5",
+      "inspected_ranges": [
+        [
+          1,
+          243
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/research_selection.py",
+      "sha256": "a9896fcbbe36e99d9bc54b8642d27c0cab9aa592b8ab5cc68378547febdec4a0",
+      "inspected_ranges": [
+        [
+          1,
+          486
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/retrieval.py",
+      "sha256": "b61cdb883be073f8303f7a34c80c455c2af200daefa48ba916ec19f930e77333",
+      "inspected_ranges": [
+        [
+          1,
+          200
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/scraping.py",
+      "sha256": "378d1336992ac60e91b273a739a20e65305a4e50ddd57498c99c7300e5edc3ec",
+      "inspected_ranges": [
+        [
+          1,
+          84
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/search.py",
+      "sha256": "cf4061079fab3f7071216fb4ef902c046651a233e9d252c1a775e0f8a9c80dbe",
+      "inspected_ranges": [
+        [
+          1,
+          217
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/source_leads.py",
+      "sha256": "335343deb74eaf7a7cfa786de06a8d4d4243181853dc68bbfb8204fe4edcdc41",
+      "inspected_ranges": [
+        [
+          1,
+          46
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/contracts/source_selection_preview.py",
+      "sha256": "7436bca0fd4e76881b2594cedb04d94f5161f221fdb61f83de1bcae9bce20edd",
+      "inspected_ranges": [
+        [
+          1,
+          42
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/__init__.py",
+      "sha256": "8173f401ed1961e85e693cf864121b0faa09b84010cd68d41b8f144de56abb0b",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/brief_export.py",
+      "sha256": "101839fd64934c7f78a9e2cb36cdb31637f19069da336b099756d6a84a2921da",
+      "inspected_ranges": [
+        [
+          1,
+          294
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/evidence_analysis.py",
+      "sha256": "39fafded6afe474e8a70fff6ef9a0ba8d9594281dd07420049144ea7ef0b0a88",
+      "inspected_ranges": [
+        [
+          1,
+          649
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/evidence_browser.py",
+      "sha256": "425d197bd0094477f103b0106dbc058b185226b9520243939352f43a59c7caff",
+      "inspected_ranges": [
+        [
+          1,
+          549
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/evidence_core.py",
+      "sha256": "5f0fbaf11ce5a11f9de5b2aa407fafb123446a5761d8aca541e198f5a6979c2d",
+      "inspected_ranges": [
+        [
+          1,
+          842
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/evidence_portfolio.py",
+      "sha256": "8b5ad5b8a80a00fa019140219e5709c6ba8e41f2ec3217fa4a9991b769077aaf",
+      "inspected_ranges": [
+        [
+          1,
+          113
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/historical_render.py",
+      "sha256": "c8727f1c6b41bf4a775a5c82a7c32680041f78d0ff9466892210016f459a46e2",
+      "inspected_ranges": [
+        [
+          1,
+          64
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/pdf_render.py",
+      "sha256": "cc0482886cd8a9d9001fc330fd74373ad9525cf08ceab32c977df861ca828bfe",
+      "inspected_ranges": [
+        [
+          1,
+          102
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/released_output.py",
+      "sha256": "8bad1b4d1b0ae4329f5f240227fbe98a51ed64b39e860979153876adf4392bc7",
+      "inspected_ranges": [
+        [
+          1,
+          28
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/renderer.py",
+      "sha256": "6106820bdd8a71497eef362b5f3e9a8c2d5205d8898924e2e004abb3cb22294a",
+      "inspected_ranges": [
+        [
+          1,
+          737
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/source_display.py",
+      "sha256": "00aaca346fea302aca225fd4c7f103b905ca11a8345d0c35399f882b9151c1be",
+      "inspected_ranges": [
+        [
+          1,
+          32
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/study_lineage.py",
+      "sha256": "1d0e8c85ff65999a83c533ef377799ee83a92f11bea6a25ceb32dd9d3d4414ef",
+      "inspected_ranges": [
+        [
+          1,
+          273
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/synthesizer.py",
+      "sha256": "59de147639c3dd5d6c7b3af60c12e0c3a74ad7eb55634094e3c0c9822536634a",
+      "inspected_ranges": [
+        [
+          1,
+          181
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/evidence/text_compatibility.py",
+      "sha256": "3d60f7003437346a3127174f325527fe995c20c4f17785408c969ded2e2f3b42",
+      "inspected_ranges": [
+        [
+          1,
+          21
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/__init__.py",
+      "sha256": "bab51e5d357ab3603246762fc708ae9cfbcfa334b3376b88d7f3e4f672088d94",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/acquisition_supervisor.py",
+      "sha256": "b438b0a38e132817fc4a93517509b87f55ea0228a40a56d4b6be06ff9e180be7",
+      "inspected_ranges": [
+        [
+          1,
+          27
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/credential_store.py",
+      "sha256": "a0ea2b38c3ed92d71a7370592ac8394ec6d8264d4b478a6ef4778c8a584b4cb6",
+      "inspected_ranges": [
+        [
+          1,
+          443
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/desktop_ownership.py",
+      "sha256": "ba121c2d7f05112a0ac10180a642715074a1d522ba24db17ac4a45fb71201cee",
+      "inspected_ranges": [
+        [
+          1,
+          69
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/desktop_paths.py",
+      "sha256": "a730a5c2625eee65a58711d024071c01317887af79353a11ec55f67368ed165d",
+      "inspected_ranges": [
+        [
+          1,
+          27
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/desktop_settings.py",
+      "sha256": "c43c6b528a0ef12aa0cb90cccb2b885facf35b598c43c1db717c9a546a5a5b5d",
+      "inspected_ranges": [
+        [
+          1,
+          142
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/file_lock.py",
+      "sha256": "55b5bd0d60e7f890486dac12578ddde1d42c762af6e9abe123fe1c506863356c",
+      "inspected_ranges": [
+        [
+          1,
+          67
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/private_files.py",
+      "sha256": "3230bc8483675a6034950859e30d7319062dbc6018870cbc48dbe0d8a2d55415",
+      "inspected_ranges": [
+        [
+          1,
+          187
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/windows_credentials.py",
+      "sha256": "cf7edc10793edb441a84214fb72cfbe1aef5d3c69687669bfbe934900676524d",
+      "inspected_ranges": [
+        [
+          1,
+          83
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/platform_support/windows_job.py",
+      "sha256": "8fd5b51d94947af551d8e7f0bffd8317df8a4ff3e853ae8ead630d2b61eaf812",
+      "inspected_ranges": [
+        [
+          1,
+          94
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/__init__.py",
+      "sha256": "0d5de1c91bed5d66c0435603ed7fef148da1ec5ad5e3051f3483c3b59b0f3dac",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/acquisition.py",
+      "sha256": "d1ca0b31cb6529029ea843ed74bac95bc15c61eb24a06c90615cfa7cd196ace1",
+      "inspected_ranges": [
+        [
+          1,
+          567
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/arxiv.py",
+      "sha256": "8107903756172548a2a01830c94b82980f1d1f61a84107677a1f74b5f984da31",
+      "inspected_ranges": [
+        [
+          1,
+          290
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/bounded_network.py",
+      "sha256": "969b8ba572140d69a7dae764ec50f34e5098689ce115fc4bfc8b8cddf721c633",
+      "inspected_ranges": [
+        [
+          1,
+          132
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/bounded_resolver.py",
+      "sha256": "08aa972fcdfd880687f82cde32b19d0242c647d0d29321e72ab30953b00e9acb",
+      "inspected_ranges": [
+        [
+          1,
+          97
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/clients.py",
+      "sha256": "b2ddc7f1c86923b7b563bfb9bcd555f2585a867b29e7b2544fcacd8f2f03991f",
+      "inspected_ranges": [
+        [
+          1,
+          32
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/composite_search.py",
+      "sha256": "0cb2f2a14341cacf058453bb77c35def047a01b9abe8651a7d3448cd96dacd47",
+      "inspected_ranges": [
+        [
+          1,
+          137
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/config.py",
+      "sha256": "5eae0124270d8093677a08d92d616e366d4d2561d644688499e6d6adefe680b4",
+      "inspected_ranges": [
+        [
+          1,
+          468
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/crossref.py",
+      "sha256": "c522ccd8e118a7b69f5a53162828f82821befcd32318e04395413d2c21cc76c9",
+      "inspected_ranges": [
+        [
+          1,
+          100
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/discovery_transport.py",
+      "sha256": "3a0d658733a55716e17c07f1404586f52ea6eb2d4d097f3ffd2e796b71896071",
+      "inspected_ranges": [
+        [
+          1,
+          198
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/dns_worker.py",
+      "sha256": "fdea1deb2fdd10e062a95e5c2a6430fa77046ef5d8db01ca5b51d90cd236b3b4",
+      "inspected_ranges": [
+        [
+          1,
+          40
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/exa.py",
+      "sha256": "cde25b3574e97a41a811cbaebfc239d2d68e0ddf41c7b84832389124780eacd2",
+      "inspected_ranges": [
+        [
+          1,
+          233
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/firecrawl.py",
+      "sha256": "e089ebf10abe827662bea7ddd9074a73170874a489419dad6efe6ad8ea4d4a59",
+      "inspected_ranges": [
+        [
+          1,
+          222
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/llm.py",
+      "sha256": "a361d4dddf0615f5184e2fbdbdd2c7226b12a1719507906e3a20ad06c07d413b",
+      "inspected_ranges": [
+        [
+          1,
+          804
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/mimo.py",
+      "sha256": "991d73fa40f5fd5b72b679ccd650dcb2ec52ccfa9ea17f8ded1934fa63668b44",
+      "inspected_ranges": [
+        [
+          1,
+          966
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/mimo_factory.py",
+      "sha256": "da184f70b72cfbd49806fe1d8c19acb589db07a6e971a92a82c8db9809dfd18f",
+      "inspected_ranges": [
+        [
+          1,
+          358
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/model_choices.py",
+      "sha256": "32f4d9d824c65e1ca1d72bcfc187f16172c42c7028b8d9a69bcb92f375c2aff2",
+      "inspected_ranges": [
+        [
+          1,
+          171
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/model_profiles.py",
+      "sha256": "e00267b114c693752fca9bd095d941e46e81d02382359b84241596f142f47bef",
+      "inspected_ranges": [
+        [
+          1,
+          147
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/normalization.py",
+      "sha256": "85357d9c68f21b521c2b76105899f88646bbbda002ff9bac05eb0f524df3aa58",
+      "inspected_ranges": [
+        [
+          1,
+          357
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/openalex.py",
+      "sha256": "652c9ed572b60ef39a97845be1eec6c45771045bbbd0de632130d372d5a9ab63",
+      "inspected_ranges": [
+        [
+          1,
+          432
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/openalex_neighborhood.py",
+      "sha256": "457efbfee45727c4059bfd2c7c6c1636bb089792fe7ea9402e87aa06abaef1b1",
+      "inspected_ranges": [
+        [
+          1,
+          588
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/pdf_worker.py",
+      "sha256": "85fac44239ca4ea3a6c226b5b449d16d8c07163ad2d2dba078d8ed8ec7f89c0c",
+      "inspected_ranges": [
+        [
+          1,
+          39
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/pricing.py",
+      "sha256": "128e5dc691a34f01908518c0f34b130767bc2d77b5bcec22fb037a92850a7574",
+      "inspected_ranges": [
+        [
+          1,
+          165
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/public_network.py",
+      "sha256": "88926f1954dec9009623981971a201a756b1d33f050bc1d1743586ec945ad7d2",
+      "inspected_ranges": [
+        [
+          1,
+          70
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/pubmed.py",
+      "sha256": "d10ea2a0bdcb887cc0a31f02d7da6ee0f36a7da15f7ad2c70003b5c0b9847a77",
+      "inspected_ranges": [
+        [
+          1,
+          332
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/ranking.py",
+      "sha256": "7fc71777b8f120ee057fafec77d010e99d8503efc03af24fa6134622d7810ee2",
+      "inspected_ranges": [
+        [
+          1,
+          334
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/scraper.py",
+      "sha256": "f5f622b88f9f2d8cb3692e92a738374b43785d1178f235072591dc185b424e72",
+      "inspected_ranges": [
+        [
+          1,
+          54
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/search.py",
+      "sha256": "14ce5ceb74e31d6392b2a73055c2f475ed231a4de96b6cc59a18dc86b6ffc9ae",
+      "inspected_ranges": [
+        [
+          1,
+          121
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/serpsearch.py",
+      "sha256": "5e4258073385255e133740696993c0ee1a01357202415aec6f99be6c0e6cec4e",
+      "inspected_ranges": [
+        [
+          1,
+          200
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/v2_budget.py",
+      "sha256": "70e85b6ae49f83df3025c2cd92ae73aacf5d1e3ceb67404aa459ff4a95fb4684",
+      "inspected_ranges": [
+        [
+          1,
+          642
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/v2_factory.py",
+      "sha256": "1c45ed0525fd0c99e4fe4fde4563469e3d0e66e400d72f90e61ef9e51bfdad78",
+      "inspected_ranges": [
+        [
+          1,
+          285
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/v2_routing.py",
+      "sha256": "d390f59fe2cc8ffdaee3f585f8ba9a31bb16635989c055e1d6be7a854638ccdd",
+      "inspected_ranges": [
+        [
+          1,
+          564
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/providers/wigolo.py",
+      "sha256": "10222d02259a26acc60547a62728da2e820153ddf2446f46ec3ac7e4860990cf",
+      "inspected_ranges": [
+        [
+          1,
+          358
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/__init__.py",
+      "sha256": "4172bc6737377c553d9779ceeac24939a437d202ef30785392b723e5e67982ec",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/discovery_capabilities.py",
+      "sha256": "a1538e79c9fa8f9c17d2ebafd62528224be7bcf2a5f0c5d03b7a10cdf392b692",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/discovery_policy.py",
+      "sha256": "02f658f1a164281313a7bf65ea235e49e1fd2ad4b07ca03a5cd29ec085d4d550",
+      "inspected_ranges": [
+        [
+          1,
+          274
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/fixture_pipeline.py",
+      "sha256": "809cfb0e63cf741e031c702f7308e8126d8e84d2ea572ddbf4e119c5df3886f6",
+      "inspected_ranges": [
+        [
+          1,
+          902
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/historical_execution.py",
+      "sha256": "38285c87828cd18b9b8dbba20a6a49a8b0e693753c5d4085ca0bbc721dcae9ea",
+      "inspected_ranges": [
+        [
+          1,
+          3868
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/research/metadata_ranking.py",
+      "sha256": "d146306cd32272d6d906deb9bd1687b75cc380a1345be65f40138f844afe9a74",
+      "inspected_ranges": [
+        [
+          1,
+          217
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/orchestrator.py",
+      "sha256": "c76a0bc3e5ed238235345818ac7c9c692339ced2503250e723c402a349823cd4",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/pipeline_artifacts.py",
+      "sha256": "6b0d71dc4ec2f0b96aac0104dc94e30a99b1e500fbd0e8930e3e3ec41cffe43f",
+      "inspected_ranges": [
+        [
+          1,
+          70
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/pipeline_compatibility.py",
+      "sha256": "c81153a7eff17f2cb65db0c099435816945d852070f28f5bb72a0ac9cabc8b54",
+      "inspected_ranges": [
+        [
+          1,
+          25
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/product_discovery.py",
+      "sha256": "96bc5de27c5322a89d8d65820da2d4d69a2cb1b74120b325c7baa75f04fbdcd5",
+      "inspected_ranges": [
+        [
+          1,
+          35
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/query_compiler.py",
+      "sha256": "ce3d65107a37a484917c1a26d22bc5dfaba3ba96d506305731b88a55f32323e0",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/query_execution.py",
+      "sha256": "1c67c934200a41b72123b001971d9b27c61f340f2a134d01246708946be4a0c8",
+      "inspected_ranges": [
+        [
+          1,
+          1177
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/research_governor.py",
+      "sha256": "ecd9e876244ad098ce9660c9224b85b20c6f8c7cdaa55afb07591c93286dcd57",
+      "inspected_ranges": [
+        [
+          1,
+          464
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/seed_expansion.py",
+      "sha256": "2fadcae56549f0b9caaca1a0ff63127eb4980443224993e2fb7a63bba81079d5",
+      "inspected_ranges": [
+        [
+          1,
+          894
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/research/source_preview.py",
+      "sha256": "dfd085f5d773c07ad034de3763e2d1ed8dfde06af694cbfc2df2e78d81303272",
+      "inspected_ranges": [
+        [
+          1,
+          932
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/research/v2_orchestrator.py",
+      "sha256": "14d33e1e343e8af550f54f31859bf5adaecaabf55e034b70027bf73b8f13e8c9",
+      "inspected_ranges": [
+        [
+          1,
+          1571
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/runtime/__init__.py",
+      "sha256": "177be105f610697b357f7852142569687783fea63c81348abbaccfac7e4cf91e",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/runtime/application_runtime.py",
+      "sha256": "7ccf53e33d69f4e5faa8e445cda8a18d6b253160fbb84452a41d5d55de7abb19",
+      "inspected_ranges": [
+        [
+          1,
+          108
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/runtime/cli.py",
+      "sha256": "4afc7686ad03be189a48ec865503c059a5662a73fb8f42b1c1996ba451649852",
+      "inspected_ranges": [
+        [
+          1,
+          930
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/__init__.py",
+      "sha256": "ba805423ad389e4f12bf9ffb0b9b7f12913f47c72764dfd576760a9fb81d7a49",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/checkpoint_store.py",
+      "sha256": "df1b5f38cf2469bfbb85104364be20be2a03ead2148fd114c671623bd2c8c5a1",
+      "inspected_ranges": [
+        [
+          1,
+          239
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/database_lock.py",
+      "sha256": "919f36a87a567f058074f9ea9fdc3ee36382295f0ea471331a7d51a3a6191899",
+      "inspected_ranges": [
+        [
+          1,
+          44
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/database_recovery.py",
+      "sha256": "ee67d8afee82cbcd05bf38cfe935f2f265fa72b41581980dfa26ddfd48fd6dff",
+      "inspected_ranges": [
+        [
+          1,
+          286
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/discovery_store.py",
+      "sha256": "489039fa55017a6281b0b1783a897e541994d0a27c84675c2f7e3b94db79f1ee",
+      "inspected_ranges": [
+        [
+          1,
+          1644
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/evidence_transactions.py",
+      "sha256": "f884722e90f13a9be8abc35d3af5e88061a43a96166b067ceed775543246b390",
+      "inspected_ranges": [
+        [
+          1,
+          855
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/historical_decode.py",
+      "sha256": "fbfe687a93a8bfb17c80028c3b065ff3e3308b51d4f134cd6fa2ed43e00c44ef",
+      "inspected_ranges": [
+        [
+          1,
+          437
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/history_import.py",
+      "sha256": "7df0abe3219c6b24e0a29fd5e64365f68ed4d49290ce47c06e0a8a8adffa264c",
+      "inspected_ranges": [
+        [
+          1,
+          89
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/legacy_planning_store.py",
+      "sha256": "661bdc4b1c4d66cddfca9a8cc984f96a017b11161d478f1356f37eb0ecffa1d0",
+      "inspected_ranges": [
+        [
+          1,
+          222
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/model_accounting_store.py",
+      "sha256": "19e4971f68a48e9c4ae5452753269cc4c5bf4101c23612bd7671245d8eddd927",
+      "inspected_ranges": [
+        [
+          1,
+          434
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/neighborhood_store.py",
+      "sha256": "474aa6a3e327d23d7cf809a7d932c48ae5fc846afaf2a2a78160d2fbec301119",
+      "inspected_ranges": [
+        [
+          1,
+          159
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/portfolio_transactions.py",
+      "sha256": "99961259d530b24fa2b8ae0084141d788bceb3259885d9747d3123fc9a19e460",
+      "inspected_ranges": [
+        [
+          1,
+          310
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/provider_history.py",
+      "sha256": "5cc2e239757f2d8617909ab05ca77f037f894a8884dd32e819f05c558817671b",
+      "inspected_ranges": [
+        [
+          1,
+          359
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/storage/query_retrieval_store.py",
+      "sha256": "928097db9f69e53926b2614d5324787e0be4206e24172de48ba79ef01b94d36d",
+      "inspected_ranges": [
+        [
+          1,
+          255
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/run_cancellation.py",
+      "sha256": "8b4af065ef843c79eb5df7c04543d2f81e3d92f227368b7e2ccf6fc313e9b0d5",
+      "inspected_ranges": [
+        [
+          1,
+          40
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/run_state_store.py",
+      "sha256": "ca3cc06cbeb09294d2d37611116753cf3094e9de9f79832e30ee673fd4384e54",
+      "inspected_ranges": [
+        [
+          1,
+          276
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/source_leads.py",
+      "sha256": "6afb6a46a15a8211886a02ef71bcfa4580676c8108e3fcc0ed22a8737f3973c0",
+      "inspected_ranges": [
+        [
+          1,
+          835
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/sqlite_policy.py",
+      "sha256": "9106fb534705390ed21de78bbbdd73e8732a1172c504a8203251651d0b6b21a0",
+      "inspected_ranges": [
+        [
+          1,
+          68
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/store.py",
+      "sha256": "f43cde446be3be0eb27c5c33e2414083886bfe1634b1475e5a81effde3a62822",
+      "inspected_ranges": [
+        [
+          1,
+          1359
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/researchassistant/storage/store_schema.py",
+      "sha256": "39db99da4536140c8094c29044bb339c688d21e9719d0c377328973e79e03bee",
+      "inspected_ranges": [
+        [
+          1,
+          1964
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/store_types.py",
+      "sha256": "bdcc8370056692aa364196aa00bdfd2225a49f237114c7218734ecb3c1e966ba",
+      "inspected_ranges": [
+        [
+          1,
+          122
+        ]
+      ]
+    },
+    {
+      "path": "backend/src/researchassistant/storage/v2_transactions.py",
+      "sha256": "65f8ecb975081846aa8278df23b8f27b051a0a68c31cd9238a4a381715d23305",
+      "inspected_ranges": [
+        [
+          1,
+          707
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "backend/src/store.py",
+      "sha256": "350ef3808c52a33c632f4102bbd9c060a03ce6e3bbe8b9bcdc2db25c6e2a8c23",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "cli.py",
+      "sha256": "e7be60eed1f4eac0a1adbd1215c2cef9e51d6da2275d93e289eb0d35ded9e214",
+      "inspected_ranges": [
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/cache-policy.mjs",
+      "sha256": "bef371fc054733c6e26a7af810facfdcd4fb83b2c13329c0cc19520f286817a8",
+      "inspected_ranges": [
+        [
+          1,
+          23
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/cache-policy.test.cjs",
+      "sha256": "3240012761fd884a1a07600c35f0f9bbd01e35b629a6dad73121f630efa587bb",
+      "inspected_ranges": [
+        [
+          1,
+          71
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/network-policy-smoke.cjs",
+      "sha256": "b9d467aa25ab2d5b4274b9aeaffdb1d3ed9d0dcae8c9746259225acfac245387",
+      "inspected_ranges": [
+        [
+          1,
+          156
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/network-policy.mjs",
+      "sha256": "9e66794716ec3e6edb242b199ad4ed6e03060661415b448e32cd02224a396aee",
+      "inspected_ranges": [
+        [
+          1,
+          174
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/network-policy.test.cjs",
+      "sha256": "afc085c340e5a2925aaa49044782f5fb9f892f951cdbedb419d9765af5281b0c",
+      "inspected_ranges": [
+        [
+          1,
+          118
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/network-preload.mjs",
+      "sha256": "459c1a5fd10306798009eb999ac57e7e936c7b597577e478ad21816fce3448f3",
+      "inspected_ranges": [
+        [
+          1,
+          39
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/network-proxy.mjs",
+      "sha256": "b86cd3edecb324a66702922f75704ab1f15258d510c3400b3758978efde53435",
+      "inspected_ranges": [
+        [
+          1,
+          147
+        ]
+      ]
+    },
+    {
+      "path": "desktop/acquisition/network-proxy.test.cjs",
+      "sha256": "a4f937f8ce98cb0ed6cdd8afb74904e4cca6ffcce8304f79119d92c13e12fda4",
+      "inspected_ranges": [
+        [
+          1,
+          140
+        ]
+      ]
+    },
+    {
+      "path": "desktop/audit-api-smoke.cjs",
+      "sha256": "28fa015b48464a704fa615c30f99842e9d23c0e2a9c7706fca2ffa96c07c4f56",
+      "inspected_ranges": [
+        [
+          1,
+          89
+        ]
+      ]
+    },
+    {
+      "path": "desktop/backend.py",
+      "sha256": "1d06839e8110ad23f0c16c809e6c13c0956022446268436604e4ef0703dc244a",
+      "inspected_ranges": [
+        [
+          1,
+          203
+        ]
+      ]
+    },
+    {
+      "path": "desktop/build.py",
+      "sha256": "9fa12b79a15760c488d253cb2a1d36e553cd9eb8026868313c4e99c0d82416fe",
+      "inspected_ranges": [
+        [
+          1,
+          196
+        ]
+      ]
+    },
+    {
+      "path": "desktop/configuration-race-smoke.cjs",
+      "sha256": "772d5b4bb5e061b10fa60940d9ba699f63e664281b42a920380aa390ae84a0b8",
+      "inspected_ranges": [
+        [
+          1,
+          172
+        ]
+      ]
+    },
+    {
+      "path": "desktop/frontend-poll-smoke.cjs",
+      "sha256": "4d9ef8937fc3ebd8a087f6347d24c5562a35d0d13a7991524f98c8f08a389fc0",
+      "inspected_ranges": [
+        [
+          1,
+          340
+        ]
+      ]
+    },
+    {
+      "path": "desktop/frontend-smoke.cjs",
+      "sha256": "4e462056e921075ec22ef872da284aa4ef7eb099c53447b43598db4522420e81",
+      "inspected_ranges": [
+        [
+          1,
+          354
+        ]
+      ]
+    },
+    {
+      "path": "desktop/history-race-smoke.cjs",
+      "sha256": "af6ff4031845dbfbf989ffe534398cfb6d2167d6ed634fd8f2d08959a29d77d3",
+      "inspected_ranges": [
+        [
+          1,
+          214
+        ]
+      ]
+    },
+    {
+      "path": "desktop/main.cjs",
+      "sha256": "0629008531126ccd0aa2fad723056a9650c44887540ec74385590bc75c70018e",
+      "inspected_ranges": [
+        [
+          1,
+          222
+        ]
+      ]
+    },
+    {
+      "path": "desktop/preferences-race-smoke.cjs",
+      "sha256": "ceeaceab6e80c2f38054621a1017562c49cf1b0f46fa054de64def4ec115abdf",
+      "inspected_ranges": [
+        [
+          1,
+          151
+        ]
+      ]
+    },
+    {
+      "path": "desktop/release-signing.cjs",
+      "sha256": "37c59b5ef6234679fd6e9071e3a4d7600b35b6ce9a429d06f521943eafbc21d5",
+      "inspected_ranges": [
+        [
+          1,
+          19
+        ]
+      ]
+    },
+    {
+      "path": "desktop/shutdown-electron-smoke.cjs",
+      "sha256": "e31ff9ab3a7c6e7335ad775ae1e0ce7b129e339ead20bba545bb811fa5025f9f",
+      "inspected_ranges": [
+        [
+          1,
+          75
+        ]
+      ]
+    },
+    {
+      "path": "desktop/shutdown-smoke.cjs",
+      "sha256": "b9e7c6592fcaded63b130f5b4a968e92a040dbe2297a436376e626b9441c1fbc",
+      "inspected_ranges": [
+        [
+          1,
+          209
+        ]
+      ]
+    },
+    {
+      "path": "desktop/shutdown-test-support.cjs",
+      "sha256": "269b1d79d74a616d807bfc08f6f19be435e2c31b5ef546fffae12a5bb670abf5",
+      "inspected_ranges": [
+        [
+          1,
+          101
+        ]
+      ]
+    },
+    {
+      "path": "desktop/shutdown.test.cjs",
+      "sha256": "106ec582e300b53ed57c6b460675d16751b640a7cde470ecae26aa34aac2a477",
+      "inspected_ranges": [
+        [
+          1,
+          217
+        ]
+      ]
+    },
+    {
+      "path": "desktop/smoke.py",
+      "sha256": "0e1c244b2604f6ac6d957b4c250f46ff6b222d9280a56dce5c5112c5d1f45d16",
+      "inspected_ranges": [
+        [
+          1,
+          178
+        ]
+      ]
+    },
+    {
+      "path": "desktop/smoke_support.py",
+      "sha256": "eaea3727ce1bce0e5b1c854b6bb51ddd7d54eb5acd063f6ae452245eea7cf186",
+      "inspected_ranges": [
+        [
+          1,
+          158
+        ]
+      ]
+    },
+    {
+      "path": "desktop/ui-smoke.cjs",
+      "sha256": "58cc7b1d4fc999f4713bb4af18236a15071be601e82a74923f1614ceece9f1ac",
+      "inspected_ranges": [
+        [
+          1,
+          68
+        ]
+      ]
+    },
+    {
+      "path": "desktop/upgrade-smoke.py",
+      "sha256": "72c956c4e318d338f36ba2341feed230128d1271e9ea97fc799784fc847bdcde",
+      "inspected_ranges": [
+        [
+          1,
+          365
+        ]
+      ]
+    },
+    {
+      "path": "desktop/windows-ci-diagnostics.py",
+      "sha256": "8dc3bb36e578dcaf92c8ec0b0008ac6fd13c2c0b8bb660ebf130e35ba77cc5d5",
+      "inspected_ranges": [
+        [
+          1,
+          96
+        ]
+      ]
+    },
+    {
+      "path": "desktop/windows-installer-smoke.py",
+      "sha256": "b43d5fb6337a03b8cd36ffd8fcb3c4e6154f51fad75a20b037d99515fe6c8097",
+      "inspected_ranges": [
+        [
+          1,
+          229
+        ]
+      ]
+    },
+    {
+      "path": "desktop/windows-shutdown-electron-smoke.py",
+      "sha256": "3153035c085e7d9c59d438ffc00f224a607dd957fdc87e02e501f2543ea0ca6c",
+      "inspected_ranges": [
+        [
+          1,
+          130
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/__init__.py",
+      "sha256": "3257301ebae0d7cf91c9d1ad00ba6c28c59724118337a8f80ac1a326289f0b75",
+      "inspected_ranges": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/evaluator.py",
+      "sha256": "b8bcc3cbf736d83044a2ed89ca04638680ec7dfc65c46dffa07bd222f8460bdb",
+      "inspected_ranges": [
+        [
+          1,
+          1143
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "evaluations/import_saved_research.py",
+      "sha256": "ab806912c3e64819cd652c2c334cf17750cc37ba3cd583017abf8a0fe217f8a3",
+      "inspected_ranges": [
+        [
+          1,
+          352
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/observation_safety.py",
+      "sha256": "fdeab60094d2bc6c749ab5e901946146625a905fd6c055c40b0b34483af36ad3",
+      "inspected_ranges": [
+        [
+          1,
+          193
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/output_publication.py",
+      "sha256": "4c0da882cd3c035cc98b9b19caaa03fbfefc5e69873bda90d359c54e172fe6a0",
+      "inspected_ranges": [
+        [
+          1,
+          42
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/research_quality.py",
+      "sha256": "f81a764d4090ad0485e7ca9d7897028fe6c1e5409964024187b5afa064be5c7a",
+      "inspected_ranges": [
+        [
+          1,
+          641
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/research_quality_contracts.py",
+      "sha256": "0d21fe5f353e5c1a603f2908ffec675334e66ed7525078ef3a3d14fc1deafce6",
+      "inspected_ranges": [
+        [
+          1,
+          378
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/research_quality_preflight.py",
+      "sha256": "13dc2d260c887191003c07adb4370d45898fc54f471a4956b66dbe3a37a1f870",
+      "inspected_ranges": [
+        [
+          1,
+          116
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/run_evaluations.py",
+      "sha256": "5e7eb11901c644c73f53c6b09da2c06f278b64e6bebc89a57235c015a4db5fd4",
+      "inspected_ranges": [
+        [
+          1,
+          69
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "evaluations/schema.py",
+      "sha256": "8293c45225d010913a710c2ff625fdf3f4e428f8485f48727e2ea4a64402f287",
+      "inspected_ranges": [
+        [
+          1,
+          532
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/source_discovery.py",
+      "sha256": "f6c3658312c8b7f38b3056b131245777045265f1dbeef1a94d2a05647f301bdb",
+      "inspected_ranges": [
+        [
+          1,
+          609
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "evaluations/source_discovery_transport.py",
+      "sha256": "bb3e486b5c709851776e4a6df3150b04555c1b498da26ee75faa8a057d08bb44",
+      "inspected_ranges": [
+        [
+          1,
+          815
+        ]
+      ]
+    },
+    {
+      "path": "evaluations/source_leads.py",
+      "sha256": "99e78d308447ebe7ba0c314d6ccb0903b20dd1ea3af0e17c658ac94f5acc39c5",
+      "inspected_ranges": [
+        [
+          1,
+          298
+        ]
+      ]
+    },
+    {
+      "path": "frontend/app/globals.css",
+      "sha256": "e70a923adb44db852754e8ecd6d795c29168f88b3a5a0508138386fe35239954",
+      "inspected_ranges": [
+        [
+          1,
+          671
+        ]
+      ]
+    },
+    {
+      "path": "frontend/app/layout.tsx",
+      "sha256": "4b5662eb419573f8036368a89a505b23c45c1a6a1e90e366dccca0b1f2e5a8cc",
+      "inspected_ranges": [
+        [
+          1,
+          16
+        ]
+      ]
+    },
+    {
+      "path": "frontend/app/page.tsx",
+      "sha256": "ddd85119f75fe3585edb0ac44db5421adace645d9a455e0438686a9b924fcbbc",
+      "inspected_ranges": [
+        [
+          1,
+          198
+        ]
+      ]
+    },
+    {
+      "path": "frontend/components/dialog.tsx",
+      "sha256": "32f7951865ca6109fdbf6edca49e529b120db8cc610e671efa47f1b42333532d",
+      "inspected_ranges": [
+        [
+          1,
+          79
+        ]
+      ]
+    },
+    {
+      "path": "frontend/components/provider-setup.tsx",
+      "sha256": "28f79c6c9c53d84305a266e5ff3813924615575bd0f7d49d0b160bea25085867",
+      "inspected_ranges": [
+        [
+          1,
+          400
+        ]
+      ]
+    },
+    {
+      "path": "frontend/components/workspace.tsx",
+      "sha256": "92121e476fc8dd3319384d356059ba2a964f50031cecb8b259c240ea79e80fb2",
+      "inspected_ranges": [
+        [
+          1,
+          266
+        ]
+      ]
+    },
+    {
+      "path": "frontend/eslint.config.mjs",
+      "sha256": "5f9151dadd25eea1cb991df794794c06a29f613dfb140e714ddae519a195d1be",
+      "inspected_ranges": [
+        [
+          1,
+          9
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/history/history.tsx",
+      "sha256": "f54d8f3900d4804b5c44e5d2fc1ccd073155d8da2ce9a8520b29ce89ea1be03e",
+      "inspected_ranges": [
+        [
+          1,
+          61
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/history/use-history.ts",
+      "sha256": "9ef1915933d0061f1fb4aa82c35a57ca47e60e730648910fb981141ddea13d54",
+      "inspected_ranges": [
+        [
+          1,
+          98
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/preferences/panel.tsx",
+      "sha256": "a96dd25f6ada15e23ae0343a3a20e427c202902feb00f213105657c93c3c9cc1",
+      "inspected_ranges": [
+        [
+          1,
+          353
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/preferences/settings.ts",
+      "sha256": "cfb18cadd68dd5c1f5e99e59471e8f23dfda41b206d35086270d2700c00f0fa7",
+      "inspected_ranges": [
+        [
+          1,
+          102
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/preferences/use-configuration.ts",
+      "sha256": "59c6c3da96400a90d4d38ad7207fd9b30cc1e31859bae403e8cd1fbeb33859fc",
+      "inspected_ranges": [
+        [
+          1,
+          108
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/preferences/use-history-import.ts",
+      "sha256": "58ebc94f79f59890887285f29eb94cfa65dc20dce55e8bdfae6b4ad575824447",
+      "inspected_ranges": [
+        [
+          1,
+          60
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/preferences/use-preferences.ts",
+      "sha256": "53358aea7f552da251ca1391c9f507dfd86f79b16c54939281a6d5f3807cb9b2",
+      "inspected_ranges": [
+        [
+          1,
+          130
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/research/composer.tsx",
+      "sha256": "183f51e27872dc8c69df886579a30691ab0c1480c3b2174bd54c856027278fe9",
+      "inspected_ranges": [
+        [
+          1,
+          244
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/research/progress.tsx",
+      "sha256": "352fa8dee23ea36116efe17e4a5a02a455022c5241f8d867c7899251b3da9256",
+      "inspected_ranges": [
+        [
+          1,
+          262
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/research/use-research.ts",
+      "sha256": "7e6dddbff99a7fb87cd1a230ce6a76c8ab738fcc95a17eecdc5c62523d9ca35f",
+      "inspected_ranges": [
+        [
+          1,
+          189
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/admitted-evidence.tsx",
+      "sha256": "2697e0562a6756cb1491c4f7313552d3df98595c9d74311c0b9a193d1431fa19",
+      "inspected_ranges": [
+        [
+          1,
+          175
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/coverage-status.tsx",
+      "sha256": "cb240f7d18d4d819816eab6ac289ee2723bb8c6b1b35886854a0e1bb98c3a54f",
+      "inspected_ranges": [
+        [
+          1,
+          203
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/paper.tsx",
+      "sha256": "d30b072f2752b02d22a721fa7696e4bc8844410dead4175981240adb22331ee8",
+      "inspected_ranges": [
+        [
+          1,
+          109
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/result.tsx",
+      "sha256": "6059cda69167e1c225a3a0b2305632619e98fd12d5703f09d3f065b123f8341e",
+      "inspected_ranges": [
+        [
+          1,
+          366
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/source-leads.tsx",
+      "sha256": "1c7ad58d4ef46b28c1336be6879340d3792b69886d63654e0e156fbb47ba6683",
+      "inspected_ranges": [
+        [
+          1,
+          203
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/source-sections.tsx",
+      "sha256": "212f94a38d309df50709b35cf27f8354a099acd5bdf104ef559b3fa19f01a76c",
+      "inspected_ranges": [
+        [
+          1,
+          258
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/source-titles.tsx",
+      "sha256": "a14cc6b6a802d81818dd53cde87782427afba1635cca655396e1b3330de14939",
+      "inspected_ranges": [
+        [
+          1,
+          44
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/trail.tsx",
+      "sha256": "07d0bc388dfb6c5e3b7aeee77a5a782f00cfce497833f8ae5d2c07029e8712a6",
+      "inspected_ranges": [
+        [
+          1,
+          262
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/results/use-result.ts",
+      "sha256": "5e94de4decfd9d4e40c051123cdb603ed03541823305979d2734ee98eed96099",
+      "inspected_ranges": [
+        [
+          1,
+          245
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/shared/model-usage.tsx",
+      "sha256": "84ad8e449305059c34eaec6613de855baedb6ffd27fc62d56a0669acb3f58d04",
+      "inspected_ranges": [
+        [
+          1,
+          69
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/shared/presentation.ts",
+      "sha256": "3d73185c59cb7bf08101cf225f966172f27c64ac6047b19b0011634e76369f31",
+      "inspected_ranges": [
+        [
+          1,
+          163
+        ]
+      ]
+    },
+    {
+      "path": "frontend/features/shell/views.tsx",
+      "sha256": "7ddbedbf57673dacf85889efd012350ea1c5e9f4b7b04fe6cf819ead1aa3a066",
+      "inspected_ranges": [
+        [
+          1,
+          171
+        ]
+      ]
+    },
+    {
+      "path": "frontend/lib/api.ts",
+      "sha256": "6263896e896bdf904d75e0b9a81f01f6f671e04829e359acb30bc24921093d5c",
+      "inspected_ranges": [
+        [
+          1,
+          311
+        ]
+      ]
+    },
+    {
+      "path": "frontend/lib/generated/api-contracts.ts",
+      "sha256": "eeb7340b1f6941ac909c068feef1adfa33d3ff38b3bcb610e7cb6ef33bbcfbd9",
+      "inspected_ranges": [
+        [
+          1,
+          1247
+        ]
+      ]
+    },
+    {
+      "path": "frontend/lib/preview.ts",
+      "sha256": "0469ed81f4e1ed281d4342da591a7e786d4e8421de60d1506f6e47deb3098508",
+      "inspected_ranges": [
+        [
+          1,
+          38
+        ]
+      ]
+    },
+    {
+      "path": "frontend/next-env.d.ts",
+      "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
+      "inspected_ranges": [
+        [
+          1,
+          7
+        ]
+      ]
+    },
+    {
+      "path": "frontend/next.config.ts",
+      "sha256": "f6069e6ca0f78f5687c1157e932f0d1ad4a6590e865ea6e2675ad0a0b9e087fe",
+      "inspected_ranges": [
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    {
+      "path": "frontend/scripts/generate_api_contracts.py",
+      "sha256": "16d9191b8337540f8f295e986f9c44724f83e95817744a56ee2f2c87ffe80566",
+      "inspected_ranges": [
+        [
+          1,
+          196
+        ]
+      ]
+    },
+    {
+      "path": "frontend/scripts/hook-regressions.test.cjs",
+      "sha256": "bd98c41273dbdf027ecc5302e32a6c2fb1c8873503ad58ffdb02e6a19f7c9fc5",
+      "inspected_ranges": [
+        [
+          1,
+          336
+        ]
+      ]
+    },
+    {
+      "path": "frontend/scripts/smoke.cjs",
+      "sha256": "77b88fdfd6c6be0b567eac8493e1adda68dba507482ce763965306169b3dc206",
+      "inspected_ranges": [
+        [
+          1,
+          29
+        ]
+      ]
+    },
+    {
+      "path": "scripts/benchmark_database_query_scale.py",
+      "sha256": "b500a9b8737372cf298573389d290b8b2b206b8797b1e4d05601caf44afc6209",
+      "inspected_ranges": [
+        [
+          1,
+          400
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "scripts/benchmark_read_polling.py",
+      "sha256": "adfe9a2962f230f3ae4a99ce221af6927397766ea0c9176a3e0d252135d14d25",
+      "inspected_ranges": [
+        [
+          1,
+          215
+        ]
+      ]
+    },
+    {
+      "path": "scripts/build_distribution.py",
+      "sha256": "f96d787e75b2bb46d0e51d29d4f76052757b75e11323c9aa90eee6d13c4e784b",
+      "inspected_ranges": [
+        [
+          1,
+          5
+        ]
+      ]
+    },
+    {
+      "path": "scripts/build_source_archive.py",
+      "sha256": "bfc318e7a089d41a7419cf2df508e5939611cdc138024a843a1c41d54d58b145",
+      "inspected_ranges": [
+        [
+          1,
+          193
+        ]
+      ]
+    },
+    {
+      "path": "scripts/check_repository_boundaries.py",
+      "sha256": "4bc73f9b8ae46adc0ab2bfd7bd182d4ba1e2fd739bd951052835ed23eed422ab",
+      "inspected_ranges": [
+        [
+          1,
+          144
+        ]
+      ]
+    },
+    {
+      "path": "scripts/install_smoke.py",
+      "sha256": "524b3e73e57ed1ad04fcc1c09696f21864cb05b1646fba29c112389d12c56677",
+      "inspected_ranges": [
+        [
+          1,
+          202
+        ]
+      ]
+    },
+    {
+      "path": "scripts/mimo_live_smoke.py",
+      "sha256": "5f7bab0517b1c00368beb888d72ca548a615279994b98203d480e0d3a8b66d9f",
+      "inspected_ranges": [
+        [
+          1,
+          112
+        ]
+      ]
+    },
+    {
+      "path": "scripts/verify_distribution.py",
+      "sha256": "75205d4bc2df186152fccd5d9aa417df3ec66e24577510c7e7230d29bda0e9a1",
+      "inspected_ranges": [
+        [
+          1,
+          189
+        ]
+      ]
+    },
+    {
+      "path": "tests/api_contract_support.py",
+      "sha256": "810d95a7687fabd4e2be025e36bb4964515e8885984585e4d6dfd2266b368f62",
+      "inspected_ranges": [
+        [
+          1,
+          134
+        ]
+      ]
+    },
+    {
+      "path": "tests/mvp4_subprocess_driver.py",
+      "sha256": "d253ddeea81fef47110e35e24206eb783addccf614256631a094fd7e72d959da",
+      "inspected_ranges": [
+        [
+          1,
+          163
+        ]
+      ]
+    },
+    {
+      "path": "tests/review_schema_compatibility.py",
+      "sha256": "5ecd669366e55883ebf58cdf145997326bfc0563c8ecc1df621876c0fb4d1749",
+      "inspected_ranges": [
+        [
+          1,
+          32
+        ]
+      ]
+    },
+    {
+      "path": "tests/storage_crash_driver.py",
+      "sha256": "4e21bcaebdfc18effff6eabbfba7890af765e898df1e210bd58ea6782a6d1de7",
+      "inspected_ranges": [
+        [
+          1,
+          78
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_acquisition_disposition_review.py",
+      "sha256": "035823e0f6ca03a2981c3fd83dcd63f6d9055ebebe5e3bdcc7ac4e2ec72eb8d2",
+      "inspected_ranges": [
+        [
+          1,
+          59
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_admission_checkpoint_resume.py",
+      "sha256": "e3b39cca1a9523c8fc9209d86b6069074532df629e34d011c65640db85ac254b",
+      "inspected_ranges": [
+        [
+          1,
+          165
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_admission_render_wording.py",
+      "sha256": "03645747a98fc2ec7b4daa1a5d6947fdd9f1b83670c64615bc4f38f1709aedf2",
+      "inspected_ranges": [
+        [
+          1,
+          77
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_api_module_split.py",
+      "sha256": "a14f2e326b95e2cb303a234bf9e75d74f540af6723b23283ac5a4c0131381f54",
+      "inspected_ranges": [
+        [
+          1,
+          228
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_api_shutdown_owner.py",
+      "sha256": "97ba3b38c0b6d9baed293c043f3f130d31ba15ab4679d8a1e9fed5eee2efa5cd",
+      "inspected_ranges": [
+        [
+          1,
+          110
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_audit_api_boundaries.py",
+      "sha256": "5e7e1d7f704825098db2120ba66e521dbaab76631f0335693a169f9074f23563",
+      "inspected_ranges": [
+        [
+          1,
+          84
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_audit_cli_inspection.py",
+      "sha256": "ead112ff035f0cfd0e88ce263dbc8ca276ee3f86cc9824a1be1fe1ed27b61223",
+      "inspected_ranges": [
+        [
+          1,
+          192
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_audit_evidence_provenance.py",
+      "sha256": "58fe7de94b312e07a78c9837f4676ed9783bed2a46777c418a902e8719f0f278",
+      "inspected_ranges": [
+        [
+          1,
+          116
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_audit_legacy_retrieval.py",
+      "sha256": "eb6aab2b625224e96f0cdd043588813f19b6a0f1d5cfa961e1b181b7fafa5790",
+      "inspected_ranges": [
+        [
+          1,
+          192
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_audit_money.py",
+      "sha256": "8b949a37f068947616e4fa6ac762df11f7e0c437d395bdc33b64f7eb742712aa",
+      "inspected_ranges": [
+        [
+          1,
+          50
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_backend_hotspot_compatibility.py",
+      "sha256": "996aa2743b8e2963d21c0d7c0fcb89ece3beed6cb34463f917efbb75dfc42e6e",
+      "inspected_ranges": [
+        [
+          1,
+          129
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "tests/test_bounded_resolver.py",
+      "sha256": "34260f0bbab3843f9600699991d4e3bc20acd973cf25032d5f1bbacfd6ce9cf8",
+      "inspected_ranges": [
+        [
+          1,
+          179
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_browser_decisions_phase3.py",
+      "sha256": "6d1966819bca3e8a36e9e8fd99c4ee07c1765cd44d4458b04e8c2fcc62571bf4",
+      "inspected_ranges": [
+        [
+          1,
+          205
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_cleanup_boundaries.py",
+      "sha256": "300d5746130d729f40959845331b191ee7e8b3b7283811ac14ea7ac529d40bd1",
+      "inspected_ranges": [
+        [
+          1,
+          157
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_cli_configuration_redaction.py",
+      "sha256": "4e2a876cbfbd7b865b5a0f274e4560ce3ec9b97e6d8e16ebe60831c12ac35535",
+      "inspected_ranges": [
+        [
+          1,
+          92
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_contract_ownership.py",
+      "sha256": "b8d6ea687f1d75053f50ae18f31c4222c98711e6bda7dd271481b6bd98b7efd7",
+      "inspected_ranges": [
+        [
+          1,
+          147
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "tests/test_database_attempt_caller_phase2.py",
+      "sha256": "2108103d96f45de91930258fbc7214fe4f7b65a66aad902de8a2c592cfffb79d",
+      "inspected_ranges": [
+        [
+          1,
+          234
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_cache_accounting.py",
+      "sha256": "51dc97d2b265aa27174efb5f48c8429fdfae3ac5f2a31545733fd7938e197548",
+      "inspected_ranges": [
+        [
+          1,
+          160
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_import_failures.py",
+      "sha256": "cc4d65c15d15f0cfb0580a1eb209205d2dde920e21d4120bcaf93528cd172be7",
+      "inspected_ranges": [
+        [
+          1,
+          156
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_query_indexes_phase4.py",
+      "sha256": "5ddba883fa16dff546564c993af20a807fb1d7d45fc16d283d5895911ae4421d",
+      "inspected_ranges": [
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_read_paths_phase3.py",
+      "sha256": "8c547e02ab0a128a70e9c18564d040bfffbe46cf319f868e570bcd2f9af5f12c",
+      "inspected_ranges": [
+        [
+          1,
+          262
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_read_snapshots.py",
+      "sha256": "50f5588564d6f0829afd1c736428954dfda04c0cc15028b4ef349035e445a259",
+      "inspected_ranges": [
+        [
+          1,
+          285
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_recovery_cli.py",
+      "sha256": "42ea501b8b814aed1cbda94a2334f4646597b6a0a40fefe760b146ba76f04f2d",
+      "inspected_ranges": [
+        [
+          1,
+          128
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_request_consistency.py",
+      "sha256": "1847a59308d95b0bab8d176e49897c852549caf52dc15baa90879ae2baf40c72",
+      "inspected_ranges": [
+        [
+          1,
+          150
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_database_upgrade_fixture_phase2.py",
+      "sha256": "d03947e66368c1a57f43537d9cc6226ccbdab188e7ff13c3b6e5229669164f84",
+      "inspected_ranges": [
+        [
+          1,
+          223
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "tests/test_desktop.py",
+      "sha256": "dea0de78a135601c41161cf77ed4f78265bcd0de13630d6a42d491f6ffbf4595",
+      "inspected_ranges": [
+        [
+          1,
+          330
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_desktop_ownership.py",
+      "sha256": "4b00dc867db09bc0b99df1377e26adc1fa9f52118133912ffc26b885ca484cb3",
+      "inspected_ranges": [
+        [
+          1,
+          192
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_desktop_shutdown.py",
+      "sha256": "c0b419a1a1e01e3207abeea0c9eb2bbc874e8ec73d9396172f1c6674a1ccde3a",
+      "inspected_ranges": [
+        [
+          1,
+          230
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_desktop_smoke_support.py",
+      "sha256": "9798d9210179cf72d848eaf23ca4e17efc3d6838882345895a918a7d8ee96c92",
+      "inspected_ranges": [
+        [
+          1,
+          142
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_desktop_windows_installer.py",
+      "sha256": "06f0a6b887bbfe6b466bab6b7fb111a138d3a259ae8e1e6449947169a0c863e4",
+      "inspected_ranges": [
+        [
+          1,
+          66
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_capabilities.py",
+      "sha256": "64757427cca26655371c34f5ac268cb2ce71a854e13aa8434cdfeffbfb6fe58b",
+      "inspected_ranges": [
+        [
+          1,
+          76
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_complete_review.py",
+      "sha256": "376578d66f3476be5de2cc4ea56c4352196cb3bd23fa69ac2d9e2b9c16e6eb64",
+      "inspected_ranges": [
+        [
+          1,
+          154
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_evaluation_transport.py",
+      "sha256": "c5ee011b51160ad6fed385f9922f47779f249ed8b13639f1af338633a198cbd2",
+      "inspected_ranges": [
+        [
+          1,
+          98
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_policy.py",
+      "sha256": "a4093cdf31ad771f3d6d7f23c999efe2116d7d2e626c1d26233b3952052e951f",
+      "inspected_ranges": [
+        [
+          1,
+          351
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_product_review.py",
+      "sha256": "b0936c907a94174f7e5e90e80b85dc838d951cd62d04f77b9c75a6115ab3a405",
+      "inspected_ranges": [
+        [
+          1,
+          170
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_provenance_and_metadata_review.py",
+      "sha256": "defd34b476450a0d5d6251c7e3bd020330d073ff529f36b6a8ee9324eae80bf5",
+      "inspected_ranges": [
+        [
+          1,
+          248
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_review.py",
+      "sha256": "79ea6479b9947f4e825b3bdb90d2da1d7ae966a7003ac24411e51c98124e4a66",
+      "inspected_ranges": [
+        [
+          1,
+          151
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_store.py",
+      "sha256": "2b423f437c42283c59b578a25d874b1e72ede4cfb7041b03b62e05694000ed03",
+      "inspected_ranges": [
+        [
+          1,
+          347
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discovery_transport_bounds.py",
+      "sha256": "0f13db6e8050dcbc6a66fcd589ebd5190f27c37f22c7fffec17ce83e770c03b6",
+      "inspected_ranges": [
+        [
+          1,
+          279
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_discrimination_extraction_budget.py",
+      "sha256": "cbb66bea9d27ce4f6f2aeab23fa149eb8883bf9032a0670425c82c57815dd9b0",
+      "inspected_ranges": [
+        [
+          1,
+          99
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_distribution_resources.py",
+      "sha256": "dbb515f45c2120d638985421669ea738a32e37d6cf4a938b51f20b5feb352ac3",
+      "inspected_ranges": [
+        [
+          1,
+          110
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_docx_exports.py",
+      "sha256": "815d17592a287b5abe7722696099dddcd2d6fb45c97f270854c570a1d048c757",
+      "inspected_ranges": [
+        [
+          1,
+          104
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_evidence_browser_batching.py",
+      "sha256": "c88f2423dc592b49d91ae0212cb563acdf7a271a9f6e74e8cfdc7e3c43b25fbb",
+      "inspected_ranges": [
+        [
+          1,
+          242
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_four_round_survivor_capacity.py",
+      "sha256": "87e989093cee3b5877c6643d1f0fa1325c3be8380d66e16ce02bdf558c5b111b",
+      "inspected_ranges": [
+        [
+          1,
+          256
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_fresh_quote_occurrences.py",
+      "sha256": "91e76f1f26f08225893cadf8141076e3a5725b472a43d85c95c2a026da9bec8c",
+      "inspected_ranges": [
+        [
+          1,
+          223
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_frontend_api_contracts.py",
+      "sha256": "693576dd1f88cdb638ff7787799c8ed416f545cf83293539be03864277fedc3b",
+      "inspected_ranges": [
+        [
+          1,
+          235
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_frontend_discovery_diagnostics.py",
+      "sha256": "4aab17b7f425fca6c6efbd80e109237342ae6e4307d16194ad30ffc3db49ef69",
+      "inspected_ranges": [
+        [
+          1,
+          207
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_graph_neighbor_adaptive_handoffs.py",
+      "sha256": "994aee03f1e8a93305f599bb6d9555672a89d401ecc33d03007f6a2b52f23520",
+      "inspected_ranges": [
+        [
+          1,
+          174
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_ipv6_discovery_identity.py",
+      "sha256": "8e2f8828c2e387ee472a2a2c22e2bd41d357241a9321eefc02aac9d3a3a8bf13",
+      "inspected_ranges": [
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_live_resume_status.py",
+      "sha256": "dabe28f2aa93fd921c8d99be39331ae9a61a15bd7245d750cc222f713b272ca0",
+      "inspected_ranges": [
+        [
+          1,
+          731
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_metadata_cost_reservations.py",
+      "sha256": "46416b66a1726a64cd09c2d51d0b5d2540be73840e4dee17342e690e4543d2a0",
+      "inspected_ranges": [
+        [
+          1,
+          94
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_metadata_ranking.py",
+      "sha256": "7dee8eb15a3ad061fc2a9ac186463a70ce409218a7e5b671b245114e9bf0a786",
+      "inspected_ranges": [
+        [
+          1,
+          222
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_metadata_representative_review.py",
+      "sha256": "d0b2914e7995d346c25f9c75fac7e94a1d09a194239334d3e3dadab490461ea0",
+      "inspected_ranges": [
+        [
+          1,
+          82
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_metadata_review.py",
+      "sha256": "7c5aaa95970f4c32abae383f8ff25d16e2e7750456130b84738419da72eaff8d",
+      "inspected_ranges": [
+        [
+          1,
+          14
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mlp2_credentials.py",
+      "sha256": "7a16e79107e3704ebe4109eaf6526349d8e1e344f18419f041669fdd3ae64bf8",
+      "inspected_ranges": [
+        [
+          1,
+          125
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mlp3_api.py",
+      "sha256": "1ba20a8e51ca0518f52c83500f34c7aa9a1eb25004672bd007862a8c953cdc93",
+      "inspected_ranges": [
+        [
+          1,
+          829
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mlp5_provider_selection.py",
+      "sha256": "3c9160cf8e9f70c5386c32c933237f881d4b40721c7c3b1cd40228c1e72a7d03",
+      "inspected_ranges": [
+        [
+          1,
+          98
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp1.py",
+      "sha256": "e1ee502ed9c2b7d4f19b8486383d573210bfc6a12c49ca738a73ba36a5008eae",
+      "inspected_ranges": [
+        [
+          1,
+          293
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp10_evidence_portfolio.py",
+      "sha256": "3c8023116a75cad3b0941fc21a8852d0f411df9b539c046a711b9ff6458fe0f5",
+      "inspected_ranges": [
+        [
+          1,
+          92
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp11_research_governor.py",
+      "sha256": "a31191661227abe92aafc8fca5274731e09edc05c65c9ca6c24d6c2de16313ec",
+      "inspected_ranges": [
+        [
+          1,
+          299
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp6_5_read_only_inspection.py",
+      "sha256": "e50c0f451cc531f84232a30c2fc3e57ead94ba89d0e0e28e2a0133f7c0b76317",
+      "inspected_ranges": [
+        [
+          1,
+          425
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp8_1_controls.py",
+      "sha256": "4ee24568c09c92012e78692053b43047c7a1fe9215eabd5d9dd05b5c35d9211c",
+      "inspected_ranges": [
+        [
+          1,
+          77
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp8_2_evidence_browser.py",
+      "sha256": "61a4d8160d5ee17295dc4b7f384b329b475f2d2a2cedcf876877100116c3ab55",
+      "inspected_ranges": [
+        [
+          1,
+          117
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp8_exports.py",
+      "sha256": "69cc059a982fc3c764070b84a0db5374c64745874e1fe91f0a358b7cecbddf1f",
+      "inspected_ranges": [
+        [
+          1,
+          181
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_mvp9_verified_quote_selection.py",
+      "sha256": "5dad11820cae980e5c170df93f43a0590606322be7f7aba055fed9b6e6c85e4c",
+      "inspected_ranges": [
+        [
+          1,
+          226
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_native_evidence_browser_integrity.py",
+      "sha256": "41f402a7bb155eb2013a15e83936ffc2887446a30641550430ed4995a0ba8504",
+      "inspected_ranges": [
+        [
+          1,
+          85
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_native_storage_durability.py",
+      "sha256": "67c60ae849aa553edad603080d8635a22d48d3ad6db716ebda6d2ea9e586b163",
+      "inspected_ranges": [
+        [
+          1,
+          149
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_native_windows_security.py",
+      "sha256": "7a08eaeb3b14201f308b476f05aae63d80be3626b4ab93d23c60a4ffbc34b951",
+      "inspected_ranges": [
+        [
+          1,
+          255
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_observation_safety.py",
+      "sha256": "aa4bf47d08972914d717ff8be6d5336a0e693f47e38406c0d6dbf96aaea0210b",
+      "inspected_ranges": [
+        [
+          1,
+          277
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_older_evaluation_output.py",
+      "sha256": "cef3c32d62257deb9cfbc0b09d5318348ecee5e6c36223fee89974703872f48a",
+      "inspected_ranges": [
+        [
+          1,
+          146
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_pdf_exports_phase3.py",
+      "sha256": "687a0c39d1448b6cf414c3291f780b7e161c26ba9ec2d5dc02654d29e573b99c",
+      "inspected_ranges": [
+        [
+          1,
+          89
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_pdf_worker_deadline.py",
+      "sha256": "f60fde97b1029013d16e110f574d3f8b27cdb65035357889f98c89e9d0d85557",
+      "inspected_ranges": [
+        [
+          1,
+          74
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_phase0_foundation.py",
+      "sha256": "3fcbf89407691c7b78f4405f0393080415fc22ddc73cf0f13a98fd490bc487cf",
+      "inspected_ranges": [
+        [
+          1,
+          67
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_phase10.py",
+      "sha256": "2543f9082724fb14102aab4324d7eb46c690d4f7bd7de44d3d826e4894bb803c",
+      "inspected_ranges": [
+        [
+          1,
+          626
+        ]
+      ],
+      "reviewed_update": "Approved R37\u2013R52 edits inspected after the preceding complete read."
+    },
+    {
+      "path": "tests/test_phase7_frontend.py",
+      "sha256": "246f542cc8ac70ce1d85d8f3ac34a3a899f5235c38115bf69fede58341e36514",
+      "inspected_ranges": [
+        [
+          1,
+          104
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_phase9.py",
+      "sha256": "b19743a260e049781308c95bb8c463de105d5e52fdfa1aa1cc6d48907d617879",
+      "inspected_ranges": [
+        [
+          1,
+          1111
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_planner_response_contract.py",
+      "sha256": "539a83e70c7e1ceb1e3c699a7e2e63e03c65087c7164d84205b99d286406b71b",
+      "inspected_ranges": [
+        [
+          1,
+          82
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_post_mvp5_retrieval.py",
+      "sha256": "4aeec83605783079c7bf5bf4dd1f7b772786827a914d144fcccbbd0473c247dd",
+      "inspected_ranges": [
+        [
+          1,
+          179
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_preview_structure_review.py",
+      "sha256": "dee89442dbb55d905f012a9c47f21e95071ec7552e19867529342a8c7315b6da",
+      "inspected_ranges": [
+        [
+          1,
+          259
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_product_discovery_pipeline.py",
+      "sha256": "3365e47bf8ce5a6c61d947d72a927fe443c5bdf1abe520bea8fe30c929e79a2f",
+      "inspected_ranges": [
+        [
+          1,
+          334
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_prompt6_interface_settings.py",
+      "sha256": "ec892fdbccfea57e6b456cd3b04527cdeeaba10b429517216523d61a878bfc52",
+      "inspected_ranges": [
+        [
+          1,
+          27
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_provider_absolute_deadlines.py",
+      "sha256": "39c781e729741bca1930b396fa195d0e718d8525bf60eef8e835549da5ebe310",
+      "inspected_ranges": [
+        [
+          1,
+          322
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_provider_attempt_integrity.py",
+      "sha256": "b2c91eb8eb4c913a40f2293bd2671215f7d2ed33b5fc313c08eccad8ff3a9725",
+      "inspected_ranges": [
+        [
+          1,
+          106
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_public_source_transport.py",
+      "sha256": "9ae243d7e0a96c867850b3713562426a9ae3166610e1d95054526c1f0ea89f30",
+      "inspected_ranges": [
+        [
+          1,
+          134
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_compiler.py",
+      "sha256": "3f611fda93a1cab0fa5bd8b56fdc492d57039cd9b7d18fbddf9c9ce50bd2eb08",
+      "inspected_ranges": [
+        [
+          1,
+          202
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_frozen_depth.py",
+      "sha256": "064eb5d236ec46dcd4dfcd896c1de5838bc76e7b17845072af062f45228b4768",
+      "inspected_ranges": [
+        [
+          1,
+          266
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_production.py",
+      "sha256": "4b75a1f5f8c2129a2eaae11b3f4f49502def2110ad17ebf950e90e20058cf996",
+      "inspected_ranges": [
+        [
+          1,
+          247
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_retention_fairness.py",
+      "sha256": "2bd2588f506a0c0e63a9c22e9db0544c1a8cbab5f4d0872767a029b7b41b9db2",
+      "inspected_ranges": [
+        [
+          1,
+          191
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_retrieval_review.py",
+      "sha256": "7fff21946a6015e9b39866c6bc1bfd333a59af09fdd044d23c402777bfab8fc3",
+      "inspected_ranges": [
+        [
+          1,
+          205
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_review.py",
+      "sha256": "397a611bca111cd9fb93f031aff105d1216c1b312719a4257a17f1e419beb223",
+      "inspected_ranges": [
+        [
+          1,
+          92
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_round_four_review.py",
+      "sha256": "7b1fb8dca72469a3d3cd5e94266495b27ccccd75b12b32d2929801565c776053",
+      "inspected_ranges": [
+        [
+          1,
+          170
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_query_scale_benchmark_fixture.py",
+      "sha256": "10c46fbcf5d8d7104f770bec13f0c91829c4f1d531286d7fa304a1e629d77800",
+      "inspected_ranges": [
+        [
+          1,
+          106
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_repository_boundaries.py",
+      "sha256": "6ce78ae4bf36dfbf9f6b75bfc67fd2c11ef63178e6caca50acbcf8807743bfcc",
+      "inspected_ranges": [
+        [
+          1,
+          141
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_repository_build_review.py",
+      "sha256": "1fdff40b087185a9cd388c40f76615790d503355dd8b39876cc512f0422d0b5a",
+      "inspected_ranges": [
+        [
+          1,
+          105
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_repository_runtime_review.py",
+      "sha256": "1c8568062a73ee880eaf380e7eda47d503512595e49d3b3c37c818d1970d6e4a",
+      "inspected_ranges": [
+        [
+          1,
+          102
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_repository_storage_review.py",
+      "sha256": "7886b5d0ebca19ff3f30ea67af9e2e890eca44405b8fc4d07cdeea2cad82194a",
+      "inspected_ranges": [
+        [
+          1,
+          109
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_research_quality_benchmark.py",
+      "sha256": "460b75325569289a4db79a7c8c1a3e489c28a1936ad397d5bd5a43052f71326f",
+      "inspected_ranges": [
+        [
+          1,
+          206
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_research_quality_metrics_review.py",
+      "sha256": "89231ff51bff45bcb46a634aa36a0b8b7cfefe7e52fe860e0ea09003a50dd3bc",
+      "inspected_ranges": [
+        [
+          1,
+          328
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_research_quality_output.py",
+      "sha256": "476103a639adaac134af69dd9b43154f13eee85cb7877d57ae0fab506b0c7feb",
+      "inspected_ranges": [
+        [
+          1,
+          61
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_research_quality_preflight.py",
+      "sha256": "e80470a0222262f5a19c2f8e36ae399c20a84e7efb7091e6a5e42c56a1f87372",
+      "inspected_ranges": [
+        [
+          1,
+          90
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_research_quality_reference_replay.py",
+      "sha256": "06c69d5cfdb092d8f3ab2743c5fbf6148dc8ed72a30a7267bd250c82ee9946b6",
+      "inspected_ranges": [
+        [
+          1,
+          298
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_retained_retrieval_review_fixes.py",
+      "sha256": "b1d9ceb92dae9ae595b29577caa6ca5fdc0daa9ad7aae3ca2b4b4bcf84f69c0f",
+      "inspected_ranges": [
+        [
+          1,
+          226
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_retained_reviewer_checkpoint_resume.py",
+      "sha256": "7202804db9f3210cf6cec7c2c75fadb80e4bf6b3e2e52073ca84233d8c15dfb3",
+      "inspected_ranges": [
+        [
+          1,
+          173
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_saved_research_import.py",
+      "sha256": "510df3f039cd61f564221fae7f54065b4d88ff47e27494da862c06885dabca92",
+      "inspected_ranges": [
+        [
+          1,
+          598
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_saved_result_integrity.py",
+      "sha256": "064f077b487f7d9f0a76b46b4a2eff76535d1d73f0f59bec8adba8422b33fcd1",
+      "inspected_ranges": [
+        [
+          1,
+          235
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_scholarly_url_resilience.py",
+      "sha256": "9b0410d280b42d819211f37c0919fc53304fe1e4b77c9cd69ee767572105cde8",
+      "inspected_ranges": [
+        [
+          1,
+          119
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_source_archive.py",
+      "sha256": "212de140c4bda06a5ad77a85601b76b1c502d26734f6e51ce7a32dd52ca65774",
+      "inspected_ranges": [
+        [
+          1,
+          223
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_source_discovery_evaluation.py",
+      "sha256": "0c8dc7c9e52b6aef5222a50939e7b90e1a466703936934b9c40ef1a7cc166e94",
+      "inspected_ranges": [
+        [
+          1,
+          189
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_source_display.py",
+      "sha256": "ecaca1dbfc8b0b0399cbd4ddc863d31ee5c7616ceb766c5c1c3044b56c79977b",
+      "inspected_ranges": [
+        [
+          1,
+          63
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_source_leads_evaluation.py",
+      "sha256": "7e2dd342a23f12ded8d9295807da18bfa7e5c1d5653e6616042f474810003880",
+      "inspected_ranges": [
+        [
+          1,
+          29
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_source_selection_preview_extension.py",
+      "sha256": "8fdc37d28a3c6d7e3a670d681b086873e4a6b874e7b88887389174edf678614d",
+      "inspected_ranges": [
+        [
+          1,
+          183
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_stage_pair_checkpoint_resume.py",
+      "sha256": "116fca578bae85076386c92860149ea50f824bd734f1aa3af56fc0ca4e4a4127",
+      "inspected_ranges": [
+        [
+          1,
+          148
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_status_polling_compatibility.py",
+      "sha256": "488b802cf5c4a4efd397f832719f6976e8a221f23e807b0f05a0feaf14c40bd4",
+      "inspected_ranges": [
+        [
+          1,
+          139
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_type_contracts.py",
+      "sha256": "d8c19ca2cc47695258b371f5f889d8283626259f6ad144bfdd782caca481cfcf",
+      "inspected_ranges": [
+        [
+          1,
+          130
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_checkpoint_resume.py",
+      "sha256": "57aea38df59a251d1d9c20df5fbd35f1e04cdc4f40c6e01205a685b7650a0425",
+      "inspected_ranges": [
+        [
+          1,
+          98
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_discovery_provider_adapters.py",
+      "sha256": "479719398837565f70e4602b70e00dd972ee890dd858bb05ffae18df1f9619db",
+      "inspected_ranges": [
+        [
+          1,
+          94
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_evidence_display.py",
+      "sha256": "2170d271b5e9f7eb01cdd216c918f6eaed02e2a7a2d74e2bf76aa07572081aa6",
+      "inspected_ranges": [
+        [
+          1,
+          264
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_phase10_reviewer_ledger.py",
+      "sha256": "8453811a3536e2e0760d489537998005a9c2bc989790678acfcaf9bb198ebb5b",
+      "inspected_ranges": [
+        [
+          1,
+          227
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_problem2_budget_reconciliation.py",
+      "sha256": "ecc5aedc5517da9424f8f3055a78b92d2900e1fbc074ed1671d6e55b8def907e",
+      "inspected_ranges": [
+        [
+          1,
+          243
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_query_planning_contracts.py",
+      "sha256": "92e965e9d19d43f0c62639922a7f4cf9ad734169105d02c09f0b66a6057fbe1f",
+      "inspected_ranges": [
+        [
+          1,
+          57
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_research_status_display.py",
+      "sha256": "99d6ef847cf6b8a9c01d62ec95493fe9ba24aeaec8a42403d9be98835457dd2e",
+      "inspected_ranges": [
+        [
+          1,
+          284
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_v2_resume_integrity.py",
+      "sha256": "4bb11a745f3bef0808802a7cd9645785f214356e01943952113a3b5765ff1aa8",
+      "inspected_ranges": [
+        [
+          1,
+          413
+        ]
+      ]
+    },
+    {
+      "path": "tests/test_wigolo_cache_policy.py",
+      "sha256": "ae01e9c732dc438dbca3b91ce44f7b43168c93402b0b012f02ed74b441440353",
+      "inspected_ranges": [
+        [
+          1,
+          67
+        ]
+      ]
+    }
+  ],
+  "summary": {
+    "fully_inspected_current_files": 493,
+    "fully_inspected_current_lines": 112802,
+    "starting_code_files": 527,
+    "starting_code_lines": 147198,
+    "note": "Current coverage includes newly added files and many small compatibility facades. File count does not imply equivalent coverage of the larger implementation or test files."
+  },
+  "partial_files": [],
+  "non_code_files": [
+    {
+      "path": "evaluations/README.md",
+      "sha256": "f9535608d1dc76d9719d34b44f616b0d134ae8bbfe9a2abbff176475b96a17e6",
+      "inspected_ranges": [
+        [
+          1,
+          170
+        ]
+      ]
+    }
+  ]
+}

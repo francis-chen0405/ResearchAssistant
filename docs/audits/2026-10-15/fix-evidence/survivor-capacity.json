@@ -1,0 +1,11 @@
+{
+  "state": "failed",
+  "failure_reason": "ValidationError: 1 validation error for V2SourceSelectionInput\nsurvivors\n  Tuple should have at most 75 items after validation, not 80 [type=too_long, input_value=(V2SourceSelectionCandida...: 0.0375; weight 1'))))), input_type=tuple]\n    For further information visit https://errors.pydantic.dev/2.13/v/too_long",
+  "model_calls": 17,
+  "search_calls": 16,
+  "source_counts": {
+    "phase-7-merged-survivor-pool": 60,
+    "post-phase-13-round-4-completion-v1": 80
+  },
+  "method": "Generated offline balanced research with twenty requested sources per direction, two providers, unique metadata and both-direction gaps. No external calls or real data."
+}

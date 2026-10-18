@@ -1,0 +1,30 @@
+{
+  "R19": {
+    "configured_timeout_seconds": 0.02,
+    "elapsed_seconds": 0.08268141699954867,
+    "successful_after_deadline": true,
+    "read_budgets": [
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02
+    ],
+    "closed_after_owner_cleanup": true
+  },
+  "R20": {
+    "configured_absolute_deadline_seconds": 0.02,
+    "elapsed_seconds": 0.12541870796121657,
+    "error": "ConnectError after generated stalled getaddrinfo returned"
+  },
+  "real_network_provider_or_credential_calls": 0,
+  "method": "Actual HTTPX/httpcore transport; generated socket for R19, patched resolver for R20. No real sockets connect."
+}

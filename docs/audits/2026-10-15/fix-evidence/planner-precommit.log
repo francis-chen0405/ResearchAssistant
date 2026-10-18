@@ -1,0 +1,28 @@
+{
+  "state": "released",
+  "failure_reason": null,
+  "completed_planner_calls": 3,
+  "planner_invocations_per_fresh_plan": 1,
+  "same_nonbudget_input": true,
+  "requests": [
+    {
+      "stage": "initial_planner",
+      "prompt_sha256": "7d64b86d91c343a18a6ee2c5650b151d696ef9f09f8b2b575dd734760cd6957e",
+      "nonbudget_input_sha256": "62daeabcd125185fc2395eefbcd4e628332e117e7d2e7ea4aa3250d27824425d"
+    },
+    {
+      "stage": "initial_planner",
+      "prompt_sha256": "7d64b86d91c343a18a6ee2c5650b151d696ef9f09f8b2b575dd734760cd6957e",
+      "nonbudget_input_sha256": "62daeabcd125185fc2395eefbcd4e628332e117e7d2e7ea4aa3250d27824425d"
+    },
+    {
+      "stage": "initial_planner",
+      "prompt_sha256": "7d64b86d91c343a18a6ee2c5650b151d696ef9f09f8b2b575dd734760cd6957e",
+      "nonbudget_input_sha256": "62daeabcd125185fc2395eefbcd4e628332e117e7d2e7ea4aa3250d27824425d"
+    }
+  ],
+  "physical_audit_prefix_preserved": true,
+  "all_preinterruption_calls_completed": true,
+  "new_search_calls_after_interruption": 6,
+  "method": "Two actual generated production interruptions after successful initial Planner and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls."
+}

@@ -213,9 +213,11 @@ def test_optional_scout_admits_only_budget_safe_prefix_and_caps_candidates() -> 
 
 
 def test_new_binding_freezes_source_schemas_and_effective_settings(tmp_path: Path) -> None:
-    (tmp_path / "prompts").mkdir()
+    (tmp_path / "researchassistant/prompts").mkdir(parents=True)
     for name in ("v2_initial_planner.md", "v2_scout.md", "search_agent.md"):
-        (tmp_path / "prompts" / name).write_text("test executable prompt", encoding="utf-8")
+        (tmp_path / "researchassistant/prompts" / name).write_text(
+            "test executable prompt", encoding="utf-8"
+        )
     (tmp_path / "pyproject.toml").write_text("# isolated source", encoding="utf-8")
     run_id = uuid4()
     provider = DiscoveryProvider.OPENALEX
@@ -246,7 +248,9 @@ def test_new_binding_freezes_source_schemas_and_effective_settings(tmp_path: Pat
             **arguments, policy=V2DiscoveryPolicy(metadata_depth=30)
         ).fingerprint
     )
-    (tmp_path / "prompts" / "v2_scout.md").write_text("changed executable", encoding="utf-8")
+    (tmp_path / "researchassistant/prompts" / "v2_scout.md").write_text(
+        "changed executable", encoding="utf-8"
+    )
     changed = build_discovery_binding(**arguments, policy=V2DiscoveryPolicy())
     assert original.prompt_schema_hash != changed.prompt_schema_hash
     assert original.source_identity_hash != changed.source_identity_hash

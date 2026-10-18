@@ -1,74 +1,119 @@
 # ResearchAssistant
 
-ResearchAssistant is a local desktop application for source-backed research on a claim. Choose Support, Challenge, or both. The local Python backend discovers sources, preserves exact evidence and provenance, investigates gaps within budget, and releases only deterministically validated results. Historical runs remain readable and exportable. There is no hosted application backend.
+ResearchAssistant is a local desktop application for source-backed research on a claim.
+Choose Support, Challenge, or both. It discovers sources, preserves exact evidence and
+provenance, investigates gaps within budget, and releases deterministically validated
+results. Historical runs remain readable and exportable. There is no hosted backend.
 
-Current source has completed database and six-phase source-discovery implementation plus
-repository review fixes. Current-source delivery and live acceptance remain pending; the
-installed app is older. [STATUS](STATUS.md) owns the verified stage and remaining gates.
+[Current status](docs/project/STATUS.md) owns verified source and installed-build facts.
+[Handoff](docs/project/HANDOFF.md) names the next boundary. Source identity changes
+require a fresh research run under the existing compatibility gate.
 
-## Install and run
+## Install and develop
 
-The desktop application bundles its runtime; end users do not install Python, Node, or Docker. The latest recorded public Apple Silicon DMG/ZIP is the [September 28 unsigned test release](https://github.com/francis-chen0405/ResearchAssistant/releases/tag/v0.1.0-mac-test.20260928), built from `ac49404`. It does **not** include the October fixes in current source or the locally installed app, so do not treat it as current. It is unsigned and unnotarized; macOS may block its first launch. Clean-machine/macOS 14 checks and Developer ID signing/notarization remain open. Current delivery facts and the Windows deferral are in [STATUS](STATUS.md) and [desktop operations](desktop/README.md).
+The desktop application bundles its runtimes. Python developers can install the backend
+and run the console command from any working directory:
 
-## Develop and verify
+```sh
+python -m pip install ./backend
+researchassistant --help
+```
 
-Use Python 3.12, Node 24.18.0, and the committed locks. From the repository root:
+For a checkout, use Python 3.12, Node 24.18.0 and the committed locks:
 
 ```sh
 python3.12 -m venv .venv
-.venv/bin/python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt httpx2 pytest pytest-cov ruff
-pnpm --dir web install --frozen-lockfile
+.venv/bin/python -m pip install -c desktop/constraints.txt -e "./backend[dev]" -r desktop/requirements-build.txt
+pnpm --dir frontend install --frozen-lockfile
 npm ci --prefix desktop
+.venv/bin/python -m researchassistant.api.api
+# In another terminal:
+pnpm --dir frontend dev
+```
+
+On Windows, use `.venv\Scripts\python.exe` for the Python launcher.
+The console command, `python -m cli` and root `python cli.py` remain supported after
+installation. Historical `models`, `store`, `orchestrator`, `agents`, `providers` and
+Python `frontend` imports are installed facades; new code uses `researchassistant.*`.
+The Next.js folder and historical Python namespace coexist through the installed backend.
+Optional Streamlit fixture UI dependencies are in `backend/requirements-legacy.txt`.
+Credentials come from native desktop settings or the CLI process environment; `.env`
+files and shell profiles are never loaded automatically.
+
+## Folder owners
+
+| Folder | Responsibility |
+| --- | --- |
+| `backend/` | Installable Python distribution, runtime, API, agents, providers and packaged resources |
+| `frontend/` | Next.js renderer |
+| `desktop/` | Electron shell, acquisition runtime and native packaging |
+| `tests/`, `evaluations/` | Regressions and offline research/integrity benchmarks |
+| `docs/project/` | Current architecture, conventions, decisions, status and handoff |
+| `docs/verification/`, `docs/archive/` | Verification evidence and preserved historical snapshots |
+| `scripts/`, `.github/` | Workspace tooling and CI |
+| `.agent/` | Plan index and retained plans |
+
+Root `pyproject.toml` configures workspace tests/lint; `backend/pyproject.toml` owns
+package discovery, runtime dependencies, data manifests and the console command.
+`cli.py` and `Launch ResearchAssistant.command` are explicit transition launchers.
+The historical `.agents/PLANS/` record retains its stable path.
+
+## Standalone source archives
+
+Source snapshots include the launchers, owned source folders, tests, current guidance
+and retained historical records. Runtime databases, credentials, generated bundles,
+installed dependencies and Git metadata are excluded. Install the declared backend/
+frontend dependencies before using the build or verification commands below.
+
+For a source extraction, initialize local Git metadata before the Git-aware workspace
+checks (these commands apply only to that extracted copy):
+
+```sh
+git init
+git add --all
+```
+
+The archive freezes guidance at packaging time. Final delivery hashes and acceptance
+results belong to the accompanying `VERIFICATION.json` and `SHA256SUMS`; they are
+finalized afterward to avoid making the archive hash depend on itself.
+Build another snapshot with `python scripts/build_source_archive.py --archive PATH
+--manifest PATH`, placing outputs outside the supplied source or under an ignored
+build/distribution directory. `SOURCE-MANIFEST.json` binds every file's bytes and mode.
+
+## Verify and package
+
+Run workspace commands from the repository root with the development environment.
+
+```sh
+.venv/bin/python scripts/check_repository_boundaries.py
 .venv/bin/python -m pytest
 .venv/bin/python -m ruff check .
 .venv/bin/python -m ruff format --check .
 git diff --check
-pnpm --dir web lint
-pnpm --dir web exec tsc --noEmit
+git diff --cached --check
+pnpm --dir frontend lint
+pnpm --dir frontend exec tsc --noEmit
+.venv/bin/python scripts/verify_distribution.py --constraints desktop/constraints.txt
 ```
 
-The constraints file pins the validated environment. `httpx2`, pytest, pytest-cov, and Ruff are explicit development/test packages in the install command because setuptools editable installation is not supported by the repository's package layout. For a base Python install, use `python -m pip install -c desktop/constraints.txt -r requirements.txt`. The legacy Streamlit frontend is intentionally separate from the base install: `python -m pip install -c desktop/constraints.txt -r requirements-legacy.txt`. Its constrained no-index dry run has been verified.
+Build a wheel with `python -m pip wheel --no-deps --wheel-dir /path/to/dist ./backend`.
+The verifier audits exact installed files and bytes and exercises wheel/editable CLI,
+API, fake-provider fixtures, prompts, font, identity and Unicode PDF output outside
+the checkout. All 18 prompt bytes and font bytes retain their historical meaning.
+Tests and offline evaluations need no paid provider calls.
 
-The canonical CLI module is `researchassistant.runtime.cli`; run `python -m researchassistant.runtime.cli --help` from the repository root. Root `cli.py` remains available as the existing script launcher, and `models.py`, `store.py`, and `orchestrator.py` remain compatibility imports. New backend imports should use the `researchassistant.*` package paths documented in [architecture](ARCHITECTURE.md).
+[The test map](tests/README.md) groups focused checks by subsystem, shows how to find
+tests for an owner such as `seed_expansion`, and keeps full collection discoverable.
 
-## Database recovery
-
-Writable database upgrades retain verified SQLite backups beside the database, in `<database-name>.backups/` under the database's parent directory. The default is three backups. Set `RESEARCHASSISTANT_BACKUP_COUNT` to a positive integer to change the retention count. Backups are created for writable schema upgrades; history inspection and export remain read-only.
-
-List available verified backups with:
-
-```sh
-python -m researchassistant.runtime.cli list-backups --db-path /path/to/live-runs.sqlite3
-```
-
-Restore a selected backup to a new file path. The restore command will not replace an existing database:
-
-```sh
-python -m researchassistant.runtime.cli restore-backup \
-  --backup-path /path/to/live-runs.sqlite3.backups/backup.sqlite3 \
-  --output-path /path/to/restored-live-runs.sqlite3
-```
-
-Use the restored file with `run --db-path ... --run-id ...` to resume a run. Resume still requires the exact persisted claim and pipeline/provider fingerprint; a restored backup does not relax those checks. Import an existing database into app storage with:
-
-```sh
-python -m researchassistant.runtime.cli import-history --source-path /path/to/older.sqlite3
-```
-
-Add `--destination-dir /path/to/imports` to choose another destination directory. The desktop's Advanced settings import action selects the usable imported copy automatically; to use a restored path, enter it in the database path field. Imports accept read-only compatible schemas 7–17; older recognized writable schemas can be recovered and upgraded through an intentional run/resume. Fresh CLI runs create missing selected parent directories without changing existing directory permissions. Desktop paths require an existing writable parent folder; create the folder first. Invalid desktop paths are rejected before a worker starts.
-
-Keep the `.verified.json` file beside each backup: listing and restore require it and recheck integrity, schema, foreign keys and contents. A failed upgrade retains its verified copy. Orphan `.pending-*` files and copies without valid verification records are ignored and never pruned as valid backups. Retention runs only after a successful upgrade and keeps at least one verified backup; it does not run during inspection or current-schema opens. Copies being restored are retained until a later cleanup. POSIX copies are mode `0600` and app-owned folders `0700`; caller-selected folders retain their modes. Windows applies a protected owner/SYSTEM ACL. Publication requires filesystem hard-link support (NTFS on Windows); native Windows ACL and power-loss durability verification remain release gates. Unsupported publication or privacy setup fails before migration.
-
-On Windows, use `.venv\Scripts\python.exe` in place of `.venv/bin/python`. See the [desktop build guide](desktop/README.md) for static export, backend builds, native smokes, and installers. A successful macOS build does not verify Windows. Tests do not require paid provider calls; opt-in integration checks remain opt-in.
-
-For browser development, run `.venv/bin/python -m frontend.api` and `pnpm --dir web dev` in separate terminals. See [frontend notes](frontend/README.md). The CLI retains fixture, inspection, export, and live entry points. Desktop credentials use native settings; CLI credentials come from the process environment. Never put secrets in source files or rely on automatic `.env` or shell-profile loading.
+See [desktop operations](desktop/README.md) for static export, native builds/smokes and
+unsigned local installation versus signed public distribution,
+[renderer development](frontend/README.md), and [database recovery](docs/project/database-recovery.md) for read-only history,
+backups and restore, and [backend/API notes](backend/src/researchassistant/api/README.md)
+for browser development.
 
 ## Project guidance
 
-- [Architecture](ARCHITECTURE.md): runtime, module ownership, and research flow. [Research invariants](docs/research-invariants.md) records the detailed current evidence and storage rules.
-- [Conventions](CONVENTIONS.md), [decisions](DECISIONS.md), and [plans](.agent/PLANS.md): development rules and current scope.
-- [Status](STATUS.md) and [handoff](HANDOFF.md): verified state, open checks, and next boundary.
-- [Grouped plan and verification history](docs/history.md): links to every retained plan and verification record.
-- [Archive index](docs/archive/INDEX.md): exact prior snapshots and archived documents.
-
-The long historical README was archived verbatim on 2026-09-26. This replacement puts current installation, development, and release guidance first.
+[Architecture](docs/project/ARCHITECTURE.md), [conventions](docs/project/CONVENTIONS.md),
+[decisions](docs/project/DECISIONS.md), [plan index](.agent/PLANS.md),
+[status](docs/project/STATUS.md), [handoff](docs/project/HANDOFF.md),
+[grouped history](docs/history.md) and [archive index](docs/archive/INDEX.md).

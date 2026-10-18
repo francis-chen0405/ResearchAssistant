@@ -1,0 +1,30 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd()/'tests'))
+from test_v2_post_analysis import _admission, NOW
+from test_v2_phase11_final_output import _continuation
+from researchassistant.agents.v2_final_output import build_v2_final_research_output, build_v2_synthesizer_input, render_v2_final_output
+from researchassistant.contracts.models import V2EvidenceRelationship
+from researchassistant.evidence.synthesizer import build_v2_synthesis_output
+
+
+def main() -> None:
+    observed=[]
+    with tempfile.TemporaryDirectory(prefix='ra-relationship-wording-') as folder:
+        for relation in (V2EvidenceRelationship.CHALLENGES,V2EvidenceRelationship.QUALIFIES):
+            root=Path(folder)/relation.value; root.mkdir()
+            admission=_admission(root,relationship=relation)
+            continuation=_continuation(admission.run_id)
+            synthesis=build_v2_synthesis_output(synthesis_input=build_v2_synthesizer_input(admission,continuation),created_at=NOW)
+            final=build_v2_final_research_output(admission_result=admission,continuation=continuation,synthesis=synthesis,created_at=NOW)
+            rendered=render_v2_final_output(final)
+            record=admission.source_results[0].evidence_record
+            observed.append({'relationship':relation.value,'release_valid':final.release_validation.valid,'evidence_quality':record.evidence_quality,'claim_fit':record.claim_fit,'coverage_label':next(line for line in rendered.splitlines() if line.startswith('Admitted relationships:')),'factual_item_label':next(line for line in rendered.splitlines() if line.startswith('- Direct'))})
+    result={'cases':observed,'method':'Actual current deterministic synthesis and final rendering, using complete generated typed Analyst/admission fixtures with explicit challenging/qualifying relationship. No record edits, real data, provider transport or paid research.'}
+    Path('/tmp/ra-review-relationship-wording.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
+
+
+if __name__=='__main__':main()

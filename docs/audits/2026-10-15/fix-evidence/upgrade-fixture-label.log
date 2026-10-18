@@ -1,0 +1,1 @@
+{"cases": [{"actual_input_versions": [14], "requested_case_version": 14, "test_passed": true}, {"actual_input_versions": [15], "requested_case_version": 15, "test_passed": true}, {"actual_input_versions": [18], "requested_case_version": 16, "test_passed": true}], "external_provider_calls": 0, "finding": "R51 companion regression gap", "real_database_changes": 0}

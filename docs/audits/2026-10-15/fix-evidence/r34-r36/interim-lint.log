@@ -1,0 +1,67 @@
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend/src/researchassistant/contracts/research_selection.py:3:1
+   |
+ 1 |   """Source selection and budget-aware deep-analysis queue handoffs."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | from datetime import datetime
+ 6 | | from enum import StrEnum
+ 7 | | from typing import Annotated, Literal
+ 8 | | from uuid import UUID
+ 9 | |
+10 | | from pydantic import (
+11 | |     ConfigDict,
+12 | |     Field,
+13 | |     SerializerFunctionWrapHandler,
+14 | |     field_validator,
+15 | |     model_serializer,
+16 | |     model_validator,
+17 | | )
+18 | |
+19 | | from researchassistant.common.money import ExactUSD
+20 | | from researchassistant.contracts.discovery_v2 import (
+21 | |     V2GraphNeighborAction,
+22 | |     V2PreviewResult,
+23 | | )
+24 | | from researchassistant.contracts.metadata_ranking import MetadataRank
+25 | | from researchassistant.contracts.model_contracts import (
+26 | |     DiscoveryProvider,
+27 | |     NonEmptyStr,
+28 | |     NonNegativeInt,
+29 | |     PositiveInt,
+30 | |     StrictModel,
+31 | |     _validate_aware_datetime,
+32 | | )
+33 | | from researchassistant.contracts.research_coverage import (
+34 | |     V2ClaimCoverageAssessment as V2ClaimCoverageAssessment,
+35 | | )
+36 | | from researchassistant.contracts.research_coverage import (
+37 | |     V2SourceSelectionGap as V2SourceSelectionGap,
+38 | | )
+39 | | from researchassistant.contracts.research_coverage import (
+40 | |     validate_v2_source_selection_gap_history as validate_v2_source_selection_gap_history,
+41 | | )
+42 | | from researchassistant.contracts.research_directions import ResearchDirection, ResearchDirections
+43 | | from researchassistant.contracts.research_policy import (
+44 | |     V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY as V2_DEEP_ANALYSIS_QUEUE_POLICY_IDENTITY,
+45 | | )
+46 | | from researchassistant.contracts.research_policy import (
+47 | |     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP as V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
+48 | | )
+49 | | from researchassistant.contracts.research_policy import (
+50 | |     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP as V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+51 | | )
+52 | | from researchassistant.contracts.research_policy import (
+53 | |     V2_SOURCE_SELECTION_POLICY_IDENTITY as V2_SOURCE_SELECTION_POLICY_IDENTITY,
+54 | | )
+55 | | from researchassistant.contracts.research_policy import (
+56 | |     V2_FOUR_ROUND_SURVIVOR_LIMIT,
+57 | |     V2_PREVIEW_SELECTION_POLICY_IDENTITY,
+58 | | )
+   | |_^
+   |
+help: Organize imports
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.

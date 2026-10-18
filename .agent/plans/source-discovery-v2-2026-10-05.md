@@ -1,5 +1,11 @@
 # Source discovery v2 — shared implementation record
 
+The subsequent [October 9 citation-expansion limit investigation](../../docs/verification/citation-expansion-limits-2026-10-09.md)
+reproduces shared-retention and changed-limit response-replay failures. Fresh seed policy v3
+corrects those boundaries; historical dispatch, physical ceilings and evidence gates remain.
+That record owns the regressions, boundary matrix and local checks; the completed phase
+records below retain their original scope and evidence.
+
 Authorized scope: all six phases of the source-discovery pack, with source/offline acceptance complete. All six phases are reviewed local commits. The subsequent complete cross-phase review and seven repairs are recorded at the end of this plan. Preserve the unrelated proposal pack and restored root compatibility files. Paid transports, credential access, real databases, installation, automation, push and publication remain outside this request.
 
 ## Original Phase 1 specification and ownership

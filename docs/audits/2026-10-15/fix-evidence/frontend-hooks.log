@@ -1,0 +1,13 @@
+✔ a successful trail retry clears the failure that previously hid its rows (65.906167ms)
+✔ active-run reconnection validates snapshot ownership: owned (18.945208ms)
+✔ active-run reconnection validates snapshot ownership: different-worker (10.440416ms)
+✔ active-run reconnection validates snapshot ownership: missing (9.540667ms)
+✔ active-run reconnection validates snapshot ownership: wrong-run (9.678959ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 428.050667

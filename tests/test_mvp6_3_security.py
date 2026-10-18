@@ -31,6 +31,8 @@ def _resolver_for(
 
 def _wigolo_client(observed_urls: list[str] | None = None) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/ra/network-policy":
+            return httpx.Response(200, json={"identity": "ra-public-network-v1"})
         body = json.loads(request.content)
         if observed_urls is not None:
             observed_urls.append(body["url"])
@@ -472,7 +474,7 @@ def test_mvp6_3_acquisition_identity_is_incompatible_with_pre_phase_identity() -
         clients=ProviderClients(host_resolver=_resolver_for()),
     )
 
-    assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v3"
+    assert ACQUISITION_VERSION == "mvp6.9-acquisition-provenance-v5"
     assert ACQUISITION_VERSION in bundle.fingerprint_payload_json
     old_payload = bundle.fingerprint_payload_json.replace(
         ACQUISITION_VERSION,

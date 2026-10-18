@@ -1,0 +1,8 @@
+include pyproject.toml README.md MANIFEST.in
+include _build/__init__.py _build/build_distribution.py
+recursive-include src *.py
+recursive-include src/researchassistant/prompts *.md
+include src/researchassistant/evidence/fonts/unifont-15.0.01.ttf
+include src/researchassistant/evidence/fonts/UNIFONT-LICENSE.txt
+include src/researchassistant/evidence/fonts/README.md
+global-exclude __pycache__ *.py[cod] .DS_Store *.pem *.key .env

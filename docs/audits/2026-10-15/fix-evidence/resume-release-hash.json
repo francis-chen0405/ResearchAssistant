@@ -1,0 +1,11 @@
+{
+  "finding": "R31",
+  "resumed_state": "released",
+  "saved_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "actual_rendered_hash": "1073fb5cd68d1b0b2bb2ffef7c27eac9bb19d9cf6b65578c4b01b5d1b6308baf",
+  "hash_mismatch_accepted": true,
+  "model_requests_on_resume": 0,
+  "search_requests_on_resume": 0,
+  "database_unchanged_by_resume": true,
+  "method": "Generate offline released research, replace only the cached production-result release hash, update envelope checksum and restore the exact immutability trigger; invoke actual production resume under identical settings/source. No real data or external calls."
+}

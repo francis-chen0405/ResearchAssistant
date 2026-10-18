@@ -1,17 +1,54 @@
 from __future__ import annotations
 
+import runpy
+import sys
 from pathlib import Path
+from types import ModuleType
+from unittest.mock import MagicMock
+
+import pytest
 
 from frontend.streamlit_app import (
     FrontendRunSummary,
     discover_fixture_runs,
     run_fixture_for_frontend,
 )
+from researchassistant.api import evidence_browser_app, streamlit_app
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FIXTURE_ROOT = _REPO_ROOT / "tests" / "fixtures"
 _VALID_FIXTURE = _FIXTURE_ROOT / "basic_valid_run"
 _INVALID_FIXTURE = _FIXTURE_ROOT / "invalid_release_run"
+
+
+@pytest.mark.parametrize("launch", ["module", "script"])
+def test_evidence_viewer_launcher_renders_read_only_controls(
+    monkeypatch: pytest.MonkeyPatch, launch: str
+) -> None:
+    ui = MagicMock()
+    ui.button.return_value = False
+    monkeypatch.setitem(sys.modules, "streamlit", ui)
+    monkeypatch.delitem(sys.modules, "frontend.evidence_browser_app", raising=False)
+    if launch == "module":
+        runpy.run_module("frontend.evidence_browser_app", run_name="__main__")
+    else:
+        runpy.run_path(
+            str(_REPO_ROOT / "backend/src/frontend/evidence_browser_app.py"),
+            run_name="__main__",
+        )
+    ui.title.assert_called_once_with("Evidence Browser")
+    ui.text_input.assert_any_call("Existing SQLite database")
+    ui.button.assert_called_once_with("Open evidence trail", use_container_width=True)
+
+
+@pytest.mark.parametrize("app", [evidence_browser_app, streamlit_app])
+def test_optional_ui_missing_dependency_points_to_existing_requirements(
+    monkeypatch: pytest.MonkeyPatch, app: ModuleType
+) -> None:
+    monkeypatch.setitem(sys.modules, "streamlit", None)
+    with pytest.raises(RuntimeError, match="backend/requirements-legacy.txt"):
+        app._load_streamlit()
+    assert (_REPO_ROOT / "backend/requirements-legacy.txt").is_file()
 
 
 def test_fixture_discovery_finds_expected_fixture_runs() -> None:

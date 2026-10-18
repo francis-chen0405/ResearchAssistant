@@ -1,0 +1,26 @@
+from __future__ import annotations
+import json
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / 'tests'))
+from test_four_round_survivor_capacity import _BalancedModel, product
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, ResearchDirections, ResearchMode, V2SourceSelectionQueueResult
+from researchassistant.research.v2_orchestrator import run_v2_production_pipeline
+from researchassistant.storage.store import read_v2_artifact
+
+def main() -> None:
+    controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX), research_mode=ResearchMode.BALANCED, sources_per_stance_per_round=20)
+    model, search = _BalancedModel(completed_rounds=4), product._WideSearch()
+    with tempfile.TemporaryDirectory(prefix='ra-cross-direction-provenance-') as folder:
+        path = Path(folder) / 'generated.sqlite3'
+        result = run_v2_production_pipeline(product.production.CLAIM, db_path=path, directions=ResearchDirections(support_enabled=True, challenge_enabled=True), discovery_providers=controls.discovery_providers, search_providers={provider:search for provider in controls.discovery_providers}, wigolo_provider=product.phase12._Scraper(), llm_provider=model, routing_config=product.phase12._routing(), ceilings=product.production.CEILINGS, research_controls=controls, clock=lambda: product.phase12.NOW)
+        selection = V2SourceSelectionQueueResult.model_validate_json(read_v2_artifact(path, result.run_id, 'phase-13-source-selection-deep-analysis-queue-analyzer-admission').payload_json)
+        directions = {gap.gap_id:gap.direction for gap in selection.input.gap_history}
+        conflicts = [{'source_id':str(source.source_id), 'survivor_direction':source.direction.value, 'round':source.research_round, 'targeted_gaps':[{'gap_id':gap, 'direction':directions[gap].value} for provenance in source.search_provenance for gap in provenance.targeted_gap_ids if directions.get(gap) is not source.direction]} for source in selection.input.survivors if any(directions.get(gap) is not source.direction for provenance in source.search_provenance for gap in provenance.targeted_gap_ids)]
+        observed = {'state':result.state.value, 'failure_reason':result.failure_reason, 'selection_survivors':len(selection.input.survivors), 'source_statuses':len(selection.source_statuses), 'conflicting_cross_direction_provenance':conflicts, 'model_calls':len(model.requests), 'search_calls':len(search.requests), 'method':'Actual offline production with valid both-direction gaps and duplicate paper titles returned in both directions. Discovery legitimately preserves all contributing query provenance. No saved-artifact edits, real data, paid research or external calls.'}
+    Path('/tmp/ra-review-cross-direction-provenance.json').write_text(json.dumps(observed, indent=2)+'\n')
+    print(json.dumps(observed, indent=2))
+
+if __name__ == '__main__':
+    main()

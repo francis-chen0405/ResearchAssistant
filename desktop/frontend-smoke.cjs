@@ -7,7 +7,7 @@ const path = require('node:path');
 const http = require('node:http');
 
 async function main() {
-  const root = path.resolve(__dirname, '../web/out');
+  const root = path.resolve(__dirname, '../frontend/out');
   const shots = path.resolve(__dirname, 'build/phase3-screenshots');
   fs.mkdirSync(shots, {recursive:true});
   const server = http.createServer((req,res) => {
@@ -30,6 +30,42 @@ async function main() {
     let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false; let invalidPlan = false; let sufficientSourcePool = false; let invalidRelease = false; let evidenceFailure = false; let v2ResultRequests = 0; let v2EvidenceRequests = 0;
     const id='11111111-1111-4111-8111-111111111111';
     const progress = {status:'running',model_attempts:1,retrieval_attempts:2,usable_snapshots:1,candidates:1};
+    const sourceLeadRequests=[];
+    const sourceLeadPage=(offset,limit)=>{
+      const all=Array.from({length:51},(_,index)=>({
+        lead_id:`lead-${String(index+1).padStart(2,'0')}`,
+        source_id:index===0?'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa':null,
+        title:`Lead ${String(index+1).padStart(2,'0')} · Discovery example`,
+        url:`https://example.org/lead-${index+1}`,
+        work_id:null,
+        readable_alternate_url:null,
+        providers:['openalex'],
+        search_directions:['support_search'],
+        rounds:[1],
+        capture_status:index===0?'failed':'unknown',
+        disposition:index===0?'excluded':'pending',
+        reason:index===0?'The source could not be captured; it remains a discovery lead.':'Recorded discovery candidate; capture not yet attempted.',
+        confidence:'recorded',
+        unknowns:[],
+        history:index===0?[{stage:'source_capture',status:'failed',reason:'The capture worker reported a timeout.'}]:[],
+        snippet:'SOURCE_LEAD_SNIPPET_MUST_NOT_RENDER',
+        quote:'SOURCE_LEAD_QUOTE_MUST_NOT_RENDER',
+      }));
+      Object.assign(all[1],{
+        url:'https://example.org/landing',
+        capture_status:'unusable',
+        readable_alternate_url:'https://mirror.example.org/fulltext',
+        reason:'The linked landing page was unusable; a readable alternate was captured.',
+        history:[
+          {stage:'capture',status:'unusable',reason:'wigolo: https://example.org/landing'},
+          {stage:'capture',status:'readable',reason:'wigolo: https://mirror.example.org/fulltext'},
+        ],
+      });
+      all[2].readable_alternate_url='https://user:secret@example.org/fulltext';
+      all[3].readable_alternate_url='javascript:alert(1)';
+      const items=all.slice(offset,offset+limit);
+      return {run_id:id,items,total:all.length,offset,limit,has_more:offset+items.length<all.length,notice:'Discovery leads are records of candidate sources.'};
+    };
     const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',model_usage_details:{input_tokens:{total:null,known_subtotal:123,complete:false},output_tokens:{total:44,known_subtotal:44,complete:true},cached_input_tokens:{total:null,known_subtotal:0,complete:false},cache_write_tokens:{total:null,known_subtotal:4,complete:false},cost_basis_counts:[{basis:'published_cache_prices_reported_writes',physical_calls:1},{basis:'published_cache_prices_assumed_all_uncached_writes',physical_calls:1},{basis:null,physical_calls:1}]},supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
     await page.route('**/api/**', async route => {
       const req=route.request(); const url=new URL(req.url()); const p=url.pathname; let body={}; let status=200;
@@ -46,6 +82,13 @@ async function main() {
       else if(p==='/api/research/start') { assert.equal(serviceReady,true,'Research must wait for local tools health'); assert.equal(serviceStarts,1); assert.equal(serviceProbes,2); started=req.postDataJSON(); run='running'; body={started:true,run_id:id,classification:'starting',message:'Research started.'}; }
       else if(p.endsWith('/cancel')) { run='cancelled'; body={cancelled:true,message:'Cancellation requested.'}; }
       else if(p==='/api/history') body={items:run ? [{run_id:id,raw_claim:started.raw_claim,status:run,stage:'discovery',updated_at:'2026-09-07T12:00:00Z'}] : []};
+      else if(p===`/api/research/${id}/source-leads`) {
+        const offset=Number(url.searchParams.get('offset')||'0'); const limit=Number(url.searchParams.get('limit')||'0');
+        assert.equal(req.method(),'GET','Source leads are a read-only request');
+        assert.ok(limit>0 && limit<=50,`Source-lead page size must be at most 50: ${limit}`);
+        sourceLeadRequests.push({method:req.method(),run,offset,limit});
+        body=sourceLeadPage(offset,limit);
+      }
       else if(p.endsWith('/v2-result')) {
         v2ResultRequests++;
         if(!detailed) { status=404; body={detail:'Historical brief'}; }
@@ -146,6 +189,34 @@ async function main() {
     await page.screenshot({path:path.join(shots,'research-active.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Cancel run',exact:true}).click();
     await page.getByText('No brief was released.',{exact:true}).waitFor();
+    await page.locator('.source-lead').first().waitFor();
+    assert.equal(await page.locator('.source-lead').count(),50,'An unreleased run shows the first bounded source-lead page');
+    const firstLead=page.locator('.source-lead').first();
+    await firstLead.getByRole('link',{name:'Lead 01 · Discovery example',exact:true}).waitFor();
+    await firstLead.locator('.source-lead-reason').getByText('The source could not be captured; it remains a discovery lead.',{exact:true}).waitFor();
+    assert.equal(await firstLead.locator('details[open]').count(),0,'Lead history and metadata start collapsed');
+    assert.equal(await page.getByText('SOURCE_LEAD_SNIPPET_MUST_NOT_RENDER',{exact:true}).count(),0);
+    assert.equal(await page.getByText('SOURCE_LEAD_QUOTE_MUST_NOT_RENDER',{exact:true}).count(),0);
+    await firstLead.locator('.source-lead-details summary').click();
+    await firstLead.getByText('The capture worker reported a timeout.',{exact:true}).waitFor();
+    const landingLead=page.locator('.source-lead').nth(1);
+    assert.equal((await landingLead.locator('.source-lead-status').innerText()).toLowerCase(),'linked page: unusable','The badge describes the linked page, not a readable alternate');
+    assert.equal(await landingLead.getByRole('link',{name:'Lead 02 · Discovery example',exact:true}).getAttribute('href'),'https://example.org/landing');
+    const readableAlternate=landingLead.getByRole('link',{name:'Readable alternate',exact:true});
+    assert.equal(await readableAlternate.getAttribute('href'),'https://mirror.example.org/fulltext','The readable capture has its own visible alternate link');
+    assert.equal(await readableAlternate.getAttribute('rel'),'noopener noreferrer');
+    assert.equal(await landingLead.locator('details[open]').count(),0,'The alternate link is visible before expanding history');
+    await landingLead.locator('.source-lead-details summary').click();
+    await landingLead.getByText('wigolo: https://example.org/landing',{exact:true}).waitFor();
+    await landingLead.getByText('wigolo: https://mirror.example.org/fulltext',{exact:true}).waitFor();
+    for(const index of [2,3]) assert.equal(await page.locator('.source-lead').nth(index).getByRole('link',{name:'Readable alternate',exact:true}).count(),0,'Unsafe alternate protocols and embedded credentials must not become links');
+    await page.getByRole('button',{name:'Load more source leads'}).click();
+    await page.getByText('51 of 51 shown',{exact:true}).waitFor();
+    assert.equal(await page.locator('.source-lead').count(),51,'Pagination appends the remaining lead without duplicates');
+    assert.deepEqual(sourceLeadRequests.filter(request=>request.run==='cancelled').map(({method,offset,limit})=>({method,offset,limit})),[
+      {method:'GET',offset:0,limit:50},
+      {method:'GET',offset:50,limit:50},
+    ]);
     await page.screenshot({path:path.join(shots,'research-cancelled.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     run='failed'; v2ResultRequests=0; v2EvidenceRequests=0;
@@ -158,6 +229,10 @@ async function main() {
     run='released';
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await page.locator('.source-lead').first().waitFor();
+    assert.equal(await page.locator('.source-lead').count(),50,'Released run loads source leads independently of the brief');
+    assert.ok(sourceLeadRequests.some(request=>request.run==='released' && request.method==='GET' && request.offset===0 && request.limit===50),'The released run requests its first lead page');
+    assert.ok(sourceLeadRequests.every(request=>request.method==='GET' && request.limit<=50),'Every source-lead request is a bounded GET');
     await page.getByRole('button',{name:'Copy brief',exact:false}).click();
     assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/validated example finding/);
     const downloadEvent=page.waitForEvent('download'); await page.getByRole('button',{name:'Download brief'}).click();

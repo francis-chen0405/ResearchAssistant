@@ -610,6 +610,10 @@ def _reduce_to_recorded_version(path: Path, version: int) -> None:
     """Remove schema objects introduced later, preserving executable older boundaries."""
     with _connect(path) as connection:
         connection.execute("PRAGMA foreign_keys = OFF")
+        if 13 <= version < 18:
+            from test_database_schema_integrity import _restore_round_three_constraint
+
+            _restore_round_three_constraint(connection)
         canonical = store_schema._canonical_schema()
         for kind, name, _sql in reversed(canonical):
             if store_schema._object_version(kind, name) > version and kind in {

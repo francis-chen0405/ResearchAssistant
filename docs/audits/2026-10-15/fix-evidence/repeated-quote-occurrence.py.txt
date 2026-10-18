@@ -1,0 +1,18 @@
+from __future__ import annotations
+import json
+from pathlib import Path
+from researchassistant.contracts.models import SelectedSentenceRange,V2VerbatimQuoteSelection
+from researchassistant.evidence.evidence_core import assemble_quote_block_from_selected_segments,fresh_sentence_spans,parse_extracted_quote_block
+
+def main() -> None:
+    repeated='Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.'
+    text=f'The first cohort excluded older adults. {repeated} The second cohort included all age groups. {repeated} The second cohort was followed for twelve months.'
+    selection=V2VerbatimQuoteSelection(selected_sentence_ranges=(SelectedSentenceRange(start_sentence=4,end_sentence=4),))
+    spans=fresh_sentence_spans(text)
+    quote=assemble_quote_block_from_selected_segments(text,selection,truncated=False)
+    parsed=parse_extracted_quote_block(quote)
+    observed={'selected_sentence':4,'selected_exact_text':spans[3].text,'expected_preceding_context':spans[2].text,'expected_following_context':spans[4].text,'actual_preceding_context':parsed.preceding_context,'actual_following_context':parsed.following_context,'assembled_quote':quote,'method':'Actual fresh sentence-range selection and production quote assembler; generated repeated source text only, no database/provider activity.'}
+    Path('/tmp/ra-review-repeated-quote-occurrence.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

@@ -1,0 +1,109 @@
+{
+  "verified_at_utc": "2026-10-18T17:40:29.226292+00:00",
+  "authorization": "Direct user request to delete the current Mac app and install the new app.",
+  "installed_path": "/Applications/ResearchAssistant.app",
+  "build": "20261018.59",
+  "version": "0.1.0",
+  "bundle_identifier": "org.researchassistant.desktop",
+  "source_identity": "source-sha256:fe0cc617eaba0753c9895d0a5f4a983f07946c594c7054d9696775250dcf937c",
+  "frozen_identity": "source-sha256:721663605cbebb699899af04610598f4f137748125952f5f8c1a3fc0a22a7d6a",
+  "backend_sha256": "cc9fcdf881589b016869c238188e2c1ff6582d88f8f42707d9ba6d7e2ac0a75e",
+  "previous_backend_sha256": "12e1705b6790b2532e8284ce5baa32e25f09b83de701dd15ce6d0415945c03f5",
+  "old_app_removed": true,
+  "installer": {
+    "path": "/Users/francischen/Downloads/ResearchAssistant-0.1.0-20261018-review-arm64.dmg",
+    "sha256": "bbe4751370bbdfb3903644a00387a316ea124c0ee7c806bde717ffd0061b9172",
+    "bytes": 1025825811,
+    "verified": true
+  },
+  "dmg_parity": {
+    "path": "/private/tmp/researchassistant-install-20261018/release/ResearchAssistant-0.1.0-20261018-review-arm64.dmg",
+    "sha256": "bbe4751370bbdfb3903644a00387a316ea124c0ee7c806bde717ffd0061b9172",
+    "bytes": 1025825811,
+    "payload_entries": 31663,
+    "exact_dmg_payload_parity": true
+  },
+  "saved_data": {
+    "entries_verified_before_normal_launch": 38,
+    "exact_payload_and_modes_preserved_during_install_and_isolated_checks": true,
+    "research_cache_preferences_unchanged_after_normal_launch": true,
+    "ordinary_electron_log_changes": [
+      "Local Storage/leveldb/LOG",
+      "Local Storage/leveldb/LOG.old"
+    ],
+    "ordinary_running_instance_links": [
+      "SingletonCookie",
+      "SingletonLock",
+      "SingletonSocket"
+    ],
+    "existing_files_removed": [],
+    "real_native_credentials": "not replaced/deleted; tests used isolated namespaces and cleaned them"
+  },
+  "normal_launch": {
+    "app": "/Applications/ResearchAssistant.app",
+    "build": "20261018.59",
+    "main_pid": 37207,
+    "backend_pid": 37212,
+    "origin": "http://127.0.0.1:54566",
+    "unauthenticated_health_status": 401,
+    "launched_normally": true,
+    "left_open_for_user": true,
+    "elapsed_seconds": 18.12
+  },
+  "checks": {
+    "source_full_python": "3195 passed / 9 existing skips; exact source unchanged",
+    "exact_backend_source_resource_payloads": 299,
+    "installed_payload_entries": 31663,
+    "candidate_backend_and_window": "pass",
+    "installed_backend_and_window": "pass",
+    "older_schema17_generated_fixture_upgrade": "pass: credentials/settings/identical validated brief and unchanged history database",
+    "real_research_calls": 0,
+    "public_release": false,
+    "signed_notarized": false,
+    "clean_minimum_os_acceptance": false,
+    "windows_acceptance": false,
+    "final_documentation_and_quality": "Ruff lint/format, repository boundaries, staged/unstaged whitespace, current-record links and exact source/ledger/staged-hash preservation pass."
+  },
+  "logs_and_helpers": "desktop/build/current-install-20261018",
+  "raw_file_sha256": {
+    "builder.json": "91a7effbce13d8d7f940f6638737ca223fb3507396ac836dc0a134122dbbb572",
+    "candidate-frozen.log": "a3a16a26b57219cc7267b7744f06b8d3711680e06958ed09a9d65bdc2d977b4b",
+    "candidate-payload.json": "066f477a47a40a3900f9eff0166bd350e0a9eff52a8067ab089c24d8734112e8",
+    "candidate-window.log": "58b0cf1d01b8d3d1c632bf21989e3cb21e548964d2bfbe802c45905c30bdb4ce",
+    "check-shell.cjs.txt": "f3ff3d765e003f807033d93ca31c468d7e58c52de43f3ccef87c99bb2e294cf2",
+    "dmg-verification.log": "ecbdc2f47ee4df26beeb159294e4d8b13d2139a5077986723fd379502f4dbeaa",
+    "dmg.json": "23072b92c78f672c1cb6163ed964427205de296b21a47ea6c38728cfcad83c07",
+    "download-copy.log": "f4b4b83a0ccc13de7917fb6e0ba7be6cead308ffe3565f8e8a2518888399b46a",
+    "download.json": "f4b4b83a0ccc13de7917fb6e0ba7be6cead308ffe3565f8e8a2518888399b46a",
+    "finish.log": "15a02af907a509c11af2467c55305f24c5145bb22f8125b7d6fc49ea3390cdde",
+    "historical-upgrade.log": "1e2b113a618725247f0c4914d2ae6f7a833c3edd6d89ca2555b34a5fc97e4307",
+    "install.log": "9771d686b6a30473e1e9e63259b9e5d47dadf78e7bd3b007d278a0c1984347fd",
+    "install.py.txt": "5d08f692ba62b3772fb387da37bdbe6c98d6f3b09c571200ab4b90006e26695a",
+    "installation.json": "15a02af907a509c11af2467c55305f24c5145bb22f8125b7d6fc49ea3390cdde",
+    "installed-frozen.log": "a3a16a26b57219cc7267b7744f06b8d3711680e06958ed09a9d65bdc2d977b4b",
+    "installed-window.log": "58b0cf1d01b8d3d1c632bf21989e3cb21e548964d2bfbe802c45905c30bdb4ce",
+    "normal-launch-data-comparison.json": "c5e8f3e61cfe9206f78c4c75d6cd1cdcf49b3924bd50e931c51fff7cb6eca9d8",
+    "normal-launch.json": "df09dd227f8d197a5d8dfe1253fbcbffd845aa86d43e9b7fd9836a8ef017b607",
+    "normal-launch.log": "df09dd227f8d197a5d8dfe1253fbcbffd845aa86d43e9b7fd9836a8ef017b607",
+    "old-payload.json": "f61a9b06cd764fa91bab64295ca3737d773cfd3628317c97b79b16845dcec44e",
+    "open-verified.py.txt": "f73d5cf03b152f60356ee576db6c00469cfd64acf578a2c5a991106e82c3e8b4",
+    "package.log": "b3c19030e8c5b66fbf59ef0e749328a62c5260d819161d67b74cfabe441e25bd",
+    "preparation.json": "b6d2503841ac0833fcf3cb283264ecaf7bb6b59f7d9cecc8137bce59e3e0a430",
+    "saved-data-after.json": "527315da400bc5389c2ea1eb5b7dcb108ca9d0b779402f9cb33851ed7be6ad87",
+    "saved-data-before.json": "527315da400bc5389c2ea1eb5b7dcb108ca9d0b779402f9cb33851ed7be6ad87",
+    "shell-parity.log": "3baabb5876b8f9099ed1623865c9239043101771c7e6bff7ee0d60891ab7ba41",
+    "upgrade-historical-fixture.py.txt": "732bd26bb8789c250c167487d515d329cd8d2d0f71368a57c0b1b395ee515b7c",
+    "lint.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "format.log": "76fc4cac1f3220d3cf798f254f0e2dbd962aa5022721df2702f15770d4e2bdc4",
+    "boundaries.log": "504cebd2684317f62dde85a0352bd74406b4e54e1753df952b7e16b33e4eff3a",
+    "whitespace.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "staged-whitespace.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "records-check.log": "3063742927b8fd473608d4d665eba2d76f1f63062bc30b5abbc81c98b345975c"
+  },
+  "git": {
+    "head": "94a241b52f9525cab3aff52d1f85026f081b3e85",
+    "branch": "master",
+    "staged_diff_sha256": "85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2"
+  },
+  "dmg_source": "Locally packaged verified R01\u2013R59 source; no public release download or publication."
+}

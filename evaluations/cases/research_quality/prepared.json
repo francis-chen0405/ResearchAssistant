@@ -1,0 +1,385 @@
+{
+  "schema_version": "research-quality-v1",
+  "prepared_on": "2026-10-11",
+  "baseline": {
+    "captured_on": "2026-10-11",
+    "source_identity": "source-sha256:4a9ce91342ff8933f7942d83dced1cd70b56f77ac80eac017e6a632aab5b2dc4",
+    "git_head": "94a241b52f9525cab3aff52d1f85026f081b3e85",
+    "dirty_checkout": true,
+    "controls": {
+      "depth": "standard",
+      "length": "report",
+      "tone": "neutral",
+      "focus": null,
+      "research_mode": "focused",
+      "sources_per_stance_per_round": 10,
+      "discovery_providers": [
+        "serpsearch",
+        "exa",
+        "openalex"
+      ]
+    },
+    "discovery_policy": {
+      "policy_identity": "source-discovery-v2-2026-10-08-v3",
+      "metadata_depth": 20,
+      "max_pages_per_operation": 3,
+      "max_raw_per_round": 300,
+      "max_raw_per_run": 1000,
+      "max_scout_per_round": 60,
+      "max_acquisition_per_round": 25,
+      "max_seeds_per_run": 3,
+      "max_hops": 1,
+      "unknown_request_recovery": "stop",
+      "max_neighbors_per_seed": 10,
+      "max_expansion_per_run": 30,
+      "metadata_page_size": 20,
+      "ranking_weights": {
+        "directness": 5.0,
+        "method_fit": 3.0,
+        "gap_fit": 2.0,
+        "identity_completeness": 1.0,
+        "novelty": 1.0,
+        "diversity": 1.0
+      },
+      "seed_expansion_enabled": true,
+      "sources_per_direction_per_round": 10,
+      "scholarly_search_mode": "lexical"
+    },
+    "provider_modes": {
+      "serpsearch": "lexical",
+      "exa": "provider_default",
+      "openalex": "lexical"
+    },
+    "model_options": {
+      "choices": [
+        {
+          "id": "gpt-6-luna-high",
+          "label": "GPT-6 Luna \u00b7 High",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "high",
+          "input_per_million": "0.10",
+          "cached_input_per_million": "0.01",
+          "output_per_million": "0.50",
+          "input_cap_per_million": "0.25",
+          "output_cap_per_million": "0.75"
+        },
+        {
+          "id": "gpt-6-luna-xhigh",
+          "label": "GPT-6 Luna \u00b7 XHigh",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "xhigh",
+          "input_per_million": "0.10",
+          "cached_input_per_million": "0.01",
+          "output_per_million": "0.50",
+          "input_cap_per_million": "0.25",
+          "output_cap_per_million": "0.75"
+        },
+        {
+          "id": "mimo-v2.6-pro",
+          "label": "MiMo v2.6 Pro",
+          "provider": "mimo",
+          "model": "mimo-v2.6-pro",
+          "reasoning_effort": null,
+          "input_per_million": "0.435",
+          "cached_input_per_million": "0.0036",
+          "output_per_million": "0.87",
+          "input_cap_per_million": "0.50",
+          "output_cap_per_million": "1.00"
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "label": "MiMo v2.6 Flash",
+          "provider": "mimo",
+          "model": "mimo-v2.6-flash",
+          "reasoning_effort": null,
+          "input_per_million": "0.14",
+          "cached_input_per_million": "0.0028",
+          "output_per_million": "0.28",
+          "input_cap_per_million": "0.15",
+          "output_cap_per_million": "0.30"
+        },
+        {
+          "id": "gpt-6-sol-high",
+          "label": "GPT-6 Sol \u00b7 High",
+          "provider": "openai",
+          "model": "gpt-6-sol",
+          "reasoning_effort": "high",
+          "input_per_million": "2.00",
+          "cached_input_per_million": "0.20",
+          "output_per_million": "10.00",
+          "input_cap_per_million": "5.00",
+          "output_cap_per_million": "15.00"
+        },
+        {
+          "id": "gpt-5.6-terra-high",
+          "label": "GPT-5.6 Terra \u00b7 High",
+          "provider": "openai",
+          "model": "gpt-5.6-terra",
+          "reasoning_effort": "high",
+          "input_per_million": "2.00",
+          "cached_input_per_million": "0.20",
+          "output_per_million": "12.00",
+          "input_cap_per_million": "5.00",
+          "output_cap_per_million": "18.00"
+        }
+      ],
+      "defaults": {
+        "planner": "gpt-6-luna-xhigh",
+        "scout": "gpt-6-luna-high",
+        "gap_analysis": "gpt-6-luna-xhigh",
+        "search_agent": "gpt-6-luna-xhigh",
+        "source_selection": "gpt-6-luna-xhigh",
+        "extractor": "gpt-6-luna-high",
+        "analyst": "gpt-6-luna-xhigh"
+      }
+    },
+    "model_ceilings": {
+      "max_physical_calls": 160,
+      "max_total_tokens": 500000,
+      "max_total_cost_usd": "0.20",
+      "policy_identity": "researchassistant-v2-phase-13-run-budget-analyzer-admission-v1"
+    },
+    "locale": {
+      "serp_country": null,
+      "serp_language": null,
+      "serp_location": null,
+      "reason": "Current adapter sends no location/language/country parameters; upstream defaults unknown."
+    },
+    "origins": {
+      "serpsearch": "https://api.serpsearch.com",
+      "exa": "https://api.exa.ai",
+      "openalex": "https://api.openalex.org",
+      "openai": "https://api.openai.com/v1"
+    },
+    "search_reservation_ceilings_usd": {
+      "serpsearch": "0.12",
+      "exa": "0.18",
+      "openalex": "0.01"
+    },
+    "physical_search_ceilings": {
+      "serpsearch": 12,
+      "exa": 18,
+      "openalex": 10
+    },
+    "acquisition": "Wigolo/local direct capture; paid Firecrawl and Crossref enrichment disabled for pilot.",
+    "price_basis": "Dated repository reservation assumptions; actual total/invoice costs unknown until physical receipts.",
+    "directions": {
+      "support_enabled": true,
+      "challenge_enabled": true
+    },
+    "completion_limits": {
+      "planner": 8192,
+      "scout": 4096,
+      "gap_analysis": 16384,
+      "search_agent": 8192,
+      "source_selection": 8192,
+      "extractor": 8192,
+      "analyst": 16384
+    }
+  },
+  "topics": [
+    {
+      "topic_id": "alpr-crime",
+      "split": "development",
+      "claim": "Automated license plate readers reduce vehicle theft in US cities.",
+      "rationale": "Public policy; causal outcomes, aliases and government reports; mixed/negative studies count.",
+      "short_query": "license plate readers vehicle theft evaluation",
+      "concepts": [
+        "license plate readers",
+        "vehicle theft"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "alpr-equity",
+      "split": "development",
+      "claim": "Automated license plate reader deployment disproportionately exposes minority neighborhoods to police surveillance.",
+      "rationale": "Distributional claim; distinguish deployment exposure from stops, arrests and causal discrimination.",
+      "short_query": "license plate reader deployment racial disparities study",
+      "concepts": [
+        "license plate readers",
+        "racial disparities"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "cbt-depression",
+      "split": "development",
+      "claim": "Cognitive behavioral therapy reduces depressive symptoms in adults compared with usual care.",
+      "rationale": "Biomedical trials/reviews; duplicates, effect sizes, risk of bias and inaccessible full text.",
+      "short_query": "cognitive behavioral therapy adult depression usual care trial",
+      "concepts": [
+        "cognitive behavioral therapy",
+        "depression"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "homework",
+      "split": "development",
+      "claim": "Homework improves academic achievement for primary school students.",
+      "rationale": "Null results and age-dependent effects; reviews share underlying studies.",
+      "short_query": "homework primary school achievement evidence",
+      "concepts": [
+        "homework",
+        "primary school"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "heat-pumps",
+      "split": "development",
+      "claim": "Residential air source heat pumps reduce annual household energy costs in cold climates.",
+      "rationale": "Engineering/policy; electricity and fuel prices, climate and installed system boundaries.",
+      "short_query": "air source heat pump cold climate household energy costs study",
+      "concepts": [
+        "air source heat pumps",
+        "cold climates"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "congestion",
+      "split": "development",
+      "claim": "Urban congestion pricing reduces traffic in the charging zone.",
+      "rationale": "Non-academic official reports and quasi experiments; spillovers and periods matter.",
+      "short_query": "congestion pricing traffic evaluation",
+      "concepts": [
+        "congestion pricing",
+        "traffic"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "school-start",
+      "split": "held_out",
+      "claim": "Later secondary school start times increase adolescents sleep duration.",
+      "rationale": "Held out: observational/confounded and repeated-cohort reports; never tune on these outcomes.",
+      "short_query": "later school start times adolescent sleep study",
+      "concepts": [
+        "school start times",
+        "adolescent sleep"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    },
+    {
+      "topic_id": "green-roofs",
+      "split": "held_out",
+      "claim": "Green roofs reduce urban building cooling energy use in summer.",
+      "rationale": "Held out: simulations versus measured buildings and climate sensitivity; readable technical sources.",
+      "short_query": "green roofs building cooling energy summer field study",
+      "concepts": [
+        "green roofs",
+        "cooling energy"
+      ],
+      "reference": {
+        "status": "pending",
+        "scope": "non_exhaustive",
+        "method": "Provisional assistant nominations are linked; not counted as useful references. Pending independent human reference construction: before looking at comparison output, freeze first ten organic URLs from one short ordinary Google query, plus up to five primary works nominated by a topic reviewer. Inspect full sources, record useful and irrelevant rationales, DOI/URL aliases and study relationships. Signed hash-locked reference artifact must precede scored observations. A pooled supplemental set is a separately versioned post-observation sensitivity analysis, never substituted for the preregistered set. This set is non-exhaustive; total useful sources on the web is unknown.",
+        "locked_at": null,
+        "reviewer": null,
+        "evidence": {
+          "path": "reference_nominations.json",
+          "sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+          "media_type": "application/json",
+          "role": "reference"
+        },
+        "works": []
+      }
+    }
+  ],
+  "observations": []
+}

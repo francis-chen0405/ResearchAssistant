@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "raw_response",
+            "snapshot",
+            "stage",
+            "request",
+            "judgment",
+            "reference"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type",
+        "role"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "work_id": {
+          "title": "Work Id",
+          "type": "string"
+        },
+        "urls": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Urls",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "work_id",
+        "urls",
+        "rationale"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Hash-bound scoring denominator and lock metadata; human evidence is separate.",
+  "properties": {
+    "schema_version": {
+      "const": "research-quality-reference-v1",
+      "default": "research-quality-reference-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "topic_id": {
+      "title": "Topic Id",
+      "type": "string"
+    },
+    "claim_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Claim Sha256",
+      "type": "string"
+    },
+    "scope": {
+      "enum": [
+        "non_exhaustive",
+        "exhaustive_fixture"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "method": {
+      "minLength": 1,
+      "title": "Method",
+      "type": "string"
+    },
+    "locked_at": {
+      "format": "date-time",
+      "title": "Locked At",
+      "type": "string"
+    },
+    "reviewer": {
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "works": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "minItems": 1,
+      "title": "Works",
+      "type": "array"
+    },
+    "supporting_evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Artifact"
+      },
+      "title": "Supporting Evidence",
+      "type": "array"
+    }
+  },
+  "required": [
+    "topic_id",
+    "claim_sha256",
+    "scope",
+    "method",
+    "locked_at",
+    "reviewer",
+    "works"
+  ],
+  "title": "FrozenReference",
+  "type": "object"
+}

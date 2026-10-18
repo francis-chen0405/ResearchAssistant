@@ -1,0 +1,39 @@
+from __future__ import annotations
+import hashlib
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+ROOT=Path.cwd()
+sys.path.insert(0,str(ROOT/'desktop'))
+import smoke
+from researchassistant.runtime.application_runtime import repository_identity
+resources=Path('/tmp/researchassistant-review-r56-r59-frozen/resources')
+identities: list[str]=[]
+original=smoke.BackendMonitor.startup
+def startup(self: object) -> str:
+    line=original(self)
+    data=json.loads(line)
+    if 'identity' in data:
+        identities.append(data['identity'])
+    return line
+smoke.BackendMonitor.startup=startup
+sys.argv=['smoke.py',str(resources)]
+smoke.main()
+assert len(identities)==2 and len(set(identities))==1
+executable=resources/'backend/researchassistant-backend'
+with tempfile.TemporaryDirectory(prefix='ra-frozen-dns-') as temporary:
+    result=subprocess.run([str(executable),'--dns-worker'],input=json.dumps({'hostname':'localhost'}),text=True,capture_output=True,cwd=temporary,env={'PATH':'','HOME':os.environ['HOME']},timeout=10,check=False)
+    assert result.returncode==0,result.stderr
+    assert all(ipaddress.ip_address(value).is_loopback for value in json.loads(result.stdout)['addresses'])
+prior=json.loads((ROOT/'docs/audits/2026-10-15/fix-evidence/frozen-artifact-r18.json').read_text())
+files={}
+for name in prior['files']:
+    path=resources/name
+    files[name]={'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
+artifact={'path':str(resources),'source_identity':repository_identity(),'frozen_identity':identities[0],'node_version':prior['node_version'],'files':files,'node_and_chromium_origin':prior['node_and_chromium_origin'],'scope':'R56–R59 backend and current frontend; frozen parent owns a localhost DNS worker in each smoke/cleanup process. Standalone frozen DNS dispatch also succeeds with empty PATH and unrelated cwd. No installer acceptance.'}
+Path('/tmp/ra-reviewed-frozen-artifact-r56-r59.json').write_text(json.dumps(artifact,indent=2)+'\n')
+print('PASS: frozen owned DNS parent/worker, empty-PATH dispatch and resource identity')

@@ -178,7 +178,9 @@ def test_pipeline_does_not_touch_network_or_provider_surfaces(
     assert result.status == "released"
     source_text = "\n".join(
         [
-            (_REPO_ROOT / "researchassistant/research/orchestrator.py").read_text(encoding="utf-8"),
+            (_REPO_ROOT / "backend/src/researchassistant/research/orchestrator.py").read_text(
+                encoding="utf-8"
+            ),
             (_REPO_ROOT / "cli.py").read_text(encoding="utf-8"),
         ]
     )

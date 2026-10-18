@@ -1,0 +1,39 @@
+"""Offline reproduction of the current query-scaling benchmark failure."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+
+def main() -> None:
+    result = subprocess.run(
+        [".venv/bin/python", "scripts/benchmark_database_query_scale.py"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    Path("/tmp/ra-review-query-scale.log").write_text(result.stderr, encoding="utf-8")
+    report = {
+        "finding": "R51",
+        "returncode": result.returncode,
+        "json_measurement_emitted": bool(result.stdout.strip()),
+        "inconsistent_migration_history": (
+            "schema migration records are incomplete or inconsistent" in result.stderr
+        ),
+        "failure_stage": "legacy browser reads the generated downgraded fixture",
+        "real_database_changes": 0,
+        "external_provider_calls": 0,
+    }
+    assert result.returncode == 1
+    assert report["inconsistent_migration_history"]
+    assert not report["json_measurement_emitted"]
+    Path("/tmp/ra-review-query-scale.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(report, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

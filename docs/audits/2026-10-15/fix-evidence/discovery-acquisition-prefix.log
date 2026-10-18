@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "owner": "v2_discovery",
+      "checkpoint": "phase-3-metadata-ranking-round-1",
+      "state": "failed",
+      "failure_reason": "IntegrityError: v2 artifact phase-3-metadata-ranking-round-1 already exists with different data",
+      "original_sidecar_unchanged": true,
+      "new_model_calls": 1,
+      "new_search_calls": 0
+    },
+    {
+      "owner": "v2_acquisition",
+      "checkpoint": "metadata-acquisition-v2-round-1",
+      "state": "failed",
+      "failure_reason": "IntegrityError: v2 artifact metadata-acquisition-v2-round-1 already exists with different data",
+      "original_sidecar_unchanged": true,
+      "new_model_calls": 0,
+      "new_search_calls": 0
+    }
+  ],
+  "method": "Advancing UTC clock; actual production interrupted immediately after committed ranking sidecar; identical-source resume without artifact edits. Generated offline providers only, no real data or credentials."
+}

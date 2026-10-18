@@ -1,0 +1,2900 @@
+{
+  "scope": "Current application/tooling/test code, active configuration, lockfiles and current test/evaluation/reference assets. Historical documentation, completed plans, archived snapshots and old result/verification records are excluded by the user; they are preserved, not manually rereviewed. Current compatibility code and fixtures remain in scope because they are exercised by current consumers/tests.",
+  "full_repository_manual_review_complete": false,
+  "fully_inspected_current_files": 708,
+  "fully_inspected_current_lines": 165063,
+  "remaining_original_files": 20,
+  "remaining_original_extensions": {
+    ".b64": 2,
+    ".json": 14,
+    ".md": 2,
+    ".ttf": 1,
+    ".yaml": 1
+  },
+  "unread_owned_source_code_paths": [],
+  "generated_lockfiles_need_remaining_data_review": [
+    "desktop/package-lock.json",
+    "desktop/acquisition/package-lock.json",
+    "frontend/pnpm-lock.yaml"
+  ],
+  "files": [
+    {
+      "path": "backend/src/researchassistant/evidence/fonts/unifont-15.0.01.ttf",
+      "current_sha256": "299459bc34e915b1c18dd38677739f41d0b2a6d79b93f480cd157ef24da675ab",
+      "starting_sha256": "299459bc34e915b1c18dd38677739f41d0b2a6d79b93f480cd157ef24da675ab",
+      "current_bytes": 12273948,
+      "starting_lines": 6530
+    },
+    {
+      "path": "desktop/acquisition/package-lock.json",
+      "current_sha256": "aecd036296f02cc1738e3c0563fc85b23836810de26feb7d13ef47a1ac524258",
+      "starting_sha256": "bafc89ef93d601607aa100475167b9804419dd8fbe463d2566898a96a113c084",
+      "current_bytes": 207245,
+      "starting_lines": 5907
+    },
+    {
+      "path": "desktop/package-lock.json",
+      "current_sha256": "c428d6d53e5258b6b485d9199e8766ec72f486909323109ac4fd5b6d37691511",
+      "starting_sha256": "c428d6d53e5258b6b485d9199e8766ec72f486909323109ac4fd5b6d37691511",
+      "current_bytes": 127504,
+      "starting_lines": 3597
+    },
+    {
+      "path": "docs/source-query-provider-reference.md",
+      "current_sha256": "7e94a527af9191097bfe667f5beb47901d39c7025daa0bceb202dd9207b0ec03",
+      "starting_sha256": "7e94a527af9191097bfe667f5beb47901d39c7025daa0bceb202dd9207b0ec03",
+      "current_bytes": 7823,
+      "starting_lines": 113
+    },
+    {
+      "path": "evaluations/cases/offline-corpus.json",
+      "current_sha256": "86611a646450995ba51fa2e8d047924d174e1bd62c3e4f320cc1d8f576bdbedc",
+      "starting_sha256": "86611a646450995ba51fa2e8d047924d174e1bd62c3e4f320cc1d8f576bdbedc",
+      "current_bytes": 15623,
+      "starting_lines": 454
+    },
+    {
+      "path": "evaluations/cases/research_quality/PROTOCOL.md",
+      "current_sha256": "e5ff3f5a84386aa54efa2fad0a5ab0ba72f48d6dd641eeb91f17451e567f3915",
+      "starting_sha256": "e5ff3f5a84386aa54efa2fad0a5ab0ba72f48d6dd641eeb91f17451e567f3915",
+      "current_bytes": 23043,
+      "starting_lines": 331
+    },
+    {
+      "path": "evaluations/cases/research_quality/fixture_bundle/manifest.json",
+      "current_sha256": "9435426f6333cf70998b9b46056fd09f81cb2df562218e370876e331182ab78e",
+      "starting_sha256": "9435426f6333cf70998b9b46056fd09f81cb2df562218e370876e331182ab78e",
+      "current_bytes": 19169,
+      "starting_lines": 580
+    },
+    {
+      "path": "evaluations/cases/research_quality/prepared.json",
+      "current_sha256": "28647eaa4ab95a06aec792d058216fa814472e5c45fd565fcc26009e093ede26",
+      "starting_sha256": "28647eaa4ab95a06aec792d058216fa814472e5c45fd565fcc26009e093ede26",
+      "current_bytes": 18303,
+      "starting_lines": 385
+    },
+    {
+      "path": "evaluations/cases/research_quality/queries.json",
+      "current_sha256": "beecb8c2bea9ae7f667d51555cd6aefe4ee4217f70160c966fc163905c732d38",
+      "starting_sha256": "beecb8c2bea9ae7f667d51555cd6aefe4ee4217f70160c966fc163905c732d38",
+      "current_bytes": 24249,
+      "starting_lines": 805
+    },
+    {
+      "path": "evaluations/cases/research_quality/reference-schema.json",
+      "current_sha256": "cdf3a6c05fd1eccdd4d9756497e1204721178732482a10f4c49b3fdb5b920678",
+      "starting_sha256": "cdf3a6c05fd1eccdd4d9756497e1204721178732482a10f4c49b3fdb5b920678",
+      "current_bytes": 2942,
+      "starting_lines": 141
+    },
+    {
+      "path": "evaluations/cases/research_quality/reference_nominations.json",
+      "current_sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+      "starting_sha256": "8fbcf96b0d0715230a1f0bf8b3cc0fe1b88b69e29bc8303d502ae217723e380d",
+      "current_bytes": 4083,
+      "starting_lines": 87
+    },
+    {
+      "path": "evaluations/cases/research_quality/schema.json",
+      "current_sha256": "ce6dd111edfdb4e46ff845e19385ca86f60b849640d660ef7e2b83d3c9bc501d",
+      "starting_sha256": "ce6dd111edfdb4e46ff845e19385ca86f60b849640d660ef7e2b83d3c9bc501d",
+      "current_bytes": 20428,
+      "starting_lines": 930
+    },
+    {
+      "path": "evaluations/cases/source_discovery/manifest.json",
+      "current_sha256": "bc1038d52ae027ed4e131a77257b29e8c9a81bd3cd522b9393127ebe58a42c67",
+      "starting_sha256": "bc1038d52ae027ed4e131a77257b29e8c9a81bd3cd522b9393127ebe58a42c67",
+      "current_bytes": 163682,
+      "starting_lines": 2292
+    },
+    {
+      "path": "frontend/pnpm-lock.yaml",
+      "current_sha256": "0093be6a8bf0730c07b53b7036aa05c0f04e06d3aa3bcb332a031b7ff62d6dc0",
+      "starting_sha256": "0093be6a8bf0730c07b53b7036aa05c0f04e06d3aa3bcb332a031b7ff62d6dc0",
+      "current_bytes": 130878,
+      "starting_lines": 3902
+    },
+    {
+      "path": "tests/fixtures/api-contract-before.json",
+      "current_sha256": "9bace49cc96edfcfe4a1c9dcce6511c17893d6a00140ca3fedf965b484584bbb",
+      "starting_sha256": "9bace49cc96edfcfe4a1c9dcce6511c17893d6a00140ca3fedf965b484584bbb",
+      "current_bytes": 172581,
+      "starting_lines": 6017
+    },
+    {
+      "path": "tests/fixtures/backend-hotspots-before.json",
+      "current_sha256": "53ff6a5e1f318125bed58bfedda66bb7b2e48ad6d4c1d5d7089844832528cef9",
+      "starting_sha256": "53ff6a5e1f318125bed58bfedda66bb7b2e48ad6d4c1d5d7089844832528cef9",
+      "current_bytes": 30296,
+      "starting_lines": 923
+    },
+    {
+      "path": "tests/fixtures/historical_reads/legacy-researcher-trails.json",
+      "current_sha256": "860390a9d36c5de33b76d02c8056519f9ac1dd3c5c7f3fd1fbf822a6fe056b82",
+      "starting_sha256": "860390a9d36c5de33b76d02c8056519f9ac1dd3c5c7f3fd1fbf822a6fe056b82",
+      "current_bytes": 213096,
+      "starting_lines": 4631
+    },
+    {
+      "path": "tests/fixtures/historical_reads/v2-prior-policy-artifacts.json",
+      "current_sha256": "4878ab8cc14132564ed0789c77406943d5b0717e5f6e585392aa8e4f01b506b8",
+      "starting_sha256": "4878ab8cc14132564ed0789c77406943d5b0717e5f6e585392aa8e4f01b506b8",
+      "current_bytes": 1069644,
+      "starting_lines": 96
+    },
+    {
+      "path": "tests/fixtures/mvp2b/digital.pdf.b64",
+      "current_sha256": "cfa7d8346f5a91f00d478f27f0f72fa5f1870f1ecb4ddff6f6d68876fb381ee5",
+      "starting_sha256": "cfa7d8346f5a91f00d478f27f0f72fa5f1870f1ecb4ddff6f6d68876fb381ee5",
+      "current_bytes": 821,
+      "starting_lines": 1
+    },
+    {
+      "path": "tests/fixtures/mvp2b/image_only.pdf.b64",
+      "current_sha256": "8cd344142eb098f4925391a0464418e7ad9358795a2ae0cae4b7366ad5b1e57c",
+      "starting_sha256": "8cd344142eb098f4925391a0464418e7ad9358795a2ae0cae4b7366ad5b1e57c",
+      "current_bytes": 577,
+      "starting_lines": 1
+    }
+  ],
+  "scope_change": {
+    "user_instruction": "we dont need to review historical files",
+    "previous_pending_count": 365,
+    "historical_records_excluded": 341,
+    "previously_read_current_guidance_credited": 4,
+    "current_pending_count": 20
+  },
+  "excluded_historical_files": [
+    {
+      "path": ".agent/plans/adaptive-search-reliability.md",
+      "current_sha256": "b706ec1df7de8ad9ff093905256034a4256b72ae7d70edb2f6b30c50543a01fd",
+      "starting_sha256": "b706ec1df7de8ad9ff093905256034a4256b72ae7d70edb2f6b30c50543a01fd",
+      "current_bytes": 18774,
+      "starting_lines": 270,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/audit-maintenance.md",
+      "current_sha256": "1d4a96a0b781ab6f8bb3ac3fbda29855998da962be00fecc3fbc0a866073ffe0",
+      "starting_sha256": "1d4a96a0b781ab6f8bb3ac3fbda29855998da962be00fecc3fbc0a866073ffe0",
+      "current_bytes": 3339,
+      "starting_lines": 27,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/comprehensive-code-audit-2026-10-01.md",
+      "current_sha256": "d2df69f692c9a79413f973893015475f93abe5138a3698079b55f1c47a85ac70",
+      "starting_sha256": "d2df69f692c9a79413f973893015475f93abe5138a3698079b55f1c47a85ac70",
+      "current_bytes": 5144,
+      "starting_lines": 84,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/database-integrity-fixes.md",
+      "current_sha256": "f535d9fc517b86bb5b45cd30aed8c4907db5b1d0831266418529fabf4d1eb752",
+      "starting_sha256": "f535d9fc517b86bb5b45cd30aed8c4907db5b1d0831266418529fabf4d1eb752",
+      "current_bytes": 2176,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/database-review-2026-10-03.md",
+      "current_sha256": "84db6da3740e1b2f12e252c11d7eeb15b7db8b0c962d98db3ae364eff1d8e820",
+      "starting_sha256": "84db6da3740e1b2f12e252c11d7eeb15b7db8b0c962d98db3ae364eff1d8e820",
+      "current_bytes": 51395,
+      "starting_lines": 325,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/deep-analysis-deterministic-concurrency.md",
+      "current_sha256": "7c6c5d4541974100547cf0c634f54e601e1a620762d0ab0fd2b86e03028e0d9f",
+      "starting_sha256": "7c6c5d4541974100547cf0c634f54e601e1a620762d0ab0fd2b86e03028e0d9f",
+      "current_bytes": 3704,
+      "starting_lines": 65,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/explicit-pipeline-selection.md",
+      "current_sha256": "df0d8561ad6ea4685a0bde31d5fa28d849e798b6d99160b1d6944aefa293d2eb",
+      "starting_sha256": "df0d8561ad6ea4685a0bde31d5fa28d849e798b6d99160b1d6944aefa293d2eb",
+      "current_bytes": 3222,
+      "starting_lines": 54,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/install-audited-mac-app-2026-10-01.md",
+      "current_sha256": "4f3a26495ad8af45e1232b1a1e320818a19dbb49db703edd000677ff470d16ea",
+      "starting_sha256": "4f3a26495ad8af45e1232b1a1e320818a19dbb49db703edd000677ff470d16ea",
+      "current_bytes": 3188,
+      "starting_lines": 51,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/mac-current-build-release-verification-2026-09-28.md",
+      "current_sha256": "818e7e828137e98e4bfbd086532db1449cf0a04aab031c91bd2ec686b7d15630",
+      "starting_sha256": "818e7e828137e98e4bfbd086532db1449cf0a04aab031c91bd2ec686b7d15630",
+      "current_bytes": 2283,
+      "starting_lines": 36,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/mac-delivery-gates-2026-10-13.md",
+      "current_sha256": "c3ea9cdb4f7194328be5f8bc6e30cd8351f0c7488fdbbbd487f5bb78d3b1a175",
+      "starting_sha256": "c3ea9cdb4f7194328be5f8bc6e30cd8351f0c7488fdbbbd487f5bb78d3b1a175",
+      "current_bytes": 4156,
+      "starting_lines": 60,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/mac-release-cache-pricing.md",
+      "current_sha256": "44c7c0682cba107265e8bf07760c4221f79ace7f8c09e1af6f634d02577a480b",
+      "starting_sha256": "44c7c0682cba107265e8bf07760c4221f79ace7f8c09e1af6f634d02577a480b",
+      "current_bytes": 5282,
+      "starting_lines": 81,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/mlp-readiness.md",
+      "current_sha256": "bb3b4ce40e49a9509f910e6b6c955d9abe614882be347556db3454d6e4e0c9f2",
+      "starting_sha256": "bb3b4ce40e49a9509f910e6b6c955d9abe614882be347556db3454d6e4e0c9f2",
+      "current_bytes": 7869,
+      "starting_lines": 112,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/neutral-evidence-ownership.md",
+      "current_sha256": "b0fd6bc86b0daa30a691f64c850336220184ab552616712d5a0905fdb2fe567e",
+      "starting_sha256": "b0fd6bc86b0daa30a691f64c850336220184ab552616712d5a0905fdb2fe567e",
+      "current_bytes": 2571,
+      "starting_lines": 49,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/per-step-model-choices.md",
+      "current_sha256": "c40671a009df2ddfc6c2fbf52b94b3e8621aca7fa844b9437f63b536cadc4322",
+      "starting_sha256": "c40671a009df2ddfc6c2fbf52b94b3e8621aca7fa844b9437f63b536cadc4322",
+      "current_bytes": 4416,
+      "starting_lines": 68,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-00-foundation.md",
+      "current_sha256": "21c3c8054d13428e52fdf3613aff202f3f14fc74f15c6698351f13e63346677e",
+      "starting_sha256": "21c3c8054d13428e52fdf3613aff202f3f14fc74f15c6698351f13e63346677e",
+      "current_bytes": 2625,
+      "starting_lines": 55,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-01-models.md",
+      "current_sha256": "bf7f67014c6117841a62e6b2b76368b40b570aed5b82cfc1eb00fab97897b5cd",
+      "starting_sha256": "bf7f67014c6117841a62e6b2b76368b40b570aed5b82cfc1eb00fab97897b5cd",
+      "current_bytes": 2028,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-02-store.md",
+      "current_sha256": "a2f98798f8653c7b035f983013e777a1cc3f9c195c121e5778485aad68305ea3",
+      "starting_sha256": "a2f98798f8653c7b035f983013e777a1cc3f9c195c121e5778485aad68305ea3",
+      "current_bytes": 3498,
+      "starting_lines": 63,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-03-snapshot-integrity.md",
+      "current_sha256": "267d03d631f09228b570aed092ebbef95e2f6545ad547299081baddcd4e84b6b",
+      "starting_sha256": "267d03d631f09228b570aed092ebbef95e2f6545ad547299081baddcd4e84b6b",
+      "current_bytes": 3659,
+      "starting_lines": 86,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-04-ledger-admission.md",
+      "current_sha256": "005890aa9d7c48e938e8a994d38da5c1a2ed5208262d591df113b32c760ecdad",
+      "starting_sha256": "005890aa9d7c48e938e8a994d38da5c1a2ed5208262d591df113b32c760ecdad",
+      "current_bytes": 7198,
+      "starting_lines": 189,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-05-release-gate.md",
+      "current_sha256": "5d48990403aa1c08eda1b5b7e12db01c313e3e9372391925082ea944dbae6d0f",
+      "starting_sha256": "5d48990403aa1c08eda1b5b7e12db01c313e3e9372391925082ea944dbae6d0f",
+      "current_bytes": 5602,
+      "starting_lines": 133,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-06-fixture-pipeline.md",
+      "current_sha256": "ae460ee8c8fd024ae628e136c995f5ee9c54ef8adc1e57428a48e2c4311fb8d6",
+      "starting_sha256": "ae460ee8c8fd024ae628e136c995f5ee9c54ef8adc1e57428a48e2c4311fb8d6",
+      "current_bytes": 6891,
+      "starting_lines": 173,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-07-retrieval.md",
+      "current_sha256": "eb3d00c880c1f326887918a0508f971648fd03ebd1b41f194f0c504e428a9240",
+      "starting_sha256": "eb3d00c880c1f326887918a0508f971648fd03ebd1b41f194f0c504e428a9240",
+      "current_bytes": 8450,
+      "starting_lines": 168,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-07a-local-frontend.md",
+      "current_sha256": "75ab5746475d0cdb563171aa9e91ec044efc3d52b1565c22be2e29da759426b2",
+      "starting_sha256": "75ab5746475d0cdb563171aa9e91ec044efc3d52b1565c22be2e29da759426b2",
+      "current_bytes": 4142,
+      "starting_lines": 129,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-08-llm-integration.md",
+      "current_sha256": "2a0b92160dc382488feccb8e724770548afad021fa3584f003b884754e6b7d0e",
+      "starting_sha256": "2a0b92160dc382488feccb8e724770548afad021fa3584f003b884754e6b7d0e",
+      "current_bytes": 9688,
+      "starting_lines": 188,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-09-orchestration.md",
+      "current_sha256": "2d1aedfaee904f27ad67d0eda65183a6b82182cd0ecadc5aa2013b89ba52dcbc",
+      "starting_sha256": "2d1aedfaee904f27ad67d0eda65183a6b82182cd0ecadc5aa2013b89ba52dcbc",
+      "current_bytes": 9501,
+      "starting_lines": 167,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-1-desktop.md",
+      "current_sha256": "17c023d2a6fdccff0195bad1ea9ee7c122ae06de79c578764e8dee70c4224323",
+      "starting_sha256": "17c023d2a6fdccff0195bad1ea9ee7c122ae06de79c578764e8dee70c4224323",
+      "current_bytes": 6824,
+      "starting_lines": 117,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-10-evaluation.md",
+      "current_sha256": "1e86402904f4401762044167a6a6ff68a89d4041c72c7525e0b558c46fa36660",
+      "starting_sha256": "1e86402904f4401762044167a6a6ff68a89d4041c72c7525e0b558c46fa36660",
+      "current_bytes": 7722,
+      "starting_lines": 157,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-2-cleanup.md",
+      "current_sha256": "5a1b1a46411622e20e2ed074deb07fe88f37686da40859488c1de715c938998e",
+      "starting_sha256": "5a1b1a46411622e20e2ed074deb07fe88f37686da40859488c1de715c938998e",
+      "current_bytes": 6327,
+      "starting_lines": 95,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-3-frontend-settings.md",
+      "current_sha256": "0339865bcc6d71e5b4cd6f47db833672059629ccecbc9ae8e521a65ef554bba6",
+      "starting_sha256": "0339865bcc6d71e5b4cd6f47db833672059629ccecbc9ae8e521a65ef554bba6",
+      "current_bytes": 7265,
+      "starting_lines": 112,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mlp-1-simplified-live-experience.md",
+      "current_sha256": "a245364fd599a5c9040de69734946dfae1f5b68ddce4e7f2518606ccaf7f2654",
+      "starting_sha256": "a245364fd599a5c9040de69734946dfae1f5b68ddce4e7f2518606ccaf7f2654",
+      "current_bytes": 1717,
+      "starting_lines": 37,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mlp-2-local-product-experience.md",
+      "current_sha256": "5dec6b5ba0a200176925c5fa9048b6110a1c8e8c638cabf81272d3cb76e713f0",
+      "starting_sha256": "5dec6b5ba0a200176925c5fa9048b6110a1c8e8c638cabf81272d3cb76e713f0",
+      "current_bytes": 2544,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mlp-3-nextjs-product-rebuild.md",
+      "current_sha256": "d8a64c166aad0d1c6e006b02a2337ed7587a32c9fec3c81c1870929c8545de4a",
+      "starting_sha256": "d8a64c166aad0d1c6e006b02a2337ed7587a32c9fec3c81c1870929c8545de4a",
+      "current_bytes": 7354,
+      "starting_lines": 139,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mlp-4-research-quality-openalex.md",
+      "current_sha256": "48af354dd2e7d3ce0038594a92eb4eb3167b13865381a7c9bf9ff6c28a500873",
+      "starting_sha256": "48af354dd2e7d3ce0038594a92eb4eb3167b13865381a7c9bf9ff6c28a500873",
+      "current_bytes": 12279,
+      "starting_lines": 225,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mlp-5-provider-selection-serpsearch.md",
+      "current_sha256": "0d50f0d97ea3228024aa5f255522569ffb3753117f23f9c8d3542fdd78d02e20",
+      "starting_sha256": "0d50f0d97ea3228024aa5f255522569ffb3753117f23f9c8d3542fdd78d02e20",
+      "current_bytes": 2543,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-1-release-contract-correctness.md",
+      "current_sha256": "36b208d3b43b9aefac64c5429f0a296318b304e2044ce266a849399a604b48fb",
+      "starting_sha256": "36b208d3b43b9aefac64c5429f0a296318b304e2044ce266a849399a604b48fb",
+      "current_bytes": 4144,
+      "starting_lines": 96,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-10-evidence-portfolio-trail.md",
+      "current_sha256": "3ee81a1df87002780bc884d465c3d3c2dbe0b5fedf9b97b3bbf907d7dc9c315a",
+      "starting_sha256": "3ee81a1df87002780bc884d465c3d3c2dbe0b5fedf9b97b3bbf907d7dc9c315a",
+      "current_bytes": 2239,
+      "starting_lines": 25,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-11-research-governor.md",
+      "current_sha256": "b080fb80a2a8c7cc4022c38c596f02ee8a7508c68e0a19803cc51e1dcf33cd66",
+      "starting_sha256": "b080fb80a2a8c7cc4022c38c596f02ee8a7508c68e0a19803cc51e1dcf33cd66",
+      "current_bytes": 3219,
+      "starting_lines": 54,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-2a-architecture-gate.md",
+      "current_sha256": "f0ba670a10e66f73d578475a19ac8f24ea920b76bbcaadaf08b028df56fd42c6",
+      "starting_sha256": "f0ba670a10e66f73d578475a19ac8f24ea920b76bbcaadaf08b028df56fd42c6",
+      "current_bytes": 19229,
+      "starting_lines": 317,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-2b-production-provider-boundaries.md",
+      "current_sha256": "1f6e3f8ae5b1a1387f5d6470090539943130ce1905b516fed18208b264d27e11",
+      "starting_sha256": "1f6e3f8ae5b1a1387f5d6470090539943130ce1905b516fed18208b264d27e11",
+      "current_bytes": 9461,
+      "starting_lines": 184,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-3a-mocked-full-provider-pipeline.md",
+      "current_sha256": "39266a8ed2a40560ea01e7a7dfaccdf4a9d74329047df8d557d4ab66f83080ed",
+      "starting_sha256": "39266a8ed2a40560ea01e7a7dfaccdf4a9d74329047df8d557d4ab66f83080ed",
+      "current_bytes": 4931,
+      "starting_lines": 98,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-3b-live-canary-stabilization.md",
+      "current_sha256": "16991e13bd361a93b29a2aec8e2219ea8342bc029a41e96b2b60cc29daad3789",
+      "starting_sha256": "16991e13bd361a93b29a2aec8e2219ea8342bc029a41e96b2b60cc29daad3789",
+      "current_bytes": 3572,
+      "starting_lines": 66,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-4-live-cli-release.md",
+      "current_sha256": "5aad81562f893d7b526359ea13954a335acda8f36f6d51a93802763698b2fe52",
+      "starting_sha256": "5aad81562f893d7b526359ea13954a335acda8f36f6d51a93802763698b2fe52",
+      "current_bytes": 5403,
+      "starting_lines": 98,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-5-scheduled-live-validation.md",
+      "current_sha256": "7d77fbef64f34dfc8b98ba3f491be77165e1caa4a3c7c44b06be4281742aa633",
+      "starting_sha256": "7d77fbef64f34dfc8b98ba3f491be77165e1caa4a3c7c44b06be4281742aa633",
+      "current_bytes": 10390,
+      "starting_lines": 174,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-2-integrity-provenance-runtime-contract-hardening.md",
+      "current_sha256": "9a9479b115abdf5970b7f1b5bf30287868d06e38a149455ffbb0379894053ade",
+      "starting_sha256": "9a9479b115abdf5970b7f1b5bf30287868d06e38a149455ffbb0379894053ade",
+      "current_bytes": 2604,
+      "starting_lines": 48,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-3-public-acquisition-provenance-security.md",
+      "current_sha256": "c90b2dea0ea9e504b08db12b760674a404fe882962a190b8236720936dd15c48",
+      "starting_sha256": "c90b2dea0ea9e504b08db12b760674a404fe882962a190b8236720936dd15c48",
+      "current_bytes": 5218,
+      "starting_lines": 90,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-4-evidence-density-threshold-calibration.md",
+      "current_sha256": "84853e358bb0c33f5054490d49cbbe3d12d6ce800fba9016b9ad0d3d5fd31663",
+      "starting_sha256": "84853e358bb0c33f5054490d49cbbe3d12d6ce800fba9016b9ad0d3d5fd31663",
+      "current_bytes": 4567,
+      "starting_lines": 80,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-5-immutable-run-authority-read-only-inspection.md",
+      "current_sha256": "0d4d0e69c9c3116d758aa3e0afa3d1c088151374320ea1cab118600001e2f5ad",
+      "starting_sha256": "0d4d0e69c9c3116d758aa3e0afa3d1c088151374320ea1cab118600001e2f5ad",
+      "current_bytes": 4030,
+      "starting_lines": 70,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-6-runtime-status-budget-contract-integrity.md",
+      "current_sha256": "b4fa701868a0e8ed1431b82d94597bb01feff8697d2509998e8803b53a67d39f",
+      "starting_sha256": "b4fa701868a0e8ed1431b82d94597bb01feff8697d2509998e8803b53a67d39f",
+      "current_bytes": 5219,
+      "starting_lines": 86,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-7-repository-wide-type-contract-enforcement.md",
+      "current_sha256": "832d51fde3802244e2e329f6cb4d9dda671e7190e1ed3b86942bba1c0bf6e604",
+      "starting_sha256": "832d51fde3802244e2e329f6cb4d9dda671e7190e1ed3b86942bba1c0bf6e604",
+      "current_bytes": 4105,
+      "starting_lines": 72,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-8-persistence-accounting-integrity.md",
+      "current_sha256": "937b7ebd0ed62c4fda0dc98531835a02692961e793b0dbfb22c7c77300314eee",
+      "starting_sha256": "937b7ebd0ed62c4fda0dc98531835a02692961e793b0dbfb22c7c77300314eee",
+      "current_bytes": 4322,
+      "starting_lines": 80,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-6-9-acquisition-configuration-integrity.md",
+      "current_sha256": "61eb475e45604f02fb4cd37adbf3a58495777e44e420df39e3149a868055ffee",
+      "starting_sha256": "61eb475e45604f02fb4cd37adbf3a58495777e44e420df39e3149a868055ffee",
+      "current_bytes": 5108,
+      "starting_lines": 89,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-8-1-research-controls.md",
+      "current_sha256": "bca7167c0146e9d705199c9a2cef59d581960a9bab4d9abcf0e5d22aaa9164d6",
+      "starting_sha256": "bca7167c0146e9d705199c9a2cef59d581960a9bab4d9abcf0e5d22aaa9164d6",
+      "current_bytes": 3698,
+      "starting_lines": 67,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-8-2-evidence-browser.md",
+      "current_sha256": "867fc817e8a3047af44826f6e64d7e1d7d8db4ce78384385c1621be47d10815d",
+      "starting_sha256": "867fc817e8a3047af44826f6e64d7e1d7d8db4ce78384385c1621be47d10815d",
+      "current_bytes": 3612,
+      "starting_lines": 68,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-8-briefs-export-performance.md",
+      "current_sha256": "e920b69a145c3a57a23ad7c76650f3cfb55428682cfc47f9990702a0215ea54d",
+      "starting_sha256": "e920b69a145c3a57a23ad7c76650f3cfb55428682cfc47f9990702a0215ea54d",
+      "current_bytes": 3138,
+      "starting_lines": 59,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-mvp-9-verified-quote-selection-deterministic-assembly.md",
+      "current_sha256": "fe6df260027c30ee89a72349f8c805144acf90d0d7704b211cc4d83f611016e2",
+      "starting_sha256": "fe6df260027c30ee89a72349f8c805144acf90d0d7704b211cc4d83f611016e2",
+      "current_bytes": 3956,
+      "starting_lines": 73,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-02-multi-model-routing.md",
+      "current_sha256": "e7a2fbdeb822a08b7bb4aefa660ad779cccba8dc837f794a82db950e8ec416c5",
+      "starting_sha256": "e7a2fbdeb822a08b7bb4aefa660ad779cccba8dc837f794a82db950e8ec416c5",
+      "current_bytes": 2242,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-04-discovery-providers-normalization-clustering-scout.md",
+      "current_sha256": "b228b892124f27d5239fae8497313b473a07fddb341abaa9942d7823ad6304a8",
+      "starting_sha256": "b228b892124f27d5239fae8497313b473a07fddb341abaa9942d7823ad6304a8",
+      "current_bytes": 2177,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-05-acquisition-snapshots-probe-survivors.md",
+      "current_sha256": "bd13d3b2b52bbc664ac2099ed6808e2475916d041a1dfdb740eb1c0b5ff5840f",
+      "starting_sha256": "bd13d3b2b52bbc664ac2099ed6808e2475916d041a1dfdb740eb1c0b5ff5840f",
+      "current_bytes": 1786,
+      "starting_lines": 32,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-06-luna-gap-analysis.md",
+      "current_sha256": "cca3ba384c744b7dd3e102411737474c8e0714229e86b14c98c8eaf9e8a7df09",
+      "starting_sha256": "cca3ba384c744b7dd3e102411737474c8e0714229e86b14c98c8eaf9e8a7df09",
+      "current_bytes": 1871,
+      "starting_lines": 33,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-07-adaptive-search-continuation.md",
+      "current_sha256": "3fd4855f17e33166e4cd2609ecac619478d85de3283749b38a511ac9b3ea3205",
+      "starting_sha256": "3fd4855f17e33166e4cd2609ecac619478d85de3283749b38a511ac9b3ea3205",
+      "current_bytes": 2174,
+      "starting_lines": 38,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-08-source-selection-deep-analysis-queue.md",
+      "current_sha256": "26d1adabee77c5fc2b5a811b2bb6081aaac786d48e5e19139f80e20cc6de62ba",
+      "starting_sha256": "26d1adabee77c5fc2b5a811b2bb6081aaac786d48e5e19139f80e20cc6de62ba",
+      "current_bytes": 3199,
+      "starting_lines": 50,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-09-luna-evidence-analyst.md",
+      "current_sha256": "50a759163ae23664ac6956fc3299ce4da32bf515b302d75c80648056360b1a69",
+      "starting_sha256": "50a759163ae23664ac6956fc3299ce4da32bf515b302d75c80648056360b1a69",
+      "current_bytes": 3245,
+      "starting_lines": 52,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-10-reviewer-ledger-integration.md",
+      "current_sha256": "6c8fb3321b9fa96e4077ddbe477de72fcf4fff0965d69aba8aad91494f6bb799",
+      "starting_sha256": "6c8fb3321b9fa96e4077ddbe477de72fcf4fff0965d69aba8aad91494f6bb799",
+      "current_bytes": 2521,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-11-synthesis-final-output.md",
+      "current_sha256": "36ad4425444e6c7781e5c4abfa7ad07989b40f39244fe56d21e6205ddf6c1526",
+      "starting_sha256": "36ad4425444e6c7781e5c4abfa7ad07989b40f39244fe56d21e6205ddf6c1526",
+      "current_bytes": 1789,
+      "starting_lines": 32,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-12-production-hardening-cutover.md",
+      "current_sha256": "e06d9b14ca4db231fc3c398d82c1c733487037cd144104ca8a5a925b8a25d7e5",
+      "starting_sha256": "e06d9b14ca4db231fc3c398d82c1c733487037cd144104ca8a5a925b8a25d7e5",
+      "current_bytes": 3427,
+      "starting_lines": 59,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-13-analyzer-admission-cutover.md",
+      "current_sha256": "07e09aef1f50af2f55df56a90178af4657f745d4ab7150b6c28ac19bfffe5d93",
+      "starting_sha256": "07e09aef1f50af2f55df56a90178af4657f745d4ab7150b6c28ac19bfffe5d93",
+      "current_bytes": 2628,
+      "starting_lines": 48,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/phase-v2-14-conditional-round-four.md",
+      "current_sha256": "7a92bf0bd630b16094e6d82717d5f4a108c4cb7062adb9393a439d010a0d266e",
+      "starting_sha256": "7a92bf0bd630b16094e6d82717d5f4a108c4cb7062adb9393a439d010a0d266e",
+      "current_bytes": 5077,
+      "starting_lines": 73,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/private-surveillance-run-fixes-2026-10-02.md",
+      "current_sha256": "a24d5f8b095ce1400001d529a410888b268fdbff29d9879f7a1435c75219e621",
+      "starting_sha256": "a24d5f8b095ce1400001d529a410888b268fdbff29d9879f7a1435c75219e621",
+      "current_bytes": 4758,
+      "starting_lines": 31,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/repository-review-2026-10-08.md",
+      "current_sha256": "07d0f486e78592c8330b80371b2171d10d3be6140cd37cb337569c4f45d2bcc7",
+      "starting_sha256": "07d0f486e78592c8330b80371b2171d10d3be6140cd37cb337569c4f45d2bcc7",
+      "current_bytes": 6220,
+      "starting_lines": 77,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/research-quality-acceptance-2026-10-11.md",
+      "current_sha256": "fa49ec955dbbef4ab55508345da30c5a9368dc751b362ca4d80280be4fc576f5",
+      "starting_sha256": "fa49ec955dbbef4ab55508345da30c5a9368dc751b362ca4d80280be4fc576f5",
+      "current_bytes": 9461,
+      "starting_lines": 140,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/reviewer-route-testing-fix-2026-10-01.md",
+      "current_sha256": "dbaac8178f52acabc59ed925ec0405f31f57c558e488e468f1532c70f7443f0b",
+      "starting_sha256": "dbaac8178f52acabc59ed925ec0405f31f57c558e488e468f1532c70f7443f0b",
+      "current_bytes": 2351,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/source-discovery-v2-2026-10-05.md",
+      "current_sha256": "00033318c0fd5a851c1a45c6442cbe88a8503cc270c482896a073a53157fe8f8",
+      "starting_sha256": "00033318c0fd5a851c1a45c6442cbe88a8503cc270c482896a073a53157fe8f8",
+      "current_bytes": 94626,
+      "starting_lines": 835,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/source-leads-quality-2026-10-13.md",
+      "current_sha256": "ec6392496cf53a604e3ca62b6dd4fc7ff616185996608cde4be87533b029fd1a",
+      "starting_sha256": "ec6392496cf53a604e3ca62b6dd4fc7ff616185996608cde4be87533b029fd1a",
+      "current_bytes": 11335,
+      "starting_lines": 157,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/sqlite-status-polling.md",
+      "current_sha256": "edfa81e53b1678155959c4b522334baff97e7c892991d54e766f455bcad1290b",
+      "starting_sha256": "edfa81e53b1678155959c4b522334baff97e7c892991d54e766f455bcad1290b",
+      "current_bytes": 3285,
+      "starting_lines": 56,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/validator-and-current-docs-2026-10-02.md",
+      "current_sha256": "a992c2728c0b5c72327f826932b7ab46dc67ed888ea8206aadc1699f6d10dc69",
+      "starting_sha256": "a992c2728c0b5c72327f826932b7ab46dc67ed888ea8206aadc1699f6d10dc69",
+      "current_bytes": 12124,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": ".agent/plans/windows-ci-durability-2026-10-13.md",
+      "current_sha256": "d869d5b6a01589f27a39889f21587762e2b46badef32186b6c5cf50874c0136b",
+      "starting_sha256": "d869d5b6a01589f27a39889f21587762e2b46badef32186b6c5cf50874c0136b",
+      "current_bytes": 2790,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/.agent/PLANS.md",
+      "current_sha256": "a3c3abf09a23fa8f0ea9df5dd811e794e8b062846335b7187a4348ad93bad6f7",
+      "starting_sha256": "a3c3abf09a23fa8f0ea9df5dd811e794e8b062846335b7187a4348ad93bad6f7",
+      "current_bytes": 3949,
+      "starting_lines": 57,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/.agent/plans/mac-release-cache-pricing.md",
+      "current_sha256": "e760443a59f0b303cc8cfc76daf14fe34af8c968616e9808d2ad385719986532",
+      "starting_sha256": "e760443a59f0b303cc8cfc76daf14fe34af8c968616e9808d2ad385719986532",
+      "current_bytes": 5186,
+      "starting_lines": 80,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/AGENTS.md",
+      "current_sha256": "42c9759ecfe8174fcef314a1efe585d9261cee5ece06ed32956f9f2a5e543e38",
+      "starting_sha256": "42c9759ecfe8174fcef314a1efe585d9261cee5ece06ed32956f9f2a5e543e38",
+      "current_bytes": 4710,
+      "starting_lines": 58,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/ARCHITECTURE.md",
+      "current_sha256": "b39ddc5da7eebb3350a1b3dcab918eab94ad46c5f517fcc4fef13679c0367728",
+      "starting_sha256": "b39ddc5da7eebb3350a1b3dcab918eab94ad46c5f517fcc4fef13679c0367728",
+      "current_bytes": 19429,
+      "starting_lines": 276,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/CONVENTIONS.md",
+      "current_sha256": "9e047c0d08c4bd6b1c49ffd5127b449360f02cbaa1c95001f4c77dce358e5bc2",
+      "starting_sha256": "9e047c0d08c4bd6b1c49ffd5127b449360f02cbaa1c95001f4c77dce358e5bc2",
+      "current_bytes": 6749,
+      "starting_lines": 99,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/DECISIONS.md",
+      "current_sha256": "85badf5dae291fe09c504a82e8ac0bd05e0cc34a63177e529f10cbcc8db1c7b1",
+      "starting_sha256": "85badf5dae291fe09c504a82e8ac0bd05e0cc34a63177e529f10cbcc8db1c7b1",
+      "current_bytes": 11670,
+      "starting_lines": 177,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/HANDOFF.md",
+      "current_sha256": "cbc01dd6e4bf57b3088fef605da7e39860d67e5a7c0b6e525e6927dad39a0ffe",
+      "starting_sha256": "cbc01dd6e4bf57b3088fef605da7e39860d67e5a7c0b6e525e6927dad39a0ffe",
+      "current_bytes": 24634,
+      "starting_lines": 379,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/README.md",
+      "current_sha256": "c4216365aebbffe5220d6f7d0f6bd4d9b82e0b19a0581d64d0787c6bf63f6fe5",
+      "starting_sha256": "c4216365aebbffe5220d6f7d0f6bd4d9b82e0b19a0581d64d0787c6bf63f6fe5",
+      "current_bytes": 3740,
+      "starting_lines": 67,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/STATUS.md",
+      "current_sha256": "fe7b2c128b89b52e0229a9f1350afc02446b88a33e07db1ca96c8ab267240ce6",
+      "starting_sha256": "fe7b2c128b89b52e0229a9f1350afc02446b88a33e07db1ca96c8ab267240ce6",
+      "current_bytes": 22588,
+      "starting_lines": 342,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-09-26-maintenance/docs/verification/planner-scout-reliability.md",
+      "current_sha256": "6f32ddd1a746c32dec309203e361f99a5250067d9ebda6d86c4db1305415ec46",
+      "starting_sha256": "6f32ddd1a746c32dec309203e361f99a5250067d9ebda6d86c4db1305415ec46",
+      "current_bytes": 5383,
+      "starting_lines": 84,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/.agent/PLANS.md",
+      "current_sha256": "8a8698885e876904a720103922c276853cf71d1501c777d2ab967c9b1e8cd8f6",
+      "starting_sha256": "8a8698885e876904a720103922c276853cf71d1501c777d2ab967c9b1e8cd8f6",
+      "current_bytes": 16414,
+      "starting_lines": 183,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/AGENTS.md",
+      "current_sha256": "034297fbe937624c2ddfb11c30d95bc5761e8202c30b9df2432cccf28718de85",
+      "starting_sha256": "034297fbe937624c2ddfb11c30d95bc5761e8202c30b9df2432cccf28718de85",
+      "current_bytes": 8685,
+      "starting_lines": 58,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/ARCHITECTURE.md",
+      "current_sha256": "40455bba078d4d1207e9aefaea0f2945bf6b0ff0977b0b04195cf9e4b31b61b7",
+      "starting_sha256": "40455bba078d4d1207e9aefaea0f2945bf6b0ff0977b0b04195cf9e4b31b61b7",
+      "current_bytes": 10304,
+      "starting_lines": 76,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/CONVENTIONS.md",
+      "current_sha256": "188d9ae700ca12c4939063ed1085a1fac3c5980f77df0790ba9ca73b1a69671d",
+      "starting_sha256": "188d9ae700ca12c4939063ed1085a1fac3c5980f77df0790ba9ca73b1a69671d",
+      "current_bytes": 4278,
+      "starting_lines": 31,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/DECISIONS.md",
+      "current_sha256": "c3b3a0e1cff9fcb8cb7da15634ed204cc409eb7c7760a206c7f214b8f8329d9a",
+      "starting_sha256": "c3b3a0e1cff9fcb8cb7da15634ed204cc409eb7c7760a206c7f214b8f8329d9a",
+      "current_bytes": 7987,
+      "starting_lines": 44,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/HANDOFF.md",
+      "current_sha256": "f38e719e285bf9dd5ebbfacdba0628b96ad44743dd1ed55fd529d8ad7a02d50c",
+      "starting_sha256": "f38e719e285bf9dd5ebbfacdba0628b96ad44743dd1ed55fd529d8ad7a02d50c",
+      "current_bytes": 23093,
+      "starting_lines": 249,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/README.md",
+      "current_sha256": "393115a5507339036395fa8bf6e4d4c85570bde61f740229d0683282513a56b8",
+      "starting_sha256": "393115a5507339036395fa8bf6e4d4c85570bde61f740229d0683282513a56b8",
+      "current_bytes": 3548,
+      "starting_lines": 39,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/STATUS.md",
+      "current_sha256": "0b92f73cae2bce279faa1d19e38833bcc2c997ed6196045f3a16613e286f16ce",
+      "starting_sha256": "0b92f73cae2bce279faa1d19e38833bcc2c997ed6196045f3a16613e286f16ce",
+      "current_bytes": 25038,
+      "starting_lines": 273,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-02-current-state/desktop/README.md",
+      "current_sha256": "6f67fc388ba627d06c5c3c74ef2b223abab07488bb0a63b88bd7444220257bcd",
+      "starting_sha256": "6f67fc388ba627d06c5c3c74ef2b223abab07488bb0a63b88bd7444220257bcd",
+      "current_bytes": 13419,
+      "starting_lines": 211,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-03-current-state/.agent/PLANS.md",
+      "current_sha256": "ebb2e9b8f39902896d39fc10062bff2ae4ba9938f1c47df07c1ea315c323ba5d",
+      "starting_sha256": "ebb2e9b8f39902896d39fc10062bff2ae4ba9938f1c47df07c1ea315c323ba5d",
+      "current_bytes": 1200,
+      "starting_lines": 18,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-03-current-state/ARCHITECTURE.md",
+      "current_sha256": "23ae85ceacd91a0d9eb277d76f1c2561e1006da60c24257905a70f7f25ad93c4",
+      "starting_sha256": "23ae85ceacd91a0d9eb277d76f1c2561e1006da60c24257905a70f7f25ad93c4",
+      "current_bytes": 11088,
+      "starting_lines": 78,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-03-current-state/HANDOFF.md",
+      "current_sha256": "efa61792f8de7b24bb113da51f5a3c9f7a8b4c3ca1202713c600cdf3d1a5b2fa",
+      "starting_sha256": "efa61792f8de7b24bb113da51f5a3c9f7a8b4c3ca1202713c600cdf3d1a5b2fa",
+      "current_bytes": 2407,
+      "starting_lines": 16,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-03-current-state/STATUS.md",
+      "current_sha256": "6369a723d0494cd5458096c85ae94f9b910d3642e49bb860d42928b446e32719",
+      "starting_sha256": "6369a723d0494cd5458096c85ae94f9b910d3642e49bb860d42928b446e32719",
+      "current_bytes": 2764,
+      "starting_lines": 24,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase3-state/.agent/PLANS.md",
+      "current_sha256": "0592eb725159926754357ad7c0caa99023624621c7c0c71baf3d4eb02f7b7613",
+      "starting_sha256": "0592eb725159926754357ad7c0caa99023624621c7c0c71baf3d4eb02f7b7613",
+      "current_bytes": 1307,
+      "starting_lines": 18,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase3-state/ARCHITECTURE.md",
+      "current_sha256": "d51ec1cbaa03f1002c6b29263ae67c4a7d6f7e0bd75b463cdcf4c6431c3febe5",
+      "starting_sha256": "d51ec1cbaa03f1002c6b29263ae67c4a7d6f7e0bd75b463cdcf4c6431c3febe5",
+      "current_bytes": 12529,
+      "starting_lines": 80,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase3-state/HANDOFF.md",
+      "current_sha256": "21b21ffc0ed0de8aa65550383d868fde328b0cb2d739c8b9cb54f52ef6a62b48",
+      "starting_sha256": "21b21ffc0ed0de8aa65550383d868fde328b0cb2d739c8b9cb54f52ef6a62b48",
+      "current_bytes": 2216,
+      "starting_lines": 15,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase3-state/STATUS.md",
+      "current_sha256": "697b7e6124742860398325f22de5c42c55d7e5ad5d6bd94c197368dff221dc6b",
+      "starting_sha256": "697b7e6124742860398325f22de5c42c55d7e5ad5d6bd94c197368dff221dc6b",
+      "current_bytes": 3465,
+      "starting_lines": 26,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase4-state/.agent/PLANS.md",
+      "current_sha256": "c86522db1871999b719431b25b5f0a12974de335409a7dd10dde7b66bbbc5ba5",
+      "starting_sha256": "c86522db1871999b719431b25b5f0a12974de335409a7dd10dde7b66bbbc5ba5",
+      "current_bytes": 1308,
+      "starting_lines": 18,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase4-state/ARCHITECTURE.md",
+      "current_sha256": "f9ce4c71fec9b987da900100423f5590827737c9482e5010b08c25ad3bf7b28f",
+      "starting_sha256": "f9ce4c71fec9b987da900100423f5590827737c9482e5010b08c25ad3bf7b28f",
+      "current_bytes": 14483,
+      "starting_lines": 86,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase4-state/DECISIONS.md",
+      "current_sha256": "9b81ab66a45482b21ab4fe27875d2fc7233d3de589d9bfc5fa4fbd419278815c",
+      "starting_sha256": "9b81ab66a45482b21ab4fe27875d2fc7233d3de589d9bfc5fa4fbd419278815c",
+      "current_bytes": 8833,
+      "starting_lines": 45,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase4-state/HANDOFF.md",
+      "current_sha256": "48dfb83d36e38b53cebac6efa05f8b172d9eb06f255f27e62bee03bb14442363",
+      "starting_sha256": "48dfb83d36e38b53cebac6efa05f8b172d9eb06f255f27e62bee03bb14442363",
+      "current_bytes": 2007,
+      "starting_lines": 14,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-04-phase4-state/STATUS.md",
+      "current_sha256": "78e2356a12a1a3b9b86624c6c6c010d9c03e61735a0ad7585ac169a0232d9c18",
+      "starting_sha256": "78e2356a12a1a3b9b86624c6c6c010d9c03e61735a0ad7585ac169a0232d9c18",
+      "current_bytes": 4504,
+      "starting_lines": 30,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-06-source-discovery-foundations-state/.agent/PLANS.md",
+      "current_sha256": "f1309f0af3a8e6b62b2ec19fcd3fb9d4b7a37ef7af9d45a1d69445920ce79cf5",
+      "starting_sha256": "f1309f0af3a8e6b62b2ec19fcd3fb9d4b7a37ef7af9d45a1d69445920ce79cf5",
+      "current_bytes": 1584,
+      "starting_lines": 18,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-06-source-discovery-foundations-state/ARCHITECTURE.md",
+      "current_sha256": "3b9769d5ff5bcc96dd01acacf316aef93a1587e90b621218e2bdb883bb4f96fa",
+      "starting_sha256": "3b9769d5ff5bcc96dd01acacf316aef93a1587e90b621218e2bdb883bb4f96fa",
+      "current_bytes": 15148,
+      "starting_lines": 86,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-06-source-discovery-foundations-state/DECISIONS.md",
+      "current_sha256": "52e523e7a850e17f6342cf54d0d69136872bf74e49e26cd739ed020a086b7375",
+      "starting_sha256": "52e523e7a850e17f6342cf54d0d69136872bf74e49e26cd739ed020a086b7375",
+      "current_bytes": 9163,
+      "starting_lines": 45,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-06-source-discovery-foundations-state/HANDOFF.md",
+      "current_sha256": "c30b9b5c6e9e7af2d9e62c46ec9043f17e05d8aedb751e2dd17b0864ee348425",
+      "starting_sha256": "c30b9b5c6e9e7af2d9e62c46ec9043f17e05d8aedb751e2dd17b0864ee348425",
+      "current_bytes": 1587,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-06-source-discovery-foundations-state/STATUS.md",
+      "current_sha256": "c4e3d59a0c46570f3b7b2a6c0b52a0304b9626561a4f39c7ac8f72ef50ece28e",
+      "starting_sha256": "c4e3d59a0c46570f3b7b2a6c0b52a0304b9626561a4f39c7ac8f72ef50ece28e",
+      "current_bytes": 3788,
+      "starting_lines": 29,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-discovery-phase3-state/.agent/PLANS.md",
+      "current_sha256": "0a85de921d6ec2509cce866ff18f12fc50a1509def0d2f58b8e74f67bef22592",
+      "starting_sha256": "0a85de921d6ec2509cce866ff18f12fc50a1509def0d2f58b8e74f67bef22592",
+      "current_bytes": 1730,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-discovery-phase3-state/ARCHITECTURE.md",
+      "current_sha256": "72784ab6be135edd6e964e69eef448a56ca1f0b60ee60952cf8928acd603aff0",
+      "starting_sha256": "72784ab6be135edd6e964e69eef448a56ca1f0b60ee60952cf8928acd603aff0",
+      "current_bytes": 16877,
+      "starting_lines": 91,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-discovery-phase3-state/DECISIONS.md",
+      "current_sha256": "251b5b9ef6fb02a9ff1fccc3e4fa3ede1802f1d90151bd0ca4fe70c2186f6961",
+      "starting_sha256": "251b5b9ef6fb02a9ff1fccc3e4fa3ede1802f1d90151bd0ca4fe70c2186f6961",
+      "current_bytes": 10378,
+      "starting_lines": 51,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-discovery-phase3-state/HANDOFF.md",
+      "current_sha256": "d7c916a2dc3ac8f3f9a13296e72b855a12e812db84215bb0f4062645b545836f",
+      "starting_sha256": "d7c916a2dc3ac8f3f9a13296e72b855a12e812db84215bb0f4062645b545836f",
+      "current_bytes": 2635,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-discovery-phase3-state/STATUS.md",
+      "current_sha256": "1cf226c8e43483eed5bd8060c897132cad5017ad16daa654129930aaa2e5fa29",
+      "starting_sha256": "1cf226c8e43483eed5bd8060c897132cad5017ad16daa654129930aaa2e5fa29",
+      "current_bytes": 5359,
+      "starting_lines": 30,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-preview-state/ARCHITECTURE.md",
+      "current_sha256": "0b5c96167d8a373a3d4fa3563a0869191b885b30a723ff3d7800a60dc37d22a0",
+      "starting_sha256": "0b5c96167d8a373a3d4fa3563a0869191b885b30a723ff3d7800a60dc37d22a0",
+      "current_bytes": 18416,
+      "starting_lines": 93,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-preview-state/DECISIONS.md",
+      "current_sha256": "92a2f5880bee0b1745859099d77be554e81441179718f5ce596ac387b24c1ebe",
+      "starting_sha256": "92a2f5880bee0b1745859099d77be554e81441179718f5ce596ac387b24c1ebe",
+      "current_bytes": 12047,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-preview-state/HANDOFF.md",
+      "current_sha256": "6c9daf2f06e2e96e1a03820f2765ffb8748a2c39e1256fdfbd81201001db3a4e",
+      "starting_sha256": "6c9daf2f06e2e96e1a03820f2765ffb8748a2c39e1256fdfbd81201001db3a4e",
+      "current_bytes": 3197,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-preview-state/PLANS.md",
+      "current_sha256": "2ba405b719b42b628ed0f1b0a29d942a726b2781526348788c8ef44e14901b9e",
+      "starting_sha256": "2ba405b719b42b628ed0f1b0a29d942a726b2781526348788c8ef44e14901b9e",
+      "current_bytes": 1694,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-preview-state/STATUS.md",
+      "current_sha256": "3ac660fc4d1ff736a009f9dc43ab310e42266471e82a7c117016d3d087305570",
+      "starting_sha256": "3ac660fc4d1ff736a009f9dc43ab310e42266471e82a7c117016d3d087305570",
+      "current_bytes": 6112,
+      "starting_lines": 30,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-query-planning-state/.agent/PLANS.md",
+      "current_sha256": "088001b9c5a5efb55febdc903dab61cbdf9ed188b8faa60d5d9505b23e5be6de",
+      "starting_sha256": "088001b9c5a5efb55febdc903dab61cbdf9ed188b8faa60d5d9505b23e5be6de",
+      "current_bytes": 1687,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-query-planning-state/ARCHITECTURE.md",
+      "current_sha256": "cdd5c98d80e9ab28cdd0a467e512a16dca105f14874f153e348237efc07be329",
+      "starting_sha256": "cdd5c98d80e9ab28cdd0a467e512a16dca105f14874f153e348237efc07be329",
+      "current_bytes": 16159,
+      "starting_lines": 91,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-query-planning-state/HANDOFF.md",
+      "current_sha256": "6700be7e2bee122d4d5766a6b560356b9640539bc04ad1dadb26c6f9d71af433",
+      "starting_sha256": "6700be7e2bee122d4d5766a6b560356b9640539bc04ad1dadb26c6f9d71af433",
+      "current_bytes": 1909,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-07-source-query-planning-state/STATUS.md",
+      "current_sha256": "6c012423a9da481fc249d86ffe5f8bdb311da606dc33cdb3a8ecf2e3ed892b1e",
+      "starting_sha256": "6c012423a9da481fc249d86ffe5f8bdb311da606dc33cdb3a8ecf2e3ed892b1e",
+      "current_bytes": 4308,
+      "starting_lines": 30,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-documentation-stage-state/.agent/PLANS.md",
+      "current_sha256": "2d40a015dd71cfc85589db068faf936b3fa051ad38a3cbf71568c829f4ba7829",
+      "starting_sha256": "2d40a015dd71cfc85589db068faf936b3fa051ad38a3cbf71568c829f4ba7829",
+      "current_bytes": 1860,
+      "starting_lines": 20,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-documentation-stage-state/HANDOFF.md",
+      "current_sha256": "f5cb0d8de24bb2f0f4f3311ab33da96ae4bd29822cc1b9d829a08644bf2910ca",
+      "starting_sha256": "f5cb0d8de24bb2f0f4f3311ab33da96ae4bd29822cc1b9d829a08644bf2910ca",
+      "current_bytes": 1428,
+      "starting_lines": 20,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-documentation-stage-state/STATUS.md",
+      "current_sha256": "11e3cbf4cbbab0bfca8f6e075fec0e0bfb000c0e03cea90b8c5ef807b78ff2fc",
+      "starting_sha256": "11e3cbf4cbbab0bfca8f6e075fec0e0bfb000c0e03cea90b8c5ef807b78ff2fc",
+      "current_bytes": 6317,
+      "starting_lines": 60,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-repository-review-state/.agent/PLANS.md",
+      "current_sha256": "3df9b55b6798da4217725a1ba7f8ca87c9dd42b61331d498ee6aed6d14be7d76",
+      "starting_sha256": "3df9b55b6798da4217725a1ba7f8ca87c9dd42b61331d498ee6aed6d14be7d76",
+      "current_bytes": 1600,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-repository-review-state/HANDOFF.md",
+      "current_sha256": "afeaacffa7be6498b2dd45dc342e206352401a31c5d2a963886ce1d4e90c0a2e",
+      "starting_sha256": "afeaacffa7be6498b2dd45dc342e206352401a31c5d2a963886ce1d4e90c0a2e",
+      "current_bytes": 1293,
+      "starting_lines": 18,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-repository-review-state/STATUS.md",
+      "current_sha256": "7af35d571d08b9c2e1db8c267dedac13c46f15790fe71db1a2d80b746e68634a",
+      "starting_sha256": "7af35d571d08b9c2e1db8c267dedac13c46f15790fe71db1a2d80b746e68634a",
+      "current_bytes": 6181,
+      "starting_lines": 54,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-complete-review-state/.agent/PLANS.md",
+      "current_sha256": "ed2cc731ad342f88c0275eff75b493d423f69ca4b797afe876196b8a1cd7bbfe",
+      "starting_sha256": "ed2cc731ad342f88c0275eff75b493d423f69ca4b797afe876196b8a1cd7bbfe",
+      "current_bytes": 1584,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-complete-review-state/ARCHITECTURE.md",
+      "current_sha256": "d4bd75492fb0c121794ae12cef337d1fb86ec078d6df843d7f839009c46b4dd5",
+      "starting_sha256": "d4bd75492fb0c121794ae12cef337d1fb86ec078d6df843d7f839009c46b4dd5",
+      "current_bytes": 21478,
+      "starting_lines": 122,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-complete-review-state/HANDOFF.md",
+      "current_sha256": "041b77240494cfd6c1416382b3018abec1ba8a4d8ae9f826b339397e1503d3d4",
+      "starting_sha256": "041b77240494cfd6c1416382b3018abec1ba8a4d8ae9f826b339397e1503d3d4",
+      "current_bytes": 1391,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-complete-review-state/STATUS.md",
+      "current_sha256": "28106f1a60c0b8c2e3b5beb992a4291ed990e4df9ce3f93de287d060eb384c60",
+      "starting_sha256": "28106f1a60c0b8c2e3b5beb992a4291ed990e4df9ce3f93de287d060eb384c60",
+      "current_bytes": 5742,
+      "starting_lines": 32,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-integration-state/.agent/PLANS.md",
+      "current_sha256": "eeef16684893eeb4cbe0c8488daa57c53661ae532c2afeba07a49d1bac7632bd",
+      "starting_sha256": "eeef16684893eeb4cbe0c8488daa57c53661ae532c2afeba07a49d1bac7632bd",
+      "current_bytes": 1555,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-integration-state/ARCHITECTURE.md",
+      "current_sha256": "6c7bdeab72f2ff57d4201f3f24c5275caa173ec20b0d9fcb60bb6b9f1fc0add9",
+      "starting_sha256": "6c7bdeab72f2ff57d4201f3f24c5275caa173ec20b0d9fcb60bb6b9f1fc0add9",
+      "current_bytes": 20209,
+      "starting_lines": 107,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-integration-state/DECISIONS.md",
+      "current_sha256": "2b377a3482cf9fb21a62e2acc788c31c1e58fd7ae4ff1d902c31757d24300440",
+      "starting_sha256": "2b377a3482cf9fb21a62e2acc788c31c1e58fd7ae4ff1d902c31757d24300440",
+      "current_bytes": 13635,
+      "starting_lines": 68,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-integration-state/HANDOFF.md",
+      "current_sha256": "c990ea7076381e1d86d90ce1862c87fda80fa6df4ef38e55844a0f214a4fe8df",
+      "starting_sha256": "c990ea7076381e1d86d90ce1862c87fda80fa6df4ef38e55844a0f214a4fe8df",
+      "current_bytes": 2676,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-integration-state/STATUS.md",
+      "current_sha256": "13777c6c57e1d8302ffa021b6d7a6b7d8ceb8a9846056679318eb5f9d4f47758",
+      "starting_sha256": "13777c6c57e1d8302ffa021b6d7a6b7d8ceb8a9846056679318eb5f9d4f47758",
+      "current_bytes": 5830,
+      "starting_lines": 32,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-neighborhood-state/.agent/PLANS.md",
+      "current_sha256": "e8189d932b9d77f12bd72f721613491632a4a530f04927ee335cc425336e1896",
+      "starting_sha256": "e8189d932b9d77f12bd72f721613491632a4a530f04927ee335cc425336e1896",
+      "current_bytes": 1748,
+      "starting_lines": 19,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-neighborhood-state/ARCHITECTURE.md",
+      "current_sha256": "4cfeda712f0ebe6e42063480d7466b0265c34dfbd8b8b48ce34d88452385eddf",
+      "starting_sha256": "4cfeda712f0ebe6e42063480d7466b0265c34dfbd8b8b48ce34d88452385eddf",
+      "current_bytes": 19024,
+      "starting_lines": 93,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-neighborhood-state/DECISIONS.md",
+      "current_sha256": "2e6bd9e8a27d710e936cbbbb3b6167ce9057803a41e7dcd5fc07904e52089a74",
+      "starting_sha256": "2e6bd9e8a27d710e936cbbbb3b6167ce9057803a41e7dcd5fc07904e52089a74",
+      "current_bytes": 12402,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-neighborhood-state/HANDOFF.md",
+      "current_sha256": "b1bc0004012f925eeddafb40b7b8fe05efbe1ee5a7115aac6eb10ec2f03bda13",
+      "starting_sha256": "b1bc0004012f925eeddafb40b7b8fe05efbe1ee5a7115aac6eb10ec2f03bda13",
+      "current_bytes": 2650,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-08-source-neighborhood-state/STATUS.md",
+      "current_sha256": "9961242239ed8a338ff166117b700b48e6402b9f177125cc51c1eb0f8a759eb3",
+      "starting_sha256": "9961242239ed8a338ff166117b700b48e6402b9f177125cc51c1eb0f8a759eb3",
+      "current_bytes": 7919,
+      "starting_lines": 34,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-09-root-cleanup-state/.agent/PLANS.md",
+      "current_sha256": "2485fc413334dacddcd0d9ca284c3c8dfbeed369fc196c3625185d4f9c20d33b",
+      "starting_sha256": "2485fc413334dacddcd0d9ca284c3c8dfbeed369fc196c3625185d4f9c20d33b",
+      "current_bytes": 2064,
+      "starting_lines": 38,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-09-root-cleanup-state/ARCHITECTURE.md",
+      "current_sha256": "d38bf692844004cb67390fd583ef9a0255799a92b3c9f2ab9e4344038fe47b02",
+      "starting_sha256": "d38bf692844004cb67390fd583ef9a0255799a92b3c9f2ab9e4344038fe47b02",
+      "current_bytes": 22110,
+      "starting_lines": 128,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-09-root-cleanup-state/CONVENTIONS.md",
+      "current_sha256": "c78e81848036cd5562ac3a4a810c9e4d14698ab48c0b68abeeb213770f7b4bbc",
+      "starting_sha256": "c78e81848036cd5562ac3a4a810c9e4d14698ab48c0b68abeeb213770f7b4bbc",
+      "current_bytes": 6423,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-09-root-cleanup-state/HANDOFF.md",
+      "current_sha256": "a52cbb51b72f2a2f5568e589ac493f7b62e0fd543217be6f527c1bf75b799022",
+      "starting_sha256": "a52cbb51b72f2a2f5568e589ac493f7b62e0fd543217be6f527c1bf75b799022",
+      "current_bytes": 1983,
+      "starting_lines": 30,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-09-root-cleanup-state/STATUS.md",
+      "current_sha256": "900c02479aa30e93cd57b34736cdcd32728ca993a2db6de168d10127e7188e9f",
+      "starting_sha256": "900c02479aa30e93cd57b34736cdcd32728ca993a2db6de168d10127e7188e9f",
+      "current_bytes": 6465,
+      "starting_lines": 92,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-api-split-state/.agent/PLANS.md",
+      "current_sha256": "59b04aef7d185fc7ce01827efafde5cbfd5de008ba33cc4a1cbd1993fabec47f",
+      "starting_sha256": "59b04aef7d185fc7ce01827efafde5cbfd5de008ba33cc4a1cbd1993fabec47f",
+      "current_bytes": 1888,
+      "starting_lines": 34,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-api-split-state/docs/project/ARCHITECTURE.md",
+      "current_sha256": "b00c7a2551b3fc7fc92deb5f936d6e317c3cc8033ad7f4b287cc130dc419bd2a",
+      "starting_sha256": "b00c7a2551b3fc7fc92deb5f936d6e317c3cc8033ad7f4b287cc130dc419bd2a",
+      "current_bytes": 24459,
+      "starting_lines": 170,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-api-split-state/docs/project/HANDOFF.md",
+      "current_sha256": "861fbec143f59344b180cf8156bfd9cc9d6ac40ca0d9f278a8bdefedc8060409",
+      "starting_sha256": "861fbec143f59344b180cf8156bfd9cc9d6ac40ca0d9f278a8bdefedc8060409",
+      "current_bytes": 1939,
+      "starting_lines": 28,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-api-split-state/docs/project/STATUS.md",
+      "current_sha256": "dd2b0d392bb201502100f29dcea3e68e84592beaff168fae372554550ba4ffb1",
+      "starting_sha256": "dd2b0d392bb201502100f29dcea3e68e84592beaff168fae372554550ba4ffb1",
+      "current_bytes": 4865,
+      "starting_lines": 73,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-contract-ownership-state/.agent/PLANS.md",
+      "current_sha256": "fb5c161c1a19cf6cdcbbd0963702820f3a12ddb4a42bfafb152c87107b213c61",
+      "starting_sha256": "fb5c161c1a19cf6cdcbbd0963702820f3a12ddb4a42bfafb152c87107b213c61",
+      "current_bytes": 2055,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-contract-ownership-state/docs/project/ARCHITECTURE.md",
+      "current_sha256": "beca11147dc4391276aaa7467d8cb127bc2cfb2a07b26bfa91ed9aba44ec1227",
+      "starting_sha256": "beca11147dc4391276aaa7467d8cb127bc2cfb2a07b26bfa91ed9aba44ec1227",
+      "current_bytes": 26624,
+      "starting_lines": 198,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-contract-ownership-state/docs/project/CONVENTIONS.md",
+      "current_sha256": "86e8ef9938ae68dade3b92ef728f5be44876c2f243ede1316de562aac2170366",
+      "starting_sha256": "86e8ef9938ae68dade3b92ef728f5be44876c2f243ede1316de562aac2170366",
+      "current_bytes": 9765,
+      "starting_lines": 71,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-contract-ownership-state/docs/project/DECISIONS.md",
+      "current_sha256": "cf3c5e815f108fa3bbc0c5e61bbc8f44647ac948f41fa459da6200f8fe342085",
+      "starting_sha256": "cf3c5e815f108fa3bbc0c5e61bbc8f44647ac948f41fa459da6200f8fe342085",
+      "current_bytes": 19191,
+      "starting_lines": 137,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-contract-ownership-state/docs/project/HANDOFF.md",
+      "current_sha256": "25b0133652a0e3b86ce593e43dde45313b6c1be11527cff138e86021ae391af4",
+      "starting_sha256": "25b0133652a0e3b86ce593e43dde45313b6c1be11527cff138e86021ae391af4",
+      "current_bytes": 2841,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-contract-ownership-state/docs/project/STATUS.md",
+      "current_sha256": "49e79f43bf76db369d488b18857c0e37096345120727738473e0649bd12960a0",
+      "starting_sha256": "49e79f43bf76db369d488b18857c0e37096345120727738473e0649bd12960a0",
+      "current_bytes": 4791,
+      "starting_lines": 74,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/.agent/PLANS.md",
+      "current_sha256": "05c1c0c3203d44026b0e771122872b76e7999e6d877138e4ec81c84f436e1fbc",
+      "starting_sha256": "05c1c0c3203d44026b0e771122872b76e7999e6d877138e4ec81c84f436e1fbc",
+      "current_bytes": 4990,
+      "starting_lines": 78,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/ARCHITECTURE.md",
+      "current_sha256": "138d593c52a21566484faaa6cddb42b3b9eb222ba57e5ab06abf938fe4bb09cc",
+      "starting_sha256": "138d593c52a21566484faaa6cddb42b3b9eb222ba57e5ab06abf938fe4bb09cc",
+      "current_bytes": 24332,
+      "starting_lines": 154,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/CONVENTIONS.md",
+      "current_sha256": "e3f74db30f8fcd07dc067b68ac023c709e21f7a2d51e4e7fed5459f34ad61068",
+      "starting_sha256": "e3f74db30f8fcd07dc067b68ac023c709e21f7a2d51e4e7fed5459f34ad61068",
+      "current_bytes": 8814,
+      "starting_lines": 68,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/DECISIONS.md",
+      "current_sha256": "5ddbfb2bbb7d9d8405865dc9c47d7a353b9a47e54a58f8c22e3c7556fb7bf172",
+      "starting_sha256": "5ddbfb2bbb7d9d8405865dc9c47d7a353b9a47e54a58f8c22e3c7556fb7bf172",
+      "current_bytes": 17932,
+      "starting_lines": 120,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/HANDOFF.md",
+      "current_sha256": "ffd101dc4da1dadcbb63bace5828b4ff4cc9aabc34661d287e6977f1266223e0",
+      "starting_sha256": "ffd101dc4da1dadcbb63bace5828b4ff4cc9aabc34661d287e6977f1266223e0",
+      "current_bytes": 5447,
+      "starting_lines": 76,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/README.md",
+      "current_sha256": "94951aaf27c2ab4239ff83aea9f6068b9c190618eca17bcbebedf7b1938fc0f8",
+      "starting_sha256": "94951aaf27c2ab4239ff83aea9f6068b9c190618eca17bcbebedf7b1938fc0f8",
+      "current_bytes": 7969,
+      "starting_lines": 78,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/STATUS.md",
+      "current_sha256": "61e88723964a5a690f1734145a62580daa4b54e3c2a0370865f81672c20ddebc",
+      "starting_sha256": "61e88723964a5a690f1734145a62580daa4b54e3c2a0370865f81672c20ddebc",
+      "current_bytes": 12409,
+      "starting_lines": 169,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/before-review-fixes/HANDOFF.md",
+      "current_sha256": "c0232e4c5ec6ccb76832ad5e2591634a18a7b1cb336cb1c9e3ffef94270f6464",
+      "starting_sha256": "c0232e4c5ec6ccb76832ad5e2591634a18a7b1cb336cb1c9e3ffef94270f6464",
+      "current_bytes": 1485,
+      "starting_lines": 22,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/before-review-fixes/PLANS.md",
+      "current_sha256": "c6e490f327ec554e0cd6c1b5e91e7f969075604cd5d6930724a11c4328dd59ec",
+      "starting_sha256": "c6e490f327ec554e0cd6c1b5e91e7f969075604cd5d6930724a11c4328dd59ec",
+      "current_bytes": 1748,
+      "starting_lines": 32,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-folder-consolidation-state/before-review-fixes/STATUS.md",
+      "current_sha256": "d8ba662bd55def0aef59730c1f77b2cfc3a6e8cc4b123f2e6a5bfa9375d02cbe",
+      "starting_sha256": "d8ba662bd55def0aef59730c1f77b2cfc3a6e8cc4b123f2e6a5bfa9375d02cbe",
+      "current_bytes": 3102,
+      "starting_lines": 48,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/.agent/PLANS.md",
+      "current_sha256": "10e75dd6526433eb047b4c2afae0baa406551238b418c680d72f2f9165391d1d",
+      "starting_sha256": "10e75dd6526433eb047b4c2afae0baa406551238b418c680d72f2f9165391d1d",
+      "current_bytes": 1998,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/AGENTS.md",
+      "current_sha256": "022f7b7661f09f1c6cbbd623f646dec721017dfdce0f4dc5725033eda50707c1",
+      "starting_sha256": "022f7b7661f09f1c6cbbd623f646dec721017dfdce0f4dc5725033eda50707c1",
+      "current_bytes": 1430,
+      "starting_lines": 29,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/README.md",
+      "current_sha256": "179a9c5f854dc75282db2a3716588e0c140794f3793ad0f0f3b64527dbd0b40d",
+      "starting_sha256": "179a9c5f854dc75282db2a3716588e0c140794f3793ad0f0f3b64527dbd0b40d",
+      "current_bytes": 4239,
+      "starting_lines": 90,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/backend/src/researchassistant/api/README.md",
+      "current_sha256": "624f97c53cc70cf09d3b228ea6d13cea68165533acfdad2accfededf2b1713f4",
+      "starting_sha256": "624f97c53cc70cf09d3b228ea6d13cea68165533acfdad2accfededf2b1713f4",
+      "current_bytes": 2175,
+      "starting_lines": 29,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/desktop/README.md",
+      "current_sha256": "a589734eb691071c84d3c7e771d04ad0e19ef411c4afde8fe3ad96c7b0b92942",
+      "starting_sha256": "a589734eb691071c84d3c7e771d04ad0e19ef411c4afde8fe3ad96c7b0b92942",
+      "current_bytes": 18932,
+      "starting_lines": 286,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/docs/project/ARCHITECTURE.md",
+      "current_sha256": "ebd68081c1fbb30c17bcc0b0ed233972cef6d741508f87b4b4b02154d45f781e",
+      "starting_sha256": "ebd68081c1fbb30c17bcc0b0ed233972cef6d741508f87b4b4b02154d45f781e",
+      "current_bytes": 24395,
+      "starting_lines": 169,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/docs/project/CONVENTIONS.md",
+      "current_sha256": "c547af1a6327389fe350a973ccb6ad3e7878d10d7ec134480076c3759a4dc9e3",
+      "starting_sha256": "c547af1a6327389fe350a973ccb6ad3e7878d10d7ec134480076c3759a4dc9e3",
+      "current_bytes": 9371,
+      "starting_lines": 66,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/docs/project/DECISIONS.md",
+      "current_sha256": "8e3eaa1eee110f1e49cb376b1ec410cfcd126a2f1d612106947572d6f79f7b5c",
+      "starting_sha256": "8e3eaa1eee110f1e49cb376b1ec410cfcd126a2f1d612106947572d6f79f7b5c",
+      "current_bytes": 19141,
+      "starting_lines": 137,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/docs/project/HANDOFF.md",
+      "current_sha256": "42b0f40aedf9ca8293a508842946e473094361723507487055bb196d0784474a",
+      "starting_sha256": "42b0f40aedf9ca8293a508842946e473094361723507487055bb196d0784474a",
+      "current_bytes": 1625,
+      "starting_lines": 23,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/docs/project/STATUS.md",
+      "current_sha256": "0990b803d895bc1f40e035bf17f268ac8f72bea61dcc605d94cf9b336182bd21",
+      "starting_sha256": "0990b803d895bc1f40e035bf17f268ac8f72bea61dcc605d94cf9b336182bd21",
+      "current_bytes": 3405,
+      "starting_lines": 52,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-guidance-state/docs/project/database-recovery.md",
+      "current_sha256": "5a86c822534586185cfa7007147e864650e73e5c38bf68d80ccc7b1bee835f15",
+      "starting_sha256": "5a86c822534586185cfa7007147e864650e73e5c38bf68d80ccc7b1bee835f15",
+      "current_bytes": 3463,
+      "starting_lines": 32,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-renderer-split-state/PLANS.md",
+      "current_sha256": "42c265bd759f017a6382cb733766df2be8b113f19cef3e16433f1a0e538c14f3",
+      "starting_sha256": "42c265bd759f017a6382cb733766df2be8b113f19cef3e16433f1a0e538c14f3",
+      "current_bytes": 1986,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-renderer-split-state/docs/project/ARCHITECTURE.md",
+      "current_sha256": "0c834d204484f5e90ad0b8591ccf514e5216a593a26616bce7025ef240b2b44d",
+      "starting_sha256": "0c834d204484f5e90ad0b8591ccf514e5216a593a26616bce7025ef240b2b44d",
+      "current_bytes": 25357,
+      "starting_lines": 179,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-renderer-split-state/docs/project/HANDOFF.md",
+      "current_sha256": "3b6c137dcb53ed909be642613c5283bd025972255ab471000deafdcf1ee45365",
+      "starting_sha256": "3b6c137dcb53ed909be642613c5283bd025972255ab471000deafdcf1ee45365",
+      "current_bytes": 2579,
+      "starting_lines": 37,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-10-renderer-split-state/docs/project/STATUS.md",
+      "current_sha256": "fa73c6b987eeba9085f1dee73c5bb058605a5ce1627240682115e5adbe887318",
+      "starting_sha256": "fa73c6b987eeba9085f1dee73c5bb058605a5ce1627240682115e5adbe887318",
+      "current_bytes": 5003,
+      "starting_lines": 74,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-hotspot-split-state/.agent/PLANS.md",
+      "current_sha256": "12eff0aa24f1bc0c40357c02c0e6e24380d4b910cc4dfd57b8b4103c52d34123",
+      "starting_sha256": "12eff0aa24f1bc0c40357c02c0e6e24380d4b910cc4dfd57b8b4103c52d34123",
+      "current_bytes": 2035,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-hotspot-split-state/docs/project/ARCHITECTURE.md",
+      "current_sha256": "ba79c4939601f9d79082dc6c24d97b9bf7fdc57d9e8bf9e9003f533eef7c1def",
+      "starting_sha256": "ba79c4939601f9d79082dc6c24d97b9bf7fdc57d9e8bf9e9003f533eef7c1def",
+      "current_bytes": 28064,
+      "starting_lines": 212,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-hotspot-split-state/docs/project/HANDOFF.md",
+      "current_sha256": "491cce24fedddf3a9ae85d64e72d97cc27d196b30965ec6c65951b896ef91b5e",
+      "starting_sha256": "491cce24fedddf3a9ae85d64e72d97cc27d196b30965ec6c65951b896ef91b5e",
+      "current_bytes": 2555,
+      "starting_lines": 37,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-hotspot-split-state/docs/project/STATUS.md",
+      "current_sha256": "ebf29b0913a83633e4c0133d7060b85b7a7449093f5f21e0a48725f5df9ee46b",
+      "starting_sha256": "ebf29b0913a83633e4c0133d7060b85b7a7449093f5f21e0a48725f5df9ee46b",
+      "current_bytes": 4879,
+      "starting_lines": 72,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-quality-benchmark-state/.agent/PLANS.md",
+      "current_sha256": "b56c52e538f1a60dba84df86a953878919b4a6fbf52dfe7c462dbfdcf11ac368",
+      "starting_sha256": "b56c52e538f1a60dba84df86a953878919b4a6fbf52dfe7c462dbfdcf11ac368",
+      "current_bytes": 2243,
+      "starting_lines": 37,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-quality-benchmark-state/docs/project/HANDOFF.md",
+      "current_sha256": "fc035856a1a0d821ae696a6dc217885620e077ade7a1ee3897112cbd76ed2c89",
+      "starting_sha256": "fc035856a1a0d821ae696a6dc217885620e077ade7a1ee3897112cbd76ed2c89",
+      "current_bytes": 2904,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-11-quality-benchmark-state/docs/project/STATUS.md",
+      "current_sha256": "6f1425d6725b78d140ba83e8871ff53550d0fd8cb1ef50d86d6fd852fa4c3503",
+      "starting_sha256": "6f1425d6725b78d140ba83e8871ff53550d0fd8cb1ef50d86d6fd852fa4c3503",
+      "current_bytes": 5338,
+      "starting_lines": 78,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/.agent/PLANS.md",
+      "current_sha256": "8888338cec501fa02f1e0d7c75a0ff9f018f50164208bf56180acc76be4d74e3",
+      "starting_sha256": "8888338cec501fa02f1e0d7c75a0ff9f018f50164208bf56180acc76be4d74e3",
+      "current_bytes": 2519,
+      "starting_lines": 40,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/.agent/plans/research-quality-acceptance-2026-10-11.md",
+      "current_sha256": "56dea54997c802e7baf7df70c64b6e4798aca0e52e65849f3a72a4649d3e96e8",
+      "starting_sha256": "56dea54997c802e7baf7df70c64b6e4798aca0e52e65849f3a72a4649d3e96e8",
+      "current_bytes": 6610,
+      "starting_lines": 97,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/docs/project/HANDOFF.md",
+      "current_sha256": "1204e4232167422e0f3e02f6e2bc9be5759c05dc85ff9f7f451e1a61962ee26d",
+      "starting_sha256": "1204e4232167422e0f3e02f6e2bc9be5759c05dc85ff9f7f451e1a61962ee26d",
+      "current_bytes": 1993,
+      "starting_lines": 29,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/docs/project/STATUS.md",
+      "current_sha256": "40139e0b85f10ceb43264d870d342b0c0ca49db3ebece769b32e0dc538ba6add",
+      "starting_sha256": "40139e0b85f10ceb43264d870d342b0c0ca49db3ebece769b32e0dc538ba6add",
+      "current_bytes": 4567,
+      "starting_lines": 65,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/evaluations/README.md",
+      "current_sha256": "ab3b0d9cdcc0b0424ff0bfea189f678493855cc331d25c8b52d6d9a26ad91746",
+      "starting_sha256": "ab3b0d9cdcc0b0424ff0bfea189f678493855cc331d25c8b52d6d9a26ad91746",
+      "current_bytes": 7607,
+      "starting_lines": 130,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/evaluations/cases/research_quality/PROTOCOL.md",
+      "current_sha256": "adc54e225e8f45e0e7db317583a5b73576781ba73e04acd76b17c86745911056",
+      "starting_sha256": "adc54e225e8f45e0e7db317583a5b73576781ba73e04acd76b17c86745911056",
+      "current_bytes": 20954,
+      "starting_lines": 302,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/evaluations/cases/research_quality/RESULT_TEMPLATE.md",
+      "current_sha256": "1321b7c804e2cd2fc2f8b7a46bc27a0bb7973f687284244037888f80d4f308ea",
+      "starting_sha256": "1321b7c804e2cd2fc2f8b7a46bc27a0bb7973f687284244037888f80d4f308ea",
+      "current_bytes": 3446,
+      "starting_lines": 45,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-12-quality-review-state/evaluations/cases/research_quality/offline_results.json",
+      "current_sha256": "6eedfe39334b60e424bdee15aa6efda68273dc7c3ef2bc569db0b9dfdb575609",
+      "starting_sha256": "6eedfe39334b60e424bdee15aa6efda68273dc7c3ef2bc569db0b9dfdb575609",
+      "current_bytes": 17732,
+      "starting_lines": 497,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-mac-delivery-preceding-state/HANDOFF.md",
+      "current_sha256": "1badc1cd57a44ad33894c819ad14f8baed45991abe535ae9fdcd42a7f90964b7",
+      "starting_sha256": "1badc1cd57a44ad33894c819ad14f8baed45991abe535ae9fdcd42a7f90964b7",
+      "current_bytes": 2305,
+      "starting_lines": 33,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-mac-delivery-preceding-state/PLANS.md",
+      "current_sha256": "307e7656ede93564d81d0d4cd3fbbc6c4644367925b9067be3b6adb8eefea0ac",
+      "starting_sha256": "307e7656ede93564d81d0d4cd3fbbc6c4644367925b9067be3b6adb8eefea0ac",
+      "current_bytes": 2893,
+      "starting_lines": 46,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-mac-delivery-preceding-state/STATUS.md",
+      "current_sha256": "813fd123cd8d33a455f0ed2f63765a427a44d89dcb8a570f8d5be825b362c9c7",
+      "starting_sha256": "813fd123cd8d33a455f0ed2f63765a427a44d89dcb8a570f8d5be825b362c9c7",
+      "current_bytes": 5057,
+      "starting_lines": 74,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/.agent/PLANS.md",
+      "current_sha256": "cd6c61a1d758aaf3e8979fef4a3265bbe6a2fa44056f99da9b6a287fcc2282b9",
+      "starting_sha256": "cd6c61a1d758aaf3e8979fef4a3265bbe6a2fa44056f99da9b6a287fcc2282b9",
+      "current_bytes": 2708,
+      "starting_lines": 44,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/.agent/plans/mac-delivery-gates-2026-10-13.md",
+      "current_sha256": "47cf036126471c7d0ba1cd63520bad5311d0ff6f6c33ed11c8a1b958a17ec34c",
+      "starting_sha256": "47cf036126471c7d0ba1cd63520bad5311d0ff6f6c33ed11c8a1b958a17ec34c",
+      "current_bytes": 2671,
+      "starting_lines": 38,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/README.md",
+      "current_sha256": "8c4a22af5970841e001b0215bebcd70ef1b4423a3ac1522dfb50d05f8bfd2c01",
+      "starting_sha256": "8c4a22af5970841e001b0215bebcd70ef1b4423a3ac1522dfb50d05f8bfd2c01",
+      "current_bytes": 4599,
+      "starting_lines": 97,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/docs/project/HANDOFF.md",
+      "current_sha256": "499becfb5ab902573c4fc410df646a7667132f377b1caea44b7d9f6e97cca82d",
+      "starting_sha256": "499becfb5ab902573c4fc410df646a7667132f377b1caea44b7d9f6e97cca82d",
+      "current_bytes": 2142,
+      "starting_lines": 31,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/docs/project/STATUS.md",
+      "current_sha256": "ecc10d14e85e976fa59080953257a328c7fd02b17cdf2a5a7c64f35315cdd3e4",
+      "starting_sha256": "ecc10d14e85e976fa59080953257a328c7fd02b17cdf2a5a7c64f35315cdd3e4",
+      "current_bytes": 5435,
+      "starting_lines": 84,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/docs/verification/mac-delivery-gates-2026-10-13.json",
+      "current_sha256": "90799e541bf57b7345af42396b27ff50b71b8f7be7d1387274eceba715f583b9",
+      "starting_sha256": "90799e541bf57b7345af42396b27ff50b71b8f7be7d1387274eceba715f583b9",
+      "current_bytes": 11593,
+      "starting_lines": 263,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/docs/verification/mac-delivery-gates-2026-10-13.md",
+      "current_sha256": "ed930a9b9c433131d900325f4f0205c1ec358adc8f69369e9d441b7e96184709",
+      "starting_sha256": "ed930a9b9c433131d900325f4f0205c1ec358adc8f69369e9d441b7e96184709",
+      "current_bytes": 16351,
+      "starting_lines": 243,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-archive-review-state/tests/README.md",
+      "current_sha256": "a99bdcbcc0a9ff01be85cc92cb15c358d25b928185deaf906686822232a36db7",
+      "starting_sha256": "a99bdcbcc0a9ff01be85cc92cb15c358d25b928185deaf906686822232a36db7",
+      "current_bytes": 10422,
+      "starting_lines": 132,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-preceding-state/.agent/PLANS.md",
+      "current_sha256": "8b4d2168b2a1932c8eb00a2f907580aa578e56ca1a2b1d04fb1f4798e0900b4e",
+      "starting_sha256": "8b4d2168b2a1932c8eb00a2f907580aa578e56ca1a2b1d04fb1f4798e0900b4e",
+      "current_bytes": 2804,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-preceding-state/docs/project/HANDOFF.md",
+      "current_sha256": "a17edd9d6f202cc9ec46c18a69a075680d6014b4890508e4e1b1c158cd902a67",
+      "starting_sha256": "a17edd9d6f202cc9ec46c18a69a075680d6014b4890508e4e1b1c158cd902a67",
+      "current_bytes": 2490,
+      "starting_lines": 33,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-preceding-state/docs/project/STATUS.md",
+      "current_sha256": "cedb5f5410fb95217f00f20671c5d00fbf3a4179b786b434725fce883d4e4db1",
+      "starting_sha256": "cedb5f5410fb95217f00f20671c5d00fbf3a4179b786b434725fce883d4e4db1",
+      "current_bytes": 4940,
+      "starting_lines": 74,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-review-state/.agent/PLANS.md",
+      "current_sha256": "3a50251f58181aff938fa0cdeabc6faa4479e0f462e43dda0d1adc4f7252ee34",
+      "starting_sha256": "3a50251f58181aff938fa0cdeabc6faa4479e0f462e43dda0d1adc4f7252ee34",
+      "current_bytes": 2590,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-review-state/.agent/plans/source-leads-quality-2026-10-13.md",
+      "current_sha256": "250edb5252e7bee2ad238653ab79f3f42dd0a6b168498a1bbbfddb25b2d060fb",
+      "starting_sha256": "250edb5252e7bee2ad238653ab79f3f42dd0a6b168498a1bbbfddb25b2d060fb",
+      "current_bytes": 8039,
+      "starting_lines": 110,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-review-state/docs/project/HANDOFF.md",
+      "current_sha256": "91f880558e7637fd0d919a2f63bd9674ac33b1a2329cac84912184c5bd18a124",
+      "starting_sha256": "91f880558e7637fd0d919a2f63bd9674ac33b1a2329cac84912184c5bd18a124",
+      "current_bytes": 2073,
+      "starting_lines": 30,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-review-state/docs/project/STATUS.md",
+      "current_sha256": "841dbb4607c37ae0ba0ed206b98f154e2c182e6e73122617f18f51c862f7dcdc",
+      "starting_sha256": "841dbb4607c37ae0ba0ed206b98f154e2c182e6e73122617f18f51c862f7dcdc",
+      "current_bytes": 4612,
+      "starting_lines": 66,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-source-leads-review-state/evaluations/cases/source_leads/offline_results.json",
+      "current_sha256": "c35e5f84cf5aacc7b4d042b29c18cc33b76e591964789c706a214a5510f75d22",
+      "starting_sha256": "c35e5f84cf5aacc7b4d042b29c18cc33b76e591964789c706a214a5510f75d22",
+      "current_bytes": 20820,
+      "starting_lines": 655,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/.agent/PLANS.md",
+      "current_sha256": "ecabbedb96d1e1490e6e26d91db1ae621e0c3ccd3ef67383ee9d5b70da2f0205",
+      "starting_sha256": "ecabbedb96d1e1490e6e26d91db1ae621e0c3ccd3ef67383ee9d5b70da2f0205",
+      "current_bytes": 2746,
+      "starting_lines": 44,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/desktop/README.md",
+      "current_sha256": "b219c33ae57f3f69c0e049ffec6ca63ee4646918f446776bdb21ed6e8ec5d7ab",
+      "starting_sha256": "b219c33ae57f3f69c0e049ffec6ca63ee4646918f446776bdb21ed6e8ec5d7ab",
+      "current_bytes": 20926,
+      "starting_lines": 316,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/docs/project/ARCHITECTURE.md",
+      "current_sha256": "ed6ebecd5182c28fd0030a620b5c67337cc1bf5691becc70b63a7164071e8c25",
+      "starting_sha256": "ed6ebecd5182c28fd0030a620b5c67337cc1bf5691becc70b63a7164071e8c25",
+      "current_bytes": 31218,
+      "starting_lines": 256,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/docs/project/DECISIONS.md",
+      "current_sha256": "066a389f52c5048b1dc5768ffeef019d137ff55dabd0b628d5efd1289b985047",
+      "starting_sha256": "066a389f52c5048b1dc5768ffeef019d137ff55dabd0b628d5efd1289b985047",
+      "current_bytes": 20707,
+      "starting_lines": 159,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/docs/project/HANDOFF.md",
+      "current_sha256": "8400b2d5ce32bca335fc12e07414d23cee9fbe57d2d56b97026810de8039a945",
+      "starting_sha256": "8400b2d5ce32bca335fc12e07414d23cee9fbe57d2d56b97026810de8039a945",
+      "current_bytes": 2415,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/docs/project/STATUS.md",
+      "current_sha256": "37ec8a9b5dfd8e419f36a3e4e4a113c439e6bcf53e15d6dac047565b8277dd00",
+      "starting_sha256": "37ec8a9b5dfd8e419f36a3e4e4a113c439e6bcf53e15d6dac047565b8277dd00",
+      "current_bytes": 6140,
+      "starting_lines": 93,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/docs/project/database-recovery.md",
+      "current_sha256": "1f241c5f50778a9ff6b33b3b3b71e91bc401b3cfc248b59f2850901cab38a6ee",
+      "starting_sha256": "1f241c5f50778a9ff6b33b3b3b71e91bc401b3cfc248b59f2850901cab38a6ee",
+      "current_bytes": 3659,
+      "starting_lines": 35,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/2026-10-13-windows-preceding-state/tests/README.md",
+      "current_sha256": "21de1bb66de1d532bc24ce92536798e4efc27c32b308147bcfcec7965586c79b",
+      "starting_sha256": "21de1bb66de1d532bc24ce92536798e4efc27c32b308147bcfcec7965586c79b",
+      "current_bytes": 10467,
+      "starting_lines": 132,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/INDEX.md",
+      "current_sha256": "b35b0471d76d84ca2f55461a664e5f4e98ccb5c2c127f19c329deeedf19134c1",
+      "starting_sha256": "afdf695e2d48dc2ff65016897b37c87da95c9155ec4dca839bcdb66032c9c781",
+      "current_bytes": 12874,
+      "starting_lines": 151,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/README.md",
+      "current_sha256": "df05089a6909ae9c66488f4d3da957c414618b67a15717a03c162458954bd0bf",
+      "starting_sha256": "df05089a6909ae9c66488f4d3da957c414618b67a15717a03c162458954bd0bf",
+      "current_bytes": 8206,
+      "starting_lines": 89,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/phase-2-handoff/HANDOFF.md",
+      "current_sha256": "ea97a5ae69ceba3551e1c8c23b53215e22bcbbbfdf8de48dca27cc52e8baf810",
+      "starting_sha256": "ea97a5ae69ceba3551e1c8c23b53215e22bcbbbfdf8de48dca27cc52e8baf810",
+      "current_bytes": 1818,
+      "starting_lines": 29,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/phase-2-handoff/STATUS.md",
+      "current_sha256": "1e6fd2fb52aa2ea09757cc277a44e6da57611b569a18277c5c529e538f482d8c",
+      "starting_sha256": "1e6fd2fb52aa2ea09757cc277a44e6da57611b569a18277c5c529e538f482d8c",
+      "current_bytes": 1507,
+      "starting_lines": 24,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/.agent/PLANS.md",
+      "current_sha256": "4039f2f182c57eeddfa26d2ce0febc965b92a7b5f13af35041fbc04ae0290668",
+      "starting_sha256": "4039f2f182c57eeddfa26d2ce0febc965b92a7b5f13af35041fbc04ae0290668",
+      "current_bytes": 28771,
+      "starting_lines": 651,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/AGENTS.md",
+      "current_sha256": "955d7bd40afbf12c56c0b08d666a43aa6b499067d38b9f892cc5dc973f8efa6d",
+      "starting_sha256": "955d7bd40afbf12c56c0b08d666a43aa6b499067d38b9f892cc5dc973f8efa6d",
+      "current_bytes": 4024,
+      "starting_lines": 51,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/ARCHITECTURE.md",
+      "current_sha256": "2ff4b00cf822b27df72f65fe5ba35d349d61c8334931dd1509458181b916ef82",
+      "starting_sha256": "2ff4b00cf822b27df72f65fe5ba35d349d61c8334931dd1509458181b916ef82",
+      "current_bytes": 82744,
+      "starting_lines": 1204,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/CONVENTIONS.md",
+      "current_sha256": "135b9d4f8fab2e8c55d714e74e24c6c55de3bb2ad5737865c6061ba8608c62f8",
+      "starting_sha256": "135b9d4f8fab2e8c55d714e74e24c6c55de3bb2ad5737865c6061ba8608c62f8",
+      "current_bytes": 20299,
+      "starting_lines": 321,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/DECISIONS.md",
+      "current_sha256": "bc621bc21ffb55f437fd8f2f87429ac0e9f948428d1749ce7b9e7a2d29fe3cfb",
+      "starting_sha256": "bc621bc21ffb55f437fd8f2f87429ac0e9f948428d1749ce7b9e7a2d29fe3cfb",
+      "current_bytes": 69054,
+      "starting_lines": 989,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/HANDOFF.md",
+      "current_sha256": "1eb445d8a251ec5288c17fea6c2afa0a89a56692245a7b3dabf9f2e2459c4697",
+      "starting_sha256": "1eb445d8a251ec5288c17fea6c2afa0a89a56692245a7b3dabf9f2e2459c4697",
+      "current_bytes": 168321,
+      "starting_lines": 3122,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/README.md",
+      "current_sha256": "b1ef85e18459746f7b1a65eb97cbd467f1bc61eebff7185270970f7489869775",
+      "starting_sha256": "b1ef85e18459746f7b1a65eb97cbd467f1bc61eebff7185270970f7489869775",
+      "current_bytes": 3374,
+      "starting_lines": 101,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/STATUS.md",
+      "current_sha256": "f94e8e67304e05e78a193c642ae614a3f2dff857aee3377b241ebbf23387b2a0",
+      "starting_sha256": "f94e8e67304e05e78a193c642ae614a3f2dff857aee3377b241ebbf23387b2a0",
+      "current_bytes": 163919,
+      "starting_lines": 2801,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/archive/pre-phase-2/frontend/README.md",
+      "current_sha256": "adeb290d8084ccfebafb0cadf6fc4cc73ac1ef67cc01d9eecbf06ad612265ac5",
+      "starting_sha256": "adeb290d8084ccfebafb0cadf6fc4cc73ac1ef67cc01d9eecbf06ad612265ac5",
+      "current_bytes": 4785,
+      "starting_lines": 88,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/README.md",
+      "current_sha256": "1a9f1ca1a7d0de973aae94398d9a9b3c868190303160f5b65c45419ffc4c46fe",
+      "starting_sha256": "1a9f1ca1a7d0de973aae94398d9a9b3c868190303160f5b65c45419ffc4c46fe",
+      "current_bytes": 14101,
+      "starting_lines": 162,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/api-native-review.md",
+      "current_sha256": "7ece8857ca799f45897540b21f8a44d1e854048178f78b0fad22d21d7a9e5c7c",
+      "starting_sha256": "7ece8857ca799f45897540b21f8a44d1e854048178f78b0fad22d21d7a9e5c7c",
+      "current_bytes": 5050,
+      "starting_lines": 69,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/coverage.csv",
+      "current_sha256": "d797f67c4d19f0403bc1a89b6531b9c428c1a7f2bb5a4f3d8cd50877dcdd9de6",
+      "starting_sha256": "d797f67c4d19f0403bc1a89b6531b9c428c1a7f2bb5a4f3d8cd50877dcdd9de6",
+      "current_bytes": 26670,
+      "starting_lines": 207,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/desktop-build-review.md",
+      "current_sha256": "c05a389669e1c29030a3a99d8c3b3cd9c20c24f98946a559cbb3eb56939679f1",
+      "starting_sha256": "c05a389669e1c29030a3a99d8c3b3cd9c20c24f98946a559cbb3eb56939679f1",
+      "current_bytes": 1626,
+      "starting_lines": 27,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/frontend-review.md",
+      "current_sha256": "967afc41035700b3832a2b7002b17ee5b9a17b03031c673593ba12a1f3e04ae7",
+      "starting_sha256": "967afc41035700b3832a2b7002b17ee5b9a17b03031c673593ba12a1f3e04ae7",
+      "current_bytes": 3468,
+      "starting_lines": 62,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/legacy-review.md",
+      "current_sha256": "e70292456e004672298c9cc4f7d2ee9aa5761650febedb41a209f9bc83d3d207",
+      "starting_sha256": "e70292456e004672298c9cc4f7d2ee9aa5761650febedb41a209f9bc83d3d207",
+      "current_bytes": 7138,
+      "starting_lines": 84,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/live-service-review.md",
+      "current_sha256": "a19bc3800cbf7420d6e118ecc167ca16fdef2da2b26a4e0d8966ff6002d0be6c",
+      "starting_sha256": "a19bc3800cbf7420d6e118ecc167ca16fdef2da2b26a4e0d8966ff6002d0be6c",
+      "current_bytes": 7007,
+      "starting_lines": 54,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/pipeline-review.md",
+      "current_sha256": "293e547f738e43481fab631f777445c70bca8f130893473e17b86f1b2c03789e",
+      "starting_sha256": "293e547f738e43481fab631f777445c70bca8f130893473e17b86f1b2c03789e",
+      "current_bytes": 8812,
+      "starting_lines": 145,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/providers-review.md",
+      "current_sha256": "fb9c4049d055f2ca7b7b214347a5d83c39a4f8c624ce17fcf1f6e9005225343c",
+      "starting_sha256": "fb9c4049d055f2ca7b7b214347a5d83c39a4f8c624ce17fcf1f6e9005225343c",
+      "current_bytes": 7843,
+      "starting_lines": 129,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/service-manager-review.md",
+      "current_sha256": "a22c4c4469f8bd9c8ed58c3e69c50bb28957ae1e3b4df28504a7bbb18166b4ae",
+      "starting_sha256": "a22c4c4469f8bd9c8ed58c3e69c50bb28957ae1e3b4df28504a7bbb18166b4ae",
+      "current_bytes": 3800,
+      "starting_lines": 64,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-01/storage-review.md",
+      "current_sha256": "f547867172cf4c9ff03f902f6c27f9a5cf8c8be660c8727af655ee0f882cb5cc",
+      "starting_sha256": "f547867172cf4c9ff03f902f6c27f9a5cf8c8be660c8727af655ee0f882cb5cc",
+      "current_bytes": 5488,
+      "starting_lines": 95,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/database-health.json",
+      "current_sha256": "74d723eefb0d3f983db606fb622580c4269b2f28bf14a8580b84f1b9d5441202",
+      "starting_sha256": "74d723eefb0d3f983db606fb622580c4269b2f28bf14a8580b84f1b9d5441202",
+      "current_bytes": 17488,
+      "starting_lines": 585,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/database-repro-results.json",
+      "current_sha256": "01f47d14ccf88f85e6e2ad7c5cbcfa18a72fab715bacb448bd14c8ee8a47255f",
+      "starting_sha256": "01f47d14ccf88f85e6e2ad7c5cbcfa18a72fab715bacb448bd14c8ee8a47255f",
+      "current_bytes": 3101,
+      "starting_lines": 107,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/database-review.md",
+      "current_sha256": "f4403df2811db708a9e6ab1c4c7557157e060dcda88d6fea30d62ea0c5a7a20c",
+      "starting_sha256": "f4403df2811db708a9e6ab1c4c7557157e060dcda88d6fea30d62ea0c5a7a20c",
+      "current_bytes": 22745,
+      "starting_lines": 178,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/implementation-prompts/01-lifecycle-and-recovery.md",
+      "current_sha256": "aa9dc1de12c9cd248bf274b6c72a24e0908a29f9721c95947c0522b439c2da61",
+      "starting_sha256": "aa9dc1de12c9cd248bf274b6c72a24e0908a29f9721c95947c0522b439c2da61",
+      "current_bytes": 9874,
+      "starting_lines": 33,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/implementation-prompts/02-schema-and-accounting.md",
+      "current_sha256": "167e52b8cafc7e446d92b5acfb61bb27cf51e21b1f383901a67d8376674a88c2",
+      "starting_sha256": "167e52b8cafc7e446d92b5acfb61bb27cf51e21b1f383901a67d8376674a88c2",
+      "current_bytes": 11460,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/implementation-prompts/03-historical-reads-and-exports.md",
+      "current_sha256": "225fd048872d6e8efc00c930cf584caf018e2afaaf0596ce40a013f1eed82b19",
+      "starting_sha256": "225fd048872d6e8efc00c930cf584caf018e2afaaf0596ce40a013f1eed82b19",
+      "current_bytes": 11392,
+      "starting_lines": 23,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/implementation-prompts/04-performance-and-integration.md",
+      "current_sha256": "75d3baa32fc422bd8b620b43183b2787a39d9f54a3f40f9061c05a1f09e6330d",
+      "starting_sha256": "75d3baa32fc422bd8b620b43183b2787a39d9f54a3f40f9061c05a1f09e6330d",
+      "current_bytes": 12520,
+      "starting_lines": 60,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/audits/2026-10-03/implementation-prompts/all-four-prompts.md",
+      "current_sha256": "4f1beef0fa6816bff77ff037213147e75eaec1b43a3281371a99f520f590d1f3",
+      "starting_sha256": "4f1beef0fa6816bff77ff037213147e75eaec1b43a3281371a99f520f590d1f3",
+      "current_bytes": 44741,
+      "starting_lines": 185,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/benchmarks/database-query-scale-2026-10-04.md",
+      "current_sha256": "ddfba35cb43748bcf1e3519edac4dfe661afbaeceea3932c288e0d3d37885550",
+      "starting_sha256": "ddfba35cb43748bcf1e3519edac4dfe661afbaeceea3932c288e0d3d37885550",
+      "current_bytes": 4407,
+      "starting_lines": 41,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/benchmarks/database-read-polling-2026-10-04.json",
+      "current_sha256": "f72ed480aea3574110dee7653c77f171a4e95be02853a4eb465063e411e0c1ca",
+      "starting_sha256": "f72ed480aea3574110dee7653c77f171a4e95be02853a4eb465063e411e0c1ca",
+      "current_bytes": 7726,
+      "starting_lines": 323,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/benchmarks/database-read-polling-2026-10-04.md",
+      "current_sha256": "706491882e3c7beceb4d312cdc55223b8aafc9f9cc41c36ab65bca31d91c106e",
+      "starting_sha256": "706491882e3c7beceb4d312cdc55223b8aafc9f9cc41c36ab65bca31d91c106e",
+      "current_bytes": 2660,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/history.md",
+      "current_sha256": "a166e01f25aa824f310b630b6d6b23801f40542b62e797bc7a72dc3724260981",
+      "starting_sha256": "a166e01f25aa824f310b630b6d6b23801f40542b62e797bc7a72dc3724260981",
+      "current_bytes": 14838,
+      "starting_lines": 168,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-2026-10-09.md",
+      "current_sha256": "30d33df0c6df6c175660f3d1dbe7947f9a669da16becfd8391076e18f89a989c",
+      "starting_sha256": "30d33df0c6df6c175660f3d1dbe7947f9a669da16becfd8391076e18f89a989c",
+      "current_bytes": 17161,
+      "starting_lines": 155,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/01-root-cleanup-and-guardrails.md",
+      "current_sha256": "7f7c1569a45fef58e72938601a9fc1f5155e138711107e5b14ecfff72ad4b8f0",
+      "starting_sha256": "7f7c1569a45fef58e72938601a9fc1f5155e138711107e5b14ecfff72ad4b8f0",
+      "current_bytes": 2680,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/02-expansion-limit.md",
+      "current_sha256": "10906eced1f3983d32aef5d5bd34bfd2291b5444e6fcca39159726ee050346ab",
+      "starting_sha256": "10906eced1f3983d32aef5d5bd34bfd2291b5444e6fcca39159726ee050346ab",
+      "current_bytes": 2351,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/03-acquisition-fallback.md",
+      "current_sha256": "df66acc9fae91c6dbecf082ab994caa6e465fa07db873f16eed65ab3e9d27530",
+      "starting_sha256": "df66acc9fae91c6dbecf082ab994caa6e465fa07db873f16eed65ab3e9d27530",
+      "current_bytes": 2354,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/04-resume-status.md",
+      "current_sha256": "54d05037f95efcfa1f4479d75e713461cf390476742778bed200c3ee9612bcb6",
+      "starting_sha256": "54d05037f95efcfa1f4479d75e713461cf390476742778bed200c3ee9612bcb6",
+      "current_bytes": 2251,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/05-service-lifecycle.md",
+      "current_sha256": "85de42cfab86362c8d2d29acd1901081836616f78dad1fb6db655592425405c2",
+      "starting_sha256": "85de42cfab86362c8d2d29acd1901081836616f78dad1fb6db655592425405c2",
+      "current_bytes": 2133,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/06-desktop-shutdown.md",
+      "current_sha256": "d5e58812c5d176db21552d0f487e568dd81ba3b1803dca9657b7c1dc8b6ceb58",
+      "starting_sha256": "d5e58812c5d176db21552d0f487e568dd81ba3b1803dca9657b7c1dc8b6ceb58",
+      "current_bytes": 2101,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/07-installable-backend.md",
+      "current_sha256": "55e9e09aeb19a058b0eb3ad6542814b056774a19aabe2ea20a984ab0f288bbef",
+      "starting_sha256": "55e9e09aeb19a058b0eb3ad6542814b056774a19aabe2ea20a984ab0f288bbef",
+      "current_bytes": 2749,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/08-folder-consolidation.md",
+      "current_sha256": "855eb68692cd95aaee80d87f551540f3eedfa26862f899f423780f12002b4818",
+      "starting_sha256": "855eb68692cd95aaee80d87f551540f3eedfa26862f899f423780f12002b4818",
+      "current_bytes": 3731,
+      "starting_lines": 15,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/09-docs-and-test-navigation.md",
+      "current_sha256": "b587014a6408e5a718abd1949789af50c5518aa076f40d7f8e988f82c991759f",
+      "starting_sha256": "b587014a6408e5a718abd1949789af50c5518aa076f40d7f8e988f82c991759f",
+      "current_bytes": 2445,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/10-python-api.md",
+      "current_sha256": "8078eb1eb16f047a4a6505206805d0ff9a3da0e33002f5a3efa3c5b677a2f55f",
+      "starting_sha256": "8078eb1eb16f047a4a6505206805d0ff9a3da0e33002f5a3efa3c5b677a2f55f",
+      "current_bytes": 2177,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/11-frontend-and-ci.md",
+      "current_sha256": "5262ffcffa9a1f4e20b11a1488d0a0bbad9454faa45a4e74f04902f86c96c16f",
+      "starting_sha256": "5262ffcffa9a1f4e20b11a1488d0a0bbad9454faa45a4e74f04902f86c96c16f",
+      "current_bytes": 2380,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/12-contracts-and-legacy.md",
+      "current_sha256": "fabce585db53c6da72bb4c6f4c577d156104bb11a1df13588b98e2ea23fa7975",
+      "starting_sha256": "fabce585db53c6da72bb4c6f4c577d156104bb11a1df13588b98e2ea23fa7975",
+      "current_bytes": 2536,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/13-research-storage-decomposition.md",
+      "current_sha256": "e64c6b464fdf2794c94fd244387d9cbcfef177bff96ff17a385a365f731b05d7",
+      "starting_sha256": "e64c6b464fdf2794c94fd244387d9cbcfef177bff96ff17a385a365f731b05d7",
+      "current_bytes": 2686,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/14-research-quality.md",
+      "current_sha256": "928529f192321ed2c7910382af710358fbba9c3bd19c56746d73a23bcd4e203d",
+      "starting_sha256": "928529f192321ed2c7910382af710358fbba9c3bd19c56746d73a23bcd4e203d",
+      "current_bytes": 2893,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/15-discovery-and-results.md",
+      "current_sha256": "0c31466adf5a671f442513034687af307a50b415923813f3843b2ed43bf875c0",
+      "starting_sha256": "0c31466adf5a671f442513034687af307a50b415923813f3843b2ed43bf875c0",
+      "current_bytes": 3234,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/16-mac-distribution-and-cache.md",
+      "current_sha256": "57600cf4398f872fb71830be28c5dad7bcb33e290d7d69aa6c8a99ea3d35f9fd",
+      "starting_sha256": "57600cf4398f872fb71830be28c5dad7bcb33e290d7d69aa6c8a99ea3d35f9fd",
+      "current_bytes": 2755,
+      "starting_lines": 13,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/17-windows-ci-and-durability.md",
+      "current_sha256": "82114de7dde3ff47f9da3124e62705e507b84796251d1455079b926b100409d5",
+      "starting_sha256": "82114de7dde3ff47f9da3124e62705e507b84796251d1455079b926b100409d5",
+      "current_bytes": 2313,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/project-foundation-implementation-prompts/README.md",
+      "current_sha256": "971afa35a33f8d4de9c8ef4c794a40d7e357f416afdcee2f2ca48aebc6235bb7",
+      "starting_sha256": "971afa35a33f8d4de9c8ef4c794a40d7e357f416afdcee2f2ca48aebc6235bb7",
+      "current_bytes": 3564,
+      "starting_lines": 27,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/01-foundations-and-contracts.md",
+      "current_sha256": "cb0dbf799c3ba7860503498ec6d949e1cc0e203bb257411b7abca2912c0724e5",
+      "starting_sha256": "cb0dbf799c3ba7860503498ec6d949e1cc0e203bb257411b7abca2912c0724e5",
+      "current_bytes": 13549,
+      "starting_lines": 61,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/02-engine-specific-queries.md",
+      "current_sha256": "4bb1936ff51ff7a6769121b466d9d1570424f7fb419a33c81a729fed60f2df89",
+      "starting_sha256": "4bb1936ff51ff7a6769121b466d9d1570424f7fb419a33c81a729fed60f2df89",
+      "current_bytes": 12502,
+      "starting_lines": 61,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/03-deeper-retrieval-and-ranking.md",
+      "current_sha256": "c73094f5e6bfcf0471c649236bb9d0b467b7c1ece3650cac6bf94850476f1248",
+      "starting_sha256": "c73094f5e6bfcf0471c649236bb9d0b467b7c1ece3650cac6bf94850476f1248",
+      "current_bytes": 12558,
+      "starting_lines": 55,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/04-claim-aware-source-previews.md",
+      "current_sha256": "42c4deac30badabb48b54fa49b89c9265631672028ea8c5971bac55909fb0ed5",
+      "starting_sha256": "42c4deac30badabb48b54fa49b89c9265631672028ea8c5971bac55909fb0ed5",
+      "current_bytes": 12314,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/05-expand-from-strong-papers.md",
+      "current_sha256": "ad8cc710d2fef7261160d725cc161e8aec68def22d039cde6bd5ddc731a1bfb8",
+      "starting_sha256": "ad8cc710d2fef7261160d725cc161e8aec68def22d039cde6bd5ddc731a1bfb8",
+      "current_bytes": 13189,
+      "starting_lines": 57,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/06-integration-ui-and-acceptance.md",
+      "current_sha256": "3885c89e238b7f00e5f1be36ddab78cf0a7193949bdb94635dfe7778f40d3bed",
+      "starting_sha256": "3885c89e238b7f00e5f1be36ddab78cf0a7193949bdb94635dfe7778f40d3bed",
+      "current_bytes": 15505,
+      "starting_lines": 67,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/README.md",
+      "current_sha256": "75bba186985a512b904d95672ec0e4f52c2d509544ff75b5276523cf334fe688",
+      "starting_sha256": "75bba186985a512b904d95672ec0e4f52c2d509544ff75b5276523cf334fe688",
+      "current_bytes": 5734,
+      "starting_lines": 42,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/all-six-prompts.md",
+      "current_sha256": "58c78307b7c9e2d02ef726854de402ab5490dd542604fca0f3890c26d4233bea",
+      "starting_sha256": "58c78307b7c9e2d02ef726854de402ab5490dd542604fca0f3890c26d4233bea",
+      "current_bytes": 77142,
+      "starting_lines": 360,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/source-discovery-2026-10-05/implementation-prompts/source-audit.md",
+      "current_sha256": "313e8db2ea957136390612e540f23f079d747862979827d6aff2c66500a62fbc",
+      "starting_sha256": "313e8db2ea957136390612e540f23f079d747862979827d6aff2c66500a62fbc",
+      "current_bytes": 9450,
+      "starting_lines": 77,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/proposals/web-discovery-quality-2026-10-09.md",
+      "current_sha256": "39e80a011ba72d106997ee3facb93faff69ea706d05ba711287a67abb0008a02",
+      "starting_sha256": "39e80a011ba72d106997ee3facb93faff69ea706d05ba711287a67abb0008a02",
+      "current_bytes": 12254,
+      "starting_lines": 80,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/testing-handoff-2026-10-01.md",
+      "current_sha256": "e4ac6a4e32e127271ce7b0133e2fa990b8fd4cf39132f3f8e7536af9df3683d9",
+      "starting_sha256": "e4ac6a4e32e127271ce7b0133e2fa990b8fd4cf39132f3f8e7536af9df3683d9",
+      "current_bytes": 5758,
+      "starting_lines": 44,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/acquisition-usable-fallback-2026-10-09.md",
+      "current_sha256": "635e6939c228c8844b6966bcf562f1ce6ed1d14d261ce3bcfb8ad1c408b104df",
+      "starting_sha256": "635e6939c228c8844b6966bcf562f1ce6ed1d14d261ce3bcfb8ad1c408b104df",
+      "current_bytes": 8180,
+      "starting_lines": 115,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/adaptive-search-reliability.md",
+      "current_sha256": "dbed285187a185a8a0c7d5ce8de70048a0b3618f2728e2467f9152a0bba5882b",
+      "starting_sha256": "dbed285187a185a8a0c7d5ce8de70048a0b3618f2728e2467f9152a0bba5882b",
+      "current_bytes": 4890,
+      "starting_lines": 75,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/alpr-equity-run-review-2026-10-02.md",
+      "current_sha256": "6af1074cc9ea472bda72eedf17e044afc1e7ac6ae9cf1d55ed0ab2db7e4f5cc1",
+      "starting_sha256": "6af1074cc9ea472bda72eedf17e044afc1e7ac6ae9cf1d55ed0ab2db7e4f5cc1",
+      "current_bytes": 11688,
+      "starting_lines": 74,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/alpr-run-fixes-2026-10-01.md",
+      "current_sha256": "057cb1106e6939d57c7cd030a0fb3182554f6e396a0d9323d6744b9226392048",
+      "starting_sha256": "057cb1106e6939d57c7cd030a0fb3182554f6e396a0d9323d6744b9226392048",
+      "current_bytes": 9693,
+      "starting_lines": 78,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/alpr-run-review-2026-10-01.md",
+      "current_sha256": "3c3acb50418b598034080ad5d9df50231cc65a5593cfa0b474fed346dfcf195c",
+      "starting_sha256": "3c3acb50418b598034080ad5d9df50231cc65a5593cfa0b474fed346dfcf195c",
+      "current_bytes": 13332,
+      "starting_lines": 222,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/api-module-split-2026-10-10.md",
+      "current_sha256": "b091450e31a6f4bd1789db588f6a2a559600ed4d2a8baca7d57462e6951f8227",
+      "starting_sha256": "b091450e31a6f4bd1789db588f6a2a559600ed4d2a8baca7d57462e6951f8227",
+      "current_bytes": 9804,
+      "starting_lines": 135,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/audit-maintenance.md",
+      "current_sha256": "149eaac7e584fcdb875ec0638d1267b01373713e7e46bcdcb33a0d81ec5abfe2",
+      "starting_sha256": "149eaac7e584fcdb875ec0638d1267b01373713e7e46bcdcb33a0d81ec5abfe2",
+      "current_bytes": 5886,
+      "starting_lines": 55,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/audited-app-install-2026-10-01.md",
+      "current_sha256": "7f5a5b97da278f4cf6172f3d46c7a3d9a5d21c02d1a40109114c2ae22f5739cf",
+      "starting_sha256": "7f5a5b97da278f4cf6172f3d46c7a3d9a5d21c02d1a40109114c2ae22f5739cf",
+      "current_bytes": 5594,
+      "starting_lines": 89,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/backend-hotspot-split-2026-10-11-wheel-files.txt",
+      "current_sha256": "ddcead31adda9b9f0e0f63ddd86bef65a9314c4b2c6ff4424ec060399eb31a9b",
+      "starting_sha256": "ddcead31adda9b9f0e0f63ddd86bef65a9314c4b2c6ff4424ec060399eb31a9b",
+      "current_bytes": 11579,
+      "starting_lines": 293,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/backend-hotspot-split-2026-10-11.md",
+      "current_sha256": "2e0707e3911f0375945e341c2ef33917ae21b4271b5da956c47dacda0da7dc76",
+      "starting_sha256": "2e0707e3911f0375945e341c2ef33917ae21b4271b5da956c47dacda0da7dc76",
+      "current_bytes": 13516,
+      "starting_lines": 180,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/backend-installability-2026-10-10-wheel-files.txt",
+      "current_sha256": "c4156e0d69a846db461418a3721761096cbe9c72551da0a22912f8242f77840d",
+      "starting_sha256": "c4156e0d69a846db461418a3721761096cbe9c72551da0a22912f8242f77840d",
+      "current_bytes": 5901,
+      "starting_lines": 162,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/backend-installability-2026-10-10.md",
+      "current_sha256": "a23848386986b7732133c86d8c2871315b09fa5cc65a6736309edd13afa10fee",
+      "starting_sha256": "a23848386986b7732133c86d8c2871315b09fa5cc65a6736309edd13afa10fee",
+      "current_bytes": 8074,
+      "starting_lines": 125,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/citation-expansion-limits-2026-10-09.md",
+      "current_sha256": "2c68a23e98742949a3f863e904c5034a98ca9383447c7cbd843bb1a6a941219c",
+      "starting_sha256": "2c68a23e98742949a3f863e904c5034a98ca9383447c7cbd843bb1a6a941219c",
+      "current_bytes": 9722,
+      "starting_lines": 124,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/committed-app-redelivery-2026-10-02.md",
+      "current_sha256": "47ca20e8f647b78d4c9ac4c70bb2772aa1565f23bcf94293169c6b137cc0202f",
+      "starting_sha256": "47ca20e8f647b78d4c9ac4c70bb2772aa1565f23bcf94293169c6b137cc0202f",
+      "current_bytes": 2499,
+      "starting_lines": 11,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/contract-ownership-2026-10-10.md",
+      "current_sha256": "734fcf6439eb69569376dba71ef0b69ba8bb775b8b6ec6ba11b0be4bccb89983",
+      "starting_sha256": "734fcf6439eb69569376dba71ef0b69ba8bb775b8b6ec6ba11b0be4bccb89983",
+      "current_bytes": 9562,
+      "starting_lines": 133,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/current-app-install-2026-10-09.md",
+      "current_sha256": "2684f2d762125c5d7a0b5c8de56e47c5c996771915594af4737d3be0aa8c330e",
+      "starting_sha256": "2684f2d762125c5d7a0b5c8de56e47c5c996771915594af4737d3be0aa8c330e",
+      "current_bytes": 4682,
+      "starting_lines": 76,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/database-integrity-fixes.md",
+      "current_sha256": "79293ab0498bc15f92caca79b312c5d0ac8a5b92f317b237c90f894de7183f92",
+      "starting_sha256": "79293ab0498bc15f92caca79b312c5d0ac8a5b92f317b237c90f894de7183f92",
+      "current_bytes": 5210,
+      "starting_lines": 38,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/database-phase4-review.md",
+      "current_sha256": "0b48194f92063cac61610414d470e772c3abe1636bd613329b3dc69f7d2893db",
+      "starting_sha256": "0b48194f92063cac61610414d470e772c3abe1636bd613329b3dc69f7d2893db",
+      "current_bytes": 10762,
+      "starting_lines": 114,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/database-phase4.md",
+      "current_sha256": "854f56135ca72493f8a3e6a4fc41f014dd7c30c68a2b2f8080ceddf95461a96d",
+      "starting_sha256": "854f56135ca72493f8a3e6a4fc41f014dd7c30c68a2b2f8080ceddf95461a96d",
+      "current_bytes": 21356,
+      "starting_lines": 115,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/desktop-shutdown-2026-10-10.md",
+      "current_sha256": "1ac5b6e62cd399f6cef79ace28fe86245a963a763a396a9bd3a7ed1addbdcd8a",
+      "starting_sha256": "1ac5b6e62cd399f6cef79ace28fe86245a963a763a396a9bd3a7ed1addbdcd8a",
+      "current_bytes": 10611,
+      "starting_lines": 147,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/discrimination-run-fixes-2026-10-02.md",
+      "current_sha256": "8fdc0ddb603177fcdec3c5ed9b51bf685f8033d871599509cf334d6b64d21fca",
+      "starting_sha256": "8fdc0ddb603177fcdec3c5ed9b51bf685f8033d871599509cf334d6b64d21fca",
+      "current_bytes": 8026,
+      "starting_lines": 53,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/discrimination-run-review-2026-10-01.md",
+      "current_sha256": "ddffe6fddb7875e2a161268120a1b26765bebdd7a8dc43873ac0d9b736f84909",
+      "starting_sha256": "ddffe6fddb7875e2a161268120a1b26765bebdd7a8dc43873ac0d9b736f84909",
+      "current_bytes": 11354,
+      "starting_lines": 145,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/docs-test-navigation-2026-10-10.md",
+      "current_sha256": "725f880c2ec0b87fa383d473ad73594364692119d8278bc1a691cce2407af95d",
+      "starting_sha256": "725f880c2ec0b87fa383d473ad73594364692119d8278bc1a691cce2407af95d",
+      "current_bytes": 8729,
+      "starting_lines": 131,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/folder-consolidation-2026-10-10-wheel-files.txt",
+      "current_sha256": "5efac2670861d22157263fb3a6d02ad6a6f026859602e7423a97cb2f5ef1f5e5",
+      "starting_sha256": "5efac2670861d22157263fb3a6d02ad6a6f026859602e7423a97cb2f5ef1f5e5",
+      "current_bytes": 8706,
+      "starting_lines": 231,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/folder-consolidation-2026-10-10.md",
+      "current_sha256": "e9f91e1e8ddeb330874df9c88883b760f07c8a2f50690b959f4c164d14f4e180",
+      "starting_sha256": "e9f91e1e8ddeb330874df9c88883b760f07c8a2f50690b959f4c164d14f4e180",
+      "current_bytes": 14016,
+      "starting_lines": 213,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/mac-cache-pricing.md",
+      "current_sha256": "02b1961f4c01857be554af96563e30c1617f87697a0611ade9355ca0d374b702",
+      "starting_sha256": "02b1961f4c01857be554af96563e30c1617f87697a0611ade9355ca0d374b702",
+      "current_bytes": 8726,
+      "starting_lines": 130,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/mac-current-build-2026-09-28.md",
+      "current_sha256": "a62a52a917304ea4a02c2138dcd316cea6283d89df35602d10490c2dfd87f6fe",
+      "starting_sha256": "a62a52a917304ea4a02c2138dcd316cea6283d89df35602d10490c2dfd87f6fe",
+      "current_bytes": 4409,
+      "starting_lines": 70,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/mac-delivery-gates-2026-10-13.json",
+      "current_sha256": "e918046736898a88c72f39846bf93559caf5eda92b7971788e67c388c69ddfbe",
+      "starting_sha256": "e918046736898a88c72f39846bf93559caf5eda92b7971788e67c388c69ddfbe",
+      "current_bytes": 14672,
+      "starting_lines": 332,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/mac-delivery-gates-2026-10-13.md",
+      "current_sha256": "49ab9e047d3324d351ef7ee0c1c28b3ec94236b2891ae0a61f3550a550071c8a",
+      "starting_sha256": "49ab9e047d3324d351ef7ee0c1c28b3ec94236b2891ae0a61f3550a550071c8a",
+      "current_bytes": 19280,
+      "starting_lines": 285,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/phase-2.md",
+      "current_sha256": "a33dae21281ce130837a77708e629ef72a3733ed9c935a1e487f903f65d80d43",
+      "starting_sha256": "a33dae21281ce130837a77708e629ef72a3733ed9c935a1e487f903f65d80d43",
+      "current_bytes": 4968,
+      "starting_lines": 80,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/phase-3.md",
+      "current_sha256": "14aa976a7addfdd57a03b032f831044f9b5d9cdfa76ec39d73911e0730ab1536",
+      "starting_sha256": "14aa976a7addfdd57a03b032f831044f9b5d9cdfa76ec39d73911e0730ab1536",
+      "current_bytes": 12203,
+      "starting_lines": 197,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/planner-scout-reliability.md",
+      "current_sha256": "9c24ea88459dd127abe67b010bf802ad9819c258824ace6ed652dd7c6335d17f",
+      "starting_sha256": "9c24ea88459dd127abe67b010bf802ad9819c258824ace6ed652dd7c6335d17f",
+      "current_bytes": 5900,
+      "starting_lines": 92,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/private-surveillance-run-fixes-2026-10-02.md",
+      "current_sha256": "5968b0f3f71320c3b4b013c41cbb9e77378a48d2a1ee6f5f5fdea0ca290d6310",
+      "starting_sha256": "5968b0f3f71320c3b4b013c41cbb9e77378a48d2a1ee6f5f5fdea0ca290d6310",
+      "current_bytes": 5565,
+      "starting_lines": 26,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/private-surveillance-run-review-2026-10-02.md",
+      "current_sha256": "d7b5df1bedf0f5cd6360803b2fbf23c57d970a3abeb0cbf3dc17b36d0c99130f",
+      "starting_sha256": "d7b5df1bedf0f5cd6360803b2fbf23c57d970a3abeb0cbf3dc17b36d0c99130f",
+      "current_bytes": 4536,
+      "starting_lines": 34,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/project-stage-2026-10-08.md",
+      "current_sha256": "63d12bfec633e181158b4eb815be7498374f62d9b521f84fcd4223002da8d338",
+      "starting_sha256": "63d12bfec633e181158b4eb815be7498374f62d9b521f84fcd4223002da8d338",
+      "current_bytes": 7332,
+      "starting_lines": 108,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/renderer-split-2026-10-10.md",
+      "current_sha256": "b66e37b89b56b18af37a8dde4e6d98a145df0709e80a612774beaacae73ad9e5",
+      "starting_sha256": "b66e37b89b56b18af37a8dde4e6d98a145df0709e80a612774beaacae73ad9e5",
+      "current_bytes": 8466,
+      "starting_lines": 131,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/resume-status-2026-10-10.md",
+      "current_sha256": "54293f4d6557b18982de4e325d2d430d5285049a7d483bdb500b83dd37639618",
+      "starting_sha256": "54293f4d6557b18982de4e325d2d430d5285049a7d483bdb500b83dd37639618",
+      "current_bytes": 5905,
+      "starting_lines": 90,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/reviewer-route-testing-fix-2026-10-01.md",
+      "current_sha256": "3855ab23ea4629bbcc8635cbb8b0930ee81699f458743e9e875972aafdff83b4",
+      "starting_sha256": "3855ab23ea4629bbcc8635cbb8b0930ee81699f458743e9e875972aafdff83b4",
+      "current_bytes": 5218,
+      "starting_lines": 84,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/root-cleanup-2026-10-09.md",
+      "current_sha256": "234ba5cb468461c6cbaf0e13a62ae5abea2a4101115a10cb65bce21a03a7ab1e",
+      "starting_sha256": "234ba5cb468461c6cbaf0e13a62ae5abea2a4101115a10cb65bce21a03a7ab1e",
+      "current_bytes": 7099,
+      "starting_lines": 122,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/service-lifecycle-2026-10-10.md",
+      "current_sha256": "56658394c0b6b260e2b3f2d61d17e058a20a0352239465c799700b1810cbe10b",
+      "starting_sha256": "56658394c0b6b260e2b3f2d61d17e058a20a0352239465c799700b1810cbe10b",
+      "current_bytes": 8362,
+      "starting_lines": 134,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/sqlite-status-polling.md",
+      "current_sha256": "f2d5a2e8a6efbea1baf941f3b1479aea3694cdeabbe5f76409b8304a3ba24a52",
+      "starting_sha256": "f2d5a2e8a6efbea1baf941f3b1479aea3694cdeabbe5f76409b8304a3ba24a52",
+      "current_bytes": 3948,
+      "starting_lines": 64,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/windows-ci-durability-2026-10-13.json",
+      "current_sha256": "b003e6284f159d32f462b2d1e5ecfae85ceb7e3d2a8a176a352fd096597b971c",
+      "starting_sha256": "b003e6284f159d32f462b2d1e5ecfae85ceb7e3d2a8a176a352fd096597b971c",
+      "current_bytes": 23406,
+      "starting_lines": 484,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "docs/verification/windows-ci-durability-2026-10-13.md",
+      "current_sha256": "611cb12f513b9b0b24cdbe137900f89432a3fd3ee22e38819ab8e05aefe2daad",
+      "starting_sha256": "611cb12f513b9b0b24cdbe137900f89432a3fd3ee22e38819ab8e05aefe2daad",
+      "current_bytes": 24592,
+      "starting_lines": 288,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "evaluations/cases/research_quality/LIVE_RESULT.md",
+      "current_sha256": "c2f0a07f8c966da037dd8fa349c331e18576c2bf24ea53203a55d599e3152dbe",
+      "starting_sha256": "c2f0a07f8c966da037dd8fa349c331e18576c2bf24ea53203a55d599e3152dbe",
+      "current_bytes": 2870,
+      "starting_lines": 43,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "evaluations/cases/research_quality/offline_results.json",
+      "current_sha256": "138d8b0cc178b460512d3343d7cdb5e33994dada5ff0f01870ecd7526b9875ce",
+      "starting_sha256": "138d8b0cc178b460512d3343d7cdb5e33994dada5ff0f01870ecd7526b9875ce",
+      "current_bytes": 20639,
+      "starting_lines": 548,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    },
+    {
+      "path": "evaluations/cases/source_leads/offline_results.json",
+      "current_sha256": "930405d54f91db9a0bf7c48de1c5dd82081f7004cdc45d0e66c54d62d23f1dd9",
+      "starting_sha256": "930405d54f91db9a0bf7c48de1c5dd82081f7004cdc45d0e66c54d62d23f1dd9",
+      "current_bytes": 21240,
+      "starting_lines": 665,
+      "reason": "Historical documentation, completed plan, proposal or retained verification/result record; excluded by direct user instruction."
+    }
+  ],
+  "active_scope_manual_review_complete": false
+}

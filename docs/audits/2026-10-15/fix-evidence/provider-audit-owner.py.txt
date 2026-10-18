@@ -1,0 +1,52 @@
+from __future__ import annotations
+import json
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd()/'tests'))
+import test_product_discovery_pipeline as product
+from researchassistant.api.live_service import LiveResearchController
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, canonical_v2_artifact_json, v2_payload_fingerprint
+from researchassistant.contracts.discovery_v2 import V2ProviderAttemptCompletion
+from researchassistant.storage.discovery_store import provider_attempt_audit
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix='ra-audit-owner-review-') as temporary:
+        path=Path(temporary)/'generated.sqlite3'
+        result,_,_=product._run(path,ResearchControls(discovery_providers=(DiscoveryProvider.EXA,)))
+        assert result.state.value=='released'
+        audit=provider_attempt_audit(path,result.run_id)
+        original=next(x for x in audit.completions if x is not None)
+        other=next(x for x in audit.starts if x.operation_id!=original.operation_id)
+        forged=V2ProviderAttemptCompletion.model_validate(original.model_dump()|{'operation_id':other.operation_id})
+        payload=canonical_v2_artifact_json(forged)
+        with sqlite3.connect(path) as connection:
+            trigger=connection.execute("SELECT sql FROM sqlite_master WHERE name='v2_artifacts_immutable_update'").fetchone()[0]
+            connection.execute('DROP TRIGGER v2_artifacts_immutable_update')
+            changed=connection.execute("UPDATE v2_artifacts SET payload_json=?,payload_sha256=? WHERE run_id=? AND artifact_type='V2ProviderAttemptCompletion' AND json_extract(payload_json,'$.attempt_id')=?",(payload,v2_payload_fingerprint(payload),str(result.run_id),str(original.attempt_id)))
+            assert changed.rowcount==1
+            connection.execute(trigger)
+        before=path.read_bytes()
+        readback=provider_attempt_audit(path,result.run_id)
+        mismatched=[(s,c) for s,c in zip(readback.starts,readback.completions,strict=True) if c is not None and s.operation_id!=c.operation_id]
+        assert len(mismatched)==1
+        controller=LiveResearchController(environment={})
+        try:
+            snapshot=controller.snapshot(path,result.run_id)
+        finally:
+            controller.shutdown(timeout=20)
+        observed={
+            'finding':'R30', 'generated_released_run':True,
+            'checksum_valid_completion_with_other_operation_accepted':True,
+            'audit_start_operation':str(mismatched[0][0].operation_id),
+            'audit_completion_operation':str(mismatched[0][1].operation_id),
+            'returned_snapshot_classification':snapshot.classification,
+            'physical_search_requests':snapshot.v2_diagnostics.physical_search_requests,
+            'database_unchanged_by_inspection':path.read_bytes()==before,
+            'method':'Generated offline released research; substitute only one physical completion operation ID and recompute its envelope checksum; restore original immutability trigger. No real data or external calls.',
+        }
+    Path('/tmp/ra-review-provider-audit-owner.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

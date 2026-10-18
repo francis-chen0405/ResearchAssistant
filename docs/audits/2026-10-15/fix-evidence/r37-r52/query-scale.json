@@ -1,0 +1,182 @@
+{
+  "baseline_revision": "b25df1d",
+  "baseline_schema": 16,
+  "candidate_runs": {
+    "10": {
+      "artifacts": "one Analyst, draft, Reviewer decision, and Ledger row per candidate",
+      "indexed_measurement": {
+        "first_call_ms": 299.48,
+        "peak_python_mib": 1.1,
+        "warm_median_ms": 296.34
+      },
+      "indexed_related_selects": {
+        "analyst_decisions": 1,
+        "candidates": 1,
+        "ledger_records": 1,
+        "snapshots": 1,
+        "statement_drafts": 1,
+        "statement_review_attempts": 1
+      },
+      "indexed_total_selects": 15,
+      "legacy_measurement": {
+        "first_call_ms": 8.31,
+        "peak_python_mib": 0.86,
+        "warm_median_ms": 8.21
+      },
+      "legacy_related_selects": {
+        "analyst_decisions": 10,
+        "candidates": 1,
+        "ledger_records": 10,
+        "snapshots": 10,
+        "statement_drafts": 10,
+        "statement_review_attempts": 10
+      },
+      "legacy_total_selects": 69,
+      "typed_outputs_equal": true
+    },
+    "1000": {
+      "artifacts": "one Analyst, draft, Reviewer decision, and Ledger row per candidate",
+      "indexed_measurement": {
+        "first_call_ms": 29687.69,
+        "peak_python_mib": 21.58,
+        "warm_median_ms": 30563.73
+      },
+      "indexed_related_selects": {
+        "analyst_decisions": 2,
+        "candidates": 1,
+        "ledger_records": 2,
+        "snapshots": 1,
+        "statement_drafts": 2,
+        "statement_review_attempts": 2
+      },
+      "indexed_total_selects": 19,
+      "legacy_measurement": {
+        "first_call_ms": 1398.58,
+        "peak_python_mib": 82.27,
+        "warm_median_ms": 1421.69
+      },
+      "legacy_related_selects": {
+        "analyst_decisions": 1000,
+        "candidates": 1,
+        "ledger_records": 1000,
+        "snapshots": 1000,
+        "statement_drafts": 1000,
+        "statement_review_attempts": 1000
+      },
+      "legacy_total_selects": 6009,
+      "typed_outputs_equal": true
+    },
+    "2": {
+      "artifacts": "one Analyst, draft, Reviewer decision, and Ledger row per candidate",
+      "indexed_measurement": {
+        "first_call_ms": 61.0,
+        "peak_python_mib": 0.91,
+        "warm_median_ms": 61.31
+      },
+      "indexed_related_selects": {
+        "analyst_decisions": 1,
+        "candidates": 1,
+        "ledger_records": 1,
+        "snapshots": 1,
+        "statement_drafts": 1,
+        "statement_review_attempts": 1
+      },
+      "indexed_total_selects": 15,
+      "legacy_measurement": {
+        "first_call_ms": 5.6,
+        "peak_python_mib": 0.21,
+        "warm_median_ms": 4.84
+      },
+      "legacy_related_selects": {
+        "analyst_decisions": 2,
+        "candidates": 1,
+        "ledger_records": 2,
+        "snapshots": 2,
+        "statement_drafts": 2,
+        "statement_review_attempts": 2
+      },
+      "legacy_total_selects": 21,
+      "typed_outputs_equal": true
+    },
+    "40": {
+      "artifacts": "one Analyst, draft, Reviewer decision, and Ledger row per candidate",
+      "indexed_measurement": {
+        "first_call_ms": 1152.73,
+        "peak_python_mib": 1.71,
+        "warm_median_ms": 1160.91
+      },
+      "indexed_related_selects": {
+        "analyst_decisions": 1,
+        "candidates": 1,
+        "ledger_records": 1,
+        "snapshots": 1,
+        "statement_drafts": 1,
+        "statement_review_attempts": 1
+      },
+      "indexed_total_selects": 15,
+      "legacy_measurement": {
+        "first_call_ms": 24.26,
+        "peak_python_mib": 3.35,
+        "warm_median_ms": 23.78
+      },
+      "legacy_related_selects": {
+        "analyst_decisions": 40,
+        "candidates": 1,
+        "ledger_records": 40,
+        "snapshots": 40,
+        "statement_drafts": 40,
+        "statement_review_attempts": 40
+      },
+      "legacy_total_selects": 249,
+      "typed_outputs_equal": true
+    }
+  },
+  "current_schema": 18,
+  "filesystem_cache": "uncontrolled; first call is not described as a cold-cache run",
+  "fixture": "tests/fixtures/basic_valid_run",
+  "history_listing": {
+    "elapsed_ms": 1.57,
+    "history_rows": 501,
+    "returned_rows": 100
+  },
+  "history_runs": 501,
+  "schema16_query_plans": {
+    "candidates": [
+      "SCAN candidates",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "drafts": [
+      "SCAN statement_drafts",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "history": [
+      "SCAN runs",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "ledger": [
+      "SCAN ledger_records USING INDEX sqlite_autoindex_ledger_records_1"
+    ],
+    "reviews": [
+      "SEARCH statement_review_attempts USING INDEX sqlite_autoindex_statement_review_attempts_2 (run_id=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  },
+  "schema18_query_plans": {
+    "candidates": [
+      "SEARCH candidates USING INDEX candidates_run_extracted_quote (run_id=?)"
+    ],
+    "drafts": [
+      "SEARCH statement_drafts USING INDEX statement_drafts_run_quote_drafted (run_id=? AND quote_block_id=?)"
+    ],
+    "history": [
+      "SCAN runs USING INDEX runs_updated_history"
+    ],
+    "ledger": [
+      "SEARCH ledger_records USING INDEX ledger_records_run_quote_claim (run_id=? AND quote_block_id=?)"
+    ],
+    "reviews": [
+      "SEARCH statement_review_attempts USING INDEX statement_reviews_run_quote_reviewed (run_id=? AND quote_block_id=?)"
+    ]
+  },
+  "source_text_bytes_per_snapshot": 65536
+}

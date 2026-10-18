@@ -9,12 +9,139 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  windows-regressions:
+    name: Windows regressions and native storage
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Record native runner and filesystem
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/build/windows-evidence | Out-Null
+          $os = Get-CimInstance Win32_OperatingSystem
+          $volumes = Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystemType
+          @{ os = $os.Caption; version = $os.Version; build = $os.BuildNumber; volumes = $volumes; revision = "${{ github.sha }}" } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 desktop/build/windows-evidence/environment.json
+          Get-Content desktop/build/windows-evidence/environment.json
+      - name: Install Python dependencies
+        run: python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
+      - name: Native NTFS storage, crash recovery, ACL and vault checks
+        run: >-
+          python -m pytest tests/test_native_storage_durability.py
+          tests/test_native_windows_security.py
+          tests/test_private_import_files.py::test_native_windows_acl_is_protected_and_contains_owner_and_system
+          tests/test_desktop_shutdown.py
+          --junitxml=desktop/build/windows-evidence/native.xml
+      - name: Measure offline CLI and source-lead fixture failures
+        run: python desktop/windows-ci-diagnostics.py
+      - name: Reproduce reported Windows regressions
+        run: >-
+          python -m pytest
+          tests/test_database_read_paths_phase3.py::test_readers_encode_uri_sensitive_path_characters
+          tests/test_mlp3_api.py::test_browser_claim_submission_trims_whitespace_before_api_request
+          tests/test_mvp5_live_web.py::test_service_launch_excludes_secrets_and_stops_only_owned_process
+          tests/test_mvp5_live_web.py::test_mocked_released_run_reconnects_through_local_api
+          tests/test_private_import_files.py::test_windows_acl_setup_refuses_replaced_created_path
+          tests/test_v2_deep_analysis_concurrency.py::test_cancellation_drains_in_flight_work_and_writes_no_aggregate
+          tests/test_api_module_split.py::test_routes_schemas_and_offline_responses_match_before_split
+          tests/test_saved_research_import.py::test_saved_fixture_replay_is_private_read_only_and_keeps_unknowns
+          tests/test_source_archive.py::test_archive_inventory_retains_documented_launchers_and_required_guidance
+          tests/test_source_leads.py::test_full_production_pipeline_leads_keep_admission_families_and_released_bytes
+          tests/test_live_resume_status.py::test_matching_resume_is_active_and_clears_previous_rejection
+          --junitxml=desktop/build/windows-evidence/regressions.xml
+      - name: Upload Windows check evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-check-evidence
+          path: desktop/build/windows-evidence/
+          if-no-files-found: error
+  windows-package:
+    name: Windows packaging and native desktop
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.19.0"
+      - name: Record native packaging runner and filesystem
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/build/windows-evidence | Out-Null
+          $os = Get-CimInstance Win32_OperatingSystem
+          $volumes = Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystemType
+          @{ os = $os.Caption; version = $os.Version; build = $os.BuildNumber; volumes = $volumes; revision = "${{ github.sha }}" } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 desktop/build/windows-evidence/environment.json
+          Get-Content desktop/build/windows-evidence/environment.json
+      - name: Install constrained build environment
+        run: python -m pip install -c desktop/constraints.txt -e "./backend[dev]" -r desktop/requirements-build.txt
+      - name: Install locked frontend and desktop dependencies
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          npm ci --prefix desktop --no-audit --no-fund
+          node desktop/node_modules/electron/install.js
+      - name: Build bundled runtimes and static frontend
+        run: python desktop/build.py
+      - name: Pinned acquisition cache regressions
+        run: node --test desktop/acquisition/cache-policy.test.cjs desktop/acquisition/network-policy.test.cjs desktop/acquisition/network-proxy.test.cjs
+      - name: Exercise offline research interface
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/desktop/build/resources/browsers
+        run: |
+          node desktop/acquisition/network-policy-smoke.cjs
+          pnpm --dir frontend smoke:offline
+      - name: Exercise frozen bundle without developer tools
+        run: python desktop/smoke.py desktop/build/resources
+      - name: Exercise desktop window
+        run: node desktop/ui-smoke.cjs
+      - name: Real Electron Windows forced process shutdown
+        run: python desktop/windows-shutdown-electron-smoke.py
+      - name: Build unsigned test installers
+        id: package
+        working-directory: desktop
+        run: npm run package
+      - name: Install, interrupt and repair the Windows candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python desktop/windows-installer-smoke.py "desktop/dist/ResearchAssistant Setup 0.1.0.exe"
+          --output desktop/build/windows-evidence/installer.json
+      - name: Upload native Windows installer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-evidence
+          path: desktop/build/windows-evidence/
+          if-no-files-found: warn
+      - name: Upload test installer even if installed smoke fails
+        if: always() && steps.package.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResearchAssistant-windows-2025
+          path: desktop/dist/*.exe
+          if-no-files-found: error
   desktop:
     name: Desktop ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -38,14 +165,20 @@ jobs:
           version: "11.19.0"
       - name: Install Python dependencies
         run: |
-          python -m pip install -c desktop/constraints.txt -r requirements.txt -r desktop/requirements-build.txt httpx2 pytest ruff
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]" -r desktop/requirements-build.txt
+      - name: Verify supported Python distribution
+        run: python scripts/verify_distribution.py --constraints desktop/constraints.txt
       - name: Install locked frontend and desktop dependencies
         run: |
-          pnpm --dir web install --frozen-lockfile
+          pnpm --dir frontend install --frozen-lockfile
           npm ci --prefix desktop --no-audit --no-fund
           node desktop/node_modules/electron/install.js
       - name: Python regressions
         run: python -m pytest
+      - name: Desktop shutdown handlers and native process ownership
+        run: |
+          npm --prefix desktop test
+          npm --prefix desktop run smoke:shutdown
       - name: Ruff lint
         run: python -m ruff check .
       - name: Ruff format
@@ -53,29 +186,37 @@ jobs:
       - name: Whitespace check
         run: git diff --check
       - name: Frontend lint and type check
-        working-directory: web
+        working-directory: frontend
         run: |
           pnpm lint
           pnpm exec tsc --noEmit
       - name: Build bundled runtimes and static frontend
+        if: runner.os != 'Windows'
         run: python desktop/build.py
+      - name: Pinned acquisition cache regressions
+        if: runner.os != 'Windows'
+        run: node --test desktop/acquisition/cache-policy.test.cjs desktop/acquisition/network-policy.test.cjs desktop/acquisition/network-proxy.test.cjs
       - name: Exercise offline research interface
+        if: runner.os != 'Windows'
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/desktop/build/resources/browsers
         run: |
-          node desktop/frontend-smoke.cjs
-          node desktop/frontend-poll-smoke.cjs
-          node desktop/configuration-race-smoke.cjs
-          node desktop/audit-api-smoke.cjs
-          node desktop/history-race-smoke.cjs
+          node desktop/acquisition/network-policy-smoke.cjs
+          pnpm --dir frontend smoke:offline
       - name: Exercise frozen bundle without developer tools
+        if: runner.os != 'Windows'
         run: python desktop/smoke.py desktop/build/resources
       - name: Exercise desktop window
-        run: node desktop/ui-smoke.cjs
+        if: runner.os != 'Windows'
+        run: |
+          node desktop/ui-smoke.cjs
+          node desktop/shutdown-electron-smoke.cjs
       - name: Build unsigned test installers
+        if: runner.os != 'Windows'
         working-directory: desktop
         run: npm run package
       - name: Upload test installers
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ResearchAssistant-${{ matrix.os }}

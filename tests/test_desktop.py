@@ -252,7 +252,7 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
     import researchassistant.runtime.application_runtime as application_runtime
     import researchassistant.runtime.cli as cli
 
-    source_root = tmp_path / "source"
+    source_root = tmp_path / "source/backend/src"
     source_engine = source_root / "researchassistant/research/v2_orchestrator.py"
     source_engine.parent.mkdir(parents=True)
     source_engine.write_text("# engine one")
@@ -265,9 +265,9 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
     source_font = source_root / "researchassistant/evidence/fonts/unifont-15.0.01.ttf"
     source_font.parent.mkdir(parents=True)
     source_font.write_bytes(b"font one")
-    (source_root / "pyproject.toml").write_text("# dependencies")
-    (source_root / "prompts").mkdir()
-    source_prompt = source_root / "prompts/analyst.md"
+    (source_root.parent / "pyproject.toml").write_text("# dependencies")
+    (source_root / "researchassistant/prompts").mkdir(parents=True)
+    source_prompt = source_root / "researchassistant/prompts/analyst.md"
     source_prompt.write_text("exact prompt one")
     monkeypatch.setattr(
         application_runtime,
@@ -290,20 +290,32 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
     (source_root / "history.sqlite3").write_bytes(b"runtime data")
     assert cli.repository_identity() == changed_font
 
-    internal_root = tmp_path / "dist/_internal"
+    internal_root = tmp_path / "dist/_internal/backend/src"
+    from researchassistant.common.resources import PROMPT_NAMES
+
+    for name in PROMPT_NAMES:
+        prompt = internal_root / "researchassistant/prompts" / name
+        prompt.parent.mkdir(parents=True, exist_ok=True)
+        prompt.write_text("packaged prompt")
     for relative, payload in (
         ("researchassistant/research/v2_orchestrator.py", "# packaged engine"),
         ("researchassistant/runtime/cli.py", "# packaged cli one"),
         ("researchassistant/contracts/models.py", "# packaged contracts"),
-        ("prompts/analyst.md", "packaged prompt"),
-        ("pyproject.toml", "packaged dependencies"),
+        ("researchassistant/prompts/analyst.md", "packaged prompt"),
+        ("cli.py", "packaged cli facade"),
+        ("models.py", "packaged models facade"),
+        ("orchestrator.py", "packaged orchestrator facade"),
+        ("store.py", "packaged store facade"),
         ("researchassistant/evidence/fonts/unifont-15.0.01.ttf", "packaged font"),
     ):
         path = internal_root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(payload)
+    (internal_root.parent / "pyproject.toml").write_text("packaged dependencies")
     monkeypatch.setattr(application_runtime.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(application_runtime.sys, "_MEIPASS", str(internal_root), raising=False)
+    monkeypatch.setattr(
+        application_runtime.sys, "_MEIPASS", str(internal_root.parent.parent), raising=False
+    )
     executable = tmp_path / "dist/researchassistant-backend"
     executable.write_bytes(b"frozen executable one")
     monkeypatch.setattr(application_runtime.sys, "executable", str(executable))

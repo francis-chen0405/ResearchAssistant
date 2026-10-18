@@ -8,9 +8,9 @@ const http = require("node:http");
 const path = require("node:path");
 
 async function main() {
-  const root = path.resolve(__dirname, "../web/out");
+  const root = path.resolve(__dirname, "../frontend/out");
   if (!fs.existsSync(path.join(root, "index.html"))) {
-    throw new Error("Build the static web app before running this smoke (web/out/index.html is missing).");
+    throw new Error("Build the static web app before running this smoke (frontend/out/index.html is missing).");
   }
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
@@ -47,6 +47,12 @@ async function main() {
       useOpenAlex: true, useArxiv: false, usePubmed: false, useCrossref: true,
     };
     const releaseStaleResponses = [];
+    let finishSave, credentialSaves = 0, saveCompleted = false;
+    let credentialRequestStarted;
+    const credentialRequest = new Promise(resolve => { credentialRequestStarted = resolve; });
+    const postSaveSelections = [];
+    let postSaveRequestStarted;
+    const postSaveRequest = new Promise(resolve => { postSaveRequestStarted = resolve; });
     let initialRequestStarted;
     const initialRequest = new Promise((resolve) => { initialRequestStarted = resolve; });
     let intermediateRequestStarted;
@@ -71,11 +77,25 @@ async function main() {
         body = preferences;
       } else if (pathname === "/api/model-options") {
         body = { choices: options, defaults: stageModels };
+      } else if (pathname === "/api/model-profiles") {
+        body = [];
+      } else if (pathname === "/api/credentials") {
+        credentialSaves++;
+        credentialRequestStarted();
+        body = await new Promise(resolve => { finishSave = resolve; });
       } else if (pathname === "/api/configuration/check") {
         assert.equal(request.method(), "POST");
         const payload = request.postDataJSON();
         assert.equal(payload.model_profile, "configurable-2026-09");
-        if (payload.stage_models.scout === "gpt-6-luna-high") {
+        if (saveCompleted) {
+          postSaveSelections.push(payload.stage_models.scout);
+          postSaveRequestStarted();
+        }
+        if (payload.stage_models.scout === "mimo-v2.6-flash") {
+          body = { configured: false, message: "The current MiMo selection still needs setup.", default_db_path: preferences.dbPath,
+            saved_credentials: ["openai", "exa"], saved_settings: [], firecrawl_enabled: false,
+            service: { wigolo_ready: true, state: "healthy", message: "Ready" } };
+        } else if (payload.stage_models.scout === "gpt-6-luna-high") {
           initialRequestStarted();
           await new Promise((resolve) => { releaseStaleResponses.push(() => {
             body = { configured: false, message: "Stale selection is incomplete.", default_db_path: preferences.dbPath, saved_credentials: [], saved_settings: [], firecrawl_enabled: false, service: { wigolo_ready: true, state: "healthy", message: "Ready" } };
@@ -119,8 +139,27 @@ async function main() {
     await page.getByText("Providers configured", { exact: true }).waitFor();
     assert.equal(await page.getByText("Setup needed", { exact: true }).count(), 0, "Stale success and failure must not replace the newest selection state");
     assert.equal(await page.getByText("App connection unavailable", { exact: true }).count(), 0, "A stale failure must not mark the current selection offline");
+    await page.getByRole("button", { name: /Provider setup/ }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Exa API key", { exact: true }).fill("GENERATED_OFFLINE_KEY");
+    await dialog.getByRole("button", { name: "Save keys securely" }).click();
+    for (const input of await dialog.locator("input[type=password]").all()) assert.equal(await input.isDisabled(), true);
+    await dialog.locator("form").evaluate(form => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await credentialRequest;
+    assert.equal(credentialSaves, 1);
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    await page.locator("#stage-model-scout").selectOption("mimo-v2.6-flash");
+    await page.getByText("Setup needed", { exact: true }).waitFor();
+    saveCompleted = true;
+    finishSave({ saved: true, message: "Offline keys saved" });
+    await postSaveRequest;
+    await page.waitForTimeout(100);
+    assert.deepEqual(postSaveSelections, ["mimo-v2.6-flash"], "The late save callback must check the latest selected models");
+    await page.getByText("Setup needed", { exact: true }).waitFor();
+    assert.equal(await page.getByText("Providers configured", { exact: true }).count(), 0);
     assert.deepEqual(pageErrors, []);
-    console.log("Verified stale configuration success and failure are ignored after selection changes.");
+    console.log("Verified stale configuration success/failure ownership, protected pending key inputs and late-save refresh of the latest models.");
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

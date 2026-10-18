@@ -1,0 +1,12 @@
+{
+  "finding": "R33",
+  "same_source_and_settings": true,
+  "saved_artifacts_modified_by_probe": false,
+  "interrupted_after": "phase-13-complete-survivor-pool-analyzer-admission",
+  "partial_status": "running",
+  "resume_state": "failed",
+  "failure_reason": "IntegrityError: v2 artifact phase-13-complete-survivor-pool-analyzer-admission already exists with different data",
+  "model_requests_on_resume": 0,
+  "search_requests_on_resume": 0,
+  "method": "Actual generated offline pipeline with an advancing UTC clock; interruption immediately after the source-selection pool commit, followed by unchanged production resume. No SQL edits, artifact substitution, real data or external calls."
+}

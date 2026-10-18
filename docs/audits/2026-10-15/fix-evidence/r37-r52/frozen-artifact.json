@@ -1,0 +1,46 @@
+{
+  "path": "/tmp/researchassistant-review-r37-r52-frozen/resources",
+  "source_identity": "source-sha256:abf82ceb3977d8b4eb0c7a1a96e8513765bec46704db4402da9d817e678de219",
+  "frozen_identity": "source-sha256:2c0a6b561a92a625bdae07560b7f55a4a1bd93f878971b4f9586c4cd6c4ea04b",
+  "node_version": "v24.18.0",
+  "files": {
+    "backend/researchassistant-backend": {
+      "bytes": 12629728,
+      "sha256": "0ed6261d32c4a375ae82242cf606174c6140e4b30464f146ef53b7477fb59fb8"
+    },
+    "node/bin/node": {
+      "bytes": 120965360,
+      "sha256": "ee6fb0e015284d83a91e8ec5213f43a157f8a392b58555301682892ba928c04a"
+    },
+    "frontend/index.html": {
+      "bytes": 5876,
+      "sha256": "84fd00a8cba36d871d0d177a52938f303e4fc64aec6ec5713b831d37bc2af6d6"
+    },
+    "acquisition/network-policy.mjs": {
+      "bytes": 8348,
+      "sha256": "9e66794716ec3e6edb242b199ad4ed6e03060661415b448e32cd02224a396aee"
+    },
+    "acquisition/network-preload.mjs": {
+      "bytes": 2178,
+      "sha256": "459c1a5fd10306798009eb999ac57e7e936c7b597577e478ad21816fce3448f3"
+    },
+    "acquisition/network-proxy.mjs": {
+      "bytes": 7477,
+      "sha256": "b86cd3edecb324a66702922f75704ab1f15258d510c3400b3758978efde53435"
+    },
+    "acquisition/package-lock.json": {
+      "bytes": 207245,
+      "sha256": "aecd036296f02cc1738e3c0563fc85b23836810de26feb7d13ef47a1ac524258"
+    },
+    "browsers/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell": {
+      "bytes": 157792208,
+      "sha256": "aa25f2e795c02d5cb5ef5d6987745cc5bbe7d8bea58827390c7a4c81c8d2dd7b"
+    },
+    "browsers/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing": {
+      "bytes": 68624,
+      "sha256": "2447c7bdea8e8ad38b52594f1ba53e18821c05445e8a07ad1cf3b0f23931d89d"
+    }
+  },
+  "node_and_chromium_origin": "Node, Chromium, acquisition and renderer copied unchanged from the preceding R36 resource candidate; the R37\u2013R52 backend is freshly frozen.",
+  "scope": "R37\u2013R52 backend and current frontend; frozen parent owns a localhost DNS worker in each smoke/cleanup process. Standalone frozen DNS dispatch also succeeds with empty PATH and unrelated cwd. No installer acceptance."
+}

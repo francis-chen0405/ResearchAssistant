@@ -1,0 +1,60 @@
+"""Observe the schema actually supplied by each generated upgrade-fixture case."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path.cwd() / "tests"))
+import test_database_upgrade_fixture_phase2 as fixture
+
+
+def main() -> None:
+    original = fixture.upgrade_smoke._prepare_schema13_fixture
+    observations = []
+    with tempfile.TemporaryDirectory(prefix="ra-review-upgrade-label-") as directory:
+        for requested in (14, 15, 16):
+            folder = Path(directory) / str(requested)
+            folder.mkdir()
+            actual_versions: list[int] = []
+
+            def observe(path: Path) -> None:
+                connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+                try:
+                    actual_versions.append(connection.execute(
+                        "SELECT MAX(version) FROM schema_migrations"
+                    ).fetchone()[0])
+                finally:
+                    connection.close()
+                original(path)
+
+            fixture.upgrade_smoke._prepare_schema13_fixture = observe
+            try:
+                fixture.test_generated_schema_14_and_16_convert_to_schema13_without_losing_prior_data(
+                    folder, requested
+                )
+            finally:
+                fixture.upgrade_smoke._prepare_schema13_fixture = original
+            observations.append({
+                "requested_case_version": requested,
+                "actual_input_versions": actual_versions,
+                "test_passed": True,
+            })
+    assert observations[-1]["actual_input_versions"] == [18]
+    report = {
+        "finding": "R51 companion regression gap",
+        "cases": observations,
+        "external_provider_calls": 0,
+        "real_database_changes": 0,
+    }
+    Path("/tmp/ra-review-upgrade-fixture-label.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(report, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

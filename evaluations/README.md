@@ -1,5 +1,67 @@
 # Phase 10 Evaluations
 
+## Current research-quality benchmark (Prompt 14)
+
+The [bounded protocol](cases/research_quality/PROTOCOL.md),
+[exact current baseline/topics](cases/research_quality/prepared.json),
+[comparison requests](cases/research_quality/queries.json),
+[strict schema](cases/research_quality/schema.json) and
+[result template](cases/research_quality/RESULT_TEMPLATE.md) prepare current quality
+acceptance without changing production defaults. Run locally:
+
+```sh
+.venv/bin/python -m evaluations.research_quality --output-dir /private/tmp/prompt14/prepared --replay
+.venv/bin/python -m evaluations.research_quality --manifest evaluations/cases/research_quality/fixture_bundle/manifest.json --output-dir /private/tmp/prompt14/fixture --replay
+```
+
+The prepared current-pilot manifest contains **zero current live observations**. Human reference sets
+are pending, so live denominators remain unknown. The separate arithmetic bundle
+is entirely authored fixture data. The harness validates frozen bytes/ownership,
+reports per-stage work metrics, human judgment coverage/abstentions, publication
+aliases versus study groups, exact quotation checks, final-statement judgments,
+physical requests, elapsed time, known costs and conservative exposure. It keeps
+fixtures, replayed observations and newly authorized live observations separate.
+Production handoff replay runs normalization/ranking only; it does not execute
+models, parse raw HTTP anew, or assert evidence admission/entailment. Read-only
+native history inspection also found eight September/October saved runs; the
+private [saved-history importer](import_saved_research.py) preserves search,
+acquisition and model receipts and replays typed metadata with unknown quality
+denominators. This historical availability sample is separate from current live
+rankings; original HTTP bodies and exact model inputs remain unavailable.
+
+Locked reference evidence must follow the [canonical reference schema](cases/research_quality/reference-schema.json):
+topic, claim digest, useful work list, sampling method, reviewer and lock time are
+hashed together and must match the scored manifest. Supporting human records remain
+separate hashed artifacts. Complete discovery replay maps exact logical handoffs
+to successful physical attempts via `discovery_handoff_attempts` and preserves page
+results via `search_attempt_result_paths`. Attempt settings record `query_id`;
+query/provider identity and result multiplicity are checked per page. Aggregate
+handoffs must preserve complete result values from those pages, allowing subsets
+and deduplication; later stage retention dispositions are independent. Historical
+handoffs without physical receipts remain explicitly incomplete.
+
+Whole-output support bounds require a complete assertion inventory. Recorded-subset
+bounds have explicit names/scope. Work usefulness/relevance disagreements remain
+unknown across stage filtering; URL capture grades stay separate. Admission behavior
+is distinct from human utility evaluation. Repeated URLs and distinct publication
+aliases have separate counts; monetary exposure compares Decimal values.
+
+Saved stage exports validate persisted checksums, types and nested run ownership,
+reject recognized credentials before writing, and identify the pinned SQLite read
+snapshot (including committed WAL) separately from main-file measurements. Failed
+exports remove only their own newly created files. These safeguards were repaired
+after the [Prompt 14 review](../.agent/plans/research-quality-acceptance-2026-10-11.md#review-repairs--october-12-2026).
+
+No live adapter or credential integration exists in the scoring runner. The prior
+paid allowance is exhausted. The human approved the **$2.48** pilot and collection
+with human scores pending. The separate local [preflight](research_quality_preflight.py)
+binds approval to input/source hashes before optional native-key availability checks,
+without provider transport. [Actual pilot result](cases/research_quality/LIVE_RESULT.md):
+all four required native keys missing, account terms unverified, collector unavailable;
+zero starts/$0.00 exposure. Human references stay pending. Current live rankings, full-text yield, model
+value and interpretation quality remain untested. The two older suites below keep
+their existing meanings and frozen corpora unchanged.
+
 ## Separate source-discovery evaluation
 
 Run `.venv/bin/python -m evaluations.source_discovery --json-output /private/tmp/source-discovery/results.json --summary-output /private/tmp/source-discovery/summary.md`.
@@ -44,6 +106,9 @@ The default command reads `evaluations/cases/offline-corpus.json` and writes:
 
 The output directory is ignored except for its `.gitignore`; tests normally direct
 outputs to a temporary directory.
+Both older commands require fresh, distinct report paths. Existing reports and
+frozen inputs (including file aliases) are never replaced; choose a new output
+directory for another evaluation. A failed publication removes only its own files.
 
 Regression fixture manifests store strict frozen outcomes separately from corpus case
 expectations. The runner checks both against observed gate behavior, so changing a
@@ -89,3 +154,17 @@ application separately contains live provider adapters and HTTP clients under `p
 
 No failing case is skipped. Optional live comparison is the only normal skip and is
 recorded explicitly in both outputs.
+
+## Source-lead visibility comparison
+
+Run `python -m evaluations.source_leads --output-dir /private/tmp/source-leads`.
+The report uses authored source-disposition fixtures on the two Prompt 14 held-out
+topic labels, school-start and green-roofs. Each persists five same-run metadata
+leads with skip, Scout-budget omission, failed capture, shell and readable outcomes.
+Fixture setup uses three fake acquisition attempts and zero model/live provider calls
+per topic. Both display arms share the same saved inputs/capacities. Inspection adds
+zero calls and preserves database bytes/mtime. The prior brief-gated view exposes zero
+leads without a final artifact; the new view exposes all five. This measures saved
+record availability, not human readability, useful recall, source truth, admission
+utility or a query-policy winner. Those fields stay unknown. Frozen Prompt 14 files
+and approval inputs are not regenerated.

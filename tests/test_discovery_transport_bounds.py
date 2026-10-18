@@ -3,11 +3,13 @@ from __future__ import annotations
 import gzip
 from collections.abc import Iterator
 
+import httpcore
 import httpx
 import pytest
 
 from providers.discovery_transport import bounded_send
 from providers.search import SearchFailureCode, SearchProviderError
+from researchassistant.providers.bounded_network import DeadlineHTTPTransport, DeadlineStream
 
 
 class _TrackedStream(httpx.SyncByteStream):
@@ -149,6 +151,59 @@ def test_total_read_deadline_closes_a_slow_stream() -> None:
         )
 
     assert stream.closed
+
+
+def test_httpcore_trickle_reads_receive_the_remaining_absolute_budget() -> None:
+    elapsed = 0.0
+    budgets: list[float] = []
+
+    class Wire(httpcore.NetworkStream):
+        closed = False
+        headers_sent = False
+
+        def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+            nonlocal elapsed
+            assert timeout is not None
+            budgets.append(timeout)
+            if not self.headers_sent:
+                self.headers_sent = True
+                return b"HTTP/1.1 200 OK\r\nContent-Length: 10000\r\n\r\n"
+            if timeout < 0.005:
+                elapsed += timeout
+                raise httpcore.ReadTimeout("fixture wire timed out at remaining budget")
+            elapsed += 0.005
+            return b"x"
+
+        def write(self, buffer: bytes, timeout: float | None = None) -> None:
+            pass
+
+        def close(self) -> None:
+            self.closed = True
+
+        def get_extra_info(self, info: str) -> object:
+            return None
+
+    wire = Wire()
+
+    class Backend(httpcore.NetworkBackend):
+        def connect_tcp(self, *args: object, **kwargs: object) -> DeadlineStream:
+            return DeadlineStream(wire)
+
+    with httpx.Client(transport=DeadlineHTTPTransport(backend=Backend())) as client:
+        with pytest.raises(httpx.ReadTimeout):
+            bounded_send(
+                client,
+                "GET",
+                "http://api.example/search",
+                expected_base_url="http://api.example",
+                timeout=0.02,
+                monotonic=lambda: elapsed,
+            )
+    assert elapsed == pytest.approx(0.02)
+    assert len(budgets) <= 6
+    assert budgets[0] == 0.02
+    assert budgets[-1] <= 0.005 + 1e-12
+    assert wire.closed
 
 
 def test_redirects_are_disabled_even_when_injected_client_follows_them() -> None:

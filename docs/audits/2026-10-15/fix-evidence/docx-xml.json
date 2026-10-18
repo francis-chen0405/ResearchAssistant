@@ -1,0 +1,10 @@
+{
+  "finding": "R28",
+  "actual_released_run": true,
+  "export_reported_success": true,
+  "content_hash_matches_report": true,
+  "document_xml_parse_error": "not well-formed (invalid token): line 1, column 1520",
+  "control_character_present": true,
+  "database_unchanged": true,
+  "method": "Generated offline released run with an accepted U+0001 claim character; actual public DOCX export; standard XML parser rejects word/document.xml. No real data or provider work."
+}

@@ -1,0 +1,12 @@
+E501 Line too long (101 > 100)
+   --> backend/src/researchassistant/agents/v2_initial_planner.py:156:101
+    |
+154 |     except KeyError:
+155 |         stored = None
+156 |     artifact_plan = read_checkpoint(path, resolved_run_id, _INITIAL_PLAN_KEY, V2InitialPlannerOutput)
+    |                                                                                                     ^
+157 |     if stored is not None and artifact_plan is not None and stored != artifact_plan:
+158 |         raise ValueError("saved initial plan projections disagree")
+    |
+
+Found 3 errors (2 fixed, 1 remaining).

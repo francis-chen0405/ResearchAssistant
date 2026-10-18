@@ -36,22 +36,13 @@ jobs:
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python - <<'PY'
-          import subprocess
-          import sys
-          import tomllib
-          from pathlib import Path
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
-          configuration = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          dependencies = [
-              *configuration["project"]["dependencies"],
-              *configuration["project"]["optional-dependencies"]["dev"],
-          ]
-          subprocess.run(
-              [sys.executable, "-m", "pip", "install", *dependencies],
-              check=True,
-          )
-          PY
+      - name: Verify isolated wheel and editable installs outside the checkout
+        run: python scripts/verify_distribution.py --constraints desktop/constraints.txt
+
+      - name: Check repository root and dependency boundaries
+        run: python scripts/check_repository_boundaries.py
 
       - name: Run tests with branch coverage
         run: python -m pytest --cov --cov-report=term-missing
@@ -74,22 +65,7 @@ jobs:
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python - <<'PY'
-          import subprocess
-          import sys
-          import tomllib
-          from pathlib import Path
-
-          configuration = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          dependencies = [
-              *configuration["project"]["dependencies"],
-              *configuration["project"]["optional-dependencies"]["dev"],
-          ]
-          subprocess.run(
-              [sys.executable, "-m", "pip", "install", *dependencies],
-              check=True,
-          )
-          PY
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
       - name: Run Ruff lint
         run: ruff check .
@@ -115,22 +91,56 @@ jobs:
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python - <<'PY'
-          import subprocess
-          import sys
-          import tomllib
-          from pathlib import Path
-
-          configuration = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          dependencies = [
-              *configuration["project"]["dependencies"],
-              *configuration["project"]["optional-dependencies"]["dev"],
-          ]
-          subprocess.run(
-              [sys.executable, "-m", "pip", "install", *dependencies],
-              check=True,
-          )
-          PY
+          python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
 
       - name: Run deterministic offline evaluation
-        run: python evaluations/run_evaluations.py
+        run: |
+          python evaluations/run_evaluations.py
+          python -m evaluations.source_discovery
+
+  frontend:
+    name: Frontend lint, types, export and offline smokes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      RESEARCHASSISTANT_DESKTOP: "1"
+      NEXT_PUBLIC_RESEARCH_API_URL: ""
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.18.0"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.19.0"
+      - name: Install backend development environment
+        run: python -m pip install -c desktop/constraints.txt -e "./backend[dev]"
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Check generated frontend API contracts
+        run: python frontend/scripts/generate_api_contracts.py --check
+      - name: Test frontend API contracts
+        run: python -m pytest tests/test_frontend_api_contracts.py
+      - name: Hook recovery regressions
+        run: node --test frontend/scripts/hook-regressions.test.cjs
+      - name: Frontend ESLint
+        working-directory: frontend
+        run: pnpm lint
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: pnpm exec tsc --noEmit
+      - name: Build static desktop export
+        working-directory: frontend
+        run: pnpm exec next build --webpack
+      - name: Install locked acquisition package for shared Playwright runtime
+        run: npm ci --prefix desktop/acquisition --ignore-scripts --no-audit --no-fund
+      - name: Install locked Playwright Chromium
+        run: node desktop/acquisition/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Run offline frontend and API smokes
+        run: pnpm --dir frontend smoke:offline

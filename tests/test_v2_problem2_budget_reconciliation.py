@@ -239,5 +239,5 @@ def test_bulk_physical_audit_rejects_payload_from_another_run(tmp_path: Path) ->
     finally:
         connection.close()
 
-    with pytest.raises(ValueError, match="run_id"):
+    with pytest.raises((ValueError, sqlite3.IntegrityError), match="run_id|another run"):
         read_v2_physical_call_audit(path, run_id)

@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from uuid import uuid4
+
+import httpx
+from pydantic import SecretStr
+
+from researchassistant.contracts.models import DiscoveryProvider, SearchIntent
+from researchassistant.contracts.search import SearchRequest
+from researchassistant.providers.arxiv import ArxivSearchAdapter
+from researchassistant.providers.config import ArxivConfig, OpenAlexConfig
+from researchassistant.providers.openalex import OpenAlexSearchAdapter
+
+
+def main() -> None:
+    body = {'results': [
+        {'id': 'https://openalex.org/W1', 'title': 'Generated valid primary',
+         'primary_location': {'landing_page_url': 'https://source.example/primary'},
+         'best_oa_location': {'landing_page_url': 'http://['}},
+        {'id': 'https://openalex.org/W2', 'title': 'Generated valid second',
+         'primary_location': {'landing_page_url': 'https://source.example/second'}},
+    ]}
+    xml = b'''<feed xmlns="http://www.w3.org/2005/Atom">
+    <entry><id>http://[</id><title>Generated malformed URL</title></entry>
+    <entry><id>https://arxiv.org/abs/2601.00001</id><title>Generated valid URL</title></entry>
+    </feed>'''
+    results: list[dict[str, object]] = []
+    with httpx.Client(base_url='https://api.openalex.org', transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json=body)
+    )) as oa_client, httpx.Client(base_url='https://export.arxiv.org', transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, content=xml)
+    )) as arxiv_client:
+        adapters = [
+            (DiscoveryProvider.OPENALEX, OpenAlexSearchAdapter(OpenAlexConfig(api_key=SecretStr('generated')), client=oa_client)),
+            (DiscoveryProvider.ARXIV, ArxivSearchAdapter(ArxivConfig(), client=arxiv_client)),
+        ]
+        for provider, adapter in adapters:
+            try:
+                adapter.search(SearchRequest(run_id=uuid4(), provider=provider,
+                    intent=SearchIntent.ACADEMIC_STUDY, query_text='generated metadata', limit=2))
+            except ValueError as error:
+                results.append({'provider': provider.value, 'exception': type(error).__name__,
+                    'message': str(error), 'valid_results_not_returned': 2 if provider is DiscoveryProvider.OPENALEX else 1})
+            else:
+                raise AssertionError('expected current malformed URL defect')
+    observed = {'finding': 'R24', 'results': results, 'external_provider_calls': 0}
+    Path('/tmp/ra-review-metadata-urls.json').write_text(json.dumps(observed, indent=2)+'\n')
+    print(json.dumps(observed, indent=2))
+
+
+if __name__ == '__main__':
+    main()

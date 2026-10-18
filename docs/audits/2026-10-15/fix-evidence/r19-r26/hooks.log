@@ -1,0 +1,25 @@
+✔ provider save protects input and rejects an overlapping action before commit (160.035334ms)
+✔ provider remove protects input and rejects an overlapping action before commit (39.542916ms)
+✔ provider check protects input and rejects an overlapping action before commit (36.199125ms)
+✔ provider restore protects input and rejects an overlapping action before commit (45.19925ms)
+✔ configuration refresh uses current selection and rejects a pre-cleanup stale success (20.964541ms)
+✔ configuration refresh uses current selection and rejects a pre-cleanup stale failure (17.332ms)
+✔ preferences expose read failure/retry and never reload over post-load choices (484.499625ms)
+✔ superseded and disposed preferences reads cannot publish late values (69.3455ms)
+✔ history import uses the latest callback and ignores duplicate clicks (14.218375ms)
+✔ history import preserves selection when closed (11.877667ms)
+✔ history import preserves selection when active (11.481083ms)
+✔ history import preserves selection when database-changed (16.983416ms)
+✔ a successful trail retry clears the failure that previously hid its rows (17.836542ms)
+✔ active-run reconnection validates snapshot ownership: owned (20.008333ms)
+✔ active-run reconnection validates snapshot ownership: different-worker (18.356583ms)
+✔ active-run reconnection validates snapshot ownership: missing (18.760291ms)
+✔ active-run reconnection validates snapshot ownership: wrong-run (19.521292ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1328.293167

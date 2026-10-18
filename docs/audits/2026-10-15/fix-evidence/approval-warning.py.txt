@@ -1,0 +1,21 @@
+from __future__ import annotations
+import json,sys,tempfile
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/'tests'))
+from test_admission_checkpoint_resume import _ready_source,analyst_fixture
+from researchassistant.contracts.models import ResearchMode,SynthesisOutput
+from researchassistant.evidence.renderer import render_brief
+from researchassistant.evidence.synthesizer import _build_synthesis_sections
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix='ra-approval-warning-') as folder:
+        _,source,arguments=_ready_source(Path(folder))
+        record=source.evidence_record
+        assert record is not None
+        synthesis=SynthesisOutput(run_id=source.run_id,synthesizer_prompt_version='generated-probe',synthesizer_model_name='generated-probe',created_at=analyst_fixture.NOW,sections=_build_synthesis_sections((record,)))
+        rendered=render_brief(synthesis,(record,),authoritative_claim=arguments['analyst_result'].input.exact_claim,research_mode=ResearchMode.BALANCED)
+        observed={'admission_method':record.admission_method.value,'coverage_warning':next(line for line in rendered.splitlines() if line.startswith('Evidence coverage:')),'method':'Actual current renderer, strict synthesis and current analyzer-admitted fixture record; generated offline source only. No real data or provider traffic.'}
+    Path('/tmp/ra-review-approval-warning.json').write_text(json.dumps(observed,indent=2)+'\n')
+    print(json.dumps(observed,indent=2))
+if __name__=='__main__':
+    main()

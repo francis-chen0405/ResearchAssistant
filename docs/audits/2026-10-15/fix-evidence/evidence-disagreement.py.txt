@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path.cwd() / 'tests'))
+from test_product_discovery_pipeline import _run
+
+from researchassistant.agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
+from researchassistant.api.application_services.result_reads import read_evidence, read_result
+from researchassistant.contracts.models import DiscoveryProvider, ResearchControls, v2_payload_fingerprint
+
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix='ra-evidence-disagreement-') as temporary:
+        database = Path(temporary) / 'generated.sqlite3'
+        result, _, _ = _run(database, ResearchControls(discovery_providers=(DiscoveryProvider.EXA,)))
+        output = read_result(database, result.run_id)
+        assert output.release_validation.valid
+        original = read_evidence(database, result.run_id)
+        first = original.items[0]
+        replacement = 'A substituted statement that was never in the released brief.'
+        with sqlite3.connect(database) as connection:
+            payload = json.loads(connection.execute(
+                'SELECT payload_json FROM v2_artifacts WHERE run_id=? AND artifact_key=?',
+                (str(result.run_id), V2_EVIDENCE_ADMISSION_ARTIFACT_KEY),
+            ).fetchone()[0])
+            record = next(item['evidence_record'] for item in payload['source_results']
+                          if item['evidence_record'] and item['evidence_record']['ledger_claim_id'] == str(first.ledger_claim_id))
+            record['approved_factual_statement'] = replacement
+            record['approved_claim_text'] = 'A different, substituted research claim.'
+            encoded = json.dumps(payload)
+            trigger = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE name='v2_artifacts_immutable_update'"
+            ).fetchone()[0]
+            connection.execute('DROP TRIGGER v2_artifacts_immutable_update')
+            connection.execute(
+                'UPDATE v2_artifacts SET payload_json=?, payload_sha256=? WHERE run_id=? AND artifact_key=?',
+                (encoded, v2_payload_fingerprint(encoded), str(result.run_id), V2_EVIDENCE_ADMISSION_ARTIFACT_KEY),
+            )
+            connection.execute(trigger)
+        before = hashlib.sha256(database.read_bytes()).hexdigest()
+        evidence = read_evidence(database, result.run_id)
+        released = read_result(database, result.run_id)
+        changed = next(item for item in evidence.items if item.ledger_claim_id == first.ledger_claim_id)
+        synthesis = next(item for section in released.synthesis.sections for item in section.items
+                         if item.ledger_claim_id == first.ledger_claim_id)
+        assert changed.approved_factual_statement == replacement
+        assert synthesis.approved_factual_statement == first.approved_factual_statement
+        assert before == hashlib.sha256(database.read_bytes()).hexdigest()
+        observed = {
+            'same_ledger_id_has_different_statements': True,
+            'released_statement': synthesis.approved_factual_statement,
+            'evidence_display_statement': changed.approved_factual_statement,
+            'released_hash_unchanged': released.release_validation.rendered_output_hash == output.release_validation.rendered_output_hash,
+            'inconsistent_approved_claim_was_accepted': True,
+            'database_unchanged_by_inspection': True,
+            'method': 'Generated offline research, checksum-valid same-run admission substitution, original immutability trigger restored. No real data or provider calls.',
+        }
+    Path('/tmp/ra-review-evidence-disagreement.json').write_text(json.dumps(observed, indent=2)+'\n')
+    print(json.dumps(observed, indent=2))
+
+
+if __name__ == '__main__':
+    main()

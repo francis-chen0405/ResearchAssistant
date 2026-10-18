@@ -1,0 +1,16 @@
+{
+  "finding": "R25",
+  "cases": [
+    {
+      "valid_public_url": "https://[2606:4700:4700::1111]/paper",
+      "canonical_url": "https://2606:4700:4700::1111/paper",
+      "ranking_error": "Port could not be cast to integer value as '4700:4700::1111'"
+    },
+    {
+      "valid_public_url": "https://[2606:4700:4700::1111]:8443/paper",
+      "canonical_url": "https://2606:4700:4700::1111:8443/paper",
+      "ranking_error": "Port could not be cast to integer value as '4700:4700::1111:8443'"
+    }
+  ],
+  "network_or_provider_calls": 0
+}

@@ -1,0 +1,12 @@
+AssertionError [ERR_ASSERTION]: Unrelated sentinel must survive
+
+false !== true
+
+    at /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/desktop/shutdown-smoke.cjs:86:14 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

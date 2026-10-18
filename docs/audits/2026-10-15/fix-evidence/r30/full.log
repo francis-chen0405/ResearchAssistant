@@ -1,0 +1,77 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.14.1, cov-6.3.0
+collected 3007 items
+
+tests/test_acquisition_disposition_review.py .                           [  0%]
+tests/test_acquisition_usable_fallback.py .......................        [  0%]
+tests/test_adaptive_reliability.py .................                     [  1%]
+tests/test_api_module_split.py ..........                                [  1%]
+tests/test_api_shutdown_owner.py ....                                    [  1%]
+tests/test_audit_api_boundaries.py .......                               [  2%]
+tests/test_audit_cli_inspection.py ..                                    [  2%]
+tests/test_audit_evidence_provenance.py .......                          [  2%]
+tests/test_audit_legacy_retrieval.py ...                                 [  2%]
+tests/test_audit_live_service.py .........                               [  2%]
+tests/test_audit_money.py .......                                        [  2%]
+tests/test_audit_provider_budget.py .................                    [  3%]
+tests/test_audit_service_manager.py ....                                 [  3%]
+tests/test_backend_hotspot_compatibility.py ............................ [  4%]
+........................................................................ [  7%]
+..........................                                               [  7%]
+tests/test_bounded_resolver.py ...........                               [  8%]
+tests/test_browser_decisions_phase3.py ....                              [  8%]
+tests/test_claim_source_previews.py ..................                   [  8%]
+tests/test_cleanup_boundaries.py ....................                    [  9%]
+tests/test_contract_ownership.py ....................................... [ 10%]
+.....                                                                    [ 11%]
+tests/test_database_attempt_caller_phase2.py ..........                  [ 11%]
+tests/test_database_attempt_integrity_phase2.py ........................ [ 12%]
+.........................................................                [ 14%]
+tests/test_database_cache_accounting.py ...                              [ 14%]
+tests/test_database_import_failures.py .......                           [ 14%]
+tests/test_database_lifecycle_locks.py ..................                [ 15%]
+tests/test_database_query_indexes_phase4.py ..                           [ 15%]
+tests/test_database_read_paths_phase3.py .................               [ 15%]
+tests/test_database_read_snapshots.py ..............                     [ 16%]
+tests/test_database_recovery.py ........................................ [ 17%]
+.................                                                        [ 18%]
+tests/test_database_recovery_cli.py ....                                 [ 18%]
+tests/test_database_request_consistency.py ....                          [ 18%]
+tests/test_database_schema_integrity.py ...........................      [ 19%]
+tests/test_database_schema_provenance_phase2.py ........................ [ 20%]
+.............................................................            [ 22%]
+tests/test_database_transactions.py ..........                           [ 22%]
+tests/test_database_upgrade_fixture_phase2.py .........                  [ 22%]
+tests/test_database_v2_replay_phase2.py .......................          [ 23%]
+tests/test_desktop.py ...........                                        [ 23%]
+tests/test_desktop_ownership.py ......                                   [ 24%]
+tests/test_desktop_shutdown.py ....ss                                    [ 24%]
+tests/test_desktop_smoke_support.py .........                            [ 24%]
+tests/test_desktop_windows_installer.py ....                             [ 24%]
+tests/test_discovery_capabilities.py .........                           [ 24%]
+tests/test_discovery_complete_review.py ...........                      [ 25%]
+tests/test_discovery_evaluation_transport.py ..                          [ 25%]
+tests/test_discovery_foundations_contracts.py .......................... [ 26%]
+.............                                                            [ 26%]
+tests/test_discovery_integration.py .......                              [ 26%]
+tests/test_discovery_policy.py .......................                   [ 27%]
+tests/test_discovery_product_review.py ....                              [ 27%]
+tests/test_discovery_review.py .....                                     [ 27%]
+tests/test_discovery_store.py ......                                     [ 28%]
+tests/test_discovery_store_acceptance.py .......                         [ 28%]
+tests/test_discovery_transport_bounds.py .........                       [ 28%]
+tests/test_discrimination_extraction_budget.py ...                       [ 28%]
+tests/test_distribution_resources.py ......................              [ 29%]
+tests/test_docx_exports.py ............................................  [ 30%]
+tests/test_evidence_browser_batching.py ....                             [ 31%]
+tests/test_frontend_api_contracts.py .......                             [ 31%]
+tests/test_frontend_discovery_diagnostics.py ..
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/storage/sqlite_policy.py:29: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+================== 943 passed, 2 skipped in 62.01s (0:01:02) ===================

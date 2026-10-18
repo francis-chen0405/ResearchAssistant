@@ -9,7 +9,7 @@ Implementation and unsigned Mac delivery are complete, including the user-author
 reliability extension below: 992 Python tests, Ruff, offline evaluation, native/upgrade/
 packaged/installed checks and archive integrity passed for the 2026-09-17 candidate.
 Its generated local artifacts are historical evidence, not a current download location.
-See the current [status](../../STATUS.md) and
+See the current [status](../../docs/project/STATUS.md) and
 [delivery evidence](../../docs/verification/planner-scout-reliability.md).
 Live acceptance remains open: the original five-submission allowance is exhausted,
 with no completed final report and $0.178617536 recorded model exposure. Do not run more

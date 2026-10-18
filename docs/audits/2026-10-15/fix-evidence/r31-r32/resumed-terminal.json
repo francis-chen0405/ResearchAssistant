@@ -1,0 +1,26 @@
+{
+  "changed_gap_input_fields": [
+    "remaining_budget"
+  ],
+  "saved_remaining_budget": {
+    "model_calls_remaining": 158,
+    "tokens_remaining": 499970,
+    "cost_remaining_usd": "4.99998"
+  },
+  "incoming_remaining_budget": {
+    "model_calls_remaining": 140,
+    "tokens_remaining": 499700,
+    "cost_remaining_usd": "4.9998"
+  },
+  "finding": "R32",
+  "partial_status": "running",
+  "partial_stage": "synthesis",
+  "same_source_and_settings": true,
+  "saved_artifacts_modified_by_probe": false,
+  "resume_state": "released",
+  "failure_reason": null,
+  "model_requests_on_resume": 0,
+  "search_requests_on_resume": 0,
+  "manifest_after_resume": "completed",
+  "method": "Actual generated offline run interrupted immediately before terminal commit, then resumed with identical source/settings. No artifact substitution, database edits, real data or external calls."
+}

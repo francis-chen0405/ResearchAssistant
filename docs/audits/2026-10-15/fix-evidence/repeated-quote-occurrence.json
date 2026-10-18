@@ -1,0 +1,10 @@
+{
+  "selected_sentence": 4,
+  "selected_exact_text": "Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.",
+  "expected_preceding_context": "The second cohort included all age groups.",
+  "expected_following_context": "The second cohort was followed for twelve months.",
+  "actual_preceding_context": "The first cohort excluded older adults.",
+  "actual_following_context": "The second cohort included all age groups.",
+  "assembled_quote": "[The first cohort excluded older adults.] \"Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.\" [The second cohort included all age groups.]",
+  "method": "Actual fresh sentence-range selection and production quote assembler; generated repeated source text only, no database/provider activity."
+}

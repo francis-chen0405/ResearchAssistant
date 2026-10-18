@@ -1,0 +1,7 @@
+{
+  "state": "failed",
+  "error": "ValidationError: 1 validation error for RetrievalOutcome\n  Value error, failed or unsupported outcomes require exactly one failure code [type=value_error, input_value={'retrieval': RetrievalRe...uplicate_source_family'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+  "first_status": "retrieved",
+  "scrape_calls": 2,
+  "method": "Actual retained retrieval/deduplication path, generated distinct captures at two URLs with the same canonical DOI. No database, provider traffic or real data."
+}

@@ -1,0 +1,46 @@
+{
+  "path": "/tmp/researchassistant-review-r53-r55-frozen/resources",
+  "source_identity": "source-sha256:9f1c3e19607ed1d9b393457dcb629ccebb290be11cb6d4db0e76c2798c181189",
+  "frozen_identity": "source-sha256:314b3168e0ee6e832a06cfef1ae9104351d7cfedeac881d3a8991d5735a75c28",
+  "node_version": "v24.18.0",
+  "files": {
+    "backend/researchassistant-backend": {
+      "bytes": 12641216,
+      "sha256": "89e205aaa692196492ca14aa8d0f6f95854099cccfccb70c61ef0b66a29e6c1e"
+    },
+    "node/bin/node": {
+      "bytes": 120965360,
+      "sha256": "ee6fb0e015284d83a91e8ec5213f43a157f8a392b58555301682892ba928c04a"
+    },
+    "frontend/index.html": {
+      "bytes": 5876,
+      "sha256": "84fd00a8cba36d871d0d177a52938f303e4fc64aec6ec5713b831d37bc2af6d6"
+    },
+    "acquisition/network-policy.mjs": {
+      "bytes": 8348,
+      "sha256": "9e66794716ec3e6edb242b199ad4ed6e03060661415b448e32cd02224a396aee"
+    },
+    "acquisition/network-preload.mjs": {
+      "bytes": 2178,
+      "sha256": "459c1a5fd10306798009eb999ac57e7e936c7b597577e478ad21816fce3448f3"
+    },
+    "acquisition/network-proxy.mjs": {
+      "bytes": 7477,
+      "sha256": "b86cd3edecb324a66702922f75704ab1f15258d510c3400b3758978efde53435"
+    },
+    "acquisition/package-lock.json": {
+      "bytes": 207245,
+      "sha256": "aecd036296f02cc1738e3c0563fc85b23836810de26feb7d13ef47a1ac524258"
+    },
+    "browsers/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell": {
+      "bytes": 157792208,
+      "sha256": "aa25f2e795c02d5cb5ef5d6987745cc5bbe7d8bea58827390c7a4c81c8d2dd7b"
+    },
+    "browsers/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing": {
+      "bytes": 68624,
+      "sha256": "2447c7bdea8e8ad38b52594f1ba53e18821c05445e8a07ad1cf3b0f23931d89d"
+    }
+  },
+  "node_and_chromium_origin": "Copied unchanged from the preceding October 13 candidate; current backend/acquisition/frontend rebuilt or restaged.",
+  "scope": "R53\u2013R55 backend and current frontend; frozen parent owns a localhost DNS worker in each smoke/cleanup process. Standalone frozen DNS dispatch also succeeds with empty PATH and unrelated cwd. No installer acceptance."
+}

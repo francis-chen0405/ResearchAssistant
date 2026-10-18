@@ -1,0 +1,30 @@
+E501 Line too long (103 > 100)
+   --> tests/test_selection_planner_checkpoint_resume.py:349:101
+    |
+347 |             if table == "v2_artifacts":
+348 |                 connection.execute(
+349 |                     "DELETE FROM v2_artifacts WHERE artifact_key LIKE 'initial-planner-checkpoint-v1%'"
+    |                                                                                                     ^^^
+350 |                 )
+351 |                 if missing == "generic":
+    |
+
+F821 Undefined name `result`
+   --> tests/test_selection_planner_checkpoint_resume.py:382:12
+    |
+380 |             )
+381 |     assert len(provider.requests) == 1
+382 |     assert result.result == execute(_budget()).result
+    |            ^^^^^^
+    |
+
+F821 Undefined name `execute`
+   --> tests/test_selection_planner_checkpoint_resume.py:382:29
+    |
+380 |             )
+381 |     assert len(provider.requests) == 1
+382 |     assert result.result == execute(_budget()).result
+    |                             ^^^^^^^
+    |
+
+Found 4 errors (1 fixed, 3 remaining).

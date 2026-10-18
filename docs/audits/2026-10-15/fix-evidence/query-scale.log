@@ -1,0 +1,41 @@
+Traceback (most recent call last):
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/storage/store.py", line 542, in _validate_read_only_schema
+    latest = validate_recorded_database(conn, allow_pending=False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/storage/store_schema.py", line 1937, in validate_recorded_database
+    raise RecordedSchemaError(
+researchassistant.storage.store_schema.RecordedSchemaError: schema migration records are incomplete or inconsistent
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "b25df1d:evidence_browser.py", line 134, in browse_evidence_run
+  File "/Users/francischen/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/scripts/benchmark_database_query_scale.py", line 234, in traced
+    with original(path) as reader:
+         ^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/storage/store.py", line 667, in open_read_only_store
+    return ReadOnlyStore(db_path)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/storage/store.py", line 629, in __init__
+    self.compatibility = _validate_read_only_schema(self.connection)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/backend/src/researchassistant/storage/store.py", line 557, in _validate_read_only_schema
+    raise _compatibility_error(
+researchassistant.storage.store.DatabaseCompatibilityError: schema migration records are incomplete or inconsistent; inspection made no changes
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/scripts/benchmark_database_query_scale.py", line 363, in <module>
+    main()
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/scripts/benchmark_database_query_scale.py", line 332, in main
+    prior, prior_selects, prior_related = _traced_browser(legacy, before, run_id)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/francischen/Library/CloudStorage/OneDrive2-EastsidePreparatorySchool/GitHub/ResearchAssistant/scripts/benchmark_database_query_scale.py", line 240, in _traced_browser
+    result = module.browse_evidence_run(database, run_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "b25df1d:evidence_browser.py", line 159, in browse_evidence_run
+researchassistant.evidence.evidence_browser_before_query_indexes.EvidenceBrowserError: evidence browser cannot open this database safely: schema migration records are incomplete or inconsistent; inspection made no changes

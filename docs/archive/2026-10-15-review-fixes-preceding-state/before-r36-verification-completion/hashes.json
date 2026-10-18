@@ -1,0 +1,14 @@
+{
+  "docs/project/STATUS.md": "18b1c10fcfc3cc094c51f6dd8abf5c3540be1098149fdee085823b3b28a9db97",
+  "docs/project/HANDOFF.md": "f0ff2b32e3bdea18f58fe7149edf792d0f5d286ba5a3c537453c831986957a6d",
+  "docs/project/ARCHITECTURE.md": "c1dbf773bee09be48642177d2e1551daebcd90ca3e93a6e3d5d03f497ab2181d",
+  "docs/project/DECISIONS.md": "19b9b9aae60b40a8f12bd97ecca1539ca82baf1fe26a6e50b99379cf1bc2d5fe",
+  ".agent/PLANS.md": "a6b88b5ffeedde18c50cd9861f79d2d64dcfcda96199a3aed36d7d6313afdb23",
+  ".agent/plans/full-code-review-fixes-2026-10-15.md": "2493744e9553eaae24e71e355d845134488eff5c39ed0f8ea9ad0a0758f3cd0b",
+  "docs/audits/2026-10-15/full-code-review.md": "39e33920dee91b61e2aa367c0ae47bd93fb8e2cc329342596da663c6b63af4ba",
+  "docs/audits/2026-10-15/continued-review-evidence.json": "0ab7c503a578af571abea9fff7e1c6f38d3b5a1e788696804554e24c134385d2",
+  "docs/audits/2026-10-15/post-fix-evidence.json": "c60eb8801bb5b680b6be386b34b8542289f14e157d0ecacfdd3c4c75e2d0c9c6",
+  "docs/audits/2026-10-15/manual-coverage.json": "197b63bc8165b1be2a88d21cd4ad4dd0e887754ea31aeb57369a0a84501d60e4",
+  "docs/verification/full-review-fixes-2026-10-15.md": "4765375efc725fd95c7742a70d1aff4487ef44303528826f07610db88e1cefe0",
+  "tests/README.md": "2e899606368e11acf3a5bca7a2247916c6b9832a28a6efa7dd44bbb13b32b340"
+}

@@ -1,0 +1,39 @@
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/test_contract_ownership.py:3:1
+   |
+ 1 |   """Ownership moves preserve the public objects and pre-move validation surface."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import importlib
+ 6 | | import json
+ 7 | | import subprocess
+ 8 | | import sys
+ 9 | | from hashlib import sha256
+10 | | from pathlib import Path
+11 | | from typing import Any
+12 | |
+13 | | import pytest
+14 | | from review_schema_compatibility import verify_review_schema_additions
+15 | | from pydantic import ValidationError
+16 | |
+17 | | from researchassistant.contracts.search import SearchRequest, SearchResponse, SearchResult
+   | |__________________________________________________________________________________________^
+18 |
+19 |   FIXTURE = Path(__file__).parent / "fixtures/contract-ownership-before.json"
+   |
+help: Organize imports
+
+E501 Line too long (105 > 100)
+   --> tests/test_discovery_provenance_and_metadata_review.py:211:101
+    |
+209 | …                     "concept": (
+210 | …                         "independent replication course completion round "
+211 | …                         f"{request.input_artifact.request.round_number} lane {index}"
+    |                                                                                   ^^^^^
+212 | …                     ),
+213 | …                     "aliases": ("replication study",),
+    |
+
+Found 2 errors.
+[*] 1 fixable with the `--fix` option.

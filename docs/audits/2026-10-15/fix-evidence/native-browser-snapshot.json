@@ -1,0 +1,13 @@
+{
+  "state": "accepted",
+  "released_traces": 2,
+  "released_trails": 2,
+  "snapshot_hashes_match": [
+    false,
+    false
+  ],
+  "compatibility_issues": [],
+  "snapshot_label": "Trusted snapshot text (ResearchAssistant normalized)",
+  "database_unchanged_by_inspection": true,
+  "method": "Actual fixture-pipeline released native run; simulate source-text corruption only in its disposable generated database, restoring original triggers before actual read-only browsing. No real data or provider activity."
+}

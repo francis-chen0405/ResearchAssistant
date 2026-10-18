@@ -1,17 +1,20 @@
 .env
 __pycache__/
 .venv/
+build/
+dist/
+*.egg-info/
 live-smoke-output/
 .researchassistant/
 .DS_Store
 .coverage
 .pnpm-store/
-web/.next/
-web/node_modules/
-web/next-env.d.ts
-web/tsconfig.tsbuildinfo
+frontend/.next/
+frontend/node_modules/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
 
-web/out/
+frontend/out/
 desktop/node_modules/
 desktop/dist/
 desktop/build/

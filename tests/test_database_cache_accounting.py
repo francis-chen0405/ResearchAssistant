@@ -107,6 +107,10 @@ def test_historical_attempt_without_cache_columns_reads_unknown_values(tmp_path:
     db_path, run_id, attempt = _database(tmp_path)
     finish_model_route_attempt(str(db_path), _finished(attempt))
     with sqlite3.connect(db_path) as connection:
+        from test_database_schema_integrity import _restore_round_three_constraint
+
+        connection.row_factory = sqlite3.Row
+        _restore_round_three_constraint(connection)
         for row in connection.execute(
             "SELECT name FROM sqlite_master WHERE type='trigger'"
         ).fetchall():

@@ -1,0 +1,20 @@
+{"ts":"2026-10-15T19:52:31.098Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"001-sqlite-vec"}}
+{"ts":"2026-10-15T19:52:31.100Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"002-feed-items"}}
+{"ts":"2026-10-15T19:52:31.100Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"003-crawl-etags"}}
+{"ts":"2026-10-15T19:52:31.100Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"004-watch-jobs"}}
+{"ts":"2026-10-15T19:52:31.101Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"005-tls-routing"}}
+{"ts":"2026-10-15T19:52:31.101Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"006-url-cache-http-status"}}
+{"ts":"2026-10-15T19:52:31.101Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"007-drop-lp-routing"}}
+{"ts":"2026-10-15T19:52:31.102Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"008-antibot-clearance"}}
+{"ts":"2026-10-15T19:52:31.103Z","level":"info","msg":"migration applied","module":"cache","data":{"name":"009-content-completeness"}}
+✔ healthy cache and repeated initialization preserve content and FTS (34.580083ms)
+✔ unrecognized SQLite errors fail without index rebuild (0.535083ms)
+✔ core corruption refuses derived-index rebuild (0.183917ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 92.887916

@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from collections import Counter
+from pathlib import Path
+
+root = Path.cwd()
+audit = root / 'docs/audits/2026-10-15'
+ledger = json.loads((audit / 'manual-coverage.json').read_text())
+entries = {entry['path']: entry for entry in ledger['files']}
+reviewed_deltas = {
+    'Launch ResearchAssistant.command',
+    'backend/src/researchassistant/agents/v2_initial_planner.py',
+    'backend/src/researchassistant/agents/v2_source_selection.py',
+    'backend/src/researchassistant/agents/v2_stage_checkpoint.py',
+    'backend/src/researchassistant/storage/v2_transactions.py',
+    'desktop/README.md', 'docs/project/ARCHITECTURE.md', 'docs/project/DECISIONS.md',
+    'docs/project/database-recovery.md', 'docs/research-invariants.md', 'frontend/README.md',
+    'tests/test_preview_selection_bounds.py', 'tests/test_live_resume_status.py',
+}
+for name, entry in entries.items():
+    if hashlib.sha256((root / name).read_bytes()).hexdigest() != entry['sha256']:
+        assert name in reviewed_deltas, name
+names = [
+    'tests/test_checkout_launcher_readiness.py',
+    'tests/test_selection_planner_checkpoint_resume.py',
+    'evaluations/cases/regression-fixtures/integrity-attacks.json',
+    'evaluations/cases/regression-fixtures/validator-mutations.json',
+    'evaluations/cases/research_quality/allowance.json',
+    'evaluations/cases/research_quality/preflight.json',
+    'evaluations/cases/research_quality/live_plan.json',
+    'tests/fixtures/phase10/unexpected-validator-expectation.json',
+    'tests/fixtures/phase10/unsafe-fallback-operation.json',
+    'tests/fixtures/historical_reads/native-ledger-august2.json',
+    'tests/fixtures/contract-ownership-before.json',
+    'tests/fixtures/packaging/prompt-hashes.json',
+    'tests/fixtures/phase5_expected_valid_brief.txt',
+    'docs/verification/docs-test-navigation-2026-10-10-links.json',
+    'docs/benchmarks/database-query-scale-2026-10-04.json',
+    'evaluations/output/.gitignore',
+    'backend/src/researchassistant/prompts/.gitkeep',
+    'backend/src/researchassistant/providers/.gitkeep', 'tests/fixtures/.gitkeep',
+]
+for folder in ('basic_valid_run', 'invalid_release_run'):
+    for name in ('analyst_decisions.json', 'planner.json', 'provisional_candidates.json',
+                 'retrievals.json', 'reviewer_decisions.json', 'snapshots.json',
+                 'statement_drafts.json', 'synthesis.json', 'validation_times.json',
+                 'raw_claim.txt', '.gitignore'):
+        names.append(f'tests/fixtures/{folder}/{name}')
+for name in ('handoff.json', 'reference.json', 'provider.json', 'request.json',
+             'settings.json', 'search-page.json', 'snapshot.txt'):
+    names.append('evaluations/cases/research_quality/fixture_bundle/' + name)
+for name in ('alpr-equity-run-fixes-2026-10-02', 'alpr-equity-run-review-2026-10-02',
+             'alpr-run-fixes-2026-10-01', 'alpr-run-review-2026-10-01',
+             'discrimination-run-fixes-2026-10-01', 'discrimination-run-review-2026-10-01',
+             'documentation-audit-2026-09-28'):
+    names.append('.agent/plans/' + name + '.md')
+for name in (*reviewed_deltas, *names):
+    path = root / name
+    entries[name] = {'path': name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                     'inspected_ranges': [[1, len(path.read_text().splitlines())]]}
+ledger['files'] = [entries[name] for name in sorted(entries)]
+ledger['summary']['fully_inspected_current_files'] = len(entries)
+ledger['summary']['fully_inspected_current_lines'] = sum(
+    row['inspected_ranges'][0][1] for row in entries.values()
+)
+(audit / 'manual-coverage.json').write_text(json.dumps(ledger, indent=2) + '\n')
+remaining = json.loads((audit / 'remaining-file-review.json').read_text())
+remaining['files'] = [row for row in remaining['files'] if row['path'] not in entries]
+for row in remaining['files']:
+    path = root / row['path']
+    row['current_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+    row['current_bytes'] = path.stat().st_size
+remaining['remaining_original_files'] = len(remaining['files'])
+remaining['remaining_original_extensions'] = dict(sorted(Counter(
+    Path(row['path']).suffix for row in remaining['files']
+).items()))
+remaining['fully_inspected_current_files'] = len(entries)
+remaining['fully_inspected_current_lines'] = ledger['summary']['fully_inspected_current_lines']
+remaining['unread_owned_source_code_paths'] = []
+(audit / 'remaining-file-review.json').write_text(json.dumps(remaining, indent=2) + '\n')
+assert hashlib.sha256(subprocess.check_output(['git','diff','--cached','--binary'])).hexdigest() == (
+    '85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2'
+)
+print(json.dumps({'ledger': ledger['summary'], 'remaining_original_files': len(remaining['files']),
+                  'new_full_reads_including_tests': len(names),
+                  'reviewed_deltas': sorted(reviewed_deltas),
+                  'whole_repository_manual_review_complete': False}, indent=2))

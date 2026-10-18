@@ -19,10 +19,7 @@ from uuid import UUID, uuid5
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from agents.v2_acquisition import run_v2_acquisition_probe
-from providers.config import OpenAlexConfig
-from providers.openalex_neighborhood import OpenAlexNeighborhoodAdapter
-from providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProviderError
+from researchassistant.agents.v2_acquisition import run_v2_acquisition_probe
 from researchassistant.contracts.discovery_v2 import (
     V2PreviewRequest,
     V2PreviewResult,
@@ -32,7 +29,7 @@ from researchassistant.contracts.discovery_v2 import (
 )
 from researchassistant.contracts.model_contracts import DiscoveryProvider, SourceSnapshot
 from researchassistant.contracts.model_research import (
-    V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
+    V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
     DiscoveryMetadataEntry,
     DiscoveryProvenance,
     DiscoveryProviderReference,
@@ -61,6 +58,9 @@ from researchassistant.contracts.model_research import (
     V2SurvivingSource,
 )
 from researchassistant.contracts.query_planning import V2ConceptualAdaptiveLane
+from researchassistant.providers.config import OpenAlexConfig
+from researchassistant.providers.openalex_neighborhood import OpenAlexNeighborhoodAdapter
+from researchassistant.providers.scraper import ScrapeRequest, ScrapeResponse, ScraperProviderError
 from researchassistant.research.query_execution import freeze_query_execution
 from researchassistant.research.seed_expansion import execute_expansion, offer_expansions
 from researchassistant.storage.discovery_store import provider_attempt_audit
@@ -766,7 +766,7 @@ def run_acquisition_fixture(
             policy=V2AcquisitionPolicy(
                 max_clusters=max(1, len(works)),
                 allow_firecrawl_fallback=False,
-                policy_identity=V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
+                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
             ),
             exact_claim=exact_claim,
             clock=_clock,

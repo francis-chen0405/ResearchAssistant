@@ -533,18 +533,26 @@ def test_ranked_run_persists_sidecar_and_resumes_it(
     )
     insert_v2_pipeline_identity(str(path), run_id, V2PipelineIdentity(), NOW)
     policy = V2MetadataDiscoveryPolicy()
-    binding = type("Binding", (), {"exact_claim": plan.raw_claim, "policy": policy})()
+    binding = type(
+        "Binding",
+        (),
+        {
+            "exact_claim": plan.raw_claim,
+            "policy": policy,
+            "ranking_identity": "source-candidate-ranking-v2",
+        },
+    )()
     monkeypatch.setattr(v2_discovery, "_fresh_ranked_binding", lambda _path, _run: binding)
     inserted_keys: list[str] = []
-    insert_artifact = v2_discovery.insert_v2_artifact
+    insert_artifacts = v2_discovery.insert_v2_artifact_batch
 
-    def record_artifact(
-        db_path: str, artifact_key: str, artifact: StrictModel, created_at: datetime
+    def record_artifacts(
+        db_path: str, artifacts: tuple[tuple[str, StrictModel, datetime], ...]
     ) -> object:
-        inserted_keys.append(artifact_key)
-        return insert_artifact(db_path, artifact_key, artifact, created_at)
+        inserted_keys.extend(key for key, _, _ in artifacts)
+        return insert_artifacts(db_path, artifacts)
 
-    monkeypatch.setattr(v2_discovery, "insert_v2_artifact", record_artifact)
+    monkeypatch.setattr(v2_discovery, "insert_v2_artifact_batch", record_artifacts)
     scout = _RecallScout()
     result = v2_discovery.run_v2_discovery_and_scout(
         db_path=path,

@@ -1,0 +1,230 @@
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend/src/researchassistant/providers/acquisition.py:3:1
+   |
+ 1 |   """Bounded source acquisition and deterministic snapshot construction."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import hashlib
+ 6 | | import ipaddress
+ 7 | | import re
+ 8 | | from collections.abc import Callable, Sequence
+ 9 | | from time import monotonic
+10 | | from urllib.parse import urljoin, urlsplit
+11 | |
+12 | | import httpx
+13 | | import httpcore
+14 | | from pydantic import ConfigDict, Field
+15 | |
+16 | | from researchassistant.contracts.models import (
+17 | |     MediaTypeProvenance,
+18 | |     StrictModel,
+19 | |     SupportedOriginMediaType,
+20 | | )
+21 | | from researchassistant.contracts.scraping import (
+22 | |     ScrapeRequest,
+23 | |     ScrapeResponse,
+24 | |     VerifiedAcquisitionPreflight,
+25 | | )
+26 | | from researchassistant.providers.config import WigoloConfig
+27 | | from researchassistant.providers.bounded_network import network_deadline, remaining_timeout
+28 | | from researchassistant.providers.bounded_resolver import resolve_host_addresses
+29 | | from researchassistant.providers.normalization import (
+30 | |     NormalizationError,
+31 | |     normalize_markdown,
+32 | |     normalize_pdf,
+33 | |     normalize_plain_text,
+34 | | )
+35 | | from researchassistant.providers.public_network import PublicDestinationHTTPTransport
+36 | | from researchassistant.providers.scraper import ScraperProviderError, ScraperTimeoutError
+   | |_________________________________________________________________________________________^
+37 |
+38 |   ACQUISITION_VERSION = "mvp6.9-acquisition-provenance-v5"
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend/src/researchassistant/providers/bounded_network.py:7:1
+   |
+ 5 |   """
+ 6 |
+ 7 | / from __future__ import annotations
+ 8 | |
+ 9 | | import ssl
+10 | | import ipaddress
+11 | | import socket
+12 | | from collections.abc import Callable, Iterator
+13 | | from contextlib import contextmanager
+14 | | from contextvars import ContextVar
+15 | | from typing import Any
+16 | |
+17 | | import httpcore
+18 | | import httpx
+19 | | from httpcore._backends.sync import SyncBackend, SyncStream
+20 | |
+21 | | from researchassistant.providers.bounded_resolver import resolve_host_addresses
+   | |_______________________________________________________________________________^
+22 |
+23 |   _DEADLINE: ContextVar[tuple[Callable[[], float], float] | None] = ContextVar(
+   |
+help: Organize imports
+
+E501 Line too long (102 > 100)
+  --> backend/src/researchassistant/providers/bounded_resolver.py:64:101
+   |
+62 |             if remaining <= 0:
+63 |                 raise TimeoutError("hostname resolution startup deadline expired")
+64 |             process.communicate(json.dumps({"hostname": hostname}).encode("ascii"), timeout=remaining)
+   |                                                                                                     ^^
+65 |             if time.monotonic() >= deadline:
+66 |                 raise TimeoutError("hostname resolution deadline expired")
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> backend/src/researchassistant/providers/mimo.py:3:1
+   |
+ 1 |   """OpenAI-compatible JSON-mode adapters for MiMo and the Luna route."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import json
+ 6 | | import re
+ 7 | | import time
+ 8 | | from datetime import UTC, datetime
+ 9 | | from decimal import Decimal
+10 | | from enum import StrEnum
+11 | | from hashlib import sha256
+12 | | from threading import local
+13 | | from typing import Any
+14 | | from uuid import NAMESPACE_URL, UUID, uuid5
+15 | |
+16 | | import httpx
+17 | | from pydantic import BaseModel, ConfigDict, Field, ValidationError
+18 | |
+19 | | from researchassistant.agents.analyst import AnalystLLMInput, StatementDraftLLMInput
+20 | | from researchassistant.agents.planner import PlannerLLMInput
+21 | | from researchassistant.common.money import parse_exact_usd
+22 | | from researchassistant.contracts.models import (
+23 | |     AmbiguityRecord,
+24 | |     ClaimDefinition,
+25 | |     DiscoveryProvider,
+26 | |     ModelUsageCostBasis,
+27 | |     ModelUsageMetadata,
+28 | |     PlannerOutput,
+29 | |     Score,
+30 | |     ScoreDecision,
+31 | |     SearchIntent,
+32 | |     SearchQuery,
+33 | |     SectionType,
+34 | |     Stance,
+35 | |     StatementDraft,
+36 | |     StrictModel,
+37 | |     SynthesisItem,
+38 | |     SynthesisOutput,
+39 | |     SynthesisSection,
+40 | |     V2SynthesizerInput,
+41 | |     _derive_ledger_score,
+42 | |     _expected_placement,
+43 | |     _is_ledger_eligible,
+44 | |     validate_planner_provider_selection,
+45 | | )
+46 | | from researchassistant.evidence.synthesizer import SynthesizerLLMInput, _item_from_ledger
+47 | | from researchassistant.providers.config import (
+48 | |     LunaConfig,
+49 | |     MimoChoiceConfig,
+50 | |     MimoConfig,
+51 | |     MimoRouteConfig,
+52 | | )
+53 | | from researchassistant.providers.bounded_network import (
+54 | |     DeadlineHTTPTransport,
+55 | |     DeadlineStream,
+56 | |     network_deadline,
+57 | | )
+58 | | from researchassistant.providers.llm import (
+59 | |     LLMProviderCapabilities,
+60 | |     LLMRequest,
+61 | |     LLMStage,
+62 | |     ModelAlias,
+63 | | )
+64 | | from researchassistant.providers.model_choices import ModelChoice, option_for
+65 | | from researchassistant.providers.pricing import (
+66 | |     DIRECT_MIMO_PRICE_CAP,
+67 | |     CacheTokenPrices,
+68 | |     ModelPriceCap,
+69 | |     cache_prices_for_route,
+70 | |     conservative_token_estimate,
+71 | | )
+   | |_^
+72 |
+73 |   MAX_MODEL_RESPONSE_BYTES = 16 * 1024 * 1024
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/test_frontend_api_contracts.py:3:1
+   |
+ 1 |   """Offline wire examples and generated renderer contracts stay tied to the API."""
+ 2 |
+ 3 | / from __future__ import annotations
+ 4 | |
+ 5 | | import importlib.util
+ 6 | | import json
+ 7 | | import shutil
+ 8 | | import subprocess
+ 9 | | from pathlib import Path
+10 | | from types import ModuleType
+11 | | from typing import Any
+12 | |
+13 | | import pytest
+14 | | from pydantic import ValidationError as InputValidationError
+15 | | from api_contract_support import contract_inventory
+16 | | from fastapi.testclient import TestClient
+17 | | from test_mlp3_api import FakeController, FakeServices
+18 | | from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved, _run
+19 | | from test_v2_phase11_final_output import _continuation, _synthesis
+20 | |
+21 | | from researchassistant.agents.v2_final_output import build_v2_final_research_output
+22 | | from researchassistant.api import api
+23 | | from researchassistant.contracts.models import ValidationError, ValidationErrorCode
+24 | | from researchassistant.storage.store import insert_v2_artifact
+   | |______________________________________________________________^
+25 |
+26 |   ROOT = Path(__file__).resolve().parents[1]
+   |
+help: Organize imports
+
+E501 Line too long (101 > 100)
+   --> tests/test_frontend_api_contracts.py:164:101
+    |
+162 |             f"const namedResearchError = {json.dumps(research_error)} "
+163 |             'satisfies ApiSchemas["V2ReleaseValidation"]["errors"][number];',
+164 |             f"const httpError = {json.dumps(http_error)} satisfies ApiSchemas[\"ValidationError\"];",
+    |                                                                                                     ^
+165 |             "// @ts-expect-error HTTP input errors cannot represent research release errors.",
+166 |             f"const wrongResearchError = {json.dumps(http_error)} satisfies ResearchError;",
+    |
+
+E501 Line too long (101 > 100)
+  --> tests/test_ipv6_discovery_identity.py:34:101
+   |
+32 |     for identity in ("source-candidate-ranking-v2", "source-candidate-ranking-v3"):
+33 |         legacy_ranked = rank_metadata(
+34 |             (item,), exact_claim=CLAIM, policy=V2MetadataDiscoveryPolicy(), ranking_identity=identity
+   |                                                                                                     ^
+35 |         )
+36 |         assert legacy_ranked[0].work_key == historical
+   |
+
+E501 Line too long (102 > 100)
+   --> tests/test_saved_result_integrity.py:231:101
+    |
+229 |         }
+230 |     )
+231 |     changed = admitted.model_copy(update={"source_results": (replaced, *admitted.source_results[1:])})
+    |                                                                                                     ^^
+232 |     with pytest.raises(ValueError, match="reviewer_approval_id"):
+233 |         _build_v2_evidence_display(output, changed)
+    |
+
+Found 8 errors.
+[*] 4 fixable with the `--fix` option.

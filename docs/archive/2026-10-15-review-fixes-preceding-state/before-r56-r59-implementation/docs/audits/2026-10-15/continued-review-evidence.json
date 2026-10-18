@@ -1,0 +1,1878 @@
+{
+  "scope": "Continued current-source review. R01\u2013R55 approved, implemented and verified. Original pre-fix probes/hashes remain retained. R56\u2013R59 reproduced and awaiting approval; none of those repairs is implemented. Literal every-line manual review remains incomplete.",
+  "findings": [
+    {
+      "id": "R15",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual usePreferences TypeScript compiled/executed with deterministic state and a deferred API response; no provider traffic.",
+      "observed": {
+        "finding": "R15",
+        "selected_before_preferences_return": {
+          "maxCost": "0.50",
+          "challengeEnabled": true
+        },
+        "actual_after_delayed_preferences": {
+          "maxCost": "10.00",
+          "challengeEnabled": false
+        },
+        "paid_or_provider_calls": 0
+      },
+      "probe_path": "/tmp/ra-review-preferences-race.cjs",
+      "probe_sha256": "961a315ec84edf81b63c0d7ac5c0bf3fbe28730cadcb4f8f961af5019e0ace44",
+      "source_sha256": {
+        "frontend/features/preferences/use-preferences.ts": "6af80bcb00afe9e7f701c5aa7201b1f7be42d15de56e2169020f0a7d71f6371c",
+        "frontend/app/page.tsx": "0af5993b263eb9974ff7011acd4b1bb19196c0336d4fab148ecddb0ec02186d6",
+        "frontend/features/research/composer.tsx": "183f51e27872dc8c69df886579a30691ab0c1480c3b2174bd54c856027278fe9"
+      }
+    },
+    {
+      "id": "R16",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual AdvancedPanel TypeScript/JSX handlers executed with deterministic virtual elements and deferred import; no database/provider traffic.",
+      "observed": {
+        "finding": "R16",
+        "selected_budget_while_import_pending": "0.50",
+        "actual_budget_after_import": "10.00",
+        "imported_path": "/generated/imported.sqlite3",
+        "database_or_provider_calls": 0
+      },
+      "probe_path": "/tmp/ra-review-import-race.cjs",
+      "probe_sha256": "30cc7fe489fcc3e3740462eab0414e4cf5cbefbdd73128a7bb7ce861719fb3c8",
+      "source_sha256": {
+        "frontend/features/preferences/panel.tsx": "e90d31688324dded0055f2c300e86b58525c20db2dd12d9a5d0a406146f63e4c",
+        "frontend/app/page.tsx": "a1f48b3550fef93850bba5878f6553cd72caeee74b05d67ef176f78238e94c20"
+      }
+    },
+    {
+      "id": "R17",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual TypeScript/JSX callbacks or hook executed with deferred/mocked API boundaries; no real credentials, database or provider traffic.",
+      "observed": {
+        "input_editable_while_saving": true,
+        "new_typed_value_erased": true,
+        "submitted_prior_value": true,
+        "reported_saved": true
+      },
+      "probe_path": "/tmp/ra-review-provider-ui-races.cjs",
+      "probe_sha256": "6c21442adfc97aeb39623ac137a0e7dbb784b02624610c4b9c47aa046e953ca7",
+      "source_sha256": {
+        "frontend/components/provider-setup.tsx": "5d05f030207f7b7d7e466b4f47758dc38e590b6845ecf2501ea9d71b23b3ff75"
+      }
+    },
+    {
+      "id": "R18",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual TypeScript/JSX callbacks or hook executed with deferred/mocked API boundaries; no real credentials, database or provider traffic.",
+      "observed": {
+        "current_scout_model": "gpt-6-sol-high",
+        "previously_configured": true,
+        "stale_callback_checked_model": "mimo-v2.6-pro",
+        "configuration_after_stale_callback": false
+      },
+      "probe_path": "/tmp/ra-review-provider-ui-races.cjs",
+      "probe_sha256": "6c21442adfc97aeb39623ac137a0e7dbb784b02624610c4b9c47aa046e953ca7",
+      "source_sha256": {
+        "frontend/features/preferences/use-configuration.ts": "cd88b9b061243430a7e14f6ae7f0c3200d9824883393bc099ca53c665ec35d84",
+        "frontend/components/provider-setup.tsx": "5d05f030207f7b7d7e466b4f47758dc38e590b6845ecf2501ea9d71b23b3ff75",
+        "frontend/app/page.tsx": "ddd85119f75fe3585edb0ac44db5421adace645d9a455e0438686a9b924fcbbc"
+      }
+    },
+    {
+      "id": "R19",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual HTTPX/httpcore transport; generated socket for R19, patched resolver for R20. No real sockets connect.",
+      "observed": {
+        "configured_timeout_seconds": 0.02,
+        "elapsed_seconds": 0.08268141699954867,
+        "successful_after_deadline": true,
+        "read_budgets": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ],
+        "closed_after_owner_cleanup": true
+      },
+      "real_network_provider_or_credential_calls": 0,
+      "probe_path": "/tmp/ra-review-transport-gaps.py",
+      "probe_sha256": "c4255c765f2aa8baf95f8bf92c9f1be453b811ce8c14a81d1a3b65b5badc67f8",
+      "source_sha256": {
+        "backend/src/researchassistant/providers/acquisition.py": "5d619539d96ced894da7af5928f917299313b01043664c4f0570049e7f079a76",
+        "backend/src/researchassistant/providers/public_network.py": "88926f1954dec9009623981971a201a756b1d33f050bc1d1743586ec945ad7d2"
+      },
+      "retained_probe": "fix-evidence/transport-gaps.py.txt"
+    },
+    {
+      "id": "R20",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual HTTPX/httpcore transport; generated socket for R19, patched resolver for R20. No real sockets connect.",
+      "observed": {
+        "configured_absolute_deadline_seconds": 0.02,
+        "elapsed_seconds": 0.12541870796121657,
+        "error": "ConnectError after generated stalled getaddrinfo returned"
+      },
+      "real_network_provider_or_credential_calls": 0,
+      "probe_path": "/tmp/ra-review-transport-gaps.py",
+      "probe_sha256": "c4255c765f2aa8baf95f8bf92c9f1be453b811ce8c14a81d1a3b65b5badc67f8",
+      "source_sha256": {
+        "backend/src/researchassistant/providers/bounded_network.py": "af7a54a362cf9127136c55f1ec3f12bee192d77e8a89a89fd4a13db738dd011e",
+        "backend/src/researchassistant/providers/acquisition.py": "5d619539d96ced894da7af5928f917299313b01043664c4f0570049e7f079a76"
+      },
+      "retained_probe": "fix-evidence/transport-gaps.py.txt"
+    },
+    {
+      "id": "R21",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual local FastAPI catalog response, actual research-validation error, and installed TypeScript compiler; no external calls.",
+      "observed": {
+        "finding": "R21",
+        "results": [
+          {
+            "case": "real_catalog",
+            "exit_code": 2,
+            "diagnostic": "../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_catalog.ts(2,31): error TS2739: Type '{ id: \"gpt-6-luna-high\"; label: string; provider: \"openai\"; input_per_million: string; output_per_million: string; }' is missing the following properties from type '{ id: \"gpt-6-luna-high\" | \"gpt-6-luna-xhigh\" | \"mimo-v2.6-pro\" | \"mimo-v2.6-flash\" | \"gpt-6-sol-high\" | \"gpt-5.6-terra-high\"; label: string; provider: \"openai\" | \"mimo\"; model: string; ... 5 more ...; output_cap_per_million: string; }': \"model\", \"cached_input_per_million\", \"input_cap_per_million\", \"output_cap_per_million\"\n../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_catalog.ts(2,174): error TS2739: Type '{ id: \"gpt-6-luna-xhigh\"; label: string; provider: \"openai\"; input_per_million: string; output_per_million: string; }' is missing the following properties from type '{ id: \"gpt-6-luna-high\" | \"gpt-6-luna-xhigh\" | \"mimo-v2.6-pro\" | \"mimo-v2.6-flash\" | \"gpt-6-sol-high\" | \"gpt-5.6-terra-high\"; label: string; provider: \"openai\" | \"mimo\"; model: string; ... 5 more ...; output_cap_per_million: string; }': \"model\", \"cached_input_per_million\", \"input_cap_per_million\", \"output_cap_per_million\"\n../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_catalog.ts(2,319): error TS2739: Type '{ id: \"mimo-v2.6-pro\"; label: string; provider: \"mimo\"; input_per_million: string; output_per_million: string; }' is missing the following properties from type '{ id: \"gpt-6-luna-high\" | \"gpt-6-luna-xhigh\" | \"mimo-v2.6-pro\" | \"mimo-v2.6-flash\" | \"gpt-6-sol-high\" | \"gpt-5.6-terra-high\"; label: string; provider: \"openai\" | \"mimo\"; model: string; ... 5 more ...; output_cap_per_million: string; }': \"model\", \"cached_input_per_million\", \"input_cap_per_million\", \"output_cap_per_million\"\n../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_catalog.ts(2,450): error TS2739: Type '{ id: \"mimo-v2.6-flash\"; label: string; provider: \"mimo\"; input_per_million: string; output_per_million: string; }' is missing the following properties from type '{ id: \"gpt-6-luna-high\" | \"gpt-6-luna-xhigh\" | \"mimo-v2.6-pro\" | \"mimo-v2.6-flash\" | \"gpt-6-sol-high\" | \"gpt-5.6-terra-high\"; label: string; provider: \"openai\" | \"mimo\"; model: string; ... 5 more ...; output_cap_per_million: string; }': \"model\", \"cached_input_per_million\", \"input_cap_per_million\", \"output_cap_per_million\"\n../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_catalog.ts(2,584): error TS2739: Type '{ id: \"gpt-6-sol-high\"; label: string; provider: \"openai\"; input_per_million: string; output_per_million: string; }' is missing the following properties from type '{ id: \"gpt-6-luna-high\" | \"gpt-6-luna-xhigh\" | \"mimo-v2.6-pro\" | \"mimo-v2.6-flash\" | \"gpt-6-sol-high\" | \"gpt-5.6-terra-high\"; label: string; provider: \"openai\" | \"mimo\"; model: string; ... 5 more ...; output_cap_per_million: string; }': \"model\", \"cached_input_per_million\", \"input_cap_per_million\", \"output_cap_per_million\"\n../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_catalog.ts(2,726): error TS2739: Type '{ id: \"gpt-5.6-terra-high\"; label: string; provider: \"openai\"; input_per_million: string; output_per_million: string; }' is missing the following properties from type '{ id: \"gpt-6-luna-high\" | \"gpt-6-luna-xhigh\" | \"mimo-v2.6-pro\" | \"mimo-v2.6-flash\" | \"gpt-6-sol-high\" | \"gpt-5.6-terra-high\"; label: string; provider: \"openai\" | \"mimo\"; model: string; ... 5 more ...; output_cap_per_million: string; }': \"model\", \"cached_input_per_million\", \"input_cap_per_million\", \"output_cap_per_million\"\n"
+          },
+          {
+            "case": "real_research_error",
+            "exit_code": 2,
+            "diagnostic": "../../../../../../../var/folders/_h/hjz63dxd16z48vb3j2cvxmjm0000gn/T/ra-wire-review-280vc3wc/real_research_error.ts(2,95): error TS1360: Type '{ code: string; location: string; message: string; }' does not satisfy the expected type '{ loc: (string | number)[]; msg: string; type: string; input?: unknown; ctx?: Record<string, unknown> | undefined; } & Record<string, unknown>'.\n  Type '{ code: string; location: string; message: string; }' is missing the following properties from type '{ loc: (string | number)[]; msg: string; type: string; input?: unknown; ctx?: Record<string, unknown> | undefined; }': \"loc\", \"msg\", \"type\"\n"
+          },
+          {
+            "case": "http_error_accepted_as_research_error",
+            "exit_code": 0,
+            "diagnostic": ""
+          }
+        ],
+        "network_database_or_provider_calls": 0
+      },
+      "probe_path": "/tmp/ra-review-wire-contracts.py",
+      "probe_sha256": "5d5c88da569e40e236d079894ec04388e4e395636957d93d84fcffeba0a6d9d1",
+      "source_sha256": {
+        "frontend/scripts/generate_api_contracts.py": "e54c937792851bc466d395e48850b90403dc7aec3b4bd690cf13db0ec7633072",
+        "frontend/lib/generated/api-contracts.ts": "5bb017201e154690b6bcaf27f74c3fa55c8a04c6a9af03c5a9174b2b471070dd",
+        "backend/src/researchassistant/api/application_services/configuration.py": "9734f61fdd5f1b39d6ea6788bf3633655201dbad6bff5a28dd7fab6921b04cc4",
+        "tests/test_frontend_api_contracts.py": "04355a51fa714b5c85404a80bc9ca0e8e8ae089123a9bf5887e9af39b3ce3c9f"
+      },
+      "retained_probe": "fix-evidence/wire-contracts.py.txt"
+    },
+    {
+      "id": "R22",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual model adapter and HTTPX/httpcore with a synthetic trickling socket; no real calls.",
+      "observed": {
+        "finding": "R22",
+        "stage_deadline_seconds": 0.02,
+        "elapsed_seconds": 0.07723404187709093,
+        "returned_error": "returned_model_mismatch",
+        "read_budgets": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ],
+        "closed_after_owner_cleanup": true,
+        "real_network_model_or_credential_calls": 0,
+        "method": "Actual model adapter and HTTPX/httpcore; generated trickling socket and synthetic key. The payload is parsed only after exceeding the stage deadline."
+      },
+      "probe_path": "/tmp/ra-review-model-deadline.py",
+      "probe_sha256": "bc930eb51ce9dc95f7e89ff49e27be73ec3d44aa576fd3e186a555922699e68a",
+      "source_sha256": {
+        "backend/src/researchassistant/providers/mimo.py": "41e3eb9a31d1ac197aea4e35514fcdb7809a42341c400e3806d76c02c442dba7"
+      },
+      "retained_probe": "fix-evidence/model-deadline.py.txt"
+    },
+    {
+      "id": "R23",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Generated offline research and checksum-valid same-run admission substitution, with original immutability trigger restored; no real database, credentials or external calls.",
+      "observed": {
+        "same_ledger_id_has_different_statements": true,
+        "released_statement": "Among surveyed regional-program adults, 62% reported course completion versus 48% among matched adults receiving standard materials.",
+        "evidence_display_statement": "A substituted statement that was never in the released brief.",
+        "released_hash_unchanged": true,
+        "inconsistent_approved_claim_was_accepted": true,
+        "database_unchanged_by_inspection": true,
+        "method": "Generated offline research, checksum-valid same-run admission substitution, original immutability trigger restored. No real data or provider calls."
+      },
+      "probe_path": "/tmp/ra-review-evidence-disagreement.py",
+      "retained_probe": "fix-evidence/evidence-disagreement.py.txt",
+      "probe_sha256": "030f6e9f28f4ae8042b28400570fc853441cda230211add50bfc5bd2703f1863",
+      "source_sha256": {
+        "backend/src/researchassistant/api/application_services/evidence_projection.py": "3398bfa699452d4d4fd8e487a9760b9ecda687f5f31188c7a82fcb79d21876f2",
+        "backend/src/researchassistant/contracts/model_evidence.py": "75cde1f5e0d35c4c422f2b43e1397bdba165cf02249b590fa73e6b0736e7b626",
+        "backend/src/researchassistant/api/application_services/result_reads.py": "1ce9c31f71e75746b4c9f73ef294c863c11559799b45cb8e494472a21e538d14"
+      }
+    },
+    {
+      "id": "R24",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual adapters with mocked HTTP metadata responses and generated URLs; no external calls.",
+      "observed": {
+        "finding": "R24",
+        "results": [
+          {
+            "provider": "openalex",
+            "exception": "ValueError",
+            "message": "Invalid IPv6 URL",
+            "valid_results_not_returned": 2
+          },
+          {
+            "provider": "arxiv",
+            "exception": "ValueError",
+            "message": "Invalid IPv6 URL",
+            "valid_results_not_returned": 1
+          }
+        ],
+        "external_provider_calls": 0
+      },
+      "probe_path": "/tmp/ra-review-metadata-urls.py",
+      "retained_probe": "fix-evidence/metadata-urls.py.txt",
+      "probe_sha256": "2cefeed73443389a29a2f78ca445a3677151de2f20340be6d7b611f064ce3581",
+      "source_sha256": {
+        "backend/src/researchassistant/providers/openalex.py": "363f4bde02af0622f4956c38a21f1365ca4c364de9afe5fa3fe98ebc59fab89d",
+        "backend/src/researchassistant/providers/arxiv.py": "fe27dd8a7a1d505e5b86cf36bb5b2502c4d342aa626caeafa93a69156ef8d548"
+      }
+    },
+    {
+      "id": "R25",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual public-source validation, URL canonicalization and metadata ranking with generated IPv6 source metadata; no network.",
+      "observed": {
+        "finding": "R25",
+        "cases": [
+          {
+            "valid_public_url": "https://[2606:4700:4700::1111]/paper",
+            "canonical_url": "https://2606:4700:4700::1111/paper",
+            "ranking_error": "Port could not be cast to integer value as '4700:4700::1111'"
+          },
+          {
+            "valid_public_url": "https://[2606:4700:4700::1111]:8443/paper",
+            "canonical_url": "https://2606:4700:4700::1111:8443/paper",
+            "ranking_error": "Port could not be cast to integer value as '4700:4700::1111:8443'"
+          }
+        ],
+        "network_or_provider_calls": 0
+      },
+      "probe_path": "/tmp/ra-review-ipv6-canonical.py",
+      "retained_probe": "fix-evidence/ipv6-canonical.py.txt",
+      "probe_sha256": "1cb7c89453d34b1584524761219bf4910f6243cc3371fb24e506fabd7d2390e3",
+      "source_sha256": {
+        "backend/src/researchassistant/providers/ranking.py": "d1ad6a142622326002d18675a5d60ad42187f8927ba7c28123e979fb74893d75",
+        "backend/src/researchassistant/research/metadata_ranking.py": "1909cb8736ad881636b07c9a1f96fd1cbcdfc56808adf60509febe5421e18e2b",
+        "backend/src/researchassistant/research/discovery_policy.py": "fb3fb4dbfe430fceafc280bae4644aac01691580ddeaaee370ee218cddd53199"
+      }
+    },
+    {
+      "id": "R26",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Generated offline release, actual completed-future cache/eviction path, generated database replacement with original preserved by rename; no external calls or real data.",
+      "observed": {
+        "finding": "R26",
+        "replacement_database_has_requested_run": false,
+        "returned_classifications": [
+          "released",
+          "released"
+        ],
+        "returned_old_brief_and_hash": true,
+        "terminal_cache_remains_after_repeated_reads": true,
+        "replacement_unchanged_by_inspection": true,
+        "method": "Generated offline release, actual completed-future eviction/cache path, original file preserved by rename and fresh empty generated database at the same path; no real data or calls."
+      },
+      "probe_path": "/tmp/ra-review-terminal-cache.py",
+      "retained_probe": "fix-evidence/terminal-cache.py.txt",
+      "probe_sha256": "e91cac2b37e9b4a74f03b2955bc65ed977bf433bd3ab9e6d43a9060d3534a56b",
+      "source_sha256": {
+        "backend/src/researchassistant/api/live_service.py": "0f6a1b69659e7afd98c907d6bdaaf4395d110428dc9bca667307bb79ee01348c"
+      }
+    },
+    {
+      "id": "R27",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual offline HTTP 422 body versus live OpenAPI, without lifespan or provider work.",
+      "observed": {
+        "finding": "R27",
+        "http_status": 422,
+        "actual_body": {
+          "detail": "Invalid request fields."
+        },
+        "documented_detail_schema": {
+          "items": {
+            "$ref": "#/components/schemas/ValidationError"
+          },
+          "type": "array",
+          "title": "Detail"
+        },
+        "method": "Actual offline FastAPI request with missing required fields; no lifespan, database, credentials or provider work."
+      },
+      "retained_evidence": "fix-evidence/http-error-shape.json",
+      "retained_sha256": "22faf9c31e0e5c6ee9b9650b497e388bad69ca281c2c519a25b67a8164c6cc68",
+      "source_sha256": {
+        "backend/src/researchassistant/api/application.py": "92f0949813664507103d9c56b5f0bec061e28f9aed5a2dda5ab8c09125e13f24",
+        "frontend/lib/generated/api-contracts.ts": "d2125573d89158b59163a4c60f4364a3d19b8607483b10c1b35625585b9ddc40"
+      }
+    },
+    {
+      "id": "R28",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual public DOCX export of a generated offline released run; parse resulting XML without opening a real application.",
+      "observed": {
+        "finding": "R28",
+        "actual_released_run": true,
+        "export_reported_success": true,
+        "content_hash_matches_report": true,
+        "document_xml_parse_error": "not well-formed (invalid token): line 1, column 1520",
+        "control_character_present": true,
+        "database_unchanged": true,
+        "method": "Generated offline released run with an accepted U+0001 claim character; actual public DOCX export; standard XML parser rejects word/document.xml. No real data or provider work."
+      },
+      "retained_probe": "fix-evidence/docx-xml.py.txt",
+      "probe_sha256": "710c441e42f32768da0d3cb712e7a8856131a48bee85d6e98de90e2d9f20308d",
+      "source_sha256": {
+        "backend/src/researchassistant/evidence/brief_export.py": "786d7ed4700a44ea75aa74851072c66e10250cf39cd34aade87606c6e7722f16",
+        "backend/src/researchassistant/evidence/pdf_render.py": "51595dfb7102ba3099ee1ee31f1ad2af7377b15216b326417da52f51d1152162"
+      }
+    },
+    {
+      "id": "R29",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual active controller worker and HTTP poll with generated offline providers; paused acquisition after persisted discovery.",
+      "observed": {
+        "finding": "R29",
+        "actual_http_status": 200,
+        "classification": "running",
+        "worker_active": true,
+        "actual_v2_diagnostics": null,
+        "computed_diagnostics": {
+          "configured_providers": [
+            "exa"
+          ],
+          "provider_outcomes": [
+            {
+              "provider": "exa",
+              "query_attempts": 3,
+              "non_empty_queries": 3,
+              "empty_queries": 0,
+              "timeout_queries": 0,
+              "failed_queries": 0,
+              "search_results": 3,
+              "surviving_sources": 0
+            }
+          ],
+          "search_attempts": 3,
+          "search_results": 3,
+          "acquisition_attempts": 0,
+          "sources_acquired": 0,
+          "sources_survived_probe": 0,
+          "sources_queued_for_analysis": 0,
+          "sources_analyzed": 0,
+          "approved_evidence_records": 0,
+          "logical_discovery_operations": 3,
+          "physical_search_requests": 3,
+          "retained_metadata_records": 3,
+          "deduplicated_work_candidates": 3,
+          "seed_derived_candidates": 0,
+          "diagnostic_messages": [
+            "Some provider searches ended early; counts include only retained results.",
+            "OpenAlex was not selected; citation graph expansion was unavailable."
+          ]
+        },
+        "database_unchanged_by_inspection": true,
+        "method": "Actual fresh controller worker with offline generated providers, paused during acquisition after saved discovery; actual HTTP polling. No external calls or real data."
+      },
+      "retained_probe": "fix-evidence/live-diagnostics.py.txt",
+      "probe_sha256": "8e6e119e5ae5962b7459b50bf3cbbbed0ab08d05fa3459a91f493fcf5c16cd61",
+      "retained_evidence": "fix-evidence/live-diagnostics.json",
+      "retained_sha256": "2ff72ede785d93a3123a6ff985b1919366ea54640930140c3df0844b1dcbb283",
+      "source_sha256": {
+        "backend/src/researchassistant/api/live_progress.py": "982acb65ec0ea75ff7bae6c28a5229eca954b79ba7e1cc1f160825ad36b9bdfe",
+        "backend/src/researchassistant/api/live_service.py": "fce1f08d8c2d90709ff3dc9bf7aaa8bdca48101d25bac37602ef29a6c93e70a2",
+        "frontend/features/research/progress.tsx": "352fa8dee23ea36116efe17e4a5a02a455022c5241f8d867c7899251b3da9256"
+      }
+    },
+    {
+      "id": "R30",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Generated offline release, checksum-valid same-run completion operation substitution, original immutability trigger restored.",
+      "observed": {
+        "finding": "R30",
+        "generated_released_run": true,
+        "checksum_valid_completion_with_other_operation_accepted": true,
+        "audit_start_operation": "669be888-aef2-51ca-a59c-0a56416a37b8",
+        "audit_completion_operation": "585cf516-9b26-5a55-b998-10123144be2d",
+        "returned_snapshot_classification": "released",
+        "physical_search_requests": 6,
+        "database_unchanged_by_inspection": true,
+        "method": "Generated offline released research; substitute only one physical completion operation ID and recompute its envelope checksum; restore original immutability trigger. No real data or external calls."
+      },
+      "retained_probe": "fix-evidence/provider-audit-owner.py.txt",
+      "probe_sha256": "c36f1526ec45b9c19e3ab6fc02333bb76758f4304837466bb5345f283eecc62c",
+      "retained_evidence": "fix-evidence/provider-audit-owner.json",
+      "retained_sha256": "8b4c2b85d08d4ac3616518c4fd074a52a080d3d8a0b80bc3b6c3328a3f081724",
+      "source_sha256": {
+        "backend/src/researchassistant/storage/discovery_store.py": "a7d053bcd1bb5eb0e80b4db8a60345197e718a392e9b3dfcef420fdbfa709eee"
+      }
+    },
+    {
+      "id": "R31",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Generate offline released research, replace only the cached production-result release hash, update envelope checksum and restore the exact immutability trigger; invoke actual production resume under identical settings/source. No real data or external calls.",
+      "observed": {
+        "finding": "R31",
+        "resumed_state": "released",
+        "saved_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "actual_rendered_hash": "1073fb5cd68d1b0b2bb2ffef7c27eac9bb19d9cf6b65578c4b01b5d1b6308baf",
+        "hash_mismatch_accepted": true,
+        "model_requests_on_resume": 0,
+        "search_requests_on_resume": 0,
+        "database_unchanged_by_resume": true,
+        "method": "Generate offline released research, replace only the cached production-result release hash, update envelope checksum and restore the exact immutability trigger; invoke actual production resume under identical settings/source. No real data or external calls."
+      },
+      "retained_probe": "fix-evidence/resume-release-hash.py.txt",
+      "probe_sha256": "e27d5c96faa8c994975f2e0701c7d7637889529455235673259cef0d244d45ad",
+      "retained_evidence": "fix-evidence/resume-release-hash.json",
+      "retained_sha256": "f8abb269b99c02df0b15337adac7f2dc93dbe81ed40f08ff7f379fd1c835340c",
+      "source_sha256": {
+        "backend/src/researchassistant/research/v2_orchestrator.py": "1af5cff438568fcf948d786133c691f68d4cb34a17bfc5cad3b09809908850ee",
+        "backend/src/researchassistant/agents/v2_final_output.py": "139cb820b2c00bc0d62a694446ed6491d03f0bd2b6163efc1101f9c82f7bdd6a",
+        "backend/src/researchassistant/evidence/released_output.py": "d249b073c009ed4dfa2e4432c3f98696cad9f5badf4c6b9e2324dff7faa2f098"
+      }
+    },
+    {
+      "id": "R32",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual generated offline run interrupted immediately before terminal commit, then resumed with identical source/settings. No artifact substitution, database edits, real data or external calls.",
+      "observed": {
+        "changed_gap_input_fields": [
+          "remaining_budget"
+        ],
+        "saved_remaining_budget": {
+          "model_calls_remaining": 158,
+          "tokens_remaining": 499970,
+          "cost_remaining_usd": "4.99998"
+        },
+        "incoming_remaining_budget": {
+          "model_calls_remaining": 140,
+          "tokens_remaining": 499700,
+          "cost_remaining_usd": "4.9998"
+        },
+        "finding": "R32",
+        "partial_status": "running",
+        "partial_stage": "synthesis",
+        "same_source_and_settings": true,
+        "saved_artifacts_modified_by_probe": false,
+        "resume_state": "failed",
+        "failure_reason": "ValueError: persisted Gap Analysis input does not match this Round-1 state",
+        "model_requests_on_resume": 0,
+        "search_requests_on_resume": 0,
+        "manifest_after_resume": "failed",
+        "method": "Actual generated offline run interrupted immediately before terminal commit, then resumed with identical source/settings. No artifact substitution, database edits, real data or external calls."
+      },
+      "retained_probe": "fix-evidence/partial-resume-budget.py.txt",
+      "probe_sha256": "2280b5367f1913a180b3322868b4eaa2e8c744d6b841ade352b2092648bdf7a4",
+      "retained_evidence": "fix-evidence/partial-resume-budget.json",
+      "retained_sha256": "72818270641afbd0e19cba526254c8f83e3a1413b05daecc826f9bb148b788d1",
+      "source_sha256": {
+        "backend/src/researchassistant/research/v2_orchestrator.py": "1af5cff438568fcf948d786133c691f68d4cb34a17bfc5cad3b09809908850ee",
+        "backend/src/researchassistant/agents/v2_gap_analysis.py": "ae364e48ebcf384d198bb08ca862c113922666633ed586d8d46a7a67f3e84627"
+      }
+    },
+    {
+      "id": "R33",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual offline production interruptions with an advancing clock, no saved-artifact edits. Observed after the R31\u2013R32 budget replay fixes.",
+      "probes": [
+        {
+          "retained_probe": "fix-evidence/resume-prefix.py.txt",
+          "probe_sha256": "b46142b10af4eefe8cd4fd7230b773fac5fb279efd874ce2d9c270e4c61d20fc",
+          "retained_evidence": "fix-evidence/resume-prefix.json",
+          "retained_sha256": "f2c24ed3a5e9218de0301f54a18cd9d8e172155d0c2467ee50df9d6865134a83",
+          "observed": {
+            "finding": "R33",
+            "same_source_and_settings": true,
+            "saved_artifacts_modified_by_probe": false,
+            "interrupted_after": "phase-13-complete-survivor-pool-analyzer-admission",
+            "partial_status": "running",
+            "resume_state": "failed",
+            "failure_reason": "IntegrityError: v2 artifact phase-13-complete-survivor-pool-analyzer-admission already exists with different data",
+            "model_requests_on_resume": 0,
+            "search_requests_on_resume": 0,
+            "method": "Actual generated offline pipeline with an advancing UTC clock; interruption immediately after the source-selection pool commit, followed by unchanged production resume. No SQL edits, artifact substitution, real data or external calls."
+          }
+        },
+        {
+          "retained_probe": "fix-evidence/resume-adaptive-prefix.py.txt",
+          "probe_sha256": "acd81bef1ecb787971f53f4d91811508f32b39d4e8b43e5c6c94132ff6cdec83",
+          "retained_evidence": "fix-evidence/resume-adaptive-prefix.json",
+          "retained_sha256": "b4b98b96ee80513288ceb110b9ee7a23db7d526df9e326359d87baec418ae19e",
+          "observed": {
+            "finding": "R33",
+            "same_source_and_settings": true,
+            "saved_artifacts_modified_by_probe": false,
+            "interrupted_after": "phase-7-round-2-execution",
+            "partial_status": "running",
+            "resume_state": "failed",
+            "failure_reason": "IntegrityError: v2 artifact phase-7-round-2-execution already exists with different data",
+            "model_requests_on_resume": 0,
+            "search_requests_on_resume": 0,
+            "method": "Actual generated offline pipeline with an advancing UTC clock; interruption immediately after the Round-2 execution commit, followed by unchanged production resume. No SQL edits, artifact substitution, real data or external calls."
+          }
+        }
+      ],
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_source_selection.py": "9e589922767c6d69866bab4f00358b7628628f7cba86bab5903f975d0b52647f",
+        "backend/src/researchassistant/agents/adaptive_execution.py": "8e4f8cefde161402951cb12f80402769cca892b79cc84aa1b355e262c0b6589d",
+        "backend/src/researchassistant/storage/v2_transactions.py": "30338cce7a390e02f30e38a6235b85aad2cabc16ce0e16df560d62cf630dcd61"
+      }
+    },
+    {
+      "id": "R34",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual generated offline research with an advancing UTC clock; interruption after a relational evidence-admission commit before its source checkpoint. No SQL edits, artifact substitution, real data or external calls.",
+      "observed": {
+        "finding": "R34",
+        "partial_status": "running",
+        "resume_state": "released",
+        "failure_reason": null,
+        "saved_admission_unchanged": true,
+        "model_requests_on_resume": 0,
+        "search_requests_on_resume": 0,
+        "method": "Actual generated offline research with an advancing UTC clock; interruption after a relational evidence-admission commit before its source checkpoint. No SQL edits, artifact substitution, real data or external calls.",
+        "deep_analysis_failure": "IntegrityError: v2 evidence admission is immutable",
+        "interrupted_source_state": "analyst_failed",
+        "interrupted_source_failure": "Deep analysis stopped before an Analyst result was produced.",
+        "interrupted_admission_in_final_release": false
+      },
+      "retained_probe": "fix-evidence/admission-prefix.py.txt",
+      "probe_sha256": "280e22ba6d7e67d8bdbec8c500cbb2b6bc21e6a8356320b75352d5df931ba2a0",
+      "retained_evidence": "fix-evidence/admission-prefix.json",
+      "retained_sha256": "813aa554c0ed6a8a8d51554b344c55cf3f5f2f3d9a20e20316f89378dffb20db",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_evidence_admission.py": "f6b14be83005af6bbb382423542115d8b2e7bb0d94a8ed36d2e971d5c2e0dc83",
+        "backend/src/researchassistant/storage/v2_transactions.py": "30338cce7a390e02f30e38a6235b85aad2cabc16ce0e16df560d62cf630dcd61",
+        "backend/src/researchassistant/agents/v2_deep_analysis.py": "a0c61e0f2b5710d9b32bdbee1b3c20ca5b412b4d27548f54cae0f8020ef32d2a"
+      }
+    },
+    {
+      "id": "R35",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Generated offline balanced research with twenty requested sources per direction, two providers, unique metadata and both-direction gaps. No external calls or real data.",
+      "observed": {
+        "state": "failed",
+        "failure_reason": "ValidationError: 1 validation error for V2SourceSelectionInput\nsurvivors\n  Tuple should have at most 75 items after validation, not 80 [type=too_long, input_value=(V2SourceSelectionCandida...: 0.0375; weight 1'))))), input_type=tuple]\n    For further information visit https://errors.pydantic.dev/2.13/v/too_long",
+        "model_calls": 17,
+        "search_calls": 16,
+        "source_counts": {
+          "phase-7-merged-survivor-pool": 60,
+          "post-phase-13-round-4-completion-v1": 80
+        },
+        "method": "Generated offline balanced research with twenty requested sources per direction, two providers, unique metadata and both-direction gaps. No external calls or real data."
+      },
+      "retained_probe": "fix-evidence/survivor-capacity.py.txt",
+      "probe_sha256": "aa2b145e74beb02781d267efb58a31d8d110a0a38daeed75ec7b9107b03c6eb9",
+      "retained_evidence": "fix-evidence/survivor-capacity.json",
+      "retained_sha256": "c8b7bcab3cad9074eebfa74945de44a493b826b6bb70984c9a78b9cccd6c4442",
+      "source_sha256": {
+        "backend/src/researchassistant/contracts/research_selection.py": "759e86e873ca961c5b14e987a7eaf2354c6779742d39eae5bed29213783a59da",
+        "backend/src/researchassistant/contracts/source_selection_preview.py": "2c99f41661e88b0df9714ea2a38e886e2743afe3f38f6fb3508f08e9387183ca",
+        "backend/src/researchassistant/agents/v2_acquisition.py": "3b04f197d095d4a63312cd6fa7b41f8c701a83629ae50a18033dcab93da0e458"
+      }
+    },
+    {
+      "id": "R36",
+      "status": "approved and implemented; original pre-fix evidence retained",
+      "method": "Actual CLI configuration handling with an explicitly injected synthetic credential-bearing loopback URL; exits before identity/provider setup. No real credentials, database or external calls.",
+      "observed": {
+        "finding": "R36",
+        "exit_code": 20,
+        "synthetic_password_in_stderr": true,
+        "stderr": "configuration error: 1 validation error for WigoloConfig\nbase_url\n  Value error, Wigolo base URL cannot contain credentials, query, or fragment [type=value_error, input_value='http://u:probe-secret@localhost', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error\n",
+        "database_created": false,
+        "method": "Actual CLI configuration handling with an explicitly injected synthetic credential-bearing loopback URL; exits before identity/provider setup. No real credentials, database or external calls."
+      },
+      "retained_probe": "fix-evidence/cli-config-secret.py.txt",
+      "probe_sha256": "aba9a9f68c9fa989cce86ce4778fea096538021a5f381960c0464a1ef683508b",
+      "retained_evidence": "fix-evidence/cli-config-secret.json",
+      "retained_sha256": "935eac79f4bb5cae98963cdf37adea59c27ee203a4c98ad40e1753d2d3bc7266",
+      "source_sha256": {
+        "backend/src/researchassistant/runtime/cli.py": "13e8bb8c2776818bfc3d4b9c9dab6393b9abee31e4b8683f4fed638cdeed9b44",
+        "backend/src/researchassistant/providers/config.py": "5eae0124270d8093677a08d92d616e366d4d2561d644688499e6d6adefe680b4"
+      }
+    },
+    {
+      "id": "R37",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual generated offline balanced four-round production, no database edits, real credentials, paid research or external calls.",
+      "observed": {
+        "state": "failed",
+        "failure_reason": "ValueError: search provenance Gap ID 'gap-round-3' has mismatched direction",
+        "selection_survivors": 80,
+        "source_statuses": 80,
+        "conflicting_cross_direction_provenance": [
+          {
+            "source_id": "83fdb5bf-0237-5c7d-a688-480d31db2259",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "b8247a06-494f-503b-a589-1f5b773b37e7",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "2377f0aa-c735-5373-bb5b-e237c30b681a",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "a9deab12-f1b4-5fd2-9adf-95927960bfd8",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "ac88d779-1f65-540b-b3d6-6684d6bb0b54",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "a1e08b52-647a-5c8d-b550-8e60b48c4ba0",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "1b82d412-75b4-5591-b381-e6e6050c95ac",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "c7c602df-5e44-565b-9a35-19343852ba3c",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "b1a10c29-e6a8-59e7-abf7-67b96a6d47a8",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "12b1ce34-3a8e-5017-b0e2-8c00eedd157b",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "cf32d7c5-dd28-516e-9d79-78fc56e827d7",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "2acbf128-0700-5ddc-a195-991748add0e1",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "772c600b-c441-5c59-9683-6f087e1dfa74",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "2616609c-75df-531e-b5d5-1d4658fe3d5b",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "f83fd2a7-209c-532b-832a-769445e29944",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "a82b0ddd-2d83-5585-8eb0-4deb5ef33bcd",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "4c6caf9a-97a7-52dc-aa26-4f4927dba260",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "1abf5eb1-77cf-531d-9897-a4a61e515553",
+            "survivor_direction": "challenge",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              },
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "8cdd0fe9-6463-5b77-864d-ab3c901530bd",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "98f89798-e42e-57b3-9bc2-1b1a4d369f24",
+            "survivor_direction": "support",
+            "round": 2,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              },
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "07576ff8-2e6f-5710-afc1-b2b0043c84c3",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "9cd8fb1b-c1f5-5b29-927d-d81ae31981a9",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "cced918d-5806-5389-89d6-7b492eeaac4d",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "9c276c93-567c-5c74-8fe4-1f0fab35e20d",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "abb10e98-4f10-5c33-aa00-a37cf9bb0a07",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "85b68d63-900c-5bc1-badf-8dc80d490a2b",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "5a3a3082-5263-5aa0-b421-48ad10c4f898",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "76d03e02-45cc-5357-8123-301dadcdbc8b",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "5a84a777-dc6a-5ba9-96f5-e1727104243a",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "0a3756d0-e591-5b67-baff-764e743e0048",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "162ae7c1-067d-5cdc-bb9c-def08f063fb1",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "268efdc5-00fa-5d23-932b-5e4afd8e5729",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          },
+          {
+            "source_id": "9a0ee535-1d3e-54b6-9261-d62e74e20c36",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "b18b3b72-fd55-5809-a35d-b5d86e01943f",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "725b7fcc-eb7b-507f-a25f-8ff4dd08cd53",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "d0fe0881-94c2-50a7-8aab-dcd70fcf4e5d",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "6a356d4e-c711-5da5-8115-549ce7869f90",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "f44b30a8-20ea-50f1-b94c-2d4497e24f82",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "beae45ab-5456-58cf-b211-2414e3ccdfff",
+            "survivor_direction": "challenge",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "gap-round-3",
+                "direction": "support"
+              }
+            ]
+          },
+          {
+            "source_id": "9b125ee3-9d6f-57bc-b2ae-15ee17a44c62",
+            "survivor_direction": "support",
+            "round": 4,
+            "targeted_gaps": [
+              {
+                "gap_id": "challenge-gap-round-3",
+                "direction": "challenge"
+              }
+            ]
+          }
+        ],
+        "model_calls": 158,
+        "search_calls": 16,
+        "method": "Actual offline production with valid both-direction gaps and duplicate paper titles returned in both directions. Discovery legitimately preserves all contributing query provenance. No saved-artifact edits, real data, paid research or external calls."
+      },
+      "probe_path": "/tmp/ra-review-cross-direction-provenance.py",
+      "probe_sha256": "ec020ec044f3a6b32d944d9a2c9dbca82c338bc63c1d6a4412447e9f3f976656",
+      "retained_probe": "fix-evidence/cross-direction-provenance.py.txt",
+      "retained_result": "fix-evidence/cross-direction-provenance.json",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_discovery.py": "34d9896a2778a7c9b4050cf3968d830d2b5ad12d2c8a2199c1bc85cef332d77d",
+        "backend/src/researchassistant/agents/v2_source_selection.py": "ae32185a9200ade1358ac655c2fbcecb3dc7bd8c6fc9dc3bedbce81221abcd5e",
+        "backend/src/researchassistant/agents/round_four_reconciliation.py": "3074e8c0a97130f59865cdeb23e6da965b724103d5367ac6fb596d73227ea8ac",
+        "backend/src/researchassistant/contracts/research_selection.py": "25cca10bdf88380d805a5c6c246afe2040eb84e388865c7e4c0dbf6e327220c2"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R38",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual advancing-clock production interrupted after each discovery/acquisition ranking sidecar commit, then exact-source resume. Generated offline providers only.",
+      "observed": {
+        "results": [
+          {
+            "owner": "v2_discovery",
+            "checkpoint": "phase-3-metadata-ranking-round-1",
+            "state": "failed",
+            "failure_reason": "IntegrityError: v2 artifact phase-3-metadata-ranking-round-1 already exists with different data",
+            "original_sidecar_unchanged": true,
+            "new_model_calls": 1,
+            "new_search_calls": 0
+          },
+          {
+            "owner": "v2_acquisition",
+            "checkpoint": "metadata-acquisition-v2-round-1",
+            "state": "failed",
+            "failure_reason": "IntegrityError: v2 artifact metadata-acquisition-v2-round-1 already exists with different data",
+            "original_sidecar_unchanged": true,
+            "new_model_calls": 0,
+            "new_search_calls": 0
+          }
+        ],
+        "method": "Advancing UTC clock; actual production interrupted immediately after committed ranking sidecar; identical-source resume without artifact edits. Generated offline providers only, no real data or credentials."
+      },
+      "probe_path": "/tmp/ra-review-discovery-acquisition-prefix.py",
+      "probe_sha256": "c13d789d7eaf39b1423d29c181a2b3903b61b1c346453e2aa268d53c5f6ed12e",
+      "retained_probe": "fix-evidence/discovery-acquisition-prefix.py.txt",
+      "retained_result": "fix-evidence/discovery-acquisition-prefix.json",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_discovery.py": "34d9896a2778a7c9b4050cf3968d830d2b5ad12d2c8a2199c1bc85cef332d77d",
+        "backend/src/researchassistant/agents/v2_acquisition.py": "3b04f197d095d4a63312cd6fa7b41f8c701a83629ae50a18033dcab93da0e458"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R39",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual advancing-clock production interrupted after persisted Round-4 post-plan facts, then exact-source resume; generated offline providers only.",
+      "observed": {
+        "results": [
+          {
+            "owner": "round_four_summary",
+            "checkpoint": "post-phase-13-round-4-post-plan-facts-v1",
+            "state": "failed",
+            "failure_reason": "ValueError: persisted Round-4 post-plan facts do not match the execution",
+            "original_sidecar_unchanged": true,
+            "new_model_calls": 0,
+            "new_search_calls": 0
+          }
+        ],
+        "method": "Advancing UTC clock; actual production interrupted immediately after committed Round-4 post-plan facts; identical-source resume without artifact edits. Generated offline providers only, no real data or credentials."
+      },
+      "probe_path": "/tmp/ra-review-round-four-facts-prefix.py",
+      "probe_sha256": "63d5bc3342b577de283fe39840c8c67706db9a0eb8a541df71e173668f534dd0",
+      "retained_probe": "fix-evidence/round-four-facts-prefix.py.txt",
+      "retained_result": "fix-evidence/round-four-facts-prefix.json",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_round_four.py": "f1941adb719b23ce69ca32948ceffa4eb073dd8629039afdbebb27bea26fac1a",
+        "backend/src/researchassistant/agents/round_four_summary.py": "9e52165eb286a58012c229e274368539405244f75c10745bba988de9322906dd"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R40",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Historical Phase-10 Reviewer bridge directly invoked using its existing offline typed fixture; current fresh production uses analyzer admission instead.",
+      "observed": {
+        "boundary": "Historical Phase-10 Reviewer bridge, directly invoked with its existing generated fixture; ordinary fresh production uses analyzer admission instead.",
+        "state": "failed",
+        "error": "IntegrityError: v2 Ledger admission is immutable",
+        "new_provider_calls": 0,
+        "original_admission_unchanged": true,
+        "method": "Actual relational admission commit interrupted before source checkpoint; advancing UTC clock, exact original Analyst result on resume. Generated offline providers only; no artifact edits or real data."
+      },
+      "probe_path": "/tmp/ra-review-historical-ledger-prefix.py",
+      "probe_sha256": "a34bb77a7d2420ed284ea4d847d6a9451ad29aba8f6c27a67e52e0770ae50edd",
+      "retained_probe": "fix-evidence/historical-ledger-prefix.py.txt",
+      "retained_result": "fix-evidence/historical-ledger-prefix.json",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_reviewer_ledger.py": "3fecddfbb85ca4c0d87b6b7dbe1700cacb0793c47fc4aee6c53dc3b6dce095b1"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R41",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Current fresh sentence selection, actual quote assembler and deterministic bracket validation used by v2 extraction, generated text only.",
+      "observed": {
+        "fresh_sentences": [
+          "This observational sample excludes residents older than 65.5 years.",
+          "Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.",
+          "No improvement was measured above the 0.5 mg dose threshold."
+        ],
+        "assembled_quote": "[5 years.] \"Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.\" [No improvement was measured above the 0.]",
+        "actual_preceding_context": "5 years.",
+        "actual_following_context": "No improvement was measured above the 0.",
+        "accepted_by_context_validator": true,
+        "method": "Actual current fresh selection, assembler and deterministic context validator, called by fresh v2 extraction. Generated source only; no database or provider activity."
+      },
+      "probe_path": "/tmp/ra-review-fresh-quote-context.py",
+      "probe_sha256": "66f69bc08311b9d86a15d8504d78b2a10378e276bac83ac30926d59674524071",
+      "retained_probe": "fix-evidence/fresh-quote-context.py.txt",
+      "retained_result": "fix-evidence/fresh-quote-context.json",
+      "source_sha256": {
+        "backend/src/researchassistant/evidence/evidence_core.py": "18f837fa4fe58383d7d09a0f6e1d1c4f815766e313ed3b8138d3c810f2982015",
+        "backend/src/researchassistant/agents/v2_extraction.py": "2b27df692007b089c7a42736f0bc591eafb9be563bf9159b402b51c7bcc0e111"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R42",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual fresh numbered sentence-range selection and production quote assembler, generated repeated source only.",
+      "observed": {
+        "selected_sentence": 4,
+        "selected_exact_text": "Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.",
+        "expected_preceding_context": "The second cohort included all age groups.",
+        "expected_following_context": "The second cohort was followed for twelve months.",
+        "actual_preceding_context": "The first cohort excluded older adults.",
+        "actual_following_context": "The second cohort included all age groups.",
+        "assembled_quote": "[The first cohort excluded older adults.] \"Among enrolled adults, 62 percent completed the assigned course within six months compared with 48 percent among matched adults receiving standard materials.\" [The second cohort included all age groups.]",
+        "method": "Actual fresh sentence-range selection and production quote assembler; generated repeated source text only, no database/provider activity."
+      },
+      "probe_path": "/tmp/ra-review-repeated-quote-occurrence.py",
+      "probe_sha256": "a182eae63d31f85995ecbcf77f2215e302ebe679310f76ed89551ec98e441b58",
+      "retained_probe": "fix-evidence/repeated-quote-occurrence.py.txt",
+      "retained_result": "fix-evidence/repeated-quote-occurrence.json",
+      "source_sha256": {
+        "backend/src/researchassistant/evidence/evidence_core.py": "18f837fa4fe58383d7d09a0f6e1d1c4f815766e313ed3b8138d3c810f2982015"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R43",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual current preview construction from equivalent generated flattened scientific section headings.",
+      "observed": {
+        "results": [
+          {
+            "heading": "Materials and methods",
+            "observed_sections": [
+              "conclusion",
+              "results",
+              "unknown"
+            ],
+            "missing_sections": [
+              "abstract",
+              "methods",
+              "discussion"
+            ],
+            "selected_sections": [
+              "unknown",
+              "results"
+            ]
+          },
+          {
+            "heading": "Methods and materials",
+            "observed_sections": [
+              "conclusion",
+              "methods",
+              "results"
+            ],
+            "missing_sections": [
+              "abstract",
+              "discussion"
+            ],
+            "selected_sections": [
+              "methods",
+              "results"
+            ]
+          }
+        ],
+        "method": "Actual current preview construction from two equivalent generated flattened method headings; no database/provider activity."
+      },
+      "probe_path": "/tmp/ra-review-inline-methods-heading.py",
+      "probe_sha256": "7da4730fdd8d3a355c8310034396e90324133f0844d790b7eb926e4b28c83f9e",
+      "retained_probe": "fix-evidence/inline-methods-heading.py.txt",
+      "retained_result": "fix-evidence/inline-methods-heading.json",
+      "source_sha256": {
+        "backend/src/researchassistant/research/source_preview.py": "7bf5505bf68800823954e3e1c774125067b531e7a15b2d239ee349e8eb12a435"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R44",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual generated offline production; arXiv-style comma-joined author display with valid DOI/year/type and an enabled OpenAlex seed provider. No external calls, real data or saved-artifact edits.",
+      "observed": {
+        "state": "released",
+        "failure_reason": null,
+        "model_calls": 6,
+        "search_calls": 2,
+        "author_display_characters": 498,
+        "method": "Actual generated offline production; arXiv-style comma-joined author display with valid DOI/year/type and an enabled OpenAlex seed provider. No external calls, real data or saved-artifact edits.",
+        "continuation": {
+          "completed_rounds": 1,
+          "decided_at": "2026-08-21T00:00:00Z",
+          "run_id": "e43b19c5-d595-4fb8-adc9-f4a3f0c9fbf7",
+          "stop_code": "no_materially_new_query",
+          "stopping_reason": "1 validation error for V2WorkIdentity\nauthors.0\n  String should have at most 240 characters [type=string_too_long, input_value='Generated Researcher 00,...Generated Researcher 19', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_too_long"
+        }
+      },
+      "probe_path": "/tmp/ra-review-long-author-seed.py",
+      "probe_sha256": "85f829cfa57fee25df220464d43c84c9544a3a9736ab639d6b9c8471d15405cb",
+      "retained_probe": "fix-evidence/long-author-seed.py.txt",
+      "retained_result": "fix-evidence/long-author-seed.json",
+      "source_sha256": {
+        "backend/src/researchassistant/research/seed_expansion.py": "2fadcae56549f0b9caaca1a0ff63127eb4980443224993e2fb7a63bba81079d5",
+        "backend/src/researchassistant/common/discovery_identity.py": "683e91cb24dc98701cb695ebecd137d493ebce63d56dfc659764299d18785d8c"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R45",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual current renderer, strict synthesis and current analyzer-admitted fixture record; generated offline source only. No real data or provider traffic.",
+      "observed": {
+        "admission_method": "analyzer_admitted",
+        "coverage_warning": "Evidence coverage: This brief is not balanced; no Reviewer-approved opposing evidence was available.",
+        "method": "Actual current renderer, strict synthesis and current analyzer-admitted fixture record; generated offline source only. No real data or provider traffic."
+      },
+      "probe_path": "/tmp/ra-review-approval-warning.py",
+      "probe_sha256": "01d11e54803232298bd5d1ceb75f8e5505408d55c96b01b5cf89a86fda2cc9ba",
+      "retained_probe": "fix-evidence/approval-warning.py.txt",
+      "retained_result": "fix-evidence/approval-warning.json",
+      "source_sha256": {
+        "backend/src/researchassistant/evidence/renderer.py": "6dfc3e25454d52c8884e22e8e9b3f3adf3bafbc03b88bcad14b050e2c5f5fb6e"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R46",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual fixture-pipeline released native run; simulate source-text corruption only in its disposable generated database, restoring original triggers before actual read-only browsing. No real data or provider activity.",
+      "observed": {
+        "state": "accepted",
+        "released_traces": 2,
+        "released_trails": 2,
+        "snapshot_hashes_match": [
+          false,
+          false
+        ],
+        "compatibility_issues": [],
+        "snapshot_label": "Trusted snapshot text (ResearchAssistant normalized)",
+        "database_unchanged_by_inspection": true,
+        "method": "Actual fixture-pipeline released native run; simulate source-text corruption only in its disposable generated database, restoring original triggers before actual read-only browsing. No real data or provider activity."
+      },
+      "probe_path": "/tmp/ra-review-native-browser-snapshot.py",
+      "probe_sha256": "87804ee25d83ee9d2ebfcb332c689c0ecd530ccc3b62aa363c5fd4695e18f1c9",
+      "retained_probe": "fix-evidence/native-browser-snapshot.py.txt",
+      "retained_result": "fix-evidence/native-browser-snapshot.json",
+      "source_sha256": {
+        "backend/src/researchassistant/evidence/evidence_browser.py": "236d369c61c6bd429caea66fdd3d53aea8f1a0f4f463f92ad55cefb3b2a58916"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R47",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual retained retrieval/deduplication path with two generated captures sharing one canonical DOI.",
+      "observed": {
+        "state": "failed",
+        "error": "ValidationError: 1 validation error for RetrievalOutcome\n  Value error, failed or unsupported outcomes require exactly one failure code [type=value_error, input_value={'retrieval': RetrievalRe...uplicate_source_family'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+        "first_status": "retrieved",
+        "scrape_calls": 2,
+        "method": "Actual retained retrieval/deduplication path, generated distinct captures at two URLs with the same canonical DOI. No database, provider traffic or real data."
+      },
+      "probe_path": "/tmp/ra-review-family-duplicate-contract.py",
+      "probe_sha256": "2df403c3b27261d8efc03be72efbf19043dd5764e66bb7ce1f46bc69c17466a5",
+      "retained_probe": "fix-evidence/family-duplicate-contract.py.txt",
+      "retained_result": "fix-evidence/family-duplicate-contract.json",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/supportingresearcher.py": "bb5db4b94aa4cda0a31092d2012b92dd44d2b35b553e18035841649dd45b2555",
+        "backend/src/researchassistant/contracts/retrieval.py": "b61cdb883be073f8303f7a34c80c455c2af200daefa48ba916ec19f930e77333"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R48",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual retained provider runner with advancing UTC clock, interrupted immediately after native Reviewer row commit; exact-source resume with no saved-artifact edits. All providers generated offline.",
+      "observed": {
+        "status": "failed",
+        "failure_reason": "existing Phase 9 Reviewer decision differs from fixture artifact",
+        "new_model_calls": 0,
+        "new_search_calls": 0,
+        "new_scrape_calls": 0,
+        "original_review_unchanged": true,
+        "method": "Actual retained provider runner with advancing UTC clock, interrupted immediately after native Reviewer row commit; exact-source resume with no saved-artifact edits. All providers generated offline."
+      },
+      "probe_path": "/tmp/ra-review-retained-runner-cases.py",
+      "probe_sha256": "5389b6c217ef4f036450c4e13096e5a6e7eac1fe031726a1ade16ec57ca7bd0a",
+      "retained_probe": "fix-evidence/retained-runner-cases.py.txt",
+      "retained_result": "fix-evidence/retained-runner-cases.json",
+      "source_sha256": {
+        "backend/src/researchassistant/research/historical_execution.py": "ede3c291c09ba2fa0dc5dbda6121230e0f5b28d68e4ab16eb70abe1d7e84d2cf"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R49",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual retained deduplication seeding from its real completed generated researcher artifact, followed by ordinary retrieval of the same original/resolved source URL. No database modifications or external calls.",
+      "observed": {
+        "results": [
+          {
+            "alias": "original",
+            "scrape_calls": 1,
+            "outcome": "duplicate_url",
+            "attempts_made": 1,
+            "seeded_resolved_aliases": 0
+          },
+          {
+            "alias": "resolved",
+            "scrape_calls": 1,
+            "outcome": "duplicate_url",
+            "attempts_made": 1,
+            "seeded_resolved_aliases": 0
+          }
+        ],
+        "method": "Actual retained deduplication seeding from its real completed generated researcher artifact, followed by ordinary retrieval of the same original/resolved source URL. No database modifications or external calls."
+      },
+      "probe_path": "/tmp/ra-review-retained-runner-cases.py",
+      "probe_sha256": "5389b6c217ef4f036450c4e13096e5a6e7eac1fe031726a1ade16ec57ca7bd0a",
+      "retained_probe": "fix-evidence/retained-runner-cases.py.txt",
+      "retained_result": "fix-evidence/retained-runner-cases.json",
+      "source_sha256": {
+        "backend/src/researchassistant/research/historical_execution.py": "ede3c291c09ba2fa0dc5dbda6121230e0f5b28d68e4ab16eb70abe1d7e84d2cf"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R50",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Actual retained Governor fact derivation using fully typed generated researcher/analysis artifacts; no new requests, budget edits or database writes.",
+      "observed": {
+        "actual_status_counts": {
+          "retrieved": 2,
+          "duplicate_content": 16
+        },
+        "actual_duplicate_outcomes": 16,
+        "reported_duplicate_count": 0,
+        "reported_result_count": 18,
+        "method": "Actual retained Governor fact derivation using fully typed generated researcher/analysis artifacts; no new requests, budget edits or database writes."
+      },
+      "probe_path": "/tmp/ra-review-retained-runner-cases.py",
+      "probe_sha256": "5389b6c217ef4f036450c4e13096e5a6e7eac1fe031726a1ade16ec57ca7bd0a",
+      "retained_probe": "fix-evidence/retained-runner-cases.py.txt",
+      "retained_result": "fix-evidence/retained-runner-cases.json",
+      "source_sha256": {
+        "backend/src/researchassistant/research/historical_execution.py": "ede3c291c09ba2fa0dc5dbda6121230e0f5b28d68e4ab16eb70abe1d7e84d2cf"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R51",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Run the current query-scaling benchmark with its actual disposable generated fixture; no provider or real database activity.",
+      "observed": {
+        "finding": "R51",
+        "returncode": 1,
+        "json_measurement_emitted": false,
+        "inconsistent_migration_history": true,
+        "failure_stage": "legacy browser reads the generated downgraded fixture",
+        "real_database_changes": 0,
+        "external_provider_calls": 0
+      },
+      "probe_path": "/tmp/ra-review-query-scale.py",
+      "probe_sha256": "15d13be4718e3875b0dac994e3c3c91328fd346b535084ec59800e50d3cf3a4e",
+      "source_sha256": {
+        "scripts/benchmark_database_query_scale.py": "b69de0909dc416a07198e595efad60953c6387a267f7617eaa5da5e770bea065"
+      },
+      "retained_probe": "fix-evidence/query-scale.py.txt",
+      "retained_evidence_sha256": {
+        "fix-evidence/query-scale.py.txt": "15d13be4718e3875b0dac994e3c3c91328fd346b535084ec59800e50d3cf3a4e",
+        "fix-evidence/query-scale.json": "23289c60c3079fc39e88994586340837f00d1a310315cfbc0efd0a88346e096e",
+        "fix-evidence/query-scale.log": "cfee244c7af05c11d04d2cf88f66178d43e443b431a9127d0f36b750c790c2dd"
+      },
+      "companion_regression_probe": {
+        "observed": {
+          "finding": "R51 companion regression gap",
+          "cases": [
+            {
+              "requested_case_version": 14,
+              "actual_input_versions": [
+                14
+              ],
+              "test_passed": true
+            },
+            {
+              "requested_case_version": 15,
+              "actual_input_versions": [
+                15
+              ],
+              "test_passed": true
+            },
+            {
+              "requested_case_version": 16,
+              "actual_input_versions": [
+                18
+              ],
+              "test_passed": true
+            }
+          ],
+          "external_provider_calls": 0,
+          "real_database_changes": 0
+        },
+        "retained_evidence_sha256": {
+          "fix-evidence/upgrade-fixture-label.py.txt": "8dc08efbfea59b3211b16867250f05f70708a465d3e4ee1f3fcc4ba3c440fa7e",
+          "fix-evidence/upgrade-fixture-label.json": "9e45f0e91e46f96c4b1f9500fe16413a64004973a9150890a7b4e56e76be0e85",
+          "fix-evidence/upgrade-fixture-label.log": "55593470fb15ab95eb6ab0bd1fb0c83f75c7f2b65b9cd6bef5e3618f654e1fac"
+        },
+        "source_sha256": {
+          "tests/test_database_upgrade_fixture_phase2.py": "fb58ab1c82f1450dea31aa4f6dae467391bc344f2008a9f26586daf82da503b6"
+        }
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R52",
+      "status": "approved and implemented; original pre-fix probe retained",
+      "method": "Invoke both real older offline evaluation CLI entry points with disposable copied inputs and colliding output paths; compare original source hashes afterward.",
+      "observed": {
+        "finding": "R52",
+        "cases": [
+          {
+            "entry": "evaluations.source_discovery.main",
+            "returncode": 0,
+            "input_overwritten": true,
+            "original_schema_lost": true
+          },
+          {
+            "entry": "evaluations.run_evaluations.main",
+            "returncode": 0,
+            "input_overwritten": true,
+            "original_schema_lost": true
+          },
+          {
+            "entry": "evaluations.run_evaluations.main",
+            "case": "same machine/human output path",
+            "returncode": 0,
+            "machine_output_replaced_by_markdown": true
+          }
+        ],
+        "original_input_files_unchanged": true,
+        "external_provider_calls": 0,
+        "real_database_changes": 0
+      },
+      "probe_path": "/tmp/ra-review-evaluation-output-collisions.py",
+      "probe_sha256": "3455121967335e248ae653baea19131fdbaf87c4a5b80705989589f06606620e",
+      "source_sha256": {
+        "evaluations/source_discovery.py": "386b29cf700630555885191d59ee20f3e57b40e4f74097a4c4b8ab9c0d3e39b1",
+        "evaluations/evaluator.py": "d50aefa3781f5cedfa8d7a1e717ad4330b47a0ba66a60c1c81ef112374e0adfd",
+        "evaluations/run_evaluations.py": "617198e0f18fff1c3570a29e18dd429d83644a8b04a6610ce46909648361f899"
+      },
+      "retained_probe": "fix-evidence/evaluation-output-collisions.py.txt",
+      "retained_evidence_sha256": {
+        "fix-evidence/evaluation-output-collisions.py.txt": "3455121967335e248ae653baea19131fdbaf87c4a5b80705989589f06606620e",
+        "fix-evidence/evaluation-output-collisions.json": "c3ed06caa85d22c3169e6a616760af3792a206f9c8acae223c9451f7f4e96c50",
+        "fix-evidence/evaluation-output-collisions.log": "59d2739378c384c47d384971523aa9dab5f609a8adbc5e1eb18f9f6ddc32d776"
+      },
+      "repair_verification": "post-fix-evidence.json#r37_r52_verification"
+    },
+    {
+      "id": "R53",
+      "status": "approved; implemented and verified",
+      "method": "Two actual generated production interruptions after successful Scout and before the first atomic stage pair commit; exact-source resume and unchanged fixture inputs. No artifact edits, real data, credentials, paid research or external calls.",
+      "observed": {
+        "state": "released",
+        "failure_reason": null,
+        "identical_first_batch_calls": 3,
+        "configured_attempts_per_batch": 2,
+        "completed_first_batch_calls_before_final_resume": 2,
+        "repeated_identical_prompt_hash": "c1b699d89fab543c8cec0026b4736f6475337b3fbf7f52ccb43221a031bd2172",
+        "physical_audit_prefix_preserved": true,
+        "new_search_calls_after_interruption": 1,
+        "method": "Two actual generated production interruptions after successful Scout and before the first atomic stage pair commit; exact-source resume and unchanged fixture inputs. No artifact edits, real data, credentials, paid research or external calls."
+      },
+      "probe_path": "/tmp/ra-review-scout-precommit.py",
+      "probe_sha256": "65c2ae25b1a58f3431ab8dec04c342d92dbaacf97f697fc29672d41a74cfa17b",
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_discovery.py": "0d5b14f37ea644a4b689a26e75d10a5b15d901545fb8cb8f86fb5470b1840507"
+      },
+      "retained_probe": "fix-evidence/scout-precommit.py.txt",
+      "retained_evidence_sha256": {
+        "fix-evidence/scout-precommit.py.txt": "65c2ae25b1a58f3431ab8dec04c342d92dbaacf97f697fc29672d41a74cfa17b",
+        "fix-evidence/scout-precommit.json": "58286e8f23ece3db8c090d2ff286697878f11105c2c04c882c91f6d3282129f0",
+        "fix-evidence/scout-precommit.log": "58286e8f23ece3db8c090d2ff286697878f11105c2c04c882c91f6d3282129f0"
+      }
+    },
+    {
+      "id": "R54",
+      "status": "approved; implemented and verified",
+      "method": "Actual current deterministic synthesis and final rendering, using complete generated typed Analyst/admission fixtures with explicit challenging/qualifying relationship. No record edits, real data, provider transport or paid research.",
+      "observed": {
+        "cases": [
+          {
+            "relationship": "challenges",
+            "release_valid": true,
+            "evidence_quality": 4,
+            "claim_fit": 5,
+            "coverage_label": "Admitted relationships: 0 supports, 1 challenges, 0 qualifies.",
+            "factual_item_label": "- Direct supporting evidence: Among surveyed regional-program adults, 62% reported course completion within six months, versus 48% among matched adults receiving standard materials."
+          },
+          {
+            "relationship": "qualifies",
+            "release_valid": true,
+            "evidence_quality": 4,
+            "claim_fit": 5,
+            "coverage_label": "Admitted relationships: 0 supports, 0 challenges, 1 qualifies.",
+            "factual_item_label": "- Direct supporting evidence: Among surveyed regional-program adults, 62% reported course completion within six months, versus 48% among matched adults receiving standard materials."
+          }
+        ],
+        "method": "Actual current deterministic synthesis and final rendering, using complete generated typed Analyst/admission fixtures with explicit challenging/qualifying relationship. No record edits, real data, provider transport or paid research."
+      },
+      "probe_path": "/tmp/ra-review-relationship-wording.py",
+      "probe_sha256": "322a0d7e7f2278dc388fcd2681d134424960b31aaf0a3111ab179988ba7526cc",
+      "source_sha256": {
+        "backend/src/researchassistant/evidence/synthesizer.py": "59de147639c3dd5d6c7b3af60c12e0c3a74ad7eb55634094e3c0c9822536634a",
+        "backend/src/researchassistant/agents/v2_final_output.py": "ada415413b076933b58a35a9ef123239371f5f08bede4b105e265d40c88fecae"
+      },
+      "retained_probe": "fix-evidence/relationship-wording.py.txt",
+      "retained_evidence_sha256": {
+        "fix-evidence/relationship-wording.py.txt": "322a0d7e7f2278dc388fcd2681d134424960b31aaf0a3111ab179988ba7526cc",
+        "fix-evidence/relationship-wording.json": "a2ffb7709b728762e8c49b2f6f992f11bbf0ae61850a05f628af9dc4a7fb420a",
+        "fix-evidence/relationship-wording.log": "a2ffb7709b728762e8c49b2f6f992f11bbf0ae61850a05f628af9dc4a7fb420a",
+        "fix-evidence/relationship-wording-initial.py.txt": "b9cd6ec0368c850cec60b1009a86f78cd3d96ff3c590e34d5b5e419f6de4d835",
+        "fix-evidence/relationship-wording-initial.log": "7be74e63ebf124c80f9b6ac7331bfbbe8a95cb66cee6a809531f4fd993b31a69"
+      },
+      "diagnostic": "The first generated case used Claim Fit 4 and correctly chose an indirect-evidence template. The confirmed case uses a valid fully admitted Claim Fit 5 record and reaches the erroneous direct-evidence branch."
+    },
+    {
+      "id": "R55",
+      "status": "approved; implemented and verified",
+      "observed": {
+        "state": "released",
+        "failure_reason": null,
+        "completed_round_one_gap_calls": 3,
+        "configured_attempts_per_stage": 2,
+        "same_nonbudget_input": true,
+        "requests": [
+          {
+            "completed_round": 1,
+            "prompt_sha256": "81f41ec75d5f6899b91522bd1ec48aa12c7eb7bee89afd23c06f7c705cc7885b",
+            "nonbudget_input_sha256": "38348f3c6827376f87bfca37c171704fc82054f858c96bb7831616d29e8e15a4"
+          },
+          {
+            "completed_round": 1,
+            "prompt_sha256": "eccbba7da1255c4b7c3fa941001b1eaff8379bdd469115180865440f3cdab3a6",
+            "nonbudget_input_sha256": "38348f3c6827376f87bfca37c171704fc82054f858c96bb7831616d29e8e15a4"
+          },
+          {
+            "completed_round": 1,
+            "prompt_sha256": "4d3820fb06bffd9ea256ab6bc944176dd2af9a6ce3b33c6545c71c837fea5fd7",
+            "nonbudget_input_sha256": "38348f3c6827376f87bfca37c171704fc82054f858c96bb7831616d29e8e15a4"
+          },
+          {
+            "completed_round": 2,
+            "prompt_sha256": "90b95cc6edc11aee254905dcc7cd995a60126288d6da6826f64e9c95a8dcf11e",
+            "nonbudget_input_sha256": "8fe71dc5363b2c6dc745d8bc3a8fb94ea5169e33917f030bef0516ab28418ea1"
+          }
+        ],
+        "physical_audit_prefix_preserved": true,
+        "all_preinterruption_calls_completed": true,
+        "new_search_calls_after_interruption": 1,
+        "method": "Two actual generated production interruptions after successful Round-1 Gap Analysis and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls."
+      },
+      "retained_evidence_sha256": {
+        "fix-evidence/gap-precommit.py.txt": "afcd5c8db39ab6468c6ed988eef2ff24ad8ec873adf97e7b821f8c90d95fff9e",
+        "fix-evidence/gap-precommit.json": "854b3c620c84b25e3065ab849c33135ef8cd4604f6888ce7d5aca1a66704c90b",
+        "fix-evidence/gap-precommit.log": "854b3c620c84b25e3065ab849c33135ef8cd4604f6888ce7d5aca1a66704c90b",
+        "fix-evidence/gap-precommit-initial.py.txt": "35294acfc5ea36595b6cbf12f5ad7f6d9980dbfe178f90ccc1ca27b4dc0168cd",
+        "fix-evidence/gap-precommit-initial.log": "a434e48cafbe68ff2cdad8ceb2d8abdd4065d88806e39567488c2ecab66c9e15"
+      },
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_gap_analysis.py": "f1b7d8a921b2e4aed1cfdb564d6901655f1f00d9ae059580ca42e83610dad905"
+      },
+      "diagnostic": "Initial probe misspelled the stage artifact key and did not interrupt. Its log is retained; the corrected probe uses the actual exported constant."
+    },
+    {
+      "id": "R56",
+      "status": "awaiting approval; not implemented",
+      "observed": {
+        "state": "released",
+        "failure_reason": null,
+        "completed_selection_calls": 3,
+        "configured_attempts_per_stage": 2,
+        "same_nonbudget_input": true,
+        "requests": [
+          {
+            "stage": "source_selection",
+            "prompt_sha256": "f54a73f7c7878f1155b8293889a3e8d1eb4def9171d39d96ffff1e46732a5ad8",
+            "nonbudget_input_sha256": "cf366ae2c310c1e93c9e9d34641128a903deea93668b0b4674893ba411c82f22"
+          },
+          {
+            "stage": "source_selection",
+            "prompt_sha256": "f54a73f7c7878f1155b8293889a3e8d1eb4def9171d39d96ffff1e46732a5ad8",
+            "nonbudget_input_sha256": "cf366ae2c310c1e93c9e9d34641128a903deea93668b0b4674893ba411c82f22"
+          },
+          {
+            "stage": "source_selection",
+            "prompt_sha256": "f54a73f7c7878f1155b8293889a3e8d1eb4def9171d39d96ffff1e46732a5ad8",
+            "nonbudget_input_sha256": "cf366ae2c310c1e93c9e9d34641128a903deea93668b0b4674893ba411c82f22"
+          }
+        ],
+        "physical_audit_prefix_preserved": true,
+        "all_preinterruption_calls_completed": true,
+        "new_search_calls_after_interruption": 0,
+        "method": "Two actual generated production interruptions after successful Source Selection and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls."
+      },
+      "retained_evidence_sha256": {
+        "fix-evidence/selection-precommit.py.txt": "5eb7212a60ec758feada6e78909ae70b44dc6156c43361fbd9351ebc952615eb",
+        "fix-evidence/selection-precommit.json": "e8e44ce99b24ea1bb553be367533c7c0c54215edfe5bd2f3a5c9c427748e16e7",
+        "fix-evidence/selection-precommit.log": "e8e44ce99b24ea1bb553be367533c7c0c54215edfe5bd2f3a5c9c427748e16e7"
+      },
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_source_selection.py": "4d35444a1d3d90e9007543b59580a421dc297d6c5aa46af38972ace9a4f6a745"
+      }
+    },
+    {
+      "id": "R57",
+      "status": "awaiting approval; not implemented",
+      "observed": {
+        "state": "released",
+        "failure_reason": null,
+        "completed_planner_calls": 3,
+        "planner_invocations_per_fresh_plan": 1,
+        "same_nonbudget_input": true,
+        "requests": [
+          {
+            "stage": "initial_planner",
+            "prompt_sha256": "7d64b86d91c343a18a6ee2c5650b151d696ef9f09f8b2b575dd734760cd6957e",
+            "nonbudget_input_sha256": "62daeabcd125185fc2395eefbcd4e628332e117e7d2e7ea4aa3250d27824425d"
+          },
+          {
+            "stage": "initial_planner",
+            "prompt_sha256": "7d64b86d91c343a18a6ee2c5650b151d696ef9f09f8b2b575dd734760cd6957e",
+            "nonbudget_input_sha256": "62daeabcd125185fc2395eefbcd4e628332e117e7d2e7ea4aa3250d27824425d"
+          },
+          {
+            "stage": "initial_planner",
+            "prompt_sha256": "7d64b86d91c343a18a6ee2c5650b151d696ef9f09f8b2b575dd734760cd6957e",
+            "nonbudget_input_sha256": "62daeabcd125185fc2395eefbcd4e628332e117e7d2e7ea4aa3250d27824425d"
+          }
+        ],
+        "physical_audit_prefix_preserved": true,
+        "all_preinterruption_calls_completed": true,
+        "new_search_calls_after_interruption": 6,
+        "method": "Two actual generated production interruptions after successful initial Planner and before its aggregate commit; exact-source resume, unchanged inputs except the current remaining budget. No artifact edits, real data, credentials, paid research or external calls."
+      },
+      "retained_evidence_sha256": {
+        "fix-evidence/planner-precommit.py.txt": "e31bacbfdc0550edfeecde84f17b8f48e2799037a27bcf8da3785be786370fa2",
+        "fix-evidence/planner-precommit.json": "0d18cc3a6aaa13ae8185d7ad32ac3d8de14a08220af10c8031d7fd285846311d",
+        "fix-evidence/planner-precommit.log": "0d18cc3a6aaa13ae8185d7ad32ac3d8de14a08220af10c8031d7fd285846311d"
+      },
+      "source_sha256": {
+        "backend/src/researchassistant/agents/v2_initial_planner.py": "249fae9a5cf83768cc2a0ea78b383e03ad143954f47a1ed1de8b21618594a401"
+      },
+      "diagnostic": "The first probe command used the bundled document Python without pytest. Running the unchanged probe under the project test environment confirms the finding."
+    },
+    {
+      "id": "R58",
+      "status": "awaiting approval; not implemented",
+      "observed": {
+        "launcher_web_readiness_options": [
+          "--fail",
+          "--silent"
+        ],
+        "nominal_loop_iterations": 45,
+        "first_request_completed": false,
+        "elapsed_seconds": 46.024,
+        "method": "Exact launcher curl arguments against one owned loopback server that accepts but never responds. The full launcher, API, frontend and installed app are not started. The probe terminates/reaps only its own curl process and closes its own temporary socket."
+      },
+      "retained_evidence_sha256": {
+        "fix-evidence/launcher-readiness.py.txt": "439b1af95f110d5d56db9fbfc8037c8900867460a9bd664900197a4bc23f0a3b",
+        "fix-evidence/launcher-readiness.json": "b037e874ebf3be822462f0aa029a077119a56a4cc41e54a447c6648dd10dfddc",
+        "fix-evidence/launcher-readiness.log": "9ed942f858b7656e97201ebbc5ab3cc0e26e71900d9af8fdba1ee1c65c20fda1",
+        "fix-evidence/launcher-readiness-sandbox.log": "f96058f3e5edfea61ffe074c2386672c5a75d998732f57671f50541098fdbaaf"
+      },
+      "source_sha256": {
+        "Launch ResearchAssistant.command": "ef9c69ede2b9b8cf59ae854710dad4067c1c885538e0969af8e74b844121dbc1"
+      }
+    },
+    {
+      "id": "R59",
+      "status": "awaiting approval; not implemented",
+      "method": "Manual comparison of maintained guides with live reviewed owners; existing source and regression validation retained.",
+      "observed": [
+        "Current invariants incorrectly deny source socket pinning",
+        "Current schema/read-only/import/converter ranges stop at 17 although schema 18 is implemented",
+        "Desktop external-link policy is documented HTTPS-only despite HTTP(S) implementation",
+        "Renderer shared smoke count says five; actual runner contains six",
+        "Executable identity ownership still describes old root Python paths"
+      ],
+      "document_sha256": {
+        "docs/research-invariants.md": "7bbdca90e4a31aaf2657c99f0464ad2a81e94e57a215fa85354c257f8f105ba8",
+        "docs/project/database-recovery.md": "511cbfbe5aaf33468991babf5ecf703a5d2e446e6ca25801e53905c1a5b5df77",
+        "desktop/README.md": "a38e4e20da683858257a36a7dcbc04c8be795ac1552b9ad3e2b089ec613140f8",
+        "frontend/README.md": "b29813df011f0032dd51e9f22baf4698d511f5d38f9bd3851e37ded3c382d4e7"
+      }
+    }
+  ],
+  "graph_refresh": {
+    "nodes": 32036,
+    "edges": 106092,
+    "expected_nodes": 32036,
+    "expected_edges": 106092,
+    "persistence": false
+  }
+}

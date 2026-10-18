@@ -37,6 +37,34 @@ def replace_tree(source: Path, destination: Path) -> None:
         staged.replace(destination)
 
 
+def stage_python_source() -> Path:
+    """Stage only the explicit executable/data manifest, excluding caches and secrets."""
+    source = ROOT / "backend/src"
+    paths = [source / name for name in ("cli.py", "models.py", "orchestrator.py", "store.py")]
+    for name in ("researchassistant", "agents", "providers", "frontend"):
+        paths.extend((source / name).rglob("*.py"))
+    paths.extend((source / "researchassistant/prompts").glob("*.md"))
+    paths.extend(
+        source / "researchassistant/evidence/fonts" / name
+        for name in (
+            "unifont-15.0.01.ttf",
+            "UNIFONT-LICENSE.txt",
+            "README.md",
+        )
+    )
+    destination = DESKTOP / "build/source-data/backend"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="python-source-", dir=destination.parent) as temporary:
+        staged = Path(temporary) / "backend"
+        for path in paths:
+            target = staged / "src" / path.relative_to(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+        shutil.copyfile(ROOT / "backend/pyproject.toml", staged / "pyproject.toml")
+        replace_tree(staged, destination)
+    return destination
+
+
 def stage_node() -> Path:
     architecture = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "x64", "AMD64": "x64"}[
         platform.machine()
@@ -66,6 +94,31 @@ def stage_node() -> Path:
     return RESOURCES / "node" / ("node.exe" if sys.platform == "win32" else "bin/node")
 
 
+def stage_acquisition(source: Path) -> None:
+    """Apply the reviewed connection policy only to the exact locked upstream bytes."""
+    upstream = source / "node_modules/wigolo/dist/cache/db.js"
+    expected = "3fbee2a93d4424d2174fd758141b945d54aa198e24a030482c7101ce485385f1"
+    if hashlib.sha256(upstream.read_bytes()).hexdigest() != expected:
+        raise RuntimeError("Wigolo cache integration requires the reviewed 0.2.1 source")
+    network_sources = {
+        "router.js": "d3459edd5b8cd5790bcec48b3aae7b9ef02e09a1582ed18b57b50cc20bac85b9",
+        "http-client.js": "708dc18a71974a8722cac462786c29f42f529bdaeeac7793db939eda942038ac",
+        "browser-pool.js": "34dabb86d958dc7b4a493fb6b1c64e46a44c972cbb9abdc7e19684a47552dfad",
+    }
+    for name, digest in network_sources.items():
+        path = source / "node_modules/wigolo/dist/fetch" / name
+        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise RuntimeError("Wigolo network integration requires the reviewed 0.2.1 source")
+    destination = RESOURCES / "acquisition"
+    replace_tree(source, destination)
+    cache = destination / "node_modules/wigolo/dist/cache"
+    shutil.copyfile(source / "cache-policy.mjs", cache / "ra-cache-policy.mjs")
+    original = upstream.read_text(encoding="utf-8")
+    patched = 'import { prepareCacheConnection } from "./ra-cache-policy.mjs";\n' + original
+    patched = patched.replace("  instance = db;", "  prepareCacheConnection(db);\n  instance = db;")
+    (cache / "db.js").write_text(patched, encoding="utf-8")
+
+
 def main() -> None:
     RESOURCES.mkdir(parents=True, exist_ok=True)
     if "--backend-only" not in sys.argv:
@@ -82,10 +135,10 @@ def main() -> None:
             [str(node), str(acquisition / "node_modules/playwright/cli.js"), "install", "chromium"],
             env=browser_env,
         )
-        replace_tree(acquisition, RESOURCES / "acquisition")
+        stage_acquisition(acquisition)
         run(
-            [str(node), str(ROOT / "web/node_modules/next/dist/bin/next"), "build"],
-            cwd=ROOT / "web",
+            [str(node), str(ROOT / "frontend/node_modules/next/dist/bin/next"), "build"],
+            cwd=ROOT / "frontend",
             env={
                 **env,
                 "RESEARCHASSISTANT_DESKTOP": "1",
@@ -93,7 +146,7 @@ def main() -> None:
                 "NEXT_TELEMETRY_DISABLED": "1",
             },
         )
-        replace_tree(ROOT / "web/out", RESOURCES / "web")
+        replace_tree(ROOT / "frontend/out", RESOURCES / "frontend")
     command = [
         sys.executable,
         "-m",
@@ -104,25 +157,32 @@ def main() -> None:
         "--name",
         "researchassistant-backend",
         "--paths",
-        str(ROOT),
+        str(ROOT / "backend/src"),
         "--distpath",
         str(DESKTOP / "build/python"),
         "--workpath",
         str(DESKTOP / "build/pyinstaller"),
         "--specpath",
         str(DESKTOP / "build"),
+        "--collect-submodules",
+        "agents",
+        "--collect-submodules",
+        "providers",
+        "--collect-submodules",
+        "frontend",
         "--exclude-module",
         "streamlit",
         "--exclude-module",
         "pytest",
     ]
-    # Match the documented compatibility surface and repository_identity's root list.
+    # Source data retains the current backend ownership paths for frozen identity.
+    source_data = stage_python_source()
+    source = source_data / "src"
     for name in ("cli.py", "models.py", "orchestrator.py", "store.py"):
-        path = ROOT / name
-        command.extend(["--add-data", f"{path}{os.pathsep}."])
-    command.extend(["--add-data", f"{ROOT / 'pyproject.toml'}{os.pathsep}."])
-    for name in ("agents", "providers", "frontend", "prompts", "researchassistant"):
-        command.extend(["--add-data", f"{ROOT / name}{os.pathsep}{name}"])
+        command.extend(["--add-data", f"{source / name}{os.pathsep}backend/src"])
+    command.extend(["--add-data", f"{source_data / 'pyproject.toml'}{os.pathsep}backend"])
+    for name in ("agents", "providers", "frontend", "researchassistant"):
+        command.extend(["--add-data", f"{source / name}{os.pathsep}backend/src/{name}"])
     command.append(str(DESKTOP / "backend.py"))
     run(command)
     replace_tree(

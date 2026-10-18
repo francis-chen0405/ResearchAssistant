@@ -81,7 +81,12 @@ def _generated_database(path: Path) -> None:
 
 
 def _downgrade_generated_database(path: Path, version: int) -> None:
+    from test_database_schema_integrity import _restore_round_three_constraint
+
     with sqlite3.connect(path) as connection:
+        connection.row_factory = sqlite3.Row
+        if version < 18:
+            _restore_round_three_constraint(connection)
         if version < 16:
             for table in upgrade_smoke._SCHEMA13_PROVENANCE_GUARD_TABLES:
                 connection.execute(f"DROP TRIGGER {table}_provenance_immutable_update")
@@ -115,8 +120,9 @@ def test_generated_schema_14_and_16_convert_to_schema13_without_losing_prior_dat
 ) -> None:
     database = tmp_path / f"schema-{version}.sqlite3"
     _generated_database(database)
-    if version < 16:
-        _downgrade_generated_database(database, version)
+    _downgrade_generated_database(database, version)
+    with open_read_only_store(database) as store:
+        assert store.compatibility.schema_version == version
 
     upgrade_smoke._prepare_schema13_fixture(database)
 
@@ -185,7 +191,7 @@ def test_unknown_or_incomplete_schema_refuses_conversion_without_mutation(tmp_pa
     _generated_database(database)
     with sqlite3.connect(database) as connection:
         connection.execute(
-            "INSERT INTO schema_migrations VALUES (18, 'unknown', '2026-10-04T00:00:00Z')"
+            "INSERT INTO schema_migrations VALUES (19, 'unknown', '2026-10-04T00:00:00Z')"
         )
         connection.commit()
     before = _schema_state(database)

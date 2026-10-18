@@ -94,7 +94,11 @@ def _clock() -> datetime:
 
 
 def _binding(
-    path: Path, *, max_requests: int = 10, seed_identity: str = "source-seed-expansion-v2"
+    path: Path,
+    *,
+    max_requests: int = 10,
+    seed_identity: str = "source-seed-expansion-v2",
+    policy: V2DiscoveryPolicy | None = None,
 ) -> None:
     init_db(str(path))
     insert_run(
@@ -130,7 +134,7 @@ def _binding(
         exact_claim=CLAIM,
         directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
         providers=(provider,),
-        policy=V2DiscoveryPolicy(max_seeds_per_run=3),
+        policy=policy or V2DiscoveryPolicy(max_seeds_per_run=3),
         capabilities=(capability,),
         provider_budgets=(
             V2DiscoveryProviderBudget(
@@ -392,7 +396,7 @@ def _manual_action(
         requested_depth=min(binding.policy.metadata_depth, 3),
         policy=binding.policy,
         capabilities=binding.capabilities[0],
-        seed_identity="source-seed-expansion-v2",
+        seed_identity=binding.seed_identity,
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
 from hashlib import sha256
@@ -597,8 +598,8 @@ def test_binding_requires_complete_ordered_provider_identity_and_configuration_h
         )
 
 
-def test_existing_production_fingerprint_is_unchanged_by_discovery_metadata_policy() -> None:
-    """The new opt-in metadata policy does not alter legacy production identity."""
+def test_discovery_metadata_keeps_fingerprint_except_approved_quote_context_version() -> None:
+    """Verify the R41 policy addition and retain the exact preceding identity check."""
     routing = V2RoutingConfig.from_environment(
         {
             "MIMO_API_KEY": "test",
@@ -627,4 +628,13 @@ def test_existing_production_fingerprint_is_unchanged_by_discovery_metadata_poli
         datetime(2026, 1, 1, tzinfo=UTC),
     )
 
-    assert fingerprint.sha256 == "97a0d5eb65a527849dfaf25b3ee99d611568b9c4adf26f46ef6e78e77518754d"
+    assert fingerprint.sha256 == sha256(fingerprint.canonical_payload_json.encode()).hexdigest()
+    payload = json.loads(fingerprint.canonical_payload_json)
+    assert payload["semantic_policy"].pop("quote_context_filter_policy") == (
+        "researchassistant-v2-phase-12-post-filter-v2"
+    )
+    preceding = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    assert sha256(preceding.encode()).hexdigest() == (
+        "97a0d5eb65a527849dfaf25b3ee99d611568b9c4adf26f46ef6e78e77518754d"
+    )
+    assert fingerprint.sha256 != sha256(preceding.encode()).hexdigest()

@@ -1,0 +1,26 @@
+{
+  "finding": "R52",
+  "cases": [
+    {
+      "entry": "evaluations.source_discovery.main",
+      "returncode": 0,
+      "input_overwritten": true,
+      "original_schema_lost": true
+    },
+    {
+      "entry": "evaluations.run_evaluations.main",
+      "returncode": 0,
+      "input_overwritten": true,
+      "original_schema_lost": true
+    },
+    {
+      "entry": "evaluations.run_evaluations.main",
+      "case": "same machine/human output path",
+      "returncode": 0,
+      "machine_output_replaced_by_markdown": true
+    }
+  ],
+  "original_input_files_unchanged": true,
+  "external_provider_calls": 0,
+  "real_database_changes": 0
+}
