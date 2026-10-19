@@ -27,3 +27,11 @@ preceding complete offline result (3,196 / nine skips): no runtime/test source c
 are made, so no new native or full-runtime acceptance is claimed. Verify the new
 remote automatic job is skipped after the normal master push. Existing Windows
 release blockers remain open; installed app, real data and source identity are preserved.
+
+## Windows desktop matrix removal
+
+The user subsequently explicitly requested removal of `Desktop windows-2025` after
+another failure. Remove `windows-2025` from the desktop matrix, retaining `macos-15`.
+The separate Windows native-storage regressions remain enabled and the packaging
+verifier remains manual-only. This supersedes the earlier instruction to leave the
+desktop matrix unchanged. No application code or installed data changes.

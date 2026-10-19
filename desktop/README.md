@@ -220,8 +220,9 @@ page loading and empty password controls. CI runs these before installer creatio
 `.github/workflows/desktop.yml` defines macOS and Windows builds, retaining unsigned test
 artifacts without publishing releases. Windows packaging/frozen/installer verification
 runs only through **Actions → Desktop Phase 1 → Run workflow**, at the user’s request.
-Automatic pushes/PRs retain Windows regressions/native storage, the desktop Python
-matrix and Mac packaging. Workflow configuration alone is not evidence that
+Automatic pushes/PRs retain Windows regressions/native storage and the macOS desktop
+checks and packaging. The Windows desktop matrix entry has been removed at the user's
+request. Workflow configuration alone is not evidence that
 the current version built or ran on either target. Its independent Windows job records
 OS/NTFS and JUnit evidence for actual ACL/access-denial, file/link, generated-data crash,
 native vault and process checks. The installer smoke is restricted to disposable
