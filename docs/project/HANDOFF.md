@@ -1,5 +1,11 @@
 # Handoff
 
+The [progress recovery change](../../.agent/plans/recoverable-progress-polling-2026-10-23.md)
+is reviewed with passing source, renderer, static-build and all six offline browser
+checks. The user authorized commit/push to master. The API-client VM smoke now provides
+its required browser abort-controller/timer globals. Preserve the installed application
+and real data. Installation and paid research require a separate request.
+
 The user-authorized e359 integration is complete in master with passing source,
 wheel/editable, renderer and desktop-window checks. Preserve the current CLI defaults
 and immutable saved research. See

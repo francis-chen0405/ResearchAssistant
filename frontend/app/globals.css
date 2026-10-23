@@ -58,7 +58,14 @@ textarea::placeholder { color: #9a988f; opacity: 1; }
 .primary-action.wide { width: 100%; margin-top: 8px; }
 .starting-view { display: grid; place-items: center; max-width: 760px; margin: 18vh auto 0; text-align: center; }
 .starting-view h2 { margin: 0; font-family: Georgia, serif; font-size: clamp(34px, 5vw, 64px); font-weight: 400; line-height: 1.05; letter-spacing: -0.04em; }
-.starting-view > p:last-child { max-width: 470px; color: var(--muted); line-height: 1.55; }
+.starting-view > p:last-of-type { max-width: 470px; color: var(--muted); line-height: 1.55; }
+.research-connection { width: 100%; margin: 20px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; text-align: left; }
+.research-connection p { margin: 0 0 10px; line-height: 1.5; }
+.research-connection .progress-received { color: var(--muted); font-size: 12px; }
+.research-connection p:empty { display: none; }
+.connection-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.connection-actions button { padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px; background: transparent; cursor: pointer; font-size: 12px; }
+.connection-actions button:disabled { opacity: .55; cursor: default; }
 .orbital-loader { position: relative; display: grid; place-items: center; width: 80px; height: 80px; margin-bottom: 32px; }
 .orbital-loader i { position: absolute; inset: 0; border: 1px solid var(--line); border-top-color: var(--signal); border-radius: 50%; }
 .orbital-loader span { font-family: Georgia, serif; font-size: 18px; }

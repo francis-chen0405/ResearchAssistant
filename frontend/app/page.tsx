@@ -28,7 +28,7 @@ export default function Home() {
   const preferencesReady = preferencesStatus === "ready";
   const { configuration, refreshConfiguration, updateService, changeService } =
     useConfiguration(settings, setSettings, setOffline, setNotice);
-  const research = useResearch(setNotice, setOffline);
+  const research = useResearch(setNotice, setOffline, view === "research" && preferencesReady);
   const history = useHistory(
     settings.dbPath,
     view,
@@ -69,6 +69,15 @@ export default function Home() {
       : configuration?.saved_credentials.length
         ? "saved"
         : "setup";
+  const recovery = {
+    connection: research.connection,
+    lastConfirmedAt: research.lastConfirmedAt,
+    cancellation: research.cancellation,
+    onReconnect: research.reconnect,
+    onHistory: () => navigate("history"),
+    onCancel: research.cancel,
+    canCancel: snapshot?.worker_active !== false,
+  };
 
   return (
     <MotionConfig
@@ -116,7 +125,7 @@ export default function Home() {
               <ProgressView
                 key={`progress-${snapshot.run_id}`}
                 snapshot={snapshot}
-                onCancel={research.cancel}
+                {...recovery}
               />
             )
           ) : activeRun ? (
@@ -124,6 +133,7 @@ export default function Home() {
               key="starting"
               claim={research.claim}
               reduceMotion={Boolean(reduceMotion)}
+              {...recovery}
             />
           ) : (
             <ResearchView

@@ -26,6 +26,11 @@ escalation. Forced exit writes no research
 completion or accounting changes; [the shutdown record](../verification/desktop-shutdown-2026-10-10.md)
 owns timer behavior, crash recovery and native platform verification.
 
+Renderer progress reads have per-request deadlines and a bounded consecutive-failure
+allowance. Connection recovery preserves the selected run/database and last confirmed
+snapshot. Navigation cancels reads; reconnect only reads saved state. Cancellation
+has independent pending/confirmed/unknown presentation and is never replayed automatically.
+
 ## Runtime and module ownership
 
 Standalone API lifespan owns cancellation/drain and owned-service retirement;

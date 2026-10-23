@@ -64,6 +64,11 @@ async function main() {
     };
     let run = null;
     let started = null;
+    let startCalls = 0;
+    let recoveryMode = false;
+    let recoveryHealthy = false;
+    let cancelCalls = 0;
+    let confirmCancellation;
     let snapshotCalls = 0;
     let activeSnapshots = 0;
     let maxActiveSnapshots = 0;
@@ -167,6 +172,7 @@ async function main() {
           service: { wigolo_ready: true, state: "healthy", message: "Research tools ready" },
         };
       } else if (pathname === "/api/research/start") {
+        startCalls++;
         started = request.postDataJSON();
         run = "running";
         body = { started: true, run_id: runId, classification: "starting", message: "Research started." };
@@ -223,6 +229,10 @@ async function main() {
           worker_active: false,
           message: "No active worker in this app. Saved progress and reservations are unchanged; resume with the original settings or start a new run.",
         });
+      } else if (pathname === `/api/research/${runId}/cancel`) {
+        cancelCalls++;
+        await new Promise(resolve => { confirmCancellation = resolve; });
+        body = { cancelled: true, message: "Cancellation requested." };
       } else if (pathname === `/api/research/${runId}`) {
         const call = ++snapshotCalls;
         activeSnapshots += 1;
@@ -230,7 +240,12 @@ async function main() {
         snapshotStartedResolve();
         snapshotStartedResolve = () => {};
         try {
-          if (call === 1) {
+          if (recoveryMode) {
+            assert.equal(request.method(), "GET");
+            assert.equal(url.searchParams.get("db_path"), database);
+            if (recoveryHealthy) body = makeSnapshot("running");
+            else { status = 503; body = { detail: "Progress read unavailable" }; }
+          } else if (call === 1) {
             await WAIT(25);
             status = 503;
             body = { detail: "Temporary status outage" };
@@ -326,8 +341,46 @@ async function main() {
     await page.getByRole("heading", { name: "Research a claim." }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeUnmount, "Unmount must cancel the delayed follow-up");
+    // Recover from repeated failures before the first snapshot, without a new run.
+    recoveryMode = true;
+    await page.getByRole("button", { name: "Research", exact: true }).click();
+    await page.getByLabel("Your research question", { exact: true }).fill("Can this same run reconnect safely?");
+    await page.getByRole("checkbox").check();
+    const beforeRecovery = snapshotCalls;
+    await page.getByRole("button", { name: "Begin research", exact: true }).click();
+    const recoveryStarts = startCalls;
+    const connection = page.getByRole("region", { name: "Progress connection", exact: true });
+    await connection.getByText(/Automatic retries paused/).waitFor();
+    assert.equal(snapshotCalls, beforeRecovery + 3);
+    await page.getByText("Preparing the trail", { exact: true }).waitFor();
+    await connection.getByText("No progress snapshot confirmed yet.", { exact: true }).waitFor();
+    await connection.getByRole("button", { name: "Cancel run", exact: true }).waitFor();
+    await connection.getByRole("button", { name: "Open History", exact: true }).click();
+    await page.getByText("A saved replacement run", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Research", exact: true }).click();
+    await connection.getByText(/Automatic retries paused/).waitFor();
+    await WAIT(1700);
+    assert.equal(snapshotCalls, beforeRecovery + 3, "Navigation preserves the exhausted retry budget");
+    recoveryHealthy = true;
+    await connection.getByRole("button", { name: "Reconnect", exact: true }).click();
+    await connection.getByText("Progress connection restored.", { exact: true }).waitFor();
+    const lastConfirmed = await connection.locator("time").getAttribute("datetime");
+    assert.ok(lastConfirmed);
+    recoveryHealthy = false;
+    await connection.getByText(/Automatic retries paused/).waitFor();
+    assert.equal(await connection.locator("time").getAttribute("datetime"), lastConfirmed);
+    await connection.getByText("Research may still be running.", { exact: true }).waitFor();
+    await connection.getByRole("button", { name: "Cancel run", exact: true }).click();
+    await connection.getByRole("button", { name: "Sending cancellation…", exact: true }).waitFor();
+    assert.equal(await connection.getByRole("button", { name: "Cancellation requested", exact: true }).count(), 0);
+    confirmCancellation();
+    const confirmedCancel = connection.getByRole("button", { name: "Cancellation requested", exact: true });
+    await confirmedCancel.waitFor();
+    assert.equal(await confirmedCancel.isDisabled(), true);
+    assert.equal(cancelCalls, 1);
+    assert.equal(startCalls, recoveryStarts, "Reconnection cannot start replacement research");
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${snapshotCalls} deterministic snapshots, live discovery counts/warnings, max same-run concurrency ${verifiedSameRunConcurrency}, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement and unmount cleanup.`);
+    console.log(`PASS: ${snapshotCalls} deterministic snapshots, live discovery counts/warnings, max same-run concurrency ${verifiedSameRunConcurrency}, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement/unmount cleanup, bounded recovery before/after a snapshot, preserved retry budget, same-run reconnect and backend-confirmed cancellation.`);
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

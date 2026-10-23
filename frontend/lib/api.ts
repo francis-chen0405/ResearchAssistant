@@ -115,22 +115,50 @@ function readableErrorDetail(detail: unknown): string | null {
   return messages.length ? messages.join(" ") : null;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      detail?: unknown;
-    } | null;
-    const detail =
-      readableErrorDetail(payload?.detail) ??
-      "The local service could not complete that request.";
-    throw new Error(detail);
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs?: number,
+): Promise<T> {
+  // Bound the whole read, including its response body, and release both timers
+  // and lifecycle listeners on every exit. Mutations opt in explicitly.
+  const controller = new AbortController();
+  const timer = timeoutMs === undefined || init?.signal?.aborted
+    ? undefined
+    : window.setTimeout(
+        () => controller.abort(new Error("The local service took too long to respond.")),
+        timeoutMs,
+      );
+  const abort = () => {
+    controller.abort(init?.signal?.reason);
+    if (timer !== undefined) window.clearTimeout(timer);
+  };
+  if (init?.signal?.aborted) abort();
+  else init?.signal?.addEventListener("abort", abort, { once: true });
+  try {
+    controller.signal.throwIfAborted();
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        detail?: unknown;
+      } | null;
+      const detail =
+        readableErrorDetail(payload?.detail) ??
+        "The local service could not complete that request.";
+      throw new Error(detail);
+    }
+    const payload = (await response.json()) as T;
+    controller.signal.throwIfAborted();
+    return payload;
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+    init?.signal?.removeEventListener("abort", abort);
   }
-  return (await response.json()) as T;
 }
 
 async function startService(): Promise<ServiceDiagnostic> {
@@ -250,14 +278,17 @@ export const researchApi = {
     request<RunSnapshot>(
       `/api/research/${runId}?db_path=${encodeURIComponent(database)}`,
       { signal },
+      10_000,
     ),
-  cancel: (runId: string, database: string) =>
+  cancel: (runId: string, database: string, signal?: AbortSignal) =>
     request<ApiResponses["POST /api/research/{run_id}/cancel"]>(
       `/api/research/${runId}/cancel`,
       {
         method: "POST",
+        signal,
         body: JSON.stringify({ db_path: database }),
       },
+      10_000,
     ),
   history: (database: string) =>
     request<ApiResponses["GET /api/history"]>(

@@ -10,11 +10,16 @@ const ts = require("typescript");
 
 // Execute the actual hook actions with deterministic state and API boundaries.
 // Browser acceptance separately covers React mounts, aborts and rendering.
-function hookHarness(relative, api) {
+function hookHarness(relative, api, options = {}) {
   const state = [];
   const effects = [];
   const layoutEffects = [];
   let cursor = 0;
+  let effectCursor = 0;
+  const mountedEffects = new Map();
+  const sameDeps = (before, after) => before && after && before.length === after.length
+    && before.every((value, index) => Object.is(value, after[index]));
+  const effect = (list, callback, deps) => list.push({ callback, deps, index: effectCursor++ });
   const react = {
     useState(initial) {
       const index = cursor++;
@@ -28,10 +33,15 @@ function hookHarness(relative, api) {
       if (!(index in state)) state[index] = { current: initial };
       return state[index];
     },
-    useCallback(callback) { return callback; },
+    useCallback(callback, deps) {
+      if (!options.trackEffects) return callback;
+      const index = cursor++;
+      if (!sameDeps(state[index]?.deps, deps)) state[index] = { callback, deps };
+      return state[index].callback;
+    },
     useMemo(factory) { return factory(); },
-    useLayoutEffect(effect) { layoutEffects.push(effect); },
-    useEffect(effect) { effects.push(effect); },
+    useLayoutEffect(callback, deps) { effect(layoutEffects, callback, deps); },
+    useEffect(callback, deps) { effect(effects, callback, deps); },
   };
   function load(file) {
     const compiled = { exports: {} };
@@ -40,7 +50,9 @@ function hookHarness(relative, api) {
     }).outputText;
     vm.runInNewContext(code, {
       exports: compiled.exports, AbortController, Error, Set, Promise,
-      process: { env: {} }, window: { setTimeout, clearTimeout },
+      process: { env: {} }, window: options.clock ?? { setTimeout, clearTimeout },
+      fetch: options.fetch ?? fetch,
+      Date: options.clock ? class extends Date { static now() { return options.clock.now; } } : Date,
       require(name) {
         if (name === "react") return react;
         if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }),
@@ -57,9 +69,21 @@ function hookHarness(relative, api) {
   const exports = load(path.resolve(__dirname, "..", relative));
   return {
     exports,
-    render(name, ...args) { cursor = 0; effects.length = 0; layoutEffects.length = 0; return exports[name](...args); },
-    runEffects() { return [...layoutEffects, ...effects].map((effect) => effect()); },
-    runLayoutEffects() { return layoutEffects.map(effect => effect()); },
+    render(name, ...args) { cursor = 0; effectCursor = 0; effects.length = 0; layoutEffects.length = 0; return exports[name](...args); },
+    runEffects() { return [...layoutEffects, ...effects].map(({ callback }) => callback()); },
+    runLayoutEffects() { return layoutEffects.map(({ callback }) => callback()); },
+    commitEffects() {
+      for (const { callback, deps, index } of [...layoutEffects, ...effects]) {
+        const previous = mountedEffects.get(index);
+        if (previous && sameDeps(previous.deps, deps)) continue;
+        previous?.cleanup?.();
+        mountedEffects.set(index, { deps, cleanup: callback() });
+      }
+    },
+    dispose() {
+      for (const { cleanup } of mountedEffects.values()) cleanup?.();
+      mountedEffects.clear();
+    },
   };
 }
 
@@ -420,3 +444,284 @@ for (const scenario of ["owned", "different-worker", "missing", "wrong-run"]) {
     assert.equal(result.busy, false);
   });
 }
+
+const flushProgress = () => new Promise(setImmediate);
+function progressClock() {
+  const timers = new Map();
+  let nextId = 0;
+  const clock = {
+    now: 1_000,
+    setTimeout(callback, delay) {
+      const id = ++nextId;
+      timers.set(id, { callback, at: clock.now + delay });
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+    get pending() { return timers.size; },
+    async advance(milliseconds) {
+      const until = clock.now + milliseconds;
+      while (true) {
+        const next = [...timers.entries()].filter(([, timer]) => timer.at <= until)
+          .sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next) break;
+        timers.delete(next[0]);
+        clock.now = next[1].at;
+        next[1].callback();
+        await flushProgress();
+      }
+      clock.now = until;
+      await flushProgress();
+    },
+  };
+  return clock;
+}
+const progressSnapshot = (classification = "running", id = "run") => ({
+  run_id: id, db_path: "db", classification, worker_active: classification === "running",
+});
+const progressResponse = (value) => ({ ok: true, json: async () => value });
+const waitForProgressAbort = (signal) => new Promise((_resolve, reject) => {
+  signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+});
+function pollingHarness(fetch) {
+  const clock = progressClock();
+  const api = hookHarness("lib/api.ts", {}, { clock, fetch }).exports.researchApi;
+  let starts = 0;
+  const notices = [];
+  const notify = (message) => notices.push(message);
+  const offline = () => {};
+  const harness = hookHarness("features/research/use-research.ts", {
+    ...api,
+    start() { starts++; assert.fail("Recovery attempted to start research"); },
+  }, { clock, trackEffects: true });
+  function render(enabled = true) {
+    const value = harness.render("useResearch", notify, offline, enabled);
+    harness.commitEffects();
+    return value;
+  }
+  render().setActiveRun({ id: "run", database: "db" });
+  render();
+  return { clock, render, dispose: () => harness.dispose(), notices, get starts() { return starts; } };
+}
+
+test("hanging progress reads time out individually, pause after three failures and reconnect once", async () => {
+  let healthy = false, inFlight = 0, maxInFlight = 0;
+  const requests = [];
+  const h = pollingHarness(async (url, { signal, method }) => {
+    assert.equal(method, undefined, "Recovery must only read saved state");
+    assert.match(url, /\/api\/research\/run\?db_path=db$/);
+    requests.push(signal);
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    try {
+      if (!healthy) await waitForProgressAbort(signal);
+      return progressResponse(progressSnapshot());
+    } finally { inFlight--; }
+  });
+  await h.clock.advance(100_000);
+  let state = h.render();
+  assert.equal(requests.length, 3);
+  assert.equal(new Set(requests).size, 3, "Every attempt needs a fresh request signal");
+  assert.ok(requests.every(signal => signal.aborted));
+  assert.equal(state.connection.state, "paused");
+  assert.equal(state.snapshot, null);
+  assert.equal(state.lastConfirmedAt, null);
+  assert.equal(h.clock.pending, 0);
+  assert.equal(state.activeRun.id, "run");
+  assert.equal(state.activeRun.database, "db");
+  healthy = true;
+  state.reconnect(); state.reconnect(); state.reconnect();
+  await flushProgress();
+  state = h.render();
+  assert.equal(requests.length, 4, "Repeated reconnect clicks cannot overlap reads");
+  assert.equal(state.connection.state, "connected");
+  assert.equal(state.connection.error, null);
+  assert.equal(state.connection.recovered, true);
+  assert.equal(state.snapshot.run_id, "run");
+  assert.equal(state.lastConfirmedAt, h.clock.now);
+  assert.equal(maxInFlight, 1);
+  assert.equal(h.starts, 0);
+  h.dispose();
+  assert.equal(h.clock.pending, 0);
+});
+
+test("repeated errors before the first snapshot keep the run and expose paused recovery", async () => {
+  let calls = 0;
+  const h = pollingHarness(async () => { calls++; throw new Error("Service unavailable"); });
+  await h.clock.advance(100_000);
+  let state = h.render();
+  assert.equal(calls, 3);
+  assert.equal(state.connection.state, "paused");
+  assert.equal(state.connection.error, "Service unavailable");
+  assert.equal(state.snapshot, null);
+  h.render(false);
+  h.render(true);
+  await h.clock.advance(100_000);
+  state = h.render();
+  assert.equal(calls, 3, "Navigation must not silently reset the failure budget");
+  assert.equal(state.activeRun.id, "run");
+  assert.equal(h.notices.length, 0, "Polling uses its scoped connection status");
+  h.dispose();
+});
+
+test("connection failures retain the last confirmed snapshot and receipt time", async () => {
+  let calls = 0;
+  const h = pollingHarness(async () => {
+    if (++calls > 1) throw new Error("Read failed");
+    return progressResponse(progressSnapshot());
+  });
+  await h.clock.advance(0);
+  const confirmed = h.render();
+  await h.clock.advance(100_000);
+  const stale = h.render();
+  assert.equal(stale.connection.state, "paused");
+  assert.equal(stale.snapshot, confirmed.snapshot);
+  assert.equal(stale.lastConfirmedAt, confirmed.lastConfirmedAt);
+  h.dispose();
+});
+
+for (const change of ["navigation", "replacement", "unmount"]) {
+  test(`late progress responses after ${change} cannot publish or schedule follow-up`, async () => {
+    let finish, signal, calls = 0;
+    const h = pollingHarness((_url, init) => {
+      calls++; signal = init.signal;
+      // Simulate a transport completion already queued when cleanup aborts it.
+      return new Promise(resolve => { finish = resolve; });
+    });
+    await h.clock.advance(0);
+    if (change === "navigation") h.render(false);
+    if (change === "replacement") {
+      h.render().setActiveRun({ id: "replacement", database: "other-db" });
+      h.render(false);
+    }
+    if (change === "unmount") h.dispose();
+    assert.equal(signal.aborted, true);
+    assert.equal(h.clock.pending, 0, "Cleanup clears even a pending deadline");
+    finish(progressResponse(progressSnapshot()));
+    await flushProgress();
+    await h.clock.advance(100_000);
+    assert.equal(calls, 1);
+    if (change !== "unmount") {
+      const state = h.render(false);
+      assert.equal(state.snapshot, null);
+      assert.equal(state.lastConfirmedAt, null);
+    }
+    h.dispose();
+  });
+}
+
+test("terminal snapshots cancel future polling and reconnect cannot restart them", async () => {
+  let calls = 0;
+  const h = pollingHarness(async () => {
+    calls++;
+    return progressResponse(progressSnapshot("released"));
+  });
+  const staleActions = h.render();
+  await h.clock.advance(0);
+  staleActions.reconnect();
+  await flushProgress();
+  const state = h.render();
+  assert.equal(state.snapshot.classification, "released");
+  state.reconnect();
+  await h.clock.advance(100_000);
+  assert.equal(calls, 1);
+  assert.equal(h.clock.pending, 0);
+  assert.equal(h.starts, 0);
+  h.dispose();
+});
+
+test("snapshot deadline includes a hanging response body and lifecycle abort clears its timer", async () => {
+  for (const lifecycleAbort of [false, true]) {
+    const clock = progressClock();
+    const lifecycle = new AbortController();
+    let requestSignal;
+    const api = hookHarness("lib/api.ts", {}, { clock, fetch: async (_url, { signal }) => {
+      requestSignal = signal;
+      return { ok: true, json: () => waitForProgressAbort(signal) };
+    } }).exports.researchApi;
+    const pending = api.snapshot("run", "db", lifecycle.signal);
+    const rejected = assert.rejects(pending);
+    await flushProgress();
+    if (lifecycleAbort) lifecycle.abort();
+    else await clock.advance(10_000);
+    await rejected;
+    assert.equal(requestSignal.aborted, true);
+    assert.equal(clock.pending, 0);
+  }
+});
+
+test("cancellation is sent only once, confirmed only by the backend, and never retried automatically", async () => {
+  for (const outcome of ["confirmed", "declined", "unknown", "old-selection"]) {
+    let finish, cancelCalls = 0;
+    const h = pollingHarness(async (url, { signal }) => {
+      if (url.includes("/cancel")) {
+        cancelCalls++;
+        if (outcome === "unknown") return waitForProgressAbort(signal);
+        return new Promise(resolve => { finish = resolve; });
+      }
+      return progressResponse(progressSnapshot());
+    });
+    await h.clock.advance(0);
+    let state = h.render();
+    const pending = state.cancel();
+    await state.cancel();
+    state = h.render();
+    assert.equal(state.cancellation.state, "sending");
+    assert.equal(cancelCalls, 1);
+    if (outcome === "old-selection") {
+      state.setActiveRun({ id: "other", database: "other-db" });
+      h.render(false);
+    }
+    if (outcome === "unknown") await h.clock.advance(10_000);
+    else finish(progressResponse({ cancelled: outcome !== "declined", message: "Backend reply" }));
+    await pending;
+    state = h.render(outcome !== "old-selection");
+    assert.equal(state.cancellation.state, outcome === "confirmed" ? "requested"
+      : outcome === "old-selection" ? "idle" : "unconfirmed");
+    await h.clock.advance(10_000);
+    assert.equal(cancelCalls, 1);
+    if (outcome === "confirmed") { await state.cancel(); assert.equal(cancelCalls, 1); }
+    h.dispose();
+  }
+});
+
+test("recovery controls expose scoped status, last-confirmed time and confirmed cancellation only", () => {
+  const h = hookHarness("features/research/connection.tsx", {});
+  for (const lastConfirmedAt of [null, 10_000]) {
+    const props = {
+      connection: { state: "paused", error: "Read timed out", recovered: false },
+      lastConfirmedAt, cancellation: { state: "unconfirmed", message: "Check History" },
+      onReconnect() {}, onHistory() {}, onCancel() {},
+    };
+    const nodes = elementNodes(h.render("ResearchRecovery", props));
+    assert.ok(nodes.some(node => node.props.role === "status" && node.props["aria-live"] === "polite"));
+    assert.ok(nodes.some(node => node.type === "button" && node.props.children === "Reconnect" && !node.props.disabled));
+    assert.ok(nodes.some(node => node.type === "button" && node.props.children === "Open History"));
+    assert.ok(nodes.some(node => node.type === "button" && node.props.children === "Cancel run"));
+    assert.match(JSON.stringify(nodes), /Research may still be running/);
+    if (lastConfirmedAt === null) assert.match(JSON.stringify(nodes), /No progress snapshot confirmed/);
+    else assert.ok(nodes.some(node => node.type === "time" && node.props.dateTime));
+  }
+});
+
+test("a fresh explicit selection of the same run clears the previous cancellation guard", async () => {
+  let cancelCalls = 0;
+  const h = pollingHarness(async (url) => {
+    if (url.includes("/cancel")) {
+      cancelCalls++;
+      return progressResponse({ cancelled: true, message: "Requested" });
+    }
+    return progressResponse(progressSnapshot());
+  });
+  await h.clock.advance(0);
+  await h.render().cancel();
+  assert.equal(h.render().cancellation.state, "requested");
+  h.render().reset();
+  h.render().setActiveRun({ id: "run", database: "db" });
+  let state = h.render();
+  assert.equal(state.cancellation.state, "idle");
+  await state.cancel();
+  state = h.render();
+  assert.equal(cancelCalls, 2);
+  assert.equal(state.cancellation.state, "requested");
+  h.dispose();
+});

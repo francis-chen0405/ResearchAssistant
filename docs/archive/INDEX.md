@@ -162,3 +162,5 @@ records the remaining exceptions precisely.
 - [Before the Mac smoke PID-race repair](2026-10-18-mac-smoke-preceding-state/hashes.json): exact preceding current-state owners.
 
 - [October 23 integration preceding state](2026-10-23-integration-preceding-state/): exact master/e359 status and handoff snapshots plus master plan navigation.
+
+- [October 23 progress polling preceding state](2026-10-23-progress-polling-preceding-state/): exact status, handoff and plan navigation before the local renderer recovery task.

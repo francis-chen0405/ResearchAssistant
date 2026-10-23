@@ -201,3 +201,5 @@ installed checks are in [verification](verification/selection-coverage-repairs-2
 Research-quality improvement remains unmeasured pending fresh user runs.
 
 - [October 23 master integration](../.agent/plans/source-loss-recovery-2026-10-19.md#master-integration--october-23): reviewed e359 recovery, PDF capture and post-analysis changes integrated with current CLI defaults; full source and isolated install checks pass, frozen acquisition health remains blocked.
+
+- [Recoverable research progress polling](../.agent/plans/recoverable-progress-polling-2026-10-23.md): local renderer deadlines, bounded retries, preserved snapshots and same-run recovery controls with confirmed cancellation.

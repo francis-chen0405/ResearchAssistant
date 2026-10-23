@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import type { RunSnapshot } from "@/lib/api";
+import { ResearchRecovery, type ResearchRecoveryProps } from "./connection";
 import {
   WorkspaceFrame,
   StatusPill,
@@ -57,11 +58,10 @@ export function stageIndex(stage: string): number {
 
 export function ProgressView({
   snapshot,
-  onCancel,
+  ...recovery
 }: {
   snapshot: RunSnapshot;
-  onCancel: () => void;
-}) {
+} & ResearchRecoveryProps) {
   const activeStage =
     snapshot.current_research_round > 1 &&
     ["claim_planner", "supporting_researcher", "opposing_researcher"].includes(
@@ -80,7 +80,7 @@ export function ProgressView({
       <div className="progress-heading">
         <div>
           <p className="eyebrow">
-            Research in motion · round {snapshot.current_research_round}
+            {recovery.connection.state === "connected" ? "Research in motion" : "Last confirmed progress"} · round {snapshot.current_research_round}
           </p>
           <motion.h2 layoutId={`claim-${snapshot.run_id}`}>
             {snapshot.raw_claim}
@@ -103,9 +103,10 @@ export function ProgressView({
           </div>
         </div>
       </div>
+      <ResearchRecovery {...recovery} />
       <WorkspaceFrame
         title="Your research notebook"
-        status={<StatusPill tone="active">Research in progress</StatusPill>}
+        status={<StatusPill tone="active">{recovery.connection.state === "connected" ? "Research in progress" : "Last confirmed progress"}</StatusPill>}
       >
         <ProgressPath
           labels={stageOrder.map((stage) => stage.label)}
@@ -201,9 +202,6 @@ export function ProgressView({
           <span>Estimated model cost</span>
           <strong>{formatCost(snapshot.known_cost_subtotal_usd)}</strong>
         </div>
-        <button type="button" onClick={onCancel}>
-          Cancel run
-        </button>
       </div>
     </motion.section>
   );

@@ -1,14 +1,27 @@
 # Current status
 
+Renderer work adds recoverable progress polling: ten-second snapshot deadlines,
+three consecutive failures before automatic reads pause, same-run reconnect, last-confirmed
+receipt times, and History/cancellation controls on both starting and progress screens.
+Cancellation is shown as requested only after backend confirmation. Navigation/unmount
+aborts progress reads and suppresses late results. The [task record](../../.agent/plans/recoverable-progress-polling-2026-10-23.md)
+owns verification and limitations. Current checks pass **3,239 Python tests / nine
+skips**, all **31 renderer tests**, frontend lint/types/static webpack export, Ruff,
+repository boundaries and whitespace checks. Review verified all six offline browser
+checks, including the added recovery scenarios, and repaired the API-client VM harness
+for its new browser abort-controller/timer requirements. An additional 22 focused
+API-contract/boundary tests pass. The user authorized commit/push after review.
+The installed app has not received this renderer change.
+
 The reviewed e359 worktree changes are integrated into master.
 They add early assessed evidence feedback, bounded post-analysis follow-up, later-page
 PDF capture with exact omission boundaries, replacement acquisition, selection coverage,
 confirmed paper identity and truthful provider dispatch diagnostics. The current CLI
-20-source/50-depth defaults are retained. Current verification passes **3,239 Python tests / nine skips**, Ruff lint/format
+20-source/50-depth defaults are retained. The preceding integration verification passed **3,239 Python tests / nine skips**, Ruff lint/format
 (531 files), repository boundaries, generated API contracts, frontend lint/types/static
 build, 20 renderer tests, 22 desktop units and all six offline browser checks. Exact
 314-file wheel audit and fresh wheel/editable installs pass. The real Electron UI
-smoke passes. Current source identity:
+smoke passes. Backend execution identity:
 `source-sha256:f1c92eba7445253b21658a1eff21960223fc4eff24df69f01001d18389e45e4b`.
 
 The integrated backend freezes successfully, but packaged acquisition acceptance is

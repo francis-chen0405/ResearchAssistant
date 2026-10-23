@@ -11,7 +11,9 @@ function client(fetch) {
   let now = 0;
   const exports = {};
   const context = { exports, process: { env: { NEXT_PUBLIC_RESEARCH_API_URL: "" } }, fetch,
+    AbortController,
     AbortSignal: { timeout: () => undefined },
+    window: { setTimeout, clearTimeout },
     Date: { now: () => now },
     setTimeout: (resolve, delay) => { now += delay; resolve(); },
   };

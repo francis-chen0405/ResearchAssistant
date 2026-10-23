@@ -7,6 +7,7 @@ import {
   type ModelOptions,
 } from "@/lib/api";
 import { StatusPill } from "@/components/workspace";
+import { ResearchRecovery, type ResearchRecoveryProps } from "./connection";
 import {
   type Settings,
   budgetOptions,
@@ -216,10 +217,11 @@ export function ResearchView({
 export function StartingView({
   claim,
   reduceMotion,
+  ...recovery
 }: {
   claim: string;
   reduceMotion: boolean;
-}) {
+} & ResearchRecoveryProps) {
   return (
     <motion.section
       className="starting-view"
@@ -236,9 +238,9 @@ export function StartingView({
       <p className="eyebrow">Preparing the trail</p>
       <h2>{claim}</h2>
       <p>
-        The worker is starting. Progress appears only after it is persisted
-        locally.
+        Waiting for confirmed progress from this run. The worker may already be running.
       </p>
+      <ResearchRecovery {...recovery} />
     </motion.section>
   );
 }

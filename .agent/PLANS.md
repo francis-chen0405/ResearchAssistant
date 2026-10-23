@@ -2,11 +2,18 @@
 
 ## Current task
 
-Integrate the reviewed e359 source recovery, bounded PDF capture and post-analysis
-round into master and push, as authorized on October 23. Preserve the current CLI
-20-source/50-depth defaults. [The task record](plans/source-loss-recovery-2026-10-19.md)
-records integration checks; [STATUS](../docs/project/STATUS.md) owns verified results.
-The installed app and live research quality remain separate delivery boundaries.
+[Recoverable research-progress polling](plans/recoverable-progress-polling-2026-10-23.md):
+bounded read deadlines/retries, scoped connection status, retained confirmed snapshots,
+and starting/progress recovery controls are implemented. Run identity is preserved;
+cancellation requires backend confirmation. Code review, required source checks and
+all six offline browser checks pass; the API-client VM harness compatibility repair
+is included. The user authorized commit and push to master.
+[STATUS](../docs/project/STATUS.md) owns verification.
+Installation and paid research remain outside this task.
+
+The preceding e359 integration is committed and pushed at `021ba96`.
+[Its record](plans/source-loss-recovery-2026-10-19.md#master-integration--october-23)
+retains source/install checks and the open frozen acquisition health blocker.
 
 ## Preceding delivery task
 
