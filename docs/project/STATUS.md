@@ -26,6 +26,17 @@ preserved without further manual review. No absence-of-bugs claim follows.
 
 ## Current verification
 
+This checkout changes fresh API, desktop and CLI defaults to metadata depth 50 and 20
+candidate sources per enabled direction, with 30 replacing 15 in the UI. Fresh
+product acquisition now permits up to 60 clusters per round and final selection
+up to 240 survivors over four rounds. The historical October 19 installation
+passed candidate and installed backend/window checks. The final checkout passes
+**3,204 Python tests with nine skips** (481.92 seconds), Ruff lint/format (517
+files), repository boundaries, generated API contracts, frontend lint/types and
+static build, 17 frontend hook tests, 22 desktop units and whitespace checks.
+The new CLI regression uses a disposable path and stops before provider setup.
+This source has not been installed or tested in a live paid research run.
+
 The latest Mac CI failure at `ea4773c` was a test PID-publication race: an empty file
 became PID zero. The [test-only repair](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md)
 uses atomic records and strict PID parsing. All 22 desktop units, two complete local
@@ -37,10 +48,11 @@ three additional PDF fixture failures: coverage imports exhausted the test deadl
 before the intended parser phase. The revised fixture preloads its double, preserves
 the original timed parser assertions and adds a separate cold-start deadline test.
 All five cases pass locally with coverage; CI runs them before the full suite.
-Application source identity is unchanged; the latest test-only revision needs remote confirmation.
+At that October 18 checkpoint, application source identity was unchanged; its
+test-only revision still needed remote confirmation.
 
 
-The complete Python suite passes **3,196 tests / nine existing skips** in 415.65
+Before the October 19 change, the complete Python suite passed **3,196 tests / nine existing skips** in 415.65
 seconds (rerun for the folders-only root), including all 44 R56–R59 regressions. Ruff lint/format (517 files), repository
 boundaries, generated API types, frontend lint/types and staged/unstaged whitespace
 checks pass. Focused historical compatibility and resume checks pass.
@@ -51,11 +63,12 @@ and DNS/PDF helpers. A separate frozen Mac candidate passes authentication,
 smoke-only vault cleanup, settings restart, acquisition lifecycle and DNS/PDF dispatch
 with an empty PATH. The preceding frozen candidate remains preserved; the installed Mac app is now updated as recorded below.
 
-Renderer/Node bytes remain unchanged from R29. Its exact static export, 17 hook
+Through R56–R59, Renderer/Node bytes remained unchanged from R29. Their exact static export, 17 hook
 checks, six offline browser smokes, 38 desktop/acquisition units and nine native
-shutdown scenarios are retained; those unchanged checks were not rerun for R56–R59.
+shutdown scenarios remain historical evidence. The October 19 renderer was rebuilt
+and passed TypeScript, lint, packaged and installed window checks.
 
-Current verified source identity: `source-sha256:fe0cc617eaba0753c9895d0a5f4a983f07946c594c7054d9696775250dcf937c`.
+Current checkout source identity: `source-sha256:24fd684e94cc745749f66e08da95ce3d61d8d48851e164d5868164c3f102e4e7`.
 
 Schema 18 and existing research budgets/scoring remain authoritative. Fresh query
 provenance v2 retains each lane's own direction; quotation context filter v2 preserves
@@ -68,15 +81,12 @@ fresh research under the exact compatibility gate.
 
 ## Installed Mac app
 
-The user-authorized [October 18 replacement](../verification/current-app-install-2026-10-18.md)
-is installed and open at `/Applications/ResearchAssistant.app`, build `20261018.59`.
-The October 9 app was deleted after candidate/DMG/installed backend/window and
-isolated schema-17 history/credential upgrade checks passed. All 31,663 payload
-entries/modes match. A verified 1.03 GB DMG remains in Downloads.
-All 38 saved-data entries matched through installation/isolated checks. Normal
-opening changed only ordinary Electron logs/instance links; research, acquisition
-cache and preferences remain unchanged. Real credentials were preserved.
-The app remains an unsigned local build; public-release acceptance is separate.
+The [October 19 installation record](../verification/current-app-install-2026-10-19.md)
+documents builds `20261019.1`, `20261019.2` and `20261020.3`, their installed checks
+and preserved saved data. A read-only bundle inspection on October 23 shows
+`20261020.6` at `/Applications/ResearchAssistant.app`. That later installed build
+comes from separate work and does not contain this checkout's final CLI correction.
+No installation or live research-quality claim follows from this checkout review.
 
 ## Windows and release boundary
 

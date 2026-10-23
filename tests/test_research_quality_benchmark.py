@@ -60,7 +60,7 @@ def test_prepared_manifest_has_no_invented_live_observations() -> None:
     assert len(report["untested"]) == 5
 
 
-def test_current_product_settings_match_frozen_baseline() -> None:
+def test_current_product_settings_preserve_frozen_baseline_except_new_capacity() -> None:
     from researchassistant.contracts.models import ResearchControls
     from researchassistant.providers.model_choices import model_options_payload
     from researchassistant.providers.v2_budget import V2RunCeilings
@@ -70,7 +70,10 @@ def test_current_product_settings_match_frozen_baseline() -> None:
     controls = ResearchControls()
     policy, _ = resolve_product_discovery(controls, controls.discovery_providers)
     assert controls.model_dump(mode="json") == baseline["controls"]
-    assert policy.model_dump(mode="json") == baseline["discovery_policy"]
+    current_policy = policy.model_dump(mode="json")
+    assert current_policy["max_acquisition_per_round"] == 60
+    assert baseline["discovery_policy"]["max_acquisition_per_round"] == 25
+    assert {**current_policy, "max_acquisition_per_round": 25} == baseline["discovery_policy"]
     assert model_options_payload().model_dump(mode="json") == baseline["model_options"]
     assert V2RunCeilings().model_dump(mode="json") == baseline["model_ceilings"]
 

@@ -6,6 +6,8 @@ Historical setup, next-step and approval wording in these records applies to the
 
 ## Recent reviews and repairs
 
+- [Current Mac replacement — October 19](verification/current-app-install-2026-10-19.md): new 50/20 defaults and 30-source choice, verified local app replacement, preserved saved data and current package checks.
+
 - [Prompt 17 Windows CI and native durability](verification/windows-ci-durability-2026-10-13.md): current-source Windows reproductions, NTFS privacy/publication, process-crash recovery, isolated native vault/Jobs and explicit power-loss/release limits.
 - [Prompt 16 Mac delivery and source-archive repair candidate and installed-cache gates](verification/mac-delivery-gates-2026-10-13.md): exact current-source DMG/ZIP, confirmed FTS repair on disposable cache, preserved October 9 installation and named external signing/platform prerequisites.
 - [Prompt 15 source coverage/dispositions](../.agent/plans/source-leads-quality-2026-10-13.md): same-run read-only source leads and four review repairs; live usefulness remains unmeasured.

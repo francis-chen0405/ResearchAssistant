@@ -22,6 +22,8 @@ from researchassistant.common.utils import compute_sha256, count_words
 from researchassistant.contracts.models import (
     CandidateQuoteBlock,
     ProvisionalCandidate,
+    RetrievalRecord,
+    RetrievalStatus,
     SegmentOffset,
     SourceSnapshot,
     Stance,
@@ -195,13 +197,38 @@ def test_claim_keyword_matches_are_audit_metadata_not_an_acceptance_gate() -> No
 def test_candidate_search_rank_allows_the_expanded_bounded_backfill_pool() -> None:
     segment = _non_statistical_sentence(30)
     snapshot = _snapshot(f"{_BEFORE} {segment} {_AFTER}")
-    result = _filter(snapshot, f'[{_BEFORE}] "{segment}" [{_AFTER}]')
+    provisional = _provisional(snapshot, f'[{_BEFORE}] "{segment}" [{_AFTER}]')
+    provisional = ProvisionalCandidate.model_validate(
+        {**provisional.model_dump(), "search_rank": 30}
+    )
+    result = filter_provisional_candidate(
+        provisional,
+        snapshot,
+        claim_keywords=["policy"],
+        post_filter_version="phase3-filter-v1",
+        validation_clock=lambda: _NOW,
+    )
 
     assert result.candidate is not None
+    assert result.candidate.search_rank == 30
     payload = result.candidate.model_dump()
-    assert CandidateQuoteBlock.model_validate({**payload, "search_rank": 25}).search_rank == 25
+    assert CandidateQuoteBlock.model_validate({**payload, "search_rank": 100}).search_rank == 100
     with pytest.raises(ValidationError):
-        CandidateQuoteBlock.model_validate({**payload, "search_rank": 26})
+        CandidateQuoteBlock.model_validate({**payload, "search_rank": 101})
+
+    retrieval = RetrievalRecord(
+        run_id=_RUN_ID,
+        retrieval_attempt_id=_RETRIEVAL_ID,
+        query_id=_QUERY_ID,
+        query_round=1,
+        query_text="biodiversity loss extinction",
+        search_rank=30,
+        source_url=_SOURCE_URL,
+        resolved_url=_SOURCE_URL,
+        status=RetrievalStatus.RETRIEVED,
+        retrieved_at=_NOW,
+    )
+    assert retrieval.search_rank == 30
 
 
 def test_legacy_fixture_policy_does_not_leak_into_current_default_filtering() -> None:

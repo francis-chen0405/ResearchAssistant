@@ -12,7 +12,10 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
-from review_schema_compatibility import verify_review_schema_additions
+from review_schema_compatibility import (
+    normalize_current_product_capacity,
+    verify_review_schema_additions,
+)
 
 from researchassistant.contracts.search import SearchRequest, SearchResponse, SearchResult
 
@@ -28,6 +31,7 @@ def test_public_contract_keeps_original_schema_config_and_enum_values(qualified:
     if "schema_sha256" in expected:
         document = contract.model_json_schema()
         verify_review_schema_additions(document)
+        normalize_current_product_capacity(document)
         # R35 extends only the explicit fresh selection policy/capacity. Preserve
         # the historical fixture and verify every other nested schema byte.
         selection = document.get("$defs", {}).get("V2SourceSelectionInput")

@@ -113,7 +113,7 @@ export function ResultView({
           <section className="provider-diagnostics">
             <span>Frozen research settings</span>
             <p>
-              <strong>Sources per direction per round</strong>
+              <strong>Candidate sources to try per direction per round</strong>
               <small>
                 {snapshot.research_controls.sources_per_stance_per_round ??
                   "Not recorded"}

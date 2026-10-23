@@ -154,8 +154,9 @@ class V2ProductDiscoveryPolicy(V2MetadataDiscoveryPolicy):
     policy_identity: Literal["source-discovery-v2-2026-10-08-v3"] = (
         "source-discovery-v2-2026-10-08-v3"
     )
+    max_acquisition_per_round: int = Field(default=60, strict=True, ge=1, le=60)
     seed_expansion_enabled: bool = Field(default=True, strict=True)
-    sources_per_direction_per_round: Literal[5, 7, 10, 15, 20] = 10
+    sources_per_direction_per_round: Literal[5, 7, 10, 15, 20, 30] = 10
     scholarly_search_mode: Literal["lexical", "semantic", "auto"] = "lexical"
 
 

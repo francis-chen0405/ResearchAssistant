@@ -155,7 +155,10 @@ def _run_round_from_plan(
             exact_claim=exact_claim,
             asserted_components=asserted_components,
             target_gaps=preview_gaps,
-            policy=V2AcquisitionPolicy(policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY)
+            policy=V2AcquisitionPolicy(
+                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+                max_clusters=preview_binding.policy.max_acquisition_per_round,
+            )
             if fresh_preview
             else None,
             wigolo_provider=wigolo_provider,

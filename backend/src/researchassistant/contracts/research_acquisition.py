@@ -51,7 +51,7 @@ class V2AcquisitionPolicy(StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    max_clusters: Annotated[int, Field(ge=1, le=25)] = 25
+    max_clusters: Annotated[int, Field(ge=1, le=60)] = 25
     max_urls_per_cluster: Annotated[int, Field(ge=1, le=10)] = 6
     timeout_seconds: Annotated[float, Field(gt=0, le=120)] = 20.0
     allow_firecrawl_fallback: bool = True

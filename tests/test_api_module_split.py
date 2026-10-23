@@ -88,6 +88,30 @@ def test_routes_schemas_and_offline_responses_match_before_split(
     assert schemas["ValidationError"] == research_error
     for name in ("HTTPValidationError", "ValidationError"):
         schemas[name] = before["openapi"]["components"]["schemas"][name]
+    # Current product defaults and the 30-source option are intentional changes
+    # to the API surface; compare the remaining pre-split bytes to the fixture.
+    for schema_name, source_field, depth_field, old_source in (
+        ("InterfaceSettings", "sourceTarget", "metadataDepth", 10),
+        ("ResearchStartInput", "sources_per_stance_per_round", "metadata_depth", 10),
+    ):
+        properties = schemas[schema_name]["properties"]
+        assert properties[source_field]["default"] == 20
+        assert properties[source_field]["enum"][-1] == 30
+        assert properties[depth_field]["default"] == 50
+        properties[source_field]["default"] = old_source
+        properties[source_field]["enum"].pop()
+        properties[depth_field]["default"] = 20
+    product = schemas["V2ProductDiscoveryPolicy"]["properties"]
+    assert product["max_acquisition_per_round"]["default"] == 60
+    assert product["max_acquisition_per_round"]["maximum"] == 60
+    assert product["sources_per_direction_per_round"]["enum"][-1] == 30
+    product["max_acquisition_per_round"].update(default=25, maximum=25)
+    product["sources_per_direction_per_round"]["enum"].pop()
+    for response in after["responses"]:
+        if response["path"] == "/api/preferences" and response["status"] == 200:
+            assert response["body"]["sourceTarget"] == 20
+            assert response["body"]["metadataDepth"] == 50
+            response["body"].update(sourceTarget=10, metadataDepth=20)
     assert after == before
 
 

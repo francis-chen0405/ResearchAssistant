@@ -920,6 +920,15 @@ def _run_v2_production_pipeline(
             cancellation_requested=effective_cancellation_requested,
         ).output
         _raise_if_v2_cancelled(effective_cancellation_requested)
+        if not discovery_one.items:
+            if not any(outcome.succeeded for outcome in round_one_search.outcomes):
+                raise ValueError(
+                    "No source candidates were found because all Round-1 search requests failed. "
+                    "Review provider failures and start a fresh run."
+                )
+            raise ValueError(
+                "No source candidates were found in the completed Round-1 search results."
+            )
         current_stage = Stage.ACQUISITION
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         acquisition_one = run_v2_acquisition_probe(
@@ -931,7 +940,12 @@ def _run_v2_production_pipeline(
                 for x in planner.claim_coverage_focus
                 if x.claim_component in raw_claim
             ),
-            policy=V2AcquisitionPolicy(policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY)
+            policy=V2AcquisitionPolicy(
+                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+                max_clusters=(
+                    discovery_policy or V2MetadataDiscoveryPolicy()
+                ).max_acquisition_per_round,
+            )
             if not legacy_query_planning
             else None,
             wigolo_provider=wigolo_provider,

@@ -57,10 +57,10 @@ def test_historical_selection_keeps_its_original_limit(policy: str) -> None:
         V2SourceSelectionInput.model_validate({**current.model_dump(), "policy_identity": policy})
 
 
-def test_current_selection_rejects_more_than_one_hundred_sources() -> None:
-    assert len(_capacity_input(100).survivors) == 100
-    with pytest.raises(ValidationError, match="at most 100"):
-        _capacity_input(101)
+def test_current_selection_supports_four_rounds_of_sixty_sources() -> None:
+    assert len(_capacity_input(240).survivors) == 240
+    with pytest.raises(ValidationError, match="at most 240"):
+        _capacity_input(241)
 
 
 def test_current_shortlist_dispositions_every_source_without_raising_budgets(
@@ -213,14 +213,16 @@ class _DistinctSearch(product._WideSearch):
         )
 
 
+@pytest.mark.parametrize("source_target", [20, 30])
 def test_balanced_four_round_run_releases_more_than_seventy_five_source_dispositions(
     tmp_path: Path,
+    source_target: int,
 ) -> None:
     path = tmp_path / "generated.sqlite3"
     controls = ResearchControls(
         discovery_providers=(DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX),
         research_mode=ResearchMode.BALANCED,
-        sources_per_stance_per_round=20,
+        sources_per_stance_per_round=source_target,
     )
     model, search = _BalancedModel(completed_rounds=4), _DistinctSearch()
     result = run_v2_production_pipeline(
@@ -244,7 +246,7 @@ def test_balanced_four_round_run_releases_more_than_seventy_five_source_disposit
     )
     assert selection.input.policy_identity == V2_PREVIEW_SELECTION_POLICY_IDENTITY
     retained_count = len(selection.input.survivors)
-    assert 75 < retained_count <= 100
+    assert 75 < retained_count <= min(240, 8 * source_target)
     assert len(selection.source_statuses) == retained_count
     assert {source.research_round for source in selection.input.survivors} == {1, 2, 3, 4}
     assert len(model.requests) <= product.production.CEILINGS.max_physical_calls

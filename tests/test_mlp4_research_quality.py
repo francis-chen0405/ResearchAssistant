@@ -156,7 +156,7 @@ def test_mlp4_controls_default_to_focused_with_ten_sources() -> None:
     assert controls.sources_per_stance_per_round == 10
 
 
-@pytest.mark.parametrize("target", [5, 10, 15, 20])
+@pytest.mark.parametrize("target", [5, 10, 15, 20, 30])
 def test_mlp4_controls_accept_only_advanced_source_targets(target: int) -> None:
     controls = ResearchControls(sources_per_stance_per_round=target)
 

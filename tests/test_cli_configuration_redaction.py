@@ -7,12 +7,47 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from researchassistant.contracts.models import ResearchControls
+from researchassistant.providers.config import ProviderConfigurationError
+from researchassistant.providers.v2_factory import V2ProductionFactoryConfig
 from researchassistant.runtime.cli import (
     CLIExitCode,
     _build_parser,
     _configuration_validation_message,
     _run_live_command,
 )
+
+
+def test_fresh_cli_uses_current_product_defaults_without_starting_research(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "never-created.sqlite3"
+    args = _build_parser().parse_args(
+        ["run", "A generated public claim.", "--db-path", str(path), "--max-tokens", "1000"]
+    )
+    seen: list[ResearchControls] = []
+
+    def capture_config(
+        cls: type[V2ProductionFactoryConfig], environment: object, **kwargs: object
+    ) -> V2ProductionFactoryConfig:
+        controls = kwargs["research_controls"]
+        assert isinstance(controls, ResearchControls)
+        seen.append(controls)
+        raise ProviderConfigurationError("offline test stop before provider setup")
+
+    monkeypatch.setattr(V2ProductionFactoryConfig, "from_environment", classmethod(capture_config))
+    result = _run_live_command(
+        args,
+        environment={},
+        legacy_runner=None,
+        identity_provider=lambda: "offline-probe",
+    )
+
+    assert result is CLIExitCode.CONFIGURATION_ERROR
+    assert len(seen) == 1
+    assert seen[0].metadata_depth == 50
+    assert seen[0].sources_per_stance_per_round == 20
+    assert not path.exists()
 
 
 @pytest.mark.parametrize(

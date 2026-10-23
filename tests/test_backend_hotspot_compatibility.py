@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from review_schema_compatibility import verify_review_schema_additions
+from review_schema_compatibility import (
+    normalize_current_product_capacity,
+    verify_review_schema_additions,
+)
 
 BEFORE: dict[str, Any] = json.loads(
     (Path(__file__).parent / "fixtures/backend-hotspots-before.json").read_text()
@@ -28,6 +31,7 @@ def test_public_handoff_preserves_schema_config_and_identity(qualified: str) -> 
     if "schema_sha256" in expected:
         document = contract.model_json_schema()
         verify_review_schema_additions(document)
+        normalize_current_product_capacity(document)
         # R35 adds one explicit four-round policy. Keep the frozen fixture and
         # compare all historical schema bytes after verifying just this delta.
         selection = (

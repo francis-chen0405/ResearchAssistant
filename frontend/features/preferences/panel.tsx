@@ -140,18 +140,18 @@ export function AdvancedPanel({
           </button>
         </div>
         <div className="option-copy">
-          <strong>Sources to examine</strong>
+          <strong>Candidate sources to try</strong>
           <span>
-            Use the highest-ranked sources from each enabled direction, with
-            bounded fallbacks.
+            Set the maximum candidates tried per direction in each round.
+            Blocked or unreadable sources count toward this limit.
           </span>
         </div>
         <div
           className="source-target"
           role="group"
-          aria-label="Sources to examine"
+          aria-label="Candidate sources to try"
         >
-          {([5, 10, 15, 20] as const).map((value) => (
+          {([5, 10, 20, 30] as const).map((value) => (
             <button
               type="button"
               key={value}

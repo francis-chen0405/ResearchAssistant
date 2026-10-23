@@ -159,7 +159,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         choices=(10, 20, 50),
         default=None,
-        help="Metadata search depth (default 20), subject to provider budgets.",
+        help="Metadata search depth (default 50), subject to provider budgets.",
     )
     live_run.add_argument(
         "--seed-expansion",
@@ -271,7 +271,8 @@ def _run_live_command(
         ):
             raise ValueError("discovery settings are available only for fresh v2 runs")
         controls = ResearchControls(
-            metadata_depth=(args.metadata_depth or 20) if legacy_runner is None else None,
+            metadata_depth=(args.metadata_depth or 50) if legacy_runner is None else None,
+            sources_per_stance_per_round=20 if legacy_runner is None else 10,
             seed_expansion_enabled=(
                 args.seed_expansion if args.seed_expansion is not None else True
             )

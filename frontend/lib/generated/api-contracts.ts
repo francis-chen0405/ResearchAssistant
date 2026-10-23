@@ -94,7 +94,7 @@ export type ApiSchemas = {
     "maxCalls"?: number;
     "supportEnabled"?: boolean;
     "challengeEnabled"?: boolean;
-    "sourceTarget"?: 5 | 10 | 15 | 20;
+    "sourceTarget"?: 5 | 10 | 15 | 20 | 30;
     "metadataDepth"?: 10 | 20 | 50;
     "seedExpansionEnabled"?: boolean;
     "scholarlySearchMode"?: "lexical" | "semantic" | "auto";
@@ -273,7 +273,7 @@ export type ApiSchemas = {
     "support_enabled"?: boolean;
     "challenge_enabled"?: boolean;
     "include_counterevidence"?: boolean;
-    "sources_per_stance_per_round"?: 5 | 10 | 15 | 20;
+    "sources_per_stance_per_round"?: 5 | 10 | 15 | 20 | 30;
     "use_serpsearch"?: boolean;
     "use_exa"?: boolean;
     "use_openalex"?: boolean;
@@ -414,7 +414,7 @@ export type ApiSchemas = {
     "tone"?: ApiSchemas["Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__PresentationTone"];
     "focus"?: (ApiSchemas["Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__ResearchFocus"] | null);
     "research_mode"?: ApiSchemas["Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__ResearchMode"];
-    "sources_per_stance_per_round"?: 5 | 7 | 10 | 15 | 20;
+    "sources_per_stance_per_round"?: 5 | 7 | 10 | 15 | 20 | 30;
     "discovery_providers"?: Array<ApiSchemas["Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__DiscoveryProvider"]>;
   };
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__ResearchDepth": "focused" | "standard";
@@ -616,7 +616,7 @@ export type ApiSchemas = {
     "metadata_page_size"?: 20;
     "ranking_weights"?: ApiSchemas["Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__MetadataRankingWeights"];
     "seed_expansion_enabled"?: boolean;
-    "sources_per_direction_per_round"?: 5 | 7 | 10 | 15 | 20;
+    "sources_per_direction_per_round"?: 5 | 7 | 10 | 15 | 20 | 30;
     "scholarly_search_mode"?: "lexical" | "semantic" | "auto";
   };
   "Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__V2ProviderCapabilities": {
@@ -1065,7 +1065,7 @@ export type ApiSchemas = {
     "metadata_page_size"?: 20;
     "ranking_weights"?: ApiSchemas["Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__MetadataRankingWeights"];
     "seed_expansion_enabled"?: boolean;
-    "sources_per_direction_per_round"?: 5 | 7 | 10 | 15 | 20;
+    "sources_per_direction_per_round"?: 5 | 7 | 10 | 15 | 20 | 30;
     "scholarly_search_mode"?: "lexical" | "semantic" | "auto";
   };
   "V2ProviderCapabilities": {

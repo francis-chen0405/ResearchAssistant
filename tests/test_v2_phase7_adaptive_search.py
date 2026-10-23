@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -48,8 +49,12 @@ from researchassistant.contracts.models import (
     ScoutBatch,
     ScoutBatchAudit,
     ScoutItem,
+    SourceSnapshot,
     Stage,
+    V2AcquiredSource,
+    V2AcquisitionAttempt,
     V2AcquisitionProbeOutput,
+    V2AcquisitionProvider,
     V2AdaptiveRoundPlan,
     V2AdaptiveSearchModelOutput,
     V2AdaptiveSearchProposal,
@@ -67,9 +72,12 @@ from researchassistant.contracts.models import (
     V2InitialPlannerOutput,
     V2MaterialGap,
     V2PipelineIdentity,
+    V2ProbePassage,
+    V2ProbeResult,
     V2ProviderSearchBudget,
     V2RoundOneSearchQuery,
     V2SearchAgentInput,
+    V2SurvivingSource,
 )
 from researchassistant.contracts.query_planning import (
     V2AdaptiveSearchConceptProposal,
@@ -415,7 +423,75 @@ def test_round_two_gap_input_preserves_initial_planner_claim_coverage_focus() ->
         search_agent_prompt_version="test-v1",
         planned_at=NOW,
     )
-    discovery, acquisition = _round_one_outputs(initial_plan)
+    source_url = "https://example.org/round-two-study"
+    discovery, _ = _round_one_outputs(initial_plan, known_url=source_url)
+    cluster_id = discovery.clusters[0].cluster_id
+    snapshot_id = uuid4()
+    passage_text = "Species interactions can affect extinction risk."
+    snapshot_hash = hashlib.sha256(passage_text.encode()).hexdigest()
+    source = V2AcquiredSource(
+        cluster_id=cluster_id,
+        direction=ResearchDirection.SUPPORT,
+        snapshot=SourceSnapshot(
+            run_id=run_id,
+            retrieval_attempt_id=uuid4(),
+            snapshot_id=snapshot_id,
+            source_url=source_url,
+            retrieved_at=NOW,
+            normalized_text=passage_text,
+            snapshot_sha256=snapshot_hash,
+            word_count=len(passage_text.split()),
+            truncated=False,
+            created_at=NOW,
+        ),
+        provider=V2AcquisitionProvider.WIGOLO,
+    )
+    passage = V2ProbePassage(
+        passage_id="round-two-passage",
+        snapshot_id=snapshot_id,
+        snapshot_sha256=snapshot_hash,
+        source_cluster_id=cluster_id,
+        start_char=0,
+        end_char=len(passage_text),
+        text=passage_text,
+        score=1,
+        signals=("claim term",),
+    )
+    acquisition = V2AcquisitionProbeOutput(
+        run_id=run_id,
+        directions=initial_plan.directions,
+        acquisitions=(source,),
+        attempts=(
+            V2AcquisitionAttempt(
+                cluster_id=cluster_id,
+                url=source_url,
+                provider=V2AcquisitionProvider.WIGOLO,
+                succeeded=False,
+                failure_code="connection_failure",
+                failure_message="first attempt failed",
+            ),
+        ),
+        probes=(
+            V2ProbeResult(
+                cluster_id=cluster_id,
+                snapshot_id=snapshot_id,
+                snapshot_sha256=snapshot_hash,
+                succeeded=True,
+                passages=(passage,),
+            ),
+        ),
+        survivors=(
+            V2SurvivingSource(
+                cluster_id=cluster_id,
+                direction=ResearchDirection.SUPPORT,
+                snapshot_id=snapshot_id,
+                snapshot_sha256=snapshot_hash,
+                passage_ids=(passage.passage_id,),
+            ),
+        ),
+        policy_identity="researchassistant-v2-phase-5-acquisition-probe-v1",
+        completed_at=NOW,
+    )
 
     gap_input = _round_two_gap_input(
         round_one_gap,
@@ -426,6 +502,10 @@ def test_round_two_gap_input_preserves_initial_planner_claim_coverage_focus() ->
     )
 
     assert gap_input.claim_coverage_focus == (focus,)
+    assert gap_input.surviving_sources[-1].round_number == 2
+    assert gap_input.probe_passages[0].round_number == 2
+    assert gap_input.source_families[-1].round_numbers == (2,)
+    assert gap_input.acquisition_failures[-1].round_number == 2
 
 
 def test_adaptive_search_preserves_successful_empty_provider_results(tmp_path: Path) -> None:
@@ -512,6 +592,40 @@ def test_adaptive_concept_planner_routes_through_application_lane_and_gap() -> N
     assert query.targeted_gap_ids == lanes[0].target_gap_ids == ("gap-outcome",)
     assert query.compiled_query is not None
     assert query.query_text == query.compiled_query.query_text
+
+
+def test_adaptive_lane_bounds_verbose_gap_search_focus() -> None:
+    initial = _initial_plan(uuid4())
+    gap_output = _gap(initial, continue_research=True)
+    assert gap_output.result is not None
+    direction = gap_output.result.new_search_directions[0]
+    long_focus = "Compare extinction outcomes across independent ecosystems " * 8
+    request = V2SearchAgentInput(
+        run_id=initial.run_id,
+        exact_claim=initial.raw_claim,
+        round_number=2,
+        directions=initial.directions,
+        eligible_providers=(DiscoveryProvider.EXA,),
+        material_gaps=gap_output.result.material_gaps,
+        search_directions=(direction.model_copy(update={"search_focus": long_focus}),),
+        discovered_terms=gap_output.result.discovered_terms,
+        previous_queries=(),
+        provider_budgets=(
+            V2ProviderSearchBudget(
+                provider=DiscoveryProvider.EXA,
+                attempted_calls=1,
+                maximum_calls=18,
+            ),
+        ),
+        maximum_queries=1,
+    )
+
+    lanes = _adaptive_concept_lanes(request, {})
+
+    assert len(lanes) == 1
+    assert lanes[0].target_gap_ids == (direction.gap_id,)
+    assert lanes[0].strategy.startswith("Compare extinction outcomes")
+    assert len(lanes[0].strategy) <= 240
 
 
 def test_adaptive_search_mode_change_is_material_conceptual_novelty() -> None:

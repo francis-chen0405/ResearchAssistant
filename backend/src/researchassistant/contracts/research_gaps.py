@@ -211,9 +211,9 @@ class V2GapAnalysisInput(StrictModel):
     directions: ResearchDirections
     completed_round: Literal[1, 2, 3] = 1
     attempted_queries: tuple[V2GapAttemptedQuery, ...] = Field(max_length=48)
-    surviving_sources: tuple[V2GapSurvivingSourceMetadata, ...] = Field(max_length=75)
+    surviving_sources: tuple[V2GapSurvivingSourceMetadata, ...] = Field(max_length=180)
     probe_passages: tuple[V2GapProbePassage, ...] = Field(max_length=40)
-    source_families: tuple[V2GapSourceFamily, ...] = Field(max_length=75)
+    source_families: tuple[V2GapSourceFamily, ...] = Field(max_length=180)
     discovered_terms: tuple[NonEmptyStr, ...] = Field(max_length=40)
     duplicate_patterns: tuple[V2GapDuplicatePattern, ...] = Field(max_length=25)
     acquisition_failures: tuple[V2GapAcquisitionFailure, ...] = Field(max_length=150)

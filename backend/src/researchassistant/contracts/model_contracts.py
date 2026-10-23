@@ -156,7 +156,7 @@ class ResearchControls(StrictModel):
     tone: PresentationTone = PresentationTone.NEUTRAL
     focus: ResearchFocus | None = None
     research_mode: ResearchMode = ResearchMode.FOCUSED
-    sources_per_stance_per_round: Literal[5, 7, 10, 15, 20] = 10
+    sources_per_stance_per_round: Literal[5, 7, 10, 15, 20, 30] = 10
     discovery_providers: tuple[DiscoveryProvider, ...] = (
         DiscoveryProvider.SERPSEARCH,
         DiscoveryProvider.EXA,
@@ -562,7 +562,7 @@ class RetrievalRecord(StrictModel):
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=4)]
     query_text: NonEmptyStr
-    search_rank: Annotated[int, Field(ge=1, le=25)]
+    search_rank: Annotated[int, Field(ge=1, le=100)]
     source_url: NonEmptyStr
     resolved_url: NonEmptyStr
     status: RetrievalStatus
@@ -664,7 +664,7 @@ class ProvisionalCandidate(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=4)]
-    search_rank: Annotated[int, Field(ge=1, le=25)]
+    search_rank: Annotated[int, Field(ge=1, le=100)]
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     extracted_quote_block: NonEmptyStr
@@ -683,7 +683,7 @@ class CandidateQuoteBlock(StrictModel):
     retrieval_attempt_id: UUID
     query_id: UUID
     query_round: Annotated[int, Field(ge=1, le=4)]
-    search_rank: Annotated[int, Field(ge=1, le=25)]
+    search_rank: Annotated[int, Field(ge=1, le=100)]
     retrieved_at: datetime
     snapshot_id: UUID
     snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]

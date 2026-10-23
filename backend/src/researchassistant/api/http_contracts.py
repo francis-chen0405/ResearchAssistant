@@ -141,14 +141,14 @@ class ResearchStartInput(StrictModel):
     support_enabled: bool = True
     challenge_enabled: bool = False
     include_counterevidence: bool = False
-    sources_per_stance_per_round: Literal[5, 10, 15, 20] = 10
+    sources_per_stance_per_round: Literal[5, 10, 15, 20, 30] = 20
     use_serpsearch: bool = True
     use_exa: bool = True
     use_openalex: bool = True
     use_arxiv: bool = False
     use_pubmed: bool = False
     use_crossref: bool = True
-    metadata_depth: Literal[10, 20, 50] = 20
+    metadata_depth: Literal[10, 20, 50] = 50
     seed_expansion_enabled: bool = Field(default=True, strict=True)
     scholarly_search_mode: Literal["lexical", "semantic", "auto"] = "lexical"
 

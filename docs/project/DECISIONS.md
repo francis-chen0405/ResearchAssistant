@@ -132,9 +132,11 @@ quotation, Analyst and deterministic admission gates. Historical optional fields
 as before, and released history remains unchanged.
 
 Phase 6 activates fresh product policy v3 for ordinary API/desktop/CLI requests, with
-metadata depth 20, paper expansion enabled and lexical scholarly search by default.
-User depth choices 10/20/50 are independent of the per-direction acquisition target;
-all existing physical/raw/Scout/source/model limits still dominate. Automatic selects lexical
+metadata depth 50, paper expansion enabled and lexical scholarly search by default.
+User depth choices 10/20/50 are independent of the per-direction acquisition target
+(5/10/20/30, default 20). Current product runs allow up to 60 acquired clusters per round
+(30 for each enabled direction) and 240 survivors across four rounds; provider and
+run budgets still dominate. Historical discovery policy caps remain unchanged. Automatic selects lexical
 deterministically. Semantic requires selected OpenAlex and never enables an unselected
 provider. Disabled expansion is enforced at offering, execution and durable policy validation.
 Direct-v2 omission and the explicit legacy runner preserve their prior dispatch; missing

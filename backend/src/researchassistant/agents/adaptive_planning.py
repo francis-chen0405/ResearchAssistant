@@ -881,7 +881,9 @@ def _adaptive_concept_lanes(
                 V2ConceptualAdaptiveLane(
                     direction=search_direction.direction,
                     provider=provider,
-                    strategy=search_direction.search_focus or gap.missing_evidence,
+                    strategy=_bounded_lane_strategy(
+                        search_direction.search_focus or gap.missing_evidence
+                    ),
                     target_gap_ids=(gap.gap_id,),
                     mode=query_modes.get(provider),
                 )
@@ -893,6 +895,15 @@ def _adaptive_concept_lanes(
         if len(results) >= total_cap:
             break
     return tuple(results)
+
+
+def _bounded_lane_strategy(value: str) -> str:
+    """Keep verbose gap advice within the lane prompt bound without losing the full gap input."""
+    normalized = " ".join(value.split())
+    if len(normalized) <= 240:
+        return normalized
+    prefix = normalized[:240]
+    return prefix.rpartition(" ")[0] or prefix
 
 
 def _require_budget(budget: V2AdaptiveBudgetState, tokens: int, cost: Decimal) -> None:

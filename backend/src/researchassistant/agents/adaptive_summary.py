@@ -81,6 +81,7 @@ def _round_two_gap_input(
                 source_url=source.snapshot.source_url,
                 title=representative.title,
                 source_family_id=f"cluster:{survivor.cluster_id}",
+                round_number=2,
             )
         )
         probe = next(
@@ -96,6 +97,7 @@ def _round_two_gap_input(
                     direction=survivor.direction,
                     text=passage.text[:1200],
                     truncated_for_gap_analysis=len(passage.text) > 1200,
+                    round_number=2,
                 )
             )
     failures = tuple(
@@ -104,6 +106,7 @@ def _round_two_gap_input(
             direction=_cluster_direction(item.cluster_id, discovery),
             provider=item.provider,
             failure_code=item.failure_code or "unspecified",
+            round_number=2,
         )
         for item in acquisition.attempts
         if not item.succeeded
@@ -119,6 +122,8 @@ def _round_two_gap_input(
                     for ref in cluster_by_id[item.source_cluster_id].provider_references
                 )
             ),
+            round_number=2,
+            round_numbers=(2,),
         )
         for item in new_sources
     )
@@ -128,6 +133,7 @@ def _round_two_gap_input(
             direction=_cluster_direction(cluster.cluster_id, discovery),
             duplicate_discovery_count=len(cluster.item_ids),
             pattern="conservatively clustered same-source discovery records",
+            round_number=2,
         )
         for cluster in discovery.clusters
         if len(cluster.item_ids) > 1

@@ -1,10 +1,19 @@
 # Handoff
 
-Inspect the focused PDF coverage gate and complete matching GitHub results after the [Mac smoke PID-race repair](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md).
-The final target also gives full Python CI 30 minutes after a confirmed 15-minute
-timeout. Keep complete atomic PID records, reject unsafe values before process operations,
-and retain all shutdown ownership/sentinel assertions. The installed app and runtime
-source identity are unchanged.
+The [October 19 local Mac replacement](../verification/current-app-install-2026-10-19.md)
+verified the 50/20 API and desktop defaults and the 30-source UI choice. This
+checkout also aligns the fresh CLI defaults. The installed app currently reports
+build `20261020.6`, from separate work; this checkout has not been installed.
+The next boundary is to integrate the reviewed source-capture and post-analysis
+work from the e359 worktree before claiming those improvements on master. Offline
+checks cannot establish a live research-quality gain, and no paid research was run
+in this checkout review.
+
+The preceding [Mac smoke PID-race checkpoint](../../.agent/plans/mac-smoke-pid-race-2026-10-18.md)
+called for focused PDF coverage and matching GitHub results. It also gave full
+Python CI 30 minutes after a confirmed 15-minute timeout. Its atomic PID records,
+strict PID parsing and shutdown ownership assertions remain relevant. The October
+18 installed app and runtime source identity were unchanged at that checkpoint.
 
 Windows packaging is manual-only under the [user-authorized CI change](../../.agent/plans/windows-ci-trigger-2026-10-18.md).
 Its latest frozen smoke reports Wigolo exit 1 before reaching installer checks.
@@ -12,25 +21,22 @@ Keep that failure open for deliberate Windows investigation; all other automatic
 checks remain enabled. Preserve the existing acceptance boundaries below.
 
 The user-selected [folders-only root](../../.agent/plans/root-layout-2026-10-18.md)
-is verified: ten folders and README, with unchanged application source identity.
+is verified: ten folders and README, with unchanged application source identity at
+that checkpoint.
 Run full tests as
 `python -m pytest tests`; Ruff uses `--config tests/pyproject.toml` from the root.
 README links the relocated `.agent/AGENTS.md` instructions. Preserve all existing
 delivery and review boundaries below.
 
-The user-authorized [October 18 local Mac replacement](../verification/current-app-install-2026-10-18.md)
-is complete: build `20261018.59` is installed and open at
-`/Applications/ResearchAssistant.app`. The old bundle was removed after candidate,
-DMG, installed backend/window and generated history/credential upgrade checks passed.
-A verified installer is in Downloads. Preserve the installed replacement and real
-research/cache/preferences/credentials; no paid research, public publication,
-further app replacement is included. The current Git task explicitly authorizes
-staging, commit and push, as recorded in the [task plan](../../.agent/plans/publish-master-2026-10-18.md).
+The preceding [October 18 installation](../verification/current-app-install-2026-10-18.md)
+and [master consolidation](../../.agent/plans/publish-master-2026-10-18.md)
+remain historical records. Their source identity and local installer checks do
+not describe the October 19 replacement.
 
 The remaining review boundary is the 20 current assets in the
 [active inventory](../audits/2026-10-15/remaining-file-review.json). Historical records
 are excluded. R01–R59 are implemented and verified; [STATUS](STATUS.md) owns current
-verification. New code fixes still require user approval. Source changes need new
+verification. Source changes need new
 exact-source packaging/installation checks rather than inheriting this build’s evidence.
 
 Known Scout/Gap/Selection/Planner outcomes replay exactly; unknown intents stop

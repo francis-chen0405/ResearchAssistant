@@ -38,9 +38,9 @@ class V2AcquisitionRankingAudit(StrictModel):
     raw_hits: int = Field(strict=True, ge=0)
     deduplicated_works: int = Field(strict=True, ge=0)
     scouted_candidates: int = Field(strict=True, ge=0)
-    acquisition_shortlisted_clusters: int = Field(strict=True, ge=0, le=25)
-    fetched_documents: int = Field(strict=True, ge=0, le=25)
-    usable_survivors: int = Field(strict=True, ge=0, le=25)
+    acquisition_shortlisted_clusters: int = Field(strict=True, ge=0, le=60)
+    fetched_documents: int = Field(strict=True, ge=0, le=60)
+    usable_survivors: int = Field(strict=True, ge=0, le=60)
     dispositions: tuple[V2ClusterAcquisitionDisposition, ...] = Field(max_length=300)
 
     @model_validator(mode="after")

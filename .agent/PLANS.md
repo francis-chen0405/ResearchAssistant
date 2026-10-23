@@ -2,12 +2,16 @@
 
 ## Current task
 
-[Mac shutdown smoke PID race](plans/mac-smoke-pid-race-2026-10-18.md) fixes the latest
-GitHub failure: the harness read an empty PID record as zero. Atomic publication
-and strict PID parsing preserve the existing process assertions. The completed
-Python run also exposed PDF fixture startup timing: retain its preloaded parser and
-separate cold-start deadline checks, then inspect the final complete CI result. Preserve installed app,
-real data/credentials, all runtime policies and the folders-only root.
+The master checkout carries the reviewed [October 19 defaults and capacity update](../docs/verification/current-app-install-2026-10-19.md),
+including the fresh CLI default correction. [STATUS](../docs/project/STATUS.md)
+owns its verification; [HANDOFF](../docs/project/HANDOFF.md) records the next
+integration boundary. The source-capture and post-analysis work in the e359
+worktree is separate from this master change. Preserve the installed app and real
+research data/credentials.
+
+The preceding [Mac shutdown smoke PID race](plans/mac-smoke-pid-race-2026-10-18.md)
+repair uses atomic PID publication, strict parsing, a preloaded PDF fixture and
+a separate cold-start deadline. Its remote CI result remains a separate checkpoint.
 
 [Windows packaging](plans/windows-ci-trigger-2026-10-18.md) remains manual-only as
 requested; other automatic checks remain enabled. The [folders-only root](plans/root-layout-2026-10-18.md),

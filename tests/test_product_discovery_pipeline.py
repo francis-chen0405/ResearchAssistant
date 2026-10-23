@@ -164,26 +164,48 @@ class _WideSearch(phase12._Search):
         )
 
 
-def test_source_target_caps_acquisition_independently_of_metadata_depth(tmp_path: Path) -> None:
+class _DistinctWideSearch(_WideSearch):
+    def search(self, request: phase12.SearchRequest) -> phase12.SearchResponse:
+        result = super().search(request)
+        return result.model_copy(
+            update={
+                "results": [
+                    item.model_copy(update={"title": f"{item.title} request {len(self.requests)}"})
+                    for item in result.results
+                ]
+            }
+        )
+
+
+@pytest.mark.parametrize("source_target", [5, 30])
+def test_source_target_caps_acquisition_independently_of_metadata_depth(
+    tmp_path: Path, source_target: int
+) -> None:
     from agents.v2_acquisition import V2_ACQUISITION_PROBE_ARTIFACT_KEY
     from researchassistant.contracts.models import V2AcquisitionProbeOutput
     from researchassistant.storage.store import read_v2_artifact
 
     path = tmp_path / "source-target.sqlite"
+    metadata_depth = 50 if source_target == 30 else 20
+    providers = (
+        (DiscoveryProvider.EXA, DiscoveryProvider.OPENALEX)
+        if source_target == 30
+        else (DiscoveryProvider.EXA,)
+    )
     controls = ResearchControls(
-        discovery_providers=(DiscoveryProvider.EXA,),
-        metadata_depth=20,
-        sources_per_stance_per_round=5,
+        discovery_providers=providers,
+        metadata_depth=metadata_depth,
+        sources_per_stance_per_round=source_target,
         seed_expansion_enabled=False,
         scholarly_search_mode="lexical",
     )
-    search = _WideSearch()
+    search = _DistinctWideSearch() if source_target == 30 else _WideSearch()
     result = run_v2_production_pipeline(
         production.CLAIM,
         db_path=path,
         directions=production.DIRECTIONS,
         discovery_providers=controls.discovery_providers,
-        search_providers={DiscoveryProvider.EXA: search},
+        search_providers={provider: search for provider in providers},
         wigolo_provider=phase12._Scraper(),
         llm_provider=production._ConceptModel(completed_rounds=1),
         routing_config=phase12._routing(),
@@ -199,9 +221,20 @@ def test_source_target_caps_acquisition_independently_of_metadata_depth(tmp_path
             V2_ACQUISITION_PROBE_ARTIFACT_KEY,
         ).payload_json
     )
-    assert len(acquisition.acquisitions) == 5
-    assert all(request.compiled_query.requested_depth == 20 for request in search.requests)
-    assert sum(request.limit for request in search.requests) > 5
+    assert len(acquisition.acquisitions) == source_target
+    assert all(
+        request.compiled_query.requested_depth == metadata_depth for request in search.requests
+    )
+    assert sum(request.limit for request in search.requests) > source_target
+
+
+def test_thirty_source_choice_has_capacity_for_both_directions() -> None:
+    controls = ResearchControls(sources_per_stance_per_round=30)
+    policy, _ = resolve_product_discovery(controls, controls.discovery_providers)
+
+    assert policy.sources_per_direction_per_round == 30
+    assert policy.max_scout_per_round == 60
+    assert policy.max_acquisition_per_round == 60
 
 
 def test_live_controller_uses_product_controls_in_real_fresh_worker(

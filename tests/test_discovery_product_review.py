@@ -92,7 +92,8 @@ def test_start_endpoint_accepts_product_settings_and_defaults_old_clients(
 
     assert old_client.status_code == 200
     assert configured.status_code == 200
-    assert controller.requests[0].research_controls.metadata_depth == 20
+    assert controller.requests[0].research_controls.metadata_depth == 50
+    assert controller.requests[0].research_controls.sources_per_stance_per_round == 20
     assert controller.requests[0].research_controls.seed_expansion_enabled is True
     assert controller.requests[0].research_controls.scholarly_search_mode == "lexical"
     assert controller.requests[1].research_controls.metadata_depth == 50

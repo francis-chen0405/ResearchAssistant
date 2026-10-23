@@ -74,7 +74,7 @@ places the same work is available. See [OpenAlex work locations](https://help.op
   auto-search at 25 pending enterprise entitlement. The [Exa pricing page](https://exa.ai/pricing)
   prices Auto Search at $7 per 1,000 requests for up to 10 results and $1 per 1,000
   requests per additional result. To preserve the existing $0.18 / 18-request run
-  ceiling, this implementation reserves $0.02 per default depth-20 operation and
+  ceiling, this implementation reserves $0.02 per depth-20 operation and
   $0.03 at policy depth 50 (effective result cap 25). These are conservative policy
   reservations, not guarantees about future provider pricing or returned result count.
 
@@ -96,13 +96,15 @@ Google-style adapter is SERP Search above. No Serper requests or credentials wer
 
 ## Product configuration
 
-Fresh API/desktop/CLI requests choose metadata depth 10, 20 or 50 (default 20), paper
+Fresh API/desktop/CLI requests choose metadata depth 10, 20 or 50 (default 50), paper
 expansion on/off (default on), and lexical/semantic/automatic scholarly mode (default lexical).
 Automatic deterministically selects lexical once. Semantic requires selected OpenAlex and
 uses only its supported semantic endpoint; other selected providers retain their own mode.
 Unselected providers need no key and receive no requests. Expansion uses only owned usable,
 relevant scholarly seeds when OpenAlex is selected, inside its existing 10-request/$0.01
 envelope. Depth is a request bound, not a returned-result promise or acquisition target.
+Candidate-source choices are 5, 10, 20 and 30 per enabled direction per round
+(default 20); current product acquisition is bounded to 60 clusters per round.
 
 CLI switches are `--metadata-depth`, `--seed-expansion`/`--no-seed-expansion` and
 `--scholarly-search-mode`. Old API clients receive fresh defaults. Old saved preferences

@@ -31,8 +31,8 @@ class InterfaceSettings(StrictModel):
     maxCalls: int = Field(default=160, ge=1, le=160)
     supportEnabled: bool = True
     challengeEnabled: bool = False
-    sourceTarget: Literal[5, 10, 15, 20] = 10
-    metadataDepth: Literal[10, 20, 50] = 20
+    sourceTarget: Literal[5, 10, 15, 20, 30] = 20
+    metadataDepth: Literal[10, 20, 50] = 50
     seedExpansionEnabled: StrictBool = True
     scholarlySearchMode: Literal["lexical", "semantic", "auto"] = "lexical"
     useSerpSearch: bool = True
