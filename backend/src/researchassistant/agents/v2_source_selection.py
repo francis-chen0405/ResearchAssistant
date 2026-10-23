@@ -57,6 +57,7 @@ from researchassistant.contracts.source_selection_preview import (
     V2SelectionShortlistAudit,
 )
 from researchassistant.evidence.evidence_portfolio import identify_source_family
+from researchassistant.evidence.source_excerpt import extraction_source_view
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -110,6 +111,7 @@ def build_v2_source_selection_input(
     claim_aware: bool = False,
     asserted_components: tuple[str, ...] = (),
     metadata_ranking_outputs: tuple[V2MetadataRankingArtifact, ...] = (),
+    compact_model_view: bool = False,
     preview_builder: Callable[[V2PreviewRequest, SourceSnapshot], V2PreviewResult] | None = None,
 ) -> V2SourceSelectionInput:
     """Reconstruct every merged survivor with its persisted round context."""
@@ -248,6 +250,20 @@ def build_v2_source_selection_input(
             )
             for item in cluster.metadata_provenance
         )
+        bounded_excerpt = source.snapshot.normalized_text
+        if (
+            source.snapshot.media_type_provenance.verified_media_type == "application/pdf"
+            and source.snapshot.word_count > 3000
+        ):
+            try:
+                bounded_excerpt, _selected_sentences = extraction_source_view(
+                    source.snapshot.normalized_text,
+                    tuple(passage.text for passage in selected_passages),
+                )
+            except ValueError:
+                # Keep a conservative reservation when a source cannot make a
+                # numbered view; extraction will report that failure explicitly.
+                pass
         candidates.append(
             V2SourceSelectionCandidate(
                 source_id=survivor.cluster_id,
@@ -272,11 +288,14 @@ def build_v2_source_selection_input(
                 )
                 if merged.research_round in rankings
                 else (),
+                alternate_source_urls=tuple(
+                    location.source_url
+                    for location in merged.paper_locations
+                    if location.source_id != survivor.cluster_id
+                ),
                 search_provenance=search_provenance,
                 snapshot_word_count=source.snapshot.word_count,
-                deep_analysis_input_tokens=(
-                    conservative_token_estimate(source.snapshot.normalized_text) + 2000
-                ),
+                deep_analysis_input_tokens=(conservative_token_estimate(bounded_excerpt) + 2000),
             )
         )
     if len(candidates) != len(merged_survivors.sources):
@@ -289,6 +308,7 @@ def build_v2_source_selection_input(
         gap_history=gap_rows,
         gap_reporting_policy="conservative-v1",
         latest_gap_coverage=_latest_gap_coverage(gap_outputs),
+        model_view_policy="compact-selection-v1" if compact_model_view else None,
         policy_identity=V2_PREVIEW_SELECTION_POLICY_IDENTITY
         if fresh_preview
         else "researchassistant-v2-phase-8-source-selection-v1",

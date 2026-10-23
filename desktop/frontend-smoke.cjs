@@ -260,9 +260,9 @@ async function main() {
     assert.ok(await page.getByText(/does not establish independent corroboration/i).count() >= 1,'Shared website pages are not presented as independent corroboration');
     await page.getByText(/all-50-states statement has not been independently verified/i).waitFor();
     await page.getByText(/separate links do not establish independent studies/i).waitFor();
-    assert.equal(await page.getByText('Recommended · analyzer-admitted',{exact:false}).count(),2,'Recommended source status appears consistently in both source lists');
-    await page.getByText('Recommended outcomes: 1 analyzer-admitted',{exact:true}).waitFor();
-    await page.getByText('Outcomes among all 5 surviving sources: 2 analyzer-admitted, 1 source token-cap blocked, 1 analyst-rejected, 1 not analyzed',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Recommended · evidence admitted',{exact:false}).count(),2,'Recommended source status appears consistently in both source lists');
+    await page.getByText('Recommended outcomes: 1 evidence admitted',{exact:true}).waitFor();
+    await page.getByText('Outcomes among all 5 surviving sources: 2 evidence admitted, 1 source token-cap blocked, 1 evidence not admitted, 1 not assessed',{exact:true}).waitFor();
     await page.getByText('Survived selection · source token-cap blocked',{exact:false}).waitFor();
     await page.getByRole('heading',{name:'Source lineage',exact:true}).waitFor();
     assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');

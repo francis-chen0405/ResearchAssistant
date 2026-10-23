@@ -18,6 +18,7 @@ from researchassistant.agents.v2_stage_checkpoint import (
     save_stage_outcome,
     stage_attempt,
 )
+from researchassistant.common.research_guidance import SAVED_LEADS_GUIDANCE
 from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import (
     SearchMode,
@@ -43,6 +44,7 @@ from researchassistant.contracts.models import (
     V2RoundOneSearchQuery,
 )
 from researchassistant.contracts.query_compiler import compile_query
+from researchassistant.contracts.source_recovery import V2SavedSourceSuggestions
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -57,6 +59,7 @@ from researchassistant.providers.llm import (
 )
 from researchassistant.providers.v2_routing import V2RoutingConfig
 from researchassistant.research.query_execution import freeze_query_execution
+from researchassistant.storage.saved_source_suggestions import saved_source_suggestions
 from researchassistant.storage.store import (
     init_db,
     insert_provider_run_contract,
@@ -66,6 +69,7 @@ from researchassistant.storage.store import (
     insert_v2_pipeline_identity,
     read_provider_run_contract,
     read_run,
+    read_v2_artifact,
     read_v2_initial_planner_output,
 )
 
@@ -211,6 +215,22 @@ def run_v2_initial_planner(
         )
 
     policy = V2InitialPlannerPolicy()
+    suggestions = ()
+    if not legacy_prompt:
+        try:
+            saved = read_v2_artifact(path, resolved_run_id, "saved-source-suggestions-v1")
+        except KeyError:
+            frozen = V2SavedSourceSuggestions(
+                run_id=resolved_run_id,
+                exact_claim=raw_claim,
+                leads=saved_source_suggestions(path, resolved_run_id, raw_claim),
+            )
+            insert_v2_artifact(path, "saved-source-suggestions-v1", frozen, planned_at)
+        else:
+            frozen = V2SavedSourceSuggestions.model_validate_json(saved.payload_json)
+            if frozen.run_id != resolved_run_id or frozen.exact_claim != raw_claim:
+                raise ValueError("saved source suggestions changed run or claim")
+        suggestions = frozen.leads
     if not legacy_prompt and DiscoveryProvider.SERPER in discovery_providers:
         raise ValueError("Serper has no provider-native conceptual query compiler")
     planner_input = V2InitialPlannerInput(
@@ -219,6 +239,7 @@ def run_v2_initial_planner(
         directions=directions,
         discovery_providers=discovery_providers,
         search_lanes=policy.search_lanes(directions, discovery_providers),
+        saved_source_leads=suggestions,
     )
     prompt_path = (
         V2_INITIAL_PLANNER_PROMPT_PATH
@@ -231,7 +252,8 @@ def run_v2_initial_planner(
         run_id=resolved_run_id,
         stage=LLMStage.PLANNER,
         prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, planner_input, output_type),
+        rendered_prompt=render_stage_prompt(prompt, planner_input, output_type)
+        + ("\n" + SAVED_LEADS_GUIDANCE if suggestions else ""),
         input_artifact=planner_input,
         input_artifact_ids=(resolved_run_id,),
         requested_output_type=output_type,

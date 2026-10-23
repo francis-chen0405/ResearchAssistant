@@ -312,7 +312,15 @@ class BudgetedV2LLMProvider:
             raise V2CancellationRequested("v2 cancellation was observed before a model call")
         minimum_input_tokens = conservative_token_estimate(request.rendered_prompt)
         input_tokens = self.conservative_input_tokens(request, minimum_input_tokens)
-        reservation = self._routing.preflight().reserve(request.stage, input_tokens)
+        from researchassistant.providers.llm import completion_token_allowance
+
+        reservation = self._routing.preflight().reserve(
+            request.stage,
+            input_tokens,
+            output_limit=completion_token_allowance(
+                request, self._routing.preflight().for_stage(request.stage).max_completion_tokens
+            ),
+        )
         with self._lock:
             current = _snapshot(self._starts, self._completions, self._ceilings)
             if current.physical_calls_remaining < 1:

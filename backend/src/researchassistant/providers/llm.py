@@ -51,6 +51,11 @@ from researchassistant.contracts.models import (
     VerbatimQuoteSelection,
 )
 from researchassistant.contracts.query_planning import V2NeighborhoodSearchOutput
+from researchassistant.contracts.research_selection import V2SourceSelectionInput
+from researchassistant.contracts.selection_view import (
+    COMPACT_SELECTION_GUIDANCE,
+    selection_model_view,
+)
 
 PROMPT_DIRECTORY = prompt_directory()
 
@@ -83,6 +88,17 @@ class ModelAlias(StrEnum):
     MIMO_V25 = "mimo-v2.5"
     DEEPSEEK_V4_PRO = "deepseek-v4-pro"
     DEEPSEEK_V4_FLASH = "deepseek-v4-flash"
+
+
+def completion_token_allowance(request: LLMRequest, configured: int) -> int:
+    """Bound fresh sentence selection output without raising the configured route ceiling."""
+    if (
+        request.stage is LLMStage.EXTRACTOR
+        and request.source_id is not None
+        and request.requested_output_type.__name__ == "V2VerbatimQuoteSelection"
+    ):
+        return min(configured, 8192)
+    return configured
 
 
 class GenerationSettings(StrictModel):
@@ -547,6 +563,10 @@ def render_stage_prompt(
 ) -> str:
     """Render typed input and the application-selected schema at the provider boundary."""
     input_json = input_artifact.model_dump_json(indent=2)
+    selection_guidance = ""
+    if isinstance(input_artifact, V2SourceSelectionInput) and input_artifact.model_view_policy:
+        input_json = selection_model_view(input_artifact).model_dump_json(exclude_none=True)
+        selection_guidance = COMPACT_SELECTION_GUIDANCE + "\n"
     schema_json = json.dumps(
         requested_output_type.model_json_schema(),
         sort_keys=True,
@@ -554,6 +574,7 @@ def render_stage_prompt(
     )
     return (
         f"{prompt.text.rstrip()}\n\n"
+        f"{selection_guidance}"
         "<APPLICATION_CONTROLLED_OUTPUT_CONTRACT>\n"
         f"Requested Pydantic artifact: {requested_output_type.__name__}\n"
         "Return only data matching this schema. Do not add fields or choose another schema.\n"

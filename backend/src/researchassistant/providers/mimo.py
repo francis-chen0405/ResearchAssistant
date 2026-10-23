@@ -19,6 +19,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from researchassistant.agents.analyst import AnalystLLMInput, StatementDraftLLMInput
 from researchassistant.agents.planner import PlannerLLMInput
 from researchassistant.common.money import parse_exact_usd
+from researchassistant.common.research_guidance import (
+    ASSESSED_FINDINGS_GUIDANCE,
+    EXCERPT_GUIDANCE,
+    SAVED_LEADS_GUIDANCE,
+)
+from researchassistant.contracts.extraction import V2ExtractionLLMInput
 from researchassistant.contracts.models import (
     AmbiguityRecord,
     ClaimDefinition,
@@ -60,6 +66,7 @@ from researchassistant.providers.llm import (
     LLMRequest,
     LLMStage,
     ModelAlias,
+    completion_token_allowance,
 )
 from researchassistant.providers.model_choices import ModelChoice, option_for
 from researchassistant.providers.pricing import (
@@ -275,10 +282,11 @@ class XiaomiMimoAdapter:
                 retryable=False,
             )
         input_estimate = self.conservative_input_tokens(request)
-        reserved_tokens = input_estimate + self._config.max_completion_tokens
+        output_allowance = completion_token_allowance(request, self._config.max_completion_tokens)
+        reserved_tokens = input_estimate + output_allowance
         reserved_cost = self._price_cap.upper_bound(
             input_estimate,
-            self._config.max_completion_tokens,
+            output_allowance,
         )
         if reserved_tokens > self._max_call_tokens or reserved_cost > self._max_call_cost_usd:
             raise MimoProviderError(
@@ -461,7 +469,7 @@ def _request_payload(
         "messages": [{"role": "user", "content": _direct_mimo_prompt(request)}],
         "response_format": {"type": "json_object"},
         "stream": False,
-        "max_completion_tokens": config.max_completion_tokens,
+        "max_completion_tokens": completion_token_allowance(request, config.max_completion_tokens),
     }
     if request.generation.temperature is not None and not isinstance(
         config, (LunaConfig, MimoChoiceConfig)
@@ -492,6 +500,40 @@ def _auth_headers(
 
 def _direct_mimo_prompt(request: LLMRequest) -> str:
     stage_compatibility = ""
+    stage_input_json = request.input_artifact.model_dump_json(indent=2)
+    recovery_guidance = ""
+    from researchassistant.contracts.research_selection import V2SourceSelectionInput
+    from researchassistant.contracts.selection_view import (
+        COMPACT_SELECTION_GUIDANCE,
+        selection_model_view,
+    )
+
+    if (
+        isinstance(request.input_artifact, V2SourceSelectionInput)
+        and request.input_artifact.model_view_policy
+    ):
+        stage_input_json = selection_model_view(request.input_artifact).model_dump_json(
+            exclude_none=True
+        )
+        recovery_guidance = COMPACT_SELECTION_GUIDANCE
+    elif isinstance(request.input_artifact, V2ExtractionLLMInput):
+        stage_input = request.input_artifact.model_dump(mode="json")
+        # The complete snapshot stays local for exact quotation validation. Expose
+        # the bounded numbered view once, including at the provider-native boundary.
+        stage_input.pop("untrusted_source_text")
+        stage_input["UNTRUSTED_SOURCE_TEXT"] = {
+            "selectable_source_text": stage_input.pop("selectable_source_text")
+        }
+        stage_input_json = json.dumps(stage_input, indent=2, ensure_ascii=False)
+        recovery_guidance = EXCERPT_GUIDANCE
+    elif request.stage is LLMStage.GAP_ANALYSIS and getattr(
+        request.input_artifact, "assessed_source_findings", ()
+    ):
+        recovery_guidance = ASSESSED_FINDINGS_GUIDANCE
+    elif request.stage is LLMStage.PLANNER and getattr(
+        request.input_artifact, "saved_source_leads", ()
+    ):
+        recovery_guidance = SAVED_LEADS_GUIDANCE
     if request.stage is LLMStage.EXTRACTOR:
         stage_compatibility = (
             "\n<DIRECT_MIMO_EXACT_QUOTE_COMPATIBILITY>\n"
@@ -540,6 +582,7 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
     return (
         f"{request.prompt.text.rstrip()}\n\n"
         f"{stage_compatibility}"
+        f"{recovery_guidance + chr(10) if recovery_guidance else ''}"
         "<DIRECT_MIMO_SEMANTIC_OUTPUT_CONTRACT>\n"
         f"Requested Pydantic artifact: {response_type.__name__}\n"
         f"Return only one JSON object matching {response_type.__name__}.\n"
@@ -550,7 +593,7 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
         f"{schema_json}\n"
         "</DIRECT_MIMO_SEMANTIC_OUTPUT_CONTRACT>\n\n"
         "<APPLICATION_CONTROLLED_STAGE_INPUT>\n"
-        f"{request.input_artifact.model_dump_json(indent=2)}\n"
+        f"{stage_input_json}\n"
         "</APPLICATION_CONTROLLED_STAGE_INPUT>"
     )
 

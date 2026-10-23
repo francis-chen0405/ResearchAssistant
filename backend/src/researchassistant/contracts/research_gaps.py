@@ -59,6 +59,7 @@ from researchassistant.contracts.research_policy import (
 from researchassistant.contracts.research_policy import (
     V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY as V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
 )
+from researchassistant.contracts.source_recovery import AssessedSourceFinding
 
 
 class V2GapBudgetState(StrictModel):
@@ -221,6 +222,7 @@ class V2GapAnalysisInput(StrictModel):
     claim_coverage_focus: tuple[V2ClaimCoverageFocus, ...] = Field(default=(), max_length=6)
     claim_coverage_specification: V2ClaimCoverageSpecification | None = None
     remaining_budget: V2GapBudgetState
+    assessed_source_findings: tuple[AssessedSourceFinding, ...] = Field(default=(), max_length=4)
     policy_identity: Literal[
         "researchassistant-v2-phase-6-gap-analysis-v1",
         "researchassistant-v2-post-phase-13-gap-analysis-v1",
@@ -229,6 +231,13 @@ class V2GapAnalysisInput(StrictModel):
 
     @model_validator(mode="after")
     def validate_strategy_scope(self) -> V2GapAnalysisInput:
+        if any(
+            item.source_id not in {s.source_cluster_id for s in self.surviving_sources}
+            for item in self.assessed_source_findings
+        ):
+            raise ValueError("assessed findings must belong to surviving sources")
+        for item in self.assessed_source_findings:
+            self.directions.require_permitted(item.direction)
         for item in (
             *self.attempted_queries,
             *self.surviving_sources,
@@ -253,6 +262,15 @@ class V2GapAnalysisInput(StrictModel):
         ):
             raise ValueError("post-Round-3 Gap Analysis requires one claim-coverage specification")
         return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_assessed_findings(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        value = handler(self)
+        if not self.assessed_source_findings:
+            value.pop("assessed_source_findings", None)
+        return value
 
 
 class V2GapAnalysisModelOutput(StrictModel):

@@ -10,6 +10,7 @@ from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
 
+from researchassistant.common.research_guidance import EXCERPT_GUIDANCE
 from researchassistant.contracts.extraction import (
     V2_EXTRACTION_MAX_ATTEMPTS as V2_EXTRACTION_MAX_ATTEMPTS,
 )
@@ -52,9 +53,9 @@ from researchassistant.evidence.evidence_core import (
     FRESH_QUOTE_CONTEXT_FILTER_VERSION,
     assemble_fresh_selected_quote,
     filter_provisional_candidate,
-    fresh_numbered_source_text,
     validate_snapshot_integrity,
 )
+from researchassistant.evidence.source_excerpt import extraction_source_view
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -67,6 +68,7 @@ from researchassistant.providers.llm import (
     load_prompt,
     render_stage_prompt,
 )
+from researchassistant.providers.normalization import PDF_OMISSION_MARKER
 from researchassistant.providers.v2_budget import (
     V2BudgetExceededError,
     V2CancellationRequested,
@@ -163,6 +165,7 @@ def run_v2_exact_extraction(
             query_id=source.search_provenance[0].query_id,
             query_round=source.research_round,
             search_rank=_search_rank(source_id, discovery_outputs),
+            focus_passages=tuple(item.text for item in source.probe_passages),
             llm_provider=llm_provider,
             model_alias=route.logical_alias,
             recorded_model_name=artifact_model_name,
@@ -206,8 +209,21 @@ def _extract_source(
     model_alias: ModelAlias = ModelAlias.MIMO_V25_PRO,
     physical_model: str = "mimo-v2.5-pro",
     recorded_model_name: str | None = None,
+    focus_passages: tuple[str, ...] = (),
 ) -> V2ExtractionSourceResult:
     validate_snapshot_integrity(snapshot)
+    try:
+        selectable_text, exposed_sentences = extraction_source_view(
+            snapshot.normalized_text, focus_passages
+        )
+    except ValueError as exc:
+        return V2ExtractionSourceResult(
+            source_id=source_id,
+            direction=direction,
+            state=V2ExtractionState.FAILED,
+            attempts=1,
+            failure=f"Source excerpt unavailable: {exc}",
+        )
     input_artifact = V2ExtractionLLMInput(
         run_id=snapshot.run_id,
         source_id=source_id,
@@ -217,7 +233,7 @@ def _extract_source(
         snapshot_sha256=snapshot.snapshot_sha256,
         truncated=snapshot.truncated,
         untrusted_source_text=snapshot.normalized_text,
-        selectable_source_text=fresh_numbered_source_text(snapshot.normalized_text),
+        selectable_source_text=selectable_text,
     )
     prompt = load_prompt(LLMStage.EXTRACTOR)
     prompt_input = V2ExtractionPromptInput(
@@ -233,6 +249,7 @@ def _extract_source(
         ),
     )
     base_rendered_prompt = render_stage_prompt(prompt, prompt_input, V2VerbatimQuoteSelection)
+    base_rendered_prompt += "\n" + EXCERPT_GUIDANCE
     last_failure = "Extractor did not return a valid selection."
     for attempt in range(1, V2_EXTRACTION_MAX_ATTEMPTS + 1):
         rendered_prompt = base_rendered_prompt
@@ -290,6 +307,17 @@ def _extract_source(
             quote_block, selected_offsets = assemble_fresh_selected_quote(
                 snapshot.normalized_text, selection, truncated=snapshot.truncated
             )
+            if any(
+                PDF_OMISSION_MARKER in snapshot.normalized_text[offset.start_char : offset.end_char]
+                for offset in selected_offsets
+            ):
+                raise ValueError("selected quotation crosses omitted PDF text")
+            if any(
+                index not in exposed_sentences
+                for item in selection.selected_sentence_ranges
+                for index in range(item.start_sentence, item.end_sentence + 1)
+            ):
+                raise ValueError("selected sentence range contains an unexposed sentence")
             provisional = ProvisionalCandidate(
                 run_id=snapshot.run_id,
                 stance=(

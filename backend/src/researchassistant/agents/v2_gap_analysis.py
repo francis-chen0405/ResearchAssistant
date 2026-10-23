@@ -19,6 +19,7 @@ from researchassistant.agents.v2_stage_checkpoint import (
     save_stage_outcome,
     stage_attempt,
 )
+from researchassistant.common.research_guidance import ASSESSED_FINDINGS_GUIDANCE
 from researchassistant.contracts.models import (
     ResearchDirection,
     V2AcquisitionProbeOutput,
@@ -275,7 +276,8 @@ def run_v2_gap_analysis(
         run_id=gap_input.run_id,
         stage=LLMStage.GAP_ANALYSIS,
         prompt=prompt,
-        rendered_prompt=render_stage_prompt(prompt, gap_input, V2GapAnalysisModelOutput),
+        rendered_prompt=render_stage_prompt(prompt, gap_input, V2GapAnalysisModelOutput)
+        + ("\n" + ASSESSED_FINDINGS_GUIDANCE if gap_input.assessed_source_findings else ""),
         input_artifact=gap_input,
         input_artifact_ids=(gap_input.run_id,),
         requested_output_type=V2GapAnalysisModelOutput,

@@ -815,7 +815,9 @@ def snapshot_from_v2_result(
     classification: LiveClassification = result.state.value
     usage = _read_v2_usage_summary(read_source, result.run_id, terminal=True)
     diagnostics = result.diagnostics
-    if diagnostics is None:
+    from researchassistant.storage.query_dispatch import query_dispatch_states
+
+    if diagnostics is None or query_dispatch_states(read_source, result.run_id):
         providers = configured_v2_providers(read_source, result.run_id)
         if providers:
             diagnostics = build_v2_run_diagnostics_or_empty(

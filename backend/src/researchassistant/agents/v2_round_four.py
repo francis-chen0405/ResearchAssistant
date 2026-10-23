@@ -280,6 +280,7 @@ from researchassistant.contracts.query_planning import (
 from researchassistant.contracts.query_planning import (
     V2ConceptualSearchAgentInput as V2ConceptualSearchAgentInput,
 )
+from researchassistant.contracts.source_recovery import AssessedSourceFinding
 from researchassistant.evidence.evidence_portfolio import (
     identify_source_family as identify_source_family,
 )
@@ -327,6 +328,7 @@ def run_v2_round_four_continuation(
     budget_snapshot: Callable[[], V2AdaptiveBudgetState],
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
+    assessed_source_findings: tuple[AssessedSourceFinding, ...] = (),
 ) -> V2RoundFourRunResult:
     """Run Round 4 only after persisting its conservative preauthorization."""
     now = clock or _utc_now
@@ -349,7 +351,23 @@ def run_v2_round_four_continuation(
         remaining_budget=budget,
         db_path=path,
     )
-    if not _gap_envelope_fits(budget, gap_input, routing_config):
+    if assessed_source_findings:
+        visible_ids = {item.source_cluster_id for item in gap_input.surviving_sources}
+        gap_input = type(gap_input).model_validate(
+            gap_input.model_copy(
+                update={
+                    "assessed_source_findings": tuple(
+                        item for item in assessed_source_findings if item.source_id in visible_ids
+                    )[:4]
+                }
+            ).model_dump()
+        )
+    saved_gap_payload = _read(path, initial_plan.run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY)
+    if saved_gap_payload is not None:
+        # An older in-flight Round 4 may have begun before admission. Reuse its
+        # exact persisted input rather than changing the model call on replay.
+        gap_input = V2GapAnalysisOutput.model_validate_json(saved_gap_payload).input
+    if saved_gap_payload is None and not _gap_envelope_fits(budget, gap_input, routing_config):
         return _finish(
             path,
             continuation,
@@ -577,7 +595,6 @@ def run_v2_round_four_continuation(
         cancellation_requested=cancellation_requested,
         clock=now,
     )
-    del search
     post_plan_facts = _build_post_plan_facts(plan, summary, now)
     rounds_with_round_four = tuple(
         (
@@ -602,7 +619,15 @@ def run_v2_round_four_continuation(
         )
         return _finish(path, cancelled, gap, decision, now, post_plan_facts)
     if summary.status is V2AdaptiveRoundStatus.DEGRADED:
-        merged = _merge_survivors(initial_plan.run_id, rounds_with_round_four)
+        from researchassistant.agents.adaptive_execution import search_failure_explanation
+
+        merged = _merge_survivors(
+            initial_plan.run_id,
+            rounds_with_round_four,
+            deduplicate_papers=any(
+                query.compiled_query is not None for query in initial_plan.searches
+            ),
+        )
         failed = continuation.model_copy(
             update={
                 "rounds": (*continuation.rounds, summary),
@@ -611,7 +636,7 @@ def run_v2_round_four_continuation(
                     update={
                         "completed_rounds": 4,
                         "stop_code": V2AdaptiveStopCode.PROVIDER_FAILURE,
-                        "stopping_reason": "Targeted Round 4 ended after a provider failure.",
+                        "stopping_reason": search_failure_explanation(path, search),
                         "decided_at": now(),
                     }
                 ),
@@ -627,7 +652,11 @@ def run_v2_round_four_continuation(
             now,
             post_plan_facts,
         )
-    merged = _merge_survivors(initial_plan.run_id, rounds_with_round_four)
+    merged = _merge_survivors(
+        initial_plan.run_id,
+        rounds_with_round_four,
+        deduplicate_papers=any(query.compiled_query is not None for query in initial_plan.searches),
+    )
     updated = continuation.model_copy(
         update={
             "rounds": (*continuation.rounds, summary),

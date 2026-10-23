@@ -151,6 +151,7 @@ def _key_matches(key: str, value: BaseModel) -> bool:
             "phase-13-source-selection-deep-analysis-queue-analyzer-admission",
             "phase-13-source-statuses-analyzer-admission",
             "phase-8-source-selection-deep-analysis-queue",
+            "post-analysis-evidence-queue-v1",
         }
     if isinstance(value, V2EvidenceAnalystSourceResult):
         return key in {
@@ -168,7 +169,11 @@ def _key_matches(key: str, value: BaseModel) -> bool:
             "phase-9-luna-evidence-analyst",
         }
     if isinstance(value, V2EvidenceAdmissionBatchResult):
-        return key == "phase-13-evidence-admission" or (
+        return key in {
+            "phase-13-evidence-admission",
+            "post-analysis-evidence-admission-v1",
+            "post-analysis-combined-admission-v1",
+        } or (
             key
             in {
                 f"phase-13-evidence-admission-batch-source-{source_id}"

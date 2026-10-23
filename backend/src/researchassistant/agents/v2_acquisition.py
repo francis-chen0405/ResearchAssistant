@@ -118,6 +118,10 @@ _FALLBACK_FAILURE_CODES = frozenset(
     }
 )
 
+# V2 product policy currently permits at most sixty acquisition attempts per round.
+# Keep this local hard ceiling if a future policy raises its configured bound.
+_MAX_RANKED_SOURCE_ATTEMPTS = 60
+
 
 class V2AcquisitionProbeRunResult(StrictModel):
     """A small explicit return object without exposing mutable persistence internals."""
@@ -283,20 +287,12 @@ def run_v2_acquisition_probe(
                 continue
             chosen_ids.add(cluster.cluster_id)
             chosen_clusters.append(cluster)
-        direction_target = getattr(binding.policy, "sources_per_direction_per_round", None)
-        if direction_target is not None:
-            direction_counts: dict[ResearchDirection, int] = {}
-            bounded_clusters: list[SourceCluster] = []
-            for cluster in chosen_clusters:
-                direction = _cluster_direction(cluster, item_by_id, decisions)
-                if direction is None or direction_counts.get(direction, 0) >= direction_target:
-                    continue
-                direction_counts[direction] = direction_counts.get(direction, 0) + 1
-                bounded_clusters.append(cluster)
-            chosen_clusters = bounded_clusters
-        ordered_clusters = chosen_clusters[
-            : min(policy.max_clusters, binding.policy.max_acquisition_per_round)
-        ]
+        max_attempts = min(
+            policy.max_clusters,
+            binding.policy.max_acquisition_per_round,
+            _MAX_RANKED_SOURCE_ATTEMPTS,
+        )
+        ordered_clusters = chosen_clusters[:max_attempts]
     attempts: list[V2AcquisitionAttempt] = []
     acquired: list[V2AcquiredSource] = []
     probes: list[V2ProbeResult] = []
@@ -305,6 +301,13 @@ def run_v2_acquisition_probe(
     tried_urls: set[str] = set()
     capture_aware = policy.policy_identity == V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY
     duplicate_cluster_ids: set[UUID] = set()
+    shortlisted_cluster_ids: set[UUID] = set()
+    usable_by_direction: dict[ResearchDirection, int] = {}
+    direction_target = (
+        getattr(binding.policy, "sources_per_direction_per_round", None)
+        if ranking is not None and binding is not None
+        else None
+    )
 
     for cluster in ordered_clusters[: policy.max_clusters]:
         _raise_if_cancelled(cancellation_requested)
@@ -314,6 +317,12 @@ def run_v2_acquisition_probe(
         if direction is None:
             # Scout skip remains an audit-preserved discovery decision, not an acquisition.
             continue
+        if (
+            direction_target is not None
+            and usable_by_direction.get(direction, 0) >= direction_target
+        ):
+            continue
+        shortlisted_cluster_ids.add(cluster.cluster_id)
         if (
             not capture_aware
             and {cluster.preferred_url, cluster.canonical_url, *cluster.alternate_urls}
@@ -466,6 +475,7 @@ def run_v2_acquisition_probe(
                     passage_ids=tuple(passage.passage_id for passage in probe.passages),
                 )
             )
+            usable_by_direction[direction] = usable_by_direction.get(direction, 0) + 1
     if capture_aware:
         _raise_if_cancelled(cancellation_requested)
     output = V2AcquisitionProbeOutput(
@@ -479,7 +489,7 @@ def run_v2_acquisition_probe(
         completed_at=completed_at,
     )
     if ranking is not None:
-        shortlisted = {item.cluster_id for item in ordered_clusters}
+        shortlisted = shortlisted_cluster_ids
         fetched = {item.cluster_id for item in acquired}
         usable = {item.cluster_id for item in survivors}
         dispositions = tuple(

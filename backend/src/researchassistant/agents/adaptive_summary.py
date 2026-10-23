@@ -144,6 +144,7 @@ def _round_two_gap_input(
         exact_claim=prior.exact_claim,
         directions=prior.directions,
         completed_round=2,
+        assessed_source_findings=prior.assessed_source_findings,
         attempted_queries=(
             *prior.attempted_queries,
             *(
@@ -179,11 +180,16 @@ def _round_two_gap_input(
 
 
 def _merge_survivors(
-    run_id: UUID, rounds: tuple[tuple[int, V2DiscoveryScoutOutput, V2AcquisitionProbeOutput], ...]
+    run_id: UUID,
+    rounds: tuple[tuple[int, V2DiscoveryScoutOutput, V2AcquisitionProbeOutput], ...],
+    *,
+    deduplicate_papers: bool = False,
 ) -> V2MergedSurvivorPool:
     merged: list[V2MergedSurvivor] = []
     seen: set[str] = set()
     for round_number, _discovery, acquisition in rounds:
+        if _discovery.run_id != run_id or acquisition.run_id != run_id:
+            raise ValueError("survivor merge inputs belong to another run")
         by_snapshot = {item.snapshot.snapshot_id: item for item in acquisition.acquisitions}
         for survivor in acquisition.survivors:
             source_url = by_snapshot[survivor.snapshot_id].snapshot.source_url
@@ -196,7 +202,83 @@ def _merge_survivors(
                     research_round=round_number, source_url=source_url, survivor=survivor
                 )
             )
+    if deduplicate_papers:
+        merged = _merge_confirmed_papers(merged, rounds)
     return V2MergedSurvivorPool(run_id=run_id, sources=tuple(merged))
+
+
+def _merge_confirmed_papers(
+    sources: list[V2MergedSurvivor],
+    rounds: tuple[tuple[int, V2DiscoveryScoutOutput, V2AcquisitionProbeOutput], ...],
+) -> list[V2MergedSurvivor]:
+    from researchassistant.contracts.paper_identity import ConfirmedPaperLocation
+    from researchassistant.evidence.paper_identity import confirmed_paper_anchor, paper_title_key
+
+    snapshots = {
+        item.snapshot.snapshot_id: item.snapshot
+        for _, _, output in rounds
+        for item in output.acquisitions
+    }
+    items = {item.item_id: item for _, discovery, _ in rounds for item in discovery.items}
+    clusters = {
+        cluster.cluster_id: cluster for _, discovery, _ in rounds for cluster in discovery.clusters
+    }
+    groups: dict[
+        tuple[str, object, str], list[tuple[V2MergedSurvivor, ConfirmedPaperLocation]]
+    ] = {}
+    for source in sources:
+        cluster = clusters[source.survivor.cluster_id]
+        members = tuple(items[item_id] for item_id in cluster.item_ids)
+        title = next((item.title for item in members if item.title), None)
+        title_key = paper_title_key(title)
+        snapshot = snapshots[source.survivor.snapshot_id]
+        anchor = confirmed_paper_anchor(
+            snapshot, title, tuple(item.doi for item in members if item.doi)
+        )
+        if anchor is None or len(title_key) < 24:
+            continue
+        doi, basis = anchor
+        location = ConfirmedPaperLocation(
+            source_id=source.survivor.cluster_id,
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_hash=snapshot.snapshot_sha256,
+            source_url=snapshot.source_url,
+            research_round=source.research_round,
+            direction=source.survivor.direction,
+            doi=doi,
+            basis=basis,
+        )
+        groups.setdefault((doi, source.survivor.direction, title_key), []).append(
+            (source, location)
+        )
+    replacements: dict[UUID, V2MergedSurvivor | None] = {}
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        # Prefer full readable captures within the earliest round. Later mirrors
+        # cannot displace a source whose early assessment may already be saved.
+        ordered = sorted(
+            group,
+            key=lambda pair: (
+                pair[0].research_round,
+                -snapshots[pair[0].survivor.snapshot_id].word_count,
+                str(pair[0].survivor.cluster_id),
+            ),
+        )
+        canonical = ordered[0][0]
+        replacements[canonical.survivor.cluster_id] = V2MergedSurvivor(
+            research_round=canonical.research_round,
+            source_url=canonical.source_url,
+            survivor=canonical.survivor,
+            paper_locations=tuple(location for _, location in ordered),
+        )
+        for alias, _ in ordered[1:]:
+            replacements[alias.survivor.cluster_id] = None
+    return [
+        replacements.get(source.survivor.cluster_id, source)
+        for source in sources
+        if replacements.get(source.survivor.cluster_id, source) is not None
+    ]
 
 
 def _known_urls(outputs: tuple[V2DiscoveryScoutOutput, ...]) -> frozenset[str]:

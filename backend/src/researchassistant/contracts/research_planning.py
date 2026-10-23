@@ -56,6 +56,7 @@ from researchassistant.contracts.research_policy import (
 from researchassistant.contracts.research_policy import (
     V2_POST13_ROUND_FOUR_POLICY_IDENTITY as V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
 )
+from researchassistant.contracts.source_recovery import SavedSourceLead
 
 
 class SearchDirectionGapReference(StrictModel):
@@ -217,6 +218,14 @@ class V2InitialPlannerInput(StrictModel):
         V2_INITIAL_PLANNER_POLICY_IDENTITY
     )
     search_lanes: tuple[V2InitialPlannerSearchLane, ...]
+    saved_source_leads: tuple[SavedSourceLead, ...] = Field(default=(), max_length=12)
+
+    @model_serializer(mode="wrap")
+    def omit_absent_saved_leads(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        value = handler(self)
+        if not self.saved_source_leads:
+            value.pop("saved_source_leads", None)
+        return value
 
     @field_validator("discovery_providers")
     @classmethod

@@ -742,6 +742,7 @@ def _result_sources(evidence_result: V2EvidenceInputResult) -> tuple[V2ResultSou
                 status=display_status,
                 ledger_claim_ids=claims,
                 budget_prevented_reason=status.budget_prevented_reason,
+                alternate_source_urls=survivor.alternate_source_urls,
             )
         )
     return tuple(sources)

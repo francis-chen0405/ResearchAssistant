@@ -106,6 +106,12 @@ export function providerOutcomeLabel(
   if (outcome.timeout_queries)
     details.push(`${outcome.timeout_queries} timeout`);
   if (outcome.failed_queries) details.push(`${outcome.failed_queries} failed`);
+  if (outcome.blocked_queries)
+    details.push(`${outcome.blocked_queries} blocked before dispatch`);
+  if (outcome.unknown_queries)
+    details.push(
+      `${outcome.unknown_queries} outcome${outcome.unknown_queries === 1 ? "" : "s"} unknown`,
+    );
   if (outcome.surviving_sources) {
     details.push(
       `${outcome.surviving_sources} surviving source${outcome.surviving_sources === 1 ? "" : "s"}`,

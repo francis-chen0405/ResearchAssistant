@@ -309,3 +309,27 @@ def _execute_searches(
     )
     insert_v2_artifact(path, key, result, result.completed_at)
     return result
+
+
+def search_failure_explanation(path: str, result: V2AdaptiveSearchResults) -> str:
+    from researchassistant.storage.query_dispatch import query_dispatch_states
+
+    states = query_dispatch_states(path, result.run_id)
+    blocked = 0
+    unknown = 0
+    for outcome in result.outcomes:
+        action = outcome.query.graph_action or outcome.query.compiled_query
+        state = states.get(action.artifact_id) if action else None
+        blocked += state == "blocked"
+        unknown += state == "unknown" and not outcome.succeeded
+    if blocked or unknown:
+        failed = sum(not item.succeeded for item in result.outcomes) - blocked - unknown
+        return (
+            f"Round {result.round_number} stopped: {failed} failed searches, "
+            f"{unknown} searches with unknown request outcomes, and {blocked} searches "
+            "blocked before dispatch by the unknown-request safeguard. "
+            "Completed work was preserved."
+        )
+    return (
+        f"Round {result.round_number} stopped after search failures; completed work was preserved."
+    )

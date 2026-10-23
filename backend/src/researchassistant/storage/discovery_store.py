@@ -1210,6 +1210,7 @@ def _validate_operation_gap_targets(
         "phase-7-gap-analysis-after-round-2",
         "phase-7-gap-analysis-after-round-3",
         "post-phase-13-gap-analysis-after-round-3-v1",
+        "post-analysis-evidence-gap-v1",
     )
     matching: dict[str, object] = {}
     for key in keys:

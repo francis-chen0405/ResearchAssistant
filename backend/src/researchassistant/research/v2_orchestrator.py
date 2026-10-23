@@ -14,6 +14,12 @@ from uuid import UUID, uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from researchassistant.agents.evidence_checkpoint import (
+    CHECKPOINT_KEY,
+    V2EvidenceCheckpoint,
+    assess_initial_sources,
+)
+from researchassistant.agents.post_analysis_round import run_v2_post_analysis_round
 from researchassistant.agents.v2_acquisition import (
     V2_ACQUISITION_PROBE_ARTIFACT_KEY,
     run_v2_acquisition_probe,
@@ -35,6 +41,7 @@ from researchassistant.agents.v2_discovery import (
     V2DiscoveryResponse,
     run_v2_discovery_and_scout,
 )
+from researchassistant.agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
 from researchassistant.agents.v2_extraction import V2_EXTRACTION_ARTIFACT_KEY
 from researchassistant.agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
@@ -51,6 +58,7 @@ from researchassistant.agents.v2_gap_analysis import (
 from researchassistant.agents.v2_initial_planner import run_v2_initial_planner
 from researchassistant.agents.v2_post_analysis import V2_POST_ANALYSIS_ASSESSMENT_POLICY
 from researchassistant.agents.v2_round_four import (
+    V2_POST13_ROUND_FOUR_COMPLETION_KEY,
     reconcile_post_round_three_gaps,
     run_v2_round_four_continuation,
 )
@@ -97,6 +105,7 @@ from researchassistant.contracts.models import (
     V2RunDiagnostics,
     V2SourceSelectionQueueResult,
 )
+from researchassistant.contracts.paper_identity import ConfirmedPaperGroup, V2PaperIdentityAudit
 from researchassistant.contracts.search import SearchFailureCode, SearchResult
 from researchassistant.evidence.evidence_core import (
     EVIDENCE_POLICY_VERSION,
@@ -125,6 +134,7 @@ from researchassistant.research.query_execution import (
 )
 from researchassistant.research.research_governor import DEFAULT_RESEARCH_GOVERNOR_POLICY
 from researchassistant.storage.discovery_store import read_discovery_binding
+from researchassistant.storage.query_dispatch import query_dispatch_states
 from researchassistant.storage.store import (
     init_db,
     insert_provider_run_contract,
@@ -214,6 +224,7 @@ def build_v2_run_diagnostics(
 ) -> V2RunDiagnostics:
     """Reconstruct persisted v2 execution facts for both new and historical runs."""
     providers = list(dict.fromkeys(configured_providers))
+    dispatch_states = query_dispatch_states(path, run_id)
     counters: dict[DiscoveryProvider, dict[str, int]] = {
         provider: {
             "query_attempts": 0,
@@ -223,6 +234,8 @@ def build_v2_run_diagnostics(
             "failed_queries": 0,
             "search_results": 0,
             "graph_actions": 0,
+            "blocked_queries": 0,
+            "unknown_queries": 0,
         }
         for provider in providers
     }
@@ -238,6 +251,8 @@ def build_v2_run_diagnostics(
                 "failed_queries": 0,
                 "search_results": 0,
                 "graph_actions": 0,
+                "blocked_queries": 0,
+                "unknown_queries": 0,
             }
         return counters[provider]
 
@@ -246,10 +261,18 @@ def build_v2_run_diagnostics(
         succeeded: bool,
         result_count: int,
         failure_code: str | None,
+        operation_id: UUID | None = None,
     ) -> None:
         provider_counts = ensure_provider(provider)
+        state = dispatch_states.get(operation_id)
+        if state == "blocked":
+            provider_counts["blocked_queries"] += 1
+            return
         provider_counts["query_attempts"] += 1
         provider_counts["search_results"] += result_count
+        if not succeeded and state == "unknown":
+            provider_counts["unknown_queries"] += 1
+            return
         if succeeded:
             provider_counts["non_empty_queries" if result_count else "empty_queries"] += 1
         elif failure_code == SearchFailureCode.EMPTY_RESULTS.value:
@@ -273,6 +296,7 @@ def build_v2_run_diagnostics(
                 outcome.succeeded,
                 len(outcome.results),
                 outcome.failure_code,
+                outcome.query.compiled_query.artifact_id if outcome.query.compiled_query else None,
             )
     for round_number in (2, 3, 4):
         search_payload = _read_v2_payload(
@@ -296,6 +320,9 @@ def build_v2_run_diagnostics(
                     outcome.succeeded,
                     len(outcome.results),
                     outcome.failure_code,
+                    outcome.query.compiled_query.artifact_id
+                    if outcome.query.compiled_query
+                    else None,
                 )
 
     cluster_providers: dict[UUID, tuple[DiscoveryProvider, ...]] = {}
@@ -426,6 +453,16 @@ def build_v2_run_diagnostics(
         approved_records = sum(
             len(source.ledger_claim_ids) for source in final_output.all_surviving_sources
         )
+    else:
+        checkpoint_payload = _read_v2_payload(path, run_id, CHECKPOINT_KEY)
+        if checkpoint_payload is not None:
+            checkpoint = V2EvidenceCheckpoint.model_validate_json(checkpoint_payload)
+            if checkpoint.run_id != run_id:
+                raise ValueError("evidence checkpoint belongs to another run")
+            analyzed_sources = len({wave.source_id for wave in checkpoint.waves})
+            queued_sources = max(queued_sources, analyzed_sources)
+            # Preliminary assessments have not passed final evidence admission.
+            # Preserve zero approved records until that separate stage succeeds.
 
     provider_outcomes = tuple(
         V2ProviderRunDiagnostics(
@@ -438,6 +475,8 @@ def build_v2_run_diagnostics(
             search_results=counters[provider]["search_results"],
             surviving_sources=len(surviving_by_provider.get(provider, set())),
             graph_actions=counters[provider]["graph_actions"] or None,
+            blocked_queries=counters[provider]["blocked_queries"] or None,
+            unknown_queries=counters[provider]["unknown_queries"] or None,
         )
         for provider in providers
     )
@@ -699,8 +738,8 @@ def run_v2_production_pipeline(
                 run_id=run_id,
                 provider_policy_fingerprint=provider_policy_fingerprint,
                 query_modes=query_modes,
-                legacy_query_planning=legacy_query_planning,
                 discovery_policy=discovery_policy,
+                legacy_query_planning=legacy_query_planning,
                 research_controls=research_controls,
                 cancellation_requested=cancellation_requested,
                 clock=clock,
@@ -954,6 +993,27 @@ def _run_v2_production_pipeline(
             clock=now,
         ).output
         _raise_if_v2_cancelled(effective_cancellation_requested)
+        checkpoint = None
+        if not legacy_query_planning and acquisition_one.survivors:
+            current_stage = Stage.DEEP_ANALYSIS
+            _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+            snapshot = budgeted_llm.snapshot()
+            checkpoint = assess_initial_sources(
+                db_path=path,
+                exact_claim=raw_claim,
+                discovery=discovery_one,
+                acquisition=acquisition_one,
+                llm_provider=budgeted_llm,
+                routing_config=routing_config,
+                clock=now,
+                cancellation_requested=effective_cancellation_requested,
+                budget=V2DeepAnalysisBudget(
+                    physical_call_ceiling=resolved_ceilings.max_physical_calls,
+                    physical_calls_used=snapshot.physical_calls_used,
+                    tokens_remaining=snapshot.tokens_remaining,
+                    cost_remaining_usd=snapshot.cost_remaining_usd,
+                ),
+            )
         budget_after_round_one = budgeted_llm.snapshot()
         current_stage = Stage.GAP_ANALYSIS
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
@@ -968,6 +1028,8 @@ def _run_v2_production_pipeline(
                     tokens_remaining=budget_after_round_one.tokens_remaining,
                     cost_remaining_usd=budget_after_round_one.cost_remaining_usd,
                 ),
+            ).model_copy(
+                update={"assessed_source_findings": checkpoint.findings if checkpoint else ()}
             ),
             llm_provider=budgeted_llm,
             routing_config=routing_config,
@@ -1008,8 +1070,22 @@ def _run_v2_production_pipeline(
             )
         _raise_if_v2_cancelled(effective_cancellation_requested)
         round_four_gap = None
+        try:
+            read_v2_artifact(path, resolved_run_id, V2_POST13_ROUND_FOUR_COMPLETION_KEY)
+            # A completed Round 4 belongs before selection only for an older
+            # in-flight run. Fresh post-analysis Round 4 has the initial
+            # admission checkpoint already saved and must replay after it.
+            try:
+                read_v2_artifact(path, resolved_run_id, V2_EVIDENCE_ADMISSION_ARTIFACT_KEY)
+            except KeyError:
+                round_four_precompleted = True
+            else:
+                round_four_precompleted = False
+        except KeyError:
+            round_four_precompleted = False
         if (
-            continuation.stopping_decision.completed_rounds == 3
+            (legacy_query_planning or round_four_precompleted)
+            and continuation.stopping_decision.completed_rounds == 3
             and continuation.rounds
             and continuation.rounds[-1].round_number == 3
             and continuation.rounds[-1].status is V2AdaptiveRoundStatus.COMPLETED
@@ -1057,7 +1133,10 @@ def _run_v2_production_pipeline(
                 )
             continuation = round_four.continuation
             round_four_gap = round_four.post_round_three_gap
-        if budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE:
+        if (
+            budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE
+            and not (checkpoint and checkpoint.waves)
+        ):
             raise V2BudgetExceededError(
                 "v2 downstream reserve cannot cover selection, extraction, analysis, and admission"
             )
@@ -1076,6 +1155,31 @@ def _run_v2_production_pipeline(
         current_stage = Stage.SOURCE_SELECTION
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         _raise_if_v2_cancelled(effective_cancellation_requested)
+        if not legacy_query_planning:
+            identity_key = "retained-paper-identity-v1"
+            try:
+                saved_identity = read_v2_artifact(path, resolved_run_id, identity_key)
+            except KeyError:
+                identity_recorded_at = now()
+            else:
+                identity_recorded_at = saved_identity.created_at
+            insert_v2_artifact(
+                path,
+                identity_key,
+                V2PaperIdentityAudit(
+                    run_id=resolved_run_id,
+                    groups=tuple(
+                        ConfirmedPaperGroup(
+                            canonical_source_id=source.survivor.cluster_id,
+                            doi=source.paper_locations[0].doi,
+                            locations=source.paper_locations,
+                        )
+                        for source in continuation.merged_survivors.sources
+                        if source.paper_locations
+                    ),
+                ),
+                identity_recorded_at,
+            )
         selection_input = build_v2_source_selection_input(
             exact_claim=raw_claim,
             merged_survivors=continuation.merged_survivors,
@@ -1083,6 +1187,7 @@ def _run_v2_production_pipeline(
             acquisition_outputs=acquisitions,
             gap_outputs=gaps,
             claim_aware=not legacy_query_planning,
+            compact_model_view=not legacy_query_planning,
             asserted_components=tuple(
                 x.claim_component
                 for x in planner.claim_coverage_focus
@@ -1113,7 +1218,7 @@ def _run_v2_production_pipeline(
             clock=now,
         ).result
         _raise_if_v2_cancelled(effective_cancellation_requested)
-        if not selection.queued_source_ids:
+        if not selection.queued_source_ids and not (checkpoint and checkpoint.waves):
             reason = (
                 selection.limiting_reason.value
                 if selection.limiting_reason is not None
@@ -1135,6 +1240,7 @@ def _run_v2_production_pipeline(
             routing_config=routing_config,
             cancellation_requested=effective_cancellation_requested,
             clock=now,
+            prior_waves=checkpoint.waves if checkpoint else (),
         )
         _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.EVIDENCE_ADMISSION
@@ -1142,6 +1248,35 @@ def _run_v2_production_pipeline(
         admission = deep_analysis.final_admission_result
         if admission is None:
             raise ValueError("fresh v2 deep analysis did not produce an evidence admission result")
+        if not legacy_query_planning:
+            post_analysis = run_v2_post_analysis_round(
+                db_path=path,
+                initial_plan=planner,
+                continuation=continuation,
+                admission=admission,
+                discoveries=discoveries,
+                acquisitions=acquisitions,
+                gaps=gaps,
+                search_providers=search_providers,
+                llm_provider=budgeted_llm,
+                routing_config=routing_config,
+                wigolo_provider=wigolo_provider,
+                firecrawl_provider=firecrawl_provider,
+                crossref_resolver=crossref_resolver,
+                budget_snapshot=lambda: _adaptive_budget(budgeted_llm.snapshot(), routing_config),
+                deep_budget_snapshot=lambda: V2DeepAnalysisBudget(
+                    physical_call_ceiling=resolved_ceilings.max_physical_calls,
+                    physical_calls_used=budgeted_llm.snapshot().physical_calls_used,
+                    tokens_remaining=budgeted_llm.snapshot().tokens_remaining,
+                    cost_remaining_usd=budgeted_llm.snapshot().cost_remaining_usd,
+                ),
+                cancellation_requested=effective_cancellation_requested,
+                clock=now,
+                query_modes=query_modes,
+            )
+            continuation = post_analysis.continuation
+            admission = post_analysis.admission
+            round_four_gap = post_analysis.round_four_gap or round_four_gap
         approved_records = tuple(
             item for item in admission.source_results if item.evidence_record is not None
         )

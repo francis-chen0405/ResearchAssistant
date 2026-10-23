@@ -141,7 +141,9 @@ class V2AdaptiveSearchConceptsOutput(StrictModel):
 
     @model_validator(mode="after")
     def require_gap_purpose(self) -> V2AdaptiveSearchConceptsOutput:
-        if any(item.concepts.purpose != "gap" for item in self.searches):
+        # Union validation can try this parent against a graph-proposal subclass.
+        # Reject that branch normally so the neighborhood schema can validate it.
+        if any(item.concepts is None or item.concepts.purpose != "gap" for item in self.searches):
             raise ValueError("adaptive Search Agent concepts must use gap purpose")
         if len({item.lane_index for item in self.searches}) != len(self.searches):
             raise ValueError("adaptive proposals must use each application lane at most once")

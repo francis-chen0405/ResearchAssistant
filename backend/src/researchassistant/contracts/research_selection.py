@@ -136,6 +136,7 @@ class V2SourceSelectionCandidate(StrictModel):
 
     preview: V2PreviewResult | None = None
     metadata_ranks: tuple[MetadataRank, ...] = Field(default=(), max_length=300)
+    alternate_source_urls: tuple[str, ...] = Field(default=(), max_length=240)
 
     @model_serializer(mode="wrap")
     def historical_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
@@ -144,6 +145,8 @@ class V2SourceSelectionCandidate(StrictModel):
             data.pop("preview", None)
         if not self.metadata_ranks:
             data.pop("metadata_ranks", None)
+        if not self.alternate_source_urls:
+            data.pop("alternate_source_urls", None)
         return data
 
     @model_validator(mode="after")
@@ -179,11 +182,19 @@ class V2SourceSelectionInput(StrictModel):
     gap_history: tuple[V2SourceSelectionGap, ...] = Field(max_length=18)
     gap_reporting_policy: Literal["legacy", "conservative-v1"] = "legacy"
     latest_gap_coverage: tuple[V2ClaimCoverageAssessment, ...] = Field(default=(), max_length=6)
+    model_view_policy: Literal["compact-selection-v1"] | None = None
     policy_identity: Literal[
         "researchassistant-v2-phase-8-source-selection-v1",
         "researchassistant-v2-phase-8-source-selection-v2",
         "researchassistant-v2-phase-8-source-selection-v3",
     ] = V2_SOURCE_SELECTION_POLICY_IDENTITY
+
+    @model_serializer(mode="wrap")
+    def omit_legacy_view_policy(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if self.model_view_policy is None:
+            data.pop("model_view_policy", None)
+        return data
 
     @model_validator(mode="after")
     def validate_complete_pool(self) -> V2SourceSelectionInput:

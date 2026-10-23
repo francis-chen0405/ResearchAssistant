@@ -140,16 +140,16 @@ export function AdvancedPanel({
           </button>
         </div>
         <div className="option-copy">
-          <strong>Candidate sources to try</strong>
+          <strong>Sources to examine</strong>
           <span>
-            Set the maximum candidates tried per direction in each round.
-            Blocked or unreadable sources count toward this limit.
+            Set the readable-source target per direction in each round.
+            Unavailable sources are replaced within the run limits.
           </span>
         </div>
         <div
           className="source-target"
           role="group"
-          aria-label="Candidate sources to try"
+          aria-label="Sources to examine"
         >
           {([5, 10, 20, 30] as const).map((value) => (
             <button

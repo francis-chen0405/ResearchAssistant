@@ -95,4 +95,10 @@ def test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting(
     assert current.starts[: len(audit.starts)] == audit.starts
     assert current.completions[: len(audit.completions)] == audit.completions
     if owner == "v2_source_selection":
-        assert not search.requests
+        # A saved selection cannot repeat Round-1 dispatch. A new assessed
+        # evidence gap may still authorize one later search after admission.
+        assert all(
+            request.compiled_query is not None
+            and request.compiled_query.conceptual_query.round_number > 1
+            for request in search.requests
+        )

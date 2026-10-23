@@ -6,6 +6,17 @@ Historical setup, next-step and approval wording in these records applies to the
 
 ## Recent reviews and repairs
 
+- [Offline evidence-loop evaluation](verification/offline-evidence-loop-2026-10-23.md):
+  saved-run integrity checked read-only; disposable capture, assessed follow-up,
+  quotation, accounting and replay controls passed. Live quality remains unmeasured.
+
+- [Source-loss recovery](../.agent/plans/source-loss-recovery-2026-10-19.md): early evidence feedback,
+  source replacement, exact excerpts, saved paper leads and source outcome presentation.
+  Installed as local Mac build `20261020.4`, with verified ZIP in Downloads and older
+  copies removed. The first user rerun exposed a citation-neighbor validator crash;
+  corrective build `20261020.5` is verified and installed. Saved diagnostic runs remain
+  unchanged; final live quality is unmeasured.
+
 - [Current Mac replacement — October 19](verification/current-app-install-2026-10-19.md): new 50/20 defaults and 30-source choice, verified local app replacement, preserved saved data and current package checks.
 
 - [Prompt 17 Windows CI and native durability](verification/windows-ci-durability-2026-10-13.md): current-source Windows reproductions, NTFS privacy/publication, process-crash recovery, isolated native vault/Jobs and explicit power-loss/release limits.
@@ -178,3 +189,15 @@ Historical setup, next-step and approval wording in these records applies to the
 - [Manual-only Windows packaging — October 18](../.agent/plans/windows-ci-trigger-2026-10-18.md): exact failed job, authorized trigger change and retained acceptance limits.
 
 - [Mac shutdown smoke PID race — October 18](../.agent/plans/mac-smoke-pid-race-2026-10-18.md): atomic test records, strict PID checks and native verification.
+
+
+## 2026-10-21 — Selection coverage and paper identity
+
+Delivered local Mac build `20261020.6` with compact exact selection views, confirmed
+DOI/title mirror grouping, alternate locations, considered/omitted coverage and
+blocked/unknown dispatch reporting. Preserved source quotations, saved research,
+support-only preferences and all budgets/unknown reservations. Complete offline and
+installed checks are in [verification](verification/selection-coverage-repairs-2026-10-21.md).
+Research-quality improvement remains unmeasured pending fresh user runs.
+
+- [October 23 master integration](../.agent/plans/source-loss-recovery-2026-10-19.md#master-integration--october-23): reviewed e359 recovery, PDF capture and post-analysis changes integrated with current CLI defaults; full source and isolated install checks pass, frozen acquisition health remains blocked.

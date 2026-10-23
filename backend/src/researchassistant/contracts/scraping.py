@@ -46,7 +46,7 @@ class ScrapeResponse(StrictModel):
     original_url: str | None = None
     canonical_url: str | None = None
     snapshot_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    word_count: int | None = Field(default=None, ge=1, le=3000)
+    word_count: int | None = Field(default=None, ge=1, le=12_000)
     truncated: bool = False
     normalization_version: str | None = None
     acquisition_version: str | None = None

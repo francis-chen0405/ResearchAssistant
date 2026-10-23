@@ -178,6 +178,99 @@ def _graph_proposal(
     return V2NeighborhoodConceptProposal(lane_index=lane_index, graph_action_id=action.artifact_id)
 
 
+@pytest.mark.parametrize("repair", (False, True))
+@pytest.mark.parametrize("mixed", (False, True))
+def test_graph_planning_outcome_is_persisted_and_replayed_without_another_call(
+    tmp_path: Path, repair: bool, mixed: bool
+) -> None:
+    from test_v2_phase7_adaptive_search import FakeAdaptiveLLM
+
+    from researchassistant.agents.adaptive_handoffs import V2PlanningOutcome
+    from researchassistant.agents.adaptive_planning import _plan_with_repair
+    from researchassistant.common.resources import prompt_resource
+    from researchassistant.providers.llm import (
+        V2_LLM_ROUTING,
+        LLMRequest,
+        LLMStage,
+        load_prompt_file,
+        render_stage_prompt,
+    )
+
+    path = tmp_path / "graph-planning-outcome.sqlite"
+    _binding(path)
+    _install_round_one(path, ({"score": 85},))
+    action = _action(path, 2)
+    request = _request(providers=(DiscoveryProvider.OPENALEX, DiscoveryProvider.ARXIV))
+    lanes = _lanes(request)
+    agent_input = V2NeighborhoodSearchAgentInput(
+        request=request, lanes=lanes, offered_expansions=(action,)
+    )
+    proposals = (_graph_proposal(action),)
+    if mixed:
+        proposals += (
+            V2NeighborhoodConceptProposal(lane_index=1, concepts=_text_concepts("outcome study")),
+        )
+    response = V2NeighborhoodSearchOutput(searches=proposals)
+    rejected = V2NeighborhoodSearchOutput(
+        searches=(V2NeighborhoodConceptProposal(lane_index=0, graph_action_id=uuid4()),)
+    )
+    model = FakeAdaptiveLLM(
+        search_outputs=([rejected] if repair else []) + [response],  # type: ignore[arg-type]
+        gap_outputs=[],
+    )
+    prompt = load_prompt_file(
+        prompt_resource("search_agent_v3.md"), expected_stage=LLMStage.SEARCH_AGENT
+    )
+    llm_request = LLMRequest(
+        run_id=RUN,
+        stage=LLMStage.SEARCH_AGENT,
+        prompt=prompt,
+        rendered_prompt=render_stage_prompt(prompt, agent_input, V2NeighborhoodSearchOutput),
+        input_artifact=agent_input,
+        input_artifact_ids=(RUN,),
+        requested_output_type=V2NeighborhoodSearchOutput,
+        model_alias=_routing().preflight().for_stage(LLMStage.SEARCH_AGENT).logical_alias,
+        generation=V2_LLM_ROUTING.for_stage(LLMStage.SEARCH_AGENT).generation,
+    )
+
+    def plan() -> object:
+        return _plan_with_repair(
+            path=str(path),
+            request=llm_request,
+            request_input=agent_input,
+            base_request_input=request,
+            lanes=lanes,
+            query_modes={lane.provider: lane.mode for lane in lanes},
+            previous_compiled_queries=(),
+            output_type=V2NeighborhoodSearchOutput,
+            legacy_prompt=False,
+            llm_provider=model,
+            routing_config=_routing(),
+            budget=V2AdaptiveBudgetState(model_calls_remaining=20),
+            budget_snapshot=None,
+            cancellation_requested=None,
+            clock=lambda: NOW,
+        )[0]
+
+    result = plan()
+    assert result.searches[0].graph_action == action
+    assert len(result.searches) == (2 if mixed else 1)
+    key = f"adaptive-reliability-round-2-attempt-{2 if repair else 1}-outcome"
+    outcome = V2PlanningOutcome.model_validate_json(read_v2_artifact(path, RUN, key).payload_json)
+    assert isinstance(outcome.candidate, V2NeighborhoodSearchOutput)
+    assert outcome.candidate == response
+    if repair:
+        prior = V2PlanningOutcome.model_validate_json(
+            read_v2_artifact(
+                path, RUN, "adaptive-reliability-round-2-attempt-1-outcome"
+            ).payload_json
+        )
+        assert prior.rejection_code == "unknown_graph_action"
+        assert prior.candidate == rejected
+    assert plan() == result
+    assert len(model.requests) == (2 if repair else 1)
+
+
 def test_text_and_graph_actions_compete_for_lane_slots_and_preserve_both_identities(
     tmp_path: Path,
 ) -> None:

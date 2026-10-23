@@ -18,7 +18,11 @@ from researchassistant.contracts.discovery_v2 import (
 )
 from researchassistant.contracts.model_evidence import V2RunDiagnostics
 from researchassistant.contracts.model_research import V2AcquisitionProbeOutput
+from researchassistant.contracts.paper_identity import V2PaperIdentityAudit
 from researchassistant.contracts.query_retrieval import V2QueryRetrievalResult
+from researchassistant.contracts.research_gaps import V2GapAnalysisOutput
+from researchassistant.contracts.source_recovery import V2SavedSourceSuggestions
+from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
 from researchassistant.storage.discovery_store import (
     compute_discovery_audit_counters,
     provider_attempt_audit,
@@ -30,6 +34,7 @@ from researchassistant.storage.store import (
     _read_execute,
     _row_to_v2_artifact,
     read_snapshot_connection,
+    read_v2_artifact,
 )
 
 _ACQUISITION_AUDIT_KEYS = tuple(
@@ -192,6 +197,79 @@ def enrich_discovery_diagnostics(
         probe_previews.extend(probe.preview for probe in output.probes if probe.preview is not None)
 
     messages: list[str] = []
+    for version in ("v3", "v2"):
+        try:
+            envelope = read_v2_artifact(
+                connection, run_id, f"source-selection-preview-shortlist-{version}"
+            )
+        except KeyError:
+            continue
+        shortlist = V2SelectionShortlistAudit.model_validate_json(envelope.payload_json)
+        if shortlist.run_id != run_id:
+            raise sqlite3.IntegrityError("selection coverage belongs to another run")
+        messages.append(
+            f"Recommendation input covered {len(shortlist.included_source_ids)} of "
+            f"{shortlist.total_sources} retained sources; {len(shortlist.omitted)} "
+            "omitted by the input limit."
+        )
+        break
+    try:
+        envelope = read_v2_artifact(connection, run_id, "retained-paper-identity-v1")
+    except KeyError:
+        pass
+    else:
+        identity = V2PaperIdentityAudit.model_validate_json(envelope.payload_json)
+        if identity.run_id != run_id:
+            raise sqlite3.IntegrityError("paper identity audit belongs to another run")
+        if identity.groups:
+            mirrors = sum(len(group.locations) - 1 for group in identity.groups)
+            messages.append(
+                f"Grouped {mirrors} confirmed duplicate paper locations; original snapshots "
+                "and locations are preserved, with one copy assessed per paper "
+                "and search direction."
+            )
+    if any(item.blocked_queries or item.unknown_queries for item in diagnostics.provider_outcomes):
+        blocked = sum(item.blocked_queries or 0 for item in diagnostics.provider_outcomes)
+        unknown = sum(item.unknown_queries or 0 for item in diagnostics.provider_outcomes)
+        messages.append(
+            f"Search dispatch: {blocked} queries blocked before dispatch; {unknown} dispatched "
+            "queries have unknown outcomes. Unknown-request reservations remain consumed."
+        )
+    dispositions = []
+    for row in audit_rows:
+        saved_audit = V2AcquisitionRankingAudit.model_validate_json(row["payload_json"])
+        dispositions.extend(saved_audit.dispositions)
+    if dispositions:
+        capped = sum(item.disposition in {"cap_prevented", "not_scouted"} for item in dispositions)
+        failed = sum(
+            item.disposition in {"unavailable", "fetched_unusable"} for item in dispositions
+        )
+        retained = sum(item.disposition == "usable" for item in dispositions)
+        messages.append(
+            f"Source review: {capped} candidates skipped by limits, "
+            f"{failed} access or reading failures, {retained} readable sources retained."
+        )
+    for key, model in (
+        ("phase-6-gap-analysis", V2GapAnalysisOutput),
+        ("saved-source-suggestions-v1", V2SavedSourceSuggestions),
+    ):
+        try:
+            envelope = read_v2_artifact(connection, run_id, key)
+        except KeyError:
+            continue
+        saved = model.model_validate_json(envelope.payload_json)
+        if saved.run_id != run_id:
+            raise sqlite3.IntegrityError("source recovery diagnostics belong to another run")
+        if isinstance(saved, V2GapAnalysisOutput) and saved.input.assessed_source_findings:
+            messages.append(
+                f"Assessed {len(saved.input.assessed_source_findings)} sources before the next "
+                "search decision; final analysis reuses those assessments."
+            )
+        elif isinstance(saved, V2SavedSourceSuggestions) and saved.leads:
+            messages.append(
+                f"Considered {len(saved.leads)} prior-run paper leads; "
+                "any evidence must be assessed for this claim."
+            )
     partial_reasons = {
         "provider_limit",
         "provider_budget",
@@ -283,6 +361,6 @@ def enrich_discovery_diagnostics(
             "deduplicated_work_candidates": deduplicated_work_candidates,
             "seed_derived_candidates": len(seed_derived),
             "shortlist_candidates": shortlisted,
-            "diagnostic_messages": tuple(dict.fromkeys(messages)) or None,
+            "diagnostic_messages": tuple(dict.fromkeys(messages))[:8] or None,
         }
     )

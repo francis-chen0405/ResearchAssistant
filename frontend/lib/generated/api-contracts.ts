@@ -444,6 +444,8 @@ export type ApiSchemas = {
     "search_results"?: number;
     "surviving_sources"?: number;
     "graph_actions"?: (number | null);
+    "blocked_queries"?: (number | null);
+    "unknown_queries"?: (number | null);
   };
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__V2RunDiagnostics": {
     "configured_providers": Array<ApiSchemas["Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__DiscoveryProvider"]>;
@@ -810,6 +812,7 @@ export type ApiSchemas = {
     "status": ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2ResultSourceStatus"];
     "ledger_claim_ids"?: Array<string>;
     "budget_prevented_reason"?: (ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2DeepAnalysisBudgetReason"] | null);
+    "alternate_source_urls"?: Array<string>;
   };
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2ResultSourceStatus": "recommended_analyzed" | "recommended_analyzer_admitted" | "recommended_analyzer_rejected" | "recommended_analyzer_failed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_analyzer_admitted" | "surviving_analyzer_rejected" | "surviving_analyzer_failed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2RoundFourDecisionCode": "authorized" | "no_material_gaps" | "no_productive_search" | "gap_analysis_unusable" | "no_novel_query" | "no_eligible_provider" | "duplicate_heavy" | "unproductive" | "insufficient_reservation" | "cancelled" | "terminal_failure";
@@ -1126,6 +1129,7 @@ export type ApiSchemas = {
     "status": ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2ResultSourceStatus"];
     "ledger_claim_ids"?: Array<string>;
     "budget_prevented_reason"?: (ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2DeepAnalysisBudgetReason"] | null);
+    "alternate_source_urls"?: Array<string>;
   };
   "V2ResultSourceStatus": "recommended_analyzed" | "recommended_analyzer_admitted" | "recommended_analyzer_rejected" | "recommended_analyzer_failed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_analyzer_admitted" | "surviving_analyzer_rejected" | "surviving_analyzer_failed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
   "V2RoundFourDecisionCode": "authorized" | "no_material_gaps" | "no_productive_search" | "gap_analysis_unusable" | "no_novel_query" | "no_eligible_provider" | "duplicate_heavy" | "unproductive" | "insufficient_reservation" | "cancelled" | "terminal_failure";

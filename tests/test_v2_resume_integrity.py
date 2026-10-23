@@ -19,6 +19,7 @@ import test_v2_phase8_source_selection as selection_fixture
 import test_v2_phase10_reviewer_ledger as reviewer
 import test_v2_phase11_final_output as final_fixture
 
+import researchassistant.agents.post_analysis_round as post_analysis_round
 import researchassistant.research.v2_orchestrator as coordinator
 from researchassistant.agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
@@ -199,7 +200,8 @@ def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
 ) -> None:
     path = tmp_path / "partial.sqlite3"
     controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
-    original: Callable[..., Any] = getattr(coordinator, stage)
+    stage_owner = post_analysis_round if stage == "run_v2_round_four_continuation" else coordinator
+    original: Callable[..., Any] = getattr(stage_owner, stage)
     captured: dict[str, Any] = {}
 
     def interrupt_after_commit(**kwargs: Any) -> object:
@@ -207,10 +209,10 @@ def test_completed_stage_interruption_resumes_without_repeating_saved_calls(
         captured["model"] = kwargs["llm_provider"]._provider
         raise KeyboardInterrupt("generated interruption after completed stage")
 
-    monkeypatch.setattr(coordinator, stage, interrupt_after_commit)
+    monkeypatch.setattr(stage_owner, stage, interrupt_after_commit)
     with pytest.raises(KeyboardInterrupt):
         product._run(path, controls)
-    monkeypatch.setattr(coordinator, stage, original)
+    monkeypatch.setattr(stage_owner, stage, original)
     partial = list_runs(path)[0]
     assert partial.status.value == "running"
     previous_requests = list(captured["model"].requests)

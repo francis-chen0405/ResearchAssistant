@@ -103,8 +103,11 @@ uses only its supported semantic endpoint; other selected providers retain their
 Unselected providers need no key and receive no requests. Expansion uses only owned usable,
 relevant scholarly seeds when OpenAlex is selected, inside its existing 10-request/$0.01
 envelope. Depth is a request bound, not a returned-result promise or acquisition target.
-Candidate-source choices are 5, 10, 20 and 30 per enabled direction per round
-(default 20); current product acquisition is bounded to 60 clusters per round.
+Readable-source targets are 5, 10, 20 and 30 per enabled direction per round
+(default 20). Ranked acquisition replaces inaccessible or unusable candidates until
+the target is met or the configured acquisition bound is exhausted, with a hard
+ceiling of 60 attempted clusters per round. A readable source still requires claim-specific
+analysis; this target does not promise admitted evidence.
 
 CLI switches are `--metadata-depth`, `--seed-expansion`/`--no-seed-expansion` and
 `--scholarly-search-mode`. Old API clients receive fresh defaults. Old saved preferences
@@ -113,3 +116,19 @@ display as not recorded. Direct-v2 callers pass `ResearchControls` to activate p
 omitting them retains the preceding policy. Explicit legacy CLI discovery flags are rejected
 and legacy-injected controllers receive historical controls. Settings are frozen for a run;
 changed settings require a fresh run. Source targets and all protected budgets remain separate.
+
+
+## Recommendation coverage and paper locations
+
+Fresh recommendations use compact exact preview views within the unchanged
+24,000-token native-input cap. The run displays how many retained sources were
+included or omitted; recommendations before analysis remain provisional. Full local
+snapshots and provenance are retained. Confirmed DOI/title-matched copies across
+publisher/PMC locations share one assessment identity per direction, with alternate
+URLs and original snapshot references preserved. Uncertain matches remain separate.
+A source target counts retained captures and does not promise independent studies.
+
+Provider diagnostics distinguish failed calls, unknown dispatched outcomes and
+queries blocked before dispatch. Unknown calls keep their reservations and prevent
+further dispatch; starting a fresh run remains necessary. No automatic retry/refund
+or increase to provider/source budgets is introduced.

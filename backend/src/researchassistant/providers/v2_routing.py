@@ -166,12 +166,20 @@ class V2RoutingPreflight(StrictModel):
                 return route
         raise ValueError(f"no v2 route is configured for {stage.value}")
 
-    def reserve(self, stage: LLMStage, input_tokens: int) -> V2ModelReservation:
+    def reserve(
+        self, stage: LLMStage, input_tokens: int, *, output_limit: int | None = None
+    ) -> V2ModelReservation:
         """Calculate the exact conservative reservation without contacting a provider."""
         if input_tokens < 1:
             raise ValueError("input_tokens must be at least one")
         route = self.for_stage(stage)
-        output_tokens = route.max_completion_tokens
+        output_tokens = (
+            min(route.max_completion_tokens, output_limit)
+            if output_limit is not None
+            else route.max_completion_tokens
+        )
+        if output_tokens < 1:
+            raise ValueError("output limit must be positive")
         return V2ModelReservation(
             stage=stage,
             logical_alias=route.logical_alias,

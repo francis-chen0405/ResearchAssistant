@@ -21,6 +21,7 @@ from researchassistant.contracts.models import (
     V2EvidenceAdmissionSourceResult,
     V2EvidenceAdmissionState,
 )
+from researchassistant.providers.llm import LLMStage
 from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult, V2ProductionState
 from researchassistant.storage.store import (
     insert_v2_artifact,
@@ -79,7 +80,19 @@ def test_interruption_preserves_admitted_evidence_on_unchanged_resume(
     before = read_v2_evidence_admission(path, source.evidence_record.ledger_claim_id)
     result, model, search = product._run(path, controls, run_id=partial.run_id)
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
-    assert not model.requests and not search.requests
+    # Initial source work is checkpointed. Only the newly placed Round-4
+    # gap, plan and Scout may run after the interrupted admission completes.
+    assert [request.stage for request in model.requests] == [
+        LLMStage.GAP_ANALYSIS,
+        LLMStage.SEARCH_AGENT,
+        LLMStage.SCOUT,
+    ]
+    assert search.requests
+    assert all(
+        request.compiled_query is not None
+        and request.compiled_query.conceptual_query.round_number == 4
+        for request in search.requests
+    )
     assert read_v2_evidence_admission(path, source.evidence_record.ledger_claim_id) == before
     saved = admission.V2EvidenceAdmissionBatchResult.model_validate_json(
         read_v2_artifact(

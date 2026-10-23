@@ -9,7 +9,14 @@ from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from researchassistant.contracts.models import (
     StrictModel,
@@ -20,6 +27,7 @@ from researchassistant.contracts.models import (
     V2SearchAgentInput,
     V2SurvivingSource,
 )
+from researchassistant.contracts.paper_identity import ConfirmedPaperGroup, ConfirmedPaperLocation
 from researchassistant.contracts.query_planning import (
     V2NeighborhoodSearchOutput,
 )
@@ -208,6 +216,37 @@ class V2MergedSurvivor(StrictModel):
     research_round: int = Field(ge=1, le=4)
     source_url: str = Field(min_length=1)
     survivor: V2SurvivingSource
+    paper_locations: tuple[ConfirmedPaperLocation, ...] = Field(default=(), max_length=240)
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_shape(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if not self.paper_locations:
+            data.pop("paper_locations", None)
+        return data
+
+    @model_validator(mode="after")
+    def validate_paper_locations(self) -> V2MergedSurvivor:
+        if self.paper_locations:
+            ConfirmedPaperGroup(
+                canonical_source_id=self.survivor.cluster_id,
+                doi=self.paper_locations[0].doi,
+                locations=self.paper_locations,
+            )
+            canonical = next(
+                location
+                for location in self.paper_locations
+                if location.source_id == self.survivor.cluster_id
+            )
+            if (
+                canonical.snapshot_id != self.survivor.snapshot_id
+                or canonical.snapshot_hash != self.survivor.snapshot_sha256
+                or canonical.source_url != self.source_url
+                or canonical.research_round != self.research_round
+                or canonical.direction != self.survivor.direction
+            ):
+                raise ValueError("canonical paper location differs from retained source")
+        return self
 
 
 class V2MergedSurvivorPool(StrictModel):
@@ -215,6 +254,21 @@ class V2MergedSurvivorPool(StrictModel):
 
     run_id: UUID
     sources: tuple[V2MergedSurvivor, ...]
+
+    @model_validator(mode="after")
+    def validate_source_ownership(self) -> V2MergedSurvivorPool:
+        ids = [source.survivor.cluster_id for source in self.sources]
+        if len(ids) != len(set(ids)):
+            raise ValueError("merged survivors require unique source IDs")
+        members = [
+            location.source_id
+            for source in self.sources
+            for location in source.paper_locations
+            if location.source_id != source.survivor.cluster_id
+        ]
+        if len(members) != len(set(members)) or set(members).intersection(ids):
+            raise ValueError("paper mirror belongs to multiple retained identities")
+        return self
 
 
 class V2AdaptiveRoundExecution(StrictModel):

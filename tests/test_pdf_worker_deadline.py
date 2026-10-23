@@ -128,4 +128,4 @@ def test_pdf_worker_returns_deterministic_generated_text() -> None:
     second = normalization.normalize_pdf(buffer.getvalue())
     assert first == second
     assert first.text == "Page 1\nAn exact generated source sentence."
-    assert first.pdf_policy_version == "ra-digital-pdf-v2"
+    assert first.pdf_policy_version == "ra-digital-pdf-v4"

@@ -14,6 +14,7 @@ from uuid import UUID
 import pytest
 from api_contract_support import contract_inventory, registered_routes
 from fastapi.testclient import TestClient
+from review_schema_compatibility import normalize_approved_additive_fields
 from test_mlp3_api import FakeController, FakeServices
 from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved, _run
 from test_v2_phase11_final_output import _continuation, _synthesis
@@ -112,6 +113,9 @@ def test_routes_schemas_and_offline_responses_match_before_split(
             assert response["body"]["sourceTarget"] == 20
             assert response["body"]["metadataDepth"] == 50
             response["body"].update(sourceTarget=10, metadataDepth=20)
+    normalize_approved_additive_fields(
+        after["openapi"]["components"]["schemas"], reference_root="components/schemas"
+    )
     assert after == before
 
 

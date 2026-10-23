@@ -438,7 +438,9 @@ def run_v2_adaptive_search_continuation(
         if query.compiled_query is not None:
             resolved_query_modes.setdefault(query.provider, query.compiled_query.mode)
     initial_pool = _merge_survivors(
-        initial_plan.run_id, ((1, round_one_discovery, round_one_acquisition),)
+        initial_plan.run_id,
+        ((1, round_one_discovery, round_one_acquisition),),
+        deduplicate_papers=not legacy_prompt,
     )
     if _cancelled(cancellation_requested):
         return _finish(
@@ -505,6 +507,7 @@ def run_v2_adaptive_search_continuation(
             (1, round_one_discovery, round_one_acquisition),
             (2, discovery_two, acquisition_two),
         ),
+        deduplicate_papers=not legacy_prompt,
     )
     if summary_two.status is V2AdaptiveRoundStatus.CANCELLED:
         return _finish(
@@ -518,14 +521,15 @@ def run_v2_adaptive_search_continuation(
             now,
         )
     if not any(outcome.succeeded for outcome in search_two.outcomes):
+        from researchassistant.agents.adaptive_execution import search_failure_explanation
+
         return _finish(
             path,
             initial_plan.run_id,
             (summary_two,),
             pool_two,
             V2AdaptiveStopCode.PROVIDER_FAILURE,
-            "Round 2 stopped after all eligible search providers failed; "
-            "completed work was preserved.",
+            search_failure_explanation(path, search_two),
             2,
             now,
         )
@@ -861,15 +865,16 @@ def run_v2_adaptive_search_continuation(
             (2, discovery_two, acquisition_two),
             (3, discovery_three, acquisition_three),
         ),
+        deduplicate_papers=not legacy_prompt,
     )
     if summary_three.status is V2AdaptiveRoundStatus.CANCELLED:
         stop_code = V2AdaptiveStopCode.CANCELLED
         reason = "Research stopped at the Round-3 boundary because cancellation was requested."
     elif summary_three.status is V2AdaptiveRoundStatus.DEGRADED:
         stop_code = V2AdaptiveStopCode.PROVIDER_FAILURE
-        reason = (
-            "Research stopped after Round-3 provider degradation; completed work was preserved."
-        )
+        from researchassistant.agents.adaptive_execution import search_failure_explanation
+
+        reason = search_failure_explanation(path, search_three)
     else:
         stop_code = V2AdaptiveStopCode.ROUND_THREE_COMPLETE
         reason = "Research stopped at the fixed three-round maximum after the narrow Round 3."

@@ -139,8 +139,8 @@ export function ResearchTrailDrawer({
                   </p>
                   {item.preview.snapshot_truncated && (
                     <p>
-                      The saved source was truncated. Sections beyond the
-                      captured text are unknown.
+                      The saved source is incomplete. Pages or passages omitted
+                      from this capture may contain additional findings.
                     </p>
                   )}
                   {Boolean(item.preview.missing_sections?.length) && (

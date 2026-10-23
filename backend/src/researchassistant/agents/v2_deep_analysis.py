@@ -14,6 +14,7 @@ from pydantic import ConfigDict, Field, model_validator
 from researchassistant.agents.v2_acquisition import V2AcquisitionProbeOutput
 from researchassistant.agents.v2_discovery import V2DiscoveryScoutOutput
 from researchassistant.agents.v2_evidence_admission import (
+    V2_EVIDENCE_ADMISSION_ARTIFACT_KEY,
     V2_EVIDENCE_ADMISSION_SOURCE_ARTIFACT_PREFIX,
     V2_EVIDENCE_ADMISSION_SOURCE_LEGACY_PREFIX,
     run_v2_evidence_admission,
@@ -126,16 +127,19 @@ def run_v2_deep_analysis_with_backfill(
     routing_config: V2RoutingConfig,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
+    prior_waves: tuple[V2DeepAnalysisWave, ...] = (),
+    artifact_key: str = V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY,
+    admission_artifact_key: str | None = None,
 ) -> V2DeepAnalysisBackfillResult:
     """Execute the initial queue and backfill terminal source failures in priority order."""
     now = clock or _utc_now
     path = str(Path(db_path).resolve())
-    persisted = _read_backfill(path, queue_result.run_id)
+    persisted = _read_backfill(path, queue_result.run_id, artifact_key)
     if persisted is not None:
         if persisted.final_queue_result.input != queue_result.input:
             raise ValueError("persisted deep-analysis backfill does not match Phase-8 input")
         return persisted
-    if not queue_result.queued_source_ids:
+    if not queue_result.queued_source_ids and not prior_waves:
         raise ValueError("deep-analysis backfill requires a non-empty initial queue")
 
     source_ids = tuple(item.source_id for item in queue_result.input.survivors)
@@ -149,6 +153,41 @@ def run_v2_deep_analysis_with_backfill(
     attempted_source_ids: list[UUID] = []
     executions: dict[UUID, V2DeepAnalysisSourceExecution] = {}
     terminal_reasons: list[str] = []
+    current_snapshots = snapshots_by_source(acquisition_outputs)
+    for wave in prior_waves:
+        original_source = next(
+            (
+                s
+                for s in wave.extraction.queue_result.input.survivors
+                if s.source_id == wave.source_id
+            ),
+            None,
+        )
+        quote = wave.extraction.sources[0].candidate
+        snapshot = current_snapshots.get(wave.source_id)
+        if (
+            wave.source_id not in candidates
+            or wave.analyst.run_id != queue_result.run_id
+            or wave.analyst.input.exact_claim != queue_result.input.exact_claim
+            or wave.analyst.input.directions != queue_result.input.directions
+            or wave.admission is not None
+            or original_source is None
+            or original_source.source_url != candidates[wave.source_id].source_url
+            or snapshot is None
+            or (
+                quote is not None
+                and (
+                    quote.snapshot_id != snapshot.snapshot_id
+                    or quote.snapshot_sha256 != snapshot.snapshot_sha256
+                    or quote.run_id != queue_result.run_id
+                )
+            )
+        ):
+            raise ValueError("evidence checkpoint does not match this run and survivor pool")
+        if wave.source_id in attempted:
+            raise ValueError("evidence checkpoint contains duplicate sources")
+        attempted[wave.source_id] = wave
+        attempted_source_ids.append(wave.source_id)
 
     initial_audit = read_v2_physical_call_audit(path, queue_result.run_id)
     pending = tuple(
@@ -160,6 +199,7 @@ def run_v2_deep_analysis_with_backfill(
             audit=initial_audit,
         )
         for source_id in priority
+        if source_id not in attempted
     )
     cursor = 0
     stop_after_wave = False
@@ -258,11 +298,13 @@ def run_v2_deep_analysis_with_backfill(
                 stop_after_wave = True
         cursor += len(wave_candidates)
 
+    audit = read_v2_physical_call_audit(path, queue_result.run_id)
     final_queue = _final_queue_result(
         queue_result,
         tuple(attempted_source_ids),
-        routing_config,
+        audit,
         attempted_source_ids=tuple(attempted_source_ids),
+        prior_source_ids=frozenset(wave.source_id for wave in prior_waves),
     )
     final_analyst = _final_analyst_result(final_queue, attempted, tuple(attempted_source_ids))
     _raise_if_cancelled(
@@ -273,12 +315,17 @@ def run_v2_deep_analysis_with_backfill(
         db_path=path,
         analyst_result=final_analyst,
         clock=now,
+        artifact_key=admission_artifact_key or V2_EVIDENCE_ADMISSION_ARTIFACT_KEY,
     )
     _raise_if_cancelled(
         cancellation_requested,
         "v2 cancellation was observed after final evidence admission",
     )
-    audit = read_v2_physical_call_audit(path, queue_result.run_id)
+    for wave in prior_waves:
+        execution = _execution_from_wave(wave.model_copy(update={"admission": final_admission}), ())
+        executions[wave.source_id] = execution
+        if execution.state is V2DeepAnalysisSourceExecutionState.ANALYZER_ADMITTED:
+            admitted.append(wave.source_id)
     source_executions = tuple(
         executions.get(
             source_id,
@@ -321,7 +368,7 @@ def run_v2_deep_analysis_with_backfill(
         cancellation_requested,
         "v2 cancellation was observed before deep-analysis completion",
     )
-    insert_v2_artifact(path, V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY, result, result.completed_at)
+    insert_v2_artifact(path, artifact_key, result, result.completed_at)
     return result
 
 
@@ -546,6 +593,7 @@ def _run_source_wave(
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime],
+    admit: bool = True,
 ) -> V2DeepAnalysisWave:
     suffix = f"source-{source_id}"
     extraction = run_v2_exact_extraction(
@@ -566,11 +614,15 @@ def _run_source_wave(
         artifact_key=f"phase-13-luna-evidence-analyst-batch-{suffix}",
         clock=clock,
     )
-    admission = run_v2_evidence_admission(
-        db_path=path,
-        analyst_result=analyst,
-        clock=clock,
-        artifact_key=f"phase-13-evidence-admission-batch-{suffix}",
+    admission = (
+        run_v2_evidence_admission(
+            db_path=path,
+            analyst_result=analyst,
+            clock=clock,
+            artifact_key=f"phase-13-evidence-admission-batch-{suffix}",
+        )
+        if admit
+        else None
     )
     return V2DeepAnalysisWave(
         source_id=source_id,
@@ -626,11 +678,10 @@ def _single_source_queue(
 def _final_queue_result(
     original: V2SourceSelectionQueueResult,
     admitted: tuple[UUID, ...],
-    routing_config: V2RoutingConfig,
+    audit: V2PhysicalCallAudit,
     attempted_source_ids: tuple[UUID, ...],
+    prior_source_ids: frozenset[UUID],
 ) -> V2SourceSelectionQueueResult:
-    candidate_by_id = {item.source_id: item for item in original.input.survivors}
-    candidates = tuple(candidate_by_id[source_id] for source_id in admitted)
     original_status = {item.source_id: item for item in original.source_statuses}
     statuses = tuple(
         _status_for_queue(
@@ -644,22 +695,70 @@ def _final_queue_result(
         )
         for item in original.input.survivors
     )
-    tokens, cost = _queue_reservation(candidates, routing_config)
-    return original.model_copy(
-        update={
-            "queued_source_ids": admitted,
-            "source_statuses": statuses,
-            "queue_capacity": len(admitted),
-            "physical_calls_after_reserve": (
-                original.initial_budget.physical_calls_used
-                + original.mandatory_synthesis_physical_calls
-                + len(admitted) * V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP
-            ),
-            "total_reserved_tokens": tokens,
-            "total_reserved_cost_usd": cost,
-            "token_reservations": _reservation_points(candidates, routing_config),
-            "limiting_reason": None,
-        }
+    # Backfill may attempt more sources than the initial worst-case reservation
+    # admitted. Its final queue is an execution record: account measured usage
+    # (or the consumed reservation for an unknown completion), not 60k per source.
+    exposure: dict[UUID, tuple[int, Decimal]] = {}
+    attempted = set(admitted)
+    for start, completion in zip(audit.starts, audit.completions, strict=True):
+        if start.source_id not in attempted:
+            continue
+        source_id = start.source_id
+        old_tokens, old_cost = exposure.get(source_id, (0, Decimal("0")))
+        used_tokens = (
+            completion.usage_tokens
+            if completion is not None and completion.usage_tokens is not None
+            else start.reserved_tokens
+        )
+        used_cost = (
+            completion.usage_cost_usd
+            if completion is not None and completion.usage_cost_usd is not None
+            else start.reserved_cost_usd
+        )
+        exposure[source_id] = (
+            old_tokens + used_tokens,
+            add_usd(old_cost, used_cost),
+        )
+    tokens = 0
+    cost = Decimal("0")
+    new_tokens = 0
+    new_cost = Decimal("0")
+    points: list[V2DeepAnalysisTokenReservation] = []
+    for index, source_id in enumerate(admitted, 1):
+        source_tokens, source_cost = exposure.get(source_id, (0, Decimal("0")))
+        tokens += source_tokens
+        cost = add_usd(cost, source_cost)
+        if source_id not in prior_source_ids:
+            new_tokens += source_tokens
+            new_cost = add_usd(new_cost, source_cost)
+        if tokens:
+            points.append(
+                V2DeepAnalysisTokenReservation(
+                    source_id=source_id,
+                    queue_size=index,
+                    cumulative_reserved_tokens=tokens,
+                    cumulative_reserved_cost_usd=cost,
+                )
+            )
+    if (
+        len(audit.starts) > original.initial_budget.physical_call_ceiling
+        or new_tokens > original.initial_budget.tokens_remaining
+        or new_cost > original.initial_budget.cost_remaining_usd
+    ):
+        raise ValueError("backfill accounting exceeds the original run ceiling")
+    return V2SourceSelectionQueueResult.model_validate(
+        original.model_copy(
+            update={
+                "queued_source_ids": admitted,
+                "source_statuses": statuses,
+                "queue_capacity": len(admitted),
+                "physical_calls_after_reserve": len(audit.starts),
+                "total_reserved_tokens": tokens,
+                "total_reserved_cost_usd": cost,
+                "token_reservations": tuple(points),
+                "limiting_reason": None,
+            }
+        ).model_dump()
     )
 
 
@@ -968,9 +1067,11 @@ def _remaining_budget(
     return initial
 
 
-def _read_backfill(path: str, run_id: UUID) -> V2DeepAnalysisBackfillResult | None:
+def _read_backfill(
+    path: str, run_id: UUID, artifact_key: str = V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY
+) -> V2DeepAnalysisBackfillResult | None:
     try:
-        artifact = read_v2_artifact(path, run_id, V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY)
+        artifact = read_v2_artifact(path, run_id, artifact_key)
     except KeyError:
         return None
     result = V2DeepAnalysisBackfillResult.model_validate_json(artifact.payload_json)

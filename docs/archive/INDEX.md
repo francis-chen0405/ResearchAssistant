@@ -160,3 +160,5 @@ records the remaining exceptions precisely.
 - [Before manual-only Windows packaging](2026-10-18-ci-trigger-preceding-state/hashes.json): exact preceding current-state owners.
 
 - [Before the Mac smoke PID-race repair](2026-10-18-mac-smoke-preceding-state/hashes.json): exact preceding current-state owners.
+
+- [October 23 integration preceding state](2026-10-23-integration-preceding-state/): exact master/e359 status and handoff snapshots plus master plan navigation.

@@ -4,6 +4,12 @@ This file records decisions that still govern current behavior. The exact preced
 
 ## Research execution
 
+- [Source recovery](../../.agent/plans/source-loss-recovery-2026-10-19.md) feeds early assessed
+  findings into adaptive search, uses exact bounded extraction views and replacement candidates,
+  and considers prior paper metadata as leads requiring fresh assessment. Per-source and run
+  limits remain hard; unknown model usage is never refunded. Recommendations without evidence
+  remain provisional, and retained counts do not establish evidence sufficiency.
+
 - [Resume status projection](../verification/resume-status-2026-10-10.md) separates
   saved run status from this controller's worker ownership. Attempt failures remain
   in a bounded ephemeral cache; polling never writes or relabels the saved run.
@@ -229,3 +235,24 @@ checkout-only root data remains protected by local Git exclusions and is untouch
 The Mac checkout launcher resolves its parent from `desktop/`; the duplicate root
 CLI wrapper is removed in favor of the byte-identical installed/backend facade.
 Backend metadata, runtime resources, source identity and the installed app are unchanged.
+
+## Approved selection coverage, article identity and reporting — October 21
+
+Keep full source provenance locally while sending a versioned compact source view
+through both ordinary and native model renderers. Bound preview bytes with exact
+snapshot offsets and disclose omissions. Preserve the 24,000-token input ceiling,
+existing reservations and recommendation/analysis distinction; do not fill a quota.
+Expose considered/omitted counts so a small recommendation list cannot imply full
+comparative coverage.
+
+Collapse confirmed retained mirrors before early/final assessment using consistent
+DOI anchors plus matching full normalized titles. Preserve search directions and the
+earliest round's canonical identity, every immutable snapshot and all original URLs.
+Never relabel quotations from another snapshot or count mirror locations as independent
+studies. Uncertain identities remain separate. New policy/code identities require a
+fresh run rather than changing saved evidence judgments.
+
+Derive blocked/unknown query counts from durable receipts and physical starts; keep
+saved stop text/artifacts untouched and add truthful live diagnostics. Unknown request
+outcomes retain their conservative accounting and stop further provider dispatch.
+Offline replay verifies coverage and accounting mechanics, not research-quality gain.

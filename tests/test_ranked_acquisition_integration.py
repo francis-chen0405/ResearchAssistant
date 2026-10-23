@@ -5,20 +5,25 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import httpx
+import pytest
 from test_query_execution import CLAIM, DIRECTIONS, _action, _clock
 from test_v2_phase5_acquisition_probe import FixtureScraper, _response
 from test_v2_ranked_scout import NOW, _RecallScout, _routing, _snapshot
 
+import agents.v2_acquisition as v2_acquisition
 from agents.v2_acquisition import run_v2_acquisition_probe
 from agents.v2_discovery import (
     V2DiscoveryResponse,
     V2DiscoveryScoutRunResult,
     run_v2_discovery_and_scout,
 )
+from providers.acquisition import AcquisitionFailureCode
 from providers.config import SerpSearchConfig
+from providers.scraper import ScraperProviderError
 from providers.search import SearchResult
 from providers.serpsearch import SerpSearchAdapter
 from researchassistant.contracts.acquisition_ranking import V2AcquisitionRankingAudit
+from researchassistant.contracts.discovery_v2 import V2ProductDiscoveryPolicy
 from researchassistant.contracts.model_contracts import (
     DiscoveryProvider,
     RunManifest,
@@ -32,6 +37,7 @@ from researchassistant.contracts.model_research import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
 )
+from researchassistant.research.metadata_ranking import fair_ranked_ids
 from researchassistant.research.query_compiler import compile_query
 from researchassistant.research.query_execution import execute_query, freeze_query_execution
 from researchassistant.storage.discovery_store import provider_attempt_audit
@@ -77,6 +83,8 @@ def _organic_page(page: int) -> dict[str, object]:
 
 def _fresh_case(
     path: Path,
+    *,
+    discovery_policy: V2ProductDiscoveryPolicy | None = None,
 ) -> tuple[
     UUID,
     V2InitialPlannerOutput,
@@ -97,12 +105,22 @@ def _fresh_case(
     )
     insert_v2_pipeline_identity(str(path), run_id, V2PipelineIdentity(), NOW)
     binding = freeze_query_execution(
-        str(path), run_id, CLAIM, DIRECTIONS, (DiscoveryProvider.SERPSEARCH,), _clock()
+        str(path),
+        run_id,
+        CLAIM,
+        DIRECTIONS,
+        (DiscoveryProvider.SERPSEARCH,),
+        _clock(),
+        discovery_policy=discovery_policy,
     )
     assert binding.compiler_identity == "source-query-compiler-v3"
 
     shallow_action = _action(run_id, DiscoveryProvider.SERPSEARCH)
-    action = compile_query(shallow_action.conceptual_query, requested_depth=20)
+    action = compile_query(
+        shallow_action.conceptual_query,
+        requested_depth=20,
+        policy=discovery_policy,
+    )
     queries = (
         V2RoundOneSearchQuery(
             run_id=run_id,
@@ -249,6 +267,94 @@ def test_page_two_study_reaches_scout_shortlist_and_immutable_usable_snapshot(
     assert not any(
         "extract" in artifact.casefold() or "admission" in artifact.casefold()
         for artifact in _artifact_types(path, run_id)
+    )
+
+
+@pytest.mark.parametrize("failure_mode", ["unavailable", "probe_unusable"])
+def test_ranked_acquisition_backfills_until_direction_target_is_usable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_mode: str,
+) -> None:
+    path = tmp_path / f"ranked-acquisition-backfill-{failure_mode}.sqlite"
+    run_id, plan, results = _fresh_case(
+        path,
+        discovery_policy=V2ProductDiscoveryPolicy(
+            sources_per_direction_per_round=10,
+            max_acquisition_per_round=60,
+        ),
+    )
+    discovery_run, _ = _run_discovery(path, run_id, plan, results, model_calls=10)
+    ranking = discovery_run.ranking_artifact
+    assert ranking is not None
+
+    decisions = {
+        item.item_id: item.decision.value
+        for batch in discovery_run.output.scout_batches
+        for item in batch.items
+    }
+    eligible = sorted(
+        (rank for rank in ranking.ranks if decisions.get(rank.item_id) in {"retrieve", "maybe"}),
+        key=lambda rank: (0 if decisions[rank.item_id] == "retrieve" else 1, rank.rank),
+    )
+    eligible = tuple(
+        rank.model_copy(update={"rank": index}) for index, rank in enumerate(eligible, 1)
+    )
+    first_item_id = fair_ranked_ids(eligible, len(eligible))[0]
+    first_cluster = next(
+        cluster for cluster in discovery_run.output.clusters if first_item_id in cluster.item_ids
+    )
+
+    scrape_responses = {
+        item.source_url: _response(item.source_url, SOURCE_TEXT)
+        for item in discovery_run.output.items
+    }
+    if failure_mode == "unavailable":
+        for url in (first_cluster.preferred_url, *first_cluster.alternate_urls):
+            scrape_responses[url] = ScraperProviderError(
+                AcquisitionFailureCode.CONNECTION, "fixture source unavailable"
+            )
+    else:
+        original_probe = v2_acquisition.probe_snapshot
+
+        def fail_first_probe(*, snapshot: object, cluster_id: object, **kwargs: object) -> object:
+            if cluster_id == first_cluster.cluster_id:
+                raise RuntimeError("fixture Probe failure")
+            return original_probe(snapshot=snapshot, cluster_id=cluster_id, **kwargs)
+
+        monkeypatch.setattr(v2_acquisition, "probe_snapshot", fail_first_probe)
+
+    scraper = FixtureScraper(scrape_responses)
+    acquired = run_v2_acquisition_probe(
+        db_path=str(path),
+        discovery_output=discovery_run.output,
+        wigolo_provider=scraper,
+        policy=V2AcquisitionPolicy(max_clusters=12),
+        clock=lambda: NOW,
+    )
+
+    audit = V2AcquisitionRankingAudit.model_validate_json(
+        read_v2_artifact(str(path), run_id, "metadata-acquisition-v2-round-1").payload_json
+    )
+    first_probe = (
+        next(
+            probe
+            for probe in acquired.output.probes
+            if probe.cluster_id == first_cluster.cluster_id
+        )
+        if failure_mode == "probe_unusable"
+        else None
+    )
+    if first_probe is not None:
+        assert not first_probe.succeeded
+    assert len(acquired.output.survivors) == 10
+    assert audit.usable_survivors == 10
+    assert audit.acquisition_shortlisted_clusters == audit.fetched_documents + (
+        1 if failure_mode == "unavailable" else 0
+    )
+    assert audit.acquisition_shortlisted_clusters > 10
+    assert any(
+        source.cluster_id != first_cluster.cluster_id for source in acquired.output.acquisitions
     )
 
 

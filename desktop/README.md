@@ -2,8 +2,8 @@
 
 [STATUS](../docs/project/STATUS.md) owns current-source,
 installed-app and public-download provenance. The
-[October 19 installation record](../docs/verification/current-app-install-2026-10-19.md)
-retains that local unsigned build's checks and saved-data preservation evidence.
+[October 21 repair/install record](../docs/verification/selection-coverage-repairs-2026-10-21.md)
+retains the current local unsigned build's checks and saved-data preservation evidence.
 The source layout described here is the backend/frontend consolidation; rebuilding
 resources alone does not replace the installed application.
 

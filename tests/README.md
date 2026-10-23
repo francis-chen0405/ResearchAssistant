@@ -68,6 +68,15 @@ runtime validation.
 
 ## Find tests for an owner
 
+For early evidence feedback and source recovery, start with `test_source_loss_recovery.py`,
+`test_ranked_acquisition_integration.py`, `test_v2_deep_analysis_concurrency.py`, and
+`test_source_leads.py`. The provider-native prompt projection and completion allowance are
+covered alongside exact snapshot offsets, budget exhaustion, prior-source metadata isolation,
+DOI deduplication, fresh assessment and truthful counts after follow-up failures.
+`test_neighborhood_planning.py` exercises graph-only and mixed planning through
+persistence, bounded repair and replay without another call. Frontend outcome labels are exercised by
+`node --test frontend/scripts/hook-regressions.test.cjs` and the offline UI smoke suite.
+
 For `researchassistant.research.seed_expansion`, start with the module's
 `select_seeds`, `offer_expansions` and `execute_expansion` functions. A fresh graph
 `search_graph` followed by inbound `trace_path(include_tests=true)` exposes callers
@@ -229,3 +238,17 @@ isolated process/transport doubles: stalled API/web checks, refused listeners,
 successful opening and owned-child cleanup with an unrelated surviving process.
 The compatible-resume status test now pauses before execution: an unknown initial
 Planner intent must never be dispatched again, even under matching controls.
+
+### Selection coverage and identity regressions
+
+`test_selection_recovery_repairs.py` verifies 20-source native compact coverage within
+24,000 tokens, exact Unicode preview offsets, replay without model calls, conservative
+DOI/header mirror identity, earliest-round assessment stability, immutable member
+hashes, conflicting/reference-only DOI refusal, and unknown/blocked dispatch accounting
+without retries or database writes. Historical schema comparisons assert the precise
+approved additive fields before comparing the remaining frozen fixture bytes.
+
+When reusing dependencies through checkout symlinks, run network loader integration
+against the staged physical acquisition tree: its URL-scoped loader uses exact module
+locations. Run the stale-cache reproduction against the original unpatched dependency;
+the staged cache already includes that repair. These are separate fixture requirements.

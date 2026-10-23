@@ -2,6 +2,16 @@
 
 ResearchAssistant is a local desktop application for research on a precise claim. The Electron shell serves a static Next.js renderer and starts a bundled Python backend on loopback. Research execution, provider credentials, SQLite access, and acquisition stay in the backend. The renderer has no direct filesystem, database, process, or provider access. There is no hosted application backend.
 
+Fresh source recovery assesses up to four retained sources before the first Gap Analysis,
+then passes supported propositions, qualifications and failures back into adaptive searching.
+Final analysis reuses those source checkpoints without repeating their model calls. Ranked
+acquisition replaces failed candidates within its existing policy ceiling and usable-source
+target. Extraction uses a bounded exact-sentence view with original snapshot numbering;
+quotation membership and offsets are still checked against the immutable full snapshot.
+Initial planning may consider bounded, deduplicated prior-run paper metadata from the same
+database. Each new claim requires fresh retrieval/assessment; prior evidence is never admitted
+by reuse. [Recovery record](../../.agent/plans/source-loss-recovery-2026-10-19.md) owns details.
+
 The ownership and behavior below describe the live backend/frontend layout.
 [STATUS](STATUS.md) owns current verification, installed/public-build provenance
 and open acceptance gates. Use [the test map](../../tests/README.md) to locate
@@ -362,3 +372,26 @@ current durable accounting. Initial planning retains one intent, its typed resul
 original plan timestamp. Valid older relational/artifact publication prefixes are
 reconciled without replacement model calls; contradictions fail closed. Generic
 immutable artifacts carry these private checkpoints without a schema migration.
+
+## Compact selection and retained-paper identity — October 21
+
+Fresh selection uses `compact-selection-v1`: bounded source metadata and at most
+320 UTF-8 bytes of exact preview spans per source, including snapshot references,
+character offsets, capture/truncation flags and omission disclosure. Complete
+selection provenance stays in immutable local input checkpoints. The existing
+24,000-token native-input estimate, considered/omitted shortlist audit, output-ID
+validation, protected queue and physical/token/cost limits remain authoritative.
+Recommendations remain provisional until claim-specific evidence assessment.
+
+`retained-paper-identity-v1` groups retained locations only with consistent DOI
+anchors and matching normalized full titles within one search direction. DOI anchors
+come from provider metadata, recognized publisher URLs or a title-bound PMC article
+header; body references and title-only matches cannot establish identity. The earliest
+round keeps its assessment identity; readable capture length selects within that round.
+Every member URL, snapshot ID/hash and DOI basis remains in the audit. Original
+snapshots and quotations are preserved; alternate locations are displayed as one paper.
+
+Read-only dispatch diagnostics distinguish unknown dispatched calls from subsequent
+queries blocked before dispatch using validated physical attempts and retrieval
+receipts. Historical receipts are not rewritten. An unknown outcome still freezes
+further dispatch and retains its reservation; no automatic retry or refund is added.

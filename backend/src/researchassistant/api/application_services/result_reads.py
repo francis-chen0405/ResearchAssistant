@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID
 
+from researchassistant.agents.post_analysis_round import POST_ANALYSIS_COMBINED_KEY
 from researchassistant.agents.v2_deep_analysis import V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY
 from researchassistant.agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
 from researchassistant.agents.v2_final_output import (
@@ -75,11 +76,18 @@ def read_evidence(db_path: str | Path, run_id: UUID) -> V2EvidenceDisplay:
                 store.connection, run_id, V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
             )
             evidence_type = V2EvidenceAdmissionBatchResult
+            try:
+                combined_artifact = read_v2_artifact(
+                    store.connection, run_id, POST_ANALYSIS_COMBINED_KEY
+                )
+            except KeyError:
+                combined_artifact = None
         except KeyError:
             evidence_artifact = read_v2_artifact(
                 store.connection, run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY
             )
             evidence_type = V2ReviewerLedgerBatchResult
+            combined_artifact = None
         try:
             gap_artifact = read_v2_artifact(
                 store.connection, run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY
@@ -104,6 +112,25 @@ def read_evidence(db_path: str | Path, run_id: UUID) -> V2EvidenceDisplay:
         V2FinalResearchOutput.model_validate_json(final_artifact.payload_json), run_id, manifest
     )
     evidence_result = evidence_type.model_validate_json(evidence_artifact.payload_json)
+    if combined_artifact is not None:
+        if combined_artifact.artifact_type != V2EvidenceAdmissionBatchResult.__name__:
+            raise ValueError("combined evidence artifact has an unexpected type")
+        combined = V2EvidenceAdmissionBatchResult.model_validate_json(
+            combined_artifact.payload_json
+        )
+        original = evidence_result
+        if not isinstance(original, V2EvidenceAdmissionBatchResult) or (
+            combined.run_id != original.run_id
+            or combined.source_results[: len(original.source_results)] != original.source_results
+            or combined.analyst_result.source_results[: len(original.analyst_result.source_results)]
+            != original.analyst_result.source_results
+            or combined.analyst_result.input.queued_candidates[
+                : len(original.analyst_result.input.queued_candidates)
+            ]
+            != original.analyst_result.input.queued_candidates
+        ):
+            raise ValueError("combined evidence claim or quote differs from original admission")
+        evidence_result = combined
     gap_analysis = (
         V2GapAnalysisOutput.model_validate_json(gap_artifact.payload_json)
         if gap_artifact is not None

@@ -40,17 +40,17 @@ export function SourceSections({
     return (
       (
         {
-          recommended_analyzed: "Recommended · Reviewer-approved",
-          recommended_analyzer_admitted: "Recommended · analyzer-admitted",
-          recommended_analyzer_rejected: "Recommended · analyst-rejected",
-          recommended_analyzer_failed: "Recommended · analysis failed",
-          recommended_no_ledger_evidence: "Recommended · no admitted evidence",
-          surviving_analyzed: "Survived selection · Reviewer-approved",
-          surviving_analyzer_admitted: "Survived selection · analyzer-admitted",
-          surviving_analyzer_rejected: "Survived selection · analyst-rejected",
-          surviving_analyzer_failed: "Survived selection · analysis failed",
-          surviving_not_deeply_analyzed: "Survived selection · not analyzed",
-          budget_prevented_analysis: "Analysis prevented by budget",
+          recommended_analyzed: "Recommended · evidence assessed",
+          recommended_analyzer_admitted: "Recommended · evidence admitted",
+          recommended_analyzer_rejected: "Recommended · evidence not admitted",
+          recommended_analyzer_failed: "Recommended · assessment failed",
+          recommended_no_ledger_evidence: "Recommended · provisional; no admitted evidence",
+          surviving_analyzed: "Survived selection · evidence assessed",
+          surviving_analyzer_admitted: "Survived selection · evidence admitted",
+          surviving_analyzer_rejected: "Survived selection · evidence not admitted",
+          surviving_analyzer_failed: "Survived selection · assessment failed",
+          surviving_not_deeply_analyzed: "Survived selection · not assessed",
+          budget_prevented_analysis: "Provisional · analysis prevented by budget",
         } as Record<string, string>
       )[status] ?? readableStage(status)
     );
@@ -70,19 +70,19 @@ export function SourceSections({
               ? "source call-cap blocked"
               : source.status === "recommended_analyzed" ||
                   source.status === "surviving_analyzed"
-                ? "Reviewer-approved"
+                ? "evidence assessed"
                 : source.status.endsWith("analyzer_admitted")
-                  ? "analyzer-admitted"
+                  ? "evidence admitted"
                   : source.status.endsWith("analyzer_failed")
-                    ? "analysis failed"
+                    ? "assessment failed"
                     : source.status.endsWith("analyzer_rejected")
-                      ? "analyst-rejected"
+                      ? "evidence not admitted"
                       : source.status.endsWith("no_ledger_evidence")
                         ? "no admitted evidence"
                         : source.status.endsWith("not_deeply_analyzed")
-                          ? "not analyzed"
+                          ? "not assessed"
                           : source.status === "budget_prevented_analysis"
-                            ? "analysis prevented by budget"
+                            ? "provisional; analysis prevented by budget"
                             : null;
       if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
     }
@@ -101,6 +101,16 @@ export function SourceSections({
             (item) => item.source_id === source.source_id,
           );
           const relatedGapCount = details?.gap_ids?.length ?? 0;
+          const evidenceAssessment = details
+            ? `${
+                {
+                  supports: details.claim_fit === 5 ? "Direct support" : "Indirect or partial support",
+                  challenges: details.claim_fit === 5 ? "Direct challenge" : "Indirect or partial challenge",
+                  qualifies: "Qualifying evidence",
+                  unrelated: "Not relevant to the claim",
+                }[details.relationship_to_claim]
+              }`
+            : null;
           return (
             <article className="source-card" key={source.source_id}>
               <a href={source.source_url} target="_blank" rel="noreferrer">
@@ -110,6 +120,21 @@ export function SourceSections({
                   source.source_url,
                 )}
               </a>
+              {source.alternate_source_urls?.length ? (
+                <div>
+                  <small>
+                    Alternate locations for the same paper; these are not
+                    additional independent evidence.
+                  </small>
+                  {source.alternate_source_urls.map((url) => (
+                    <p key={url}>
+                      <a href={url} target="_blank" rel="noreferrer">
+                        Alternate location
+                      </a>
+                    </p>
+                  ))}
+                </div>
+              ) : null}
               <small>
                 {source.source_type || "Source"} · discovered via{" "}
                 {source.discovery_providers.join(", ") || "recorded source"} ·{" "}
@@ -124,6 +149,11 @@ export function SourceSections({
                 )}{" "}
                 · round {source.discovery_round}
               </small>
+              {evidenceAssessment ? (
+                <p>{evidenceAssessment}</p>
+              ) : source.recommended ? (
+                <p>Provisional · claim relationship has not been assessed.</p>
+              ) : null}
               <p>
                 {details?.selection_rationale ||
                   (source.recommended

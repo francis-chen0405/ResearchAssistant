@@ -48,13 +48,15 @@ function hookHarness(relative, api) {
         if (name === "./dialog") return { Dialog: "Dialog" };
         if (name === "./workspace") return { StatusPill: "StatusPill" };
         if (name === "@/lib/api") return { ...load(path.resolve(__dirname, "../lib/api.ts")), researchApi: api };
-        return load(path.resolve(path.dirname(file), `${name}.ts`));
+        const resolved = path.resolve(path.dirname(file), `${name}.ts`);
+        return load(fs.existsSync(resolved) ? resolved : resolved.replace(/\.ts$/, ".tsx"));
       },
     });
     return compiled.exports;
   }
   const exports = load(path.resolve(__dirname, "..", relative));
   return {
+    exports,
     render(name, ...args) { cursor = 0; effects.length = 0; layoutEffects.length = 0; return exports[name](...args); },
     runEffects() { return [...layoutEffects, ...effects].map((effect) => effect()); },
     runLayoutEffects() { return layoutEffects.map(effect => effect()); },
@@ -66,6 +68,90 @@ function elementNodes(value) {
   if (Array.isArray(value)) return value.flatMap(elementNodes);
   return [value, ...elementNodes(value.props?.children)];
 }
+
+test("source cards mark unassessed recommendations provisional and qualify partial evidence", () => {
+  const harness = hookHarness("features/results/source-sections.tsx", {});
+  const unassessedId = "unassessed-source";
+  const partialId = "partial-source";
+  const directId = "direct-source";
+  const source = (sourceId, title) => ({
+    source_id: sourceId, direction: "support", source_url: `https://example.test/${sourceId}`,
+    title, source_type: "Article", publication_date: null, discovery_providers: ["exa"],
+    discovery_round: 1, recommended: true, recommendation_rank: 1, queue_rank: 1,
+    status: "recommended_analyzed", ledger_claim_ids: [], budget_prevented_reason: null,
+  });
+  const result = {
+    recommended_sources: [source(unassessedId, "Unassessed"), source(partialId, "Qualified"), source(directId, "Direct")],
+    all_surviving_sources: [source(unassessedId, "Unassessed"), source(partialId, "Qualified"), source(directId, "Direct")],
+  };
+  const evidence = {
+    source_budget_outcomes: [], source_titles: [], study_lineage: [], shared_website_groups: [],
+    items: [{
+      source_id: partialId, relationship_to_claim: "qualifies", claim_fit: 4,
+      gap_ids: [], selection_rationale: "Selected for comparison.",
+    }, { source_id: directId, relationship_to_claim: "supports", claim_fit: 5, gap_ids: [] }],
+  };
+  const rendered = JSON.stringify(elementNodes(harness.render("SourceSections", { result, evidence })));
+  assert.match(rendered, /Provisional · claim relationship has not been assessed\./);
+  assert.match(rendered, /Qualifying evidence/);
+  assert.match(rendered, /Direct support/);
+});
+
+test("provider outcome labels separate blocked and unknown requests from failures", () => {
+  const { exports } = hookHarness("features/shared/presentation.ts", {});
+  const { providerOutcomeLabel } = exports;
+  const outcome = {
+    query_attempts: 2, graph_actions: 0, search_results: 0,
+    empty_queries: 0, timeout_queries: 0, failed_queries: 1,
+    blocked_queries: 2, unknown_queries: 1, surviving_sources: 0,
+  };
+  assert.equal(
+    providerOutcomeLabel(outcome),
+    "2 queries · 0 results · 1 failed · 2 blocked before dispatch · 1 outcome unknown",
+  );
+  assert.equal(
+    providerOutcomeLabel({ ...outcome, blocked_queries: 1, unknown_queries: 2 }),
+    "2 queries · 0 results · 1 failed · 1 blocked before dispatch · 2 outcomes unknown",
+  );
+  assert.equal(
+    providerOutcomeLabel({
+      query_attempts: 0, graph_actions: 0, search_results: 0,
+      empty_queries: 0, timeout_queries: 0, failed_queries: 0,
+      blocked_queries: 2, unknown_queries: 0, surviving_sources: 0,
+    }),
+    "2 blocked before dispatch",
+  );
+  const historical = { ...outcome };
+  delete historical.blocked_queries;
+  delete historical.unknown_queries;
+  assert.equal(
+    providerOutcomeLabel(historical),
+    "2 queries · 0 results · 1 failed",
+  );
+});
+
+test("source cards link alternate URLs as locations for the same paper", () => {
+  const harness = hookHarness("features/results/source-sections.tsx", {});
+  const source = {
+    source_id: "same-paper", direction: "support", source_url: "https://example.test/main",
+    alternate_source_urls: ["https://example.test/alternate"],
+    title: "Same paper", source_type: "Article", publication_date: null,
+    discovery_providers: ["exa"], discovery_round: 1, recommended: true,
+    recommendation_rank: 1, queue_rank: 1, status: "recommended_no_ledger_evidence",
+    ledger_claim_ids: [], budget_prevented_reason: null,
+  };
+  const result = { recommended_sources: [source], all_surviving_sources: [source] };
+  const rendered = elementNodes(harness.render("SourceSections", { result, evidence: null }));
+  const alternate = rendered.find(
+    node => node.type === "a" && node.props.href === source.alternate_source_urls[0],
+  );
+  assert.ok(alternate);
+  assert.equal(alternate.props.children, "Alternate location");
+  const content = JSON.stringify(rendered);
+  assert.match(content, /Alternate locations for the same paper/);
+  assert.match(content, /not additional independent evidence/);
+  assert.match(content, /Provisional/);
+});
 
 for (const action of ["save", "remove", "check", "restore"]) {
   test(`provider ${action} protects input and rejects an overlapping action before commit`, async () => {

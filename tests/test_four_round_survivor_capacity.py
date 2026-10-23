@@ -11,6 +11,10 @@ from pydantic import ValidationError
 from test_preview_selection_bounds import BoundedSourceSelector, _large_selection_input, _run
 from test_v2_phase8_source_selection import _candidate
 
+from researchassistant.agents.post_analysis_round import (
+    POST_ANALYSIS_COMPLETION_KEY,
+    V2PostAnalysisRoundOutcome,
+)
 from researchassistant.agents.v2_source_selection import run_v2_source_selection_and_queue
 from researchassistant.api.live_history import research_trail
 from researchassistant.api.live_progress import snapshot_from_v2_result
@@ -214,7 +218,7 @@ class _DistinctSearch(product._WideSearch):
 
 
 @pytest.mark.parametrize("source_target", [20, 30])
-def test_balanced_four_round_run_releases_more_than_seventy_five_source_dispositions(
+def test_balanced_high_source_run_retains_dispositions_when_round_four_unaffordable(
     tmp_path: Path,
     source_target: int,
 ) -> None:
@@ -248,11 +252,42 @@ def test_balanced_four_round_run_releases_more_than_seventy_five_source_disposit
     retained_count = len(selection.input.survivors)
     assert 75 < retained_count <= min(240, 8 * source_target)
     assert len(selection.source_statuses) == retained_count
-    assert {source.research_round for source in selection.input.survivors} == {1, 2, 3, 4}
+    assert {source.research_round for source in selection.input.survivors} == {1, 2, 3}
+    outcome = V2PostAnalysisRoundOutcome.model_validate_json(
+        read_v2_artifact(path, result.run_id, POST_ANALYSIS_COMPLETION_KEY).payload_json
+    )
+    assert outcome.decision.next_round is None
+    assert "insufficient_reservation" in outcome.stop_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 3
+    final_queue = outcome.admission.analyst_result.input.queue_result
+    assert (
+        final_queue.physical_calls_after_reserve <= final_queue.initial_budget.physical_call_ceiling
+    )
+    assert final_queue.total_reserved_tokens <= product.production.CEILINGS.max_total_tokens
+    assert final_queue.total_reserved_cost_usd <= product.production.CEILINGS.max_total_cost_usd
     assert len(model.requests) <= product.production.CEILINGS.max_physical_calls
     before = path.read_bytes(), path.stat().st_mtime_ns
     trail = research_trail(path, result.run_id)
     snapshot = snapshot_from_v2_result(result)
     assert len({item.url for item in trail.items if item.source_selection_status}) == retained_count
     assert snapshot.classification == "released" and not trail.compatibility_issues
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    replay_model, replay_search = _BalancedModel(completed_rounds=4), _DistinctSearch()
+    replay = run_v2_production_pipeline(
+        product.production.CLAIM,
+        db_path=path,
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=True),
+        discovery_providers=controls.discovery_providers,
+        search_providers={provider: replay_search for provider in controls.discovery_providers},
+        wigolo_provider=product.phase12._Scraper(),
+        llm_provider=replay_model,
+        routing_config=product.phase12._routing(),
+        ceilings=product.production.CEILINGS,
+        research_controls=controls,
+        run_id=result.run_id,
+        clock=lambda: product.phase12.NOW,
+    )
+    assert replay == result
+    assert not replay_model.requests and not replay_search.requests
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before

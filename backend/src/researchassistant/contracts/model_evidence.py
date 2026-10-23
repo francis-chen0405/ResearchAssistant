@@ -864,6 +864,8 @@ class V2ProviderRunDiagnostics(StrictModel):
     search_results: NonNegativeInt = 0
     surviving_sources: NonNegativeInt = 0
     graph_actions: NonNegativeInt | None = None
+    blocked_queries: NonNegativeInt | None = None
+    unknown_queries: NonNegativeInt | None = None
 
     @model_serializer(mode="wrap")
     def omit_absent_graph_actions(
@@ -872,12 +874,19 @@ class V2ProviderRunDiagnostics(StrictModel):
         data = handler(self)
         if self.graph_actions is None:
             data.pop("graph_actions", None)
+        for field in ("blocked_queries", "unknown_queries"):
+            if getattr(self, field) is None:
+                data.pop(field, None)
         return data
 
     @model_validator(mode="after")
     def validate_query_counts(self) -> V2ProviderRunDiagnostics:
         counted_attempts = (
-            self.non_empty_queries + self.empty_queries + self.timeout_queries + self.failed_queries
+            self.non_empty_queries
+            + self.empty_queries
+            + self.timeout_queries
+            + self.failed_queries
+            + (self.unknown_queries or 0)
         )
         if counted_attempts != self.query_attempts:
             raise ValueError("provider query outcome counts must reconcile to query attempts")
@@ -978,6 +987,28 @@ class V2ResultSource(StrictModel):
     status: V2ResultSourceStatus
     ledger_claim_ids: tuple[UUID, ...] = ()
     budget_prevented_reason: V2DeepAnalysisBudgetReason | None = None
+    alternate_source_urls: tuple[str, ...] = Field(default=(), max_length=240)
+
+    @model_serializer(mode="wrap")
+    def omit_legacy_alternates(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if not self.alternate_source_urls:
+            data.pop("alternate_source_urls", None)
+        return data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        # This wrapper only omits an empty additive field. Keep the model's
+        # published wire properties instead of advertising an arbitrary dict.
+        schema = core_schema.copy()
+        model = schema
+        while True:
+            model.pop("serialization", None)
+            if model["type"] == "model" or "schema" not in model:
+                break
+            model["schema"] = model["schema"].copy()
+            model = model["schema"]
+        return handler(schema)
 
     @model_validator(mode="after")
     def validate_source_status(self) -> V2ResultSource:
