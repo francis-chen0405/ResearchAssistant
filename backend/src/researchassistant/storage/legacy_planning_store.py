@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from researchassistant.contracts.historical import HistoricalRead
 from researchassistant.contracts.models import (
     AmbiguityRecord,
     ClaimDefinition,
@@ -28,6 +29,10 @@ from researchassistant.storage.store_types import (
 def insert_planner_output(
     db_path: str, planner: PlannerOutput, *, _connect: WriteConnectionFactory
 ) -> None:
+    if isinstance(planner, HistoricalRead) or any(
+        isinstance(query, HistoricalRead) for query in planner.search_queries
+    ):
+        raise ValueError("historical Planner output is inspection-only")
     conn = _connect(db_path)
     try:
         conn.execute(
@@ -104,6 +109,8 @@ def insert_search_queries(
     db_path: str, queries: tuple[SearchQuery, ...], *, _connect: WriteConnectionFactory
 ) -> None:
     """Append a distinct Planner round's queries without rewriting the initial plan."""
+    if any(isinstance(query, HistoricalRead) for query in queries):
+        raise ValueError("historical Planner queries are inspection-only")
     conn = _connect(db_path)
     try:
         for query in queries:
@@ -134,7 +141,11 @@ def insert_search_queries(
 
 
 def read_planner_output(
-    db_path: DatabaseReader, run_id: UUID, *, _read_connection: ReadConnectionFactory
+    db_path: DatabaseReader,
+    run_id: UUID,
+    *,
+    _read_connection: ReadConnectionFactory,
+    historical: bool = False,
 ) -> PlannerOutput:
     with _read_connection(db_path) as conn:
         po_row = _read_execute(
@@ -196,7 +207,7 @@ def read_planner_output(
             (str(run_id),),
         ).fetchall()
         queries = [
-            SearchQuery(
+            dict(
                 run_id=UUID(r["run_id"]),
                 query_id=UUID(r["query_id"]),
                 stance=r["stance"],
@@ -211,7 +222,7 @@ def read_planner_output(
             for r in q_rows
         ]
 
-        return PlannerOutput(
+        values = dict(
             run_id=UUID(po_row["run_id"]),
             claim_definition=claim_def,
             ambiguities=ambiguities,
@@ -220,3 +231,16 @@ def read_planner_output(
             planner_model_name=po_row["planner_model_name"],
             planned_at=_iso_to_dt(po_row["planned_at"]),
         )
+        try:
+            return PlannerOutput.model_validate(values)
+        except ValueError:
+            if not historical:
+                raise
+        from researchassistant.storage.historical_decode import decode_native_planner
+        from researchassistant.storage.store import read_provider_run_contract
+
+        try:
+            contract = read_provider_run_contract(conn, run_id)
+        except KeyError:
+            contract = None
+        return decode_native_planner(values, contract)

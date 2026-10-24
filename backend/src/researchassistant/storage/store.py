@@ -877,11 +877,14 @@ def insert_search_queries(db_path: str, queries: tuple[SearchQuery, ...]) -> Non
     )
 
 
-def read_planner_output(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput:
+def read_planner_output(
+    db_path: DatabaseReader, run_id: UUID, *, historical: bool = False
+) -> PlannerOutput:
     return _read_planner_output_owned(
         db_path=db_path,
         run_id=run_id,
         _read_connection=_read_connection,
+        historical=historical,
     )
 
 

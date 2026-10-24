@@ -20,9 +20,13 @@ from researchassistant.contracts.historical import (
     RecordCompatibilityResult,
 )
 from researchassistant.contracts.models import (
+    DiscoveryProvider,
     LedgerRecord,
     PersistedStageArtifact,
+    PlannerOutput,
     ProviderRunContract,
+    SearchIntent,
+    SearchQuery,
     SourceSnapshot,
     StrictModel,
     V2DeepAnalysisBackfillResult,
@@ -32,6 +36,7 @@ from researchassistant.contracts.models import (
     V2PersistedArtifact,
     V2ReviewerLedgerBatchResult,
     V2SourceSelectionQueueResult,
+    missing_required_query_exclusions,
 )
 
 ModelT = TypeVar("ModelT", bound=StrictModel)
@@ -316,6 +321,43 @@ LEGACY_TRAIL_POLICIES = frozenset(
 )
 
 
+class LegacySearchQuery(SearchQuery, HistoricalRead):
+    @model_validator(mode="after")
+    def validate_provider_query(self) -> LegacySearchQuery:
+        if self.provider in {DiscoveryProvider.EXA, DiscoveryProvider.SERPSEARCH}:
+            if missing_required_query_exclusions(self.exclusion_parameters):
+                raise ValueError("historical web queries require persisted exclusions")
+        elif self.intent is not SearchIntent.ACADEMIC_STUDY or self.exclusion_parameters:
+            raise ValueError(
+                "historical academic queries require academic intent without exclusions"
+            )
+        return self
+
+
+def decode_native_planner(
+    values: dict[str, Any], contract: ProviderRunContract | None
+) -> PlannerOutput:
+    """Read a recognized old Planner; never used by ordinary planning or resume."""
+    key = f"{values.get('run_id', 'unknown-run')}:planner"
+    if (
+        contract is None
+        or (contract.schema_identity, contract.prompt_identity) not in LEGACY_TRAIL_IDENTITIES
+        or contract.policy_identity not in LEGACY_TRAIL_POLICIES
+    ):
+        raise _incompatible(key, "PlannerOutput", "unsupported recorded Planner contract")
+    _validated_contract(contract, key, "PlannerOutput")
+    if str(contract.run_id) != str(values.get("run_id")):
+        raise _incompatible(key, "PlannerOutput", "Planner belongs to another provider run")
+
+    class LegacyPlannerOutput(PlannerOutput, HistoricalRead):
+        search_queries: list[LegacySearchQuery]
+
+    try:
+        return LegacyPlannerOutput.model_validate(values)
+    except ValueError as exc:
+        raise _incompatible(key, "PlannerOutput", "invalid recorded Planner shape") from exc
+
+
 def decode_native_artifact(
     artifact: PersistedStageArtifact,
     model_type: type[ModelT],
@@ -383,12 +425,6 @@ def _legacy_researcher_type(contract: ProviderRunContract) -> type[StrictModel]:
         DiscoveryDecision,
         RankedDiscoveryResult,
     )
-    from researchassistant.contracts.models import (
-        DiscoveryProvider,
-        SearchIntent,
-        SearchQuery,
-        missing_required_query_exclusions,
-    )
     from researchassistant.contracts.provider_results import (
         ResearcherPairResult,
         ResearcherStageResult,
@@ -397,19 +433,6 @@ def _legacy_researcher_type(contract: ProviderRunContract) -> type[StrictModel]:
 
     # Before the relaxed-discovery-floor-5 policy, scores <20 were discarded.
     discard_floor = 5 if "mlp4-relaxed-discovery-floor-5-v1" in contract.policy_identity else 20
-
-    class LegacySearchQuery(SearchQuery, HistoricalRead):
-        @model_validator(mode="after")
-        def validate_provider_query(self) -> LegacySearchQuery:
-            if self.provider in {DiscoveryProvider.EXA, DiscoveryProvider.SERPSEARCH}:
-                if missing_required_query_exclusions(self.exclusion_parameters):
-                    raise ValueError("historical web queries require persisted exclusions")
-                # The recorded web lane accepted academic-study intent.
-            elif self.intent is not SearchIntent.ACADEMIC_STUDY or self.exclusion_parameters:
-                raise ValueError(
-                    "historical academic queries require academic intent without exclusions"
-                )
-            return self
 
     class LegacyRanking(RankedDiscoveryResult, HistoricalRead):
         query: LegacySearchQuery

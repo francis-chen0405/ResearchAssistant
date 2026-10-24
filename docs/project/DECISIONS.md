@@ -55,6 +55,14 @@ The user-approved [A–G fixes](../../.agent/plans/alpr-run-fixes-2026-10-01.md)
   helpers remain allowed and documented. No prompt, released text, policy or stored
   fingerprint is converted; source changes require new runs under the exact gate.
 
+- Read-only provider inspection can reconstruct the two recognized historical
+  Planner families whose web queries retained academic-study intent. Decoding
+  requires the recorded schema, prompt, policy and valid provider fingerprint;
+  all original query values and run relationships remain checked. Ordinary Planner
+  reads and resume remain strict, and historical Planner objects cannot be admitted
+  through Planner/query persistence. Report exports supplement full verified
+  database backups; unreleased research still needs its historical readers.
+
 - [Desktop shutdown](../verification/desktop-shutdown-2026-10-10.md) starts with
   pipe EOF and preserves Python's 90-second drain under a single 150-second outer
   deadline. The 30-second whole-startup timeout uses the same teardown path.

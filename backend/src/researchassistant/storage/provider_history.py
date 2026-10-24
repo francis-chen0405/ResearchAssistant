@@ -310,7 +310,7 @@ def _read_optional_stage_result(
 
 def _read_optional_planner(db_path: DatabaseReader, run_id: UUID) -> PlannerOutput | None:
     try:
-        return read_planner_output(db_path, run_id)
+        return read_planner_output(db_path, run_id, historical=True)
     except KeyError:
         return None
 
