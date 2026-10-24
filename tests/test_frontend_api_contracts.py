@@ -68,6 +68,7 @@ def test_schema_generation_preserves_nullable_defaults_and_rejects_unknown_struc
         module.ts_type({"type": "object", "patternProperties": {".*": {"type": "number"}}})
 
 
+@pytest.mark.slow
 def test_successful_offline_payloads_satisfy_renderer_types(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

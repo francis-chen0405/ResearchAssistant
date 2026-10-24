@@ -189,6 +189,7 @@ def test_arxiv_spaces_compiled_request_starts_by_three_seconds() -> None:
     assert starts[1] - starts[0] >= 3.0
 
 
+@pytest.mark.slow
 def test_pubmed_offset_page_accounts_esearch_and_summary_as_page_two() -> None:
     requests: list[httpx.Request] = []
 
@@ -257,6 +258,7 @@ def test_pubmed_paces_each_search_and_summary_request() -> None:
     assert [kind for _, kind, _ in observer.calls] == ["primary", "metadata"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("articleids", "expected"),
     [

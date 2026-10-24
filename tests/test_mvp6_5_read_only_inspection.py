@@ -212,6 +212,7 @@ def test_trigger_error_is_stable_and_does_not_echo_claim_data(tmp_path: Path) ->
     assert str(caught.value) == "runs.raw_claim is immutable"
 
 
+@pytest.mark.core
 def test_read_only_inspection_preserves_database_bytes_schema_migrations_and_mtime(
     tmp_path: Path,
 ) -> None:
@@ -290,6 +291,7 @@ def test_read_only_open_supports_read_only_filesystem_permissions(tmp_path: Path
         path.chmod(0o600)
 
 
+@pytest.mark.core
 def test_missing_inspection_and_history_do_not_create_database(tmp_path: Path) -> None:
     path = tmp_path / "missing.sqlite3"
     with pytest.raises(DatabaseCompatibilityError) as caught:
@@ -299,6 +301,7 @@ def test_missing_inspection_and_history_do_not_create_database(tmp_path: Path) -
     assert not path.exists()
 
 
+@pytest.mark.core
 def test_older_schema_requires_writable_run_or_resume_without_modification(tmp_path: Path) -> None:
     path = tmp_path / "older.sqlite3"
     init_db(str(path))
@@ -332,6 +335,7 @@ def test_newer_schema_is_rejected_without_modification(tmp_path: Path) -> None:
     assert path.read_bytes() == before
 
 
+@pytest.mark.core
 def test_invalid_sqlite_file_is_rejected_and_remains_byte_identical(tmp_path: Path) -> None:
     path = tmp_path / "invalid.sqlite3"
     path.write_bytes(b"not a sqlite database\x00secret")

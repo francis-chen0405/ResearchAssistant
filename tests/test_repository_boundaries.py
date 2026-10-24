@@ -18,12 +18,14 @@ from scripts.check_repository_boundaries import (
 )
 
 
+@pytest.mark.core
 def test_repository_root_and_dependency_boundaries() -> None:
     assert not root_python_violations(ROOT)
     assert not root_layout_violations(ROOT)
     assert not dependency_violations(ROOT, BASELINE)
 
 
+@pytest.mark.core
 def test_root_allowlist_rejects_staged_and_committed_copies(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     for name in ("cli.py", "models.py", "orchestrator.py", "store.py", "model_evidence.py"):
@@ -65,6 +67,7 @@ def test_root_allowlist_rejects_staged_and_committed_copies(tmp_path: Path) -> N
     assert not root_python_violations(tmp_path)
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     ("layer", "source", "target"),
     [
@@ -110,6 +113,7 @@ def test_boundary_check_catches_import_forms(
     ]
 
 
+@pytest.mark.core
 def test_boundary_baseline_is_exact_and_ratchets_down(tmp_path: Path) -> None:
     path = tmp_path / "backend/src/researchassistant/contracts/example.py"
     path.parent.mkdir(parents=True)
@@ -137,12 +141,14 @@ def test_boundary_baseline_is_exact_and_ratchets_down(tmp_path: Path) -> None:
     assert "remove stale baseline exception" in dependency_violations(tmp_path, baseline)[0]
 
 
+@pytest.mark.core
 def test_boundary_parser_resolves_nested_relative_packages() -> None:
     assert imported_names("from ...providers import search", "researchassistant.contracts.sub") == [
         "researchassistant.providers.search"
     ]
 
 
+@pytest.mark.core
 def test_folder_git_rules_work_without_checkout_local_exclusions(tmp_path: Path) -> None:
     from scripts.check_repository_boundaries import SUPPORTED_ROOT_DIRECTORIES
 

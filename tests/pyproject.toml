@@ -2,6 +2,10 @@
 testpaths = ["."]
 python_files = ["test_*.py"]
 pythonpath = ["..", "../backend/src"]
+markers = [
+    "core: representative offline correctness checks for fast development feedback; not full acceptance",
+    "slow: expensive measured regression cases, including subprocess, transport, native and full-pipeline checks",
+]
 
 [tool.coverage.run]
 branch = true

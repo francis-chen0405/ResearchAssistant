@@ -4,6 +4,8 @@ import ast
 import os
 from pathlib import Path
 
+import pytest
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRECTORY_NAMES = frozenset(
     {
@@ -105,6 +107,7 @@ class _TypeContractVisitor(ast.NodeVisitor):
         )
 
 
+@pytest.mark.slow
 def test_every_repository_python_function_has_complete_type_annotations() -> None:
     diagnostics: list[str] = []
     python_files = _repository_python_files()

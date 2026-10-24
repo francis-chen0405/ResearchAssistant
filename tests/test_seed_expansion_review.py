@@ -231,6 +231,7 @@ def test_partial_authors_do_not_waive_exact_seed_identity_conflicts(
     assert len(sends) == 1
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("seed_identity", ("source-seed-expansion-v2", "source-seed-expansion-v3"))
 def test_three_seeds_ten_neighbors_each_and_thirty_run_bound(
     tmp_path: Path, seed_identity: str

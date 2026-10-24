@@ -31,6 +31,7 @@ def _saved_rows(path: Path) -> dict[str, tuple[str, str, str]]:
         }
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("owner", "key", "empty_round"),
     [

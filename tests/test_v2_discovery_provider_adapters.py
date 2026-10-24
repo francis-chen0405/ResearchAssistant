@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import httpx
+import pytest
 
 from providers.arxiv import ArxivSearchAdapter
 from providers.config import ArxivConfig, PubMedConfig
@@ -48,6 +49,7 @@ def test_arxiv_adapter_normalizes_atom_metadata_without_an_api_key() -> None:
     assert response.results[0].metadata.work_type == "preprint"
 
 
+@pytest.mark.slow
 def test_pubmed_adapter_uses_optional_key_and_returns_bibliographic_metadata() -> None:
     requests: list[httpx.Request] = []
 

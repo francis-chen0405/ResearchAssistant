@@ -87,6 +87,7 @@ def test_docx_valid_markup_unicode_tabs_and_lines_are_well_formed(
     assert not xml_invalid_codepoints("\t\n\r \ud7ff\ue000\ufffd\U00010000\U0010ffff")
 
 
+@pytest.mark.slow
 def test_actual_released_control_character_cannot_create_malformed_docx(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

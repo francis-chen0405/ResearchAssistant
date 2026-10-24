@@ -99,6 +99,7 @@ def test_unselected_openalex_is_reported_as_unavailable(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_actual_fresh_query_fixture_reports_retained_records_and_requests(
     tmp_path: Path,
 ) -> None:

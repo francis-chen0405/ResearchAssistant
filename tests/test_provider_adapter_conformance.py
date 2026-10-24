@@ -197,6 +197,7 @@ def _adapter_and_request(
     return adapter, request
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("provider", "expected_url", "expected_raw_rank"),
     (

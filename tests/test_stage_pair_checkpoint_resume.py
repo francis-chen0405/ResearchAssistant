@@ -31,6 +31,7 @@ from researchassistant.storage.store import (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("legacy_prefix", [False, True])
 @pytest.mark.parametrize(
     ("owner", "key"),
@@ -114,6 +115,7 @@ def test_stage_pairs_resume_without_repeating_completed_requests(
         )
 
 
+@pytest.mark.slow
 def test_artifact_pair_failure_rolls_back_both_writes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

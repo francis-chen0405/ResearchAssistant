@@ -115,6 +115,7 @@ def _routed_provider(
     )
 
 
+@pytest.mark.core
 @pytest.mark.parametrize("ceiling", ["tokens", "cost"])
 def test_v2_budget_reserves_selected_transport_prompt_before_http(
     tmp_path: Path,
@@ -473,6 +474,7 @@ def _unexpected_transport(http_request: httpx.Request) -> httpx.Response:
     raise AssertionError(f"unexpected transport request: {http_request.method}")
 
 
+@pytest.mark.core
 def test_unknown_provider_usage_keeps_reserved_exposure() -> None:
     run_id = uuid4()
     start = V2PhysicalCallStart(
@@ -501,6 +503,7 @@ def test_unknown_provider_usage_keeps_reserved_exposure() -> None:
     assert snapshot.cost_exposure_usd == Decimal("0.25")
 
 
+@pytest.mark.core
 def test_source_physical_call_cap_has_a_distinct_budget_error(
     tmp_path: Path,
 ) -> None:

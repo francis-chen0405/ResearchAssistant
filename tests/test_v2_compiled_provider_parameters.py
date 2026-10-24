@@ -149,6 +149,7 @@ def test_arxiv_compiled_fielded_query_is_sent_without_added_all_prefix() -> None
     assert params["sortOrder"] == "descending"
 
 
+@pytest.mark.slow
 def test_pubmed_compiled_title_abstract_expression_is_sent_to_esearch() -> None:
     seen: list[httpx.Request] = []
 

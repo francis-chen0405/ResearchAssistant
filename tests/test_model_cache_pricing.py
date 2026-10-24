@@ -83,6 +83,7 @@ def _request(stage: LLMStage, run_id: UUID) -> LLMRequest:
     )
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     ("stage", "expected"),
     [
@@ -157,6 +158,7 @@ def test_real_routes_persist_their_own_cache_cost(
     assert restored.snapshot() == budget.snapshot()
 
 
+@pytest.mark.core
 @pytest.mark.parametrize("cached", [None, -1, True, 1001, "800"])
 def test_missing_or_invalid_cache_metadata_retains_model_cap(cached: object) -> None:
     config = _config()
@@ -199,6 +201,7 @@ def test_missing_or_invalid_cache_metadata_retains_model_cap(cached: object) -> 
     assert usage.cached_input_tokens is None
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(("prompt", "expected"), [(272000, "0.012920000"), (272001, "0.025780500")])
 def test_luna_long_context_threshold_uses_full_input_including_cached(
     prompt: int, expected: str
@@ -242,6 +245,7 @@ def test_luna_long_context_threshold_uses_full_input_including_cached(
     assert usage.cost_usd == Decimal(expected)
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     ("cached", "writes", "expected"),
     [
@@ -281,6 +285,7 @@ def test_luna_cache_writes_are_disjoint_and_missing_counts_are_conservative(
         assert usage.usage_cost_basis == "published_cache_prices_assumed_all_uncached_writes"
 
 
+@pytest.mark.core
 def test_missing_luna_cache_write_count_is_unknown_and_uses_conservative_cost() -> None:
     from providers.mimo import _usage
     from providers.pricing import cache_prices_for_route
@@ -302,6 +307,7 @@ def test_missing_luna_cache_write_count_is_unknown_and_uses_conservative_cost() 
     assert usage.cost_usd == Decimal("0.000186000")
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     ("base_url", "model"),
     [
@@ -334,6 +340,7 @@ def test_custom_route_never_inherits_another_models_cache_discount(
     assert usage.usage_cost_basis == "configured_price_cap"
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     "values",
     [
@@ -366,6 +373,7 @@ def test_model_usage_rejects_inconsistent_cache_write_telemetry(values: dict[str
         ModelUsageMetadata(**values)
 
 
+@pytest.mark.core
 def test_unknown_usage_retains_reservation_after_restart(tmp_path: Path) -> None:
     config = _config()
     run_id = uuid4()

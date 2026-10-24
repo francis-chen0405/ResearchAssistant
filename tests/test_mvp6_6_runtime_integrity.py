@@ -301,6 +301,7 @@ def test_cli_and_web_inspection_label_incomplete_usage(
     assert snapshot.known_cost_subtotal_usd == 0
 
 
+@pytest.mark.core
 def test_unknown_usage_with_reservation_is_retained_for_next_atomic_budget_check(
     tmp_path: Path,
 ) -> None:
@@ -323,6 +324,7 @@ def test_unknown_usage_with_reservation_is_retained_for_next_atomic_budget_check
     assert reserved.attempt_id == second.attempt_id
 
 
+@pytest.mark.core
 def test_unknown_usage_without_reservation_refuses_retry_or_fallback(tmp_path: Path) -> None:
     db_path = tmp_path / "unprovable.sqlite3"
     init_db(str(db_path))

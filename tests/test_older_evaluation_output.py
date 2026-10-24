@@ -100,6 +100,7 @@ def test_regression_artifact_cannot_be_replaced_by_phase10_report(tmp_path: Path
     assert {p: p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("command", ["phase10", "discovery"])
 def test_failed_publication_preserves_concurrent_output_and_unrelated_files(
     tmp_path: Path,
@@ -126,6 +127,7 @@ def test_failed_publication_preserves_concurrent_output_and_unrelated_files(
     assert sentinel.read_bytes() == b"unrelated existing file"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("command", ["phase10", "discovery"])
 def test_fresh_reports_keep_existing_scoring_and_derived_summary(
     tmp_path: Path,

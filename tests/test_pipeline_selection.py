@@ -123,6 +123,7 @@ def _request(tmp_path: Path, run_id: UUID) -> LiveRunRequest:
     )
 
 
+@pytest.mark.core
 def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -187,6 +188,7 @@ def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
     assert kwargs["ceilings"] == bundle_calls[0].ceilings
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     ("override_name", "override_value", "all_mimo", "expected_error"),
     [
@@ -315,6 +317,7 @@ def test_cli_explicit_legacy_runner_receives_legacy_configuration_and_identity(
     )
 
 
+@pytest.mark.core
 def test_live_controller_default_configures_and_starts_v2(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -392,6 +395,7 @@ def test_live_controller_legacy_runner_selection_and_alias(tmp_path: Path, keywo
         assert controller.shutdown(timeout=5)
 
 
+@pytest.mark.core
 def test_live_controller_rejects_legacy_runner_alias_conflict_before_executor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

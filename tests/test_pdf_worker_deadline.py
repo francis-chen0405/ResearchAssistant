@@ -14,6 +14,7 @@ from reportlab.pdfgen.canvas import Canvas
 from researchassistant.providers import normalization
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("phase", ["constructor", "pages", "extract"])
 def test_stalled_pdf_parser_is_killed_at_overall_deadline(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, phase: str
@@ -98,6 +99,7 @@ pdf_worker.main()
         process.communicate()
 
 
+@pytest.mark.slow
 def test_stalled_pdf_worker_startup_is_killed_at_overall_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

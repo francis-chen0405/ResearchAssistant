@@ -51,6 +51,7 @@ def _database(tmp_path: Path) -> Path:
     return database
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     ("export_format", "suffix"),
     [
@@ -94,6 +95,7 @@ def test_export_released_brief_is_local_and_traceable(
             assert str(RUN_ID) in archive.read("docProps/core.xml").decode("utf-8")
 
 
+@pytest.mark.core
 def test_markdown_export_is_deterministic_for_fixed_generation_time(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -112,6 +114,7 @@ def test_markdown_export_is_deterministic_for_fixed_generation_time(
     assert first.read_bytes() == second.read_bytes()
 
 
+@pytest.mark.core
 @pytest.mark.parametrize(
     "status",
     [
@@ -139,6 +142,7 @@ def test_export_rejects_nonreleased_runs(
         )
 
 
+@pytest.mark.core
 def test_export_reuses_one_validated_snapshot_and_closes_it_before_render(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

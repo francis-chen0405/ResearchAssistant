@@ -217,6 +217,7 @@ class _DistinctSearch(product._WideSearch):
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("source_target", [20, 30])
 def test_balanced_high_source_run_retains_dispositions_when_round_four_unaffordable(
     tmp_path: Path,

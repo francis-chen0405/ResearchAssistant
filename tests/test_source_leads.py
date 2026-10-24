@@ -215,6 +215,7 @@ assert read_source_leads(sys.argv[1], UUID(sys.argv[2])).total == 2
     )
 
 
+@pytest.mark.slow
 def test_full_production_pipeline_leads_keep_admission_families_and_released_bytes(
     tmp_path: Path,
 ) -> None:

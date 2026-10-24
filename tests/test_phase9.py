@@ -635,6 +635,7 @@ def test_partial_retrieval_success_is_preserved(tmp_path: Path) -> None:
     assert result.retrieval_attempts_used == 18
 
 
+@pytest.mark.slow
 def test_exact_quote_failure_reacquires_once_through_firecrawl(tmp_path: Path) -> None:
     scraper = FirecrawlQuoteFallbackScraper()
 

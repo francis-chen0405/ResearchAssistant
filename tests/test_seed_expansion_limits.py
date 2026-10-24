@@ -91,6 +91,7 @@ def _slot(action: V2GraphNeighborAction, key: str, **updates: Any) -> V2GraphNei
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("scope", ("round", "run"))
 def test_graph_retention_capacity_is_shared_and_exhaustion_is_clean(
     tmp_path: Path, scope: str
@@ -185,6 +186,7 @@ def test_graph_retention_capacity_is_shared_and_exhaustion_is_clean(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("consumed", (3, 10))
 def test_exact_response_replay_uses_original_limit_after_other_work_consumes_capacity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, consumed: int
@@ -468,6 +470,7 @@ def test_reported_cost_can_exhaust_ceiling_before_request_count(tmp_path: Path) 
     assert available_query_budgets(str(path), RUN) == ()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("first", ("text", "graph"))
 def test_text_pages_and_graph_responses_share_retention_in_both_orders(
     tmp_path: Path, first: str
@@ -663,6 +666,7 @@ def test_historical_binding_dispatch_and_incompatible_resume_are_preserved(tmp_p
     assert binding.seed_identity == "source-seed-expansion-v2"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("cost_known", (True, False))
 def test_text_retries_cannot_escape_the_shared_ceiling(tmp_path: Path, cost_known: bool) -> None:
     path = tmp_path / "retry-ceiling.sqlite"
@@ -733,6 +737,7 @@ def test_graph_failed_or_unknown_request_is_never_reissued(tmp_path: Path, outco
     assert bool(audit.interrupted_unknown) == (outcome == "timeout")
 
 
+@pytest.mark.slow
 def test_default_three_hundred_record_round_retention_includes_graph_metadata(
     tmp_path: Path,
 ) -> None:

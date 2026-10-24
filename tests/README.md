@@ -6,6 +6,59 @@ Use `.venv/bin/python` (Windows: `.venv\Scripts\python.exe`) if the environment 
 not activated. Tests use offline fixtures/fake providers by default; existing
 platform and explicitly opted-in checks retain their skips.
 
+## Development feedback
+
+Use the fast core selection while iterating, then run the concrete tests for the
+changed owner from the map below. Owner checks include their slow tests; a marker
+does not make a relevant regression optional.
+
+```sh
+# Small risk-based selection, including a real offline production/controller run:
+python -m pytest -c tests/pyproject.toml tests -m core
+# Broader feedback, omitting deliberately classified expensive cases:
+python -m pytest -c tests/pyproject.toml tests -m "not slow"
+# Inspect either selection without running it:
+python -m pytest -c tests/pyproject.toml tests -m core --collect-only -q
+```
+
+`core` marks representative existing offline tests. It covers selected behaviors
+in these owners, not every test in each file:
+
+| Core behavior | Existing tests |
+| --- | --- |
+| Exact quotation occurrences, offsets and source context | [fresh quotations](test_fresh_quote_occurrences.py) |
+| Rejected run/claim/release substitutions and historical approval provenance | [saved-result integrity](test_saved_result_integrity.py) |
+| Token/cost limits, unknown reservations, restart and no duplicate dispatch | [provider budgets](test_audit_provider_budget.py), [cache pricing](test_model_cache_pricing.py), [atomic budget checks](test_mvp6_6_runtime_integrity.py), [unknown stage recovery](test_bounded_stage_checkpoint_resume.py) |
+| Additive initialization, artifact hashes, noncreating readers and validated exports | [storage contracts](test_v2_phase1_contracts.py), [read-only inspection](test_mvp6_5_read_only_inspection.py), [exports](test_mvp8_exports.py) |
+| Ordinary CLI/controller selection and actual offline product execution | [pipeline selection](test_pipeline_selection.py), [product integration](test_product_discovery_pipeline.py) |
+| HTTP validation/redaction and repository/import ownership | [API boundaries](test_audit_api_boundaries.py), [repository boundaries](test_repository_boundaries.py) |
+
+`slow` identifies cases whose setup, call or teardown made them expensive in the
+measured full suite: roughly one second or more per case on the profiling machine.
+Parametrized families share the marker, so some variants are faster. These include
+owned subprocess shutdown, transport rate/deadline waits, PDF workers, native staging,
+large discovery fixtures and interruption/replay checks. Classification is explicit
+in test decorators; pytest never filters by a machine-dependent runtime threshold.
+
+The markers describe different things and may overlap. Essential production,
+saved-result integrity and unknown-outcome checks can be both `core` and `slow`;
+`-m core` includes them.
+Consequently `-m "not slow"` is broader feedback, not a superset of core. Neither
+selection replaces complete compatibility, recovery, platform or package validation.
+
+Run the full suite locally for changes crossing owners or affecting evidence,
+accounting, persistence/schema behavior, historical compatibility, process lifecycle,
+packaging, or test selection/configuration; also use it when impact is uncertain.
+CI continues to run every collected test, with the existing platform and opt-in skips.
+See [verification policy](../docs/project/CONVENTIONS.md#packaging-and-verification)
+for lint, formatting and relevant frontend/desktop checks, which remain required.
+
+When adding or changing tests, keep core coverage representative of critical behavior,
+profile expensive tests before marking them slow, and remeasure selections after
+substantial changes. Prefer individual decorators over marking a mixed module.
+Register markers in `tests/pyproject.toml`; use `--strict-markers` to validate them.
+Never put a selection in default `addopts` or remove cases from full collection.
+
 ## Full collection and focused checks
 
 ```sh
@@ -98,7 +151,8 @@ identity aliases, replay/forgery rejection and shared request/cost/retention lim
 Product integration checks disabled expansion; adapter/planning tests cover the
 neighbor transport and authorized handoff. For another owner, replace the module
 and function terms, then inspect the matching tests before selecting them. Neither
-text search nor a graph trace proves exhaustive coverage; run the full suite too.
+text search nor a graph trace proves exhaustive coverage; follow the verification
+policy above and run the full suite whenever its gates apply.
 
 ## Desktop and renderer checks
 

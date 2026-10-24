@@ -45,6 +45,8 @@ def _run(
     return result, model, search
 
 
+@pytest.mark.core
+@pytest.mark.slow
 def test_product_settings_reach_every_round_and_read_only_views(tmp_path: Path) -> None:
     path = tmp_path / "product.sqlite"
     controls = ResearchControls(
@@ -80,6 +82,7 @@ def test_product_settings_reach_every_round_and_read_only_views(tmp_path: Path) 
     assert not replay_model.requests and not replay_search.requests
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "changes",
     [
@@ -177,6 +180,7 @@ class _DistinctWideSearch(_WideSearch):
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("source_target", [5, 30])
 def test_source_target_caps_acquisition_independently_of_metadata_depth(
     tmp_path: Path, source_target: int
@@ -237,6 +241,8 @@ def test_thirty_source_choice_has_capacity_for_both_directions() -> None:
     assert policy.max_acquisition_per_round == 60
 
 
+@pytest.mark.core
+@pytest.mark.slow
 def test_live_controller_uses_product_controls_in_real_fresh_worker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

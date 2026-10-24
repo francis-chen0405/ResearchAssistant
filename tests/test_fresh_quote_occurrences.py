@@ -49,6 +49,7 @@ class Selector:
         )
 
 
+@pytest.mark.core
 @pytest.mark.parametrize("multiple", [False, True])
 def test_extraction_retains_later_selected_occurrences(multiple: bool) -> None:
     sentences = [
@@ -112,6 +113,7 @@ def test_extraction_retains_later_selected_occurrences(multiple: bool) -> None:
         verify_candidate_against_snapshot(snapshot, changed)
 
 
+@pytest.mark.core
 def test_decimal_context_is_complete_and_historical_assembly_remains_exact() -> None:
     before = "This observational sample excludes residents older than 65.5 years."
     after = "No improvement was measured above the 0.5 mg dose threshold."
@@ -172,6 +174,7 @@ def test_decimal_context_is_complete_and_historical_assembly_remains_exact() -> 
     assert verify_candidate_against_snapshot(snapshot, historical_filtered.candidate)
 
 
+@pytest.mark.core
 def test_fresh_filter_refuses_missing_or_substituted_selected_offsets() -> None:
     text = f"Opening context. {PASSAGE} Closing context."
     selection = V2VerbatimQuoteSelection(

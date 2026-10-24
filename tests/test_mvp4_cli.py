@@ -82,6 +82,7 @@ def _run(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("scenario", "exit_code", "status_text"),
     [
@@ -130,6 +131,7 @@ def test_run_subprocess_validates_configuration_before_creating_database(tmp_pat
     assert not db_path.exists()
 
 
+@pytest.mark.slow
 def test_run_subprocess_rejects_invalid_input_and_budget(tmp_path: Path) -> None:
     run_id = uuid4()
     db_path = tmp_path / "invalid.sqlite3"
@@ -190,6 +192,7 @@ def test_budget_failure_is_failed_without_a_physical_call(
         assert connection.execute("SELECT COUNT(*) FROM model_route_attempts").fetchone()[0] == 0
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("firecrawl_enabled", [False, True])
 def test_launch_reports_current_stack_and_never_discloses_secrets(
     tmp_path: Path,
@@ -241,6 +244,7 @@ def test_launch_reports_current_stack_and_never_discloses_secrets(
     assert firecrawl_secret.encode() not in db_bytes
 
 
+@pytest.mark.slow
 def test_inspect_run_reports_authoritative_audit_and_release(tmp_path: Path) -> None:
     run_id = uuid4()
     run = _run(tmp_path, run_id=run_id)
@@ -277,6 +281,7 @@ def test_inspect_run_reports_authoritative_audit_and_release(tmp_path: Path) -> 
         assert expected in inspected.stdout
 
 
+@pytest.mark.slow
 def test_restart_reuses_terminal_release_and_rejects_changed_claim_and_identity(
     tmp_path: Path,
 ) -> None:
@@ -301,6 +306,7 @@ def test_restart_reuses_terminal_release_and_rejects_changed_claim_and_identity(
         assert connection.execute("SELECT COUNT(*) FROM validation_runs").fetchone()[0] == 1
 
 
+@pytest.mark.slow
 def test_budget_change_requires_new_run_and_never_resets_usage(tmp_path: Path) -> None:
     run_id = uuid4()
     first = _run(tmp_path, run_id=run_id)
@@ -322,6 +328,7 @@ def test_budget_change_requires_new_run_and_never_resets_usage(tmp_path: Path) -
         assert connection.execute("SELECT COUNT(*) FROM model_route_attempts").fetchone()[0] > 0
 
 
+@pytest.mark.slow
 def test_second_process_cancellation_observes_active_call_boundary(tmp_path: Path) -> None:
     run_id = uuid4()
     db_path = tmp_path / "cancel.sqlite3"

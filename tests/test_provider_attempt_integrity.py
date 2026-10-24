@@ -30,6 +30,7 @@ from researchassistant.storage.query_retrieval_store import read_pages
 from researchassistant.storage.source_leads import read_source_leads
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "consumer", ["audit", "counters", "inspection", "status", "pages", "leads", "replay"]
 )

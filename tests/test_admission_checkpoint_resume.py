@@ -33,6 +33,7 @@ from researchassistant.storage.store import (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("legacy_prefix", [False, True])
 def test_interruption_preserves_admitted_evidence_on_unchanged_resume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legacy_prefix: bool

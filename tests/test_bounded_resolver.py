@@ -20,6 +20,7 @@ from researchassistant.providers.discovery_transport import bounded_send
 from researchassistant.providers.scraper import ScrapeRequest, ScraperTimeoutError
 
 
+@pytest.mark.slow
 def test_stalled_system_resolver_is_retired_before_late_result(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -79,6 +80,7 @@ def test_numeric_addresses_need_no_helper(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
 
+@pytest.mark.slow
 def test_resolver_slot_queue_is_bounded_and_reusable(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

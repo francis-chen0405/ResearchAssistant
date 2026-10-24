@@ -141,6 +141,7 @@ def _insert_planned_run(db_path: str, run_id: UUID) -> None:
     )
 
 
+@pytest.mark.core
 def test_v2_migration_is_additive_idempotent_and_persists_canonical_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -180,6 +181,7 @@ def test_v2_migration_is_additive_idempotent_and_persists_canonical_artifacts(
     assert read_v2_artifact(db_path, run_id, "initial-plan") == persisted
 
 
+@pytest.mark.core
 def test_v2_artifact_read_rejects_payload_hash_mismatch(tmp_path: Path) -> None:
     db_path = str(tmp_path / "tampered.sqlite3")
     init_db(db_path)
@@ -215,6 +217,7 @@ def test_v2_artifact_read_rejects_payload_hash_mismatch(tmp_path: Path) -> None:
         read_v2_artifact(db_path, run_id, "tampered-plan")
 
 
+@pytest.mark.core
 def test_v2_current_artifact_read_recomputes_and_accepts_valid_hash(tmp_path: Path) -> None:
     db_path = str(tmp_path / "current.sqlite3")
     init_db(db_path)
@@ -239,6 +242,7 @@ def test_v2_current_artifact_read_recomputes_and_accepts_valid_hash(tmp_path: Pa
     assert read_v2_artifact(db_path, run_id, "current-plan") == persisted
 
 
+@pytest.mark.core
 def test_v2_historical_compatible_artifact_remains_readable(tmp_path: Path) -> None:
     db_path = str(tmp_path / "historical-artifact.sqlite3")
     init_db(db_path)

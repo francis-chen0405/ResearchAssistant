@@ -46,6 +46,7 @@ def test_manifest_rejects_duplicate_scenario_and_expected_work_ids() -> None:
         Manifest.model_validate(duplicate_expected_work)
 
 
+@pytest.mark.slow
 def test_offline_eval_preserves_direct_evidence_and_reaches_deeper_and_seed_work() -> None:
     report = evaluate_manifest()
     scenarios = {scenario.scenario_id: scenario for scenario in report.scenarios}
@@ -123,6 +124,7 @@ def test_manifest_retains_conflicts_cycles_bibliography_and_alias_versions() -> 
     assert "Ignore all previous instructions" in by_id["alpr-crime-study-18"].document
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("other_work", ("alpr-crime-study-22", "alpr-crime-study-03"))
 def test_identical_titles_preserve_graph_work_identity_and_acquisition_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, other_work: str

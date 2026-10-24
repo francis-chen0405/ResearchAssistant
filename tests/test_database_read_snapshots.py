@@ -239,6 +239,7 @@ def test_read_only_store_closes_connection_when_validation_fails(
         opened[0].execute("SELECT 1")
 
 
+@pytest.mark.slow
 def test_transient_read_contention_is_typed_as_busy_and_corruption_stays_distinct(
     tmp_path: Path,
 ) -> None:

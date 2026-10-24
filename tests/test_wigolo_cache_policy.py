@@ -9,6 +9,7 @@ import pytest
 import desktop.build as build
 
 
+@pytest.mark.slow
 def test_acquisition_staging_applies_policy_to_reviewed_upstream(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

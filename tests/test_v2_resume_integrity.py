@@ -81,6 +81,7 @@ def _substitute(path: Path, run_id: UUID, key: str, payload: dict[str, Any]) -> 
         connection.execute(trigger)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "key",
     [
@@ -184,6 +185,7 @@ def test_cached_final_stage_verifies_hash_for_current_and_historical_keys(
     assert (database.read_bytes(), database.stat().st_mtime_ns) == before
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "stage",
     [
@@ -270,6 +272,7 @@ def test_gap_replay_preserves_saved_budget_but_rejects_changed_research(tmp_path
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
 
+@pytest.mark.slow
 def test_partial_production_resume_rejects_cached_final_hash_without_new_calls(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -300,6 +303,7 @@ def test_partial_production_resume_rejects_cached_final_hash_without_new_calls(
     assert read_v2_physical_call_audit(path, run_id) == audit_before
 
 
+@pytest.mark.slow
 def test_budget_replay_never_refunds_an_unknown_physical_attempt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

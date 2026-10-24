@@ -328,6 +328,7 @@ def test_adaptive_query_rejects_compiled_lane_mismatch_before_execution(
     )
 
 
+@pytest.mark.slow
 def test_pubmed_reserves_search_and_summary_as_separate_physical_attempts(
     tmp_path: Path,
 ) -> None:
@@ -382,6 +383,7 @@ def test_pubmed_reserves_search_and_summary_as_separate_physical_attempts(
     assert binding.capabilities[0].physical_requests_per_page == 2
 
 
+@pytest.mark.slow
 def test_known_free_provider_failure_retries_but_records_both_attempts(tmp_path: Path) -> None:
     path = tmp_path / "known-failure.sqlite"
     run_id, _ = _freeze(path, DiscoveryProvider.ARXIV)

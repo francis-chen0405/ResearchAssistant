@@ -219,6 +219,7 @@ def test_completed_worker_state_is_evicted_and_unpersisted_result_is_one_shot(
         controller.snapshot(request.db_path, start.run_id)
 
 
+@pytest.mark.slow
 def test_unpersisted_early_results_are_bounded(tmp_path: Path) -> None:
     controller = LiveResearchController(environment={})
     requests = tuple(
@@ -386,6 +387,7 @@ def test_service_probe_requires_exact_wigolo_identity(monkeypatch: pytest.Monkey
     assert diagnostic.wigolo_ready is False
 
 
+@pytest.mark.slow
 def test_service_launch_excludes_secrets_and_stops_only_owned_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -558,6 +560,7 @@ def test_live_next_provider_setup_uses_password_fields() -> None:
     assert "Enter a key to replace the saved key" in source
 
 
+@pytest.mark.slow
 def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> None:
 
     db_path = tmp_path / "mocked-live-web.sqlite3"

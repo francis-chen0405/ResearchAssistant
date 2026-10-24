@@ -271,6 +271,7 @@ def test_cancelling_while_openalex_semantic_waits_creates_no_attempt(tmp_path: P
     assert len(provider_attempt_audit(str(path), run_id).starts) == 1
 
 
+@pytest.mark.slow
 def test_openalex_semantic_retry_is_also_rate_limited(tmp_path: Path) -> None:
     path = tmp_path / "semantic-retry-spacing.sqlite"
     run_id = _semantic_run(path)

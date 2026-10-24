@@ -130,6 +130,7 @@ def _run_fresh(
     )
 
 
+@pytest.mark.slow
 def test_fresh_conceptual_queries_release_after_round_four_and_restart_immutably(
     tmp_path: Path,
 ) -> None:

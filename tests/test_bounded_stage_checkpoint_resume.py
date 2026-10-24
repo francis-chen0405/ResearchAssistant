@@ -212,6 +212,8 @@ def test_gap_resume_keeps_original_budget_and_rejects_changed_claim(
     assert read_v2_artifact(path, original_input.run_id, gap.V2_GAP_ANALYSIS_ARTIFACT_KEY)
 
 
+@pytest.mark.core
+@pytest.mark.slow
 @pytest.mark.parametrize("stage", ("scout", "gap_analysis"))
 def test_production_unknown_stage_keeps_the_original_physical_reservation(
     tmp_path: Path,

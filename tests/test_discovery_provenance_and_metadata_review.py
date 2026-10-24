@@ -29,6 +29,7 @@ from researchassistant.research.v2_orchestrator import V2ProductionState, run_v2
 from researchassistant.storage.store import read_v2_artifact
 
 
+@pytest.mark.slow
 def test_same_work_in_both_search_lanes_reconciles_without_cross_lane_evidence_credit(
     tmp_path: Path,
 ) -> None:
@@ -224,6 +225,7 @@ class NeighborhoodModel(product.production._ConceptModel):
         return super().generate(request)
 
 
+@pytest.mark.slow
 def test_long_arxiv_author_display_does_not_stop_follow_up_planning(tmp_path: Path) -> None:
     controls = ResearchControls(
         discovery_providers=(DiscoveryProvider.OPENALEX, DiscoveryProvider.ARXIV)

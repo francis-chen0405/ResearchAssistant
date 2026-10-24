@@ -69,6 +69,23 @@ Use [the test map](../../tests/README.md) to discover owner tests, broader integ
 coverage and native/browser checks. A focused selection supplements full collection;
 historical milestone names do not define the current architecture.
 
-Before claiming completion, run `python -m pytest tests`, `python -m ruff check --config tests/pyproject.toml .`, `python -m ruff format --config tests/pyproject.toml --check .`, and `git diff --check`, plus the relevant frontend and desktop checks required by the active plan. Check staged whitespace with `git diff --cached --check` too. Preserve existing skips and report the target platform, artifact, and actual result. A workflow definition or a prior platform build is not evidence for the current platform/version.
+For routine changes, run `python -m pytest -c tests/pyproject.toml tests -m core`
+and the concrete tests for every changed owner, including its slow cases. The broader
+`-m "not slow"` selection is useful additional feedback; it is not full verification.
+The [test map](../../tests/README.md#development-feedback) explains both selections
+and their limits. Do not interpret a passing core selection as application acceptance.
+
+Run the complete `python -m pytest tests` locally for changes crossing subsystem
+boundaries or affecting evidence integrity, accounting, persistence/schema behavior,
+historical compatibility, process lifecycle, packaging, or test selection/configuration.
+Use the full suite when the impact is uncertain. CI keeps the complete suite and
+coverage runs unfiltered; never make a local selection the default collection policy.
+
+Always run `python -m ruff check --config tests/pyproject.toml .`,
+`python -m ruff format --config tests/pyproject.toml --check .`, `git diff --check`,
+and `git diff --cached --check`, plus relevant frontend and desktop checks. Preserve
+existing skips and report the target platform, artifact, selection and actual result.
+A workflow definition or a prior platform build is not evidence for the current
+platform/version.
 
 `STATUS.md` owns the current state and next priorities. Retained completed records are discoverable through [grouped history](../history.md); routine changes need no new history entry. Earlier guidance is recoverable through Git. These conventions supersede conflicting recordkeeping instructions in completed plans, old prompts and reports; their dated evidence and substantive requirements retain their meaning.

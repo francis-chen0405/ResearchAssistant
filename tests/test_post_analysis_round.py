@@ -268,6 +268,7 @@ def test_duplicate_follow_up_retains_only_earlier_evidence(tmp_path: Path) -> No
     assert "no novel" in outcome.stop_reason
 
 
+@pytest.mark.slow
 def test_round_four_slot_waits_for_admitted_source_assessments(tmp_path: Path) -> None:
     path = tmp_path / "post-analysis-round-four-disposable.sqlite"
     run_id = uuid4()

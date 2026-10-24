@@ -118,6 +118,7 @@ def test_stop_signals_descendant_after_owned_leader_has_exited(tmp_path: Path) -
         _cleanup_manager(manager, leader_pid)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process-group lifecycle")
 def test_stop_kills_sigterm_ignoring_descendant_after_leader_exit(tmp_path: Path) -> None:
     child_code = (

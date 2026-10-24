@@ -83,6 +83,7 @@ def test_history_manifest_and_terminal_projection_share_one_snapshot(
     assert live_history.history(database)[0].status == "failed"
 
 
+@pytest.mark.slow
 def test_writer_timeout_does_not_replay_or_disguise_contention(tmp_path: Path) -> None:
     database = tmp_path / "writer.sqlite3"
     init_db(str(database))
@@ -102,6 +103,7 @@ def test_writer_timeout_does_not_replay_or_disguise_contention(tmp_path: Path) -
         writer.close()
 
 
+@pytest.mark.slow
 def test_api_contention_is_retryable_and_next_request_recovers(tmp_path: Path) -> None:
     database = tmp_path / "api-busy.sqlite3"
     init_db(str(database))

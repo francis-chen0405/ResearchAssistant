@@ -116,6 +116,7 @@ elif scenario in ('web_refused', 'owned_api'):
     return launcher
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "scenario", ("api_stall", "web_stall", "web_refused", "owned_api", "ready")
 )

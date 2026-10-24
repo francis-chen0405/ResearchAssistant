@@ -71,6 +71,7 @@ def test_excerpt_keeps_original_offsets_and_focus_under_byte_bound() -> None:
     assert text[offsets[0].start_char : offsets[0].end_char] == result
 
 
+@pytest.mark.slow
 def test_checkpoint_drives_search_and_sources_are_not_assessed_twice(tmp_path: Path) -> None:
     path = tmp_path / "checkpoint.sqlite"
     result, model, _search = _run(
@@ -218,6 +219,7 @@ def test_oversized_unsplittable_source_is_unassessed_without_a_model_call() -> N
     assert "Source excerpt unavailable" in result.failure
 
 
+@pytest.mark.slow
 def test_prior_run_leads_are_read_only_deduplicated_metadata_and_reassessed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

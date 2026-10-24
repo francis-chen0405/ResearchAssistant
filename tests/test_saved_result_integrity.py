@@ -21,6 +21,7 @@ from researchassistant.evidence.brief_export import BriefExportFormat, export_re
 from researchassistant.storage.store import insert_v2_artifact
 
 
+@pytest.mark.core
 @pytest.mark.parametrize("change", ["run", "claim", "released_text"])
 @pytest.mark.parametrize("surface", ["result", "evidence", "export"])
 def test_checksum_valid_substitution_is_rejected_without_writes(
@@ -81,6 +82,8 @@ def test_checksum_valid_substitution_is_rejected_without_writes(
     assert Path(database).read_bytes() == before
 
 
+@pytest.mark.core
+@pytest.mark.slow
 @pytest.mark.parametrize("change", ["claim", "released_text"])
 def test_status_rejects_checksum_valid_embedded_release_changes(
     tmp_path: Path, change: str
@@ -133,6 +136,8 @@ def test_status_rejects_checksum_valid_embedded_release_changes(
         controller.shutdown(timeout=1)
 
 
+@pytest.mark.core
+@pytest.mark.slow
 @pytest.mark.parametrize("historical", [False, True])
 @pytest.mark.parametrize("change", ["statement", "quote", "ledger_id", "claim"])
 def test_supplemental_evidence_must_agree_with_released_output(
@@ -206,6 +211,7 @@ def test_supplemental_evidence_must_agree_with_released_output(
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
 
+@pytest.mark.core
 def test_historical_evidence_cannot_replace_its_reviewer_approval(tmp_path: Path) -> None:
     from researchassistant.api.application_services.evidence_projection import (
         _build_v2_evidence_display,

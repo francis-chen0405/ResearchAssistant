@@ -448,6 +448,7 @@ def test_selection_failed_attempt_cap_and_failure_records_survive_restart(
     assert len(provider.requests) == 2
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("stage", ("source_selection", "planner"))
 @pytest.mark.parametrize("unknown", (False, True))
 def test_actual_production_preserves_calls_audit_and_unknown_reservations(

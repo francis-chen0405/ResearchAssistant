@@ -121,6 +121,7 @@ def test_known_pdf_is_acquired_before_nonempty_publisher_shell(tmp_path: Path) -
     assert acquired.output.survivors
 
 
+@pytest.mark.slow
 def test_work_alias_selection_does_not_reduce_expected_work_recall(tmp_path: Path) -> None:
     payload = json.loads(DEFAULT_MANIFEST.read_text(encoding="utf-8"))
     works = {work["work_id"]: work for work in payload["scenarios"][0]["works"]}

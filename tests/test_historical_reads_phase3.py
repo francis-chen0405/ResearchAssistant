@@ -1042,6 +1042,7 @@ def test_pdf_rendering_begins_after_all_inspection_connections_are_closed(
     assert (db.read_bytes(), db.stat().st_mtime_ns) == before
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("index", [0, 1])
 def test_history_inspection_and_export_do_not_load_historical_execution(
     tmp_path: Path, index: int
