@@ -304,7 +304,6 @@ def test_fingerprint_covers_v2_prompts_and_frozen_executable(
         ("researchassistant/prompts/analyst.md", "packaged prompt"),
         ("cli.py", "packaged cli facade"),
         ("models.py", "packaged models facade"),
-        ("orchestrator.py", "packaged orchestrator facade"),
         ("store.py", "packaged store facade"),
         ("researchassistant/evidence/fonts/unifont-15.0.01.ttf", "packaged font"),
     ):

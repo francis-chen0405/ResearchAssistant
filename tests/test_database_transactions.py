@@ -10,33 +10,19 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from agents.supportingresearcher import ResearcherRetrievalBatch, RetrievalOutcome
 from frontend.live_history import history
-from providers.scraper import ScrapeStatus
 from providers.v2_budget import V2BudgetSnapshot
-from researchassistant.contracts.model_contracts import RetrievalStatus
 from researchassistant.contracts.models import (
     EvidenceRole,
     EvidenceTrailEntry,
     EvidenceTrailOutcome,
-    PlannerOutput,
     PortfolioItem,
     ResearchRound,
-    RetrievalRecord,
     RunManifest,
     RunStatus,
     SourceFamilyIdentity,
-    SourceSnapshot,
     Stage,
-    Stance,
     V2PipelineIdentity,
-)
-from researchassistant.research.orchestrator import (
-    AnalysisStageResult,
-    ResearcherPairResult,
-    ResearcherSideStatus,
-    ResearcherStageResult,
-    _persist_mvp10_portfolio,
 )
 from researchassistant.research.v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
@@ -52,7 +38,6 @@ from researchassistant.storage.store import (
     insert_run,
     insert_v2_artifact,
     insert_v2_pipeline_identity,
-    read_evidence_trail_entries,
     read_run,
     read_v2_artifact,
     update_run,
@@ -296,132 +281,6 @@ def test_old_partial_portfolio_replays_missing_snapshot_projection(tmp_path: Pat
     conflicting = entries[0].model_copy(update={"source_title": "Different source"})
     with pytest.raises(sqlite3.IntegrityError, match="evidence trail replay conflicts"):
         insert_mvp10_portfolio_batch(path, (conflicting,), ())
-
-
-def test_legacy_portfolio_uses_retrieval_attempt_for_snapshot_provenance(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "legacy.sqlite3")
-    run_id, attempt_id, snapshot_id, query_id = (uuid4() for _ in range(4))
-    init_db(path)
-    insert_run(
-        path,
-        RunManifest(
-            run_id=run_id,
-            status=RunStatus.RUNNING,
-            raw_claim="A precise test claim.",
-            current_stage=Stage.EVIDENCE_ANALYST,
-            created_at=NOW,
-            updated_at=NOW,
-        ),
-    )
-    with sqlite3.connect(path) as conn:
-        conn.execute(
-            """INSERT INTO search_queries
-               (query_id, run_id, stance, provider, intent, query_round, strategy,
-                query_text, exclusion_parameters, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                str(query_id),
-                str(run_id),
-                "supporting",
-                "exa",
-                "broad_web",
-                1,
-                "fixture",
-                "fixture search",
-                "{}",
-                NOW.isoformat(),
-            ),
-        )
-        conn.execute(
-            """INSERT INTO retrieval_attempts
-               (retrieval_attempt_id, run_id, query_id, query_round, query_text,
-                search_rank, source_url, resolved_url, status, retrieved_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                str(attempt_id),
-                str(run_id),
-                str(query_id),
-                1,
-                "fixture search",
-                1,
-                "https://example.test/source",
-                "https://example.test/source",
-                "retrieved",
-                NOW.isoformat(),
-            ),
-        )
-    retrieval = RetrievalRecord(
-        run_id=run_id,
-        retrieval_attempt_id=attempt_id,
-        query_id=query_id,
-        query_round=1,
-        query_text="fixture search",
-        search_rank=1,
-        source_url="https://example.test/source",
-        resolved_url="https://example.test/source",
-        status=RetrievalStatus.RETRIEVED,
-        retrieved_at=NOW,
-    )
-    snapshot = SourceSnapshot(
-        run_id=run_id,
-        retrieval_attempt_id=attempt_id,
-        snapshot_id=snapshot_id,
-        source_url="https://example.test/source",
-        retrieved_at=NOW,
-        normalized_text="A source text.",
-        snapshot_sha256="a" * 64,
-        word_count=3,
-        truncated=False,
-        created_at=NOW,
-    )
-    outcome = RetrievalOutcome(
-        retrieval=retrieval,
-        scrape_status=ScrapeStatus.RETRIEVED,
-        content_type="text/html",
-        snapshot_id=snapshot_id,
-        attempts_made=1,
-    )
-    batch = ResearcherRetrievalBatch.model_construct(
-        run_id=run_id,
-        stance=Stance.SUPPORTING,
-        outcomes=[outcome],
-        snapshots=[snapshot],
-    )
-    researchers = ResearcherPairResult.model_construct(
-        run_id=run_id,
-        supporting=ResearcherStageResult.model_construct(
-            run_id=run_id,
-            stance="supporting",
-            status=ResearcherSideStatus.COMPLETED,
-            retrieval_batch=batch,
-        ),
-        opposing=ResearcherStageResult.model_construct(
-            run_id=run_id,
-            stance="opposing",
-            status=ResearcherSideStatus.SKIPPED,
-        ),
-    )
-    analysis = AnalysisStageResult(
-        run_id=run_id,
-        analyst_decisions=(),
-        statement_drafts=(),
-        reviewer_decisions=(),
-        ledger_records=(),
-    )
-    _persist_mvp10_portfolio(
-        path,
-        PlannerOutput.model_construct(run_id=run_id),
-        researchers,
-        analysis,
-        lambda: NOW,
-        stopping_reason="Fixture complete.",
-    )
-    (saved,) = read_evidence_trail_entries(path, run_id)
-    assert saved.snapshot_status == "snapshotted"
-    assert saved.snapshot_sha256 == snapshot.snapshot_sha256
-    assert saved.source_family is not None
 
 
 @pytest.mark.parametrize(

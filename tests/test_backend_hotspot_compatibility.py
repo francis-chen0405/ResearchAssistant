@@ -22,7 +22,12 @@ BEFORE: dict[str, Any] = json.loads(
 )
 
 
-@pytest.mark.parametrize("qualified", BEFORE)
+# Execution-only configuration/pickle names retired with the native executor.
+# All recorded fixtures remain unchanged; shared handoff contracts stay covered.
+@pytest.mark.parametrize(
+    "qualified",
+    [name for name in BEFORE if not name.startswith("researchassistant.research.orchestrator:")],
+)
 def test_public_handoff_preserves_schema_config_and_identity(qualified: str) -> None:
     module_name, name = qualified.split(":")
     module = importlib.import_module(module_name)

@@ -86,7 +86,6 @@ from researchassistant.contracts.models import (
     V2SourceSelectionRecommendation,
     V2VerbatimQuoteSelection,
 )
-from researchassistant.research.orchestrator import request_run_cancellation
 from researchassistant.research.v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
     V2_PRODUCTION_FINGERPRINT_KEY,
@@ -99,6 +98,7 @@ from researchassistant.research.v2_orchestrator import (
     run_v2_production_pipeline,
     v2_cancellation_requested,
 )
+from researchassistant.storage.run_cancellation import request_run_cancellation
 from researchassistant.storage.store import (
     init_db,
     insert_run,

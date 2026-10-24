@@ -35,8 +35,9 @@ pnpm --dir frontend dev
 
 On Windows, use `.venv\Scripts\python.exe` for the Python launcher.
 The console command, `python -m cli` and `python backend/src/cli.py` are supported after
-installation. Historical `models`, `store`, `orchestrator`, `agents`, `providers` and
+installation. Historical `models`, `store`, `agents`, `providers` and
 Python `frontend` imports are installed facades; new code uses `researchassistant.*`.
+The native historical executor and `orchestrator` imports are retired; saved research remains readable.
 The Next.js folder and historical Python namespace coexist through the installed backend.
 Optional Streamlit fixture UI dependencies are in `backend/requirements-legacy.txt`.
 Credentials come from native desktop settings or the CLI process environment; `.env`

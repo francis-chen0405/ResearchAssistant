@@ -12,8 +12,9 @@ import pytest
 import researchassistant.storage.store as store_module
 from frontend.live_service import LiveResearchController
 from researchassistant.contracts.models import RunManifest, RunStatus, Stage
-from researchassistant.research.orchestrator import ProviderRunStatus, inspect_provider_run
+from researchassistant.contracts.provider_results import ProviderRunStatus
 from researchassistant.runtime.cli import CLIExitCode, main
+from researchassistant.storage.provider_history import inspect_provider_run
 from researchassistant.storage.store import (
     RAW_CLAIM_TRIGGER_NAME,
     DatabaseCompatibilityError,

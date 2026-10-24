@@ -24,7 +24,7 @@ from researchassistant.contracts.models import (
     Stage,
 )
 from researchassistant.contracts.provider_contract import canonical_provider_contract_payload
-from researchassistant.research.orchestrator import (
+from researchassistant.contracts.provider_results import (
     ProviderPipelineResult,
     ProviderRunStatus,
     summarize_model_usage,

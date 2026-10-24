@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from researchassistant.providers.v2_budget import read_v2_physical_call_audit
 from researchassistant.runtime.cli import CLIExitCode
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,7 +51,7 @@ def _command(db_path: Path, run_id: UUID, claim: str = CLAIM) -> list[str]:
         "--run-id",
         str(run_id),
         "--max-tokens",
-        "1000000",
+        "500000",
         "--max-cost-usd",
         "1.00",
     ]
@@ -105,10 +106,11 @@ def test_run_subprocess_uses_stable_terminal_exit_codes(
         assert "final brief:" in result.stdout
         assert "rendered hash:" in result.stdout
     elif scenario == "blocked":
-        assert "validation errors:" in result.stdout
-        assert "rendered hash: none" in result.stdout
+        assert "release integrity blocked output" in result.stdout
+        assert "rendered hash:" not in result.stdout
+        assert "final brief:" not in result.stdout
     else:
-        assert "failed stage:" in result.stdout
+        assert "LLM provider failed: offline provider failure" in result.stdout
         assert "reason:" in result.stdout
 
 
@@ -188,8 +190,7 @@ def test_budget_failure_is_failed_without_a_physical_call(
 
     assert result.returncode == CLIExitCode.FAILED
     assert expected_reason in result.stdout
-    with sqlite3.connect(db_path) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM model_route_attempts").fetchone()[0] == 0
+    assert not read_v2_physical_call_audit(db_path, run_id).starts
 
 
 @pytest.mark.slow
@@ -219,20 +220,12 @@ def test_launch_reports_current_stack_and_never_discloses_secrets(
     db_bytes = db_path.read_bytes()
 
     assert result.returncode == CLIExitCode.RELEASED
-    assert (
-        "approved provider stack: Exa Search auto discovery + Wigolo 0.2.1 primary "
-        "acquisition + optional Firecrawl fallback + direct Xiaomi MiMo"
-    ) in result.stdout
-    assert "exa discovery endpoint: https://exa.example.test" in result.stdout
-    assert "wigolo endpoint: http://127.0.0.1:8123" in result.stdout
-    expected_firecrawl = "enabled" if firecrawl_enabled else "disabled"
-    assert f"firecrawl acquisition fallback: {expected_firecrawl}" in result.stdout
-    if firecrawl_enabled:
-        assert "firecrawl endpoint: https://firecrawl.example.test" in result.stdout
-    else:
-        assert "firecrawl endpoint:" not in result.stdout
-    assert "mimo endpoint: https://api.xiaomimimo.com/v1" in result.stdout
-    assert "model alias: mimo-v2.5-pro" in result.stdout
+    assert "production pipeline: ResearchAssistant v2 analyzer-admission release" in result.stdout
+    assert "model routes:" in result.stdout
+    assert "gpt-6-luna" in result.stdout
+    assert "synthesis: deterministic Python assembly" in result.stdout
+    assert "research mode: focused" in result.stdout
+    assert "metadata depth: 50" in result.stdout
     assert SECRET not in result.stdout
     assert SECRET not in result.stderr
     assert SECRET.encode() not in db_bytes
@@ -272,9 +265,8 @@ def test_inspect_run_reports_authoritative_audit_and_release(tmp_path: Path) -> 
         "model attempts:",
         "usage:",
         "provider identity:",
-        "prompt identity:",
-        "schema identity:",
-        "normalization identity:",
+        "model identity:",
+        "fingerprint:",
         "final brief:",
         "rendered hash:",
     ):
@@ -287,6 +279,12 @@ def test_restart_reuses_terminal_release_and_rejects_changed_claim_and_identity(
 ) -> None:
     run_id = uuid4()
     first = _run(tmp_path, run_id=run_id)
+    with sqlite3.connect(tmp_path / "mvp4.sqlite3") as connection:
+        artifacts = connection.execute(
+            "SELECT artifact_key,artifact_type,payload_sha256 "
+            "FROM v2_artifacts ORDER BY artifact_key"
+        ).fetchall()
+    assert any(kind == "V2AcquisitionProbeOutput" for _key, kind, _hash in artifacts)
     second = _run(tmp_path, run_id=run_id)
     changed_claim = _run(tmp_path, run_id=run_id, claim="A changed exact claim.")
     changed_identity = _run(
@@ -298,12 +296,17 @@ def test_restart_reuses_terminal_release_and_rejects_changed_claim_and_identity(
     assert first.returncode == second.returncode == CLIExitCode.RELEASED
     assert first.stdout.split("final brief:\n", 1)[1] == second.stdout.split("final brief:\n", 1)[1]
     assert changed_claim.returncode == CLIExitCode.INVALID_INPUT
-    assert "different exact claim" in changed_claim.stderr
-    assert changed_identity.returncode == CLIExitCode.CONFIGURATION_ERROR
-    assert "incompatible fingerprint" in changed_identity.stderr
+    assert "cross-claim v2 resume is forbidden" in changed_claim.stderr
+    assert changed_identity.returncode == CLIExitCode.INVALID_INPUT
+    assert "cross-version v2 resume is forbidden" in changed_identity.stderr
     with sqlite3.connect(tmp_path / "mvp4.sqlite3") as connection:
-        assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 18
-        assert connection.execute("SELECT COUNT(*) FROM validation_runs").fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT artifact_key,artifact_type,payload_sha256 "
+                "FROM v2_artifacts ORDER BY artifact_key"
+            ).fetchall()
+            == artifacts
+        )
 
 
 @pytest.mark.slow
@@ -311,7 +314,7 @@ def test_budget_change_requires_new_run_and_never_resets_usage(tmp_path: Path) -
     run_id = uuid4()
     first = _run(tmp_path, run_id=run_id)
     command = _command(tmp_path / "mvp4.sqlite3", run_id)
-    command[command.index("--max-tokens") + 1] = "999999"
+    command[command.index("--max-tokens") + 1] = "499999"
     changed = subprocess.run(
         command,
         cwd=ROOT,
@@ -323,9 +326,8 @@ def test_budget_change_requires_new_run_and_never_resets_usage(tmp_path: Path) -
     )
 
     assert first.returncode == CLIExitCode.RELEASED
-    assert changed.returncode == CLIExitCode.CONFIGURATION_ERROR
-    with sqlite3.connect(tmp_path / "mvp4.sqlite3") as connection:
-        assert connection.execute("SELECT COUNT(*) FROM model_route_attempts").fetchone()[0] > 0
+    assert changed.returncode == CLIExitCode.INVALID_INPUT
+    assert read_v2_physical_call_audit(tmp_path / "mvp4.sqlite3", run_id).starts
 
 
 @pytest.mark.slow
@@ -345,10 +347,8 @@ def test_second_process_cancellation_observes_active_call_boundary(tmp_path: Pat
     while time.monotonic() < deadline:
         if db_path.exists():
             try:
-                with sqlite3.connect(db_path) as connection:
-                    count = connection.execute(
-                        "SELECT COUNT(*) FROM model_route_attempts WHERE status = 'running'"
-                    ).fetchone()[0]
+                audit = read_v2_physical_call_audit(db_path, run_id)
+                count = sum(item is None for item in audit.completions)
                 if count == 1:
                     break
             except sqlite3.OperationalError:
@@ -380,11 +380,12 @@ def test_second_process_cancellation_observes_active_call_boundary(tmp_path: Pat
     assert "persisted: yes" in cancelled.stdout
     assert process.returncode == CLIExitCode.CANCELLED, stderr
     assert "status: cancelled" in stdout
-    assert "observed cooperative boundary:" in stdout
+    assert "reason:" in stdout
+    assert "cancel" in stdout.lower()
     assert "immediate interruption" not in stdout
-    with sqlite3.connect(db_path) as connection:
-        statuses = connection.execute("SELECT status FROM model_route_attempts").fetchall()
-    assert statuses == [("completed",)]
+    audit = read_v2_physical_call_audit(db_path, run_id)
+    assert len(audit.starts) == len(audit.completions) == 1
+    assert audit.completions[0] is not None
 
 
 @pytest.mark.skipif(

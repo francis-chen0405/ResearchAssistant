@@ -12,7 +12,7 @@ from researchassistant.providers.config import ProviderConfigurationError
 
 # Installed compatibility modules belong to the backend source surface. The root
 # cli.py is a transition launcher, outside the distribution implementation.
-EXECUTABLE_ROOT_MODULES = ("cli.py", "models.py", "orchestrator.py", "store.py")
+EXECUTABLE_ROOT_MODULES = ("cli.py", "models.py", "store.py")
 EXECUTABLE_PACKAGES = ("researchassistant", "agents", "providers", "frontend")
 
 

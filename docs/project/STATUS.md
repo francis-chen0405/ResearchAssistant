@@ -14,7 +14,9 @@ Current source uses assessed findings to guide further searches, replaces unusab
 sources within existing limits, captures later PDF pages with explicit omissions,
 and performs a bounded follow-up when analysis leaves evidence gaps. Reports retain
 source provenance, quotation checks and conservative cost accounting. The CLI defaults
-remain 20 sources per direction and metadata search depth 50.
+remain 20 sources per direction and metadata search depth 50. The old native execution
+engine is retired; historical inspection, evidence browsing and released exports
+retain their original validation and hashes.
 
 Progress screens preserve the last confirmed state when the connection fails and let
 the user reconnect to the same run. Cancellation is confirmed by the backend before

@@ -82,12 +82,11 @@ def test_extracted_source_changes_invalidate_execution_identity(
 
 
 def test_fixture_and_exit_contracts_keep_compatibility_imports() -> None:
+
     import cli as legacy_cli
     import models as legacy_models
-    import orchestrator as legacy_orchestrator
     import researchassistant.contracts.models as canonical_models
     import researchassistant.research.fixture_pipeline as fixture_pipeline
-    import researchassistant.research.orchestrator as orchestrator
     import researchassistant.runtime.cli as canonical_cli
     import researchassistant.runtime.cli as cli
     import researchassistant.storage.store as canonical_store
@@ -99,13 +98,14 @@ def test_fixture_and_exit_contracts_keep_compatibility_imports() -> None:
     assert legacy_models.RunManifest is canonical_models.RunManifest
     assert legacy_store is canonical_store
     assert legacy_store.init_db is canonical_store.init_db
-    assert legacy_orchestrator is orchestrator
     assert legacy_cli is canonical_cli
     assert cli.CLIExitCode is CLIExitCode
-    assert orchestrator.run_fixture_pipeline is fixture_pipeline.run_fixture_pipeline
-    assert orchestrator.FixturePipelineResult is fixture_pipeline.FixturePipelineResult
-    assert orchestrator.FixturePipelineError is FixturePipelineError
     assert fixture_pipeline.FixturePipelineError is FixturePipelineError
+    from importlib.util import find_spec
+
+    assert find_spec("orchestrator") is None
+    assert find_spec("researchassistant.research.orchestrator") is None
+    assert find_spec("researchassistant.research.historical_execution") is None
 
     repository_root = Path(__file__).resolve().parents[1]
     subprocess.run(

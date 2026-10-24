@@ -10,8 +10,8 @@ from uuid import UUID
 import pytest
 
 import researchassistant.evidence.brief_export as brief_export
+from researchassistant.contracts.provider_results import ProviderRunStatus
 from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
-from researchassistant.research.orchestrator import ProviderRunStatus
 from researchassistant.storage.store import init_db
 
 

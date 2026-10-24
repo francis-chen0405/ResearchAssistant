@@ -82,7 +82,7 @@ prompt policies and immutable released hashes retain their meaning.
 | Provider-aware discovery, ranking, and durable retrieval | `researchassistant.contracts.discovery_v2`, `researchassistant.contracts.metadata_ranking`, `researchassistant.research.discovery_policy`, `discovery_capabilities`, `metadata_ranking`, `researchassistant.storage.discovery_store`, and `query_retrieval_store` |
 | Fresh research orchestration | `researchassistant.research.v2_orchestrator`, `researchassistant.agents.v2_*` |
 | Model catalogs and provider routing | `researchassistant.providers.model_profiles`, `researchassistant.providers.v2_routing`, `researchassistant.providers.v2_budget` |
-| Historical provider execution | `researchassistant.research.historical_execution`; `research.orchestrator` and installed `orchestrator` alias that module |
+| Historical research access | Neutral contract, storage and evidence readers; native provider execution and both orchestrator aliases are retired |
 | Source snapshots, quotations, and trust boundary | `researchassistant.evidence.evidence_core` |
 | Analyst scoring, drafting, and admission | `researchassistant.evidence.evidence_analysis` |
 | Shared research, evidence, and run contracts | `researchassistant.contracts.model_contracts`, stage-specific `research_*` owners, and `model_evidence`; compatible exports in `model_research` and `models` |
@@ -104,17 +104,17 @@ stages, `providers/` owns adapters, `api/` owns HTTP/services and lifecycle view
 persistence, `platform_support/` owns host integration, `runtime/` owns CLI/application
 entries and `common/` holds helpers. These are all backend-owned canonical modules.
 
-Installed `models`, `store`, `orchestrator`, `cli`, `agents.*`, `providers.*` and
+Installed `models`, `store`, `cli`, `agents.*`, `providers.*` and
 `frontend.*` alias their canonical module objects. The CLI script facade is
 `backend/src/cli.py` after installation. Historical researcher and Analyst facades preserve
 neutral evidence objects; historical retrieval remains available. Ordinary CLI/API
-construction selects v2; historical execution still requires the typed `legacy_runner`.
+construction selects v2. The small typed `legacy_runner` injection boundary remains for externally supplied runners and lifecycle tests; no native historical executor is bundled.
 The controller's older `runner` name remains a compatibility alias.
 
 Historical read/inspection/export consumers use `storage.provider_history` and
 neutral result contracts. They load neither historical execution nor its orchestrator
-aliases. The isolated executor retains former read/data/error exports; the CLI resolves
-its historical execution symbol lazily for explicit callers. Cancellation persistence
+aliases, which are removed. Fixture execution uses `research.fixture_pipeline`;
+read/data/error types live in their neutral owners. Cancellation persistence
 belongs to `storage.run_cancellation`. Exact recorded policies, immutable release
 text/hash checks and incompatible-resume behavior retain their prior meaning.
 

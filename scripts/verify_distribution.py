@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 SOURCE = BACKEND / "src"
 PACKAGES = ("researchassistant", "agents", "providers", "frontend")
-MODULES = ("cli.py", "models.py", "orchestrator.py", "store.py")
+MODULES = ("cli.py", "models.py", "store.py")
 
 
 def expected_payloads(root: Path) -> dict[str, bytes]:

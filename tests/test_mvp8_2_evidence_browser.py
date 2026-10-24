@@ -12,7 +12,7 @@ from researchassistant.evidence.evidence_browser import (
     browse_evidence_run,
     trace_released_statement,
 )
-from researchassistant.research.orchestrator import run_fixture_pipeline
+from researchassistant.research.fixture_pipeline import run_fixture_pipeline
 
 _ROOT = Path(__file__).resolve().parents[1]
 _VALID = _ROOT / "tests" / "fixtures" / "basic_valid_run"

@@ -19,6 +19,10 @@ from agents.renderer import validate_final_release
 from agents.v2_extraction import V2ExactExtractionResult
 from frontend.live_history import history, research_trail
 from researchassistant.contracts import models
+from researchassistant.contracts.artifact_keys import (
+    MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
+    PHASE9_ANALYSIS_ARTIFACT,
+)
 from researchassistant.contracts.discovery_v2 import (
     V2DiscoveryPolicy,
     V2GraphNeighborAction,
@@ -38,24 +42,24 @@ from researchassistant.contracts.models import (
     V2PersistedArtifact,
     V2PipelineIdentity,
 )
-from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
-from researchassistant.evidence.evidence_browser import browse_evidence_run
-from researchassistant.evidence.historical_render import RELEASE_V1_TEMPLATES
-from researchassistant.research.fixture_pipeline import FixturePipelineResult, run_fixture_pipeline
-from researchassistant.research.orchestrator import (
-    MVP11_ROUND_THREE_RESEARCHERS_CHECKPOINT,
-    PHASE9_ANALYSIS_ARTIFACT,
+from researchassistant.contracts.provider_results import (
     AnalysisStageResult,
     ProviderRunStatus,
     ResearcherPairResult,
     _combine_analysis_results,
-    _read_optional_stage_result,
-    inspect_provider_run,
 )
+from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
+from researchassistant.evidence.evidence_browser import browse_evidence_run
+from researchassistant.evidence.historical_render import RELEASE_V1_TEMPLATES
+from researchassistant.research.fixture_pipeline import FixturePipelineResult, run_fixture_pipeline
 from researchassistant.storage.historical_decode import (
     decode_ledger,
     decode_native_artifact,
     decode_v2_artifact,
+)
+from researchassistant.storage.provider_history import (
+    _read_optional_stage_result,
+    inspect_provider_run,
 )
 from researchassistant.storage.store import (
     init_db,
@@ -1109,4 +1113,32 @@ assert 'orchestrator' not in sys.modules
         ],
         check=True,
     )
+    assert (database.read_bytes(), database.stat().st_mtime_ns) == before
+
+
+def test_sqlite_rejects_claim_tampering_after_release(tmp_path: Path) -> None:
+    database, offline, _brief = _august_database(tmp_path / "run", 0)
+    expected = inspect_provider_run(database, offline.run_id)
+    before = database.read_bytes(), database.stat().st_mtime_ns
+    with closing(sqlite3.connect(database)) as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="runs.raw_claim is immutable"):
+            connection.execute(
+                "UPDATE runs SET raw_claim = ? WHERE run_id = ?",
+                ("A tampered claim.", str(offline.run_id)),
+            )
+    assert inspect_provider_run(database, offline.run_id).model_dump() == expected.model_dump()
+    assert (database.read_bytes(), database.stat().st_mtime_ns) == before
+
+
+def test_inspection_rejects_released_brief_hash_corruption(tmp_path: Path) -> None:
+    database, offline, _brief = _august_database(tmp_path / "run", 0)
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute(
+            "UPDATE validation_runs SET rendered_brief_hash = ? WHERE run_id = ?",
+            ("0" * 64, str(offline.run_id)),
+        )
+        connection.commit()
+    before = database.read_bytes(), database.stat().st_mtime_ns
+    with pytest.raises(ValueError, match="persisted released brief"):
+        inspect_provider_run(database, offline.run_id)
     assert (database.read_bytes(), database.stat().st_mtime_ns) == before

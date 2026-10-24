@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 import pytest
 
 import frontend.live_service as live_service
-import researchassistant.research.orchestrator as orchestrator
+import researchassistant.contracts.provider_results as provider_results
 import researchassistant.research.v2_orchestrator as v2_orchestrator
 import researchassistant.storage.database_lock as database_lock_module
 import researchassistant.storage.history_import as history_import_module
@@ -28,6 +28,7 @@ from researchassistant.contracts.models import (
 )
 from researchassistant.platform_support.file_lock import FileLock
 from researchassistant.storage.database_lock import database_lock, retained_database_lock
+from researchassistant.storage.run_cancellation import request_run_cancellation
 from researchassistant.storage.store import (
     init_db,
     insert_run,
@@ -81,10 +82,10 @@ def _request(database: Path, run_id: UUID) -> LiveRunRequest:
 
 def _legacy_result(
     db_path: str | Path, run_id: UUID, raw_claim: str
-) -> orchestrator.ProviderPipelineResult:
-    return orchestrator.ProviderPipelineResult(
+) -> provider_results.ProviderPipelineResult:
+    return provider_results.ProviderPipelineResult(
         run_id=run_id,
-        status=orchestrator.ProviderRunStatus.FAILED,
+        status=provider_results.ProviderRunStatus.FAILED,
         raw_claim=raw_claim,
         db_path=str(db_path),
         current_stage=Stage.CLAIM_PLANNER,
@@ -143,36 +144,14 @@ raise SystemExit(main())
                 stream.close()
 
 
-def test_subprocess_database_lock_excludes_init_import_and_legacy_wrapper(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_subprocess_database_lock_excludes_init_and_import(tmp_path: Path) -> None:
     database = tmp_path / "shared.sqlite3"
     init_db(str(database))
-    legacy_calls: list[object] = []
-
-    def unexpected_legacy_call(
-        *args: object, **kwargs: object
-    ) -> orchestrator.ProviderPipelineResult:
-        legacy_calls.append((args, kwargs))
-        raise AssertionError(
-            "the legacy write body must not start while another process owns the lock"
-        )
-
-    monkeypatch.setattr(orchestrator, "_run_provider_pipeline", unexpected_legacy_call)
     with _external_database_lock(database):
         with pytest.raises(RuntimeError, match="busy"):
             init_db(str(database))
         with pytest.raises(ValueError, match="active research"):
             history_import_module.import_history(database, destination_dir=tmp_path / "imports")
-        with pytest.raises(RuntimeError, match="busy"):
-            orchestrator.run_provider_pipeline(
-                "A lock contention claim.",
-                db_path=database,
-                search_provider=object(),
-                scraper_provider=object(),
-                llm_provider=object(),
-            )
-    assert legacy_calls == []
 
 
 def test_init_db_uses_retained_and_explicit_lock_ownership_without_reacquiring(
@@ -223,52 +202,6 @@ def test_v2_database_lock_creates_missing_parent_without_chmodding_existing_pare
     assert S_IMODE(existing_parent.stat().st_mode) == original_mode
 
 
-def test_direct_legacy_run_retains_shared_lock_until_write_scope_exits(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    database = tmp_path / "direct-legacy.sqlite3"
-    init_db(str(database))
-    entered = Event()
-    release = Event()
-    result_run_id = uuid4()
-
-    def blocking_write(raw_claim: str, **kwargs: object) -> orchestrator.ProviderPipelineResult:
-        init_db(str(kwargs["db_path"]))
-        entered.set()
-        assert release.wait(5), "test did not release the simulated legacy write"
-        return _legacy_result(kwargs["db_path"], result_run_id, raw_claim)
-
-    monkeypatch.setattr(orchestrator, "_run_provider_pipeline", blocking_write)
-    errors: list[BaseException] = []
-
-    def run_legacy() -> None:
-        try:
-            orchestrator.run_provider_pipeline(
-                "A direct legacy run.",
-                db_path=database,
-                search_provider=object(),
-                scraper_provider=object(),
-                llm_provider=object(),
-                run_id=result_run_id,
-            )
-        except BaseException as exc:
-            errors.append(exc)
-
-    worker = Thread(target=run_legacy)
-    worker.start()
-    try:
-        assert entered.wait(5)
-        with pytest.raises(ValueError, match="active research"):
-            history_import_module.import_history(database, destination_dir=tmp_path / "imports")
-    finally:
-        release.set()
-        worker.join(timeout=5)
-    assert not worker.is_alive()
-    assert errors == []
-    imported = history_import_module.import_history(database, destination_dir=tmp_path / "imports")
-    assert Path(imported.db_path).is_file()
-
-
 def test_live_legacy_cancellation_keeps_import_blocked_through_timed_out_shutdown(
     tmp_path: Path,
 ) -> None:
@@ -290,7 +223,7 @@ def test_live_legacy_cancellation_keeps_import_blocked_through_timed_out_shutdow
     entered = Event()
     release = Event()
 
-    def legacy_runner(raw_claim: str, **kwargs: object) -> orchestrator.ProviderPipelineResult:
+    def legacy_runner(raw_claim: str, **kwargs: object) -> provider_results.ProviderPipelineResult:
         init_db(str(kwargs["db_path"]))
         entered.set()
         assert release.wait(5), "test did not release the simulated live legacy run"
@@ -321,7 +254,7 @@ def test_cancellation_of_missing_database_does_not_create_it(tmp_path: Path) -> 
     database = tmp_path / "missing" / "not-created.sqlite3"
 
     with pytest.raises(ValueError, match="initialized compatible database"):
-        orchestrator.request_run_cancellation(database, uuid4())
+        request_run_cancellation(database, uuid4())
 
     assert not database.exists()
 
@@ -374,7 +307,7 @@ def test_cancellation_preserves_supported_read_only_schema_versions(
     run_id = uuid4()
     _historical_database(database, version, run_id)
 
-    orchestrator.request_run_cancellation(database, run_id)
+    request_run_cancellation(database, run_id)
 
     with sqlite3.connect(database) as connection:
         latest_version = connection.execute(

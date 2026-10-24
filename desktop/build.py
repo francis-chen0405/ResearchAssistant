@@ -40,7 +40,7 @@ def replace_tree(source: Path, destination: Path) -> None:
 def stage_python_source() -> Path:
     """Stage only the explicit executable/data manifest, excluding caches and secrets."""
     source = ROOT / "backend/src"
-    paths = [source / name for name in ("cli.py", "models.py", "orchestrator.py", "store.py")]
+    paths = [source / name for name in ("cli.py", "models.py", "store.py")]
     for name in ("researchassistant", "agents", "providers", "frontend"):
         paths.extend((source / name).rglob("*.py"))
     paths.extend((source / "researchassistant/prompts").glob("*.md"))
@@ -178,7 +178,7 @@ def main() -> None:
     # Source data retains the current backend ownership paths for frozen identity.
     source_data = stage_python_source()
     source = source_data / "src"
-    for name in ("cli.py", "models.py", "orchestrator.py", "store.py"):
+    for name in ("cli.py", "models.py", "store.py"):
         command.extend(["--add-data", f"{source / name}{os.pathsep}backend/src"])
     command.extend(["--add-data", f"{source_data / 'pyproject.toml'}{os.pathsep}backend"])
     for name in ("agents", "providers", "frontend", "researchassistant"):

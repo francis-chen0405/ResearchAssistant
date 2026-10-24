@@ -35,7 +35,7 @@ from researchassistant.contracts.models import (
     RunStatus,
     Stage,
 )
-from researchassistant.research.orchestrator import ProviderPipelineResult, ProviderRunStatus
+from researchassistant.contracts.provider_results import ProviderPipelineResult, ProviderRunStatus
 from researchassistant.runtime.cli import CLIExitCode
 from researchassistant.storage.store import init_db, insert_run
 
@@ -589,7 +589,7 @@ def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> Non
             "--run-id",
             str(run_id),
             "--max-tokens",
-            "1000000",
+            "500000",
             "--max-cost-usd",
             "1.00",
         ],
@@ -608,7 +608,8 @@ def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> Non
     controller = LiveResearchController(environment={})
     snapshot = controller.snapshot(db_path, run_id)
     assert snapshot.supporting.model_attempts > 0
-    assert snapshot.opposing.model_attempts > 0
+    assert snapshot.opposing.status == "disabled"
+    assert snapshot.opposing.model_attempts == 0
     runtime = ApiRuntime(
         controller=controller,
         services=WigoloServiceManager(base_environment={}),
@@ -625,7 +626,7 @@ def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> Non
     assert response.status_code == 200
     payload = response.json()
     assert payload["classification"] == "released"
-    assert "Released after deterministic validation" in payload["message"]
+    assert "Research completed and passed release validation." in payload["message"]
     assert payload["final_brief"]
     assert payload["rendered_brief_hash"]
     assert SECRET not in response.text

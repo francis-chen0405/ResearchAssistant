@@ -24,7 +24,7 @@ researchassistant = "researchassistant.runtime.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src", "_build" = "_build"}
-py-modules = ["cli", "models", "orchestrator", "store"]
+py-modules = ["cli", "models", "store"]
 include-package-data = false
 
 [tool.setuptools.packages.find]

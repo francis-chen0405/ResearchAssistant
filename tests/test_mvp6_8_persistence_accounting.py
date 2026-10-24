@@ -19,7 +19,7 @@ from researchassistant.contracts.models import (
     RunStatus,
     Stage,
 )
-from researchassistant.research.orchestrator import summarize_model_usage
+from researchassistant.contracts.provider_results import summarize_model_usage
 from researchassistant.storage.store import (
     CURRENT_SCHEMA_VERSION,
     ModelAttemptBudgetError,
@@ -79,7 +79,7 @@ def _attempt(
 
 
 def _fixture_database(tmp_path: Path) -> Path:
-    from researchassistant.research.orchestrator import run_fixture_pipeline
+    from researchassistant.research.fixture_pipeline import run_fixture_pipeline
 
     fixture = Path(__file__).parent / "fixtures" / "basic_valid_run"
     result = run_fixture_pipeline(fixture, output_dir=tmp_path / "fixture-output")

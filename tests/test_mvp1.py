@@ -21,7 +21,7 @@ from researchassistant.contracts.models import (
     StatementDraft,
     SynthesisOutput,
 )
-from researchassistant.research.orchestrator import run_fixture_pipeline
+from researchassistant.research.fixture_pipeline import run_fixture_pipeline
 from researchassistant.storage.store import read_run, read_synthesis
 
 NOW = datetime(2026, 7, 19, 12, 0, tzinfo=UTC)

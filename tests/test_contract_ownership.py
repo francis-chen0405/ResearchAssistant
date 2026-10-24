@@ -26,6 +26,9 @@ BEFORE: dict[str, Any] = json.loads(FIXTURE.read_text())
 @pytest.mark.parametrize("qualified", BEFORE)
 def test_public_contract_keeps_original_schema_config_and_enum_values(qualified: str) -> None:
     module, name = qualified.rsplit(".", 1)
+    # Shared result contracts retain their schemas at the canonical read-only owner.
+    if module == "researchassistant.research.orchestrator":
+        module = "researchassistant.contracts.provider_results"
     contract = getattr(importlib.import_module(module), name)
     expected = BEFORE[qualified]
     if "schema_sha256" in expected:

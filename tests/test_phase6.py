@@ -24,7 +24,8 @@ from researchassistant.contracts.models import (
     SynthesisOutput,
     ValidationErrorCode,
 )
-from researchassistant.research.orchestrator import FixturePipelineError, run_fixture_pipeline
+from researchassistant.research.fixture_pipeline import run_fixture_pipeline
+from researchassistant.research.pipeline_artifacts import FixturePipelineError
 from researchassistant.storage.store import read_ledger_record, read_synthesis, read_validation
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -178,7 +179,7 @@ def test_pipeline_does_not_touch_network_or_provider_surfaces(
     assert result.status == "released"
     source_text = "\n".join(
         [
-            (_REPO_ROOT / "backend/src/researchassistant/research/orchestrator.py").read_text(
+            (_REPO_ROOT / "backend/src/researchassistant/research/fixture_pipeline.py").read_text(
                 encoding="utf-8"
             ),
             (_REPO_ROOT / "backend/src/cli.py").read_text(encoding="utf-8"),

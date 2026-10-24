@@ -25,7 +25,7 @@ from researchassistant.contracts.models import (
     ResearchDirections,
     Stage,
 )
-from researchassistant.research.orchestrator import ProviderPipelineResult, ProviderRunStatus
+from researchassistant.contracts.provider_results import ProviderPipelineResult, ProviderRunStatus
 from researchassistant.research.v2_orchestrator import (
     V2ProductionPipelineResult,
     V2ProductionState,
@@ -142,7 +142,7 @@ def test_cli_defaults_to_v2_even_when_legacy_compatibility_name_is_rebound(
         legacy_calls.append((args, kwargs))
         raise AssertionError("historical runner rebinding must not select the pipeline")
 
-    monkeypatch.setattr(cli, "run_mvp3b_pipeline", historical_trap)
+    monkeypatch.setattr(cli, "run_mvp3b_pipeline", historical_trap, raising=False)
     bundle_calls: list[V2ProductionFactoryConfig] = []
     pipeline_calls: list[tuple[str, dict[str, object]]] = []
     bundle = SimpleNamespace(

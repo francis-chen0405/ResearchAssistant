@@ -36,6 +36,7 @@ from providers.search import (
     SearchResponse,
     SearchResult,
 )
+from researchassistant.contracts.artifact_keys import PHASE9_RESEARCHERS_ARTIFACT
 from researchassistant.contracts.models import (
     AmbiguityRecord,
     ClaimDefinition,
@@ -63,8 +64,7 @@ from researchassistant.contracts.models import (
     V2RoundOneSearchQuery,
     validate_planner_provider_selection,
 )
-from researchassistant.research.orchestrator import (
-    PHASE9_RESEARCHERS_ARTIFACT,
+from researchassistant.contracts.provider_results import (
     ResearcherPairResult,
     ResearcherSideStatus,
     ResearcherStageResult,

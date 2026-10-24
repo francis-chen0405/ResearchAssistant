@@ -918,14 +918,5 @@ def _exit_for_status(status: ProviderRunStatus) -> int:
     raise ValueError(f"unsupported provider run status: {status!r}")
 
 
-def __getattr__(name: str) -> object:
-    """Resolve the historical execution symbol only for callers selecting it."""
-    if name == "run_mvp3b_pipeline":
-        from researchassistant.research.orchestrator import run_mvp3b_pipeline
-
-        return run_mvp3b_pipeline
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 if __name__ == "__main__":
     raise SystemExit(main())

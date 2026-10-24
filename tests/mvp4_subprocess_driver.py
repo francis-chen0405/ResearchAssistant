@@ -1,162 +1,92 @@
-"""Subprocess entry point that runs the production CLI with mocked provider HTTP."""
+"""Run the current production CLI in a fresh process with offline provider fixtures."""
 
 from __future__ import annotations
 
 import os
-import runpy
 import sys
 import time
-from decimal import Decimal
-from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "backend/src"))
+sys.path.insert(0, str(Path(__file__).parent))
+
+from test_pipeline_selection import _environment  # noqa: E402
+from test_query_production import _ConceptModel  # noqa: E402
+from test_v2_phase12_production import _Scraper, _Search  # noqa: E402
 
 import researchassistant.runtime.cli as cli  # noqa: E402
-from providers.llm import DEFAULT_LLM_ROUTING  # noqa: E402
-from providers.mimo_factory import MimoProviderFactoryConfig  # noqa: E402
-from researchassistant.contracts.models import ProviderRunContract, ResearchControls  # noqa: E402
-from researchassistant.contracts.provider_contract import (  # noqa: E402
-    canonical_provider_contract_payload,
-)
-from researchassistant.research.orchestrator import ProviderPipelineResult  # noqa: E402
-from researchassistant.research.pipeline_compatibility import LegacyPipelineRunner  # noqa: E402
+from providers.llm import LLMRequest  # noqa: E402
+from providers.v2_factory import V2ProductionFactoryConfig  # noqa: E402
 from researchassistant.storage.store import read_cancellation_request  # noqa: E402
 
 
-def _load_provider_test_helpers() -> dict[str, object]:
-    return runpy.run_path(str(Path(__file__).with_name("test_phase9.py")))
-
-
 def main() -> int:
-    helpers = _load_provider_test_helpers()
-    llm_type = helpers["FakeLLMProvider"]
-    search_type = helpers["FakeSearchProvider"]
-    scraper_type = helpers["FakeScraperProvider"]
-    run_pipeline = helpers["run_provider_pipeline"]
-    now = helpers["NOW"]
     scenario = os.environ.get("MVP4_MOCK_SCENARIO", "released")
-    llm_kwargs: dict[str, object] = {}
+
+    class Model(_ConceptModel):
+        def generate(self, request: LLMRequest) -> object:
+            if scenario == "failed":
+                raise RuntimeError("offline provider failure")
+            if scenario == "second-process-cancel":
+                database = os.environ["MVP4_DB_PATH"]
+                run_id = UUID(os.environ["MVP4_RUN_ID"])
+                deadline = time.monotonic() + 15
+                while True:
+                    try:
+                        read_cancellation_request(database, run_id)
+                    except KeyError:
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError(
+                                "timed out waiting for second-process cancellation"
+                            ) from None
+                        time.sleep(0.05)
+                    else:
+                        break
+            return super().generate(request)
+
+    search = _Search(unique_results=True)
     if scenario == "blocked":
-        llm_kwargs["invalidate_synthesis"] = True
-    elif scenario == "failed":
-        llm_kwargs["transient_failures"] = {
-            (helpers["LLMStage"].PLANNER, helpers["ModelAlias"].MIMO_V25_PRO): 3,
-            (helpers["LLMStage"].PLANNER, helpers["ModelAlias"].MINIMAX_M3): 3,
-        }
-    elif scenario == "second-process-cancel":
-        db_path = Path(os.environ["MVP4_DB_PATH"])
-        run_id = os.environ["MVP4_RUN_ID"]
+        from datetime import datetime
 
-        def wait_for_cancellation() -> None:
-            deadline = time.monotonic() + 15
-            while time.monotonic() < deadline:
-                try:
-                    read_cancellation_request(str(db_path), helpers["UUID"](run_id))
-                except KeyError:
-                    time.sleep(0.05)
-                    continue
-                return
-            raise RuntimeError("timed out waiting for second-process cancellation")
+        from researchassistant.agents import v2_final_output
 
-    llm_kwargs["usage"] = helpers["ModelUsageMetadata"](
-        total_tokens=15,
-        cost_usd=Decimal("0.0001"),
+        original_builder = v2_final_output.build_v2_synthesis_output
+
+        def invalid_builder(*, synthesis_input: object, created_at: datetime) -> object:
+            valid = original_builder(synthesis_input=synthesis_input, created_at=created_at)
+            section = valid.sections[0]
+            item = section.items[0].model_copy(
+                update={"approved_factual_statement": "Unsupported altered statement."}
+            )
+            section = section.model_copy(update={"items": (item,)})
+            return valid.model_copy(update={"sections": (section, *valid.sections[1:])})
+
+        v2_final_output.build_v2_synthesis_output = invalid_builder
+
+    def bundle(config: V2ProductionFactoryConfig) -> SimpleNamespace:
+        return SimpleNamespace(
+            llm=Model(completed_rounds=1),
+            search_providers={provider: search for provider in config.discovery_providers},
+            wigolo=_Scraper(),
+            firecrawl=None,
+        )
+
+    cli.build_v2_production_bundle = bundle
+    environment = dict(os.environ)
+    environment.setdefault("LUNA_BASE_URL", "https://api.openai.com/v1")
+    environment.setdefault("LUNA_MODEL", "gpt-6-luna")
+    for key, value in _environment().items():
+        if key not in {"MIMO_API_KEY", "EXA_API_KEY", "OPENALEX_API_KEY"}:
+            environment.setdefault(key, value)
+    cli.environ = environment
+    return cli.main(
+        identity_provider=lambda: os.environ.get(
+            "MVP4_REPOSITORY_IDENTITY", "source-sha256:" + "a" * 64
+        ),
     )
-    if scenario == "second-process-cancel":
-
-        class CancellationAwareLLM(llm_type):
-            def generate(self, request: object) -> object:
-                wait_for_cancellation()
-                return super().generate(request)
-
-        llm = CancellationAwareLLM(**llm_kwargs)
-    else:
-        llm = llm_type(**llm_kwargs)
-
-    def mocked_runner(
-        raw_claim: str,
-        *,
-        db_path: str | Path,
-        factory_config: MimoProviderFactoryConfig,
-        run_id: UUID,
-        research_controls: ResearchControls,
-    ) -> ProviderPipelineResult:
-        budget = helpers["OrchestrationBudget"](
-            max_model_calls=factory_config.ceilings.max_llm_calls,
-            retrieval_attempts_per_side=factory_config.acquisition.maximum_attempts_per_stance,
-            max_total_tokens=factory_config.ceilings.max_tokens,
-            max_total_cost_usd=factory_config.ceilings.max_cost_usd,
-        )
-        config = helpers["ProviderOrchestrationConfig"](
-            routing=DEFAULT_LLM_ROUTING,
-            acquisition_policy=factory_config.acquisition,
-            budget=budget,
-            require_budget_reservations=True,
-            reserved_output_tokens_per_call=factory_config.mimo.max_completion_tokens,
-            pricing_policy="compatibility",
-        )
-        payload_json = canonical_provider_contract_payload(
-            {
-                "fingerprint_version": "mvp7.1-subprocess-fixture-v1",
-                "provider_identity": "mocked-direct-mimo",
-                "adapter_identity": "mocked-direct-mimo-v1",
-                "model_identity": "mimo-v2.5-pro",
-                "prompt_identity": "mocked-prompts-v1",
-                "schema_identity": "mocked-schemas-v1",
-                "normalization_identity": "mocked-normalization-v1",
-                "policy_identity": (
-                    f"tokens:{factory_config.ceilings.max_tokens}|"
-                    f"cost:{factory_config.ceilings.max_cost_usd}"
-                ),
-                "repository_revision": factory_config.repository_revision,
-            }
-        )
-        contract = ProviderRunContract(
-            run_id=run_id,
-            fingerprint_sha256=sha256(payload_json.encode("utf-8")).hexdigest(),
-            provider_identity="mocked-direct-mimo",
-            adapter_identity="mocked-direct-mimo-v1",
-            model_identity="mimo-v2.5-pro",
-            prompt_identity="mocked-prompts-v1",
-            schema_identity="mocked-schemas-v1",
-            normalization_identity="mocked-normalization-v1",
-            policy_identity=(
-                f"tokens:{factory_config.ceilings.max_tokens}|"
-                f"cost:{factory_config.ceilings.max_cost_usd}"
-            ),
-            repository_revision=factory_config.repository_revision,
-            payload_json=payload_json,
-            created_at=now,
-        )
-        scraper = scraper_type()
-        original_scrape = scraper.scrape
-
-        def scrape(request: object) -> object:
-            response = original_scrape(request)
-            return response.model_copy(update={"text": f"{response.text} {request.url}"})
-
-        scraper.scrape = scrape
-        return run_pipeline(
-            raw_claim,
-            db_path=db_path,
-            search_provider=search_type(),
-            scraper_provider=scraper,
-            llm_provider=llm,
-            run_id=run_id,
-            config=config,
-            provider_contract=contract,
-            clock=lambda: now,
-        )
-
-    legacy_runner: LegacyPipelineRunner = mocked_runner
-
-    def identity_provider() -> str:
-        return os.environ.get("MVP4_REPOSITORY_IDENTITY", "source-sha256:" + "a" * 64)
-
-    return cli.main(legacy_runner=legacy_runner, identity_provider=identity_provider)
 
 
 if __name__ == "__main__":

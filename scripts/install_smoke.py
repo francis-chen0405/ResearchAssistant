@@ -20,7 +20,6 @@ from pypdf import PdfReader
 
 import cli
 import models
-import orchestrator
 import store
 from frontend.api import create_app, create_default_runtime
 from providers.llm import LLMStage, load_prompt, load_prompt_file
@@ -37,7 +36,7 @@ from researchassistant.contracts.models import (
 from researchassistant.evidence.pdf_render import render_pdf_text
 from researchassistant.providers.bounded_resolver import resolve_host_addresses
 from researchassistant.providers.normalization import normalize_pdf
-from researchassistant.research import orchestrator as canonical_orchestrator
+from researchassistant.research import fixture_pipeline
 from researchassistant.research.query_execution import freeze_query_execution
 from researchassistant.runtime import cli as canonical_cli
 from researchassistant.runtime.application_runtime import repository_identity
@@ -50,12 +49,17 @@ def main() -> None:
     parser.add_argument("--fixtures", type=Path, required=True)
     args = parser.parse_args()
     expected = json.loads(args.expected.read_text())
-    assert (cli, models, orchestrator, store) == (
+    assert (cli, models, store) == (
         canonical_cli,
         canonical_models,
-        canonical_orchestrator,
         canonical_store,
     )
+    for retired in (
+        "orchestrator",
+        "researchassistant.research.orchestrator",
+        "researchassistant.research.historical_execution",
+    ):
+        assert importlib.util.find_spec(retired) is None, retired
     for facade, canonical in expected["facades"].items():
         assert importlib.import_module(facade) is importlib.import_module(canonical), facade
     # Exercise the optional viewer's real installed module/script entry points,
@@ -121,7 +125,7 @@ ui.button.assert_called_once_with('Open evidence trail', use_container_width=Tru
         assert help_result.returncode == 0, help_result.stderr
         assert "run-fixture" in help_result.stdout
     for name, status in (("basic_valid_run", "released"), ("invalid_release_run", "blocked")):
-        result = canonical_orchestrator.run_fixture_pipeline(
+        result = fixture_pipeline.run_fixture_pipeline(
             args.fixtures / name, output_dir=Path.cwd() / name
         )
         assert result.status == status
