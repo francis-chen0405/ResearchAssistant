@@ -1,10 +1,16 @@
 # Repository instructions
 
 Read [conventions](../docs/project/CONVENTIONS.md), [architecture](../docs/project/ARCHITECTURE.md)
-and [decisions](../docs/project/DECISIONS.md) before changes. Follow the current task in
-[the plan index](PLANS.md). [STATUS](../docs/project/STATUS.md) is the sole current-state
-owner; [HANDOFF](../docs/project/HANDOFF.md) records the next boundary.
+and [decisions](../docs/project/DECISIONS.md) before changes. The current user request
+defines scope; [the plan index](PLANS.md) links follow-up owners and any active plan.
+[STATUS](../docs/project/STATUS.md) owns current behavior, limits and next priorities.
 Use [the test map](../tests/README.md) for focused checks and full-suite discovery.
+Routine changes need no new plan, verification report, audit, snapshot or history entry.
+Put validation in the commit or PR description and final response. Update STATUS only
+when behavior, a material limitation, acceptance state or the next priority changes.
+For complex or risky work, maintain one lightweight active plan; record durable choices
+in the existing decisions document. Dedicated reports need a continuing purpose or an
+explicit user request. Verification requirements and runtime evidence remain mandatory.
 Keep active requirements and unresolved findings in the working tree. Historical
 snapshots retired by the documentation cleanup are recoverable through Git; see
 [history recovery](../docs/history.md#recovering-retired-snapshots). Retain other

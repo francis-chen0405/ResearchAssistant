@@ -103,6 +103,6 @@ Markdown-only changes. No application code, dependency, source prompt, real data
 credential, installed app, paid-provider call, push or publication changed. The
 subsequently authorized commit contains only Markdown documentation and archive copies.
 
-[STATUS](../project/STATUS.md) owns the current state; [HANDOFF](../project/HANDOFF.md) owns the
+[STATUS](../project/STATUS.md) owns the current state; [the recorded HANDOFF](https://github.com/francis-chen0405/ResearchAssistant/blob/b9fbbe3ab9efc8b1c440d620bbca35798a0b2667/HANDOFF.md) owned the
 next boundary. This review and its documentation changes are complete and committed locally; the
 seventeen pre-existing untracked root Python copies remain outside the commit.

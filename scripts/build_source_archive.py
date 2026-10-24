@@ -39,7 +39,6 @@ REQUIRED_FILES = (
     "docs/project/CONVENTIONS.md",
     "docs/project/DECISIONS.md",
     "docs/project/STATUS.md",
-    "docs/project/HANDOFF.md",
     ".agent/PLANS.md",
     ".agent/plans/phase-00-foundation.md",
     ".agents/PLANS/phase-00-foundation.md",

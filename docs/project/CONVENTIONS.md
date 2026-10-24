@@ -1,15 +1,15 @@
 # Development conventions
 
-Follow the current scope in the [plan index](../../.agent/PLANS.md) and its linked task record. Completed implementation records are not active work. Read the current architecture, decisions, status, and handoff before changes. Historical phase instructions do not authorize additional work.
+The current user request defines scope. Read the current architecture, decisions and [status](STATUS.md) before changes; use [the plan index](../../.agent/PLANS.md) for follow-up owners and any active plan. Completed records and historical phase instructions do not authorize additional work.
 
 ## Keep project records small
 
-- Use one active plan for a task. Add only decisions, boundaries, and checks needed to do and review that work.
-- Replace current-state summaries in `STATUS.md`, `HANDOFF.md`, and `.agent/PLANS.md` when the state changes. Do not append a dated phase narrative to these current-state files.
-- Keep `STATUS.md` as the sole summary of verified current state. `HANDOFF.md` records only the next action or boundary; `.agent/PLANS.md` points to the current task, completed implementation records and stable history.
-- Put completed task details in that task's plan or verification record. Link it from [grouped history](../history.md); do not duplicate its chronology in root documents.
-- Preserve active requirements and unresolved findings in current guidance. Retired historical snapshots are recoverable through Git; use [history recovery](../history.md#recovering-retired-snapshots). Do not recreate the retired archive or snapshot current documents for this cleanup. Retain other completed records until separately reviewed.
-- Before adding a plan or verification file, check whether the existing task record can be updated. Create another file only when it captures a distinct task or immutable result.
+- Routine changes do not require a new plan, verification report, audit, historical snapshot or history entry. Put routine validation results in the commit or PR description and final response.
+- Keep `STATUS.md` as the single plain-language summary of behavior, material limitations, acceptance state and next priorities. Update it only when those facts change; replace stale content instead of appending dated narratives, hashes or test logs.
+- When complexity or risk warrants a plan, use one lightweight active plan with the decisions, boundaries and checks needed to do and review that work. Update it instead of creating successive records. The plan index is navigation, not another status page.
+- Record durable architectural decisions in the existing decisions document. Create a dedicated report only for a concrete continuing need or an explicit user request. Do not create a report merely because a change is complete.
+- Preserve necessary runtime evidence, accounting, provenance, security requirements and incident information. These rules simplify development records; they do not permit deleting research artifacts or weakening verification.
+- Preserve active requirements and unresolved findings in current guidance. Retired documents are recoverable through Git; use [history recovery](../history.md#recovering-retired-snapshots). Do not create replacement archives or snapshot current guidance. Retain other completed records until separately reviewed; their dated instructions do not govern new work.
 
 ## Contracts and code
 
@@ -20,7 +20,7 @@ Follow the current scope in the [plan index](../../.agent/PLANS.md) and its link
 - Use `researchassistant.*` imports for organized backend modules: contracts under `researchassistant.contracts`, pipeline execution under `researchassistant.research`, evidence under `researchassistant.evidence`, persistence under `researchassistant.storage`, host integration under `researchassistant.platform_support`, runtime entry points under `researchassistant.runtime`, and shared helpers under `researchassistant.common`.
 - Preserve public imports, frozen fields, schemas, validators, enum values, and historical meanings during code moves. Installed `models`, `store`, and `orchestrator` facades in `backend/src/` are compatibility aliases for their canonical package modules; the CLI facade is `backend/src/cli.py` after backend installation. `researchassistant.contracts.models` owns shared public contracts, `researchassistant.storage.store` owns typed persistence, and `researchassistant.storage.store_schema` owns schema initialization and migrations.
 - Add regressions for validator or integrity defects. Never weaken tests, delete assertions, hide failures, or lower acceptance criteria to make an implementation pass.
-- Avoid unrelated edits and dependencies. Any dependency change must fit the authorized scope and be recorded in the plan, status, and handoff.
+- Avoid unrelated edits and dependencies. Explain an authorized dependency change and its validation in the commit or PR description; update an active plan or durable guidance only when the change affects their purpose.
 
 ## Persistence, security, and identity
 
@@ -71,4 +71,4 @@ historical milestone names do not define the current architecture.
 
 Before claiming completion, run `python -m pytest tests`, `python -m ruff check --config tests/pyproject.toml .`, `python -m ruff format --config tests/pyproject.toml --check .`, and `git diff --check`, plus the relevant frontend and desktop checks required by the active plan. Check staged whitespace with `git diff --cached --check` too. Preserve existing skips and report the target platform, artifact, and actual result. A workflow definition or a prior platform build is not evidence for the current platform/version.
 
-`STATUS.md` is the concise verified state; `HANDOFF.md` names the next boundary and remaining checks. Completed histories remain in stable plan and verification files linked from [grouped history](../history.md). The previous convention set and exact prior root documents are recoverable through the tagged history; this file replaces older phase-specific rules that conflict with the current module layout and product boundaries.
+`STATUS.md` owns the current state and next priorities. Retained completed records are discoverable through [grouped history](../history.md); routine changes need no new history entry. Earlier guidance is recoverable through Git. These conventions supersede conflicting recordkeeping instructions in completed plans, old prompts and reports; their dated evidence and substantive requirements retain their meaning.

@@ -51,7 +51,6 @@ def test_archive_inventory_retains_documented_launchers_and_required_guidance(
         "docs/project/ARCHITECTURE.md",
         "docs/project/DECISIONS.md",
         "docs/project/STATUS.md",
-        "docs/project/HANDOFF.md",
         ".agent/PLANS.md",
         ".agent/plans/phase-00-foundation.md",
         ".agents/PLANS/phase-00-foundation.md",

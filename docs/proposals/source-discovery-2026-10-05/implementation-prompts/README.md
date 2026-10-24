@@ -1,6 +1,6 @@
 # Source discovery implementation prompts
 
-> Historical proposal/prompt pack. All six source-discovery phases and cross-phase review fixes are now implemented and committed locally; see [the shared implementation record](../../../../.agent/plans/source-discovery-v2-2026-10-05.md) and [current STATUS](../../../project/STATUS.md). The instructions and observations below retain their original scope; live acceptance and delivery remain pending. Use the current handoff for subsequent work; implementation prompts below describe completed scope.
+> Historical proposal/prompt pack. All six source-discovery phases and cross-phase review fixes are now implemented and committed locally; see [the shared implementation record](../../../../.agent/plans/source-discovery-v2-2026-10-05.md) and [current STATUS](../../../project/STATUS.md). The instructions and observations below retain their original scope; live acceptance and delivery remain pending. Use current STATUS for subsequent priorities; implementation prompts below describe completed scope.
 
 ## Original October 5 proposal text
 

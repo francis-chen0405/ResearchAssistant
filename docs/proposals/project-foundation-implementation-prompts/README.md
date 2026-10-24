@@ -1,5 +1,12 @@
 # ResearchAssistant implementation prompts
 
+> Historical prompt pack from the October 9 foundation proposal. Its instructions
+> describe the proposed work at that time, not current authorization or recordkeeping
+> requirements. Use [current STATUS](../../project/STATUS.md) for outcomes and priorities,
+> and [current conventions](../../project/CONVENTIONS.md) for how to make changes.
+
+## Original October 9 navigation
+
 Copy one numbered file as a standalone prompt. The numbers group a practical sequence; each prompt requires a fresh source/status check and can run in a separate task. After prompts 01–06, the offline preparation in prompt 14 can proceed while prompts 07–13 clean the repository. Prompt 15 needs the benchmark or must limit itself to independently verifiable UI/adapter work. These are implementation requests, not records of completed work. The [foundation review](../project-foundation-2026-10-09.md) supplies the evidence and target layout.
 
 | Order | Prompt | Outcome |

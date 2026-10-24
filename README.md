@@ -7,8 +7,8 @@ Choose Support, Challenge, or both. It discovers sources, preserves exact eviden
 provenance, investigates gaps within budget, and releases deterministically validated
 results. Historical runs remain readable and exportable. There is no hosted backend.
 
-[Current status](docs/project/STATUS.md) owns verified source and installed-build facts.
-[Handoff](docs/project/HANDOFF.md) names the next boundary. Source identity changes
+[Current status](docs/project/STATUS.md) explains what works, known limits and next
+priorities, distinguishing source from installed builds. Source identity changes
 require a fresh research run under the existing compatibility gate.
 
 ## Install and develop
@@ -50,10 +50,10 @@ files and shell profiles are never loaded automatically.
 | `frontend/` | Next.js renderer |
 | `desktop/` | Electron shell, acquisition runtime and native packaging |
 | `tests/`, `evaluations/` | Regressions and offline research/integrity benchmarks |
-| `docs/project/` | Current architecture, conventions, decisions, status and handoff |
+| `docs/project/` | Current architecture, conventions, decisions and plain-language status |
 | `docs/verification/` | Retained verification evidence; retired snapshots are recoverable through Git |
 | `scripts/`, `.github/` | Workspace tooling and CI |
-| `.agent/` | Plan index and retained plans |
+| `.agent/` | Work navigation, optional active plans and retained plans |
 
 `tests/pyproject.toml` configures workspace tests/lint; `backend/pyproject.toml` owns
 package discovery, runtime dependencies, data manifests and the console command.
@@ -120,5 +120,5 @@ for browser development.
 
 [Architecture](docs/project/ARCHITECTURE.md), [conventions](docs/project/CONVENTIONS.md),
 [decisions](docs/project/DECISIONS.md), [plan index](.agent/PLANS.md),
-[status](docs/project/STATUS.md), [handoff](docs/project/HANDOFF.md),
+[status](docs/project/STATUS.md),
 [grouped history](docs/history.md) and [history recovery](docs/history.md#recovering-retired-snapshots).

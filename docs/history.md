@@ -1,8 +1,8 @@
 # Plan and verification history
 
-This page links to retained task records at their original paths, preserving existing references. Each record describes its own scope and evidence; the current task and completed implementation records are identified in [the plan index](../.agent/PLANS.md).
+This page links to retained task records at their original paths. Each record describes its dated scope and evidence; [work navigation](../.agent/PLANS.md) links follow-up owners. Routine changes do not require a history entry.
 
-Historical setup, next-step and approval wording in these records applies to their dated scope; [STATUS](project/STATUS.md) and [HANDOFF](project/HANDOFF.md) own the present stage.
+Historical setup, next-step and approval wording in these records applies to their dated scope. [STATUS](project/STATUS.md) owns current behavior, limits and next priorities; [conventions](project/CONVENTIONS.md) supersede older recordkeeping requirements.
 
 ## Recovering retired snapshots
 
@@ -26,6 +26,13 @@ tag. Paths and hashes inside dated audit inventories and evaluation results desc
 the recorded revision; resolve retired paths against the tag, rather than treating
 those inventories as current file lists. This tag preserves source records only;
 it is not a backup of research databases or credentials.
+
+The last separate current handoff is retained at
+[commit 1bb6476](https://github.com/francis-chen0405/ResearchAssistant/blob/1bb64766a5df09cf741052f3c58eaac04dff90e3/docs/project/HANDOFF.md).
+Retrieve it without changing the checkout with
+`git show 1bb64766a5df09cf741052f3c58eaac04dff90e3:docs/project/HANDOFF.md`.
+References to older handoffs in dated records remain pinned to their own recorded
+revision; they do not replace the current STATUS page.
 
 ## Recent reviews and repairs
 

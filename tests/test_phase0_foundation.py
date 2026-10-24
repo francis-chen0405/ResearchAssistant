@@ -11,9 +11,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 def test_phase0_scaffold_exists() -> None:
     expected_paths = [
         ".agent/AGENTS.md",
+        "docs/project/ARCHITECTURE.md",
+        "docs/project/CONVENTIONS.md",
         "docs/project/DECISIONS.md",
+        "docs/history.md",
         "docs/project/STATUS.md",
-        "docs/project/HANDOFF.md",
         "README.md",
         "tests/pyproject.toml",
         ".agent/PLANS.md",

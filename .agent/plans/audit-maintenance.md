@@ -20,7 +20,7 @@ Do not add live provider calls, paid acceptance runs, new release claims, schema
 
 ## Completion record
 
-Record exact code and documentation changes, commands and outcomes, remaining upgrade-smoke or platform limits, and local Git state in [STATUS.md](../../docs/project/STATUS.md) and [HANDOFF.md](../../docs/project/HANDOFF.md). Required repository checks remain `pytest`, `ruff check .`, and `ruff format --check .`; preserve the existing tests and skips. Do not mark this plan complete until the authorized review and commit work is finished.
+Record exact code and documentation changes, commands and outcomes, remaining upgrade-smoke or platform limits, and local Git state in [STATUS.md](../../docs/project/STATUS.md) and [HANDOFF.md](https://github.com/francis-chen0405/ResearchAssistant/blob/d886000f407848c92d446784ed77d51286c17701/HANDOFF.md). Required repository checks remain `pytest`, `ruff check .`, and `ruff format --check .`; preserve the existing tests and skips. Do not mark this plan complete until the authorized review and commit work is finished.
 
 ## Verified outcome
 

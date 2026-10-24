@@ -198,7 +198,8 @@ healthy/repeated initialization and refusal on core corruption or unrelated erro
 For packaging changes run `python scripts/verify_distribution.py --constraints desktop/constraints.txt`.
 For offline quality/integrity fixtures see [evaluations](../evaluations/README.md).
 Required lint/format/whitespace checks are in [conventions](../docs/project/CONVENTIONS.md#packaging-and-verification);
-[STATUS](../docs/project/STATUS.md) owns actual results and untested platforms.
+[STATUS](../docs/project/STATUS.md) summarizes acceptance and limits; individual
+check results belong in commit or PR descriptions and retained evidence records.
 
 R27–R29 regressions cover actual redacted HTTP error envelopes and generated types,
 DOCX XML representability with unchanged released text/hashes, and active/interrupted

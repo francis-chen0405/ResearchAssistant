@@ -35,7 +35,7 @@ Preserved earlier staged/unstaged work, historical runs/archives, native vault a
 unknown reservations. No dependency versions, prompts, query/Probe/model/budget/
 resume policy changed, and no paid calls or public release were made. Do not renew
 Prompt 14's frozen allowance. [STATUS](../../docs/project/STATUS.md) owns current
-facts; [HANDOFF](../../docs/project/HANDOFF.md) owns the next boundary.
+facts and the next boundary.
 
 ## Source-archive review repair
 

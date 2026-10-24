@@ -1,52 +1,59 @@
-# Current status
+# Project status
 
-Renderer work adds recoverable progress polling: ten-second snapshot deadlines,
-three consecutive failures before automatic reads pause, same-run reconnect, last-confirmed
-receipt times, and History/cancellation controls on both starting and progress screens.
-Cancellation is shown as requested only after backend confirmation. Navigation/unmount
-aborts progress reads and suppresses late results. The [task record](../../.agent/plans/recoverable-progress-polling-2026-10-23.md)
-owns verification and limitations. Current checks pass **3,239 Python tests / nine
-skips**, all **31 renderer tests**, frontend lint/types/static webpack export, Ruff,
-repository boundaries and whitespace checks. Review verified all six offline browser
-checks, including the added recovery scenarios, and repaired the API-client VM harness
-for its new browser abort-controller/timer requirements. An additional 22 focused
-API-contract/boundary tests pass. The user authorized commit/push after review.
-The installed app has not received this renderer change.
+## What the app does
 
-The reviewed e359 worktree changes are integrated into master.
-They add early assessed evidence feedback, bounded post-analysis follow-up, later-page
-PDF capture with exact omission boundaries, replacement acquisition, selection coverage,
-confirmed paper identity and truthful provider dispatch diagnostics. The current CLI
-20-source/50-depth defaults are retained. The preceding integration verification passed **3,239 Python tests / nine skips**, Ruff lint/format
-(531 files), repository boundaries, generated API contracts, frontend lint/types/static
-build, 20 renderer tests, 22 desktop units and all six offline browser checks. Exact
-314-file wheel audit and fresh wheel/editable installs pass. The real Electron UI
-smoke passes. Backend execution identity:
-`source-sha256:f1c92eba7445253b21658a1eff21960223fc4eff24df69f01001d18389e45e4b`.
+ResearchAssistant is a local desktop app for investigating a precise claim. It searches
+for supporting and challenging sources, captures source text, checks exact quotations,
+and produces evidence-backed reports within configured budgets. Saved research can be
+inspected and released reports exported. Credentials stay in the operating system's
+credential store; research data stays outside the application bundle.
 
-The integrated backend freezes successfully, but packaged acquisition acceptance is
-blocked: the owned Wigolo daemon starts its HTTP server while the backend health
-probe reports `[Errno 2] No such file or directory`; the original smoke exceeds its
-unchanged health deadline. The missing path/root cause is unresolved. Initial startup
-and subsequent health failures are retained in the integration task record.
+## What currently works
 
-The [offline evaluation](../verification/offline-evidence-loop-2026-10-23.md) records
-3,235 passing Python tests / 12 skips on the preceding e359 source, plus controlled
-capture, feedback, accounting and replay checks. These historical checks do not
-establish live quality on the integrated source. [The integration task](../../.agent/plans/source-loss-recovery-2026-10-19.md)
-records current verification and the packaged delivery blocker.
+Current source uses assessed findings to guide further searches, replaces unusable
+sources within existing limits, captures later PDF pages with explicit omissions,
+and performs a bounded follow-up when analysis leaves evidence gaps. Reports retain
+source provenance, quotation checks and conservative cost accounting. The CLI defaults
+remain 20 sources per direction and metadata search depth 50.
 
-Installed Mac build `20261020.6` predates the bounded PDF/post-analysis changes and
-the final CLI correction. [Its delivery record](../verification/selection-coverage-repairs-2026-10-21.md)
-retains the exact checks. This integration does not establish installation or live
-research acceptance. Saved data, credentials, historical policies and reservations
-retain their existing meaning. Schema 18 and the exact resume identity gate remain.
+Progress screens preserve the last confirmed state when the connection fails and let
+the user reconnect to the same run. Cancellation is confirmed by the backend before
+the screen reports it as requested. Recorded source, renderer, browser and distribution
+checks passed; see the [integration](../../.agent/plans/source-loss-recovery-2026-10-19.md#master-integration--october-23)
+and [progress recovery](../../.agent/plans/recoverable-progress-polling-2026-10-23.md)
+evidence. These are previously recorded results, not new installation or quality acceptance.
 
-Windows packaging remains manual-only. Its recorded Wigolo startup failure and
-interrupted-upgrade repair acceptance are open. Public release, Mac signing/notarization,
-clean-machine/minimum-OS acceptance and physical power-loss durability remain unverified.
+## Known problems and limits
 
-[Preceding master and e359 summaries](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-23-integration-preceding-state)
-preserve exact earlier results and boundaries. R01–R59 remain implemented; the
-[active review inventory](../audits/2026-10-15/remaining-file-review.json) retains
-20 current assets outside the completed source review.
+The packaged backend's acquisition service starts, but its health check reports a
+missing file and never becomes ready. The cause is unresolved, blocking packaged
+acquisition acceptance. The installed Mac build, `20261020.6`, predates the later PDF,
+post-analysis, final CLI and progress recovery changes; [its delivery record](../verification/selection-coverage-repairs-2026-10-21.md)
+describes what was actually installed.
+
+Offline checks do not establish better live research. Actual IPBES PDF recapture and
+human evaluation remain outstanding. Provider/page scheduling, partial-unknown stop
+reporting and an earlier Planner rejection remain open investigations; [the retry review](../verification/extinction-risk-retry-review-2026-10-21.md)
+and [subsequent reporting repairs](../verification/selection-coverage-repairs-2026-10-21.md)
+explain the evidence and partial progress. [Manual asset review](../audits/2026-10-15/remaining-file-review.json)
+also remains incomplete.
+
+Windows packaging is manual-only. Its acquisition startup failure, interrupted-upgrade
+repair and remaining native acceptance checks are open. Public release, Mac signing
+and notarization, clean-machine/minimum-OS testing, and physical power-loss durability
+remain unverified. [Windows evidence](../verification/windows-ci-durability-2026-10-13.md)
+and [desktop operations](../../desktop/README.md) retain the specific gates.
+
+## What comes next
+
+First identify the missing path behind the packaged acquisition failure, preserving
+the existing smoke deadlines, then rerun frozen acquisition acceptance. Installed-app
+replacement requires a separate request. The next research-quality step is controlled
+live recapture and human evaluation; the previous paid-test allowance is exhausted,
+so further paid work needs new explicit authorization. Windows acceptance remains a
+separate delivery effort.
+
+Preserve saved research, credentials, historical policies and exact resume compatibility
+throughout. Unknown request outcomes must retain their reservations and must not
+trigger duplicate calls. [Work navigation](../../.agent/PLANS.md) links follow-up owners;
+[conventions](CONVENTIONS.md) govern changes and verification.

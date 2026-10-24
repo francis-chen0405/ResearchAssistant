@@ -1,6 +1,6 @@
 # ResearchAssistant testing handoff — 2026-10-01
 
-> Historical testing handoff. Its setup describes the September build and is superseded by [current STATUS](project/STATUS.md) and [current HANDOFF](project/HANDOFF.md). Retain the dated observations below; the installed backend was subsequently replaced on October 2.
+> Historical testing handoff. Its setup describes the September build and is superseded by [current STATUS](project/STATUS.md). Retain the dated observations below; the installed backend was subsequently replaced on October 2.
 
 Use this file as context for a new chat while I test the installed Mac app. I will
 describe each bug I encounter. Investigate the reported behavior, reproduce it when
@@ -33,7 +33,7 @@ exists merely because this handoff was created.
 
 ## How to handle the next bug report
 
-1. Start with my observed behavior and check the current working tree, [AGENTS.md](../AGENTS.md), [STATUS.md](project/STATUS.md), [HANDOFF.md](project/HANDOFF.md), the applicable plan, and relevant source. Use the repository knowledge graph as an advisory map when available, then verify against live files.
+1. Start with my observed behavior and check the current working tree, [AGENTS.md](../.agent/AGENTS.md), [STATUS.md](project/STATUS.md), [HANDOFF.md](https://github.com/francis-chen0405/ResearchAssistant/blob/fdc9dc63a32b0b2ec1336949e1aeb7485e925bf3/HANDOFF.md), the applicable plan, and relevant source. Use the repository knowledge graph as an advisory map when available, then verify against live files.
 2. Capture exact reproduction steps, expected and actual behavior, the app screen or error text, and whether the issue occurs in the installed release, current source, or both. Ask only for missing details needed to proceed; do safe independent diagnosis meanwhile.
 3. Reproduce with isolated data when possible. For validator or integrity defects, add a failing regression test before fixing the code. Preserve assertions and existing history/evidence.
 4. Fix the cause, run focused checks, then the required full `pytest`, `ruff check .`, and `ruff format --check .` gates before declaring the phase complete. For desktop changes, rebuild and check the affected packaged app; source-only test success does not prove the installed binary is fixed.
