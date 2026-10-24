@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import secrets
 import socket
@@ -41,6 +42,29 @@ def smoke_phase(name: str) -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "--check-tls-runtime":
+        import ssl
+
+        import httpx
+
+        context = ssl.create_default_context()
+        if context.verify_mode != ssl.CERT_REQUIRED or not context.check_hostname:
+            raise RuntimeError("TLS verification must remain enabled")
+        config = WigoloConfig(base_url=sys.argv[2]) if len(sys.argv) > 2 else None
+        with httpx.Client(
+            base_url=config.base_url if config is not None else "",
+            verify=context,
+            trust_env=False,
+        ) as client:
+            if config is not None:
+                from researchassistant.providers.wigolo import WigoloSearchAdapter
+
+                WigoloSearchAdapter(config, client=client).verify_health()
+        result: dict[str, str | bool] = {"tls_runtime": "ready"}
+        if config is not None:
+            result["wigolo_ready"] = True
+        print(json.dumps(result), flush=True)
+        return
     if len(sys.argv) > 1 and sys.argv[1] == "--dns-worker":
         from researchassistant.providers.dns_worker import main as dns_worker_main
 

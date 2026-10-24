@@ -200,6 +200,14 @@ repair evidence are in [Mac delivery verification](../docs/verification/mac-deli
 It exports the existing Next.js page and freezes Python with source files and the canonical
 `backend/src/researchassistant/prompts/` resources. All 18 prompts and the PDF font must be present;
 the frozen identity rejects incomplete resources.
+When the build interpreter provides `codex-rejected-cas.pem` beside its standard
+library, the build includes its exact bytes beside the frozen library. This is
+the interpreter's certificate-rejection policy, and it participates in executable
+identity. The build runs `--check-tls-runtime` from an unrelated temporary directory
+with an empty PATH before promoting the backend. This checks TLS/client initialization
+with certificate and hostname verification enabled, without application or vault
+startup. Supplying an optional HTTP loopback URL also runs the strict Wigolo health
+adapter for targeted acquisition diagnosis; it does not establish desktop acceptance.
 Python source hashing includes the backend-owned installed facades and complete
 researchassistant/agents/providers/frontend surface and prompts, bundled PDF font bytes, plus the frozen executable
 bytes. Runtime data/credentials are never build inputs.

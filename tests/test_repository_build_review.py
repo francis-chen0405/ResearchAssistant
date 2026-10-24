@@ -86,7 +86,7 @@ def test_backend_bundle_excludes_inactive_root_copies(
     monkeypatch.setattr(build, "DESKTOP", desktop)
     monkeypatch.setattr(build, "RESOURCES", desktop / "build/resources")
     monkeypatch.setattr(build.sys, "argv", ["build.py", "--backend-only"])
-    monkeypatch.setattr(build, "run", lambda command: commands.append(command))
+    monkeypatch.setattr(build, "run", lambda command, **_kwargs: commands.append(command))
     build.main()
     command = commands[0]
     data_paths = [

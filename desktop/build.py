@@ -14,6 +14,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from researchassistant.runtime.application_runtime import python_tls_policy_path
+
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP = ROOT / "desktop"
 RESOURCES = DESKTOP / "build/resources"
@@ -183,8 +185,39 @@ def main() -> None:
     command.extend(["--add-data", f"{source_data / 'pyproject.toml'}{os.pathsep}backend"])
     for name in ("agents", "providers", "frontend", "researchassistant"):
         command.extend(["--add-data", f"{source / name}{os.pathsep}backend/src/{name}"])
+    # Some interpreters require this public certificate-rejection policy when an
+    # SSLContext is created. Keep its exact bytes alongside the frozen stdlib.
+    policy = python_tls_policy_path()
+    if policy.is_file():
+        command.extend(["--add-data", f"{policy}{os.pathsep}."])
     command.append(str(DESKTOP / "backend.py"))
     run(command)
+    executable = (
+        DESKTOP
+        / "build/python/researchassistant-backend"
+        / (
+            "researchassistant-backend.exe"
+            if sys.platform == "win32"
+            else "researchassistant-backend"
+        )
+    )
+    environment = {
+        name: os.environ[name]
+        for name in (
+            "HOME",
+            "USERPROFILE",
+            "LOCALAPPDATA",
+            "APPDATA",
+            "SystemRoot",
+            "WINDIR",
+            "TEMP",
+            "TMPDIR",
+        )
+        if name in os.environ
+    }
+    environment["PATH"] = ""
+    with tempfile.TemporaryDirectory(prefix="frozen-tls-check-") as temporary:
+        run([str(executable), "--check-tls-runtime"], cwd=Path(temporary), env=environment)
     replace_tree(
         DESKTOP / "build/python/researchassistant-backend",
         RESOURCES / "backend",

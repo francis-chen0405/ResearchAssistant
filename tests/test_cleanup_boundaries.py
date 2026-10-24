@@ -12,6 +12,24 @@ import pytest
 from researchassistant.runtime.application_runtime import repository_identity
 
 
+def test_executable_identity_binds_interpreter_tls_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from researchassistant.runtime import application_runtime
+
+    policy = tmp_path / "codex-rejected-cas.pem"
+    monkeypatch.setattr(application_runtime, "python_tls_policy_path", lambda: policy)
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "cli.py").write_text("# executable fixture\n")
+    missing = repository_identity(root)
+    policy.write_bytes(b"original runtime policy\n")
+    original = repository_identity(root)
+    policy.write_bytes(b"changed runtime policy\n")
+    changed = repository_identity(root)
+    assert len({missing, original, changed}) == 3
+
+
 @pytest.mark.parametrize(
     "first_import",
     [

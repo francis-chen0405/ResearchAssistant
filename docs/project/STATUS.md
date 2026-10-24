@@ -27,10 +27,11 @@ evidence. These are previously recorded results, not new installation or quality
 
 ## Known problems and limits
 
-The packaged backend's acquisition service starts, but its health check reports a
-missing file and never becomes ready. The cause is unresolved, blocking packaged
-acquisition acceptance. The installed Mac build, `20261020.6`, predates the later PDF,
-post-analysis, final CLI and progress recovery changes; [its delivery record](../verification/selection-coverage-repairs-2026-10-21.md)
+The fresh unsigned Mac candidate passes isolated acquisition readiness checks after
+packaging its Python runtime's previously omitted certificate-policy file unchanged.
+Full desktop acceptance and installation remain pending. The installed Mac build,
+`20261020.6`, predates the later PDF, post-analysis, final CLI and progress recovery
+changes; [its delivery record](../verification/selection-coverage-repairs-2026-10-21.md)
 describes what was actually installed.
 
 Offline checks do not establish better live research. Actual IPBES PDF recapture and
@@ -48,10 +49,10 @@ and [desktop operations](../../desktop/README.md) retain the specific gates.
 
 ## What comes next
 
-First identify the missing path behind the packaged acquisition failure, preserving
-the existing smoke deadlines, then rerun frozen acquisition acceptance. Installed-app
-replacement requires a separate request. The next research-quality step is controlled
-live recapture and human evaluation; the previous paid-test allowance is exhausted,
+Complete broader desktop acceptance on the fresh Mac candidate in a separate chat
+before any installed-app replacement. Packaging and isolated acquisition readiness
+are verified, with the existing deadline unchanged. The next research-quality step
+is controlled live recapture and human evaluation; the previous paid-test allowance is exhausted,
 so further paid work needs new explicit authorization. Windows acceptance remains a
 separate delivery effort.
 

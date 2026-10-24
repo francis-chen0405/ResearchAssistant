@@ -88,6 +88,18 @@ The user-approved [discrimination-run fixes](../../.agent/plans/discrimination-r
 - Package metadata uses the Python distribution name `researchassistant`, version `0.1.0`; user-facing CLI and application copy use `ResearchAssistant`. Streamlit remains outside the base install and is installed only through `backend/requirements-legacy.txt`. The `dev` dependency set includes `httpx2` for Starlette tests; versions are constrained in `desktop/constraints.txt`.
 - Backend implementation modules use canonical `researchassistant.*` imports grouped by contracts, research, evidence, storage, platform support, runtime, and common helpers. Installed `models.py` and `store.py` facades in `backend/src/` preserve legacy imports; `backend/src/cli.py` preserves the script launcher after installation. The identity surface must cover the organized package sources and bundled PDF font bytes. If a source or executable change alters the exact run identity, new research must use a new run; saved history is never rewritten and remains available for inspection/export.
 
+- Frozen builds preserve an interpreter-provided TLS certificate-rejection policy
+  unchanged when present. Its bytes participate in executable identity. A fresh
+  frozen TLS/client preflight runs with no developer tools on PATH before backend
+  staging succeeds; hostname and certificate verification remain required. The
+  same isolated diagnostic can check strict Wigolo identity on an HTTP loopback URL
+  without starting application state or accessing credentials.
+
+- Non-editable wheel builds recreate their managed build output before copying
+  current modules, preventing deleted execution code from returning through an old
+  setuptools cache. Cleanup is restricted to the project's build directory;
+  source paths and editable installs are preserved.
+
 ## Source dispositions — Prompt 15
 
 The [approved October 15 repairs](../verification/full-review-fixes-2026-10-15.md)

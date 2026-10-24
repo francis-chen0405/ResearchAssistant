@@ -18,6 +18,69 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "backend/src"
 
 
+def test_wheel_rebuild_discards_retired_modules_and_preserves_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from setuptools import Distribution
+
+    from backend._build.build_distribution import BuildPy
+
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "src/current_package"
+    source.mkdir(parents=True)
+    (source / "__init__.py").write_text("# current package\n")
+    (source / "retained.py").write_text("# retained\n")
+    configuration = b"# exact build configuration\n"
+    (tmp_path / "pyproject.toml").write_bytes(configuration)
+    distribution = Distribution(
+        {"name": "fixture", "packages": ["current_package"], "package_dir": {"": "src"}}
+    )
+    distribution.script_name = "setup.py"
+    command = BuildPy(distribution)
+    command.ensure_finalized()
+    build_lib = tmp_path / "build/lib"
+    command.build_lib = str(build_lib)
+    for retired in (
+        "orchestrator.py",
+        "researchassistant/research/orchestrator.py",
+        "researchassistant/research/historical_execution.py",
+    ):
+        path = build_lib / retired
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# stale execution\n")
+    command.run()
+    assert (build_lib / "current_package/retained.py").read_text() == "# retained\n"
+    assert not (build_lib / "orchestrator.py").exists()
+    assert not (build_lib / "researchassistant/research").exists()
+    assert (build_lib / "researchassistant/_distribution/pyproject.toml").read_bytes() == (
+        configuration
+    )
+    (source / "retained.py").unlink()
+    command.run()
+    assert not (build_lib / "current_package/retained.py").exists()
+    assert (source / "__init__.py").read_text() == "# current package\n"
+
+
+def test_wheel_build_refuses_cleanup_outside_managed_build_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from setuptools import Distribution
+
+    from backend._build.build_distribution import BuildPy
+
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "src"
+    source.mkdir()
+    marker = source / "keep.py"
+    marker.write_text("# source must survive\n")
+    command = BuildPy(Distribution())
+    command.ensure_finalized()
+    command.build_lib = str(source)
+    with pytest.raises(ValueError, match="managed build directory"):
+        command.run()
+    assert marker.read_text() == "# source must survive\n"
+
+
 def test_all_historical_prompt_bytes_are_present_in_one_canonical_directory() -> None:
     recorded = json.loads((ROOT / "tests/fixtures/packaging/prompt-hashes.json").read_text())
     resources = prompt_directory()

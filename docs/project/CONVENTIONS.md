@@ -31,7 +31,7 @@ The current user request defines scope. Read the current architecture, decisions
 - Desktop credentials use macOS Keychain or Windows Credential Manager without plaintext fallback. Secrets must stay out of logs, SQLite, exports, browser storage, and child arguments. OpenAlex and optional PubMed API keys are sent to their respective upstream services in HTTPS query strings. Do not load `.env` files or shell profiles automatically.
 - Keep canonical `backend/src/researchassistant/prompts/*.md` resources in place and preserve their bytes unless an authorized plan explicitly changes them; they are executable inputs. Prompts and fonts are backend-owned packaged resources; their historical bytes remain unchanged.
 - Source or executable identity changes require a fresh run under the existing exact compatibility gate. The identity surface must include organized package sources as well as the canonical agents, providers, API, installed facades, and prompt sources. Preserve historical inspection/export and reject incompatible resume.
-- Executable identity includes backend distribution configuration, sources, installed facades, prompts and font, under their current `backend/` paths. Root transition launchers are outside the installed runtime surface. Keep inactive root copies out of desktop packaging and executable fingerprints.
+- Executable identity includes backend distribution configuration, sources, installed facades, prompts and font, under their current `backend/` paths, plus any interpreter-provided TLS rejection policy. Root transition launchers are outside the installed runtime surface. Keep inactive root copies out of desktop packaging and executable fingerprints.
 
 ## Packaging and verification
 

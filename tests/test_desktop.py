@@ -45,6 +45,82 @@ def test_generated_backend_replacement_removes_obsolete_source_copies(tmp_path: 
     assert not (destination / "model_evidence.py").exists()
 
 
+@pytest.mark.parametrize("policy_present", [False, True])
+def test_frozen_build_preserves_optional_interpreter_tls_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, policy_present: bool
+) -> None:
+    import sysconfig
+
+    from desktop import build
+
+    stdlib = tmp_path / "stdlib"
+    stdlib.mkdir()
+    policy = stdlib / "codex-rejected-cas.pem"
+    if policy_present:
+        policy.write_bytes(b"runtime-owned certificate policy\n")
+    monkeypatch.setattr(sysconfig, "get_path", lambda _name: str(stdlib))
+    desktop = tmp_path / "desktop"
+    monkeypatch.setattr(build, "DESKTOP", desktop)
+    monkeypatch.setattr(build, "RESOURCES", desktop / "resources")
+    monkeypatch.setattr(build, "stage_python_source", lambda: tmp_path / "source")
+    monkeypatch.setattr(build, "replace_tree", lambda _source, _target: None)
+    monkeypatch.setattr(sys, "argv", ["build.py", "--backend-only"])
+    calls: list[tuple[list[str], Path, dict[str, str] | None]] = []
+
+    def run(args: list[str], *, cwd: Path = tmp_path, env: dict[str, str] | None = None) -> None:
+        calls.append((args, cwd, env))
+
+    monkeypatch.setattr(build, "run", run)
+    build.main()
+
+    command = calls[0][0]
+    assert (f"{policy}{os.pathsep}." in command) is policy_present
+    assert calls[1][0][-1] == "--check-tls-runtime"
+    assert calls[1][2] is not None and calls[1][2]["PATH"] == ""
+    assert calls[1][1] != build.ROOT
+    if policy_present:
+        assert policy.read_bytes() == b"runtime-owned certificate policy\n"
+
+
+def test_frozen_tls_check_keeps_verification_and_avoids_application_startup(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from desktop import backend
+
+    monkeypatch.setattr(sys, "argv", ["backend.py", "--check-tls-runtime"])
+
+    def unexpected_runtime() -> None:
+        raise AssertionError("TLS preflight must not initialize application state or credentials")
+
+    monkeypatch.setattr(backend, "create_default_runtime", unexpected_runtime)
+    backend.main()
+    assert '"tls_runtime": "ready"' in capsys.readouterr().out
+
+
+def test_frozen_health_diagnostic_uses_strict_adapter_and_rejects_remote_urls(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from desktop import backend
+    from researchassistant.providers.wigolo import WigoloSearchAdapter
+
+    calls: list[str] = []
+
+    def verify(adapter: WigoloSearchAdapter) -> None:
+        calls.append(adapter._config.base_url)
+
+    monkeypatch.setattr(WigoloSearchAdapter, "verify_health", verify)
+    monkeypatch.setattr(sys, "argv", ["backend.py", "--check-tls-runtime", "http://127.0.0.1:8000"])
+    backend.main()
+    assert calls == ["http://127.0.0.1:8000"]
+    assert '"wigolo_ready": true' in capsys.readouterr().out
+    monkeypatch.setattr(
+        sys, "argv", ["backend.py", "--check-tls-runtime", "https://example.invalid"]
+    )
+    with pytest.raises(ValueError, match="loopback"):
+        backend.main()
+    assert calls == ["http://127.0.0.1:8000"]
+
+
 def test_database_lock_excludes_another_process_and_releases(tmp_path: Path) -> None:
     path = tmp_path / "database.mvp5.lock"
     lock = FileLock(path)

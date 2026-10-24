@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import sysconfig
 from enum import IntEnum
 from hashlib import sha256
 from pathlib import Path
@@ -14,6 +15,16 @@ from researchassistant.providers.config import ProviderConfigurationError
 # cli.py is a transition launcher, outside the distribution implementation.
 EXECUTABLE_ROOT_MODULES = ("cli.py", "models.py", "store.py")
 EXECUTABLE_PACKAGES = ("researchassistant", "agents", "providers", "frontend")
+
+
+def python_tls_policy_path() -> Path:
+    """Locate the optional interpreter-owned certificate rejection policy unchanged."""
+    directory = (
+        _default_source_root()
+        if getattr(sys, "frozen", False)
+        else Path(sysconfig.get_path("stdlib"))
+    )
+    return directory / "codex-rejected-cas.pem"
 
 
 class CLIExitCode(IntEnum):
@@ -92,6 +103,14 @@ def repository_identity(root: Path | None = None) -> str:
         digest.update(payload)
     if not found:
         raise ProviderConfigurationError("repository identity surface is unavailable")
+    policy = python_tls_policy_path()
+    if policy.is_file():
+        relative = b"runtime/codex-rejected-cas.pem"
+        payload = policy.read_bytes()
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
     if getattr(sys, "frozen", False):
         digest.update(Path(sys.executable).read_bytes())
     return f"source-sha256:{digest.hexdigest()}"
