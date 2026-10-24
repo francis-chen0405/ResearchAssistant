@@ -65,7 +65,7 @@ initializes local Git metadata for the existing Git-aware workspace checks.
 Earlier staged work is unchanged: binary-diff SHA-256
 `85f8753d0bb6ba7af20c688eab28ad10429ee43329b879d89b8db48071324cf2`.
 The original pre-task status/handoff/index were copied byte-for-byte to the
-[archive](../archive/2026-10-13-mac-delivery-preceding-state/README.md).
+[archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-13-mac-delivery-preceding-state/README.md).
 Graph freshness was checked and the advisory index refreshed without persistence
 (12,391 nodes / 76,120 edges); identity/staging findings were verified against live
 source, package bytes, the diff and focused tests.
@@ -215,7 +215,7 @@ and DMG/ZIP bytes are unchanged; no native app/vault/cache or research data was 
 
 Source snapshot guidance predates this final companion/hash update. The final
 `VERIFICATION.json`, `SHA256SUMS` and this record own delivery acceptance. Exact
-pre-repair guidance is in the [archive](../archive/2026-10-13-source-archive-review-state/INDEX.md).
+pre-repair guidance is in the [archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-13-source-archive-review-state/INDEX.md).
 Prior delivery files are retained under `desktop/dist/prompt16-20261013/` in
 `before-source-archive-repair/` and `before-env-template-repair/`. New evidence logs
 are under `desktop/build/prompt16-20261013/source-archive-repair/` and their hashes are

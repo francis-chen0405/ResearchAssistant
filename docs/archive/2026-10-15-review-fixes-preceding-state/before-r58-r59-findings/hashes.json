@@ -1,8 +1,0 @@
-{
-  "docs/audits/2026-10-15/full-code-review.md": "c324c2b1e579f81d49ba4a47349ab2eb4f4bbbd1307aad6919c9102246e02432",
-  "docs/audits/2026-10-15/continued-review-evidence.json": "e67a976ac544325ea531fb58d84d922e613fadf502d9b39e486b3de9d3bf40fe",
-  "docs/audits/2026-10-15/post-fix-evidence.json": "1f155f83ad2f4789be7fac66e17217be5ca8caf4aca1fecaa72c1d49557d6d9e",
-  "docs/project/STATUS.md": "1e831ad15d5cea69cf7121efba60b9ddbea92e731dbd013294bb4a4846ee011b",
-  "docs/project/HANDOFF.md": "d0b9f438d0feb386ebb1314ce7fec71ac525b6679a18be8897b5f63fd7200eab",
-  ".agent/plans/full-code-review-fixes-2026-10-15.md": "937bff4a2300f076c065d92a9fc7d317449cedf64285d12b6141efa4ceee1578"
-}

@@ -8,7 +8,7 @@ Follow the current scope in the [plan index](../../.agent/PLANS.md) and its link
 - Replace current-state summaries in `STATUS.md`, `HANDOFF.md`, and `.agent/PLANS.md` when the state changes. Do not append a dated phase narrative to these current-state files.
 - Keep `STATUS.md` as the sole summary of verified current state. `HANDOFF.md` records only the next action or boundary; `.agent/PLANS.md` points to the current task, completed implementation records and stable history.
 - Put completed task details in that task's plan or verification record. Link it from [grouped history](../history.md); do not duplicate its chronology in root documents.
-- Preserve earlier records at stable paths. For exact documents replaced by a concise current version, save a byte-for-byte snapshot and link it from the [archive index](../archive/INDEX.md).
+- Preserve active requirements and unresolved findings in current guidance. Retired historical snapshots are recoverable through Git; use [history recovery](../history.md#recovering-retired-snapshots). Do not recreate the retired archive or snapshot current documents for this cleanup. Retain other completed records until separately reviewed.
 - Before adding a plan or verification file, check whether the existing task record can be updated. Create another file only when it captures a distinct task or immutable result.
 
 ## Contracts and code
@@ -71,4 +71,4 @@ historical milestone names do not define the current architecture.
 
 Before claiming completion, run `python -m pytest tests`, `python -m ruff check --config tests/pyproject.toml .`, `python -m ruff format --config tests/pyproject.toml --check .`, and `git diff --check`, plus the relevant frontend and desktop checks required by the active plan. Check staged whitespace with `git diff --cached --check` too. Preserve existing skips and report the target platform, artifact, and actual result. A workflow definition or a prior platform build is not evidence for the current platform/version.
 
-`STATUS.md` is the concise verified state; `HANDOFF.md` names the next boundary and remaining checks. Completed histories remain in stable plan and verification files linked from [grouped history](../history.md). The previous convention set and exact prior root documents are preserved in the maintenance archive; this file replaces older phase-specific rules that conflict with the current module layout and product boundaries.
+`STATUS.md` is the concise verified state; `HANDOFF.md` names the next boundary and remaining checks. Completed histories remain in stable plan and verification files linked from [grouped history](../history.md). The previous convention set and exact prior root documents are recoverable through the tagged history; this file replaces older phase-specific rules that conflict with the current module layout and product boundaries.

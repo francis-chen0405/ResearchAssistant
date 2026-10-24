@@ -4,6 +4,29 @@ This page links to retained task records at their original paths, preserving exi
 
 Historical setup, next-step and approval wording in these records applies to their dated scope; [STATUS](project/STATUS.md) and [HANDOFF](project/HANDOFF.md) own the present stage.
 
+## Recovering retired snapshots
+
+Historical snapshots formerly under `docs/archive/` are preserved in the annotated
+Git tag `archive-2026-10-23-docs-baseline`, at commit
+`ca492a6285e823018bdefb10aba1ea74af2c12af`. They are omitted from the current
+working tree and source archive. Active requirements and open acceptance gates
+remain in current guidance; retained plans, audits, proposals and verification
+records keep their existing paths.
+
+To inspect a retired file without changing your checkout:
+
+```sh
+git fetch origin tag archive-2026-10-23-docs-baseline
+git show archive-2026-10-23-docs-baseline:docs/archive/INDEX.md
+```
+
+The [tagged archive index](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/INDEX.md)
+locates the exact prior snapshots. Links into those snapshots are pinned to this
+tag. Paths and hashes inside dated audit inventories and evaluation results describe
+the recorded revision; resolve retired paths against the tag, rather than treating
+those inventories as current file lists. This tag preserves source records only;
+it is not a backup of research databases or credentials.
+
 ## Recent reviews and repairs
 
 - [Offline evidence-loop evaluation](verification/offline-evidence-loop-2026-10-23.md):

@@ -5,7 +5,10 @@ and [decisions](../docs/project/DECISIONS.md) before changes. Follow the current
 [the plan index](PLANS.md). [STATUS](../docs/project/STATUS.md) is the sole current-state
 owner; [HANDOFF](../docs/project/HANDOFF.md) records the next boundary.
 Use [the test map](../tests/README.md) for focused checks and full-suite discovery.
-Preserve historical archives and completed task records at their stable paths.
+Keep active requirements and unresolved findings in the working tree. Historical
+snapshots retired by the documentation cleanup are recoverable through Git; see
+[history recovery](../docs/history.md#recovering-retired-snapshots). Retain other
+completed task records at their existing paths until separately reviewed.
 
 <!-- codebase-memory-mcp:start -->
 # Codebase Knowledge Graph (codebase-memory-mcp)

@@ -46,6 +46,7 @@ def test_archive_inventory_retains_documented_launchers_and_required_guidance(
         "desktop/Launch ResearchAssistant.command",
         ".agent/AGENTS.md",
         "README.md",
+        "docs/history.md",
         "docs/project/CONVENTIONS.md",
         "docs/project/ARCHITECTURE.md",
         "docs/project/DECISIONS.md",
@@ -85,7 +86,7 @@ def test_archive_selects_current_owned_files_from_dirty_repository(
     modified.write_bytes(b"current working-tree bytes\n")
     deleted.unlink()
     new = _write(source_repository, "backend/src/researchassistant/new.py", b"new source\n")
-    historical = _write(source_repository, "docs/archive/retained/example.md")
+    guidance = _write(source_repository, "docs/project/extra-guidance.md")
     _write(source_repository, "unsupported-root.py")
     with (source_repository / "backend/.gitignore").open("a", encoding="utf-8") as stream:
         stream.write("\nignored-private.txt\n")
@@ -96,7 +97,7 @@ def test_archive_selects_current_owned_files_from_dirty_repository(
     }
     assert modified.relative_to(source_repository).as_posix() in selected
     assert new.relative_to(source_repository).as_posix() in selected
-    assert historical.relative_to(source_repository).as_posix() in selected
+    assert guidance.relative_to(source_repository).as_posix() in selected
     assert "backend/src/researchassistant/retired.py" not in selected
     assert "unsupported-root.py" not in selected
     assert "backend/ignored-private.txt" not in selected

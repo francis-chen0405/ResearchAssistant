@@ -66,7 +66,7 @@ Compiler/discovery/Probe dispatch, prompts, routing, budgets and persisted relea
 are unchanged; exact source identity still requires new research. Prompt 14's
 frozen allowance/input digests and original receipt remain byte-identical. No real
 history, native credentials, paid calls, staging, commit or app replacement occurred.
-The [exact pre-repair state](../../docs/archive/2026-10-13-source-leads-review-state/README.md)
+The [exact pre-repair state](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-13-source-leads-review-state/README.md)
 preserves earlier guidance, task verification and report. Current prepared/fixture
 replays, 38 integrity cases and six synthetic discovery scenarios pass offline;
 refreshed authored held-out visibility remains 5/5 leads per topic with human quality
@@ -154,4 +154,4 @@ Sol retained funnel reasoning, storage/trust boundaries, integration and evaluat
 Luna high helpers implemented simple adapter conformance and renderer/browser fixtures.
 The cancelled follow-up evaluation helper had not started; Sol completed that work.
 The exact preceding current-state documents are in the
-[archive](../../docs/archive/2026-10-13-source-leads-preceding-state/README.md).
+[archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-13-source-leads-preceding-state/README.md).

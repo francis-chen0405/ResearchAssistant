@@ -34,6 +34,7 @@ REQUIRED_FILES = (
     "backend/requirements.txt",
     "backend/requirements-legacy.txt",
     "backend/.env.example",
+    "docs/history.md",
     "docs/project/ARCHITECTURE.md",
     "docs/project/CONVENTIONS.md",
     "docs/project/DECISIONS.md",

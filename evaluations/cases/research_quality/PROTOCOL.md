@@ -119,7 +119,7 @@ method, lock time, reviewer and supporting human evidence hashes. The manifest's
 scored list/metadata must match these frozen bytes; unrelated notes do not lock a
 denominator. Pending reference sets remain unscored. The updated arithmetic fixture
 uses this canonical lock; the earlier report is retained in the
-[pre-repair archive](../../../docs/archive/2026-10-12-quality-review-state/README.md).
+[pre-repair archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-12-quality-review-state/README.md).
 
 ## Isolate discovery, selection, interpretation and admission
 

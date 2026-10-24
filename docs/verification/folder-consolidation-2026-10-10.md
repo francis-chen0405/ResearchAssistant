@@ -24,7 +24,7 @@ The pre-existing staged binary diff is byte-identical to its starting snapshot.
 Earlier runtime/test/frontend repairs were moved with their owners; no branch switch,
 staging, commit, fetch, push, paid call or real research-database mutation occurred.
 Current documents replaced during cleanup have exact snapshots under
-[the starting-state archive](../archive/2026-10-10-folder-consolidation-state/).
+[the starting-state archive](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-10-folder-consolidation-state).
 Earlier archives were not rewritten. Obsolete ignored flat-layout build/metadata/cache
 files were preserved under `backend/build/pre-migration-local-cache/`.
 
@@ -210,4 +210,4 @@ offline evaluation, native ownership/window/deadline and upgrade results above w
 not rerun for these optional-UI corrections. Platform/delivery boundaries remain.
 Review-fix logs and artifacts are under
 `/private/tmp/researchassistant-prompt08-review-fixes/`. Exact preceding current records
-are preserved in [the review-state archive](../archive/2026-10-10-folder-consolidation-state/before-review-fixes/).
+are preserved in [the review-state archive](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-10-folder-consolidation-state/before-review-fixes).

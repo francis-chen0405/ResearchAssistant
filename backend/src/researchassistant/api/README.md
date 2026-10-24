@@ -34,7 +34,7 @@ credential invariants. The workspace, settings and history workflows are impleme
 all six discovery phases: provider-specific queries, bounded retrieval/ranking, exact
 previews, seed expansion and frozen product controls. [STATUS](../../../../docs/project/STATUS.md) distinguishes
 this source behavior from installed-build provenance and pending live acceptance.
-The [original frontend README](../../../../docs/archive/pre-phase-2/frontend/README.md) is preserved
+The [original frontend README](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/pre-phase-2/frontend/README.md) is preserved
 verbatim. This document replaces its historical MLP-only provider/launcher description.
 
 Use [the test map](../../../../tests/README.md) for focused API/lifecycle tests and full collection.

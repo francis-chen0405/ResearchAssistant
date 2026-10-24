@@ -26,5 +26,5 @@ Windows acceptance remains separate: investigate the recorded Wigolo startup exi
 then complete the manual current-source installer, interrupted-upgrade, installed
 window/history/vault and uninstall checks. Retain the original acceptance deadlines.
 Mac public release still requires signing/notarization and clean-machine/macOS 14
-acceptance. [Preceding handoffs](../archive/2026-10-23-integration-preceding-state/)
+acceptance. [Preceding handoffs](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-23-integration-preceding-state)
 retain exact historical platform evidence and process/privacy requirements.

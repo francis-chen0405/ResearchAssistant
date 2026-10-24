@@ -118,8 +118,8 @@ Unrelated work, the October 9 installed app, real databases/cache/credentials,
 historical policies/artifacts/released hashes and conservative accounting remain
 preserved. No paid research, commit, push, app replacement or public release occurred.
 Exact preceding owners and completed phase details are in the
-[archive](../archive/2026-10-15-review-fixes-preceding-state/INDEX.md), including
-[the pre-R37–R52 verification state](../archive/2026-10-15-review-fixes-preceding-state/before-r37-r52-verification/hashes.json).
+[archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-15-review-fixes-preceding-state/INDEX.md), including
+[the pre-R37–R52 verification state](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-15-review-fixes-preceding-state/before-r37-r52-verification/hashes.json).
 
 Native Windows has not rerun these repairs. Historical target
 `44f83d9bfb7e8e2896dc44390c366e4d498be044` retains the 240-second interrupted-upgrade

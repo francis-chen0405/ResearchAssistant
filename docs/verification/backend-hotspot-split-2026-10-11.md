@@ -16,7 +16,7 @@ Exactly the five original backend owners below changed; all other original backe
 Python files match their starting bytes. Twenty-seven responsibility owners were
 added. Original sources, staged diff, resource/identity snapshots, AST comparisons and
 per-step logs remain under `/private/tmp/researchassistant-prompt13/`. Exact prior
-guidance is retained in the [archive](../archive/2026-10-11-hotspot-split-state/README.md).
+guidance is retained in the [archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-11-hotspot-split-state/README.md).
 
 The graph was checked/refreshed before discovery and after moves. Traces covered
 adaptive continuation, Round 4, portfolio persistence, model accounting, initial

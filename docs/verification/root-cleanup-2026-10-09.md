@@ -102,7 +102,7 @@ verified against live source; graph output was advisory.
 - Staged and unstaged whitespace checks: passed, including the final staged review diff.
 - Standalone root/import guard: passed in **0.122 seconds**.
 - All five prior-document snapshots byte-match HEAD. Existing archived documents
-  were preserved; [the new snapshot](../archive/2026-10-09-root-cleanup-state/)
+  were preserved; [the new snapshot](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-09-root-cleanup-state)
   retains prior STATUS, HANDOFF, ARCHITECTURE, CONVENTIONS and plan index.
 
 Packaging/identity validation here is offline regression coverage and exact source

@@ -80,7 +80,7 @@ proposal document carry pointers to current status and completed implementation.
 Their original observations, costs, test counts, hashes and prompt bodies remain intact.
 History links this review and records 83 plans/22 verification records. The exact
 preceding STATUS, HANDOFF and plan index were copied and byte-checked under
-[the documentation-stage archive](../archive/2026-10-08-documentation-stage-state/).
+[the documentation-stage archive](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-08-documentation-stage-state).
 Other existing archive snapshots and executable prompts are unchanged.
 
 ## Fresh verification

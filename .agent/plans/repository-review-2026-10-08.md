@@ -74,4 +74,4 @@ cache, signing and clean-machine acceptance gates remain in [STATUS](../../docs/
 Source identity changes require a new run under the existing compatibility gate.
 
 Exact preceding current-state files are retained in the
-[repository-review archive](../../docs/archive/2026-10-08-repository-review-state/STATUS.md).
+[repository-review archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-08-repository-review-state/STATUS.md).

@@ -51,7 +51,7 @@ files and shell profiles are never loaded automatically.
 | `desktop/` | Electron shell, acquisition runtime and native packaging |
 | `tests/`, `evaluations/` | Regressions and offline research/integrity benchmarks |
 | `docs/project/` | Current architecture, conventions, decisions, status and handoff |
-| `docs/verification/`, `docs/archive/` | Verification evidence and preserved historical snapshots |
+| `docs/verification/` | Retained verification evidence; retired snapshots are recoverable through Git |
 | `scripts/`, `.github/` | Workspace tooling and CI |
 | `.agent/` | Plan index and retained plans |
 
@@ -121,4 +121,4 @@ for browser development.
 [Architecture](docs/project/ARCHITECTURE.md), [conventions](docs/project/CONVENTIONS.md),
 [decisions](docs/project/DECISIONS.md), [plan index](.agent/PLANS.md),
 [status](docs/project/STATUS.md), [handoff](docs/project/HANDOFF.md),
-[grouped history](docs/history.md) and [archive index](docs/archive/INDEX.md).
+[grouped history](docs/history.md) and [history recovery](docs/history.md#recovering-retired-snapshots).

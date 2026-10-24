@@ -52,7 +52,7 @@ root-relative workspace commands and distinguish local unsigned packaging/instal
 from signing, notarization, installer acceptance and public publication.
 
 Exact replaced guidance is saved under
-[the guidance snapshot](../archive/2026-10-10-guidance-state/).
+[the guidance snapshot](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-10-guidance-state).
 Existing archive bytes and stable completed task records are preserved.
 
 ## Link audit and compatibility navigation
@@ -61,7 +61,7 @@ The audit covers local inline/reference links and Markdown heading fragments in
 root, `docs/`, `.agent/`, `.agents/`, desktop/backend/frontend and test/evaluation
 guidance. Executable prompts and generated/vendor/cache trees are excluded.
 Archived paths are checked literally and, separately, at their original document
-locations. The [archive index](../archive/INDEX.md#old-guidance-paths) owns current
+locations. The [archive index](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/INDEX.md#old-guidance-paths) owns current
 navigation for old root guidance and historical Python frontend documentation.
 
 Current navigation and stable completed records have **zero** missing local targets

@@ -126,7 +126,7 @@ environment restrictions, resolved without changing dependencies or runtime poli
 Logs, isolated installs and before/after inventory are under
 `/private/tmp/researchassistant-prompt10/`.
 The exact preceding documents are in
-[the starting-state archive](../archive/2026-10-10-api-split-state/).
+[the starting-state archive](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-10-api-split-state).
 Implementation and local verification are complete. No branch switch, staging, commit,
 push, app installation or publication is included.
 Local HEAD remains `94a241b` on `master`. Real research databases and paid providers were

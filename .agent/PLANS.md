@@ -77,5 +77,5 @@ Python 3.11/3.12 and Windows execution with its unresolved native acceptance lim
 ## Prior work
 
 [Grouped plan and verification history](../docs/history.md) links every retained record.
-[Archive index](../docs/archive/INDEX.md) links exact replaced document snapshots.
+[History recovery](../docs/history.md#recovering-retired-snapshots) explains how to retrieve retired snapshots.
 The historical `.agents/PLANS/phase-00-foundation.md` path is preserved.

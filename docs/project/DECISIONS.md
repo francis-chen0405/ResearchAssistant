@@ -1,6 +1,6 @@
 # Current decisions
 
-This file records decisions that still govern current behavior. The exact preceding decision history is preserved in the [2026-09-26 archive](../archive/2026-09-26-maintenance/DECISIONS.md); older complete records are indexed in [the archive guide](../archive/INDEX.md). Completed plan files remain authoritative evidence for their implementation details.
+This file records decisions that still govern current behavior. The exact preceding decision history is preserved in the [2026-09-26 archive](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-09-26-maintenance/DECISIONS.md); older complete records are indexed in [the archive guide](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/INDEX.md). Completed plan files remain authoritative evidence for their implementation details.
 
 ## Research execution
 

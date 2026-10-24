@@ -19,6 +19,8 @@ review suites. The table is a starting map, not an exclusive suite list. Older
 `phase`, `mvp`, `mlp`, `v2_phase` and `audit` names describe when regressions were
 introduced; many span multiple current owners. Keep them in full collection.
 Assertions, fixture bytes and cross-test helpers retain their existing meanings.
+Standalone source archives require the current guidance and [history recovery](../docs/history.md#recovering-retired-snapshots)
+guide; retired documentation snapshots are retrieved through Git instead of shipped.
 
 | Subsystem / current owner | Focused starting files in this directory |
 | --- | --- |

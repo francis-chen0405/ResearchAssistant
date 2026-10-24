@@ -46,7 +46,7 @@ Windows packaging remains manual-only. Its recorded Wigolo startup failure and
 interrupted-upgrade repair acceptance are open. Public release, Mac signing/notarization,
 clean-machine/minimum-OS acceptance and physical power-loss durability remain unverified.
 
-[Preceding master and e359 summaries](../archive/2026-10-23-integration-preceding-state/)
+[Preceding master and e359 summaries](https://github.com/francis-chen0405/ResearchAssistant/tree/archive-2026-10-23-docs-baseline/docs/archive/2026-10-23-integration-preceding-state)
 preserve exact earlier results and boundaries. R01–R59 remain implemented; the
 [active review inventory](../audits/2026-10-15/remaining-file-review.json) retains
 20 current assets outside the completed source review.

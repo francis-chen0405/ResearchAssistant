@@ -38,7 +38,7 @@ snapshot digest. Whole-output bounds and human utility remain unknown when their
 inventories/judgments are incomplete. Work-grade conflicts cannot disappear after
 filtering aliases. The final read-only peer review found no remaining scoped issues.
 
-The [exact preceding state](../../docs/archive/2026-10-12-quality-review-state/README.md)
+The [exact preceding state](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/2026-10-12-quality-review-state/README.md)
 retains the earlier verification and reports.
 
 ## Owners and artifacts
