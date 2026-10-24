@@ -26,8 +26,9 @@ owns acquisition-service lifecycle. The existing evidence viewer, fixture toolin
 historical export adapters remain available; they do not select a new research policy.
 Fresh research uses `researchassistant.research.v2_orchestrator` and current configured
 discovery/model routes. Use canonical `researchassistant.*` paths for backend imports;
-installed `models.py`, `store.py`, and `orchestrator.py` facades under `backend/src/`
-remain compatibility aliases.
+installed `models.py` and `store.py` facades under `backend/src/` remain compatibility
+aliases. The historical execution engine and the `orchestrator` facades are retired;
+historical inspection and export remain available through the canonical readers.
 
 See [architecture](../../../../docs/project/ARCHITECTURE.md) for exact evidence, persistence, accounting and
 credential invariants. The workspace, settings and history workflows are implemented. Current source includes
