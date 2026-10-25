@@ -33,6 +33,16 @@ The user-approved [A–G fixes](../../.agent/plans/alpr-run-fixes-2026-10-01.md)
 
 ## Evidence, storage, and application boundaries
 
+- Connection and pool failures that precede HTTP dispatch are recorded separately
+  from unknown outcomes. Their reservations remain consumed, while independent
+  searches retain their existing eligibility and limits. Read/write interruptions
+  remain unknown and block further dispatch; final stopping disclosures explain
+  that interruption instead of implying sufficient research coverage.
+- Fresh selection may correct a Cambridge review attachment's citation to its
+  parent article only when the captured first-page title and DOI confirm that
+  identity. Unverified reviewer authors and dates are omitted. Original discovery
+  metadata, snapshots and historical reports remain unchanged.
+
 - Approved R37–R52 repairs preserve query-lane provenance independently from
   evidence relationship, version fresh quotation context/offset handling and
   admission wording, and make dependent stage/admission commits atomic. Old

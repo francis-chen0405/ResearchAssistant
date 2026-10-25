@@ -23,6 +23,7 @@ from researchassistant.common.research_guidance import ASSESSED_FINDINGS_GUIDANC
 from researchassistant.contracts.models import (
     ResearchDirection,
     V2AcquisitionProbeOutput,
+    V2ClaimCoverageDimension,
     V2DiscoveryScoutOutput,
     V2GapAcquisitionFailure,
     V2GapAnalysisAttempt,
@@ -321,16 +322,6 @@ def run_v2_gap_analysis(
                 response = invocation.output_artifact
                 if not isinstance(response, V2GapAnalysisModelOutput):
                     raise TypeError("Gap Analysis returned an unexpected typed artifact")
-                result = V2GapAnalysisResult(
-                    **response.model_dump(),
-                    run_id=gap_input.run_id,
-                    directions=gap_input.directions,
-                    analyzed_at=completed_at,
-                )
-                validate_v2_gap_identity_continuity(
-                    gap_input.previous_gaps,
-                    result.material_gaps,
-                )
                 outcome = V2StageOutcomeCheckpoint(
                     run_id=gap_input.run_id,
                     attempt_id=attempt.attempt_id,
@@ -378,31 +369,47 @@ def run_v2_gap_analysis(
                 )
             )
             continue
-        if not isinstance(outcome.candidate, V2GapAnalysisModelOutput):
-            raise ValueError("saved Gap Analysis outcome has the wrong output type")
-        result = V2GapAnalysisResult(
-            **outcome.candidate.model_dump(),
-            run_id=gap_input.run_id,
-            directions=gap_input.directions,
-            analyzed_at=completed_at,
-        )
-        validate_v2_gap_identity_continuity(gap_input.previous_gaps, result.material_gaps)
-        output = V2GapAnalysisOutput(
-            run_id=gap_input.run_id,
-            input=gap_input,
-            state=V2GapAnalysisState.COMPLETED,
-            result=result,
-            attempts=(
-                *attempts,
+        try:
+            if not isinstance(outcome.candidate, V2GapAnalysisModelOutput):
+                raise ValueError("saved Gap Analysis outcome has the wrong output type")
+            response = _bind_claim_components(outcome.candidate, gap_input)
+            result = V2GapAnalysisResult(
+                **response.model_dump(),
+                run_id=gap_input.run_id,
+                directions=gap_input.directions,
+                analyzed_at=completed_at,
+            )
+            validate_v2_gap_identity_continuity(gap_input.previous_gaps, result.material_gaps)
+            # Validate application-owned context within the same bounded recovery
+            # path as model validation, including when replaying a saved outcome.
+            output = V2GapAnalysisOutput(
+                run_id=gap_input.run_id,
+                input=gap_input,
+                state=V2GapAnalysisState.COMPLETED,
+                result=result,
+                attempts=(
+                    *attempts,
+                    V2GapAnalysisAttempt(
+                        attempt_number=attempt_number,
+                        reservation=recorded_reservation,
+                        succeeded=True,
+                    ),
+                ),
+                stop_adaptive_continuation=not result.continue_research,
+                completed_at=completed_at,
+            )
+        except V2GapIdentityCollisionError:
+            raise
+        except (TypeError, ValueError) as exc:
+            attempts.append(
                 V2GapAnalysisAttempt(
                     attempt_number=attempt_number,
                     reservation=recorded_reservation,
-                    succeeded=True,
-                ),
-            ),
-            stop_adaptive_continuation=not result.continue_research,
-            completed_at=completed_at,
-        )
+                    succeeded=False,
+                    failure=f"{type(exc).__name__}: {exc}"[:500],
+                )
+            )
+            continue
         insert_v2_artifact(path, resolved_artifact_key, output, completed_at)
         return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
     output = V2GapAnalysisOutput(
@@ -415,6 +422,50 @@ def run_v2_gap_analysis(
     )
     insert_v2_artifact(path, resolved_artifact_key, output, completed_at)
     return V2GapAnalysisRunResult(**output.model_dump(), invocations=tuple(invocations))
+
+
+def _bind_claim_components(
+    response: V2GapAnalysisModelOutput, gap_input: V2GapAnalysisInput
+) -> V2GapAnalysisModelOutput:
+    """Bind display-text variations to the input's stable coverage dimension.
+
+    Keep the raw model response in its immutable checkpoint. Only capitalization
+    and whitespace may differ; substantive changes still fail strict validation.
+    """
+    focus_by_dimension = {item.dimension: item for item in gap_input.claim_coverage_focus}
+
+    def canonical_component(
+        dimension: V2ClaimCoverageDimension | None, text: str | None
+    ) -> str | None:
+        focus = focus_by_dimension.get(dimension)
+        if focus is not None and text is not None:
+            normalized = " ".join(text.split()).casefold()
+            if normalized == " ".join(focus.claim_component.split()).casefold():
+                return focus.claim_component
+        return text
+
+    return response.model_copy(
+        update={
+            "claim_coverage_map": tuple(
+                item.model_copy(
+                    update={
+                        "claim_component": canonical_component(item.dimension, item.claim_component)
+                    }
+                )
+                for item in response.claim_coverage_map
+            ),
+            "material_gaps": tuple(
+                gap.model_copy(
+                    update={
+                        "unsupported_claim_component": canonical_component(
+                            gap.claim_dimension, gap.unsupported_claim_component
+                        )
+                    }
+                )
+                for gap in response.material_gaps
+            ),
+        }
+    )
 
 
 def _budget_can_reserve(

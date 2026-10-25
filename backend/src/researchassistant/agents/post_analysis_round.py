@@ -198,6 +198,31 @@ def run_v2_post_analysis_round(
     ) -> V2PostAnalysisRoundOutcome:
         if final_admission is admission and (assessed_gap or round_four_gap):
             final_admission = _attach_assessed_gap(admission, assessed_gap or round_four_gap)
+        if any(
+            state in {"unknown", "blocked"}
+            for state in query_dispatch_states(path, run_id).values()
+        ):
+            interruption = (
+                "A provider request has an unknown outcome; its reservation is retained "
+                "and additional searches were blocked. Existing evidence was preserved."
+            )
+            reason = f"{reason}. {interruption}"
+            prior = final_continuation.stopping_decision
+            final_continuation = final_continuation.model_copy(
+                update={
+                    "stopping_decision": final_continuation.stopping_decision.model_copy(
+                        update={
+                            "stop_code": V2AdaptiveStopCode.PROVIDER_FAILURE,
+                            "stopping_reason": (
+                                f"{prior.stopping_reason} {interruption}"
+                                if prior.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
+                                else interruption
+                            ),
+                            "decided_at": decision.decided_at,
+                        }
+                    )
+                }
+            )
         result = V2PostAnalysisRoundOutcome(
             run_id=run_id,
             decision=decision,

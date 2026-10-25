@@ -486,6 +486,18 @@ class _PhysicalExecution:
                 raise SearchProviderError(SearchFailureCode.BUDGET_EXHAUSTED, str(exc)) from exc
             try:
                 response = send()
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+                # These failures precede an HTTP request being sent. Keep the
+                # reservation consumed, but do not block unrelated searches.
+                self._complete(
+                    start,
+                    status="not_dispatched",
+                    failure=V2DiscoveryFailure(
+                        code="connection" if isinstance(exc, httpx.ConnectError) else "timeout",
+                        detail="before_dispatch",
+                    ),
+                )
+                raise
             except BaseException:
                 self._complete(
                     start,
@@ -616,7 +628,7 @@ class _PhysicalExecution:
         self,
         start: V2ProviderAttemptStart,
         *,
-        status: Literal["completed", "failed", "interrupted_unknown"],
+        status: Literal["completed", "failed", "interrupted_unknown", "not_dispatched"],
         failure: V2DiscoveryFailure | None = None,
         response_hash: str | None = None,
         actual: Decimal | None = None,

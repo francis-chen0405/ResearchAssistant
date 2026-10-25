@@ -15,6 +15,8 @@ from agents.v2_gap_analysis import (
 from providers.llm import LLMProviderCapabilities, LLMProviderExecutionError, ModelAlias
 from providers.mimo import MimoFailureCode, MimoProviderError
 from providers.v2_routing import V2RoutingConfig
+from researchassistant.agents import v2_gap_analysis as gap_module
+from researchassistant.agents.v2_stage_checkpoint import V2StageOutcomeCheckpoint
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchDirection,
@@ -23,9 +25,11 @@ from researchassistant.contracts.models import (
     RunStatus,
     Stage,
     V2AcquisitionProbeOutput,
+    V2ClaimCoverageAssessment,
     V2ClaimCoverageDimension,
     V2ClaimCoverageFocus,
     V2ClaimCoverageKind,
+    V2ClaimCoverageState,
     V2DiscoveryScoutOutput,
     V2GapAnalysisInput,
     V2GapAnalysisModelOutput,
@@ -353,6 +357,189 @@ def test_gap_analysis_retries_once_degrades_and_restart_reuses_state(tmp_path: P
     assert first.state.value == "degraded"
     assert first.result is None and first.stop_adaptive_continuation is True
     assert len(first.attempts) == len(provider.requests) == 2
+    assert resumed.resumed and len(provider.requests) == 2
+
+
+def _claim_linked_input() -> V2GapAnalysisInput:
+    return _input().model_copy(
+        update={
+            "exact_claim": "de-extinction harms animal welfare",
+            "policy_identity": "researchassistant-v2-adaptive-gap-analysis-v2",
+            "claim_coverage_focus": (
+                V2ClaimCoverageFocus(
+                    dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                    claim_component="De-extinction harms animal welfare",
+                    kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+                ),
+            ),
+        }
+    )
+
+
+def _claim_linked_response(component: str) -> V2GapAnalysisModelOutput:
+    response = _continue(ResearchDirection.SUPPORT)
+    return response.model_copy(
+        update={
+            "claim_coverage_map": (
+                V2ClaimCoverageAssessment(
+                    dimension=V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                    claim_component=component,
+                    kind=V2ClaimCoverageKind.CLAIM_COMPONENT,
+                    coverage_state=V2ClaimCoverageState.PARTIAL,
+                    evidence_summary="Possible harms are identified without measured outcomes.",
+                ),
+            ),
+            "material_gaps": (
+                response.material_gaps[0].model_copy(
+                    update={
+                        "claim_dimension": V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                        "unsupported_claim_component": component,
+                    }
+                ),
+            ),
+            "new_search_directions": (
+                response.new_search_directions[0].model_copy(
+                    update={
+                        "claim_dimension": V2ClaimCoverageDimension.EFFECT_OR_ASSOCIATION,
+                        "resolving_evidence_kind": "Measured animal-welfare outcomes",
+                    }
+                ),
+            ),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "component",
+    ["de-extinction harms animal welfare", "  De-extinction  harms\nanimal welfare  "],
+)
+def test_gap_analysis_binds_display_variations_without_changing_raw_checkpoint(
+    tmp_path: Path, component: str
+) -> None:
+    gap_input = _claim_linked_input()
+    response = _claim_linked_response(component)
+    # Reproduce the live run: its coverage label matched, but its gap used lowercase.
+    if component.startswith("de-extinction"):
+        response = response.model_copy(
+            update={
+                "claim_coverage_map": (
+                    response.claim_coverage_map[0].model_copy(
+                        update={
+                            "claim_component": gap_input.claim_coverage_focus[0].claim_component
+                        }
+                    ),
+                )
+            }
+        )
+    db_path = tmp_path / "case.sqlite3"
+    _prepare_db(db_path, gap_input.run_id)
+    provider = FakeLuna([response])
+
+    result = run_v2_gap_analysis(
+        db_path=db_path,
+        gap_input=gap_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert result.state is V2GapAnalysisState.COMPLETED
+    assert result.result is not None
+    canonical = gap_input.claim_coverage_focus[0].claim_component
+    assert result.result.material_gaps[0].unsupported_claim_component == canonical
+    assert result.result.claim_coverage_map[0].claim_component == canonical
+    raw = read_v2_artifact(
+        str(db_path),
+        gap_input.run_id,
+        "gap-checkpoint-v1/phase-6-gap-analysis/attempt-1/outcome",
+    )
+    saved = V2StageOutcomeCheckpoint.model_validate_json(raw.payload_json)
+    assert saved.candidate == response
+    resumed = run_v2_gap_analysis(
+        db_path=db_path,
+        gap_input=gap_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    assert resumed.resumed and len(provider.requests) == 1
+
+
+def test_gap_analysis_replays_raw_outcome_after_interrupted_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gap_input = _claim_linked_input()
+    provider = FakeLuna([_claim_linked_response("de-extinction harms animal welfare")])
+    db_path = tmp_path / "interrupted.sqlite3"
+    _prepare_db(db_path, gap_input.run_id)
+
+    def interrupt_validation(
+        response: V2GapAnalysisModelOutput, gap_input: V2GapAnalysisInput
+    ) -> V2GapAnalysisModelOutput:
+        raise RuntimeError("simulated interruption after saving model outcome")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(gap_module, "_bind_claim_components", interrupt_validation)
+        with pytest.raises(RuntimeError, match="simulated interruption"):
+            run_v2_gap_analysis(
+                db_path=db_path,
+                gap_input=gap_input,
+                llm_provider=provider,
+                routing_config=_routing(),
+                clock=lambda: NOW,
+            )
+
+    result = run_v2_gap_analysis(
+        db_path=db_path,
+        gap_input=gap_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    assert result.state is V2GapAnalysisState.COMPLETED
+    assert len(provider.requests) == 1
+
+
+@pytest.mark.parametrize("recover", [True, False])
+def test_gap_analysis_context_validation_retries_or_degrades_without_claim_drift(
+    tmp_path: Path, recover: bool
+) -> None:
+    gap_input = _claim_linked_input()
+    invalid = _claim_linked_response("De-extinction improves animal welfare")
+    valid = _claim_linked_response(gap_input.claim_coverage_focus[0].claim_component)
+    db_path = tmp_path / "context.sqlite3"
+    _prepare_db(db_path, gap_input.run_id)
+    provider = FakeLuna([invalid, valid if recover else invalid])
+
+    result = run_v2_gap_analysis(
+        db_path=db_path,
+        gap_input=gap_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert len(provider.requests) == len(result.attempts) == 2
+    assert not result.attempts[0].succeeded
+    assert "must exactly match" in result.attempts[0].failure
+    if recover:
+        assert result.state is V2GapAnalysisState.COMPLETED
+        assert result.result == V2GapAnalysisResult(
+            **valid.model_dump(),
+            run_id=gap_input.run_id,
+            directions=gap_input.directions,
+            analyzed_at=NOW,
+        )
+    else:
+        assert result.state is V2GapAnalysisState.DEGRADED
+        assert result.result is None and result.stop_adaptive_continuation
+    resumed = run_v2_gap_analysis(
+        db_path=db_path,
+        gap_input=gap_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
     assert resumed.resumed and len(provider.requests) == 2
 
 

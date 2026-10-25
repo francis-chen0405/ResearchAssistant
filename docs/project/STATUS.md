@@ -27,12 +27,17 @@ evidence. These are previously recorded results, not new installation or quality
 
 ## Known problems and limits
 
-The fresh unsigned Mac candidate passes isolated acquisition readiness checks after
-packaging its Python runtime's previously omitted certificate-policy file unchanged.
-Full desktop acceptance and installation remain pending. The installed Mac build,
-`20261020.6`, predates the later PDF, post-analysis, final CLI and progress recovery
-changes; [its delivery record](../verification/selection-coverage-repairs-2026-10-21.md)
-describes what was actually installed.
+The installed unsigned Mac build, `20261024.3`, includes the later PDF, post-analysis,
+final CLI and progress recovery changes, plus the gap-analysis validation repair.
+Harmless claim-label capitalization and whitespace differences bind to the original
+coverage dimension; substantive validation failures use bounded retry/degraded handling.
+Fresh selection corrects Cambridge review metadata only when the captured article's
+title and DOI confirm its identity. Connection failures before HTTP dispatch retain
+their reservations without blocking independent searches. Truly unknown outcomes
+still block further dispatch and are disclosed as an interrupted search.
+The packaged app passed isolated backend, settings, acquisition and window checks.
+Saved research and provider preferences were unchanged through replacement. Human
+research-quality acceptance and clean-machine testing remain open.
 
 Offline checks do not establish better live research. Actual IPBES PDF recapture and
 human evaluation remain outstanding. Provider/page scheduling, partial-unknown stop
@@ -49,12 +54,11 @@ and [desktop operations](../../desktop/README.md) retain the specific gates.
 
 ## What comes next
 
-Complete broader desktop acceptance on the fresh Mac candidate in a separate chat
-before any installed-app replacement. Packaging and isolated acquisition readiness
-are verified, with the existing deadline unchanged. The next research-quality step
-is controlled live recapture and human evaluation; the previous paid-test allowance is exhausted,
-so further paid work needs new explicit authorization. Windows acceptance remains a
-separate delivery effort.
+Continue broader desktop acceptance and human research-quality testing on the installed
+Mac build. Packaging and isolated acquisition readiness are verified, with the existing
+deadline unchanged. Controlled live recapture and human evaluation remain needed;
+the previous paid-test allowance is exhausted, so further paid work needs new explicit
+authorization. Windows acceptance remains a separate delivery effort.
 
 Preserve saved research, credentials, historical policies and exact resume compatibility
 throughout. Unknown request outcomes must retain their reservations and must not

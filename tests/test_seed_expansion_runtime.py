@@ -69,6 +69,7 @@ from researchassistant.research.seed_expansion import (
 )
 from researchassistant.storage.discovery_store import (
     bind_discovery_run,
+    provider_attempt_audit,
     read_discovery_artifacts,
     read_discovery_binding,
 )
@@ -1254,6 +1255,28 @@ def test_provider_budget_partial_and_cancellation_resume_do_not_repeat_identity(
         client.close()
     assert len(cancel_calls) == 2
     assert len(resumed) == 1
+
+
+def test_graph_connection_failure_is_not_an_unknown_dispatched_request(tmp_path: Path) -> None:
+    path = tmp_path / "graph-not-dispatched.sqlite"
+    _binding(path)
+    _install_round_one(path, ({"score": 80},))
+    action = _action(path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection unavailable", request=request)
+
+    adapter, client = _adapter(handler)
+    try:
+        execute_expansion(path=str(path), action=action, adapter=adapter, clock=_clock)
+    finally:
+        client.close()
+    audit = provider_attempt_audit(str(path), RUN)
+    assert len(audit.starts) == 1
+    assert audit.interrupted_unknown == ()
+    assert audit.completions[0].status == "not_dispatched"
+    assert audit.completions[0].actual_cost_usd is None
+    assert audit.starts[0].reserved_cost_usd > 0
 
 
 def test_unknown_after_start_is_not_reissued_after_crash_like_transport_failure(

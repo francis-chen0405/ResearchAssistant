@@ -57,6 +57,7 @@ from researchassistant.contracts.source_selection_preview import (
     V2SelectionShortlistAudit,
 )
 from researchassistant.evidence.evidence_portfolio import identify_source_family
+from researchassistant.evidence.paper_identity import confirmed_parent_article_citation
 from researchassistant.evidence.source_excerpt import extraction_source_view
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
@@ -264,6 +265,16 @@ def build_v2_source_selection_input(
                 # Keep a conservative reservation when a source cannot make a
                 # numbered view; extraction will report that failure explicitly.
                 pass
+        citation = (
+            confirmed_parent_article_citation(
+                source.snapshot,
+                representative.title,
+                representative.doi,
+                representative.source_type,
+            )
+            if fresh_preview
+            else None
+        )
         candidates.append(
             V2SourceSelectionCandidate(
                 source_id=survivor.cluster_id,
@@ -271,11 +282,13 @@ def build_v2_source_selection_input(
                 source_family_id=str(identify_source_family(source.snapshot).source_family_id),
                 research_round=merged.research_round,
                 source_url=merged.source_url,
-                title=representative.title,
-                source_type=representative.source_type,
-                doi=representative.doi,
-                authors=representative.authors,
-                publication_date=representative.publication_date,
+                title=citation[0] if citation else representative.title,
+                source_type="article" if citation else representative.source_type,
+                doi=citation[1] if citation else representative.doi,
+                # Review authors/dates do not establish the parent article's
+                # authorship or publication date. Raw discovery metadata stays saved.
+                authors=() if citation else representative.authors,
+                publication_date=None if citation else representative.publication_date,
                 discovery_providers=tuple(
                     dict.fromkeys(item.provider for item in cluster.provider_references)
                 ),

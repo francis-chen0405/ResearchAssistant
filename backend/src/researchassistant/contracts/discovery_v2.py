@@ -757,6 +757,7 @@ class V2DiscoveryFailure(V2DiscoveryValue):
         "unsupported_capability",
         "cancelled",
         "unknown_after_start",
+        "before_dispatch",
     ]
 
 
@@ -906,7 +907,7 @@ class V2ProviderAttemptStart(V2DiscoveryArtifact):
 class V2ProviderAttemptCompletion(V2DiscoveryArtifact):
     attempt_id: UUID
     operation_id: UUID
-    status: Literal["completed", "failed", "interrupted_unknown"]
+    status: Literal["completed", "failed", "interrupted_unknown", "not_dispatched"]
     response_hash: Digest | None = None
     result_ids: tuple[UUID, ...] = ()
     metadata_records: Count = 0
@@ -929,6 +930,18 @@ class V2ProviderAttemptCompletion(V2DiscoveryArtifact):
             raise ValueError("documented free completion cannot claim nonzero cost")
         if self.status == "interrupted_unknown" and self.cost_basis != "unknown":
             raise ValueError("interrupted request must retain unknown cost exposure")
+        if self.status == "not_dispatched" and (
+            self.response_hash is not None
+            or self.actual_cost_usd is not None
+            or self.metadata_records
+            or self.result_ids
+            or self.failure is None
+            or self.failure.code not in {"connection", "timeout"}
+            or self.failure.detail != "before_dispatch"
+        ):
+            raise ValueError(
+                "undispatched attempts require a connection failure without a response"
+            )
         if len(self.result_ids) > self.metadata_records:
             raise ValueError("result identities exceed reported metadata record count")
         if len(set(self.result_ids)) != len(self.result_ids):

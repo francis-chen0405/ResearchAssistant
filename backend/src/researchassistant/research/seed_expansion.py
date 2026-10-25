@@ -406,6 +406,15 @@ class _GraphPhysicalExecution:
             raise SearchProviderError(SearchFailureCode.BUDGET_EXHAUSTED, str(exc)) from exc
         try:
             response = send()
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+            self._complete(
+                status="not_dispatched",
+                failure=V2DiscoveryFailure(
+                    code="connection" if isinstance(exc, httpx.ConnectError) else "timeout",
+                    detail="before_dispatch",
+                ),
+            )
+            raise
         except BaseException:
             self._complete(
                 status="interrupted_unknown",
@@ -471,7 +480,7 @@ class _GraphPhysicalExecution:
     def _complete(
         self,
         *,
-        status: Literal["completed", "failed", "interrupted_unknown"],
+        status: Literal["completed", "failed", "interrupted_unknown", "not_dispatched"],
         response_hash: str | None = None,
         failure: V2DiscoveryFailure | None = None,
         actual: Decimal | None = None,

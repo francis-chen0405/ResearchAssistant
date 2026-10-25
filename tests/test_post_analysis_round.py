@@ -215,6 +215,26 @@ def test_skip_when_admitted_coverage_is_adequate(tmp_path: Path) -> None:
     assert outcome.admission.source_results
 
 
+def test_unknown_request_stop_is_disclosed_in_final_continuation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured, _model, search = _admitted_inputs(tmp_path, monkeypatch)
+    before = len(search.requests)
+
+    def unknown_states(source: object, run_id: object) -> dict[object, str]:
+        return {run_id: "unknown"}
+
+    monkeypatch.setattr(post_module, "query_dispatch_states", unknown_states)
+    outcome = run_v2_post_analysis_round(**captured)
+
+    assert outcome.continuation.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
+    assert "unknown outcome" in outcome.continuation.stopping_decision.stopping_reason
+    assert "reservation is retained" in outcome.stop_reason
+    assert outcome.admission.source_results == captured["admission"].source_results
+    assert len(search.requests) == before
+    assert run_v2_post_analysis_round(**captured) == outcome
+
+
 def test_missing_coverage_without_useful_new_action_stops(tmp_path: Path) -> None:
     path = tmp_path / "post-analysis-no-action-disposable.sqlite"
     run_id = uuid4()

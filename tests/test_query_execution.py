@@ -40,7 +40,11 @@ from researchassistant.contracts.model_research import (
     V2RoundOneSearchQuery,
 )
 from researchassistant.research.query_compiler import compile_query
-from researchassistant.research.query_execution import execute_query, freeze_query_execution
+from researchassistant.research.query_execution import (
+    available_query_budgets,
+    execute_query,
+    freeze_query_execution,
+)
 from researchassistant.research.v2_orchestrator import _run_round_one_search
 from researchassistant.storage.discovery_store import (
     compute_discovery_audit_counters,
@@ -48,6 +52,7 @@ from researchassistant.storage.discovery_store import (
     read_discovery_artifacts,
     read_discovery_binding,
 )
+from researchassistant.storage.query_dispatch import query_dispatch_states
 from researchassistant.storage.store import insert_v2_artifact
 
 NOW = datetime(2026, 10, 6, tzinfo=UTC)
@@ -425,8 +430,10 @@ def test_known_free_provider_failure_retries_but_records_both_attempts(tmp_path:
     assert [item.status for item in audit.completions] == ["failed", "completed"]
 
 
+@pytest.mark.parametrize("error_type", [httpx.ReadTimeout, httpx.WriteTimeout])
 def test_unknown_transport_failure_is_durably_exposed_and_operation_cannot_replay(
     tmp_path: Path,
+    error_type: type[httpx.TimeoutException],
 ) -> None:
     path = tmp_path / "unknown-outcome.sqlite"
     run_id, _ = _freeze(path, DiscoveryProvider.OPENALEX)
@@ -436,7 +443,7 @@ def test_unknown_transport_failure_is_durably_exposed_and_operation_cannot_repla
     def handler(_request: httpx.Request) -> httpx.Response:
         nonlocal sent
         sent += 1
-        raise httpx.ReadTimeout("connection ended after request start")
+        raise error_type("connection ended after request start")
 
     adapter = OpenAlexSearchAdapter(
         OpenAlexConfig(api_key="test-secret"),
@@ -471,6 +478,72 @@ def test_unknown_transport_failure_is_durably_exposed_and_operation_cannot_repla
             clock=_clock(),
         )
     assert sent == 1
+
+
+@pytest.mark.parametrize(
+    "error_type", [httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout]
+)
+def test_undispatched_failure_retains_reservation_without_blocking_a_new_search(
+    tmp_path: Path, error_type: type[httpx.RequestError]
+) -> None:
+    path = tmp_path / "not-dispatched.sqlite"
+    run_id, _ = _freeze(path, DiscoveryProvider.OPENALEX)
+    sent = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal sent
+        sent += 1
+        if sent == 1:
+            raise error_type("connection unavailable")
+        return httpx.Response(200, json=_openalex_response())
+
+    adapter = OpenAlexSearchAdapter(
+        OpenAlexConfig(api_key="test-secret"),
+        client=httpx.Client(
+            base_url="https://api.openalex.org", transport=httpx.MockTransport(handler)
+        ),
+    )
+    first = _action(run_id, DiscoveryProvider.OPENALEX)
+    with pytest.raises(SearchProviderError):
+        execute_query(
+            path=str(path),
+            run_id=run_id,
+            provider=DiscoveryProvider.OPENALEX,
+            query_text=first.query_text,
+            compiled_query=first,
+            providers={DiscoveryProvider.OPENALEX: adapter},
+            clock=_clock(),
+        )
+    audit = provider_attempt_audit(str(path), run_id)
+    assert audit.interrupted_unknown == ()
+    assert query_dispatch_states(str(path), run_id) == {}
+    completion = audit.completions[0]
+    assert completion is not None and completion.status == "not_dispatched"
+    assert completion.actual_cost_usd is None and completion.cost_basis == "unknown"
+    for changed in (
+        {"response_hash": "a" * 64},
+        {"actual_cost_usd": "0", "cost_basis": "reported"},
+        {"failure": {"code": "interrupted", "detail": "unknown_after_start"}},
+    ):
+        with pytest.raises(ValueError, match="undispatched attempts"):
+            type(completion).model_validate({**completion.model_dump(), **changed})
+    assert audit.starts[0].reserved_cost_usd > 0
+    assert available_query_budgets(str(path), run_id)[0].remaining_calls == 9
+
+    second = _action(run_id, DiscoveryProvider.OPENALEX, term="independent clinical outcomes")
+    result = execute_query(
+        path=str(path),
+        run_id=run_id,
+        provider=DiscoveryProvider.OPENALEX,
+        query_text=second.query_text,
+        compiled_query=second,
+        providers={DiscoveryProvider.OPENALEX: adapter},
+        clock=_clock(),
+    )
+    assert result.results and sent == 2
+    audit = provider_attempt_audit(str(path), run_id)
+    assert len(audit.starts) == 2
+    assert audit.starts[0].reserved_cost_usd > 0
 
 
 @pytest.mark.parametrize(
