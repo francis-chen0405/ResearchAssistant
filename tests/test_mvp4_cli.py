@@ -343,38 +343,49 @@ def test_second_process_cancellation_observes_active_call_boundary(tmp_path: Pat
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        if db_path.exists():
-            try:
-                audit = read_v2_physical_call_audit(db_path, run_id)
-                count = sum(item is None for item in audit.completions)
-                if count == 1:
-                    break
-            except sqlite3.OperationalError:
-                pass
-        time.sleep(0.05)
-    else:
-        process.kill()
-        pytest.fail("run never reached an active provider call")
+    try:
+        # Coverage and imports can delay startup on a busy runner. The provider
+        # fixture separately bounds the active call while awaiting cancellation.
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                pytest.fail(f"run exited before an active provider call: {stdout}\n{stderr}")
+            if db_path.exists():
+                try:
+                    audit = read_v2_physical_call_audit(db_path, run_id)
+                    count = sum(item is None for item in audit.completions)
+                    if count == 1:
+                        break
+                except sqlite3.OperationalError:
+                    pass
+            time.sleep(0.05)
+        else:
+            process.kill()
+            stdout, stderr = process.communicate()
+            pytest.fail(f"run never reached an active provider call: {stdout}\n{stderr}")
 
-    cancelled = subprocess.run(
-        [
-            sys.executable,
-            "backend/src/cli.py",
-            "cancel-run",
-            str(db_path),
-            str(run_id),
-            "--reason",
-            "second process stop",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    stdout, stderr = process.communicate(timeout=20)
+        cancelled = subprocess.run(
+            [
+                sys.executable,
+                "backend/src/cli.py",
+                "cancel-run",
+                str(db_path),
+                str(run_id),
+                "--reason",
+                "second process stop",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        stdout, stderr = process.communicate(timeout=20)
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.communicate()
 
     assert cancelled.returncode == CLIExitCode.RELEASED
     assert "persisted: yes" in cancelled.stdout

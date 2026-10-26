@@ -51,6 +51,7 @@ def test_pyproject_declares_phase_dependencies() -> None:
         "uvicorn>=0.30,<1.0",
     ]
     assert pyproject["project"]["optional-dependencies"]["dev"] == [
+        "setuptools>=84,<85",
         "httpx2>=2.0,<3.0",
         "pytest>=8.0,<9.0",
         "pytest-cov>=6.0,<7.0",
