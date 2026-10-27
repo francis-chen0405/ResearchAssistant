@@ -10,22 +10,40 @@ Historical snapshots formerly under `docs/archive/` are preserved in the annotat
 Git tag `archive-2026-10-23-docs-baseline`, at commit
 `ca492a6285e823018bdefb10aba1ea74af2c12af`. They are omitted from the current
 working tree and source archive. Active requirements and open acceptance gates
-remain in current guidance; retained plans, audits, proposals and verification
-records keep their existing paths.
+remain in current guidance. Retained records keep their existing paths.
 
-To inspect a retired file without changing your checkout:
+Completed scope-only plans, superseded documentation checks and completed foundation
+implementation prompts retired from the remaining records are preserved exactly at
+commit `c59e54d3fcb86dd1b9f0a16242303af8fd32b608`. Repeated combined prompt packs
+are also recoverable there; their individual database/source-discovery prompts remain
+in the checkout. Requirements, unresolved findings and supporting acceptance evidence
+remain with their current owners.
+
+To inspect the earlier archive without changing your checkout:
 
 ```sh
 git fetch origin tag archive-2026-10-23-docs-baseline
 git show archive-2026-10-23-docs-baseline:docs/archive/INDEX.md
 ```
 
+To list or retrieve a record from the later cleanup without switching, staging or
+restoring files into the checkout:
+
+```sh
+git ls-tree -r --name-only c59e54d3fcb86dd1b9f0a16242303af8fd32b608 -- .agent/plans docs/audits docs/proposals docs/verification
+git show c59e54d3fcb86dd1b9f0a16242303af8fd32b608:docs/verification/docs-test-navigation-2026-10-10.md
+# Optional: save the exact record outside the checkout.
+git show c59e54d3fcb86dd1b9f0a16242303af8fd32b608:docs/verification/docs-test-navigation-2026-10-10.md > /tmp/researchassistant-retired-record.md
+```
+
 The [tagged archive index](https://github.com/francis-chen0405/ResearchAssistant/blob/archive-2026-10-23-docs-baseline/docs/archive/INDEX.md)
 locates the exact prior snapshots. Links into those snapshots are pinned to this
 tag. Paths and hashes inside dated audit inventories and evaluation results describe
-the recorded revision; resolve retired paths against the tag, rather than treating
-those inventories as current file lists. This tag preserves source records only;
-it is not a backup of research databases or credentials.
+the recorded revision, rather than current file lists. Resolve the earlier archive
+against the tag and later retired task records against the commit above; use an
+inventory's own recorded revision for its exact payload/hash comparison. Both recovery
+references preserve source records only, not research databases or credentials.
+Database backup and restore use the separate [recovery procedures](project/database-recovery.md).
 
 The last separate current handoff is retained at
 [commit 1bb6476](https://github.com/francis-chen0405/ResearchAssistant/blob/1bb64766a5df09cf741052f3c58eaac04dff90e3/docs/project/HANDOFF.md).
@@ -59,7 +77,6 @@ revision; they do not replace the current STATUS page.
 - [Neutral contracts and historical inspection — Prompt 12](verification/contract-ownership-2026-10-10.md): dependency ownership, public shape/byte compatibility, isolated reads and ratcheted import guard.
 - [Renderer feature split — Prompt 11](verification/renderer-split-2026-10-10.md): feature controllers/views, generated contracts and independent offline frontend checks.
 - [Python API responsibility split — Prompt 10](verification/api-module-split-2026-10-10.md): route ownership, compatibility facades, unchanged HTTP inventory and read/lifecycle verification.
-- [Current guidance and test navigation — Prompt 09](verification/docs-test-navigation-2026-10-10.md): installed/public provenance, owner-based test discovery, active links and preserved historical navigation.
 - [October 9 current-source Mac installation](verification/current-app-install-2026-10-09.md): verified local unsigned replacement and preserved saved data; public distribution remains separate.
 
 - [Owning-folder consolidation — Prompt 08](verification/folder-consolidation-2026-10-10.md): backend/src distribution, renderer rename, installed facades, resource/identity and final verification.
@@ -70,17 +87,11 @@ revision; they do not replace the current STATUS page.
 - [source-discovery-v2-2026-10-05](../.agent/plans/source-discovery-v2-2026-10-05.md) — all six phases: foundations, provider queries, bounded retrieval/ranking, exact previews, one-hop seed expansion, ordinary product controls and complete offline integration acceptance; synthetic evaluation and later bounded live-test protocol.
 - [database-review-2026-10-03](../.agent/plans/database-review-2026-10-03.md)
 - [alpr-equity-run-fixes-2026-10-02](../.agent/plans/alpr-equity-run-fixes-2026-10-02.md)
-- [alpr-equity-run-review-2026-10-02](../.agent/plans/alpr-equity-run-review-2026-10-02.md)
 - [alpr-run-fixes-2026-10-01](../.agent/plans/alpr-run-fixes-2026-10-01.md)
-- [alpr-run-review-2026-10-01](../.agent/plans/alpr-run-review-2026-10-01.md)
 - [comprehensive-code-audit-2026-10-01](../.agent/plans/comprehensive-code-audit-2026-10-01.md)
 - [discrimination-run-fixes-2026-10-01](../.agent/plans/discrimination-run-fixes-2026-10-01.md)
-- [discrimination-run-review-2026-10-01](../.agent/plans/discrimination-run-review-2026-10-01.md)
-- [documentation-audit-2026-09-28](../.agent/plans/documentation-audit-2026-09-28.md)
-- [install-audited-mac-app-2026-10-01](../.agent/plans/install-audited-mac-app-2026-10-01.md)
 - [mac-current-build-release-verification-2026-09-28](../.agent/plans/mac-current-build-release-verification-2026-09-28.md)
 - [private-surveillance-run-fixes-2026-10-02](../.agent/plans/private-surveillance-run-fixes-2026-10-02.md)
-- [reviewer-route-testing-fix-2026-10-01](../.agent/plans/reviewer-route-testing-fix-2026-10-01.md)
 - [validator-and-current-docs-2026-10-02](../.agent/plans/validator-and-current-docs-2026-10-02.md)
 
 ### Verification records
@@ -99,7 +110,6 @@ revision; they do not replace the current STATUS page.
 
 - [root-cleanup-2026-10-09](verification/root-cleanup-2026-10-09.md) — inactive root-copy removal and CI layout/dependency guardrails.
 
-- [project-stage-2026-10-08](verification/project-stage-2026-10-08.md) — review of all existing repository Markdown, reconciliation with current source/installed backend, and fresh offline checks.
 - [alpr-equity-run-review-2026-10-02](../docs/verification/alpr-equity-run-review-2026-10-02.md)
 - [alpr-run-fixes-2026-10-01](../docs/verification/alpr-run-fixes-2026-10-01.md)
 - [alpr-run-review-2026-10-01](../docs/verification/alpr-run-review-2026-10-01.md)
@@ -116,14 +126,10 @@ revision; they do not replace the current STATUS page.
 ### Plans
 
 - [adaptive-search-reliability](../.agent/plans/adaptive-search-reliability.md)
-- [audit-maintenance](../.agent/plans/audit-maintenance.md)
 - [ci-daily-expanded-checks](../.agent/plans/ci-daily-expanded-checks.md)
-- [database-integrity-fixes](../.agent/plans/database-integrity-fixes.md)
 - [deep-analysis-deterministic-concurrency](../.agent/plans/deep-analysis-deterministic-concurrency.md)
-- [explicit-pipeline-selection](../.agent/plans/explicit-pipeline-selection.md)
 - [mac-release-cache-pricing](../.agent/plans/mac-release-cache-pricing.md)
 - [mlp-readiness](../.agent/plans/mlp-readiness.md)
-- [neutral-evidence-ownership](../.agent/plans/neutral-evidence-ownership.md)
 - [per-step-model-choices](../.agent/plans/per-step-model-choices.md)
 - [sqlite-status-polling](../.agent/plans/sqlite-status-polling.md)
 
@@ -214,12 +220,9 @@ revision; they do not replace the current STATUS page.
 
 - [Master consolidation — October 18](../.agent/plans/publish-master-2026-10-18.md): redundant Windows branch comparison, preserved history and authorized commit/push.
 
-- [Folders-only root — October 18](../.agent/plans/root-layout-2026-10-18.md): nested settings, launchers and Git rules with preserved runtime identity.
-
 - [Manual-only Windows packaging — October 18](../.agent/plans/windows-ci-trigger-2026-10-18.md): exact failed job, authorized trigger change and retained acceptance limits.
 
 - [Mac shutdown smoke PID race — October 18](../.agent/plans/mac-smoke-pid-race-2026-10-18.md): atomic test records, strict PID checks and native verification.
-
 
 ## 2026-10-21 — Selection coverage and paper identity
 

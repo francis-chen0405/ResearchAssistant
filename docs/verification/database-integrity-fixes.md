@@ -1,6 +1,6 @@
 # Database integrity fixes — verification
 
-Verified 2026-09-28 on local macOS using the repository `.venv`. The user authorized all ten findings in the database review; scope is recorded in [the plan](../../.agent/plans/database-integrity-fixes.md).
+Verified 2026-09-28 on local macOS using the repository `.venv`. The user authorized all ten findings in the database review; scope is recorded in [the plan](https://github.com/francis-chen0405/ResearchAssistant/blob/c59e54d3fcb86dd1b9f0a16242303af8fd32b608/.agent/plans/database-integrity-fixes.md).
 
 ## Implemented fixes
 

@@ -4,7 +4,7 @@ Status: read-only review complete. No product fixes have been made.
 
 The user requests results and bugs for “Automated license plate cameras cause
 discrimination.” This follows their cumulative 410,000 input / 130,000 output token
-report. The [read-only plan](../../.agent/plans/discrimination-run-review-2026-10-01.md)
+report. The [read-only plan](https://github.com/francis-chen0405/ResearchAssistant/blob/c59e54d3fcb86dd1b9f0a16242303af8fd32b608/.agent/plans/discrimination-run-review-2026-10-01.md)
 bounds this review. Three Luna helpers review accounting, pipeline and presentation;
 the primary agent verifies the immutable release and integration. Repository
 baseline is pushed commit `fdc9dc63a32b0b2ec1336949e1aeb7485e925bf3`.

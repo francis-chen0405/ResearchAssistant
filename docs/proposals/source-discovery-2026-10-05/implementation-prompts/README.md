@@ -19,7 +19,7 @@ Each phase repeats the requested GPT 6.1 Sol High / `gpt-6-luna` helper directiv
 5. [Expand from strong papers](05-expand-from-strong-papers.md): seed identity, references/citing/related-work requests, bounded expansion, provenance, and normal evidence handoff.
 6. [Integration, UI, and acceptance](06-integration-ui-and-acceptance.md): ordinary product entry points, settings/diagnostics/history/export, whole-suite checks, ablations, and completion matrix.
 
-[All six prompts in one document](all-six-prompts.md) contains the complete repeated instructions. [The source audit](source-audit.md) records the observed ALPR cases and distinguishes historical capture failures from current source behavior.
+The repeated combined pack is available through [history recovery](../../../history.md#recovering-retired-snapshots); the six individual prompts above retain every task body. [The source audit](source-audit.md) records the observed ALPR cases and distinguishes historical capture failures from current source behavior.
 
 ## Suggested ownership and model effort
 

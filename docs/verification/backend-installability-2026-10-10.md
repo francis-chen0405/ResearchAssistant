@@ -121,5 +121,5 @@ resource into the new distribution and preserve logical configuration hashing.
 Relative source moves must create a new identity and reject incompatible resume;
 historical records must stay readable without rewriting hashes. Re-run the isolated
 install and applicable frozen/native checks at each owning-folder transition.
-The [Prompt 08 instructions](../proposals/project-foundation-implementation-prompts/08-folder-consolidation.md)
+The [Prompt 08 instructions](https://github.com/francis-chen0405/ResearchAssistant/blob/c59e54d3fcb86dd1b9f0a16242303af8fd32b608/docs/proposals/project-foundation-implementation-prompts/08-folder-consolidation.md)
 now record this starting state. App replacement and public release remain separate.

@@ -7,7 +7,7 @@ or risky work may use one lightweight active plan under these
 
 ## Follow-up owners
 
-- [Source recovery and integration](plans/source-loss-recovery-2026-10-19.md#master-integration--october-23): packaged acquisition health failure and source/installed-build boundaries.
+- [Source recovery and integration](plans/source-loss-recovery-2026-10-19.md#master-integration--october-23): source integration provenance and source/installed-build boundaries; STATUS owns subsequent packaged readiness and open acceptance.
 - [Research retry investigation](../docs/verification/extinction-risk-retry-review-2026-10-21.md): provider scheduling, interrupted reporting, Planner failure and live PDF/quality follow-up; subsequent repairs are linked from STATUS.
 - [Windows delivery](plans/windows-ci-durability-2026-10-13.md): startup, installer repair and native acceptance; [workflow policy](plans/windows-ci-trigger-2026-10-18.md) keeps packaging manual-only.
 - [Research-quality acceptance](plans/research-quality-acceptance-2026-10-11.md): evaluation protocol and limits on live work.

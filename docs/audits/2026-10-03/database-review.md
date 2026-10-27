@@ -8,7 +8,7 @@ The strongest finding is an existing historical-read compatibility failure. The 
 
 ## Approval menu
 
-Approve by ID; each row is a separately selectable scope. Sizes are relative implementation effort, not time estimates. All scopes are also grouped into [four comprehensive implementation prompts](implementation-prompts/all-four-prompts.md), ready to run sequentially.
+Approve by ID; each row is a separately selectable scope. Sizes are relative implementation effort, not time estimates. The historical scopes are grouped into four retained implementation prompts: [lifecycle/recovery](implementation-prompts/01-lifecycle-and-recovery.md), [schema/accounting](implementation-prompts/02-schema-and-accounting.md), [historical reads/exports](implementation-prompts/03-historical-reads-and-exports.md), and [performance/integration](implementation-prompts/04-performance-and-integration.md). Their repeated combined pack is available through [history recovery](../../history.md#recovering-retired-snapshots).
 
 | ID | Priority | Proposed change | Size |
 | --- | --- | --- | --- |

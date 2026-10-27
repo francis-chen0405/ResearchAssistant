@@ -11,7 +11,7 @@ changed. No new correctness bug was confirmed, so there is no isolated reproduct
 regression fix to propose from this pass.
 
 The current authority plan was
-`.agent/plans/reviewer-route-testing-fix-2026-10-01.md`. No separate comprehensive-audit
+[the Reviewer-route repair plan](https://github.com/francis-chen0405/ResearchAssistant/blob/c59e54d3fcb86dd1b9f0a16242303af8fd32b608/.agent/plans/reviewer-route-testing-fix-2026-10-01.md). No separate comprehensive-audit
 plan was present in `.agent/plans` or `docs/audits` at review start. This is the initial
 area-pass context; the completed comprehensive plan and integration results are
 recorded in the [final audit report](README.md). Also read the current

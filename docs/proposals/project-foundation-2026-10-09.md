@@ -1,5 +1,7 @@
 # Project review and foundation proposal
 
+> Historical October 9 findings and proposed sequence. The [foundation navigation](project-foundation-implementation-prompts/README.md) links completed implementation evidence and continuing acceptance requirements. [Current STATUS](../project/STATUS.md) owns subsequent outcomes and priorities.
+
 Reviewed October 9, 2026 against `94a241b` and the working tree. This is a completed analysis and proposed implementation sequence; the repairs and relocation below have not been implemented.
 
 Four GPT-6.1 Sol reviewers covered architecture (xhigh), research quality (xhigh), runtime reliability (high), and frontend/delivery (medium). The primary reviewer checked their findings against source and independently reran the defect probes. The advisory graph was checked against the current checkout. The 17 pre-existing staged root-file deletions were preserved.
@@ -152,4 +154,4 @@ Foundation completion means: the agreed root is enforced; a fresh backend instal
 
 No paid calls, user-data changes, installation, commit, push or publication occurred. Native installer/clean-machine checks, live source quality and the remote CI state were not revalidated. The only repository artifact added by this review is this proposal.
 
-The subsequent [implementation prompt pack](project-foundation-implementation-prompts/README.md) turns the remaining work into standalone, scoped tasks. It was created after this review; its existence does not mark those tasks complete.
+The subsequent [foundation navigation](project-foundation-implementation-prompts/README.md) links retained implementation evidence and the original requirements for continuing acceptance work. The proposal itself does not establish completion.
