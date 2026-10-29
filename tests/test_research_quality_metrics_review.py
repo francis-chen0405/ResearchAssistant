@@ -9,7 +9,12 @@ from typing import Any
 
 import pytest
 
-from evaluations.research_quality import DEFAULT_MANIFEST, evaluate, evaluate_observation
+from evaluations.research_quality import (
+    DEFAULT_MANIFEST,
+    evaluate,
+    evaluate_observation,
+    main,
+)
 from evaluations.research_quality_contracts import Benchmark
 
 FIXTURE = DEFAULT_MANIFEST.parent / "fixture_bundle/manifest.json"
@@ -131,6 +136,30 @@ def test_exposure_comparison_uses_decimal_value_not_scale(
     report = evaluate(manifest)
     assert report["comparisons"][0]["same_recorded_exposure"] is equal
     assert all(r["actual_total_cost_usd"] is None for r in report["observations"])
+
+
+def test_published_cost_and_exposure_preserve_all_decimal_digits(tmp_path: Path) -> None:
+    target = tmp_path / "bundle"
+    shutil.copytree(FIXTURE.parent, target)
+    data = _fixture_data()
+    observation = data["observations"][0]
+    observation["audit_complete"] = True
+    observation["attempts"][0].update(
+        actual_usd="1.00000000000000000000000000001",
+        cost_basis="synthetic exact-USD regression receipt",
+        reserved_usd="1.00000000000000000000000000000",
+    )
+    manifest = target / "manifest.json"
+    manifest.write_text(json.dumps(data))
+    output = tmp_path / "published-report"
+
+    assert main(["--manifest", str(manifest), "--output-dir", str(output)]) == 0
+
+    result = json.loads((output / "results.json").read_text())["observations"][0]
+    exact_amount = "1.00000000000000000000000000001"
+    assert result["known_cost_subtotal_usd"] == exact_amount
+    assert result["actual_total_cost_usd"] == exact_amount
+    assert result["recorded_exposure_usd"] == exact_amount
 
 
 def _synthetic_observation_manifest(

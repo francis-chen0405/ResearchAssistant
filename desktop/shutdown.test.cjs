@@ -181,6 +181,19 @@ test("quit clears a pending health retry and aborts fetch without leaving timers
   assert.equal(h.clock.pending.size, 0);
 });
 
+test("health readiness retries through the overall startup deadline", async () => {
+  let attempts = 0;
+  const h = await started({ fetch: async () => ({ ok: ++attempts > 100 }) });
+  for (let retry = 0; retry < 100; retry++) {
+    h.clock.advance(100);
+    await flush();
+  }
+  assert.equal(attempts, 101);
+  assert.equal(h.state.windows[0].shown, true);
+  assert.deepEqual(h.state.exits, []);
+  assert.equal(h.clock.pending.size, 0);
+});
+
 test("signals throwing still release streams and exit without waiting", async () => {
   const child = new FakeChild(); child.kill = () => { throw Error("gone"); };
   const h = await started({ child, kill: () => { throw Error("gone"); } });

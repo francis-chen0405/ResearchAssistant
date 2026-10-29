@@ -40,10 +40,12 @@ Saved research and provider preferences were unchanged through replacement. Huma
 research-quality acceptance and clean-machine testing remain open.
 
 Offline checks do not establish better live research. Actual IPBES PDF recapture and
-human evaluation remain outstanding. Provider/page scheduling, partial-unknown stop
-reporting and an earlier Planner rejection remain open investigations; [the retry review](../verification/extinction-risk-retry-review-2026-10-21.md)
+human evaluation remain outstanding. Provider/page scheduling and an earlier Planner
+rejection remain open investigations; [the retry review](../verification/extinction-risk-retry-review-2026-10-21.md)
 and [subsequent reporting repairs](../verification/selection-coverage-repairs-2026-10-21.md)
-explain the evidence and partial progress. [Manual asset review](../audits/2026-10-15/remaining-file-review.json)
+explain the evidence and partial progress. Current source reports an unknown later-page
+outcome even when earlier pages returned results; the installed build does not include
+this latest reporting repair. [Manual asset review](../audits/2026-10-15/remaining-file-review.json)
 also remains incomplete.
 
 Windows packaging is manual-only. Its acquisition startup failure, interrupted-upgrade

@@ -20,6 +20,7 @@ from researchassistant.agents.v2_adaptive_search import (
     V2AdaptiveRoundExecution,
 )
 from researchassistant.agents.v2_discovery import V2_SCOUT_BATCH_SIZE
+from researchassistant.common.money import add_usd
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     V2GapAnalysisInput,
@@ -119,13 +120,17 @@ def _conservative_reservation(
         + search_agent_tokens
         + scout_calls * scout_reserve.reserved_tokens
     )
-    optional_cost = (
-        2 * gap_reserve.reserved_cost_usd
-        + search_agent_cost
-        + scout_calls * scout_reserve.reserved_cost_usd
+    optional_cost = add_usd(
+        gap_reserve.reserved_cost_usd,
+        gap_reserve.reserved_cost_usd,
+        search_agent_cost,
+        *(scout_reserve.reserved_cost_usd for _ in range(scout_calls)),
     )
     future_tokens = search_agent_tokens + scout_calls * scout_reserve.reserved_tokens
-    future_cost = search_agent_cost + scout_calls * scout_reserve.reserved_cost_usd
+    future_cost = add_usd(
+        search_agent_cost,
+        *(scout_reserve.reserved_cost_usd for _ in range(scout_calls)),
+    )
     try:
         return V2RoundFourReservation(
             protected_downstream_calls=budget.protected_downstream_model_calls,
@@ -164,7 +169,7 @@ def _gap_envelope_fits(
         budget,
         calls=2,
         tokens=2 * reservation.reserved_tokens,
-        cost=2 * reservation.reserved_cost_usd,
+        cost=add_usd(reservation.reserved_cost_usd, reservation.reserved_cost_usd),
     )
 
 
@@ -192,9 +197,8 @@ def _fits_reserve(
         and budget.tokens_remaining < budget.protected_downstream_tokens + tokens
     ):
         return False
-    return (
-        budget.cost_remaining_usd is None
-        or budget.cost_remaining_usd >= budget.protected_downstream_cost_usd + cost
+    return budget.cost_remaining_usd is None or budget.cost_remaining_usd >= add_usd(
+        budget.protected_downstream_cost_usd, cost
     )
 
 

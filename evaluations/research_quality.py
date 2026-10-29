@@ -24,6 +24,7 @@ from evaluations.research_quality_contracts import (
     Observation,
     Topic,
 )
+from researchassistant.common.money import add_usd
 
 DEFAULT_MANIFEST = Path(__file__).parent / "cases/research_quality/prepared.json"
 
@@ -210,9 +211,9 @@ def evaluate_observation(topic: Topic, observation: Observation, k: int) -> dict
     supported = sum(s.entailment == "supported" for s in judged_statements)
     total_statements = len(observation.statements)
     actual_known = sum(a.actual_usd is not None for a in observation.attempts)
-    known_cost = sum((a.actual_usd or Decimal(0) for a in observation.attempts), Decimal(0))
-    exposure = sum(
-        (max(a.reserved_usd, a.actual_usd or Decimal(0)) for a in observation.attempts), Decimal(0)
+    known_cost = add_usd(*(a.actual_usd or Decimal(0) for a in observation.attempts))
+    exposure = add_usd(
+        *(max(a.reserved_usd, a.actual_usd or Decimal(0)) for a in observation.attempts)
     )
     elapsed = (
         (observation.completed_at - observation.started_at).total_seconds()

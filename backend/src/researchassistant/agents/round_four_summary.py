@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from decimal import Decimal
 from typing import TypeVar
 
 from researchassistant.agents.round_four_handoffs import (
@@ -35,6 +34,7 @@ from researchassistant.agents.v2_adaptive_search import (
     V2AdaptiveRoundExecution,
 )
 from researchassistant.agents.v2_coverage import claim_component_focus
+from researchassistant.common.money import nonnegative_difference_usd
 from researchassistant.contracts.models import (
     V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
     ResearchDirections,
@@ -230,32 +230,30 @@ def build_post_round_three_gap_input(
         previous_gaps=tuple(previous_gaps)[:6],
         claim_coverage_focus=coverage_specification.focus,
         claim_coverage_specification=coverage_specification,
-        remaining_budget=V2GapBudgetState(
-            model_calls_remaining=max(
-                0,
-                remaining_budget.model_calls_remaining
-                - remaining_budget.protected_downstream_model_calls,
-            ),
-            tokens_remaining=(
-                None
-                if remaining_budget.tokens_remaining is None
-                else max(
-                    0,
-                    remaining_budget.tokens_remaining
-                    - remaining_budget.protected_downstream_tokens,
-                )
-            ),
-            cost_remaining_usd=(
-                None
-                if remaining_budget.cost_remaining_usd is None
-                else max(
-                    Decimal("0"),
-                    remaining_budget.cost_remaining_usd
-                    - remaining_budget.protected_downstream_cost_usd,
-                )
-            ),
-        ),
+        remaining_budget=_gap_budget_after_protection(remaining_budget),
         policy_identity=V2_POST13_GAP_ANALYSIS_POLICY_IDENTITY,
+    )
+
+
+def _gap_budget_after_protection(budget: V2AdaptiveBudgetState) -> V2GapBudgetState:
+    return V2GapBudgetState(
+        model_calls_remaining=max(
+            0,
+            budget.model_calls_remaining - budget.protected_downstream_model_calls,
+        ),
+        tokens_remaining=(
+            None
+            if budget.tokens_remaining is None
+            else max(0, budget.tokens_remaining - budget.protected_downstream_tokens)
+        ),
+        cost_remaining_usd=(
+            None
+            if budget.cost_remaining_usd is None
+            else nonnegative_difference_usd(
+                budget.cost_remaining_usd,
+                budget.protected_downstream_cost_usd,
+            )
+        ),
     )
 
 

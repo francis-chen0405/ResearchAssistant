@@ -270,7 +270,7 @@ def build_v2_run_diagnostics(
             return
         provider_counts["query_attempts"] += 1
         provider_counts["search_results"] += result_count
-        if not succeeded and state == "unknown":
+        if state == "unknown":
             provider_counts["unknown_queries"] += 1
             return
         if succeeded:

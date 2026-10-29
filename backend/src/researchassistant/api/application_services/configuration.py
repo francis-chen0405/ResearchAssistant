@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from researchassistant.api.dependencies import ApiDependencies
 from researchassistant.api.http_contracts import (
@@ -69,7 +69,9 @@ def _per_token_price(value: Decimal | None) -> str | None:
     """Convert the user-facing USD-per-million price into the strict route unit."""
     if value is None:
         return None
-    return format(value / Decimal("1000000"), "f")
+    with localcontext() as context:
+        context.prec = max(28, len(value.as_tuple().digits))
+        return format(value / Decimal("1000000"), "f")
 
 
 def _saved_setting_names(environment: MutableMapping[str, str]) -> tuple[str, ...]:

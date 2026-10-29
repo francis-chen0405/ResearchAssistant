@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
@@ -19,6 +18,7 @@ from researchassistant.agents.v2_stage_checkpoint import (
     save_stage_outcome,
     stage_attempt,
 )
+from researchassistant.common.money import add_usd
 from researchassistant.common.research_guidance import ASSESSED_FINDINGS_GUIDANCE
 from researchassistant.contracts.models import (
     ResearchDirection,
@@ -481,10 +481,10 @@ def _budget_can_reserve(
         and used_tokens + reservation.reserved_tokens > budget.tokens_remaining
     ):
         return False
-    used_cost = sum((item.reservation.reserved_cost_usd for item in attempts), Decimal("0"))
+    used_cost = add_usd(*(item.reservation.reserved_cost_usd for item in attempts))
     return (
         budget.cost_remaining_usd is None
-        or used_cost + reservation.reserved_cost_usd <= budget.cost_remaining_usd
+        or add_usd(used_cost, reservation.reserved_cost_usd) <= budget.cost_remaining_usd
     )
 
 

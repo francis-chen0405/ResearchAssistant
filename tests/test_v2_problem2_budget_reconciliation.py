@@ -16,6 +16,7 @@ from providers.v2_budget import (
     _snapshot,
     read_v2_physical_call_audit,
 )
+from researchassistant.agents.v2_deep_analysis import _reconcile_source
 from researchassistant.contracts.models import (
     RunManifest,
     RunStatus,
@@ -48,6 +49,18 @@ def test_source_reconciliation_releases_only_unused_allowance() -> None:
     assert reconciliation.accounted_tokens + reconciliation.released_tokens == 60_000
 
 
+def test_source_reconciliation_rejects_context_rounded_cost_release() -> None:
+    with pytest.raises(ValueError, match="source cost release"):
+        V2DeepAnalysisSourceReconciliation(
+            source_id=uuid4(),
+            source_cap_cost_usd=Decimal("1"),
+            accounted_tokens=0,
+            released_tokens=60_000,
+            accounted_cost_usd=Decimal("0.00000000000000000000000000001"),
+            released_cost_usd=Decimal("1"),
+        )
+
+
 def test_missing_provider_usage_remains_conservative_reservation() -> None:
     run_id = uuid4()
     start = V2PhysicalCallStart(
@@ -76,6 +89,34 @@ def test_missing_provider_usage_remains_conservative_reservation() -> None:
     assert snapshot.token_exposure == 12_500
     assert snapshot.cost_exposure_usd == Decimal("0.25")
     assert snapshot.tokens_remaining == 487_500
+
+
+def test_high_precision_physical_audit_reconciles_source_and_run_cost_exactly(
+    tmp_path: Path,
+) -> None:
+    run_id = uuid4()
+    source_id = uuid4()
+    path = _physical_audit_db(tmp_path, run_id)
+    cost_cap = Decimal("1.00000000000000000000000000001")
+    used_cost = Decimal("0.00000000000000000000000000002")
+    expected_remaining = Decimal("0.99999999999999999999999999999")
+    start = _start(run_id, 1, source_id).model_copy(update={"reserved_cost_usd": used_cost})
+    completion = _completion(run_id, 1).model_copy(update={"usage_cost_usd": used_cost})
+    insert_v2_artifact(path, "phase-13-physical-call-001-start", start, NOW)
+    insert_v2_artifact(path, "phase-13-physical-call-001-completion", completion, NOW)
+
+    audit = read_v2_physical_call_audit(path, run_id)
+    reconciliation = _reconcile_source(audit=audit, source_id=source_id, source_cost_cap=cost_cap)
+    snapshot = _snapshot(
+        list(audit.starts),
+        {item.sequence: item for item in audit.completions if item is not None},
+        V2RunCeilings(max_total_cost_usd=cost_cap),
+    )
+
+    assert reconciliation.accounted_cost_usd == used_cost
+    assert reconciliation.released_cost_usd == expected_remaining
+    assert snapshot.cost_exposure_usd == used_cost
+    assert snapshot.cost_remaining_usd == expected_remaining
 
 
 def _physical_audit_db(tmp_path: Path, run_id: UUID) -> str:

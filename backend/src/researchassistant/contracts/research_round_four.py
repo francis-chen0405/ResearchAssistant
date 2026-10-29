@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from researchassistant.common.money import ExactUSD
+from researchassistant.common.money import ExactUSD, add_usd
 from researchassistant.contracts.model_contracts import (
     NonEmptyStr,
     NonNegativeInt,
@@ -108,10 +108,8 @@ class V2RoundFourReservation(StrictModel):
             and self.available_tokens < self.protected_downstream_tokens + self.optional_tokens
         ):
             raise ValueError("Round-4 reservation exceeds available token capacity")
-        if (
-            self.available_cost_usd is not None
-            and self.available_cost_usd
-            < self.protected_downstream_cost_usd + self.optional_cost_usd
+        if self.available_cost_usd is not None and self.available_cost_usd < add_usd(
+            self.protected_downstream_cost_usd, self.optional_cost_usd
         ):
             raise ValueError("Round-4 reservation exceeds available cost capacity")
         post_gap_values = (
@@ -139,7 +137,7 @@ class V2RoundFourReservation(StrictModel):
         if (
             self.post_gap_available_cost_usd is not None
             and self.post_gap_available_cost_usd
-            < self.protected_downstream_cost_usd + self.future_optional_cost_usd
+            < add_usd(self.protected_downstream_cost_usd, self.future_optional_cost_usd)
         ):
             raise ValueError("post-Gap reservation exceeds available cost capacity")
         return self

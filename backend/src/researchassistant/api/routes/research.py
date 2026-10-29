@@ -21,6 +21,7 @@ from researchassistant.api.live_service import LiveRunRequest, LiveRunSnapshot, 
 from researchassistant.api.runtime import ApiRuntime
 from researchassistant.api.security import redact_text
 from researchassistant.contracts.models import ResearchControls, ResearchMode
+from researchassistant.storage.sqlite_policy import DatabaseBusyError
 from researchassistant.storage.store import DatabaseCompatibilityError
 
 
@@ -91,7 +92,7 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
             return runtime.controller.snapshot(db_path, run_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Research run not found.") from exc
-        except DatabaseCompatibilityError as exc:
+        except (DatabaseCompatibilityError, DatabaseBusyError) as exc:
             raise _inspection_http_error(exc) from exc
 
     @router.post("/api/research/{run_id}/cancel", response_model=CancelResponse)

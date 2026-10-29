@@ -83,6 +83,11 @@ class ProviderCredentials(StrictModel):
     def validate_luna_base_url(cls, value: str | None) -> str | None:
         if value is None:
             return value
+        # HTTP setup uses this validator directly, before constructing credentials.
+        # urlsplit removes some whitespace, so reject it before parsing as well.
+        cls.validate_provider_value(value)
+        if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError("Luna base URL cannot contain whitespace or control characters")
         parsed = urlsplit(value)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("Luna base URL must use HTTPS")

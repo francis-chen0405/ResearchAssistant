@@ -190,14 +190,13 @@ async function launch() {
     } catch {}
     return { action: "deny" };
   });
-  for (let attempt = 0; attempt < 100; attempt++) {
+  while (true) {
     ensureLaunching();
     try {
       const response = await fetch(`${origin}/api/health`, { headers: { Authorization: `Bearer ${token}` }, signal: startupAbort.signal });
       if (response.ok) break;
     } catch {}
     ensureLaunching();
-    if (attempt === 99) throw new Error("The local engine health check failed.");
     await new Promise((resolve) => {
       const done = () => { clearTimeout(timer); startupAbort.signal.removeEventListener("abort", done); resolve(); };
       const timer = setTimeout(done, 100);

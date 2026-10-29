@@ -67,6 +67,26 @@ def add_usd(*values: Decimal) -> Decimal:
         return sum(parsed, Decimal("0"))
 
 
+def nonnegative_difference_usd(available: Decimal, consumed: Decimal) -> Decimal:
+    """Return exact remaining USD, clamped at zero, without context rounding."""
+    exact_available = parse_exact_usd(available)
+    exact_consumed = parse_exact_usd(consumed)
+    if exact_available <= exact_consumed:
+        return Decimal("0")
+
+    minimum_exponent = min(
+        exact_available.as_tuple().exponent,
+        exact_consumed.as_tuple().exponent,
+    )
+    aligned_digits = max(
+        len(value.as_tuple().digits) + value.as_tuple().exponent - minimum_exponent
+        for value in (exact_available, exact_consumed)
+    )
+    with localcontext() as context:
+        context.prec = max(50, aligned_digits)
+        return exact_available - exact_consumed
+
+
 ExactUSD = Annotated[
     Decimal,
     BeforeValidator(parse_exact_usd),

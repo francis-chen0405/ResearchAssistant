@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
@@ -49,6 +50,7 @@ from researchassistant.agents.v2_source_selection import (
     build_v2_source_selection_input,
     calculate_v2_deep_analysis_queue,
 )
+from researchassistant.common.money import add_usd
 from researchassistant.contracts.discovery_v2 import SearchMode
 from researchassistant.contracts.model_evidence import (
     V2EvidenceAdmissionBatchResult,
@@ -766,18 +768,29 @@ def _source_budget_fits(
     ) * 2
     calls = 3 + scout_calls
     tokens = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP + scout_calls * scout.reserved_tokens
-    cost = 2 * extractor.reserved_cost_usd + analyst.reserved_cost_usd
-    cost += scout_calls * scout.reserved_cost_usd
+    cost_components = [
+        extractor.reserved_cost_usd,
+        extractor.reserved_cost_usd,
+        analyst.reserved_cost_usd,
+        *(scout.reserved_cost_usd for _ in range(scout_calls)),
+    ]
     if planned_queries == 1 and gap_reservation is not None:
         search = preflight.reserve(LLMStage.SEARCH_AGENT, 4_000)
         calls += 3
         tokens += 2 * gap_reservation.reserved_tokens + search.reserved_tokens
-        cost += 2 * gap_reservation.reserved_cost_usd + search.reserved_cost_usd
+        cost_components.extend(
+            (
+                gap_reservation.reserved_cost_usd,
+                gap_reservation.reserved_cost_usd,
+                search.reserved_cost_usd,
+            )
+        )
     elif planned_queries == 1:
         search = preflight.reserve(LLMStage.SEARCH_AGENT, 4_000)
         calls += 1
         tokens += search.reserved_tokens
-        cost += search.reserved_cost_usd
+        cost_components.append(search.reserved_cost_usd)
+    cost = add_usd(*cost_components)
     return _fits_reserve(budget, calls=calls, tokens=tokens, cost=cost)
 
 
@@ -905,8 +918,9 @@ def _combine_admissions(
             new_queue.physical_calls_after_reserve,
         ),
         total_reserved_tokens=old_queue.total_reserved_tokens + new_queue.total_reserved_tokens,
-        total_reserved_cost_usd=(
-            old_queue.total_reserved_cost_usd + new_queue.total_reserved_cost_usd
+        total_reserved_cost_usd=_combined_queue_cost(
+            old_queue.total_reserved_cost_usd,
+            new_queue.total_reserved_cost_usd,
         ),
         token_reservations=(
             *old_queue.token_reservations,
@@ -946,6 +960,10 @@ def _combine_admissions(
         completed_at=later.completed_at,
         policy_identity=earlier.policy_identity,
     )
+
+
+def _combined_queue_cost(earlier: Decimal, later: Decimal) -> Decimal:
+    return add_usd(earlier, later)
 
 
 def _read(path: str, run_id: UUID, key: str, model: type[StrictModel]) -> StrictModel | None:

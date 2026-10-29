@@ -26,7 +26,7 @@ from researchassistant.agents.v2_evidence_analyst import (
 )
 from researchassistant.agents.v2_extraction import run_v2_exact_extraction, snapshots_by_source
 from researchassistant.agents.v2_source_selection import _source_reservation
-from researchassistant.common.money import add_usd
+from researchassistant.common.money import add_usd, nonnegative_difference_usd
 from researchassistant.contracts.extraction import V2ExactExtractionResult, V2ExtractionState
 from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
@@ -1032,7 +1032,7 @@ def _reconcile_source(
         accounted_tokens=accounted_tokens,
         released_tokens=max(0, V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP - accounted_tokens),
         accounted_cost_usd=accounted_cost,
-        released_cost_usd=max(Decimal("0"), source_cost_cap - accounted_cost),
+        released_cost_usd=nonnegative_difference_usd(source_cost_cap, accounted_cost),
         physical_call_sequences=tuple(item.sequence for item in starts),
     )
 

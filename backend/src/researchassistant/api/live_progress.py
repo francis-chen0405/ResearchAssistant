@@ -29,7 +29,7 @@ from researchassistant.api.live_contracts import (
     LiveTokenCount,
     ResearchProgress,
 )
-from researchassistant.common.money import add_usd
+from researchassistant.common.money import add_usd, nonnegative_difference_usd
 from researchassistant.contracts.artifact_keys import V2_ACQUISITION_PROBE_ARTIFACT_KEY
 from researchassistant.contracts.models import (
     DEFAULT_RESEARCH_CONTROLS,
@@ -251,7 +251,7 @@ def _read_v2_budget_snapshot(
         cost_exposure_usd=cost_exposure,
         physical_calls_remaining=max(0, ceilings.max_physical_calls - len(audit.starts)),
         tokens_remaining=max(0, ceilings.max_total_tokens - token_exposure),
-        cost_remaining_usd=max(Decimal("0"), ceilings.max_total_cost_usd - cost_exposure),
+        cost_remaining_usd=nonnegative_difference_usd(ceilings.max_total_cost_usd, cost_exposure),
     )
 
 

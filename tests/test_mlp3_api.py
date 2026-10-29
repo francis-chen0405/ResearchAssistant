@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Mapping, MutableMapping
 from decimal import Decimal
 from pathlib import Path
@@ -214,6 +215,66 @@ def test_api_rejects_nonlocal_origin_and_unknown_fields() -> None:
 
     assert blocked.status_code == 403
     assert invalid.status_code == 422
+
+
+def test_progress_contention_returns_retryable_inspection_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from researchassistant.storage.sqlite_policy import DatabaseBusyError
+
+    client, controller, _ = _client()
+
+    def busy_snapshot(db_path: str | Path, run_id: UUID) -> LiveRunSnapshot:
+        error = DatabaseBusyError("Database is busy")
+        error.sqlite_errorcode = sqlite3.SQLITE_BUSY
+        raise error
+
+    monkeypatch.setattr(controller, "snapshot", busy_snapshot)
+    response = client.get(f"/api/research/{controller.run_id}", params={"db_path": "busy.sqlite3"})
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "1"
+    assert response.json()["detail"]["issue"] == "busy"
+    assert response.json()["detail"]["retryable"] is True
+    assert controller.started == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        " https://api.example.test/v1",
+        "https://api.example.test/v1 ",
+        "\nhttps://api.example.test/v1",
+        "https://api.example.test/\nv1",
+        "https://api.example.test/\rv1",
+        "https://api.example.test/v1\tv2",
+        "https://api.example.test/v1\x00v2",
+        "https://api.example.test/v1\x1fv2",
+        "https://api.example.test/v1\x7fv2",
+        "https://api.example.test/v1 v2",
+    ],
+)
+def test_invalid_credential_endpoint_is_rejected_before_saving(url: str) -> None:
+    client, _, saved = _client()
+    response = client.post(
+        "/api/credentials",
+        json={"luna_base_url": url, "luna_api_key": "unsaved-test-secret"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid request fields."}
+    assert saved == []
+
+
+def test_saved_per_token_price_preserves_submitted_precision() -> None:
+    client, _, saved = _client()
+    response = client.post(
+        "/api/credentials",
+        json={"luna_input_usd_per_million": "1.00000000000000000000000000001"},
+    )
+
+    assert response.status_code == 200
+    assert saved[0].luna_input_usd_per_token == "0.00000100000000000000000000000000001"
 
 
 def test_credentials_are_saved_and_never_returned() -> None:

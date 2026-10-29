@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import Future
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -83,6 +83,31 @@ def _initialize_run(
         created_at=NOW,
     )
     insert_v2_artifact(str(db_path), V2_PRODUCTION_FINGERPRINT_KEY, fingerprint, NOW)
+
+
+def test_live_remaining_budget_preserves_exact_reserved_cost(tmp_path: Path) -> None:
+    from researchassistant.api.live_progress import _read_v2_budget_snapshot
+
+    path = tmp_path / "exact-live-budget.sqlite3"
+    run_id = uuid4()
+    _initialize_run(path, status=RunStatus.RUNNING, directions=ResearchDirections(), run_id=run_id)
+    start = V2PhysicalCallStart(
+        run_id=run_id,
+        sequence=1,
+        stage="planner",
+        model_alias="gpt-6-luna-xhigh",
+        reserved_tokens=1,
+        reserved_cost_usd=Decimal("1e-29"),
+        started_at=NOW,
+    )
+    insert_v2_artifact(path, "phase-13-physical-call-001-start", start, NOW)
+
+    with localcontext() as context:
+        context.prec = 2
+        budget = _read_v2_budget_snapshot(path, run_id)
+
+    assert budget.cost_exposure_usd == Decimal("1e-29")
+    assert budget.cost_remaining_usd == Decimal("0.19999999999999999999999999999")
 
 
 def _insert_call_audit(db_path: Path, run_id: UUID) -> None:

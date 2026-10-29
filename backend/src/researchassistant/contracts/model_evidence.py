@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -18,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from researchassistant.common.money import ExactUSD
+from researchassistant.common.money import ExactUSD, nonnegative_difference_usd
 from researchassistant.contracts.model_contracts import (
     ApprovedScore,
     CandidateQuoteBlock,
@@ -703,8 +702,8 @@ class V2DeepAnalysisSourceReconciliation(StrictModel):
         expected_release = max(0, self.source_cap_tokens - self.accounted_tokens)
         if self.released_tokens != expected_release:
             raise ValueError("source token release must reconcile exactly to its cap")
-        expected_cost_release = max(
-            Decimal("0"), self.source_cap_cost_usd - self.accounted_cost_usd
+        expected_cost_release = nonnegative_difference_usd(
+            self.source_cap_cost_usd, self.accounted_cost_usd
         )
         if self.released_cost_usd != expected_cost_release:
             raise ValueError("source cost release must reconcile exactly to its cap")

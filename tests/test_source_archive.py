@@ -143,6 +143,24 @@ def test_archive_excludes_tracked_private_and_generated_files(source_repository:
     assert legitimate in selected
 
 
+@pytest.mark.parametrize("tracked", [False, True])
+def test_archive_excludes_sqlite_sidecars(source_repository: Path, tracked: bool) -> None:
+    excluded = {
+        f"backend/history{extension}{sidecar}"
+        for extension in (".db", ".sqlite", ".sqlite3", ".DB", ".SQLITE", ".SQLITE3")
+        for sidecar in ("-wal", "-shm", "-journal")
+    }
+    for name in excluded:
+        _write(source_repository, name, b"private research fixture\n")
+    if tracked:
+        _git(source_repository, "add", "--force", "--all")
+
+    selected = {
+        path.relative_to(source_repository).as_posix() for path in source_paths(source_repository)
+    }
+    assert excluded.isdisjoint(selected)
+
+
 @pytest.mark.parametrize("missing", ["backend/src/cli.py", "docs/project/STATUS.md"])
 def test_missing_required_source_preserves_existing_outputs(
     source_repository: Path, tmp_path: Path, missing: str
@@ -153,6 +171,57 @@ def test_missing_required_source_preserves_existing_outputs(
     with pytest.raises(ValueError):
         build_source_archive(source_repository, archive, manifest)
     assert archive.read_bytes() == b"previous archive"
+    assert manifest.read_bytes() == b"previous manifest"
+
+
+@pytest.mark.parametrize("existing_archive", [False, True])
+def test_manifest_publication_failure_restores_previous_outputs(
+    source_repository: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing_archive: bool,
+) -> None:
+    archive = tmp_path / "source.tar.gz"
+    if existing_archive:
+        archive.write_bytes(b"previous archive")
+    manifest = _write(tmp_path, "SOURCE-MANIFEST.json", b"previous manifest")
+    replace = os.replace
+
+    def fail_manifest(source: Path, destination: Path) -> None:
+        if destination == manifest:
+            raise PermissionError("offline publication failure")
+        replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", fail_manifest)
+    with pytest.raises(PermissionError, match="offline publication failure"):
+        build_source_archive(source_repository, archive, manifest)
+
+    assert manifest.read_bytes() == b"previous manifest"
+    if existing_archive:
+        assert archive.read_bytes() == b"previous archive"
+    else:
+        assert not archive.exists()
+
+
+def test_archive_rollback_preserves_a_concurrent_replacement(
+    source_repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive = _write(tmp_path, "source.tar.gz", b"previous archive")
+    manifest = _write(tmp_path, "SOURCE-MANIFEST.json", b"previous manifest")
+    replacement = _write(tmp_path, "replacement.tar.gz", b"concurrent archive")
+    replace = os.replace
+
+    def fail_manifest(source: Path, destination: Path) -> None:
+        if destination == manifest:
+            replace(replacement, archive)
+            raise PermissionError("offline publication failure")
+        replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", fail_manifest)
+    with pytest.raises(PermissionError, match="offline publication failure"):
+        build_source_archive(source_repository, archive, manifest)
+
+    assert archive.read_bytes() == b"concurrent archive"
     assert manifest.read_bytes() == b"previous manifest"
 
 

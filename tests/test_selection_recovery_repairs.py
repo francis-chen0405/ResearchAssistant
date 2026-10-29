@@ -16,6 +16,7 @@ from test_preview_selection_bounds import (
     _run,
 )
 from test_query_execution import DIRECTIONS, NOW, _action, _clock, _freeze, _persist_round_one_gap
+from test_query_retrieval_depth import _body, _serp_adapter
 from test_seed_expansion_runtime import _candidate as paper_candidate
 
 from researchassistant.agents.adaptive_execution import (
@@ -38,6 +39,7 @@ from researchassistant.providers.llm import LLMRequest
 from researchassistant.providers.mimo import _direct_mimo_prompt
 from researchassistant.providers.openalex import OpenAlexSearchAdapter
 from researchassistant.providers.pricing import conservative_token_estimate
+from researchassistant.research.query_compiler import compile_query
 from researchassistant.research.v2_orchestrator import build_v2_run_diagnostics
 from researchassistant.storage.discovery_store import provider_attempt_audit
 from researchassistant.storage.query_dispatch import query_dispatch_states
@@ -366,3 +368,77 @@ def test_dispatch_counts_unknown_call_and_blocked_query_without_reissuing(tmp_pa
     assert _execute_searches(str(path), plan, {}, None, _clock()) == result
     assert sent == 1
     assert before == (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mtime_ns)
+
+
+def test_partial_query_reports_unknown_page_and_retained_results(tmp_path: Path) -> None:
+    path = tmp_path / "partial-unknown-dispatch.sqlite"
+    run_id, _ = _freeze(path, DiscoveryProvider.SERPSEARCH)
+    _persist_round_one_gap(path, run_id)
+    actions = tuple(
+        compile_query(
+            _action(
+                run_id,
+                DiscoveryProvider.SERPSEARCH,
+                round_number=2,
+                purpose="gap",
+                target_gap_ids=("gap-1",),
+                term=term,
+            ).conceptual_query,
+            requested_depth=20,
+        )
+        for term in ("first community", "independent ecology")
+    )
+    sent: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params["page"])
+        sent.append(page)
+        if page == 2:
+            raise httpx.ReadTimeout("offline unknown later page")
+        return httpx.Response(200, json=_body())
+
+    adapter = _serp_adapter(handler)
+    plan = V2AdaptiveRoundPlan(
+        run_id=run_id,
+        round_number=2,
+        directions=DIRECTIONS,
+        enabled_providers=(DiscoveryProvider.SERPSEARCH,),
+        targeted_gap_ids=("gap-1",),
+        discovered_terms=(),
+        searches=tuple(
+            V2AdaptiveSearchQuery(
+                run_id=run_id,
+                query_id=uuid4(),
+                round_number=2,
+                direction="support",
+                provider=DiscoveryProvider.SERPSEARCH,
+                targeted_gap_ids=("gap-1",),
+                strategy="gap",
+                query_text=action.query_text,
+                compiled_query=action,
+                created_at=NOW,
+            )
+            for action in actions
+        ),
+        search_agent_prompt_version="offline-v1",
+        planned_at=NOW,
+    )
+
+    result = _execute_searches(
+        str(path), plan, {DiscoveryProvider.SERPSEARCH: adapter}, None, _clock()
+    )
+
+    assert sent == [1, 2]
+    assert result.outcomes[0].succeeded and result.outcomes[0].results
+    assert not result.outcomes[1].succeeded
+    diagnostics = build_v2_run_diagnostics(path, run_id, (DiscoveryProvider.SERPSEARCH,))
+    provider = diagnostics.provider_outcomes[0]
+    assert provider.query_attempts == 1
+    assert provider.non_empty_queries == 0
+    assert provider.search_results == 10
+    assert provider.unknown_queries == provider.blocked_queries == 1
+    assert provider.failed_queries == 0
+    explanation = search_failure_explanation(str(path), result)
+    assert "1 searches with unknown request outcomes" in explanation
+    assert "including 1 with retained partial results" in explanation
+    assert "1 searches blocked before dispatch" in explanation

@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -69,7 +70,22 @@ _EXCLUDED_PARTS = frozenset(
     }
 )
 _PRIVATE_SUFFIXES = frozenset(
-    {".db", ".sqlite", ".sqlite3", ".pyc", ".pyo", ".p12", ".pfx", ".pem", ".key"}
+    {
+        ".db",
+        ".sqlite",
+        ".sqlite3",
+        ".pyc",
+        ".pyo",
+        ".p12",
+        ".pfx",
+        ".pem",
+        ".key",
+        *(
+            f"{extension}{sidecar}"
+            for extension in (".db", ".sqlite", ".sqlite3")
+            for sidecar in ("-wal", "-shm", "-journal")
+        ),
+    }
 )
 _PRIVATE_NAMES = frozenset({".npmrc", "credentials.json", "credentials.toml"})
 
@@ -150,7 +166,7 @@ def build_source_archive(
             prefix=".source-manifest-", dir=manifest.parent
         ) as manifest_temp,
     ):
-        staged_archive = Path(archive_temp) / archive.name
+        staged_archive = Path(archive_temp) / "archive"
         staged_manifest = Path(manifest_temp) / manifest.name
         with (
             staged_archive.open("wb") as raw,
@@ -171,8 +187,30 @@ def build_source_archive(
                 entry.mode = mode
                 output.addfile(entry, io.BytesIO(payload))
         staged_manifest.write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n")
+        previous_archive = None
+        if archive.exists():
+            previous_archive = Path(archive_temp) / "previous-archive"
+            shutil.copy2(archive, previous_archive)
+        published = staged_archive.stat()
         os.replace(staged_archive, archive)
-        os.replace(staged_manifest, manifest)
+        try:
+            os.replace(staged_manifest, manifest)
+        except OSError:
+            # Keep the prior pair if manifest publication fails. Only roll back
+            # this call's archive; a concurrent replacement belongs to its writer.
+            try:
+                current = archive.stat()
+            except FileNotFoundError:
+                current = None
+            if current is not None and (current.st_dev, current.st_ino) == (
+                published.st_dev,
+                published.st_ino,
+            ):
+                if previous_archive is None:
+                    archive.unlink()
+                else:
+                    os.replace(previous_archive, archive)
+            raise
     return rows
 
 

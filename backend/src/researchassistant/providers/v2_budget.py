@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from researchassistant.common.money import add_usd
+from researchassistant.common.money import add_usd, nonnegative_difference_usd
 from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
@@ -491,7 +491,7 @@ def _snapshot(
                 else started.reserved_cost_usd
             ),
         )
-    remaining_cost = max(Decimal("0"), ceilings.max_total_cost_usd - cost)
+    remaining_cost = nonnegative_difference_usd(ceilings.max_total_cost_usd, cost)
     return V2BudgetSnapshot(
         physical_calls_used=len(starts),
         token_exposure=tokens,

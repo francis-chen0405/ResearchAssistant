@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+from decimal import Decimal, localcontext
 from pathlib import Path
 from uuid import UUID
 
@@ -106,7 +107,7 @@ def assess_initial_sources(
             protected = budget.model_copy(
                 update={
                     "tokens_remaining": max(0, budget.tokens_remaining - 120_000),
-                    "cost_remaining_usd": budget.cost_remaining_usd / 2,
+                    "cost_remaining_usd": _checkpoint_cost_allowance(budget.cost_remaining_usd),
                 }
             )
             ids = tuple(c.source_id for c in selected)
@@ -196,3 +197,9 @@ def assess_initial_sources(
     )
     insert_v2_artifact(db_path, CHECKPOINT_KEY, result, clock())
     return result
+
+
+def _checkpoint_cost_allowance(cost: Decimal) -> Decimal:
+    with localcontext() as context:
+        context.prec = max(50, len(cost.as_tuple().digits) + 1)
+        return cost / 2

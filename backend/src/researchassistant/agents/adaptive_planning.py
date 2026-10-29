@@ -47,7 +47,7 @@ from researchassistant.agents.adaptive_handoffs import (
     _cancelled as _cancelled,
 )
 from researchassistant.agents.v2_gap_analysis import V2GapAnalysisRunResult
-from researchassistant.common.money import add_usd
+from researchassistant.common.money import add_usd, nonnegative_difference_usd
 from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import (
     SearchMode,
@@ -470,20 +470,30 @@ def _plan_with_repair(
         if outcome.rejection_code == "provider_failure":
             raise V2AdaptivePlanValidationError("A previous planning provider call failed")
         prior = outcome
-        remaining = remaining.model_copy(
-            update={
-                "model_calls_remaining": max(0, remaining.model_calls_remaining - 1),
-                "tokens_remaining": None
-                if remaining.tokens_remaining is None
-                else max(0, remaining.tokens_remaining - reserved.reserved_tokens),
-                "cost_remaining_usd": None
-                if remaining.cost_remaining_usd is None
-                else max(Decimal("0"), remaining.cost_remaining_usd - reserved.reserved_cost_usd),
-            }
-        )
+        remaining = _budget_after_rejected_plan_attempt(remaining, reservation)
     raise V2AdaptivePlanValidationError(
         "Follow-up search stopped after two invalid plans. Results use sources already collected. "
         + (prior.explanation or "")
+    )
+
+
+def _budget_after_rejected_plan_attempt(
+    budget: V2AdaptiveBudgetState,
+    reservation: V2SearchAgentReservation,
+) -> V2AdaptiveBudgetState:
+    return budget.model_copy(
+        update={
+            "model_calls_remaining": max(0, budget.model_calls_remaining - 1),
+            "tokens_remaining": None
+            if budget.tokens_remaining is None
+            else max(0, budget.tokens_remaining - reservation.reserved_tokens),
+            "cost_remaining_usd": None
+            if budget.cost_remaining_usd is None
+            else nonnegative_difference_usd(
+                budget.cost_remaining_usd,
+                reservation.reserved_cost_usd,
+            ),
+        }
     )
 
 

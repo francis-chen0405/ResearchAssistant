@@ -462,6 +462,118 @@ def test_round_four_reservation_cannot_consume_the_protected_downstream_capacity
         )
 
 
+def test_round_four_reservation_uses_exact_decimal_capacity_comparisons() -> None:
+    with pytest.raises(ValidationError, match="cost capacity"):
+        V2RoundFourReservation(
+            protected_downstream_calls=0,
+            protected_downstream_tokens=0,
+            protected_downstream_cost_usd=Decimal("1.00000000000000000000000000001"),
+            gap_attempt_calls=0,
+            search_agent_calls=0,
+            scout_calls=0,
+            provider_search_calls=0,
+            acquisition_cluster_capacity=0,
+            optional_calls=0,
+            optional_tokens=0,
+            optional_cost_usd=Decimal("0"),
+            available_calls=0,
+            available_cost_usd=Decimal("1.00000000000000000000000000000"),
+        )
+
+
+def test_round_four_post_gap_reservation_uses_exact_decimal_capacity_comparisons() -> None:
+    with pytest.raises(ValidationError, match="post-Gap reservation exceeds available cost"):
+        V2RoundFourReservation(
+            protected_downstream_calls=0,
+            protected_downstream_tokens=0,
+            protected_downstream_cost_usd=Decimal("1.00000000000000000000000000001"),
+            gap_attempt_calls=0,
+            search_agent_calls=0,
+            scout_calls=0,
+            provider_search_calls=0,
+            acquisition_cluster_capacity=0,
+            optional_calls=0,
+            optional_tokens=0,
+            optional_cost_usd=Decimal("0"),
+            available_calls=0,
+            available_cost_usd=Decimal("1.00000000000000000000000000001"),
+            post_gap_available_calls=0,
+            post_gap_available_cost_usd=Decimal("1.00000000000000000000000000000"),
+        )
+
+
+def test_round_four_cost_producers_use_exact_decimal_arithmetic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    import researchassistant.agents.round_four_authorization as round_four_authorization
+    from researchassistant.common.money import add_usd
+
+    gap_cost = Decimal("0.00000000000000000000000000002")
+    scout_cost = Decimal("0.00000000000000000000000000003")
+    search_cost = Decimal("1.00000000000000000000000000001")
+    protected_cost = Decimal("0.1")
+
+    class FakePreflight:
+        def reserve(self, stage: object, input_tokens: int) -> SimpleNamespace:
+            return SimpleNamespace(reserved_tokens=1, reserved_cost_usd=scout_cost)
+
+    class FakeRoutingConfig:
+        def preflight(self) -> FakePreflight:
+            return FakePreflight()
+
+    def gap_reservation(gap_input: object, routing_config: object) -> SimpleNamespace:
+        return SimpleNamespace(reserved_tokens=1, reserved_cost_usd=gap_cost)
+
+    monkeypatch.setattr(round_four_authorization, "_gap_reservation", gap_reservation)
+    optional_cost = add_usd(gap_cost, gap_cost, search_cost, scout_cost, scout_cost)
+    future_cost = add_usd(search_cost, scout_cost, scout_cost)
+    budget = V2AdaptiveBudgetState(
+        model_calls_remaining=20,
+        tokens_remaining=1_000,
+        cost_remaining_usd=add_usd(protected_cost, optional_cost),
+        protected_downstream_model_calls=1,
+        protected_downstream_tokens=100,
+        protected_downstream_cost_usd=protected_cost,
+    )
+    post_gap_budget = V2AdaptiveBudgetState(
+        model_calls_remaining=20,
+        tokens_remaining=1_000,
+        cost_remaining_usd=add_usd(protected_cost, future_cost),
+        protected_downstream_model_calls=1,
+        protected_downstream_tokens=100,
+        protected_downstream_cost_usd=protected_cost,
+    )
+    gap = _continuity_output((), _identity_gap())
+    reservation = _conservative_reservation(
+        budget=budget,
+        post_gap_budget=post_gap_budget,
+        gap=gap,
+        routing_config=FakeRoutingConfig(),  # type: ignore[arg-type]
+        maximum_queries=1,
+        search_agent_tokens=100,
+        search_agent_cost=search_cost,
+    )
+
+    assert reservation is not None
+    assert reservation.optional_cost_usd == optional_cost
+    assert reservation.future_optional_cost_usd == future_cost
+
+    overdrawn = V2AdaptiveBudgetState(
+        model_calls_remaining=4,
+        tokens_remaining=100,
+        cost_remaining_usd=Decimal("1.00000000000000000000000000001"),
+        protected_downstream_model_calls=1,
+        protected_downstream_cost_usd=Decimal("1.00000000000000000000000000001"),
+    )
+    assert not round_four_authorization._gap_envelope_fits(
+        overdrawn,
+        gap.input,
+        FakeRoutingConfig(),  # type: ignore[arg-type]
+    )
+
+
 def test_round_four_helpers_use_concrete_provider_budget_annotations() -> None:
     expected = tuple[V2ProviderSearchBudget, ...]
 
