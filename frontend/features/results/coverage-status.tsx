@@ -41,7 +41,13 @@ export function CoverageStatus({
           : "";
   const searchOutcomeExplanation =
     searchOutcome === "incomplete_coverage"
-      ? "Recorded gaps or incomplete dimensions remain, so conclusions are limited."
+      ? !result.claim_coverage_map?.length
+        ? `${
+            assessment?.unresolved_gap_count === 0
+              ? "No unresolved evidence gaps were recorded."
+              : `${assessment?.unresolved_gap_count ?? 0} unresolved evidence gaps were recorded.`
+          } Claim coverage was not assessed because the saved result contains no claim-coverage assessment.`
+        : "The saved coverage assessment records gaps or incomplete dimensions, so conclusions are limited."
       : searchOutcome === "limited_evidence"
         ? "Some evidence was not admitted, or the admitted findings do not include direct support or challenge. The source outcomes and limitations below show what was retained."
         : searchOutcome === "analysis_complete"
@@ -73,11 +79,13 @@ export function CoverageStatus({
     ? "This post-analysis status is included in the saved brief and export."
     : "Supplemental post-analysis status from saved evidence. The saved brief and export are unchanged.";
   const claimStatus = assessment
-    ? assessment.supporting_count > 0
+    ? assessment.supporting_count > assessment.challenging_count
       ? "Supporting findings observed; claim not established"
-      : assessment.challenging_count > 0
+      : assessment.challenging_count > assessment.supporting_count
         ? "Challenging findings observed; claim not established"
-        : "Inconclusive: no admitted supporting finding"
+        : assessment.supporting_count > 0
+          ? "Mixed supporting and challenging findings; claim not established"
+          : "Inconclusive: no admitted supporting or challenging finding"
     : null;
   return (
     <>

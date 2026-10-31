@@ -20,6 +20,10 @@ class V2EvidenceDisplayItem(StrictModel):
     title: str | None = None
     source_url: str = Field(min_length=1)
     source_type: str | None = None
+    authors: tuple[str, ...] = ()
+    publication_date: str | None = None
+    doi: str | None = None
+    publication_venue: str | None = None
     claim_fit: int | None = Field(default=None, ge=1, le=5)
     source_context_notice: str | None = None
     source_family: str = Field(min_length=1)

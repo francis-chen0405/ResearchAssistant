@@ -116,6 +116,10 @@ def _build_v2_evidence_display(
         status.source_id: status
         for status in evidence_result.analyst_result.input.queue_result.source_statuses
     }
+    selection_candidates = {
+        candidate.source_id: candidate
+        for candidate in evidence_result.analyst_result.input.queue_result.input.survivors
+    }
     items: list[V2EvidenceDisplayItem] = []
     queued_candidates = {
         item.source_id: item for item in evidence_result.analyst_result.input.queued_candidates
@@ -141,6 +145,9 @@ def _build_v2_evidence_display(
         )
         source = sources[admission.source_id]
         selection = selections[admission.source_id]
+        selection_candidate = selection_candidates.get(admission.source_id)
+        if selection_candidate is None:
+            raise ValueError("admitted source is missing its persisted selection metadata")
         limitations = (
             *analyst.assessment.material_limitations,
             *analyst.assessment.inferential_boundaries,
@@ -152,6 +159,10 @@ def _build_v2_evidence_display(
                 title=source.title,
                 source_url=record.source_url,
                 source_type=source.source_type,
+                authors=selection_candidate.authors,
+                publication_date=selection_candidate.publication_date,
+                doi=selection_candidate.doi,
+                publication_venue=selection_candidate.publication_venue,
                 claim_fit=record.claim_fit,
                 source_context_notice=_source_context_notice(
                     source_type=source.source_type,

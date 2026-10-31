@@ -5,12 +5,64 @@ import {
   assessmentRelationshipLabel,
   readableStage,
 } from "../shared/presentation";
+import {
+  evidenceCitation,
+  evidenceConflictNotice,
+  evidenceReadLocation,
+  evidenceSourceType,
+} from "./source-titles";
+
+function completeSentencePrefix(text: string): { text: string; omittedTail: boolean } {
+  const sentences = typeof Intl.Segmenter === "function"
+    ? [...new Intl.Segmenter(undefined, { granularity: "sentence" }).segment(text)].map(
+        (part) => part.segment.trim(),
+      )
+    : (() => {
+        const parts = text.split(/([.!?]["'”’)}\]]*\s+)/u);
+        const fallback: string[] = [];
+        for (let index = 0; index < parts.length; index += 2) {
+          fallback.push(`${parts[index] ?? ""}${parts[index + 1] ?? ""}`.trim());
+        }
+        return fallback;
+      })();
+  const complete: string[] = [];
+  for (const sentence of sentences) {
+    if (/[.!?]["'”’)}\]]*$/u.test(sentence)) {
+      complete.push(sentence);
+    } else if (sentence) {
+      return { text: complete.join(" "), omittedTail: true };
+    }
+  }
+  return { text: complete.join(" "), omittedTail: complete.length !== sentences.length };
+}
+
+function completeQuote(passage: string): { text: string; omittedTail: boolean } | null {
+  const match = passage.match(/^\[[\s\S]*?\]\s+"([\s\S]+)"\s+\[[\s\S]*\]$/);
+  const quotedText = (match?.[1] ?? passage).trim();
+  const sourceSegments = quotedText.split(/\s+\.\.\.\s+/);
+  const completeSegments: string[] = [];
+  let omittedTail = false;
+  for (const segment of sourceSegments) {
+    const complete = completeSentencePrefix(segment);
+    if (complete.text) completeSegments.push(complete.text);
+    if (complete.omittedTail) {
+      omittedTail = true;
+      break;
+    }
+  }
+  if (!completeSegments.length) return null;
+  return {
+    text: completeSegments.join(" … "),
+    omittedTail: omittedTail || completeSegments.length !== sourceSegments.length,
+  };
+}
 
 export function AdmittedEvidence({
   evidence,
   assessment,
   sourceHeading,
   capturedTitleDisclosure,
+  showDirection,
 }: {
   evidence: V2EvidenceDisplay | null;
   assessment: V2FinalResearchOutput["post_analysis_assessment"];
@@ -23,6 +75,7 @@ export function AdmittedEvidence({
     sourceId: string,
     title: string | null | undefined,
   ) => ReactNode;
+  showDirection: boolean;
 }) {
   return (
     <section>
@@ -57,19 +110,21 @@ export function AdmittedEvidence({
               >
                 <summary>
                   <span className="evidence-card-summary">
-                    <StatusPill
-                      tone={
-                        item.direction === "support"
-                          ? "support"
-                          : item.direction === "challenge"
-                            ? "challenge"
-                            : "neutral"
-                      }
-                    >
-                      {item.direction === "support"
-                        ? "Support-directed"
-                        : "Challenge-directed"}
-                    </StatusPill>
+                    {showDirection && (
+                      <StatusPill
+                        tone={
+                          item.direction === "support"
+                            ? "support"
+                            : item.direction === "challenge"
+                              ? "challenge"
+                              : "neutral"
+                        }
+                      >
+                        {item.direction === "support"
+                          ? "Support-directed"
+                          : "Challenge-directed"}
+                      </StatusPill>
+                    )}
                     <StatusPill tone="neutral">
                       {assessmentRelationshipLabel(item.relationship_to_claim)}
                     </StatusPill>
@@ -83,6 +138,14 @@ export function AdmittedEvidence({
                         item.source_url,
                       )}
                     </small>
+                    <small className="evidence-card-source">
+                      {evidenceCitation(item)} · {evidenceSourceType(item)}
+                    </small>
+                    {evidenceConflictNotice(item) && (
+                      <small className="evidence-card-source">
+                        Potential conflict of interest
+                      </small>
+                    )}
                     {item.source_context_notice && (
                       <small className="evidence-card-source">
                         Legal scope has not been independently verified
@@ -116,7 +179,39 @@ export function AdmittedEvidence({
                     <span className="evidence-label">Analyzed proposition</span>{" "}
                     {item.supporting_proposition}
                   </p>
-                  <blockquote>{item.quote_passage}</blockquote>
+                  {(() => {
+                    const quote = completeQuote(item.quote_passage);
+                    return quote ? (
+                      <blockquote>
+                        “{quote.text}”{quote.omittedTail ? " […]" : ""}
+                      </blockquote>
+                    ) : (
+                      <p className="result-limitation">
+                        The recorded passage has no complete sentence. Open the source page to
+                        read the surrounding text.
+                      </p>
+                    );
+                  })()}
+                  <p>
+                    <span className="evidence-label">Citation</span>{" "}
+                    {evidenceCitation(item)}. {sourceHeading(item.source_id, item.title, item.source_url)}.
+                  </p>
+                  {item.doi && (
+                    <p>
+                      <span className="evidence-label">Original publication</span>{" "}
+                      <a
+                        href={`https://doi.org/${item.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        DOI {item.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")}
+                      </a>
+                    </p>
+                  )}
+                  <p>
+                    <span className="evidence-label">Read at</span>{" "}
+                    {evidenceReadLocation(item)}
+                  </p>
                   <p>
                     <span className="evidence-label">Source</span>{" "}
                     <a href={item.source_url} target="_blank" rel="noreferrer">
@@ -131,7 +226,13 @@ export function AdmittedEvidence({
                   {item.source_type && (
                     <p>
                       <span className="evidence-label">Source type</span>{" "}
-                      {readableStage(item.source_type)}
+                      {evidenceSourceType(item)}
+                    </p>
+                  )}
+                  {evidenceConflictNotice(item) && (
+                    <p className="result-limitation">
+                      <span className="evidence-label">Conflict of interest</span>{" "}
+                      {evidenceConflictNotice(item)}
                     </p>
                   )}
                   {item.source_context_notice && (

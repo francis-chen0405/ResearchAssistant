@@ -49,7 +49,7 @@ function hookHarness(relative, api, options = {}) {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
     vm.runInNewContext(code, {
-      exports: compiled.exports, AbortController, Error, Set, Promise,
+      exports: compiled.exports, AbortController, Error, Set, Promise, URL,
       process: { env: {} }, window: options.clock ?? { setTimeout, clearTimeout },
       fetch: options.fetch ?? fetch,
       Date: options.clock ? class extends Date { static now() { return options.clock.now; } } : Date,
@@ -724,4 +724,11 @@ test("a fresh explicit selection of the same run clears the previous cancellatio
   assert.equal(cancelCalls, 2);
   assert.equal(state.cancellation.state, "requested");
   h.dispose();
+});
+
+test("citation labels do not infer randomization or vendor identity from unrelated sources", () => {
+  const { exports } = hookHarness("features/results/source-titles.tsx", {});
+  assert.notEqual(exports.evidenceSourceType({ source_type: "clinical trial", source_url: "https://example.org/study" }), "Randomized trial");
+  assert.equal(exports.evidenceConflictNotice({ source_url: "https://notflocksafety.com/article" }), null);
+  assert.match(exports.evidenceConflictNotice({ source_url: "https://blog.flocksafety.com/article" }), /commercial interest/);
 });

@@ -1,14 +1,34 @@
 import type { ResearchTrailItem } from "@/lib/api";
 import { Dialog } from "@/components/dialog";
+import type { SourceLead } from "@/lib/api";
+import { SourceLeads } from "./source-leads";
 
 export function ResearchTrailDrawer({
   items,
   error,
   onClose,
+  sourceLeads,
+  sourceLeadsTotal,
+  sourceLeadsNotice,
+  sourceLeadsLoading,
+  sourceLeadsLoadingMore,
+  sourceLeadsError,
+  sourceLeadsHasMore,
+  onLoadMoreSourceLeads,
+  onRetrySourceLeads,
 }: {
   items: ResearchTrailItem[] | null;
   error: string | null;
   onClose: () => void;
+  sourceLeads: SourceLead[];
+  sourceLeadsTotal: number;
+  sourceLeadsNotice: string | null;
+  sourceLeadsLoading: boolean;
+  sourceLeadsLoadingMore: boolean;
+  sourceLeadsError: string | null;
+  sourceLeadsHasMore: boolean;
+  onLoadMoreSourceLeads: () => void;
+  onRetrySourceLeads: () => void;
 }) {
   return (
     <Dialog title="Research trail" onClose={onClose} wide>
@@ -257,6 +277,22 @@ export function ResearchTrailDrawer({
           ))}
         </div>
       )}
+      <details className="trail-source-leads">
+        <summary>
+          Source leads · {sourceLeads.length} of {sourceLeadsTotal} loaded
+        </summary>
+        <SourceLeads
+          items={sourceLeads}
+          total={sourceLeadsTotal}
+          notice={sourceLeadsNotice}
+          loading={sourceLeadsLoading}
+          loadingMore={sourceLeadsLoadingMore}
+          error={sourceLeadsError}
+          hasMore={sourceLeadsHasMore}
+          onLoadMore={onLoadMoreSourceLeads}
+          onRetry={onRetrySourceLeads}
+        />
+      </details>
     </Dialog>
   );
 }

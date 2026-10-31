@@ -159,6 +159,7 @@ export type ApiSchemas = {
     "cost_usage_complete"?: boolean;
     "conservative_reserved_tokens"?: (number | null);
     "conservative_reserved_cost_usd"?: (string | null);
+    "cost_budget_limit_usd"?: (string | null);
     "model_usage_details"?: (ApiSchemas["LiveModelUsageDetails"] | null);
     "supporting": ApiSchemas["ResearchProgress"];
     "opposing": ApiSchemas["ResearchProgress"];
@@ -942,6 +943,10 @@ export type ApiSchemas = {
     "title"?: (string | null);
     "source_url": string;
     "source_type"?: (string | null);
+    "authors"?: Array<string>;
+    "publication_date"?: (string | null);
+    "doi"?: (string | null);
+    "publication_venue"?: (string | null);
     "claim_fit"?: (number | null);
     "source_context_notice"?: (string | null);
     "source_family": string;

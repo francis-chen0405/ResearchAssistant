@@ -154,12 +154,7 @@ export function SourceSections({
               ) : source.recommended ? (
                 <p>Provisional · claim relationship has not been assessed.</p>
               ) : null}
-              <p>
-                {details?.selection_rationale ||
-                  (source.recommended
-                    ? "Selected for deeper analysis from the surviving source pool."
-                    : "Passed selection but was not recommended for deeper analysis.")}
-              </p>
+              {details?.selection_rationale ? <p>{details.selection_rationale}</p> : null}
               {capturedTitleDisclosure(source.source_id, source.title)}
               {relatedGapCount ? (
                 <p>
@@ -228,7 +223,7 @@ export function SourceSections({
           <aside className="result-limitation">
             {sharedWebsites.map((group) => (
               <p key={group.host}>
-                <strong>{group.host}</strong> — {group.explanation}{" "}
+                <strong>{group.host}</strong>: {" "}
                 {group.source_ids.map((id, index) => {
                   const source = evidence?.items.find(
                     (item) => item.source_id === id,

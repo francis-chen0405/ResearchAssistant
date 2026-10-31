@@ -225,9 +225,11 @@ def _read_v2_directions(db_path: str | Path | Connection, run_id: UUID) -> Resea
 def _read_v2_budget_snapshot(
     db_path: str | Path | Connection,
     run_id: UUID,
+    *,
+    ceilings: V2RunCeilings | None = None,
 ) -> V2BudgetSnapshot:
     """Return conservative budget exposure from the authoritative call audit."""
-    ceilings = _read_v2_ceilings(db_path, run_id)
+    ceilings = ceilings or _read_v2_ceilings(db_path, run_id) or V2RunCeilings()
     audit = read_v2_physical_call_audit(db_path, run_id)
     token_exposure = 0
     cost_exposure = Decimal("0")
@@ -340,8 +342,7 @@ def _read_v2_usage_summary(
 def _read_v2_ceilings(
     db_path: str | Path | Connection,
     run_id: UUID,
-) -> V2RunCeilings:
-    ceilings = V2RunCeilings()
+) -> V2RunCeilings | None:
     try:
         artifact = _read_first_v2_artifact(
             db_path,
@@ -354,10 +355,9 @@ def _read_v2_ceilings(
         )
         fingerprint = V2ProductionFingerprint.model_validate_json(artifact.payload_json)
         payload = json.loads(fingerprint.canonical_payload_json)
-        ceilings = V2RunCeilings.model_validate(payload["ceilings"])
+        return V2RunCeilings.model_validate(payload["ceilings"])
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        pass
-    return ceilings
+        return None
 
 
 def _v2_current_round(db_path: str | Path | Connection, run_id: UUID) -> int:
@@ -692,7 +692,8 @@ def snapshot_from_v2_progress(
     diagnostics = enrich_discovery_diagnostics(
         read_source, run_id, build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
     )
-    budget = _read_v2_budget_snapshot(read_source, run_id)
+    ceilings = _read_v2_ceilings(read_source, run_id)
+    budget = _read_v2_budget_snapshot(read_source, run_id, ceilings=ceilings)
     terminal = manifest.status is not RunStatus.RUNNING
     usage = _read_v2_usage_summary(read_source, run_id, terminal=terminal)
     stage = infer_v2_stage(read_source, run_id, manifest.current_stage, False)
@@ -759,6 +760,9 @@ def snapshot_from_v2_progress(
         cost_usage_complete=usage.cost_usage_complete,
         conservative_reserved_tokens=usage.conservative_reserved_tokens,
         conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
+        cost_budget_limit_usd=(
+            ceilings.max_total_cost_usd if ceilings is not None else None
+        ),
         model_usage_details=usage.model_usage_details,
         supporting=supporting,
         opposing=opposing,
@@ -814,6 +818,7 @@ def snapshot_from_v2_result(
     }[result.state]
     classification: LiveClassification = result.state.value
     usage = _read_v2_usage_summary(read_source, result.run_id, terminal=True)
+    ceilings = _read_v2_ceilings(read_source, result.run_id)
     diagnostics = result.diagnostics
     from researchassistant.storage.query_dispatch import query_dispatch_states
 
@@ -897,6 +902,9 @@ def snapshot_from_v2_result(
         cost_usage_complete=usage.cost_usage_complete,
         conservative_reserved_tokens=usage.conservative_reserved_tokens,
         conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
+        cost_budget_limit_usd=(
+            ceilings.max_total_cost_usd if ceilings is not None else None
+        ),
         model_usage_details=usage.model_usage_details,
         supporting=supporting,
         opposing=opposing,

@@ -289,6 +289,13 @@ def build_v2_source_selection_input(
                 # authorship or publication date. Raw discovery metadata stays saved.
                 authors=() if citation else representative.authors,
                 publication_date=None if citation else representative.publication_date,
+                publication_venue=(
+                    None
+                    if citation
+                    or representative.crossref is None
+                    or not representative.crossref.verified
+                    else representative.crossref.container_title
+                ),
                 discovery_providers=tuple(
                     dict.fromkeys(item.provider for item in cluster.provider_references)
                 ),

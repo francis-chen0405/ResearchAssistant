@@ -89,6 +89,7 @@ class CrossrefIdentityMetadata(StrictModel):
     canonical_title: NonEmptyStr | None = None
     canonical_authors: tuple[NonEmptyStr, ...] = ()
     publication_date: NonEmptyStr | None = None
+    container_title: NonEmptyStr | None = None
     verified: bool = False
     failure_code: NonEmptyStr | None = None
 

@@ -56,6 +56,7 @@ class CrossrefEnricher:
             canonical_title=title,
             canonical_authors=_authors(message.get("author")),
             publication_date=_publication_date(message),
+            container_title=_first_string(message.get("container-title")),
             verified=True,
         )
 

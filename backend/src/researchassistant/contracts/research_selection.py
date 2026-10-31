@@ -126,6 +126,7 @@ class V2SourceSelectionCandidate(StrictModel):
     doi: NonEmptyStr | None = None
     authors: tuple[NonEmptyStr, ...] = ()
     publication_date: NonEmptyStr | None = None
+    publication_venue: NonEmptyStr | None = None
     discovery_providers: tuple[DiscoveryProvider, ...] = Field(min_length=1, max_length=6)
     probe_passages: tuple[V2SourceSelectionProbePassage, ...] = Field(max_length=5)
     search_provenance: tuple[V2SourceSelectionSearchProvenance, ...] = Field(

@@ -342,6 +342,7 @@ def test_incompatible_resume_visible_first_poll_and_keeps_database_unchanged(
         assert snapshot.model_dump(exclude=excluded) == before.model_dump(exclude=excluded)
         assert snapshot.conservative_reserved_tokens > 0
         assert snapshot.conservative_reserved_cost_usd > 0
+        assert snapshot.cost_budget_limit_usd == fixture.factory.ceilings.max_total_cost_usd
     finally:
         controller.shutdown(timeout=0)
 

@@ -6,12 +6,10 @@ import {
   readableStage,
   readableProvider,
   understandableRunMessage,
-  diagnosticCount,
   providerOutcomeLabel,
   formatCost,
 } from "../shared/presentation";
 import { V2ResultPaper } from "./paper";
-import { SourceLeads } from "./source-leads";
 import { ResearchTrailDrawer } from "./trail";
 import { useResult } from "./use-result";
 
@@ -25,6 +23,11 @@ export function ResultView({
   const released = snapshot.classification === "released";
   const userStatus = understandableRunMessage(snapshot);
   const diagnostics = snapshot.v2_diagnostics;
+  const knownCost = Number(snapshot.known_cost_subtotal_usd ?? 0);
+  const conservativeCost = Number(
+    snapshot.conservative_reserved_cost_usd ?? snapshot.known_cost_subtotal_usd ?? 0,
+  );
+  const pendingReservation = Math.max(0, conservativeCost - knownCost);
   const {
     v2Result,
     v2Evidence,
@@ -73,17 +76,6 @@ export function ResultView({
           {resultError}
         </p>
       )}
-      <SourceLeads
-        items={sourceLeads}
-        total={sourceLeadsTotal}
-        notice={sourceLeadsNotice}
-        loading={sourceLeadsLoading}
-        loadingMore={sourceLeadsLoadingMore}
-        error={sourceLeadsError}
-        hasMore={sourceLeadsHasMore}
-        onLoadMore={() => void loadMoreSourceLeads()}
-        onRetry={retrySourceLeads}
-      />
       <div className="report-layout">
         <article className="brief-paper">
           {v2Result ? (
@@ -112,43 +104,36 @@ export function ResultView({
             )}
           <section className="provider-diagnostics">
             <span>Frozen research settings</span>
-            <p>
-              <strong>Candidate sources to try per direction per round</strong>
-              <small>
-                {snapshot.research_controls.sources_per_stance_per_round ??
-                  "Not recorded"}
-              </small>
-            </p>
-            <p>
-              <strong>Metadata depth</strong>
-              <small>
-                {snapshot.research_controls.metadata_depth ?? "Not recorded"}
-              </small>
-            </p>
-            <p>
-              <strong>Paper expansion</strong>
-              <small>
-                {snapshot.research_controls.seed_expansion_enabled === null ||
-                snapshot.research_controls.seed_expansion_enabled === undefined
-                  ? "Not recorded"
-                  : snapshot.research_controls.seed_expansion_enabled
+            {snapshot.research_controls.sources_per_stance_per_round != null && (
+              <p>
+                <strong>Candidate sources to try per direction per round</strong>
+                <small>{snapshot.research_controls.sources_per_stance_per_round}</small>
+              </p>
+            )}
+            {snapshot.research_controls.metadata_depth != null && (
+              <p>
+                <strong>Metadata depth</strong>
+                <small>{snapshot.research_controls.metadata_depth}</small>
+              </p>
+            )}
+            {snapshot.research_controls.seed_expansion_enabled != null && (
+              <p>
+                <strong>Paper expansion</strong>
+                <small>
+                  {snapshot.research_controls.seed_expansion_enabled
                     ? "Enabled"
                     : "Disabled"}
-              </small>
-            </p>
-            <p>
-              <strong>Scholarly search</strong>
-              <small>
-                {snapshot.research_controls.scholarly_search_mode ??
-                  "Not recorded"}
-              </small>
-            </p>
+                </small>
+              </p>
+            )}
+            {snapshot.research_controls.scholarly_search_mode != null && (
+              <p>
+                <strong>Scholarly search</strong>
+                <small>{snapshot.research_controls.scholarly_search_mode}</small>
+              </p>
+            )}
           </section>
           <dl>
-            <div>
-              <dt>Final stage</dt>
-              <dd>{readableStage(snapshot.stage)}</dd>
-            </div>
             <div>
               <dt>Discovery sources</dt>
               <dd>
@@ -164,77 +149,91 @@ export function ResultView({
               <dt>Model calls</dt>
               <dd>{snapshot.model_calls_used}</dd>
             </div>
+            {diagnostics?.search_attempts != null && (
+              <div>
+                <dt>Logical query attempts</dt>
+                <dd>{diagnostics.search_attempts}</dd>
+              </div>
+            )}
+            {diagnostics?.graph_actions != null && (
+              <div>
+                <dt>Graph actions</dt>
+                <dd>{diagnostics.graph_actions}</dd>
+              </div>
+            )}
+            {diagnostics?.sources_acquired != null && (
+              <div>
+                <dt>Sources acquired</dt>
+                <dd>{diagnostics.sources_acquired}</dd>
+              </div>
+            )}
             <div>
-              <dt>Logical query attempts</dt>
-              <dd>{diagnostics?.search_attempts ?? "Not recorded"}</dd>
-            </div>
-            <div>
-              <dt>Graph actions</dt>
-              <dd>{diagnostics?.graph_actions ?? "Not recorded"}</dd>
-            </div>
-            <div>
-              <dt>Sources acquired</dt>
-              <dd>{diagnostics?.sources_acquired ?? "Not recorded"}</dd>
-            </div>
-            <div>
-              <dt>Estimated model cost</dt>
+              <dt>
+                {snapshot.cost_usage_complete
+                  ? "Known model spend"
+                  : "Known model spend so far"}
+              </dt>
               <dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd>
             </div>
-            <div>
-              <dt>Budget status</dt>
-              <dd>
-                {!snapshot.cost_usage_complete
-                  ? "Usage incomplete; reservations retained"
-                  : snapshot.classification === "released"
-                    ? "Recorded model usage"
-                    : "Research stopped"}
-              </dd>
-            </div>
+            {snapshot.cost_budget_limit_usd != null && (
+              <div>
+                <dt>Model cost budget</dt>
+                <dd>{formatCost(snapshot.cost_budget_limit_usd)}</dd>
+              </div>
+            )}
+            {!snapshot.cost_usage_complete && (
+              <div>
+                <dt>Held for calls without usage reports</dt>
+                <dd>{formatCost(pendingReservation)}</dd>
+              </div>
+            )}
           </dl>
           <ModelUsageDisclosure snapshot={snapshot} />
           {diagnostics && (
             <section className="provider-diagnostics">
               <span>Discovery counts</span>
-              <p>
-                <strong>Logical discovery operations</strong>
-                <small>
-                  {diagnosticCount(diagnostics.logical_discovery_operations)}
-                </small>
-              </p>
-              <p>
-                <strong>Physical provider requests/pages</strong>
-                <small>
-                  {diagnosticCount(diagnostics.physical_search_requests)}
-                </small>
-              </p>
-              <p>
-                <strong>Retained metadata records</strong>
-                <small>
-                  {diagnosticCount(diagnostics.retained_metadata_records)}
-                </small>
-              </p>
-              <p>
-                <strong>Deduplicated work candidates</strong>
-                <small>
-                  {diagnosticCount(diagnostics.deduplicated_work_candidates)}
-                </small>
-              </p>
-              <p>
-                <strong>Seed-derived candidates</strong>
-                <small>
-                  {diagnosticCount(diagnostics.seed_derived_candidates)}
-                </small>
-              </p>
-              <p>
-                <strong>Acquisition shortlist</strong>
-                <small>
-                  {diagnosticCount(diagnostics.shortlist_candidates)}
-                </small>
-              </p>
-              <p>
-                <strong>Admitted evidence records</strong>
-                <small>{diagnostics.approved_evidence_records}</small>
-              </p>
+              {diagnostics.logical_discovery_operations != null && (
+                <p>
+                  <strong>Logical discovery operations</strong>
+                  <small>{diagnostics.logical_discovery_operations}</small>
+                </p>
+              )}
+              {diagnostics.physical_search_requests != null && (
+                <p>
+                  <strong>Physical provider requests/pages</strong>
+                  <small>{diagnostics.physical_search_requests}</small>
+                </p>
+              )}
+              {diagnostics.retained_metadata_records != null && (
+                <p>
+                  <strong>Retained metadata records</strong>
+                  <small>{diagnostics.retained_metadata_records}</small>
+                </p>
+              )}
+              {diagnostics.deduplicated_work_candidates != null && (
+                <p>
+                  <strong>Deduplicated work candidates</strong>
+                  <small>{diagnostics.deduplicated_work_candidates}</small>
+                </p>
+              )}
+              {diagnostics.seed_derived_candidates != null && (
+                <p>
+                  <strong>Seed-derived candidates</strong>
+                  <small>{diagnostics.seed_derived_candidates}</small>
+                </p>
+              )}
+              {diagnostics.shortlist_candidates != null && (
+                <p>
+                  <strong>Acquisition shortlist</strong>
+                  <small>{diagnostics.shortlist_candidates}</small>
+                </p>
+              )}
+              {diagnostics.approved_evidence_records != null && (
+                <p>
+                  <strong>Admitted evidence records</strong>
+                  <small>{diagnostics.approved_evidence_records}</small>
+                </p>
+              )}
             </section>
           )}
           {Boolean(diagnostics?.diagnostic_messages?.length) && (
@@ -245,10 +244,10 @@ export function ResultView({
               ))}
             </section>
           )}
-          {diagnostics && (
+          {Boolean(diagnostics?.provider_outcomes?.length) && (
             <section className="provider-diagnostics">
               <span>Provider outcomes</span>
-              {diagnostics.provider_outcomes.map((outcome) => (
+              {diagnostics?.provider_outcomes.map((outcome) => (
                 <p key={outcome.provider}>
                   <strong>{readableProvider(outcome.provider)}</strong>
                   <small>{providerOutcomeLabel(outcome)}</small>
@@ -320,6 +319,15 @@ export function ResultView({
             items={trail}
             error={trailError}
             onClose={() => setTrailOpen(false)}
+            sourceLeads={sourceLeads}
+            sourceLeadsTotal={sourceLeadsTotal}
+            sourceLeadsNotice={sourceLeadsNotice}
+            sourceLeadsLoading={sourceLeadsLoading}
+            sourceLeadsLoadingMore={sourceLeadsLoadingMore}
+            sourceLeadsError={sourceLeadsError}
+            sourceLeadsHasMore={sourceLeadsHasMore}
+            onLoadMoreSourceLeads={() => void loadMoreSourceLeads()}
+            onRetrySourceLeads={retrySourceLeads}
           />
         )}
       </AnimatePresence>

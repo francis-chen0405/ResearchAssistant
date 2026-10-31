@@ -55,6 +55,25 @@ def test_admitted_detail_links_to_exact_record_and_preserves_relationship(
     tmp_path: Path,
 ) -> None:
     _path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    analyst_result = reviewer_result.analyst_result
+    analyst_input = analyst_result.input
+    queue_result = analyst_input.queue_result
+    selection_input = queue_result.input
+    selection_candidate = selection_input.survivors[0].model_copy(
+        update={
+            "authors": ("Ada Lovelace", "Grace Hopper"),
+            "publication_date": "2024-05-01",
+            "doi": "10.1000/example-study",
+            "publication_venue": "Journal of Test Studies",
+        }
+    )
+    selection_input = selection_input.model_copy(
+        update={"survivors": (selection_candidate,)}
+    )
+    queue_result = queue_result.model_copy(update={"input": selection_input})
+    analyst_input = analyst_input.model_copy(update={"queue_result": queue_result})
+    analyst_result = analyst_result.model_copy(update={"input": analyst_input})
+    reviewer_result = reviewer_result.model_copy(update={"analyst_result": analyst_result})
     output = build_v2_final_research_output(
         reviewer_result=reviewer_result,
         continuation=_continuation(reviewer_result.run_id),
@@ -75,6 +94,10 @@ def test_admitted_detail_links_to_exact_record_and_preserves_relationship(
     assert item.claim_fit == record.claim_fit
     assert item.relationship_to_claim is analyst.assessment.relationship_to_claim
     assert item.direction == "support"
+    assert item.authors == ("Ada Lovelace", "Grace Hopper")
+    assert item.publication_date == "2024-05-01"
+    assert item.doi == "10.1000/example-study"
+    assert item.publication_venue == "Journal of Test Studies"
     assert display.research_status.source == "final_output"
 
 

@@ -152,6 +152,8 @@ class LiveRunSnapshot(StrictModel):
     cost_usage_complete: bool = True
     conservative_reserved_tokens: int | None = Field(default=0, ge=0)
     conservative_reserved_cost_usd: ExactUSD | None = Decimal("0")
+    # Set only when the run's configured ceiling was persisted and can be reported.
+    cost_budget_limit_usd: ExactUSD | None = None
     model_usage_details: LiveModelUsageDetails | None = None
     supporting: ResearchProgress
     opposing: ResearchProgress
