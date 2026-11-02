@@ -85,6 +85,17 @@ def normalize_approved_additive_fields(
     for model in models:
         properties = model.get("properties", {})
         title = model.get("title")
+        if title in {"CrossrefIdentityMetadata", "V2SourceSelectionCandidate"}:
+            field, label = (
+                ("container_title", "Container Title")
+                if title == "CrossrefIdentityMetadata"
+                else ("publication_venue", "Publication Venue")
+            )
+            assert properties.pop(field) == {
+                "anyOf": [{"minLength": 1, "type": "string"}, {"type": "null"}],
+                "default": None,
+                "title": label,
+            }
         if title == "V2SourceSelectionInput":
             assert properties.pop("model_view_policy") == {
                 "anyOf": [

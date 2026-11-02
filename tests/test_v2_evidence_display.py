@@ -67,9 +67,7 @@ def test_admitted_detail_links_to_exact_record_and_preserves_relationship(
             "publication_venue": "Journal of Test Studies",
         }
     )
-    selection_input = selection_input.model_copy(
-        update={"survivors": (selection_candidate,)}
-    )
+    selection_input = selection_input.model_copy(update={"survivors": (selection_candidate,)})
     queue_result = queue_result.model_copy(update={"input": selection_input})
     analyst_input = analyst_input.model_copy(update={"queue_result": queue_result})
     analyst_result = analyst_result.model_copy(update={"input": analyst_input})

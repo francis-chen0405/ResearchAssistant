@@ -189,6 +189,8 @@ async function main() {
     await page.screenshot({path:path.join(shots,'research-active.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Cancel run',exact:true}).click();
     await page.getByText('No brief was released.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:/Research trail/}).click();
+    await page.locator('.trail-source-leads > summary').click();
     await page.locator('.source-lead').first().waitFor();
     assert.equal(await page.locator('.source-lead').count(),50,'An unreleased run shows the first bounded source-lead page');
     const firstLead=page.locator('.source-lead').first();
@@ -218,6 +220,7 @@ async function main() {
       {method:'GET',offset:50,limit:50},
     ]);
     await page.screenshot({path:path.join(shots,'research-cancelled.png'),fullPage:true,animations:'disabled'});
+    await page.getByRole('dialog').getByRole('button',{name:'Close'}).click();
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     run='failed'; v2ResultRequests=0; v2EvidenceRequests=0;
     await page.getByRole('button',{name:/Can greener streets/}).click();
@@ -229,10 +232,13 @@ async function main() {
     run='released';
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await page.getByRole('button',{name:/Research trail/}).click();
+    await page.locator('.trail-source-leads > summary').click();
     await page.locator('.source-lead').first().waitFor();
     assert.equal(await page.locator('.source-lead').count(),50,'Released run loads source leads independently of the brief');
     assert.ok(sourceLeadRequests.some(request=>request.run==='released' && request.method==='GET' && request.offset===0 && request.limit===50),'The released run requests its first lead page');
     assert.ok(sourceLeadRequests.every(request=>request.method==='GET' && request.limit<=50),'Every source-lead request is a bounded GET');
+    await page.getByRole('dialog').getByRole('button',{name:'Close'}).click();
     await page.getByRole('button',{name:'Copy brief',exact:false}).click();
     assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/validated example finding/);
     const downloadEvent=page.waitForEvent('download'); await page.getByRole('button',{name:'Download brief'}).click();
@@ -253,7 +259,7 @@ async function main() {
     await page.getByRole('button',{name:'View admitted quote and source'}).first().click();
     assert.equal(await page.locator('.evidence-card').first().evaluate(node=>node.open),true,'Brief findings open the exact admitted Ledger record');
     await page.locator('.evidence-card').first().getByText('Assessment relationship Adds a qualification',{exact:false}).waitFor();
-    await page.getByText('Claim status · Inconclusive: no admitted supporting finding',{exact:false}).waitFor();
+    await page.getByText('Claim status · Inconclusive: no admitted supporting or challenging finding',{exact:true}).waitFor();
     await page.getByText('This is an additional assessment of saved evidence. The saved brief and export are unchanged.',{exact:true}).waitFor();
     await page.getByText(/2 qualifying/).waitFor();
     await page.getByRole('heading',{name:'Shared publisher/website',exact:true}).waitFor();
@@ -267,7 +273,7 @@ async function main() {
     await page.getByRole('heading',{name:'Source lineage',exact:true}).waitFor();
     assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');
     assert.equal(await page.getByText('family-raw-id-should-not-render',{exact:true}).count(),0,'Internal family identifiers are not shown in ordinary cards');
-    await page.getByText('This is an exact illustrative quotation for the offline test.',{exact:true}).first().waitFor();
+    await page.locator('blockquote').getByText('This is an exact illustrative quotation for the offline test.',{exact:false}).first().waitFor();
     assert.equal(await page.locator('.evidence-card.support').count(),1);
     assert.equal(await page.locator('.evidence-card.challenge').count(),1);
     assert.equal(await page.getByText('internal-gap-example',{exact:true}).count(),0);
@@ -308,8 +314,8 @@ async function main() {
     await page.locator('.evidence-card').first().locator('summary').first().click();
     await page.locator('.evidence-card').first().getByText('Limited relevance',{exact:true}).waitFor();
     await page.locator('.evidence-card').first().getByText('Claim Fit 2/5',{exact:false}).waitFor();
-    const pdfSource = page.locator('.source-card').filter({has:page.getByRole('link',{name:'PDF file: paper.pdf (example.org)',exact:true})});
-    await pdfSource.getByRole('link',{name:'PDF file: paper.pdf (example.org)',exact:true}).waitFor();
+    const pdfSource = page.locator('.source-card').filter({has:page.getByRole('link',{name:'Source page at Example',exact:true})});
+    await pdfSource.getByRole('link',{name:'Source page at Example',exact:true}).waitFor();
     await pdfSource.getByText('Captured title and provenance',{exact:true}).click();
     await pdfSource.getByText('Original captured title S2056608520000082jra 1..28',{exact:true}).waitFor();
     assessmentPersisted=false; assessmentFresh=true;

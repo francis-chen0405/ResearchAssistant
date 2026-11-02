@@ -116,6 +116,32 @@ def test_routes_schemas_and_offline_responses_match_before_split(
     normalize_approved_additive_fields(
         after["openapi"]["components"]["schemas"], reference_root="components/schemas"
     )
+    # The result display and live progress expose optional presentation metadata.
+    optional_string = [{"type": "string"}, {"type": "null"}]
+    for model, field, title in (
+        ("LiveRunSnapshot", "cost_budget_limit_usd", "Cost Budget Limit Usd"),
+        ("V2EvidenceDisplayItem", "publication_date", "Publication Date"),
+        ("V2EvidenceDisplayItem", "doi", "Doi"),
+        ("V2EvidenceDisplayItem", "publication_venue", "Publication Venue"),
+    ):
+        assert schemas[model]["properties"].pop(field) == {
+            "anyOf": optional_string,
+            "title": title,
+        }
+    assert schemas["V2EvidenceDisplayItem"]["properties"].pop("authors") == {
+        "default": [],
+        "items": {"type": "string"},
+        "title": "Authors",
+        "type": "array",
+    }
+    snapshots = [
+        response
+        for response in after["responses"]
+        if response["path"] == "/api/research/00000000-0000-0000-0000-000000000001"
+        and response["status"] == 200
+    ]
+    assert len(snapshots) == 1
+    assert snapshots[0]["body"].pop("cost_budget_limit_usd") is None
     assert after == before
 
 

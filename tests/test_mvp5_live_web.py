@@ -597,7 +597,8 @@ def test_mocked_released_run_reconnects_through_local_api(tmp_path: Path) -> Non
         env=environment,
         capture_output=True,
         text=True,
-        timeout=30,
+        # Windows hosted runners can take over 30 seconds for the offline pipeline.
+        timeout=90,
         check=False,
     )
     assert process.returncode == CLIExitCode.RELEASED

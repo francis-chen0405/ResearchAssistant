@@ -760,9 +760,7 @@ def snapshot_from_v2_progress(
         cost_usage_complete=usage.cost_usage_complete,
         conservative_reserved_tokens=usage.conservative_reserved_tokens,
         conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
-        cost_budget_limit_usd=(
-            ceilings.max_total_cost_usd if ceilings is not None else None
-        ),
+        cost_budget_limit_usd=(ceilings.max_total_cost_usd if ceilings is not None else None),
         model_usage_details=usage.model_usage_details,
         supporting=supporting,
         opposing=opposing,
@@ -902,9 +900,7 @@ def snapshot_from_v2_result(
         cost_usage_complete=usage.cost_usage_complete,
         conservative_reserved_tokens=usage.conservative_reserved_tokens,
         conservative_reserved_cost_usd=usage.conservative_reserved_cost_usd,
-        cost_budget_limit_usd=(
-            ceilings.max_total_cost_usd if ceilings is not None else None
-        ),
+        cost_budget_limit_usd=(ceilings.max_total_cost_usd if ceilings is not None else None),
         model_usage_details=usage.model_usage_details,
         supporting=supporting,
         opposing=opposing,
