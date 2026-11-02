@@ -18,6 +18,8 @@ async function main() {
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
+  const productionFixture = process.env.REPORT_REVIEW_FIXTURE ? JSON.parse(fs.readFileSync(process.env.REPORT_REVIEW_FIXTURE, "utf8")) : null;
+  let productionReport = false;
   let browser;
   try {
     browser = await chromium.launch({headless:true});
@@ -26,7 +28,7 @@ async function main() {
     const errors = []; page.on('pageerror', e=>errors.push(e.message));
     let preferences = {modelProfile:'configurable-2026-09',stageModels:{planner:'gpt-6-luna-xhigh',scout:'gpt-6-luna-high',gap_analysis:'gpt-6-luna-xhigh',search_agent:'gpt-6-luna-xhigh',source_selection:'gpt-6-luna-xhigh',extractor:'gpt-6-luna-high',analyst:'gpt-6-luna-xhigh'},dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
     let serviceReady = false; let serviceProbes = 0; let serviceStarts = 0;
-    let assessmentPersisted = false; let assessmentFresh = false;
+    let studyReviewed = false; let assessmentPersisted = false; let assessmentFresh = false;
     let saved = []; let run = null; let started = null; let checked = 0; let removed = 0; let detailed = false; let invalidPlan = false; let sufficientSourcePool = false; let invalidRelease = false; let evidenceFailure = false; let v2ResultRequests = 0; let v2EvidenceRequests = 0;
     const id='11111111-1111-4111-8111-111111111111';
     const progress = {status:'running',model_attempts:1,retrieval_attempts:2,usable_snapshots:1,candidates:1};
@@ -61,12 +63,14 @@ async function main() {
           {stage:'capture',status:'readable',reason:'wigolo: https://mirror.example.org/fulltext'},
         ],
       });
+      all[50].url='https://example.org/lead-1#later';
+      all[50].history=[{stage:'capture',status:'failed',reason:'A later discovery record.'}];
       all[2].readable_alternate_url='https://user:secret@example.org/fulltext';
       all[3].readable_alternate_url='javascript:alert(1)';
       const items=all.slice(offset,offset+limit);
       return {run_id:id,items,total:all.length,offset,limit,has_more:offset+items.length<all.length,notice:'Discovery leads are records of candidate sources.'};
     };
-    const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',model_usage_details:{input_tokens:{total:null,known_subtotal:123,complete:false},output_tokens:{total:44,known_subtotal:44,complete:true},cached_input_tokens:{total:null,known_subtotal:0,complete:false},cache_write_tokens:{total:null,known_subtotal:4,complete:false},cost_basis_counts:[{basis:'published_cache_prices_reported_writes',physical_calls:1},{basis:'published_cache_prices_assumed_all_uncached_writes',physical_calls:1},{basis:null,physical_calls:1}]},supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
+    const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:productionReport ? productionFixture.result.exact_claim : started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',model_usage_details:{input_tokens:{total:null,known_subtotal:123,complete:false},output_tokens:{total:44,known_subtotal:44,complete:true},cached_input_tokens:{total:null,known_subtotal:0,complete:false},cache_write_tokens:{total:null,known_subtotal:4,complete:false},cost_basis_counts:[{basis:'published_cache_prices_reported_writes',physical_calls:1},{basis:'published_cache_prices_assumed_all_uncached_writes',physical_calls:1},{basis:null,physical_calls:1}]},supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
     await page.route('**/api/**', async route => {
       const req=route.request(); const url=new URL(req.url()); const p=url.pathname; let body={}; let status=200;
       assert.equal(url.origin, `http://127.0.0.1:${server.address().port}`, 'Desktop API requests must use the exported app origin');
@@ -109,7 +113,12 @@ async function main() {
       if(p.endsWith('/v2-evidence') && sufficientSourcePool && !evidenceFailure) {
         body.research_status={reason_code:'sufficient_source_pool',explanation:'Further searches overlap with the existing source families and are unlikely to add useful evidence.',actionable_gap_count:1,partial_coverage_count:1,unavailable_coverage_count:0,source:'final_output'};
       }
-      if(p.endsWith('/v2-evidence') && detailed && body.run_id) body.source_budget_outcomes=[{source_id:'33333333-3333-4333-8333-333333333333',outcome:'token_cap_blocked'}]; if(p.endsWith('/v2-evidence') && detailed && body.run_id) { body.post_analysis_assessment={run_id:id,policy_identity:assessmentFresh?'researchassistant-v2-post-analysis-evidence-v2':'researchassistant-v2-post-analysis-evidence-v1',...(assessmentFresh?{search_outcome:'incomplete_coverage',coverage_incomplete:true}:{}),assessed_after_analysis:true,claim_established:false,admitted_source_ids:body.items.map(item=>item.source_id),supporting_count:0,challenging_count:0,qualifying_count:2,unrelated_count:0,unadmitted_source_count:3,partial_coverage_count:1,unavailable_coverage_count:1,unresolved_gap_count:1,claim_support_observed:false,limitations:assessmentFresh?['No admitted finding was classified as supporting the claim. This does not establish that the claim is false.','3 of 5 surviving sources produced no admitted evidence; surviving selection is not evidence sufficiency.','Research coverage remains limited.']:['No admitted finding was classified as supporting the claim. This does not establish that the claim is false.','3 selected source(s) produced no admitted evidence; selection is not evidence sufficiency.','Research coverage remains limited.']}; body.shared_website_groups=[{host:'imy.se',source_ids:body.items.map(item=>item.source_id),explanation:'These 2 admitted pages share the imy.se website. A shared website alone does not establish independent corroboration. This does not show they are duplicates.'}]; body.items[0].source_type='general_web'; body.items[0].source_context_notice='Legal scope has not been independently verified; check jurisdiction, dates and exceptions against primary sources. The all-50-states statement has not been independently verified; check whether its scope and conditions apply in each jurisdiction.'; body.items.forEach(item=>{item.relationship_to_claim='qualifies';}); }
+      if(p.endsWith('/v2-evidence') && detailed && body.run_id) body.source_budget_outcomes=[{source_id:'33333333-3333-4333-8333-333333333333',outcome:'token_cap_blocked'}]; if(p.endsWith('/v2-evidence') && detailed && body.run_id) { body.post_analysis_assessment={run_id:id,policy_identity:assessmentFresh?'researchassistant-v2-post-analysis-evidence-v2':'researchassistant-v2-post-analysis-evidence-v1',...(assessmentFresh?{search_outcome:'incomplete_coverage',coverage_incomplete:true}:{}),assessed_after_analysis:true,claim_established:false,admitted_source_ids:body.items.map(item=>item.source_id),supporting_count:0,challenging_count:0,qualifying_count:2,unrelated_count:0,unadmitted_source_count:3,partial_coverage_count:1,unavailable_coverage_count:1,unresolved_gap_count:1,claim_support_observed:false,limitations:assessmentFresh?['No admitted finding was classified as supporting the claim. This does not establish that the claim is false.','3 of 5 surviving sources produced no admitted evidence; surviving selection is not evidence sufficiency.','Research coverage remains limited.']:['No admitted finding was classified as supporting the claim. This does not establish that the claim is false.','3 selected source(s) produced no admitted evidence; selection is not evidence sufficiency.','Research coverage remains limited.']}; body.shared_website_groups=[{host:'imy.se',source_ids:body.items.map(item=>item.source_id),explanation:'These 2 admitted pages share the imy.se website. A shared website alone does not establish independent corroboration. This does not show they are duplicates.'}]; body.items[0].source_type='randomized_trial'; body.items[0].verified_publication={doi:'10.1000/example',canonical_url:'https://doi.org/10.1000/example',title:'Illustrative canopy study',authors:['A. Researcher'],publication_date:'2024',venue:'Illustrative Journal',verification:'crossref_doi'}; body.items[1].source_type='observational_study'; body.items[1].quote_passage='The outcome was lower. However, only among'; body.items[0].source_context_notice='Legal scope has not been independently verified; check jurisdiction, dates and exceptions against primary sources. The all-50-states statement has not been independently verified; check whether its scope and conditions apply in each jurisdiction.'; body.items.forEach(item=>{item.relationship_to_claim='qualifies';}); }
+      if (p.endsWith('/v2-evidence') && studyReviewed && body.items?.length) {
+        body.study_opening=[{ledger_claim_id:body.items[0].ledger_claim_id,study_identifier:'REG-2024',role:'main',text:body.items[0].approved_factual_statement,design:'randomized',intervention:'canopy',outcome:'temperature'}, {ledger_claim_id:body.items[1].ledger_claim_id,study_identifier:'REG-2025',role:'limitation',text:body.items[1].limitations[0],design:'observational',intervention:'canopy',outcome:'temperature'}];
+      }
+      if (productionReport && p.endsWith('/v2-result')) body = productionFixture.result;
+      if (productionReport && p.endsWith('/v2-evidence')) body = productionFixture.evidence;
       await route.fulfill({status,json:body});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
@@ -195,12 +204,12 @@ async function main() {
     assert.equal(await page.locator('.source-lead').count(),50,'An unreleased run shows the first bounded source-lead page');
     const firstLead=page.locator('.source-lead').first();
     await firstLead.getByRole('link',{name:'Lead 01 · Discovery example',exact:true}).waitFor();
-    await firstLead.locator('.source-lead-reason').getByText('The source could not be captured; it remains a discovery lead.',{exact:true}).waitFor();
+    await firstLead.locator('.source-lead-reason').getByText(/recorded reason could not be translated/).waitFor();
     assert.equal(await firstLead.locator('details[open]').count(),0,'Lead history and metadata start collapsed');
     assert.equal(await page.getByText('SOURCE_LEAD_SNIPPET_MUST_NOT_RENDER',{exact:true}).count(),0);
     assert.equal(await page.getByText('SOURCE_LEAD_QUOTE_MUST_NOT_RENDER',{exact:true}).count(),0);
-    await firstLead.locator('.source-lead-details summary').click();
-    await firstLead.getByText('The capture worker reported a timeout.',{exact:true}).waitFor();
+    await firstLead.locator('.source-lead-details > summary').click();
+    await firstLead.getByText(/recorded reason could not be translated/).first().waitFor();
     const landingLead=page.locator('.source-lead').nth(1);
     assert.equal((await landingLead.locator('.source-lead-status').innerText()).toLowerCase(),'linked page: unusable','The badge describes the linked page, not a readable alternate');
     assert.equal(await landingLead.getByRole('link',{name:'Lead 02 · Discovery example',exact:true}).getAttribute('href'),'https://example.org/landing');
@@ -208,13 +217,14 @@ async function main() {
     assert.equal(await readableAlternate.getAttribute('href'),'https://mirror.example.org/fulltext','The readable capture has its own visible alternate link');
     assert.equal(await readableAlternate.getAttribute('rel'),'noopener noreferrer');
     assert.equal(await landingLead.locator('details[open]').count(),0,'The alternate link is visible before expanding history');
-    await landingLead.locator('.source-lead-details summary').click();
-    await landingLead.getByText('wigolo: https://example.org/landing',{exact:true}).waitFor();
-    await landingLead.getByText('wigolo: https://mirror.example.org/fulltext',{exact:true}).waitFor();
+    await landingLead.locator('.source-lead-details > summary').click();
+    await landingLead.getByText('Technical details',{exact:true}).click();
+    await landingLead.getByText(/wigolo: https:\/\/example.org\/landing/).waitFor();
     for(const index of [2,3]) assert.equal(await page.locator('.source-lead').nth(index).getByRole('link',{name:'Readable alternate',exact:true}).count(),0,'Unsafe alternate protocols and embedded credentials must not become links');
     await page.getByRole('button',{name:'Load more source leads'}).click();
-    await page.getByText('51 of 51 shown',{exact:true}).waitFor();
-    assert.equal(await page.locator('.source-lead').count(),51,'Pagination appends the remaining lead without duplicates');
+    await page.getByText('51 of 51 discovery records loaded · 50 unique pages or unlinked records',{exact:true}).waitFor();
+    assert.equal(await page.locator('.source-lead').count(),50,'A duplicate on the next page is grouped with its earlier record');
+    await firstLead.getByText(/1 additional discovery record/).waitFor();
     assert.deepEqual(sourceLeadRequests.filter(request=>request.run==='cancelled').map(({method,offset,limit})=>({method,offset,limit})),[
       {method:'GET',offset:0,limit:50},
       {method:'GET',offset:50,limit:50},
@@ -259,21 +269,27 @@ async function main() {
     await page.getByRole('button',{name:'View admitted quote and source'}).first().click();
     assert.equal(await page.locator('.evidence-card').first().evaluate(node=>node.open),true,'Brief findings open the exact admitted Ledger record');
     await page.locator('.evidence-card').first().getByText('Assessment relationship Adds a qualification',{exact:false}).waitFor();
-    await page.getByText('Claim status · Inconclusive: no admitted supporting or challenging finding',{exact:true}).waitFor();
-    await page.getByText('This is an additional assessment of saved evidence. The saved brief and export are unchanged.',{exact:true}).waitFor();
+    await page.getByText('Claim status · Claim not established by the admitted evidence',{exact:true}).waitFor();
+    await page.getByText('This is an additional assessment of saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
     await page.getByText(/2 qualifying/).waitFor();
     await page.getByRole('heading',{name:'Shared publisher/website',exact:true}).waitFor();
     assert.ok(await page.getByText(/does not establish independent corroboration/i).count() >= 1,'Shared website pages are not presented as independent corroboration');
     await page.getByText(/all-50-states statement has not been independently verified/i).waitFor();
     await page.getByText(/separate links do not establish independent studies/i).waitFor();
-    assert.equal(await page.getByText('Recommended · evidence admitted',{exact:false}).count(),2,'Recommended source status appears consistently in both source lists');
+    assert.equal(await page.getByText('Recommended · evidence admitted',{exact:false}).count(),1,'Recommended source is shown only once');
     await page.getByText('Recommended outcomes: 1 evidence admitted',{exact:true}).waitFor();
-    await page.getByText('Outcomes among all 5 surviving sources: 2 evidence admitted, 1 source token-cap blocked, 1 evidence not admitted, 1 not assessed',{exact:true}).waitFor();
-    await page.getByText('Survived selection · source token-cap blocked',{exact:false}).waitFor();
+    await page.getByText('Outcomes among all 5 surviving sources: 2 evidence admitted, 1 source token limit prevented analysis, 1 evidence not admitted, 1 not assessed',{exact:true}).waitFor();
+    await page.getByText('Survived selection · source token limit prevented analysis',{exact:false}).waitFor();
     await page.getByRole('heading',{name:'Source lineage',exact:true}).waitFor();
     assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');
     assert.equal(await page.getByText('family-raw-id-should-not-render',{exact:true}).count(),0,'Internal family identifiers are not shown in ordinary cards');
     await page.locator('blockquote').getByText('This is an exact illustrative quotation for the offline test.',{exact:false}).first().waitFor();
+    await page.getByRole('link',{name:'10.1000/example',exact:true}).waitFor();
+    await page.locator('.evidence-card').nth(1).locator('summary').first().focus();
+    await page.keyboard.press('Enter');
+    await page.locator('.evidence-card').nth(1).getByText(/recorded passage may be incomplete/i).waitFor();
+    await page.locator('.evidence-card').nth(1).getByText('Recorded passage and context').click();
+    await page.locator('.evidence-card').nth(1).getByText('The outcome was lower. However, only among',{exact:true}).waitFor();
     assert.equal(await page.locator('.evidence-card.support').count(),1);
     assert.equal(await page.locator('.evidence-card.challenge').count(),1);
     assert.equal(await page.getByText('internal-gap-example',{exact:true}).count(),0);
@@ -281,16 +297,22 @@ async function main() {
     await page.getByText('1 gap remains unresolved.',{exact:true}).waitFor();
     await page.getByText(/^Earlier search decision ·/).click();
     await page.getByText(/The search assessment counted 0 unresolved evidence gaps for possible follow-up/).waitFor();
-    await page.getByText(/Release validation passed: yes\./).waitFor();
+    await page.getByText(/Release checks passed: yes\./).waitFor();
     await page.getByText('Recorded token usage and cost basis',{exact:true}).click();
     await page.getByText(/published cache prices and reported cache-write tokens/).waitFor();
     await page.screenshot({path:path.join(shots,'research-evidence.png'),fullPage:true,animations:'disabled'});
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,'Result fits narrow viewport without horizontal overflow');
+    await page.getByRole('heading',{name:'Bottom line',exact:true}).waitFor();
+    await page.screenshot({path:path.join(shots,'research-evidence-narrow.png'),fullPage:true,animations:'disabled'});
+    await page.setViewportSize({width:1280,height:860});
     await page.getByRole('heading',{name:'Latest research coverage assessment',exact:true}).waitFor();
     await page.getByText('Direct evidence remains incomplete.',{exact:true}).waitFor();
     invalidPlan=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.getByText(/^Earlier search decision ·/).click();
+    await page.getByText('Technical search record',{exact:true}).click();
     await page.locator('.result-limitation').getByText(/Follow-up search stopped after two invalid plans/).waitFor();
     await page.getByText('Long-term air temperature data is unavailable.',{exact:false}).waitFor();
     await page.screenshot({path:path.join(shots,'adaptive-search-limitations.png'),fullPage:true,animations:'disabled'});
@@ -299,6 +321,7 @@ async function main() {
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.getByText(/Earlier search decision · Search stopped after the source pool was considered sufficient/).waitFor();
     await page.getByText(/^Earlier search decision ·/).click();
+    await page.getByText('Technical search record',{exact:true}).click();
     await page.locator('.result-limitation').getByText(/Further searches overlap with the existing source families/).waitFor();
     await page.locator('.result-limitation').getByText(/counted 1 unresolved evidence gap for possible follow-up/).waitFor();
     sufficientSourcePool=false;
@@ -307,7 +330,7 @@ async function main() {
     await page.locator('.welcome-view').waitFor();
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief and export are unchanged.',{exact:true}).waitFor();
+    await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
     await page.getByText('This assessment is included in the saved brief and export.',{exact:true}).waitFor();
     await page.getByText('Among 5 surviving sources, 3 had no admitted evidence and 2 had admitted evidence.',{exact:true}).waitFor();
     await page.getByRole('heading',{name:'Context and evidence qualifications',exact:true}).waitFor();
@@ -323,9 +346,43 @@ async function main() {
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.getByText('Post-analysis research status · Incomplete coverage',{exact:true}).waitFor();
     await page.getByText('This post-analysis status is included in the saved brief and export.',{exact:true}).waitFor();
-    assert.equal(await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief and export are unchanged.',{exact:true}).count(),0);
+    assert.equal(await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).count(),0);
     assessmentFresh=false;
     assessmentPersisted=false;
+    studyReviewed=true;
+    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await page.locator('.result-bottom-line').getByText('Surface temperatures only; not a general estimate of air temperature.',{exact:false}).waitFor();
+    assert.equal(await page.locator('.result-bottom-line').getByText(/not necessarily representative/).count(),0);
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true);
+    await page.screenshot({path:path.join(shots,'reviewed-opening-narrow.png'),fullPage:true,animations:'disabled'});
+    await page.setViewportSize({width:1280,height:860});
+    await page.screenshot({path:path.join(shots,'reviewed-opening-desktop.png'),fullPage:true,animations:'disabled'});
+    studyReviewed=false;
+    if (productionFixture) {
+      productionReport=true;
+      await page.getByRole('button',{name:'Saved research',exact:true}).click();
+      await page.getByRole('button',{name:/Can greener streets/}).click();
+      const opening = page.locator('.result-bottom-line');
+      await opening.getByText(/randomized study REG-2024/).waitFor();
+      await opening.getByText(/observational study REG-2025/).waitFor();
+      await opening.getByText(/Recorded limitations/).waitFor();
+      assert.equal(await opening.getByText(/not necessarily representative/).count(), 0);
+      assert.equal(await page.locator('.evidence-card').count(), 3);
+      await opening.getByRole('button',{name:'View evidence and source'}).first().click();
+      assert.equal(await page.locator('.evidence-card[open]').count(),1);
+      await page.getByRole('link',{name:'Canonical publication',exact:true}).first().waitFor();
+      for (const width of [1280,390]) {
+        await page.setViewportSize({width,height:844});
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true);
+        await page.screenshot({path:path.join(shots,`production-report-${width}.png`),fullPage:true,animations:'disabled'});
+      }
+      const [download] = await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Download brief'}).click()]);
+      assert.equal(fs.readFileSync(await download.path(),'utf8'),productionFixture.evidence.reading_aid_markdown);
+      await page.setViewportSize({width:1280,height:860});
+      productionReport=false;
+    }
     invalidRelease=true; v2ResultRequests=0; v2EvidenceRequests=0;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();

@@ -16,10 +16,18 @@ function safeWebUrl(value: string): string | null {
 }
 
 function readableValue(value: string): string {
-  return value.replaceAll("_", " ").replaceAll("-", " ");
+  const labels: Record<string, string> = {
+    support_search: "Support-directed search", challenge_search: "Challenge-directed search",
+    pending: "Pending", excluded: "Excluded", selected: "Selected", admitted: "Admitted",
+    failed: "Failed", unknown: "Unknown", unusable: "Unusable", readable: "Readable",
+    captured: "Captured", recorded: "Recorded", source_capture: "Source capture", capture: "Capture",
+    openalex: "OpenAlex", exa: "Exa", serper: "Serper", serpsearch: "SERP Search",
+    pubmed: "PubMed", arxiv: "arXiv", crossref: "Crossref",
+  };
+  return labels[value.toLowerCase()] ?? "Other recorded value";
 }
 
-function readableReason(value: string | null | undefined): string {
+export function readableReason(value: string | null | undefined): string {
   if (!value) return "Not recorded";
   const reasons: Record<string, string> = {
     no_substantive_source_text: "No substantive text was available to assess.",
@@ -30,9 +38,7 @@ function readableReason(value: string | null | undefined): string {
     cap_prevented: "The run's limit prevented further review.",
   };
   if (reasons[value]) return reasons[value];
-  if (/^[a-z0-9_]+$/.test(value)) return readableValue(value);
-  if (/V2EvidenceAnalystFailure|_RetryableAssessmentValidationError/.test(value)) return "The evidence assessment could not be completed.";
-  return value;
+  return "The recorded reason could not be translated. See technical details for the original record.";
 }
 
 export function SourceLeads({
@@ -78,9 +84,9 @@ export function SourceLeads({
             challenges the claim. Leads are not evidence.
           </p>
         </div>
-        {!loading && <span>{items.length} of {total} shown</span>}
+        {!loading && <span>{items.length} of {total} discovery records loaded · {groups.size} unique pages or unlinked records</span>}
       </div>
-      {notice && <p className="source-leads-notice">{notice}</p>}
+      {notice && <p className="source-leads-notice">Discovery records are candidates, not admitted evidence.</p>}
       {loading ? (
         <p className="source-leads-state" role="status">
           Loading source leads…
@@ -102,7 +108,7 @@ export function SourceLeads({
         <>
           {error && (
             <p className="source-leads-error" role="alert">
-              {error}
+              Source leads could not be loaded. Try again.
             </p>
           )}
           <div className="source-lead-list">
@@ -153,6 +159,7 @@ export function SourceLeads({
                   </p>
                   <details className="source-lead-details">
                     <summary>Lead metadata and history</summary>
+                    <details><summary>Technical details</summary><p>Original reason: {lead.reason ?? "Not recorded"}</p><p>Original history: {JSON.stringify(lead.history)}</p></details>
                     <dl>
                       <div>
                         <dt>Disposition</dt>
@@ -185,7 +192,7 @@ export function SourceLeads({
                       {lead.unknowns.length > 0 && (
                         <div>
                           <dt>Unknowns</dt>
-                          <dd>{lead.unknowns.join("; ")}</dd>
+                          <dd>Details are available in technical records.</dd>
                         </div>
                       )}
                     </dl>
@@ -207,6 +214,7 @@ export function SourceLeads({
                       <summary>{otherRecords.length} additional discovery {otherRecords.length === 1 ? "record" : "records"} for this page</summary>
                       {otherRecords.map((record) => (
                         <div key={record.lead_id}>
+                          <details><summary>Technical details</summary><p>Original reason: {record.reason ?? "Not recorded"}</p><p>Original history: {JSON.stringify(record.history)}</p></details>
                           <p>{readableValue(record.disposition)} · Linked page: {readableValue(record.capture_status)}</p>
                           {record.reason && <p>{readableReason(record.reason)}</p>}
                           <p>Search directions: {record.search_directions.map(readableValue).join(", ") || "Not recorded"}; providers: {record.providers.map(readableValue).join(", ") || "Not recorded"}; rounds: {record.rounds.join(", ") || "Not recorded"}</p>
@@ -214,7 +222,7 @@ export function SourceLeads({
                           {record.readable_alternate_url && safeWebUrl(record.readable_alternate_url) !== alternateHref && safeWebUrl(record.readable_alternate_url) && (
                             <a href={safeWebUrl(record.readable_alternate_url)!} target="_blank" rel="noopener noreferrer">Readable alternate</a>
                           )}
-                          {record.unknowns.length > 0 && <p>{record.unknowns.join("; ")}</p>}
+                          {record.unknowns.length > 0 && <p>Details are available in technical records.</p>}
                           {record.history.length > 0 && <ol className="source-lead-history">{record.history.map((entry, index) => <li key={`${entry.stage}-${entry.status}-${index}`}><strong>{readableValue(entry.stage)} · {readableValue(entry.status)}</strong>{entry.reason && <span>{readableReason(entry.reason)}</span>}</li>)}</ol>}
                         </div>
                       ))}

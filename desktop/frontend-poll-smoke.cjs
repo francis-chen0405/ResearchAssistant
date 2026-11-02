@@ -309,11 +309,11 @@ async function main() {
     await page.getByText("Poll smoke result", { exact: true }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeReplacement, "Run replacement must cancel old follow-up polling");
-    await page.getByText("Latest execution attempt: A completed run rejected changed settings.", { exact: true }).waitFor();
+    await page.getByText("Latest execution attempt: The latest attempt could not use the requested settings. Check the research settings and try again.", { exact: true }).waitFor();
 
     await page.getByRole("button", { name: "Saved research", exact: true }).click();
     await page.getByText("A run with a rejected resume attempt", { exact: true }).click();
-    await page.getByText("Discovery settings changed; start a new run.", { exact: true }).first().waitFor();
+    await page.getByText("The latest resume attempt could not use the requested settings. Resume with the original settings or start a new run.", { exact: true }).first().waitFor();
     const frozenMetadataDepth = page.getByText("Metadata depth", { exact: true }).locator("xpath=..");
     await frozenMetadataDepth.waitFor();
     assert.match(await frozenMetadataDepth.innerText(), /Metadata depth\s*20/);

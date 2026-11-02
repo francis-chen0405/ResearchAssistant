@@ -1,6 +1,19 @@
 import { motion } from "motion/react";
 import type { HistoryItem } from "@/lib/api";
-import { readableStage, formatDate } from "../shared/presentation";
+import { formatDate } from "../shared/presentation";
+
+const statuses: Record<string, string> = {
+  planned: "Planned", running: "Running", completed: "Completed", released: "Released",
+  blocked: "Stopped", cancelled: "Cancelled", failed: "Failed", interrupted: "Interrupted",
+};
+const stages: Record<string, string> = {
+  claim_planner: "Planning", discovery: "Finding sources", acquisition: "Reading sources",
+  gap_analysis: "Checking gaps", adaptive_search: "Follow-up search", source_selection: "Selecting sources",
+  deep_analysis: "Assessing evidence", review: "Review", synthesis: "Preparing the brief",
+  evidence_analyst: "Assessing evidence", evidence_admission: "Assessing evidence",
+  gap_reconciliation: "Checking gaps", statement_reviewer: "Review", claim_ledger: "Review",
+  debate_synthesizer: "Preparing the brief", final_renderer_validator: "Preparing the brief",
+};
 
 export function HistoryView({
   items,
@@ -44,12 +57,12 @@ export function HistoryView({
               transition={{ delay: index * 0.035 }}
             >
               <span className={`history-status ${item.status}`}>
-                {item.status}
+                {statuses[item.status] ?? "Status not recognized"}
               </span>
               <motion.strong layoutId={`claim-${item.run_id}`}>
                 {item.raw_claim}
               </motion.strong>
-              <span>{readableStage(item.stage)}</span>
+              <span>{stages[item.stage] ?? "Research stage not recognized"}</span>
               <time>{formatDate(item.updated_at)}</time>
               <b aria-hidden="true">↗</b>
             </motion.button>

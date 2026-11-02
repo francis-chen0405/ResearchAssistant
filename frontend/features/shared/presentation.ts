@@ -49,8 +49,8 @@ export function researchStopLabel(reason: string): string {
         no_productive_search: "No productive new search was available",
         duplicate_heavy: "Search results substantially overlapped",
         provider_eligibility_exhausted: "No eligible search provider remained",
-        budget: "The research budget was reached",
-        budget_limit: "The research budget was reached",
+        budget: "A research limit stopped further work; the specific limit and amount are not recorded in this brief.",
+        budget_limit: "A research limit stopped further work; the specific limit and amount are not recorded in this brief.",
         cancelled: "Research was cancelled",
         hard_round_limit: "The maximum number of research rounds was reached",
         degraded_gap_search_agent:
@@ -64,8 +64,25 @@ export function researchStopLabel(reason: string): string {
           "The remaining budget could not reserve another search",
         terminal_failure: "Research ended after a processing failure",
       } as Record<string, string>
-    )[reason] ?? readableStage(reason)
+    )[reason] ?? "The reason the search stopped was not recorded in a recognizable form"
   );
+}
+
+export function sourceBudgetStop(reason: string | null | undefined): string {
+  return ({
+    physical_call_ceiling: "The recorded call limit prevented source analysis.",
+    token_reserve: "The recorded token allowance could not reserve source analysis.",
+    cost_reserve: "The recorded money allowance could not reserve source analysis.",
+    backfill_replaced: "Another source was selected for the available analysis slot.",
+  } as Record<string, string>)[reason ?? ""] ?? "The limit that prevented source analysis was not recorded.";
+}
+
+export function sourceLocalStop(outcome: string): string {
+  return ({
+    source_budget_blocked: "A source-specific allowance prevented further analysis. Recorded allowances are listed separately when available.",
+    token_cap_blocked: "A source-specific token limit prevented further analysis. Recorded allowances are listed separately when available.",
+    physical_call_cap_blocked: "A source-specific call limit prevented further analysis. Recorded allowances are listed separately when available.",
+  } as Record<string, string>)[outcome] ?? "A source-specific limit prevented further analysis; its details were not recorded.";
 }
 
 export function readableProvider(provider: string): string {
@@ -131,20 +148,30 @@ export function formatDate(value: string): string {
 }
 
 export function formatCost(value: string | number | null): string {
-  if (value === null) return "Pending";
+  if (value == null || !Number.isFinite(Number(value))) return "Not recorded";
   return `$${Number(value).toFixed(4)}`;
 }
 
+export function understandableAttemptMessage(attempt: NonNullable<RunSnapshot["attempt_diagnostic"]>): string {
+  if (attempt.classification === "invalid_input") {
+    return attempt.diagnostic_component === "resume"
+      ? "The latest resume attempt could not use the requested settings. Resume with the original settings or start a new run."
+      : "The latest attempt could not use the requested settings. Check the research settings and try again.";
+  }
+  if (attempt.classification === "configuration_error") return "The latest attempt could not use the provider configuration. Check Provider setup and try again.";
+  return "The latest attempt did not finish. See the research trail for details.";
+}
+
 export function understandableRunMessage(snapshot: RunSnapshot): string {
-  if (snapshot.attempt_diagnostic || snapshot.classification === "interrupted")
-    return snapshot.message;
+  if (snapshot.classification === "released") return "The saved research result is available.";
+  if (snapshot.classification === "interrupted")
+    return "No active worker in this app. Saved progress and reservations are unchanged; resume with the original settings or start a new run.";
+  if (snapshot.attempt_diagnostic) return understandableAttemptMessage(snapshot.attempt_diagnostic);
+  if (snapshot.classification === "invalid_input") return "The research settings could not be used. Check them and try again.";
   if (snapshot.classification === "configuration_error")
     return "A provider could not be reached or configured. Check Provider setup, then try again.";
   if (snapshot.classification === "failed") {
-    return (
-      snapshot.message.trim() ||
-      "This research run did not finish. Reopen the saved run after resolving the reported issue."
-    );
+    return "This research run did not finish. See the research trail for details.";
   }
   if (snapshot.classification === "cancelled")
     return "This research run was cancelled. Its saved evidence and progress remain available for inspection.";
@@ -153,7 +180,8 @@ export function understandableRunMessage(snapshot: RunSnapshot): string {
     /budget|limit|ceiling/i.test(snapshot.message)
   )
     return "Stopped due to a budget limit. The result reports any evidence and gaps that were completed before the limit.";
-  return snapshot.message;
+  if (snapshot.classification === "blocked") return "Research stopped before completion. See the research trail for details.";
+  return "The recorded research status is available in the research trail.";
 }
 
 export function understandableConfigurationMessage(message: string): string {

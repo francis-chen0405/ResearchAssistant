@@ -12,7 +12,7 @@ export function CoverageStatus({
   const statusLabel = coverage ? researchStopLabel(coverage.reason_code) : "";
   const assessment = evidence?.post_analysis_assessment;
   const coverageIncomplete =
-    assessment?.coverage_incomplete ??
+    Boolean(assessment?.coverage_incomplete) ||
     (!!assessment &&
       (assessment.unresolved_gap_count > 0 ||
         assessment.partial_coverage_count > 0 ||
@@ -23,7 +23,7 @@ export function CoverageStatus({
             !["covered", "not_applicable"].includes(item.coverage_state),
         )));
   const searchOutcome = assessment
-    ? (assessment.search_outcome ??
+    ? (coverageIncomplete ? "incomplete_coverage" : assessment.search_outcome ??
       (coverageIncomplete
         ? "incomplete_coverage"
         : assessment.unadmitted_source_count > 0 ||
@@ -46,7 +46,7 @@ export function CoverageStatus({
             assessment?.unresolved_gap_count === 0
               ? "No unresolved evidence gaps were recorded."
               : `${assessment?.unresolved_gap_count ?? 0} unresolved evidence gaps were recorded.`
-          } Claim coverage was not assessed because the saved result contains no claim-coverage assessment.`
+          } Claim coverage was not assessed; the reason was not recorded.`
         : "The saved coverage assessment records gaps or incomplete dimensions, so conclusions are limited."
       : searchOutcome === "limited_evidence"
         ? "Some evidence was not admitted, or the admitted findings do not include direct support or challenge. The source outcomes and limitations below show what was retained."
@@ -74,21 +74,16 @@ export function CoverageStatus({
   );
   const assessmentOrigin = result.post_analysis_assessment
     ? "This assessment is included in the saved brief and export."
-    : "This is an additional assessment of saved evidence. The saved brief and export are unchanged.";
+    : "This is an additional assessment of saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.";
   const terminalStatusOrigin = result.post_analysis_assessment?.search_outcome
     ? "This post-analysis status is included in the saved brief and export."
-    : "Supplemental post-analysis status from saved evidence. The saved brief and export are unchanged.";
-  const claimStatus = assessment
-    ? assessment.supporting_count > assessment.challenging_count
-      ? "Supporting findings observed; claim not established"
-      : assessment.challenging_count > assessment.supporting_count
-        ? "Challenging findings observed; claim not established"
-        : assessment.supporting_count > 0
-          ? "Mixed supporting and challenging findings; claim not established"
-          : "Inconclusive: no admitted supporting or challenging finding"
-    : null;
+    : "Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.";
+  const claimStatus = "Claim not established by the admitted evidence";
   return (
     <>
+      {!assessment && !result.claim_coverage_map?.length && (
+        <p className="result-limitation">Claim coverage was not assessed; the reason was not recorded.</p>
+      )}
       {assessment && (
         <div className="result-limitation" role="status">
           <strong>Post-analysis research status · {searchOutcomeLabel}</strong>
@@ -118,7 +113,7 @@ export function CoverageStatus({
         <div className="result-limitation" role="status">
           <details>
             <summary>Earlier search decision · {statusLabel}</summary>
-            <p>{coverage.explanation}</p>
+            <details><summary>Technical search record</summary><p>{coverage.explanation}</p></details>
             <p>
               The search assessment counted {coverage.actionable_gap_count}{" "}
               unresolved evidence gap
@@ -137,8 +132,7 @@ export function CoverageStatus({
         <div className="result-limitation" role="status">
           <strong>Claim status · {claimStatus}</strong>
           <p>
-            These counts describe admitted findings; they do not independently
-            prove the claim.
+            The available assessment does not establish the balance of evidence across independent studies.
           </p>
           <small>{assessmentOrigin}</small>
         </div>
@@ -175,8 +169,7 @@ export function CoverageResultSections({
           </>
         ) : (
           <p>
-            No specific unresolved evidence gaps were recorded. This does not
-            establish that the claim is proven.
+            No specific unresolved evidence gaps were recorded. This does not establish that coverage was assessed or that the claim is proven.
           </p>
         )}
       </section>
@@ -201,9 +194,7 @@ export function CoverageResultSections({
       <section>
         <h2>Saved brief status</h2>
         <p>
-          Release validation passed:{" "}
-          {result.release_validation.valid ? "yes" : "no"}. The status above
-          reports the latest saved research decision.
+          Release checks passed: {result.release_validation.valid ? "yes" : "no"}. These checks do not establish scientific validity.
         </p>
       </section>
     </>

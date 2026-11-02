@@ -58,7 +58,7 @@ function hookHarness(relative, api, options = {}) {
         if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }),
           jsxs: (type, props) => ({ type, props }), Fragment: "Fragment" };
         if (name === "./dialog") return { Dialog: "Dialog" };
-        if (name === "./workspace") return { StatusPill: "StatusPill" };
+        if (name === "./workspace" || name === "@/components/workspace") return { StatusPill: "StatusPill" };
         if (name === "@/lib/api") return { ...load(path.resolve(__dirname, "../lib/api.ts")), researchApi: api };
         const resolved = path.resolve(path.dirname(file), `${name}.ts`);
         return load(fs.existsSync(resolved) ? resolved : resolved.replace(/\.ts$/, ".tsx"));
@@ -396,7 +396,7 @@ test("a successful trail retry clears the failure that previously hid its rows",
   result = harness.render("useResult", snapshot);
   await result.openTrail();
   result = harness.render("useResult", snapshot);
-  assert.equal(result.trailError, "temporary trail failure");
+  assert.equal(result.trailError, "The research trail could not be opened.");
   await result.openTrail();
   result = harness.render("useResult", snapshot);
   assert.equal(result.trailError, null);
@@ -731,4 +731,196 @@ test("citation labels do not infer randomization or vendor identity from unrelat
   assert.notEqual(exports.evidenceSourceType({ source_type: "clinical trial", source_url: "https://example.org/study" }), "Randomized trial");
   assert.equal(exports.evidenceConflictNotice({ source_url: "https://notflocksafety.com/article" }), null);
   assert.match(exports.evidenceConflictNotice({ source_url: "https://blog.flocksafety.com/article" }), /commercial interest/);
+});
+
+test("claim status does not infer evidence balance from finding counts", () => {
+  const { CoverageStatus } = hookHarness("features/results/coverage-status.tsx", {}).exports;
+  const assessment = { supporting_count: 20, challenging_count: 1, qualifying_count: 0,
+    unrelated_count: 0, admitted_source_ids: [], limitations: [], unresolved_gap_count: 0,
+    partial_coverage_count: 0, unavailable_coverage_count: 0, coverage_incomplete: true };
+  const tree = CoverageStatus({ result: { all_surviving_sources: [], claim_coverage_map: [] },
+    evidence: { post_analysis_assessment: assessment } });
+  const text = JSON.stringify(tree);
+  assert.match(text, /Claim not established by the admitted evidence/);
+  assert.match(text, /reason was not recorded/);
+  assert.doesNotMatch(text, /Supporting findings observed/);
+});
+
+test("unknown search stop and exception do not expose technical text", () => {
+  const { researchStopLabel, understandableRunMessage } = hookHarness("features/shared/presentation.ts", {}).exports;
+  assert.doesNotMatch(researchStopLabel("unexpected_internal_exception"), /unexpected_internal_exception/);
+  assert.doesNotMatch(understandableRunMessage({ classification: "failed", message: "RuntimeError: private detail" }), /RuntimeError/);
+});
+
+test("recommended sources are not repeated in survivor cards", () => {
+  const { SourceSections } = hookHarness("features/results/source-sections.tsx", {}).exports;
+  const source = { source_id: "one", source_url: "https://example.com", title: "A source",
+    status: "recommended_analyzed", recommended: true, discovery_providers: [], discovery_round: 1 };
+  const tree = SourceSections({ result: { recommended_sources: [source], all_surviving_sources: [source] }, evidence: null });
+  const cards = elementNodes(tree).filter((node) => node.type === "article");
+  assert.equal(cards.length, 1);
+});
+
+
+test("incomplete quotation does not discard a trailing qualification", () => {
+  const { completeQuote } = hookHarness("features/results/admitted-evidence.tsx", {}).exports;
+  assert.equal(completeQuote("The treatment reduced the outcome. However, only among"), null);
+  assert.equal(completeQuote("An incomplete passage without an ending"), null);
+  assert.equal(completeQuote("The treatment reduced the outcome. However, only among adults." ).text,
+    "The treatment reduced the outcome. However, only among adults.");
+});
+
+test("bottom line precedes status and does not rank repeated findings", () => {
+  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
+  const item = (id, relationship) => ({ ledger_claim_id: id, source_id: id,
+    source_url: "https://example.org/" + id, relationship_to_claim: relationship,
+    approved_factual_statement: id + " finding." });
+  const evidence = { items: [item("first", "supports"), item("copy", "supports"), item("contrast", "challenges")], source_titles: [] };
+  const result = { exact_claim: "Example claim", directions: {support_enabled: true, challenge_enabled: true},
+    synthesis: {sections: []}, all_surviving_sources: [], recommended_sources: [] };
+  const tree = V2ResultPaper({ result, evidence });
+  const children = tree.props.children;
+  assert.equal(children[3].props["aria-labelledby"], "bottom-line-heading");
+  const text = JSON.stringify(children[3]);
+  assert.match(text, /copy finding/);
+  assert.match(text, /contrast finding/);
+  assert.doesNotMatch(text, /first finding/);
+  assert.match(text, /not necessarily representative/);
+  assert.match(text, /does not establish the balance/);
+});
+
+test("discovery grouping retains fragments together but preserves query distinctions", () => {
+  const { SourceLeads, readableReason } = hookHarness("features/results/source-leads.tsx", {}).exports;
+  const lead = (id, url) => ({ lead_id:id, url, title:id, capture_status:"unknown", disposition:"pending",
+    search_directions:[], providers:[], rounds:[], confidence:"recorded", unknowns:[], history:[] });
+  const tree = SourceLeads({ items:[lead("a", "https://example.org/a?version=1#one"),
+    lead("b", "https://example.org/a?version=1#two"), lead("c", "https://example.org/a?version=2")],
+    total:3, notice:null, loading:false, loadingMore:false, error:null, hasMore:false,
+    onLoadMore() {}, onRetry() {} });
+  assert.equal(elementNodes(tree).filter(node => node.type === "article").length, 2);
+  assert.match(JSON.stringify(tree), /additional discovery/);
+  assert.doesNotMatch(readableReason("RuntimeError: secret internals"), /RuntimeError/);
+  assert.match(readableReason("cap_prevented"), /limit/);
+});
+
+
+test("quotation preserves recorded omissions and abbreviations", () => {
+  const { completeQuote } = hookHarness("features/results/admitted-evidence.tsx", {}).exports;
+  const passage = "Dr. Smith reported a result. ... However, the sample was small.";
+  assert.equal(completeQuote(passage).text, passage);
+  assert.equal(completeQuote("The effect was observed. ... However, only"), null);
+});
+
+test("new brief copies add the same bounded findings and retain the original release", () => {
+  const { briefWithReadingAid } = hookHarness("features/results/reading-aid.ts", {}).exports;
+  const evidence = { items: [{ledger_claim_id:"b", source_url:"https://mirror.example/work", relationship_to_claim:"supports", claim_fit:4, approved_factual_statement:"The measured outcome was associated with the program."}] };
+  const result = {exact_claim:"Does the program work?", directions:{support_enabled:true, challenge_enabled:false}, all_surviving_sources:[], claim_coverage_map:[], unresolved_material_gaps:[], stopping:{reason:"budget"}};
+  const copy = briefWithReadingAid("# Original release", result, evidence);
+  assert.match(copy, /not established by the admitted evidence/);
+  assert.match(copy, /not necessarily representative/);
+  assert.match(copy, /https:\/\/mirror.example\/work/);
+  assert.match(copy, /coverage was not assessed/);
+  assert.match(copy, /research limit stopped further work/);
+  assert.match(copy, /original released brief and its recorded hash remain unchanged/i);
+  assert.doesNotMatch(copy, /# Original release$/);
+  assert.match(briefWithReadingAid("# Original release", result, null), /detailed evidence is unavailable/);
+});
+
+test("study design is separate from publication type and unknown interests stay unknown", () => {
+  const { evidenceSourceType, evidenceStudyDesign, evidenceConflictNotice } = hookHarness("features/results/source-titles.tsx", {}).exports;
+  const trial = {source_type:"randomized_trial", source_url:"https://example.org/copy"};
+  assert.equal(evidenceStudyDesign(trial), "Randomized trial");
+  assert.equal(evidenceSourceType(trial), "Publication type not recorded");
+  assert.equal(evidenceStudyDesign({source_type:"working_paper"}), "Study design not recorded");
+  assert.equal(evidenceConflictNotice(trial), null);
+});
+
+test("verified DOI metadata takes priority over an unreliable captured title", () => {
+  const { evidenceCitation, sourceTitles } = hookHarness("features/results/source-titles.tsx", {}).exports;
+  const item = {source_id:"one", source_url:"https://mirror.example/file.pdf", title:"paper.pdf",
+    authors:["Unverified name"], publication_venue:"Unverified host", verified_publication:{
+      doi:"10.1000/abc", canonical_url:"https://doi.org/10.1000/abc", title:"Verified publication",
+      authors:["A. Author"], publication_date:"2024-02-01", venue:"Journal", verification:"crossref_doi"}};
+  const helper = sourceTitles({all_surviving_sources:[]}, {items:[item], source_titles:[{source_id:"one",display_title:"PDF file: file.pdf"}]});
+  assert.equal(helper.sourceHeading("one", item.title, item.source_url), "Verified publication");
+  assert.match(evidenceCitation(item), /A. Author · 2024 · Journal/);
+  assert.doesNotMatch(evidenceCitation(item), /Unverified/);
+});
+
+test("recorded source stops distinguish calls, tokens, money and unknown limits", () => {
+  const { sourceBudgetStop, sourceLocalStop } = hookHarness("features/shared/presentation.ts", {}).exports;
+  assert.match(sourceBudgetStop("physical_call_ceiling"), /call limit/);
+  assert.match(sourceBudgetStop("token_reserve"), /token allowance/);
+  assert.match(sourceBudgetStop("cost_reserve"), /money allowance/);
+  assert.match(sourceBudgetStop("unrecognized_internal"), /not recorded/);
+  assert.match(sourceLocalStop("token_cap_blocked"), /token limit/);
+  assert.match(sourceLocalStop("physical_call_cap_blocked"), /call limit/);
+});
+
+test("nonrandomized working papers retain both publication type and study design", () => {
+  const { evidenceSourceType, evidenceStudyDesign } = hookHarness("features/results/source-titles.tsx", {}).exports;
+  for (const source_type of ["nonrandomized working paper", "non-randomized working paper", "not randomized working paper"]) {
+    const item = { source_type, source_url: "https://institute.example/paper" };
+    assert.equal(evidenceSourceType(item), "Working paper");
+    assert.equal(evidenceStudyDesign(item), "Observational study");
+  }
+});
+
+test("copies and downloads use the server's canonical report interpretation verbatim", () => {
+  const { briefWithReadingAid } = hookHarness("features/results/reading-aid.ts", {}).exports;
+  const report = "# Reading aid\n\nVerified findings.\nUSD 0.05 reported; USD 0.02 reserved.\n";
+  assert.equal(briefWithReadingAid("immutable release", {}, { reading_aid_markdown: report }), report);
+});
+
+test("complete publication opening replaces illustrative selection and links all findings", () => {
+  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
+  const evidence = { items: [], publication_opening: [
+    { text: "The randomized study measured theft.", ledger_claim_ids: ["trial", "copy"] },
+    { text: "The observational study measured clearance.", ledger_claim_ids: ["observation"] },
+    { text: "Recorded limitations: follow-up was six months.", ledger_claim_ids: ["trial", "observation"] },
+  ] };
+  const result = { exact_claim: "Example claim", directions: { support_enabled: true, challenge_enabled: true },
+    synthesis: { sections: [] }, all_surviving_sources: [], recommended_sources: [] };
+  const tree = V2ResultPaper({ result, evidence });
+  const opening = tree.props.children[3];
+  assert.match(JSON.stringify(opening), /randomized study/);
+  assert.match(JSON.stringify(opening), /observational study/);
+  assert.match(JSON.stringify(opening), /do not establish independent studies/);
+  assert.doesNotMatch(JSON.stringify(opening), /not necessarily representative/);
+  assert.equal(elementNodes(opening).filter(node => node.type === "button").length, 3);
+});
+
+test("source pagination retries preserve earlier records and discard repeated record IDs", async () => {
+  let calls = 0;
+  const lead = id => ({ lead_id: id, url: "https://example.org/page", history: [] });
+  const api = {
+    sourceLeads: async (_run, _db, offset) => {
+      calls++;
+      if (!offset) return { items: [lead("a"), lead("a")], offset: 0, total: 3, has_more: true };
+      if (calls === 2) throw Error("temporary failure");
+      return { items: [lead("a"), lead("b")], offset: 2, total: 3, has_more: false };
+    },
+  };
+  const h = hookHarness("features/results/use-result.ts", api);
+  const snapshot = { run_id: "run", db_path: "db", classification: "cancelled" };
+  h.render("useResult", snapshot); h.runEffects();
+  await new Promise(resolve => setImmediate(resolve));
+  let state = h.render("useResult", snapshot);
+  assert.equal(state.sourceLeads.length, 1);
+  await state.loadMoreSourceLeads();
+  state = h.render("useResult", snapshot);
+  assert.ok(state.sourceLeadsError);
+  assert.equal(state.sourceLeads.length, 1);
+  await state.loadMoreSourceLeads();
+  state = h.render("useResult", snapshot);
+  assert.deepEqual(Array.from(state.sourceLeads, lead => lead.lead_id), ["a", "b"]);
+  assert.equal(state.sourceLeadsHasMore, false);
+});
+
+test("a rejected attempt does not obscure a saved release or remove resume guidance", () => {
+  const { understandableRunMessage, understandableAttemptMessage } = hookHarness("features/shared/presentation.ts", {}).exports;
+  const attempt = { classification: "invalid_input", diagnostic_component: "resume", message: "RuntimeError: private internals" };
+  assert.match(understandableRunMessage({ classification: "released", attempt_diagnostic: attempt }), /saved research result is available/);
+  assert.match(understandableRunMessage({ classification: "invalid_input", attempt_diagnostic: attempt }), /original settings or start a new run/);
+  assert.doesNotMatch(understandableAttemptMessage(attempt), /RuntimeError/);
 });

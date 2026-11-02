@@ -463,7 +463,13 @@ def test_v2_export_and_api_schema_use_the_persisted_final_output(
         generated_at=NOW,
     )
     assert exported.output_path.endswith("v2-result.md")
-    assert "Research direction: supporting evidence only" in (tmp_path / "v2-result.md").read_text()
+    export_text = (tmp_path / "v2-result.md").read_text()
+    assert "Research direction: supporting evidence only" in export_text
+    assert "The claim is not established by the admitted evidence" in export_text
+    assert "Original released brief" in export_text
+    assert output.all_surviving_sources[0].source_url in export_text
+    assert "Publication identity is not verified here" in export_text
+    assert "Earlier search decision" in export_text
 
     class _Controller:
         def has_active_runs(self) -> bool:
@@ -506,6 +512,9 @@ def test_v2_export_and_api_schema_use_the_persisted_final_output(
     assert evidence.status_code == 200
     assert evidence.json()["items"][0]["validation_status"] == "admitted"
     assert evidence.json()["items"][0]["quote_passage"]
+    for line in evidence.json()["budget_context"]:
+        assert line in export_text
+    assert "Configured limits" in export_text or "limits were not recorded" in export_text
 
 
 @pytest.mark.parametrize(

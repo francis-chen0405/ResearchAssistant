@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 from xml.sax.saxutils import escape
 
@@ -37,7 +38,10 @@ from researchassistant.storage.store import (
     read_v2_artifact,
 )
 
-EXPORTER_VERSION = "mvp8-local-export-v1"
+if TYPE_CHECKING:
+    from researchassistant.api.inspection_contracts import V2EvidenceDisplay
+
+EXPORTER_VERSION = "mvp8-local-export-v2"
 
 
 class BriefExportFormat(StrEnum):
@@ -106,6 +110,22 @@ def export_released_brief(
             if sha256(final_brief.encode("utf-8")).hexdigest() != rendered_hash:
                 raise ValueError("released brief hash does not match reconstructed brief")
 
+        # Keep the signed release immutable; new exports are rendered from the
+        # same admitted-evidence projection used by the result API.
+        if v2_output is not None:
+            from researchassistant.api.application_services.result_reads import (
+                read_evidence,
+            )
+
+            try:
+                display = read_evidence(db_path, parsed_run_id, source=store.connection)
+            except KeyError:
+                display = None
+            export_brief = (display.reading_aid_markdown if display else None) or _v2_reading_aid(
+                v2_output, display
+            )
+        else:
+            export_brief = final_brief
         timestamp = generated_at or datetime.now(UTC)
         controls = _read_controls(store.connection, parsed_run_id)
     metadata = BriefExportMetadata(
@@ -122,7 +142,7 @@ def export_released_brief(
     if os.path.lexists(destination):
         raise FileExistsError(f"refusing to overwrite existing export: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = _render_export(final_brief, metadata)
+    payload = _render_export(export_brief, metadata)
     # O_EXCL makes the no-overwrite guarantee hold even if another process creates
     # this path after the check above. Keeping the user-selected path unresolved
     # also ensures a dangling symlink is rejected instead of writing its target.
@@ -147,6 +167,224 @@ def export_released_brief(
         output_path=str(destination),
         content_sha256=sha256(payload).hexdigest(),
     )
+
+
+def _v2_reading_aid(
+    output: V2FinalResearchOutput, evidence: V2EvidenceDisplay | None = None
+) -> str:
+    """Describe saved fields without changing the signed release or inferring study identity."""
+    if evidence is not None and evidence.reading_aid_markdown:
+        return evidence.reading_aid_markdown
+    lines = [
+        "# Reading aid",
+        "",
+        f"Claim under review: {output.exact_claim}",
+        "",
+        "## Bottom line",
+    ]
+    if evidence is None:
+        lines.append(
+            "The detailed evidence is unavailable, so a conclusion cannot be assessed here."
+        )
+    elif evidence.items:
+        lines.append(
+            "The claim is not established by the admitted evidence. The available assessment "
+            "does not establish the balance of evidence across independent studies."
+        )
+    else:
+        lines.append(
+            "No evidence was admitted for this result, so the claim cannot be established from it."
+        )
+    if evidence and evidence.items:
+        lines.append(
+            "Study identity and evidence balance have not been verified. "
+            "Examples are selected by recorded claim fit, with a stable "
+            "identifier used to break ties; they are not necessarily "
+            "representative."
+        )
+        for relationship in ("supports", "challenges", "qualifies"):
+            candidates = sorted(
+                (
+                    item
+                    for item in evidence.items
+                    if item.relationship_to_claim.value == relationship
+                ),
+                key=lambda item: (-(item.claim_fit or 0), str(item.ledger_claim_id)),
+            )
+            if candidates:
+                item = candidates[0]
+                label = {
+                    "supports": "Supporting finding",
+                    "challenges": "Contrasting finding",
+                    "qualifies": "Qualification",
+                }[relationship]
+                lines.append(
+                    f"- {label}: {item.approved_factual_statement} (Read at: {item.source_url}.)"
+                )
+    if evidence and evidence.study_opening:
+        lines = lines[:5]
+        for assertion in evidence.study_opening:
+            item = next(
+                item for item in evidence.items if item.ledger_claim_id == assertion.ledger_claim_id
+            )
+            lines.append(f"{assertion.text} (Read at: {item.source_url})")
+    elif evidence and evidence.publication_opening:
+        lines = lines[:5]
+        for sentence in evidence.publication_opening:
+            citations = [
+                item.source_url
+                for item in evidence.items
+                if item.ledger_claim_id in sentence.ledger_claim_ids
+            ]
+            lines.append(f"{sentence.text} (Read at: {', '.join(citations)})")
+        lines.append(
+            "Grouped by verified publication; separate publications do not "
+            "establish independent studies."
+        )
+    if not output.claim_coverage_map:
+        lines.append("Claim coverage was not assessed; the reason was not recorded.")
+    elif (
+        (
+            evidence
+            and evidence.post_analysis_assessment
+            and evidence.post_analysis_assessment.coverage_incomplete
+        )
+        or output.unresolved_material_gaps
+        or any(
+            item.coverage_state.value not in {"covered", "not_applicable"}
+            for item in output.claim_coverage_map
+        )
+    ):
+        lines.append("Coverage was assessed and gaps or incomplete dimensions remain.")
+    else:
+        lines.append(
+            "Coverage was assessed and no gaps were recorded; this does not "
+            "prove complete coverage."
+        )
+    direction = (
+        "supporting and challenging evidence"
+        if output.directions.support_enabled and output.directions.challenge_enabled
+        else "supporting evidence only"
+        if output.directions.support_enabled
+        else "challenging evidence only"
+    )
+    lines.extend(("", f"Research direction: {direction}"))
+    stop_labels = {
+        "budget": (
+            "A research limit stopped further work. Recorded allowances and "
+            "usage are listed below; the specific exhausted limit was not "
+            "identified."
+        ),
+        "hard_round_limit": "The research round limit stopped further searching.",
+        "cancelled": "Research was cancelled before further work could be completed.",
+        "sufficient_source_pool": (
+            "The earlier search considered its source pool sufficient; this "
+            "did not establish evidence sufficiency."
+        ),
+        "no_useful_new_direction": "No useful new search direction was identified.",
+        "no_actionable_material_gap": "No actionable gap was identified for another search.",
+        "no_productive_new_search": "No productive new search was identified.",
+        "duplicate_heavy": "Search results substantially overlapped.",
+        "provider_eligibility_exhausted": "No eligible search provider remained.",
+        "degraded_gap_search_agent": "The follow-up search could not be completed.",
+        "invalid_search_agent_plan": "The follow-up search plan could not be used.",
+    }
+    lines.extend(
+        (
+            "",
+            "## Earlier search decision",
+            stop_labels.get(
+                output.stopping.reason.value,
+                "The reason the search stopped was not recorded in a recognizable form.",
+            ),
+        )
+    )
+    if evidence:
+        lines.extend(evidence.budget_context)
+    queue_stop_labels = {
+        "physical_call_ceiling": "The recorded call limit prevented source analysis.",
+        "token_reserve": "The recorded token allowance could not reserve source analysis.",
+        "cost_reserve": "The recorded money allowance could not reserve source analysis.",
+        "backfill_replaced": "Another source was selected for the available analysis slot.",
+    }
+    local_stop_labels = {
+        "source_budget_blocked": (
+            "A source-specific allowance prevented further analysis; its "
+            "amount was not recorded here."
+        ),
+        "token_cap_blocked": (
+            "A source-specific token limit prevented further analysis; its "
+            "amount was not recorded here."
+        ),
+        "physical_call_cap_blocked": (
+            "A source-specific call limit prevented further analysis; its "
+            "amount was not recorded here."
+        ),
+    }
+    for outcome in evidence.source_budget_outcomes if evidence else ():
+        source = next(
+            (item for item in output.all_surviving_sources if item.source_id == outcome.source_id),
+            None,
+        )
+        label = local_stop_labels.get(
+            outcome.outcome,
+            "A source-specific limit prevented further analysis; its details were not recorded.",
+        )
+        lines.append(f"- {source.title if source and source.title else 'Source'}: {label}")
+    for source in output.all_surviving_sources:
+        if source.status.value == "budget_prevented_analysis" and not any(
+            outcome.source_id == source.source_id
+            for outcome in (evidence.source_budget_outcomes if evidence else ())
+        ):
+            reason = source.budget_prevented_reason.value if source.budget_prevented_reason else ""
+            explanation = queue_stop_labels.get(
+                reason, "The limit that prevented source analysis was not recorded."
+            )
+            lines.append(f"- {source.title or 'Source'}: {explanation}")
+    lines.extend(("", "## Admitted evidence and reading locations"))
+    if evidence and evidence.items:
+        for item in evidence.items:
+            publication = item.verified_publication
+            if publication:
+                title = publication.title or "Title not recorded"
+                author = ", ".join(publication.authors) or "Author not recorded"
+                date = publication.publication_date or "Year not recorded"
+                venue = publication.venue or "Venue not recorded"
+                basis = (
+                    "Crossref DOI lookup"
+                    if publication.verification == "crossref_doi"
+                    else "reviewed authoritative identifier"
+                )
+                citation = (
+                    f"{title}; {author}; {date}; {venue}; {publication.canonical_url} ({basis})"
+                )
+            else:
+                citation = (
+                    f"Recorded title: {item.title or 'Not recorded'}; "
+                    "Publication identity is not verified here"
+                )
+            lines.append(
+                f"- {item.approved_factual_statement}\n  {citation}. Read at: {item.source_url}."
+            )
+            lines.append("  Recorded passage (may be incomplete; check the source context):")
+            lines.append("  " + item.quote_passage)
+            if item.limitations:
+                lines.append("  Recorded limitations: " + " ".join(item.limitations))
+            lines.append("  Recorded source type: " + (item.source_type or "Not recorded"))
+    else:
+        lines.append("- Detailed admitted passages are unavailable or none were admitted.")
+    lines.extend(
+        (
+            "",
+            "## Original released brief",
+            (
+                "The original released brief and its recorded hash remain "
+                "unchanged in the research history. This report is generated from "
+                "saved evidence."
+            ),
+        )
+    )
+    return "\n".join(lines)
 
 
 def _read_v2_final_output(source: DatabaseReader, run_id: UUID) -> V2FinalResearchOutput | None:
@@ -219,8 +457,8 @@ def _markdown(brief: str, metadata: BriefExportMetadata) -> str:
         "-->\n\n"
     )
     warning = (
-        "> **Human review required:** This locally exported report preserves the "
-        "released brief. Deterministic validation does not establish factual infallibility.\n\n"
+        "> **Human review required:** The recorded hash identifies the saved released brief. "
+        "Deterministic validation does not establish factual infallibility.\n\n"
     )
     return trace + warning + brief
 

@@ -113,6 +113,39 @@ def normalize_approved_additive_fields(
             assert properties.pop("blocked_queries") == optional_nonnegative("Blocked Queries")
             assert properties.pop("unknown_queries") == optional_nonnegative("Unknown Queries")
 
+    # Explicitly reviewed additive presentation contracts; preserve all frozen
+    # research contracts and reject changes to these additions as well.
+    import json
+    from pathlib import Path
+
+    additions_text = (
+        Path(__file__).parent / "fixtures/report-presentation-schema.json"
+    ).read_text()
+    additions = json.loads(additions_text.replace("#/$defs/", f"#/{reference_root}/"))
+    if reference_root == "components/schemas":
+        # FastAPI omits null defaults in its OpenAPI projection.
+        def strip_null_defaults(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {
+                    key: strip_null_defaults(item)
+                    for key, item in value.items()
+                    if not (key == "default" and item is None)
+                }
+            if isinstance(value, list):
+                return [strip_null_defaults(item) for item in value]
+            return value
+
+        additions = strip_null_defaults(additions)
+    for model in models:
+        title = model.get("title")
+        for field, expected in additions["fields"].get(title, {}).items():
+            actual = model["properties"].pop(field)
+            assert actual == expected, (title, field, actual, expected)
+    definitions = document.get("$defs", document)
+    for name, expected in additions["models"].items():
+        if name in definitions:
+            assert definitions.pop(name) == expected
+
     definitions = document.get("$defs")
     if definitions is not None and "ConfirmedPaperLocation" in definitions:
         assert definitions.pop("ConfirmedPaperLocation") == confirmed_location

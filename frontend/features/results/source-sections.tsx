@@ -1,7 +1,7 @@
 import type { V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
 import type { ReactNode } from "react";
-import { readableStage } from "../shared/presentation";
-import { sourceTitles } from "./source-titles";
+import { evidenceSourceType, sourceTitles } from "./source-titles";
+import { sourceBudgetStop } from "../shared/presentation";
 
 export function SourceSections({
   result,
@@ -22,21 +22,24 @@ export function SourceSections({
       item.outcome,
     ]),
   );
+
   const sourceOutcome = (
     status: string,
     sourceId: string,
     recommended: boolean,
+    budgetReason: string | null | undefined,
   ) => {
     const budgetOutcome = budgetOutcomeBySource.get(sourceId);
     if (budgetOutcome) {
       const label =
         budgetOutcome === "source_budget_blocked"
-          ? "source budget blocked"
+          ? "source allowance prevented analysis"
           : budgetOutcome === "token_cap_blocked"
-            ? "source token-cap blocked"
-            : "source call-cap blocked";
+            ? "source token limit prevented analysis"
+            : "source call limit prevented analysis";
       return `${recommended ? "Recommended" : "Survived selection"} · ${label}`;
     }
+    if (status === "budget_prevented_analysis") return sourceBudgetStop(budgetReason);
     return (
       (
         {
@@ -52,7 +55,7 @@ export function SourceSections({
           surviving_not_deeply_analyzed: "Survived selection · not assessed",
           budget_prevented_analysis: "Provisional · analysis prevented by budget",
         } as Record<string, string>
-      )[status] ?? readableStage(status)
+      )[status] ?? "Selection outcome not recognized"
     );
   };
   const sourceOutcomeSummary = (
@@ -63,11 +66,11 @@ export function SourceSections({
       const budgetOutcome = budgetOutcomeBySource.get(source.source_id);
       const label =
         budgetOutcome === "source_budget_blocked"
-          ? "source budget blocked"
+          ? "source allowance prevented analysis"
           : budgetOutcome === "token_cap_blocked"
-            ? "source token-cap blocked"
+            ? "source token limit prevented analysis"
             : budgetOutcome === "physical_call_cap_blocked"
-              ? "source call-cap blocked"
+              ? "source call limit prevented analysis"
               : source.status === "recommended_analyzed" ||
                   source.status === "surviving_analyzed"
                 ? "evidence assessed"
@@ -82,7 +85,7 @@ export function SourceSections({
                         : source.status.endsWith("not_deeply_analyzed")
                           ? "not assessed"
                           : source.status === "budget_prevented_analysis"
-                            ? "provisional; analysis prevented by budget"
+                            ? sourceBudgetStop(source.budget_prevented_reason)
                             : null;
       if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
     }
@@ -136,7 +139,7 @@ export function SourceSections({
                 </div>
               ) : null}
               <small>
-                {source.source_type || "Source"} · discovered via{" "}
+                {details ? evidenceSourceType(details) : "Source"} · discovered via{" "}
                 {source.discovery_providers.join(", ") || "recorded source"} ·{" "}
                 {source.recommended
                   ? "Recommended for deeper analysis"
@@ -146,6 +149,7 @@ export function SourceSections({
                   source.status,
                   source.source_id,
                   source.recommended,
+                  source.budget_prevented_reason,
                 )}{" "}
                 · round {source.discovery_round}
               </small>
@@ -168,6 +172,7 @@ export function SourceSections({
     ) : (
       <p>No source records are available in this section.</p>
     );
+  const otherSources = result.all_surviving_sources.filter((source) => !result.recommended_sources.some((recommended) => recommended.source_id === source.source_id));
   const groupedNotices = evidence?.study_lineage ?? [];
   const sharedWebsites = evidence?.shared_website_groups ?? [];
   return (
@@ -265,7 +270,7 @@ export function SourceSections({
         )}
         {sourceCards(result.recommended_sources)}
       </section>
-      <section>
+      {otherSources.length > 0 && <section>
         <h2>Survivor Sources</h2>
         {result.all_surviving_sources.length > 0 && (
           <p>
@@ -276,8 +281,8 @@ export function SourceSections({
             {sourceOutcomeSummary(result.all_surviving_sources)}
           </p>
         )}
-        {sourceCards(result.all_surviving_sources)}
-      </section>
+        {sourceCards(otherSources)}
+      </section>}
     </>
   );
 }

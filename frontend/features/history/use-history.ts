@@ -40,11 +40,9 @@ export function useHistory(
       if (id !== listRequestId.current) return;
       setHistory(result.items);
       setOffline(false);
-    } catch (error) {
+    } catch {
       if (id === listRequestId.current) {
-        notify(
-          error instanceof Error ? error.message : "History is not available.",
-        );
+        notify("History is not available. Try again.");
         setOffline(true);
       }
     } finally {
@@ -77,13 +75,9 @@ export function useHistory(
       setSnapshot(result);
       setActiveRun({ id: item.run_id, database: requestedDatabase });
       setView("research");
-    } catch (error) {
+    } catch {
       if (id === selectionRequestId.current)
-        notify(
-          error instanceof Error
-            ? error.message
-            : "That research run could not be opened.",
-        );
+        notify("That research run could not be opened. Try again.");
     } finally {
       if (id === selectionRequestId.current) setBusy(false);
     }

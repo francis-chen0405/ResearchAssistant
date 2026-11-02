@@ -235,6 +235,12 @@ def test_result_requests_use_one_validated_snapshot_and_close_before_projection(
         if endpoint == "v2-result"
         else api._build_v2_evidence_display(output, admitted).model_dump(mode="json")
     )
+    if endpoint == "v2-evidence":
+        # The read service now adds recorded usage and the shared export text to
+        # the unchanged evidence projection. Verify those additions separately.
+        expected = result_reads.read_evidence(database, admitted.run_id).model_dump(mode="json")
+        assert expected["reading_aid_markdown"]
+        assert "not recorded" in " ".join(expected["budget_context"])
     before = Path(database).read_bytes()
     open_reader = result_reads.open_read_only_store
     read_artifact = result_reads.read_v2_artifact

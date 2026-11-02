@@ -5,11 +5,27 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from researchassistant.agents.v2_post_analysis import V2PostAnalysisAssessment
+from researchassistant.contracts.discovery_v2 import safe_location
 from researchassistant.contracts.models import StrictModel, V2EvidenceRelationship
+from researchassistant.evidence.report_review import OpeningAssertion
 from researchassistant.evidence.study_lineage import StudyLineageNotice
+
+
+class V2VerifiedPublication(StrictModel):
+    """Metadata returned for the same DOI by Crossref, not proof of source content."""
+
+    doi: str | None = None
+    canonical_url: str = Field(min_length=1)
+    title: str | None = None
+    authors: tuple[str, ...] = ()
+    publication_date: str | None = None
+    venue: str | None = None
+    verification: Literal["crossref_doi", "authority_identifier"] = "crossref_doi"
+
+    _safe_canonical_url = field_validator("canonical_url")(safe_location)
 
 
 class V2EvidenceDisplayItem(StrictModel):
@@ -24,6 +40,7 @@ class V2EvidenceDisplayItem(StrictModel):
     publication_date: str | None = None
     doi: str | None = None
     publication_venue: str | None = None
+    verified_publication: V2VerifiedPublication | None = None
     claim_fit: int | None = Field(default=None, ge=1, le=5)
     source_context_notice: str | None = None
     source_family: str = Field(min_length=1)
@@ -74,9 +91,21 @@ class V2SourceTitleDisplay(StrictModel):
     captured_title: str | None = None
 
 
+class PublicationOpeningSentence(StrictModel):
+    """Exact admitted findings grouped by verified publication, not inferred study independence."""
+
+    text: str = Field(min_length=1)
+    ledger_claim_ids: tuple[UUID, ...] = Field(min_length=1)
+
+
 class V2EvidenceDisplay(StrictModel):
     run_id: UUID
     items: tuple[V2EvidenceDisplayItem, ...]
+    study_opening: tuple[OpeningAssertion, ...] = ()
+    study_review_rationale: str | None = None
+    budget_context: tuple[str, ...] = ()
+    reading_aid_markdown: str | None = None
+    publication_opening: tuple[PublicationOpeningSentence, ...] = ()
     source_titles: tuple[V2SourceTitleDisplay, ...] = ()
     study_lineage: tuple[StudyLineageNotice, ...] = ()
     source_budget_outcomes: tuple[V2SourceBudgetOutcomeDisplay, ...] = ()

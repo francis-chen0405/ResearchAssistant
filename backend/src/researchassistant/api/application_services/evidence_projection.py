@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import quote, urldefrag, urlsplit
 from uuid import UUID
 
 from researchassistant.agents.v2_post_analysis import (
@@ -18,7 +18,9 @@ from researchassistant.api.inspection_contracts import (
     V2SharedWebsiteGroup,
     V2SourceBudgetOutcomeDisplay,
     V2SourceTitleDisplay,
+    V2VerifiedPublication,
 )
+from researchassistant.contracts.discovery_v2 import normalize_doi
 from researchassistant.contracts.models import (
     CandidateQuoteBlock,
     LedgerRecord,
@@ -28,6 +30,7 @@ from researchassistant.contracts.models import (
     V2DeepAnalysisBackfillResult,
     V2DeepAnalysisSourceExecution,
     V2DeepAnalysisSourceExecutionState,
+    V2DiscoveryScoutOutput,
     V2EvidenceAdmissionBatchResult,
     V2EvidenceAdmissionRecord,
     V2EvidenceAnalystSourceResult,
@@ -105,6 +108,7 @@ def _build_v2_evidence_display(
     gap_analysis: V2GapAnalysisOutput | None = None,
     governor_decision: V2RoundFourGovernorDecision | None = None,
     backfill: V2DeepAnalysisBackfillResult | None = None,
+    discovery_outputs: tuple[V2DiscoveryScoutOutput, ...] = (),
 ) -> V2EvidenceDisplay:
     """Project persisted v2 evidence into a read-only result-page view."""
     _validate_evidence_display_consistency(output, evidence_result)
@@ -148,6 +152,50 @@ def _build_v2_evidence_display(
         selection_candidate = selection_candidates.get(admission.source_id)
         if selection_candidate is None:
             raise ValueError("admitted source is missing its persisted selection metadata")
+        verified_publication = None
+        # Match the actual selection cluster and its recorded DOI; a title match
+        # alone cannot establish identity. Crossref verifies metadata for the DOI,
+        # not the correctness of every claim made by the page that was read.
+        matching = []
+        for discovery in discovery_outputs:
+            if discovery.run_id != output.run_id:
+                raise ValueError("publication metadata belongs to another run")
+            cluster = next(
+                (c for c in discovery.clusters if c.cluster_id == admission.source_id),
+                None,
+            )
+            if cluster is None or not selection_candidate.doi:
+                continue
+            try:
+                selected_doi = normalize_doi(selection_candidate.doi)
+            except ValueError:
+                continue
+            for item in discovery.items:
+                metadata = item.crossref
+                if (
+                    item.item_id not in cluster.item_ids
+                    or urldefrag(item.source_url).url != urldefrag(record.source_url).url
+                    or not metadata
+                    or not metadata.verified
+                    or not metadata.doi
+                ):
+                    continue
+                try:
+                    matches = normalize_doi(metadata.doi) == selected_doi
+                except ValueError:
+                    matches = False
+                if matches:
+                    matching.append(metadata)
+        if matching and all(item == matching[0] for item in matching):
+            metadata = matching[0]
+            verified_publication = V2VerifiedPublication(
+                doi=selected_doi,
+                canonical_url="https://doi.org/" + quote(selected_doi, safe="/"),
+                title=metadata.canonical_title,
+                authors=metadata.canonical_authors,
+                publication_date=metadata.publication_date,
+                venue=metadata.container_title,
+            )
         limitations = (
             *analyst.assessment.material_limitations,
             *analyst.assessment.inferential_boundaries,
@@ -163,6 +211,7 @@ def _build_v2_evidence_display(
                 publication_date=selection_candidate.publication_date,
                 doi=selection_candidate.doi,
                 publication_venue=selection_candidate.publication_venue,
+                verified_publication=verified_publication,
                 claim_fit=record.claim_fit,
                 source_context_notice=_source_context_notice(
                     source_type=source.source_type,

@@ -1,11 +1,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
-import type { RunSnapshot } from "@/lib/api";
+import type { RunSnapshot, V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
+import { briefWithReadingAid } from "./reading-aid";
 import { ModelUsageDisclosure } from "../shared/model-usage";
 import {
   readableStage,
   readableProvider,
   understandableRunMessage,
+  understandableAttemptMessage,
   providerOutcomeLabel,
   formatCost,
 } from "../shared/presentation";
@@ -23,11 +25,9 @@ export function ResultView({
   const released = snapshot.classification === "released";
   const userStatus = understandableRunMessage(snapshot);
   const diagnostics = snapshot.v2_diagnostics;
-  const knownCost = Number(snapshot.known_cost_subtotal_usd ?? 0);
-  const conservativeCost = Number(
-    snapshot.conservative_reserved_cost_usd ?? snapshot.known_cost_subtotal_usd ?? 0,
-  );
-  const pendingReservation = Math.max(0, conservativeCost - knownCost);
+  const pendingReservation = snapshot.known_cost_subtotal_usd != null && snapshot.conservative_reserved_cost_usd != null
+    ? Math.max(0, Number(snapshot.conservative_reserved_cost_usd) - Number(snapshot.known_cost_subtotal_usd))
+    : null;
   const {
     v2Result,
     v2Evidence,
@@ -59,7 +59,7 @@ export function ResultView({
         <div>
           <p className="eyebrow">
             {released
-              ? "Validated release"
+              ? "Released research"
               : readableStage(snapshot.classification)}
           </p>
           <motion.h2 layoutId={`claim-${snapshot.run_id}`}>
@@ -86,9 +86,7 @@ export function ResultView({
             <div className="empty-brief">
               <h3>No brief was released.</h3>
               <p>{userStatus}</p>
-              {snapshot.validation_errors.map((error) => (
-                <p key={error}>{error}</p>
-              ))}
+              {snapshot.validation_errors.length > 0 && <p>The result did not pass release checks. Details are available in the research trail.</p>}
             </div>
           )}
         </article>
@@ -99,7 +97,7 @@ export function ResultView({
               snapshot.persisted_status ?? "",
             ) && (
               <p role="status">
-                Latest execution attempt: {snapshot.attempt_diagnostic.message}
+                Latest execution attempt: {understandableAttemptMessage(snapshot.attempt_diagnostic)}
               </p>
             )}
           <section className="provider-diagnostics">
@@ -173,7 +171,7 @@ export function ResultView({
                   ? "Known model spend"
                   : "Known model spend so far"}
               </dt>
-              <dd>{formatCost(snapshot.known_cost_subtotal_usd)}</dd>
+              <dd>{snapshot.known_cost_subtotal_usd == null ? "Not recorded" : formatCost(snapshot.known_cost_subtotal_usd)}</dd>
             </div>
             {snapshot.cost_budget_limit_usd != null && (
               <div>
@@ -184,7 +182,7 @@ export function ResultView({
             {!snapshot.cost_usage_complete && (
               <div>
                 <dt>Held for calls without usage reports</dt>
-                <dd>{formatCost(pendingReservation)}</dd>
+                <dd>{pendingReservation == null ? "Not recorded" : formatCost(pendingReservation)}</dd>
               </div>
             )}
           </dl>
@@ -239,9 +237,7 @@ export function ResultView({
           {Boolean(diagnostics?.diagnostic_messages?.length) && (
             <section className="provider-diagnostics">
               <span>Research notes</span>
-              {diagnostics?.diagnostic_messages?.map((message, index) => (
-                <p key={`${index}-${message}`}>{message}</p>
-              ))}
+              <p>Additional technical details are available in the research trail.</p>
             </section>
           )}
           {Boolean(diagnostics?.provider_outcomes?.length) && (
@@ -277,7 +273,7 @@ export function ResultView({
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(
-                    snapshot.final_brief ?? "",
+                    briefWithReadingAid(snapshot.final_brief ?? "", v2Result, v2Evidence),
                   );
                   setResultError("Brief copied.");
                 } catch {
@@ -294,7 +290,7 @@ export function ResultView({
             <button
               className="download-action"
               type="button"
-              onClick={() => downloadBrief(snapshot)}
+              onClick={() => downloadBrief(snapshot, v2Result, v2Evidence)}
             >
               <span>Download brief</span>
               <b>↓</b>
@@ -360,9 +356,9 @@ export function Brief({ text }: { text: string }) {
   });
 }
 
-export function downloadBrief(snapshot: RunSnapshot): void {
+export function downloadBrief(snapshot: RunSnapshot, result: V2FinalResearchOutput | null = null, evidence: V2EvidenceDisplay | null = null): void {
   if (!snapshot.final_brief) return;
-  const blob = new Blob([snapshot.final_brief], {
+  const blob = new Blob([briefWithReadingAid(snapshot.final_brief, result, evidence)], {
     type: "text/markdown;charset=utf-8",
   });
   const url = URL.createObjectURL(blob);

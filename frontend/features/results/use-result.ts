@@ -56,13 +56,11 @@ export function useResult(snapshot: RunSnapshot) {
         return;
       setTrailError(null);
       setTrail(result.items);
-    } catch (error) {
+    } catch {
       if (trailRequest.current !== request || request.controller.signal.aborted)
         return;
       setTrailError(
-        error instanceof Error
-          ? error.message
-          : "The research trail could not be opened.",
+        "The research trail could not be opened.",
       );
     }
   };
@@ -97,7 +95,7 @@ export function useResult(snapshot: RunSnapshot) {
         setSourceLeadsHasMore(result.has_more);
         nextSourceLeadsOffset.current = result.offset + result.items.length;
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (
           disposed ||
           sourceLeadsRequest.current !== sourceRequest ||
@@ -105,9 +103,7 @@ export function useResult(snapshot: RunSnapshot) {
         )
           return;
         setSourceLeadsError(
-          error instanceof Error
-            ? error.message
-            : "Discovered source leads could not be loaded.",
+          "Discovered source leads could not be loaded.",
         );
       })
       .finally(() => {
@@ -206,14 +202,10 @@ export function useResult(snapshot: RunSnapshot) {
       setSourceLeadsTotal(result.total);
       setSourceLeadsHasMore(result.has_more);
       nextSourceLeadsOffset.current = result.offset + result.items.length;
-    } catch (error) {
+    } catch {
       if (sourceLeadsRequest.current !== request || controller.signal.aborted)
         return;
-      setSourceLeadsError(
-        error instanceof Error
-          ? error.message
-          : "More source leads could not be loaded.",
-      );
+      setSourceLeadsError("More source leads could not be loaded.");
     } finally {
       if (sourceLeadsRequest.current === request) {
         sourceLeadsMorePending.current = false;

@@ -1,5 +1,4 @@
 import type { V2FinalResearchOutput, V2EvidenceDisplay } from "@/lib/api";
-import { readableStage } from "../shared/presentation";
 
 type EvidenceItem = V2EvidenceDisplay["items"][number];
 
@@ -28,12 +27,13 @@ export function evidenceReadLocation(item: EvidenceItem): string {
 }
 
 export function evidenceCitation(item: EvidenceItem): string {
-  const authors = item.authors ?? [];
+  const authors = item.verified_publication?.authors ?? item.authors ?? [];
   const author = authors[0]
     ? `${authors[0]}${authors.length > 1 ? " et al." : ""}`
     : "Author not recorded";
-  const year = item.publication_date?.match(/(?:18|19|20)\d{2}/)?.[0] ?? "Year not recorded";
-  const venue = item.publication_venue || "Venue not recorded";
+  const date = item.verified_publication ? item.verified_publication.publication_date : item.publication_date;
+  const year = date?.match(/(?:18|19|20)\d{2}/)?.[0] ?? "Year not recorded";
+  const venue = (item.verified_publication ? item.verified_publication.venue : item.publication_venue) || "Venue not recorded";
   return `${author} · ${year} · ${venue}`;
 }
 
@@ -48,14 +48,27 @@ export function evidenceSourceType(item: EvidenceItem): string {
   if (/(^|\.)flocksafety\.com$/.test(hostname)) return "Vendor blog";
   if (/(^|\.)(linkedin\.com|x\.com|twitter\.com)$/.test(hostname)) return "Social post";
   if (/op[ -]?ed|editorial|opinion/.test(sourceType)) return "Op-ed";
-  if (/randomi[sz]ed/.test(sourceType)) return "Randomized trial";
+  if (/working paper/.test(sourceType)) return "Working paper";
   if (/peer.?review|journal|scholarly|research paper/.test(sourceType)) return "Research publication";
   if (/government summary/.test(sourceType)) return "Government summary";
   if (/advocacy group/.test(sourceType)) return "Advocacy group";
   if (/vendor|company blog/.test(sourceType)) return "Vendor source";
   if (!sourceType || sourceType === "general web") return "Source type not recorded";
-  return readableStage(sourceType);
+  return "Publication type not recorded";
 }
+
+export function evidenceStudyDesign(item: EvidenceItem): string {
+  const sourceType = (item.source_type ?? "").toLowerCase().replaceAll("_", " ");
+  if (/observational|non[ -]?randomi[sz]ed|not randomi[sz]ed/.test(sourceType)) return "Observational study";
+  if (/\brandomi[sz]ed\b/.test(sourceType)) return "Randomized trial";
+  return "Study design not recorded";
+}
+
+// Only publishers with a documented product interest belong here. Unknown hosts
+// do not imply an absence or presence of a conflict.
+const publisherInterests: ReadonlyArray<{ domain: string; explanation: string }> = [
+  { domain: "flocksafety.com", explanation: "Flock Safety publishes this source and has a commercial interest in ALPR products." },
+];
 
 export function evidenceConflictNotice(item: EvidenceItem): string | null {
   let hostname = "";
@@ -64,9 +77,7 @@ export function evidenceConflictNotice(item: EvidenceItem): string | null {
   } catch {
     return null;
   }
-  return /(^|\.)flocksafety\.com$/.test(hostname)
-    ? "Flock Safety publishes this source and has a commercial interest in ALPR products."
-    : null;
+  return publisherInterests.find(({ domain }) => hostname === domain || hostname.endsWith(`.${domain}`))?.explanation ?? null;
 }
 
 export function sourceTitles(
@@ -81,9 +92,10 @@ export function sourceTitles(
     capturedTitle: string | null | undefined,
     sourceUrl: string,
   ) => {
+    const evidenceItem = evidence?.items.find((item) => item.source_id === sourceId);
+    if (evidenceItem?.verified_publication) return evidenceItem.verified_publication.title || "Publication title not recorded";
     const displayTitle = sourceTitleById.get(sourceId)?.display_title;
     if (displayTitle && !displayTitle.startsWith("PDF file:")) return displayTitle;
-    const evidenceItem = evidence?.items.find((item) => item.source_id === sourceId);
     if (evidenceItem) return evidenceCitation(evidenceItem);
     return capturedTitle && !/^S?\d{7,}[a-z0-9]*\s+\d+\.\.\d+/i.test(capturedTitle)
       ? capturedTitle
@@ -94,11 +106,9 @@ export function sourceTitles(
     capturedTitle: string | null | undefined,
   ) => {
     const projected = sourceTitleById.get(sourceId);
-    if (
-      !projected ||
-      !capturedTitle ||
-      projected.display_title === capturedTitle
-    )
+    const verifiedTitle = evidence?.items.find((item) => item.source_id === sourceId)?.verified_publication?.title;
+    if (!capturedTitle || (!projected && !verifiedTitle) ||
+      (verifiedTitle ? verifiedTitle === capturedTitle : projected?.display_title === capturedTitle))
       return null;
     return (
       <details className="source-provenance">

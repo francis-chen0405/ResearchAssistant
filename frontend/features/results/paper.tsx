@@ -3,6 +3,7 @@ import { AdmittedEvidence } from "./admitted-evidence";
 import { CoverageResultSections, CoverageStatus } from "./coverage-status";
 import { SourceSections } from "./source-sections";
 import { sourceTitles } from "./source-titles";
+import { selectedFindings as selectFindings } from "./reading-aid";
 
 export function V2ResultPaper({
   result,
@@ -29,85 +30,7 @@ export function V2ResultPaper({
     result,
     evidence,
   );
-  const studyGroups = (() => {
-    const parentBySource = new Map<string, string>();
-    const findRoot = (id: string): string => {
-      const parent = parentBySource.get(id);
-      if (!parent || parent === id) {
-        parentBySource.set(id, id);
-        return id;
-      }
-      const root = findRoot(parent);
-      parentBySource.set(id, root);
-      return root;
-    };
-    const joinSources = (sourceIds: string[]) => {
-      const [first, ...rest] = sourceIds;
-      if (!first) return;
-      for (const id of rest) parentBySource.set(findRoot(id), findRoot(first));
-    };
-    for (const notice of evidence?.study_lineage ?? []) {
-      joinSources(notice.source_ids);
-    }
-    const groups = new Map<
-      string,
-      {
-        sources: Map<string, string>;
-        relationships: Set<string>;
-        findings: Map<string, string[]>;
-      }
-    >();
-    for (const item of evidence?.items ?? []) {
-      const root = findRoot(item.source_id);
-      const group = groups.get(root) ?? {
-        sources: new Map<string, string>(),
-        relationships: new Set<string>(),
-        findings: new Map<string, string[]>(),
-      };
-      group.sources.set(
-        item.source_id,
-        sourceHeading(item.source_id, item.title, item.source_url),
-      );
-      group.relationships.add(item.relationship_to_claim);
-      const statements = group.findings.get(item.relationship_to_claim) ?? [];
-      const citation = sourceHeading(item.source_id, item.title, item.source_url);
-      const statement = `${item.approved_factual_statement.replace(/[.!?]+$/, "")} (${citation})`;
-      if (!statements.includes(statement)) {
-        statements.push(statement);
-      }
-      group.findings.set(item.relationship_to_claim, statements);
-      groups.set(root, group);
-    }
-    return [...groups.values()];
-  })();
-  const studiesWith = (relationship: string) =>
-    studyGroups.filter((group) => group.relationships.has(relationship));
-  const findingSummaries = (relationship: string) =>
-    studiesWith(relationship)
-      .map((group) => {
-        const findings = group.findings.get(relationship);
-        return findings?.length ? findings.join("; ") : null;
-      })
-      .filter((summary): summary is string => Boolean(summary));
-  const supportingSummaries = findingSummaries("supports");
-  const challengingSummaries = findingSummaries("challenges");
-  const firstRelationship =
-    challengingSummaries.length > supportingSummaries.length
-      ? "challenges"
-      : "supports";
-  const orderedSummaries =
-    firstRelationship === "challenges"
-      ? [challengingSummaries, supportingSummaries]
-      : [supportingSummaries, challengingSummaries];
-  const orderedLabels =
-    firstRelationship === "challenges"
-      ? ["Challenging", "Supporting"]
-      : ["Supporting", "Challenging"];
-  const qualifyingGroupCount = studiesWith("qualifies").length;
-  const claimBottomLine =
-    evidence?.post_analysis_assessment?.claim_established === false
-      ? "The claim is not established by this evidence review."
-      : "This evidence review does not determine whether the claim is established.";
+  const selectedFindings = selectFindings(evidence);
   const openEvidence = (ledgerClaimId: string) => {
     const detail = document.getElementById(`evidence-${ledgerClaimId}`);
     if (detail instanceof HTMLDetailsElement) {
@@ -125,38 +48,39 @@ export function V2ResultPaper({
     <>
       <p className="eyebrow">Your research result</p>
       <h1>Research Brief</h1>
-      <CoverageStatus result={result} evidence={evidence} />
       <p>Claim under review: {result.exact_claim}</p>
-      {evidence?.items.length ? (
-        <section
-          className="result-bottom-line"
-          aria-labelledby="bottom-line-heading"
-        >
-          <h2 id="bottom-line-heading">Bottom line</h2>
-          <p>
-            {orderedLabels.map((label, index) => {
-              const summaries = orderedSummaries[index];
-              return (
-                <span key={label}>
-                  {label} findings: {summaries.length
-                    ? summaries.slice(0, 3).join("; ")
-                    : "none in the admitted evidence"}.
-                  {summaries.length > 3 &&
-                    ` ${summaries.length - 3} additional ${label.toLowerCase()} evidence groups appear below.`}{" "}
-                </span>
-              );
-            })}
-            {qualifyingGroupCount > 0 &&
-              `${qualifyingGroupCount} evidence ${qualifyingGroupCount === 1 ? "group qualifies" : "groups qualify"} these findings. `}
-            {claimBottomLine}
+      <section className="result-bottom-line" aria-labelledby="bottom-line-heading">
+        <h2 id="bottom-line-heading">Bottom line</h2>
+        {evidence?.study_opening?.length ? (
+          <p>{evidence.study_opening.map((assertion) => <span key={assertion.role}>{assertion.text}{" "}<button type="button" className="text-action" onClick={() => openEvidence(assertion.ledger_claim_id)}>View evidence and source</button>{" "}</span>)}</p>
+        ) : evidence?.publication_opening?.length ? (
+          <>
+            <p>{evidence.publication_opening.map((sentence, index) => <span key={index}>{sentence.text}{" "}<button type="button" className="text-action" onClick={() => openEvidence(sentence.ledger_claim_ids[0])}>View evidence and source</button>{" "}</span>)}</p>
+            <small>Grouped by verified publication; separate publications do not establish independent studies.</small>
+          </>
+        ) : <p>
+          {evidence === null
+            ? "The detailed evidence has not loaded, so a conclusion cannot be assessed here."
+            : evidence.items.length
+              ? "The claim is not established by the admitted evidence. The available assessment does not establish the balance of evidence across independent studies."
+              : "No evidence was admitted for this result, so the claim cannot be established from it."}
+        </p>}
+        { !evidence?.study_opening?.length && !evidence?.publication_opening?.length && selectedFindings.length > 0 && (
+          <p>Study identity and evidence balance have not been verified. The following examples are selected by recorded claim fit, with a stable identifier used to break ties; they are not necessarily representative.</p>
+        )}
+        {(!evidence?.study_opening?.length && !evidence?.publication_opening?.length ? selectedFindings : []).map((item) => (
+          <p key={item.ledger_claim_id}>
+            <strong>{item.relationship_to_claim === "supports" ? "Supporting finding: " : item.relationship_to_claim === "challenges" ? "Contrasting finding: " : "Qualification: "}</strong>
+            {item.approved_factual_statement}{" "}
+            <button type="button" className="text-action" onClick={() => openEvidence(item.ledger_claim_id)}>
+              View evidence and source
+            </button>
           </p>
-          <small>
-            Sources with matching study identifiers are grouped together where
-            available; other evidence sources appear separately. A metadata
-            match does not prove that two records are the same study.
-          </small>
-        </section>
-      ) : null}
+        ))}
+        {evidence?.study_review_rationale && <details><summary>{evidence.study_opening?.length ? "Study selection review" : "Publication verification review"}</summary><p>{evidence.study_review_rationale}</p></details>}
+      </section>
+      <CoverageStatus result={result} evidence={evidence} />
+      {!!evidence?.budget_context?.length && <details><summary>Recorded limits and usage</summary>{evidence.budget_context.map((line) => <p key={line}>{line}</p>)}</details>}
       <p>
         <strong>Research direction:</strong> {direction}. This describes where
         research was directed, not whether an admitted finding supports or

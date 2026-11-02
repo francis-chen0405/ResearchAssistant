@@ -226,8 +226,21 @@ export type ApiSchemas = {
     "models": Array<ApiSchemas["SupportedModel"]>;
   };
   "ModelUsageCostBasis": "published_cache_prices_reported_writes" | "published_cache_prices_assumed_all_uncached_writes" | "configured_price_cap";
+  "OpeningAssertion": {
+    "ledger_claim_id": string;
+    "study_identifier": string;
+    "role": string;
+    "text": string;
+    "design": string;
+    "intervention": string;
+    "outcome": string;
+  };
   "Placement": "primary" | "secondary" | "supporting" | "qualified_only";
   "PresentationTone": "neutral" | "executive" | "academic" | "plain_language";
+  "PublicationOpeningSentence": {
+    "text": string;
+    "ledger_claim_ids": Array<string>;
+  };
   "RecordCompatibilityResult": {
     "record_key": string;
     "artifact_type": string;
@@ -930,6 +943,11 @@ export type ApiSchemas = {
   "V2EvidenceDisplay": {
     "run_id": string;
     "items": Array<ApiSchemas["V2EvidenceDisplayItem"]>;
+    "study_opening"?: Array<ApiSchemas["OpeningAssertion"]>;
+    "study_review_rationale"?: (string | null);
+    "budget_context"?: Array<string>;
+    "reading_aid_markdown"?: (string | null);
+    "publication_opening"?: Array<ApiSchemas["PublicationOpeningSentence"]>;
     "source_titles"?: Array<ApiSchemas["V2SourceTitleDisplay"]>;
     "study_lineage"?: Array<ApiSchemas["StudyLineageNotice"]>;
     "source_budget_outcomes"?: Array<ApiSchemas["V2SourceBudgetOutcomeDisplay"]>;
@@ -947,6 +965,7 @@ export type ApiSchemas = {
     "publication_date"?: (string | null);
     "doi"?: (string | null);
     "publication_venue"?: (string | null);
+    "verified_publication"?: (ApiSchemas["V2VerifiedPublication"] | null);
     "claim_fit"?: (number | null);
     "source_context_notice"?: (string | null);
     "source_family": string;
@@ -1204,6 +1223,15 @@ export type ApiSchemas = {
     "direction": ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__ResearchDirection"];
     "missing_evidence": string;
     "assessed_after_round": number;
+  };
+  "V2VerifiedPublication": {
+    "doi"?: (string | null);
+    "canonical_url": string;
+    "title"?: (string | null);
+    "authors"?: Array<string>;
+    "publication_date"?: (string | null);
+    "venue"?: (string | null);
+    "verification"?: "crossref_doi" | "authority_identifier";
   };
   "V2WorkIdentity": {
     "grouping_key": string;

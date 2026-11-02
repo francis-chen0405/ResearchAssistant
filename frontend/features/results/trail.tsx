@@ -1,7 +1,7 @@
 import type { ResearchTrailItem } from "@/lib/api";
 import { Dialog } from "@/components/dialog";
 import type { SourceLead } from "@/lib/api";
-import { SourceLeads } from "./source-leads";
+import { SourceLeads, readableReason } from "./source-leads";
 
 export function ResearchTrailDrawer({
   items,
@@ -56,11 +56,12 @@ export function ResearchTrailDrawer({
                 <span>
                   <small>
                     Round {item.research_round} · {item.provider} ·{" "}
-                    {item.decision}
+                    Selection outcome recorded
                   </small>
                   <strong>{item.title || item.url}</strong>
                 </span>
               </summary>
+              <details><summary>Technical discovery record</summary>
               {item.graph_action ? (
                 <div className="preview-detail">
                   <p>
@@ -174,7 +175,7 @@ export function ResearchTrailDrawer({
                     admitted as evidence.
                   </p>
                   {item.preview.outcome === "unavailable" ? (
-                    <p>{item.preview.reason.replaceAll("_", " ")}</p>
+                    <p>{readableReason(item.preview.reason)}</p>
                   ) : (
                     (item.preview.spans ?? []).map((span) => (
                       <details key={`${span.start}-${span.end}`}>
@@ -214,6 +215,7 @@ export function ResearchTrailDrawer({
                   extraction order {item.extraction_rank}
                 </p>
               )}
+              </details>
               <a href={item.url} target="_blank" rel="noreferrer">
                 Open source ↗
               </a>

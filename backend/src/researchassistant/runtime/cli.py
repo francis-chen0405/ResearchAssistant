@@ -114,6 +114,25 @@ def main(
         return _restore_backup_command(args.backup_path, args.output_path)
     if args.command == "import-history":
         return _import_history_command(args.source_path, args.destination_dir)
+    if args.command == "record-report-review":
+        from researchassistant.api.application_services.result_reads import read_evidence
+        from researchassistant.evidence.report_review import V2ReportStudyReview, record_review
+
+        try:
+            review = V2ReportStudyReview.model_validate_json(args.review_path.read_text())
+            display = read_evidence(args.db_path, review.run_id)
+            record_review(args.db_path, display, review)
+        except Exception:
+            print(
+                (
+                    "Report review could not be recorded. Check the review schema, "
+                    "evidence references and captured provenance."
+                ),
+                file=sys.stderr,
+            )
+            return CLIExitCode.INVALID_INPUT
+        print(f"Recorded report review for {review.run_id}.")
+        return CLIExitCode.RELEASED
     if args.command == "export-brief":
         return _export_brief_command(args.db_path, args.run_id, args.output_path, args.format)
     parser.print_help()
@@ -218,6 +237,12 @@ def _build_parser() -> argparse.ArgumentParser:
     export_brief.add_argument("run_id", type=UUID)
     export_brief.add_argument("output_path", type=Path)
     export_brief.add_argument("--format", type=BriefExportFormat, required=True)
+    review = subparsers.add_parser(
+        "record-report-review",
+        help="Validate and immutably record a reviewed study opening and publication provenance.",
+    )
+    review.add_argument("db_path", type=Path)
+    review.add_argument("review_path", type=Path)
     return parser
 
 

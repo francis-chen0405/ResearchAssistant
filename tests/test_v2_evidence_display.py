@@ -283,3 +283,97 @@ def test_legal_source_context_discloses_unverified_scope_and_broad_state_asserti
         )
         is None
     )
+
+
+def test_crossref_metadata_requires_verified_doi_and_exact_read_location(tmp_path: Path) -> None:
+    from test_v2_phase4_discovery_scout import _response
+
+    from agents.v2_discovery import cluster_discovery_items, normalize_discovery_responses
+    from researchassistant.contracts.models import (
+        CrossrefIdentityMetadata,
+        DiscoveryProvider,
+        V2DiscoveryScoutOutput,
+    )
+
+    _, reviewer = _run(tmp_path, Phase10Provider([_approved()]))
+    analyst = reviewer.analyst_result
+    queue = analyst.input.queue_result
+    candidate = queue.input.survivors[0].model_copy(update={"doi": "10.1000/abc"})
+    queue_input = queue.input.model_copy(update={"survivors": (candidate,)})
+    queue = queue.model_copy(update={"input": queue_input})
+    analyst_input = analyst.input.model_copy(update={"queue_result": queue})
+    analyst = analyst.model_copy(update={"input": analyst_input})
+    reviewer = reviewer.model_copy(update={"analyst_result": analyst})
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer,
+        continuation=_continuation(reviewer.run_id),
+        synthesis=_synthesis(reviewer),
+        created_at=reviewer.completed_at,
+    )
+    record = reviewer.source_results[0].ledger_record
+    assert record is not None
+    response = _response(reviewer.run_id, DiscoveryProvider.EXA, url=record.source_url)
+    items = normalize_discovery_responses(
+        run_id=reviewer.run_id,
+        directions=queue_input.directions,
+        responses=(response,),
+        discovered_at=reviewer.completed_at,
+        crossref_resolver=lambda doi: CrossrefIdentityMetadata(
+            doi=doi,
+            canonical_title="Verified publication",
+            canonical_authors=("A. Author",),
+            container_title="Journal",
+            verified=True,
+        ),
+    )
+    cluster = cluster_discovery_items(items)[0].model_copy(
+        update={"cluster_id": candidate.source_id}
+    )
+    discovery = V2DiscoveryScoutOutput(
+        run_id=reviewer.run_id,
+        directions=queue_input.directions,
+        items=items,
+        clusters=(cluster,),
+        scout_batches=(),
+        scout_audits=(),
+        completed_at=reviewer.completed_at,
+    )
+    display = _build_v2_evidence_display(output, reviewer, discovery_outputs=(discovery,))
+    publication = display.items[0].verified_publication
+    assert publication is not None
+    assert publication.title == "Verified publication"
+    assert publication.canonical_url == "https://doi.org/10.1000/abc"
+    assert display.items[0].source_url == record.source_url
+    different_location = discovery.model_copy(
+        update={
+            "items": (
+                items[0].model_copy(update={"source_url": "https://different.example/article"}),
+            )
+        }
+    )
+    assert (
+        _build_v2_evidence_display(output, reviewer, discovery_outputs=(different_location,))
+        .items[0]
+        .verified_publication
+        is None
+    )
+    assert _build_v2_evidence_display(output, reviewer).items[0].verified_publication is None
+    conflicting = discovery.model_copy(
+        update={
+            "items": (
+                items[0].model_copy(
+                    update={
+                        "crossref": items[0].crossref.model_copy(
+                            update={"canonical_title": "Conflicting metadata"}
+                        )
+                    }
+                ),
+            )
+        }
+    )
+    assert (
+        _build_v2_evidence_display(output, reviewer, discovery_outputs=(discovery, conflicting))
+        .items[0]
+        .verified_publication
+        is None
+    )

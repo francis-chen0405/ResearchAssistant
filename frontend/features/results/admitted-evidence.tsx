@@ -10,6 +10,7 @@ import {
   evidenceConflictNotice,
   evidenceReadLocation,
   evidenceSourceType,
+  evidenceStudyDesign,
 } from "./source-titles";
 
 function completeSentencePrefix(text: string): { text: string; omittedTail: boolean } {
@@ -36,7 +37,7 @@ function completeSentencePrefix(text: string): { text: string; omittedTail: bool
   return { text: complete.join(" "), omittedTail: complete.length !== sentences.length };
 }
 
-function completeQuote(passage: string): { text: string; omittedTail: boolean } | null {
+export function completeQuote(passage: string): { text: string; omittedTail: boolean } | null {
   const match = passage.match(/^\[[\s\S]*?\]\s+"([\s\S]+)"\s+\[[\s\S]*\]$/);
   const quotedText = (match?.[1] ?? passage).trim();
   const sourceSegments = quotedText.split(/\s+\.\.\.\s+/);
@@ -50,10 +51,13 @@ function completeQuote(passage: string): { text: string; omittedTail: boolean } 
       break;
     }
   }
-  if (!completeSegments.length) return null;
+  // A trailing fragment can contain a qualification to the preceding sentence.
+  // Do not silently discard it and present the remainder as a complete quote.
+  if (!completeSegments.length || omittedTail || completeSegments.length !== sourceSegments.length) return null;
   return {
-    text: completeSegments.join(" … "),
-    omittedTail: omittedTail || completeSegments.length !== sourceSegments.length,
+    // Preserve the admitted text, including its original omission markers and spacing.
+    text: quotedText,
+    omittedTail: false,
   };
 }
 
@@ -83,7 +87,8 @@ export function AdmittedEvidence({
       <p>
         Only admitted evidence appears here. Each statement links to its
         analyzed passage and source. Analyzer-admitted evidence has not been
-        independently Reviewer-approved.
+        independently Reviewer-approved. Publication metadata is recorded from
+        discovery; Crossref verification is identified when available.
       </p>
       {assessment?.qualifying_count ? (
         <aside className="result-limitation">
@@ -139,7 +144,7 @@ export function AdmittedEvidence({
                       )}
                     </small>
                     <small className="evidence-card-source">
-                      {evidenceCitation(item)} · {evidenceSourceType(item)}
+                      {evidenceCitation(item)} · {evidenceSourceType(item)} · {evidenceStudyDesign(item)}
                     </small>
                     {evidenceConflictNotice(item) && (
                       <small className="evidence-card-source">
@@ -155,10 +160,7 @@ export function AdmittedEvidence({
                   <span className="evidence-toggle" aria-hidden="true" />
                 </summary>
                 <div className="evidence-card-body">
-                  <p>
-                    <span className="evidence-label">Ledger ID</span>{" "}
-                    <code>{item.ledger_claim_id}</code>
-                  </p>
+                  <details><summary>Technical evidence identifier</summary><code>{item.ledger_claim_id}</code></details>
                   <p>
                     <span className="evidence-label">
                       Assessment relationship
@@ -182,23 +184,30 @@ export function AdmittedEvidence({
                   {(() => {
                     const quote = completeQuote(item.quote_passage);
                     return quote ? (
-                      <blockquote>
-                        “{quote.text}”{quote.omittedTail ? " […]" : ""}
-                      </blockquote>
+                      <div>
+                        <p>Recorded excerpt; sentence completeness and surrounding context should be checked in the source.</p>
+                        <blockquote>“{quote.text}”{quote.omittedTail ? " […]" : ""}</blockquote>
+                      </div>
                     ) : (
-                      <p className="result-limitation">
-                        The recorded passage has no complete sentence. Open the source page to
-                        read the surrounding text.
-                      </p>
+                      <div className="result-limitation">
+                        <p>The recorded passage may be incomplete. Open the source page to read the passage in context.</p>
+                        <details><summary>Recorded passage and context</summary><p>{item.quote_passage}</p></details>
+                      </div>
                     );
                   })()}
                   <p>
-                    <span className="evidence-label">Citation</span>{" "}
+                    <span className="evidence-label">{item.verified_publication ? (item.verified_publication.verification === "crossref_doi" ? "Crossref-verified DOI metadata" : "Reviewed authoritative publication metadata") : "Recorded publication metadata (not independently verified)"}</span>{" "}
                     {evidenceCitation(item)}. {sourceHeading(item.source_id, item.title, item.source_url)}.
                   </p>
-                  {item.doi && (
+                  {item.verified_publication && (
+                    <p><span className="evidence-label">Original publication</span>{" "}
+                      <a href={item.verified_publication.canonical_url} target="_blank" rel="noreferrer">{item.verified_publication.doi || "Canonical publication"}</a>
+                      {" "}Verification basis: {item.verified_publication.verification === "crossref_doi" ? "Crossref DOI lookup" : "reviewed identifier in authoritative capture"}. The reading location is listed separately.
+                    </p>
+                  )}
+                  {item.doi && !item.verified_publication && (
                     <p>
-                      <span className="evidence-label">Original publication</span>{" "}
+                      <span className="evidence-label">Recorded DOI (not independently verified)</span>{" "}
                       <a
                         href={`https://doi.org/${item.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")}`}
                         target="_blank"
@@ -229,6 +238,8 @@ export function AdmittedEvidence({
                       {evidenceSourceType(item)}
                     </p>
                   )}
+                  <p><span className="evidence-label">Study design</span> {evidenceStudyDesign(item)}</p>
+                  {!evidenceConflictNotice(item) && <p><span className="evidence-label">Publisher interest</span> Not established from the recorded metadata.</p>}
                   {evidenceConflictNotice(item) && (
                     <p className="result-limitation">
                       <span className="evidence-label">Conflict of interest</span>{" "}

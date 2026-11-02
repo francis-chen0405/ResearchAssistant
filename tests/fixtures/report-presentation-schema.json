@@ -1,0 +1,228 @@
+{
+  "models": {
+    "V2VerifiedPublication": {
+      "additionalProperties": false,
+      "description": "Metadata returned for the same DOI by Crossref, not proof of source content.",
+      "properties": {
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "canonical_url": {
+          "minLength": 1,
+          "title": "Canonical Url",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "authors": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "publication_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publication Date"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Venue"
+        },
+        "verification": {
+          "default": "crossref_doi",
+          "enum": [
+            "crossref_doi",
+            "authority_identifier"
+          ],
+          "title": "Verification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "canonical_url"
+      ],
+      "title": "V2VerifiedPublication",
+      "type": "object"
+    },
+    "OpeningAssertion": {
+      "additionalProperties": false,
+      "properties": {
+        "ledger_claim_id": {
+          "format": "uuid",
+          "title": "Ledger Claim Id",
+          "type": "string"
+        },
+        "study_identifier": {
+          "minLength": 3,
+          "title": "Study Identifier",
+          "type": "string"
+        },
+        "role": {
+          "pattern": "^(main|contrast|limitation)$",
+          "title": "Role",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 900,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "design": {
+          "minLength": 1,
+          "title": "Design",
+          "type": "string"
+        },
+        "intervention": {
+          "minLength": 1,
+          "title": "Intervention",
+          "type": "string"
+        },
+        "outcome": {
+          "minLength": 1,
+          "title": "Outcome",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ledger_claim_id",
+        "study_identifier",
+        "role",
+        "text",
+        "design",
+        "intervention",
+        "outcome"
+      ],
+      "title": "OpeningAssertion",
+      "type": "object"
+    },
+    "PublicationOpeningSentence": {
+      "additionalProperties": false,
+      "description": "Exact admitted findings grouped by verified publication, not inferred study independence.",
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "ledger_claim_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Ledger Claim Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "ledger_claim_ids"
+      ],
+      "title": "PublicationOpeningSentence",
+      "type": "object"
+    }
+  },
+  "fields": {
+    "V2EvidenceDisplay": {
+      "study_opening": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/OpeningAssertion"
+        },
+        "title": "Study Opening",
+        "type": "array"
+      },
+      "study_review_rationale": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Study Review Rationale"
+      },
+      "budget_context": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "title": "Budget Context",
+        "type": "array"
+      },
+      "reading_aid_markdown": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Reading Aid Markdown"
+      },
+      "publication_opening": {
+        "default": [],
+        "items": {
+          "$ref": "#/$defs/PublicationOpeningSentence"
+        },
+        "title": "Publication Opening",
+        "type": "array"
+      }
+    },
+    "V2EvidenceDisplayItem": {
+      "verified_publication": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/V2VerifiedPublication"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    }
+  }
+}
