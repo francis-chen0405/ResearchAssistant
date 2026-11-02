@@ -78,7 +78,9 @@ export function CoverageStatus({
   const terminalStatusOrigin = result.post_analysis_assessment?.search_outcome
     ? "This post-analysis status is included in the saved brief and export."
     : "Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.";
-  const claimStatus = "Claim not established by the admitted evidence";
+  const claimStatus = evidence?.items?.some((item) => item.relationship_to_claim === "challenges")
+    ? "Challenging evidence admitted; claim not established"
+    : "Claim not established by the admitted evidence";
   return (
     <>
       {!assessment && !result.claim_coverage_map?.length && (
@@ -132,7 +134,7 @@ export function CoverageStatus({
         <div className="result-limitation" role="status">
           <strong>Claim status · {claimStatus}</strong>
           <p>
-            The available assessment does not establish the balance of evidence across independent studies.
+            The labels describe admitted findings. Study design, relevance and limitations determine how much weight each finding deserves; finding counts alone do not establish the balance.
           </p>
           <small>{assessmentOrigin}</small>
         </div>

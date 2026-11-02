@@ -41,6 +41,20 @@ export function readableReason(value: string | null | undefined): string {
   return "The recorded reason could not be translated. See technical details for the original record.";
 }
 
+export function leadPageKey(value: string): string | null {
+  const safe = safeWebUrl(value);
+  if (!safe) return null;
+  const url = new URL(safe);
+  url.hash = "";
+  // Ignore known tracking tags only. Query parameters can identify different
+  // papers, versions or search results, so preserve every other parameter.
+  for (const key of [...url.searchParams.keys()]) {
+    if (/^utm_/i.test(key) || /^(fbclid|gclid|msclkid)$/i.test(key)) url.searchParams.delete(key);
+  }
+  url.searchParams.sort();
+  return url.href;
+}
+
 export function SourceLeads({
   items,
   total,
@@ -66,8 +80,7 @@ export function SourceLeads({
   // available together rather than presenting the same link as separate leads.
   const groups = new Map<string, SourceLead[]>();
   for (const lead of items) {
-    const url = safeWebUrl(lead.url);
-    const key = url ? url.split("#", 1)[0] : `record:${lead.lead_id}`;
+    const key = leadPageKey(lead.url) ?? `record:${lead.lead_id}`;
     const group = groups.get(key) ?? [];
     group.push(lead);
     groups.set(key, group);

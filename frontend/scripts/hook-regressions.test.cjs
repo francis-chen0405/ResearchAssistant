@@ -924,3 +924,28 @@ test("a rejected attempt does not obscure a saved release or remove resume guida
   assert.match(understandableRunMessage({ classification: "invalid_input", attempt_diagnostic: attempt }), /original settings or start a new run/);
   assert.doesNotMatch(understandableAttemptMessage(attempt), /RuntimeError/);
 });
+
+test("lead grouping ignores tracking and query order but preserves publication versions", () => {
+  const { leadPageKey } = hookHarness("features/results/source-leads.tsx", {}).exports;
+  assert.equal(leadPageKey("https://example.org/a?version=1&utm_source=mail#top"), leadPageKey("https://example.org/a?version=1"));
+  assert.equal(leadPageKey("https://example.org/a?b=2&a=1"), leadPageKey("https://example.org/a?a=1&b=2"));
+  assert.notEqual(leadPageKey("https://example.org/a?version=1"), leadPageKey("https://example.org/a?version=2"));
+});
+
+test("claim status names admitted challenges without inferring dominance", () => {
+  const { CoverageStatus } = hookHarness("features/results/coverage-status.tsx", {}).exports;
+  const assessment = { supporting_count: 20, challenging_count: 1, qualifying_count: 0,
+    unrelated_count: 0, admitted_source_ids: [], limitations: [], unresolved_gap_count: 0,
+    partial_coverage_count: 0, unavailable_coverage_count: 0, coverage_incomplete: true };
+  const tree = CoverageStatus({ result: { all_surviving_sources: [], claim_coverage_map: [] },
+    evidence: { items: [{relationship_to_claim:"challenges"}], post_analysis_assessment: assessment } });
+  assert.match(JSON.stringify(tree), /Challenging evidence admitted; claim not established/);
+  assert.doesNotMatch(JSON.stringify(tree), /dominates|Supporting findings observed/);
+});
+
+test("social source headings do not fall back to a post's opening line", () => {
+  const { sourceTitles } = hookHarness("features/results/source-titles.tsx", {}).exports;
+  const helper = sourceTitles({ all_surviving_sources: [] }, null);
+  const heading = helper.sourceHeading("post", "An unreliable first line of a post", "https://www.linkedin.com/posts/example");
+  assert.equal(heading, "Source page at LinkedIn");
+});

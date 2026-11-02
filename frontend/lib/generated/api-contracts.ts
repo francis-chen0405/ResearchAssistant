@@ -948,6 +948,7 @@ export type ApiSchemas = {
     "budget_context"?: Array<string>;
     "reading_aid_markdown"?: (string | null);
     "publication_opening"?: Array<ApiSchemas["PublicationOpeningSentence"]>;
+    "opening_notice"?: (string | null);
     "source_titles"?: Array<ApiSchemas["V2SourceTitleDisplay"]>;
     "study_lineage"?: Array<ApiSchemas["StudyLineageNotice"]>;
     "source_budget_outcomes"?: Array<ApiSchemas["V2SourceBudgetOutcomeDisplay"]>;

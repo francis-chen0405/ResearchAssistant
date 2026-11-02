@@ -190,57 +190,133 @@ def record_review(
 
 
 def build_publication_opening(display: V2EvidenceDisplay) -> V2EvidenceDisplay:
-    """Extract a short complete overview only when every relevant publication fits.
+    """Build a bounded extractive opening from admissions, without a second model call.
 
-    This is deliberately exhaustive, not a ranking heuristic. DOI identity groups
-    publications; it never proves that different publications are independent
-    experiments. Longer/mixed/uncertain bodies of evidence need editorial review.
-    No sentence or qualification is truncated to make it fit.
+    DOI/authority identity groups publications; otherwise group only the reading
+    URL. Ranking selects examples, never estimates effect sizes or study balance.
+    Preserve entire admitted statements and keep every source in the evidence list.
     """
     from researchassistant.api.inspection_contracts import PublicationOpeningSentence
+    from researchassistant.evidence.report_presentation import citation, source_labels
+    from urllib.parse import urldefrag
 
-    display = display.model_copy(update={"publication_opening": (), "reading_aid_markdown": None})
+    display = display.model_copy(
+        update={
+            "publication_opening": (),
+            "opening_notice": None,
+            "reading_aid_markdown": None,
+        }
+    )
     if display.study_opening:
         return display
-    relevant = [item for item in display.items if item.relationship_to_claim.value != "unrelated"]
     groups = {}
-    for item in relevant:
-        publication = item.verified_publication
-        if publication is None:
-            return display
-        groups.setdefault(publication.canonical_url, []).append(item)
-    if not 1 <= len(groups) <= 2:
+    for item in display.items:
+        if item.relationship_to_claim.value == "unrelated":
+            continue
+        key = (
+            item.verified_publication.canonical_url
+            if item.verified_publication
+            else urldefrag(item.source_url).url
+        )
+        groups.setdefault(key, []).append(item)
+    if not groups:
         return display
+
+    def rank(item):
+        # Prioritize experimental evidence, then recorded relevance. The final
+        # keys make the opening stable across database iteration orders.
+        return (
+            source_labels(item)[1] != "Randomized trial",
+            -(item.claim_fit or 0),
+            item.relationship_to_claim.value != "challenges",
+            str(item.ledger_claim_id),
+        )
+
+    # Coalesce display text only when entire finding sets match. A shared
+    # headline finding does not make the remaining findings interchangeable.
+    equivalent = {}
+    for group in groups.values():
+        signature = frozenset(
+            (item.approved_factual_statement, item.relationship_to_claim) for item in group
+        )
+        equivalent.setdefault(signature, []).extend(group)
+    by_claim = {item.ledger_claim_id: group for group in equivalent.values() for item in group}
+    representatives = sorted((min(group, key=rank) for group in equivalent.values()), key=rank)
+    chosen = representatives[:3]
+
+    def has_relationship(item, relationship):
+        return any(
+            member.relationship_to_claim.value == relationship
+            for member in by_claim[item.ledger_claim_id]
+        )
+
+    # Include a contrast even when a publication's highest-ranked item has a
+    # different relationship from its other admitted findings.
+    for relationship in ("supports", "challenges"):
+        if any(has_relationship(item, relationship) for item in representatives) and not any(
+            has_relationship(item, relationship) for item in chosen
+        ):
+            # Keep any already-selected contrast when making room.
+            replacement = next(
+                index
+                for index in reversed(range(len(chosen)))
+                if all(
+                    other_relationship == relationship
+                    or not has_relationship(chosen[index], other_relationship)
+                    or any(
+                        has_relationship(other, other_relationship)
+                        for other_index, other in enumerate(chosen)
+                        if other_index != index
+                    )
+                    for other_relationship in ("supports", "challenges")
+                )
+            )
+            chosen[replacement] = next(
+                item for item in representatives if has_relationship(item, relationship)
+            )
     sentences = []
-    for key in sorted(groups):
-        items = groups[key]
-        statements = {item.approved_factual_statement.strip() for item in items}
-        relationships = {item.relationship_to_claim for item in items}
-        if len(statements) != 1 or len(relationships) != 1:
-            return display
-        text = next(iter(statements))
-        # Conservative sentence check: uncertain punctuation takes the full-text fallback.
-        if len(text) > 600 or not re.fullmatch(r"[^.!?]+[.!?]", text):
-            return display
+    for item in chosen:
+        linked = sorted(by_claim[item.ledger_claim_id], key=rank)
+        statements = dict.fromkeys(
+            other.approved_factual_statement for other in sorted(linked, key=rank)
+        )
+        citations = dict.fromkeys(citation(other) for other in linked)
         sentences.append(
             PublicationOpeningSentence(
-                text=text, ledger_claim_ids=tuple(item.ledger_claim_id for item in items)
+                text=f"{'; '.join(citations)}: {' '.join(statements)}",
+                ledger_claim_ids=tuple(other.ledger_claim_id for other in linked),
             )
         )
-    limitations = sorted(
-        {limitation.strip() for item in relevant for limitation in item.limitations}
-    )
-    if not limitations or any(not re.fullmatch(r"[^.!?]+[.!?]", value) for value in limitations):
-        return display
-    limitation_text = (
-        "Recorded limitations: " + "; ".join(value[:-1] for value in limitations) + "."
-    )
-    if len(limitation_text) > 900:
-        return display
-    sentences.append(
-        PublicationOpeningSentence(
-            text=limitation_text,
-            ledger_claim_ids=tuple(item.ledger_claim_id for item in relevant if item.limitations),
+    if len(chosen) < 3:
+        limitations = sorted(
+            {
+                value.strip()
+                for item in chosen
+                for member in by_claim[item.ledger_claim_id]
+                for value in member.limitations
+            }
         )
+        if limitations:
+            sentences.append(
+                PublicationOpeningSentence(
+                    text="Recorded limitations: " + " ".join(limitations),
+                    ledger_claim_ids=tuple(
+                        member.ledger_claim_id
+                        for item in chosen
+                        for member in by_claim[item.ledger_claim_id]
+                        if member.limitations
+                    ),
+                )
+            )
+    unverified = any(not item.verified_publication for items in groups.values() for item in items)
+    notice = (
+        f"Selected {len(chosen)} finding groups across {len(groups)} publication or reading-location groups, "
+        "prioritizing randomized designs and recorded claim relevance, with supporting and challenging findings included when available. "
+        "This selection does not measure the overall balance or independence of studies. "
+        "Full findings and limitations appear below."
     )
-    return display.model_copy(update={"publication_opening": tuple(sentences)})
+    if unverified:
+        notice += " Some publication identities are unverified; those findings are grouped only by reading location."
+    return display.model_copy(
+        update={"publication_opening": tuple(sentences), "opening_notice": notice}
+    )

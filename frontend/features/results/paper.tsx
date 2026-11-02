@@ -2,7 +2,7 @@ import type { V2FinalResearchOutput, V2EvidenceDisplay } from "@/lib/api";
 import { AdmittedEvidence } from "./admitted-evidence";
 import { CoverageResultSections, CoverageStatus } from "./coverage-status";
 import { SourceSections } from "./source-sections";
-import { sourceTitles } from "./source-titles";
+import { sourceTitles, evidenceCitation } from "./source-titles";
 import { selectedFindings as selectFindings } from "./reading-aid";
 
 export function V2ResultPaper({
@@ -31,8 +31,13 @@ export function V2ResultPaper({
     evidence,
   );
   const selectedFindings = selectFindings(evidence);
-  const openEvidence = (ledgerClaimId: string) => {
-    const detail = document.getElementById(`evidence-${ledgerClaimId}`);
+  const openEvidence = (ledgerClaimId: string | string[]) => {
+    const ids = Array.isArray(ledgerClaimId) ? ledgerClaimId : [ledgerClaimId];
+    for (const id of ids) {
+      const related = document.getElementById(`evidence-${id}`);
+      if (related instanceof HTMLDetailsElement) related.open = true;
+    }
+    const detail = document.getElementById(`evidence-${ids[0]}`);
     if (detail instanceof HTMLDetailsElement) {
       detail.open = true;
       detail.scrollIntoView({
@@ -52,11 +57,11 @@ export function V2ResultPaper({
       <section className="result-bottom-line" aria-labelledby="bottom-line-heading">
         <h2 id="bottom-line-heading">Bottom line</h2>
         {evidence?.study_opening?.length ? (
-          <p>{evidence.study_opening.map((assertion) => <span key={assertion.role}>{assertion.text}{" "}<button type="button" className="text-action" onClick={() => openEvidence(assertion.ledger_claim_id)}>View evidence and source</button>{" "}</span>)}</p>
+          <p>{evidence.study_opening.map((assertion) => <span key={assertion.role}>{assertion.text}{" "}<small>{admittedFor(assertion.ledger_claim_id) ? evidenceCitation(admittedFor(assertion.ledger_claim_id)!) : ""}</small>{" "}<button type="button" className="text-action" onClick={() => openEvidence(assertion.ledger_claim_id)}>View evidence and source</button>{" "}</span>)}</p>
         ) : evidence?.publication_opening?.length ? (
           <>
-            <p>{evidence.publication_opening.map((sentence, index) => <span key={index}>{sentence.text}{" "}<button type="button" className="text-action" onClick={() => openEvidence(sentence.ledger_claim_ids[0])}>View evidence and source</button>{" "}</span>)}</p>
-            <small>Grouped by verified publication; separate publications do not establish independent studies.</small>
+            <p>{evidence.publication_opening.map((sentence, index) => <span key={index}>{sentence.text}{" "}<button type="button" className="text-action" onClick={() => openEvidence(sentence.ledger_claim_ids)}>View evidence and source</button>{" "}</span>)}</p>
+            <details><summary>How these findings were selected</summary><p>{evidence.opening_notice || "Grouped by verified publication; separate publications do not establish independent studies."}</p></details>
           </>
         ) : <p>
           {evidence === null

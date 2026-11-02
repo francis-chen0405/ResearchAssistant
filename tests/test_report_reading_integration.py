@@ -4,10 +4,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-import test_v2_phase9_luna_evidence_analyst as fixture
-from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved
-from test_v2_phase11_final_output import _continuation, _synthesis
-
 from researchassistant.agents.v2_evidence_analyst import run_v2_evidence_analyst
 from researchassistant.agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
@@ -21,6 +17,10 @@ from researchassistant.contracts.models import V2EvidenceAnalystBatchInput, V2Fi
 from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
 from researchassistant.evidence.report_review import build_publication_opening
 from researchassistant.storage.store import insert_v2_artifact
+
+import test_v2_phase9_luna_evidence_analyst as fixture
+from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved
+from test_v2_phase11_final_output import _continuation, _synthesis
 
 
 def production_report(
@@ -219,9 +219,9 @@ def test_production_projection_export_and_duplicate_publication_summary(
         read_v2_artifact(path, output.run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY).payload_json
     )
     template = admission.analyst_result.input.queued_candidates[0].snapshot
-    from test_phase2 import _make_planner, _make_retrieval
-
     from researchassistant.storage.store import insert_planner_output, insert_retrieval_attempt
+
+    from test_phase2 import _make_planner, _make_retrieval
 
     planner = _make_planner(output.run_id)
     insert_planner_output(path, planner)
@@ -302,6 +302,171 @@ def test_production_projection_export_and_duplicate_publication_summary(
     ):
         changed = list(items)
         changed[2] = changed[2].model_copy(update=change)
-        assert not build_publication_opening(
-            display.model_copy(update={"items": tuple(changed)})
-        ).publication_opening
+        opening = build_publication_opening(display.model_copy(update={"items": tuple(changed)}))
+        assert opening.publication_opening
+        if "verified_publication" in change:
+            assert "unverified" in opening.opening_notice
+        else:
+            assert any(
+                change["approved_factual_statement"] in sentence.text
+                for sentence in opening.publication_opening
+            )
+        assert set(
+            id for sentence in opening.publication_opening for id in sentence.ledger_claim_ids
+        ) == {item.ledger_claim_id for item in changed}
+
+
+def test_opening_handles_many_publications_without_manual_review(tmp_path, monkeypatch):
+    path, output = production_report(tmp_path, monkeypatch)
+    display = read_evidence(path, output.run_id)
+    original = display.items[0]
+    items = tuple(
+        original.model_copy(
+            update={
+                "source_id": uuid4(),
+                "ledger_claim_id": uuid4(),
+                "source_url": f"https://mirror.example/report-{index}",
+                "approved_factual_statement": f"Study {index} measured a different outcome.",
+                "relationship_to_claim": type(original.relationship_to_claim)(
+                    "challenges" if index == 4 else "supports"
+                ),
+                "authors": (f"Author {index}",),
+                "publication_date": "2024",
+                "publication_venue": "Journal",
+            }
+        )
+        for index in range(5)
+    )
+    result = build_publication_opening(display.model_copy(update={"items": items}))
+    assert len(result.publication_opening) == 3
+    assert "5 publication or reading-location groups" in result.opening_notice
+    assert "unverified" in result.opening_notice
+    assert any(
+        items[4].ledger_claim_id in sentence.ledger_claim_ids
+        for sentence in result.publication_opening
+    )
+    for sentence in result.publication_opening:
+        assert "2024 · Journal" in sentence.text
+        assert any(item.approved_factual_statement in sentence.text for item in items)
+    # Summaries never mutate admissions or the saved release.
+    assert result.items == items
+
+
+def test_export_keeps_recorded_citation_and_discloses_vendor_interest(tmp_path, monkeypatch):
+    from researchassistant.evidence.brief_export import _v2_reading_aid
+    from researchassistant.evidence.report_presentation import source_labels
+
+    path, output = production_report(tmp_path, monkeypatch)
+    display = read_evidence(path, output.run_id)
+    item = display.items[0].model_copy(
+        update={
+            "source_url": "https://www.flocksafety.com/blog/result",
+            "authors": ("Recorded Author",),
+            "publication_date": "2024-01-01",
+            "publication_venue": "Recorded Venue",
+            "source_type": "general_web",
+        }
+    )
+    text = _v2_reading_aid(
+        output,
+        display.model_copy(
+            update={
+                "items": (item,),
+                "reading_aid_markdown": None,
+                "publication_opening": (),
+            }
+        ),
+    )
+    assert "Recorded Author · 2024 · Recorded Venue" in text
+    assert "Source type: Vendor blog" in text
+    assert "commercial interest in ALPR products" in text
+    assert (
+        source_labels(
+            item.model_copy(
+                update={
+                    "source_url": "https://notflocksafety.com/article",
+                }
+            )
+        )[2]
+        is None
+    )
+
+
+def test_shared_finding_does_not_merge_different_publication_results(tmp_path, monkeypatch):
+    path, output = production_report(tmp_path, monkeypatch)
+    display = read_evidence(path, output.run_id)
+    template = display.items[0]
+
+    def item(location, author, text):
+        return template.model_copy(
+            update={
+                "source_id": uuid4(),
+                "ledger_claim_id": uuid4(),
+                "source_url": location,
+                "authors": (author,),
+                "approved_factual_statement": text,
+            }
+        )
+
+    shared = "Both publications report this result."
+    first = item("https://first.example/report", "First Author", shared)
+    second = item("https://second.example/report", "Second Author", shared)
+    extra = item(
+        first.source_url, "First Author", "Only the first publication reports this outcome."
+    )
+    result = build_publication_opening(display.model_copy(update={"items": (first, second, extra)}))
+    findings = [
+        sentence
+        for sentence in result.publication_opening
+        if not sentence.text.startswith("Recorded limitations:")
+    ]
+    assert len(findings) == 2
+    first_summary = next(
+        sentence for sentence in findings if extra.ledger_claim_id in sentence.ledger_claim_ids
+    )
+    assert extra.approved_factual_statement in first_summary.text
+    assert "Second Author" not in first_summary.text
+    assert second.ledger_claim_id not in first_summary.ledger_claim_ids
+    assert any(sentence.ledger_claim_ids == (second.ledger_claim_id,) for sentence in findings)
+    # Limitations on another admitted item in the same publication also survive.
+    assert extra.ledger_claim_id in result.publication_opening[-1].ledger_claim_ids
+
+
+def test_recorded_doi_url_normalizes_existing_resolver_prefix(tmp_path, monkeypatch):
+    from researchassistant.evidence.report_presentation import recorded_doi_url
+
+    path, output = production_report(tmp_path, monkeypatch)
+    item = read_evidence(path, output.run_id).items[0]
+    for doi in ("10.1000/example", "https://doi.org/10.1000/example"):
+        assert (
+            recorded_doi_url(item.model_copy(update={"doi": doi}))
+            == "https://doi.org/10.1000/example"
+        )
+    assert recorded_doi_url(item.model_copy(update={"doi": "not a DOI"})) is None
+
+
+def test_opening_retains_both_relationships_when_top_groups_only_qualify(tmp_path, monkeypatch):
+    path, output = production_report(tmp_path, monkeypatch)
+    display = read_evidence(path, output.run_id)
+    template = display.items[0]
+    relationships = ("qualifies", "qualifies", "qualifies", "supports", "challenges")
+    items = tuple(
+        template.model_copy(
+            update={
+                "source_id": uuid4(),
+                "ledger_claim_id": uuid4(),
+                "source_url": f"https://example.org/publication-{index}",
+                "approved_factual_statement": f"Publication {index} reports this finding.",
+                "claim_fit": 5 if index < 3 else 3,
+                "relationship_to_claim": type(template.relationship_to_claim)(relationship),
+            }
+        )
+        for index, relationship in enumerate(relationships)
+    )
+    result = build_publication_opening(display.model_copy(update={"items": items}))
+    selected = {
+        claim for sentence in result.publication_opening for claim in sentence.ledger_claim_ids
+    }
+    assert len(result.publication_opening) == 3
+    assert items[3].ledger_claim_id in selected
+    assert items[4].ledger_claim_id in selected

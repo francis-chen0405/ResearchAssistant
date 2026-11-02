@@ -37,7 +37,7 @@ export function evidenceCitation(item: EvidenceItem): string {
   return `${author} · ${year} · ${venue}`;
 }
 
-export function evidenceSourceType(item: EvidenceItem): string {
+export function evidenceSourceType(item: Pick<EvidenceItem, "source_url" | "source_type">): string {
   const sourceType = (item.source_type ?? "").toLowerCase().replaceAll("_", " ");
   let hostname = "";
   try {
@@ -50,8 +50,8 @@ export function evidenceSourceType(item: EvidenceItem): string {
   if (/op[ -]?ed|editorial|opinion/.test(sourceType)) return "Op-ed";
   if (/working paper/.test(sourceType)) return "Working paper";
   if (/peer.?review|journal|scholarly|research paper/.test(sourceType)) return "Research publication";
-  if (/government summary/.test(sourceType)) return "Government summary";
-  if (/advocacy group/.test(sourceType)) return "Advocacy group";
+  if (/government|agency report/.test(sourceType)) return "Government summary";
+  if (/advocacy/.test(sourceType)) return "Advocacy group";
   if (/vendor|company blog/.test(sourceType)) return "Vendor source";
   if (!sourceType || sourceType === "general web") return "Source type not recorded";
   return "Publication type not recorded";
@@ -95,9 +95,10 @@ export function sourceTitles(
     const evidenceItem = evidence?.items.find((item) => item.source_id === sourceId);
     if (evidenceItem?.verified_publication) return evidenceItem.verified_publication.title || "Publication title not recorded";
     const displayTitle = sourceTitleById.get(sourceId)?.display_title;
-    if (displayTitle && !displayTitle.startsWith("PDF file:")) return displayTitle;
+    const unusableTitle = (title: string) => /^(?:PDF file:|RECOGNITION \(ALPR\)|[^ ]+\.pdf$)/i.test(title.trim());
+    if (displayTitle && !unusableTitle(displayTitle) && evidenceSourceType(evidenceItem ?? { source_url: sourceUrl }) !== "Social post") return displayTitle;
     if (evidenceItem) return evidenceCitation(evidenceItem);
-    return capturedTitle && !/^S?\d{7,}[a-z0-9]*\s+\d+\.\.\d+/i.test(capturedTitle)
+    return capturedTitle && evidenceSourceType({ source_url: sourceUrl }) !== "Social post" && !unusableTitle(capturedTitle) && !/^S?\d{7,}[a-z0-9]*\s+\d+\.\.\d+/i.test(capturedTitle)
       ? capturedTitle
       : `Source page at ${sourceHostLabel(sourceUrl)}`;
   };

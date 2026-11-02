@@ -153,12 +153,6 @@ export function ResultView({
                 <dd>{diagnostics.search_attempts}</dd>
               </div>
             )}
-            {diagnostics?.graph_actions != null && (
-              <div>
-                <dt>Graph actions</dt>
-                <dd>{diagnostics.graph_actions}</dd>
-              </div>
-            )}
             {diagnostics?.sources_acquired != null && (
               <div>
                 <dt>Sources acquired</dt>

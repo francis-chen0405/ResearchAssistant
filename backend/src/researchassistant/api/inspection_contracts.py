@@ -92,7 +92,7 @@ class V2SourceTitleDisplay(StrictModel):
 
 
 class PublicationOpeningSentence(StrictModel):
-    """Exact admitted findings grouped by verified publication, not inferred study independence."""
+    """Cited admitted findings grouped by publication or reading location, not study independence."""
 
     text: str = Field(min_length=1)
     ledger_claim_ids: tuple[UUID, ...] = Field(min_length=1)
@@ -106,6 +106,7 @@ class V2EvidenceDisplay(StrictModel):
     budget_context: tuple[str, ...] = ()
     reading_aid_markdown: str | None = None
     publication_opening: tuple[PublicationOpeningSentence, ...] = ()
+    opening_notice: str | None = None
     source_titles: tuple[V2SourceTitleDisplay, ...] = ()
     study_lineage: tuple[StudyLineageNotice, ...] = ()
     source_budget_outcomes: tuple[V2SourceBudgetOutcomeDisplay, ...] = ()
