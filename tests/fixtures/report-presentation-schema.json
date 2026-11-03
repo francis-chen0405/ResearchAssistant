@@ -135,7 +135,7 @@
     },
     "PublicationOpeningSentence": {
       "additionalProperties": false,
-      "description": "Exact admitted findings grouped by verified publication, not inferred study independence.",
+      "description": "Cited findings grouped by publication or reading location, not study independence.",
       "properties": {
         "text": {
           "minLength": 1,
@@ -209,6 +209,18 @@
         },
         "title": "Publication Opening",
         "type": "array"
+      },
+      "opening_notice": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Opening Notice"
       }
     },
     "V2EvidenceDisplayItem": {

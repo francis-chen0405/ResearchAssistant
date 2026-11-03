@@ -19,7 +19,7 @@ from researchassistant.contracts.models import SourceSnapshot, StrictModel
 from researchassistant.evidence.evidence_core import validate_snapshot_integrity
 
 if TYPE_CHECKING:
-    from researchassistant.api.inspection_contracts import V2EvidenceDisplay
+    from researchassistant.api.inspection_contracts import V2EvidenceDisplay, V2EvidenceDisplayItem
 
 REPORT_REVIEW_KEY = "report-study-review-v1"
 
@@ -196,9 +196,10 @@ def build_publication_opening(display: V2EvidenceDisplay) -> V2EvidenceDisplay:
     URL. Ranking selects examples, never estimates effect sizes or study balance.
     Preserve entire admitted statements and keep every source in the evidence list.
     """
+    from urllib.parse import urldefrag
+
     from researchassistant.api.inspection_contracts import PublicationOpeningSentence
     from researchassistant.evidence.report_presentation import citation, source_labels
-    from urllib.parse import urldefrag
 
     display = display.model_copy(
         update={
@@ -222,7 +223,7 @@ def build_publication_opening(display: V2EvidenceDisplay) -> V2EvidenceDisplay:
     if not groups:
         return display
 
-    def rank(item):
+    def rank(item: V2EvidenceDisplayItem) -> tuple[bool, int, bool, str]:
         # Prioritize experimental evidence, then recorded relevance. The final
         # keys make the opening stable across database iteration orders.
         return (
@@ -244,7 +245,7 @@ def build_publication_opening(display: V2EvidenceDisplay) -> V2EvidenceDisplay:
     representatives = sorted((min(group, key=rank) for group in equivalent.values()), key=rank)
     chosen = representatives[:3]
 
-    def has_relationship(item, relationship):
+    def has_relationship(item: V2EvidenceDisplayItem, relationship: str) -> bool:
         return any(
             member.relationship_to_claim.value == relationship
             for member in by_claim[item.ledger_claim_id]
@@ -310,13 +311,18 @@ def build_publication_opening(display: V2EvidenceDisplay) -> V2EvidenceDisplay:
             )
     unverified = any(not item.verified_publication for items in groups.values() for item in items)
     notice = (
-        f"Selected {len(chosen)} finding groups across {len(groups)} publication or reading-location groups, "
-        "prioritizing randomized designs and recorded claim relevance, with supporting and challenging findings included when available. "
+        f"Selected {len(chosen)} finding groups across {len(groups)} "
+        "publication or reading-location groups, "
+        "prioritizing randomized designs and recorded claim relevance, with supporting and "
+        "challenging findings included when available. "
         "This selection does not measure the overall balance or independence of studies. "
         "Full findings and limitations appear below."
     )
     if unverified:
-        notice += " Some publication identities are unverified; those findings are grouped only by reading location."
+        notice += (
+            " Some publication identities are unverified; those findings are grouped only "
+            "by reading location."
+        )
     return display.model_copy(
         update={"publication_opening": tuple(sentences), "opening_notice": notice}
     )

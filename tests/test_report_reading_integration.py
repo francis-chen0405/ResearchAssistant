@@ -4,6 +4,10 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import test_v2_phase9_luna_evidence_analyst as fixture
+from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved
+from test_v2_phase11_final_output import _continuation, _synthesis
+
 from researchassistant.agents.v2_evidence_analyst import run_v2_evidence_analyst
 from researchassistant.agents.v2_final_output import (
     V2_FINAL_OUTPUT_ARTIFACT_KEY,
@@ -12,15 +16,12 @@ from researchassistant.agents.v2_final_output import (
 from researchassistant.agents.v2_reviewer_ledger import run_v2_reviewer_ledger
 from researchassistant.agents.v2_source_selection import calculate_v2_deep_analysis_queue
 from researchassistant.api.application_services.result_reads import read_evidence
+from researchassistant.api.inspection_contracts import V2EvidenceDisplayItem
 from researchassistant.common.utils import derive_quote_block_id
 from researchassistant.contracts.models import V2EvidenceAnalystBatchInput, V2FinalResearchOutput
 from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
 from researchassistant.evidence.report_review import build_publication_opening
 from researchassistant.storage.store import insert_v2_artifact
-
-import test_v2_phase9_luna_evidence_analyst as fixture
-from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved
-from test_v2_phase11_final_output import _continuation, _synthesis
 
 
 def production_report(
@@ -219,9 +220,9 @@ def test_production_projection_export_and_duplicate_publication_summary(
         read_v2_artifact(path, output.run_id, V2_REVIEWER_LEDGER_ARTIFACT_KEY).payload_json
     )
     template = admission.analyst_result.input.queued_candidates[0].snapshot
-    from researchassistant.storage.store import insert_planner_output, insert_retrieval_attempt
-
     from test_phase2 import _make_planner, _make_retrieval
+
+    from researchassistant.storage.store import insert_planner_output, insert_retrieval_attempt
 
     planner = _make_planner(output.run_id)
     insert_planner_output(path, planner)
@@ -316,7 +317,9 @@ def test_production_projection_export_and_duplicate_publication_summary(
         ) == {item.ledger_claim_id for item in changed}
 
 
-def test_opening_handles_many_publications_without_manual_review(tmp_path, monkeypatch):
+def test_opening_handles_many_publications_without_manual_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path, output = production_report(tmp_path, monkeypatch)
     display = read_evidence(path, output.run_id)
     original = display.items[0]
@@ -352,7 +355,9 @@ def test_opening_handles_many_publications_without_manual_review(tmp_path, monke
     assert result.items == items
 
 
-def test_export_keeps_recorded_citation_and_discloses_vendor_interest(tmp_path, monkeypatch):
+def test_export_keeps_recorded_citation_and_discloses_vendor_interest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from researchassistant.evidence.brief_export import _v2_reading_aid
     from researchassistant.evidence.report_presentation import source_labels
 
@@ -392,12 +397,14 @@ def test_export_keeps_recorded_citation_and_discloses_vendor_interest(tmp_path, 
     )
 
 
-def test_shared_finding_does_not_merge_different_publication_results(tmp_path, monkeypatch):
+def test_shared_finding_does_not_merge_different_publication_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path, output = production_report(tmp_path, monkeypatch)
     display = read_evidence(path, output.run_id)
     template = display.items[0]
 
-    def item(location, author, text):
+    def item(location: str, author: str, text: str) -> V2EvidenceDisplayItem:
         return template.model_copy(
             update={
                 "source_id": uuid4(),
@@ -432,7 +439,9 @@ def test_shared_finding_does_not_merge_different_publication_results(tmp_path, m
     assert extra.ledger_claim_id in result.publication_opening[-1].ledger_claim_ids
 
 
-def test_recorded_doi_url_normalizes_existing_resolver_prefix(tmp_path, monkeypatch):
+def test_recorded_doi_url_normalizes_existing_resolver_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from researchassistant.evidence.report_presentation import recorded_doi_url
 
     path, output = production_report(tmp_path, monkeypatch)
@@ -445,7 +454,9 @@ def test_recorded_doi_url_normalizes_existing_resolver_prefix(tmp_path, monkeypa
     assert recorded_doi_url(item.model_copy(update={"doi": "not a DOI"})) is None
 
 
-def test_opening_retains_both_relationships_when_top_groups_only_qualify(tmp_path, monkeypatch):
+def test_opening_retains_both_relationships_when_top_groups_only_qualify(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path, output = production_report(tmp_path, monkeypatch)
     display = read_evidence(path, output.run_id)
     template = display.items[0]

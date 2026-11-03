@@ -92,7 +92,7 @@ class V2SourceTitleDisplay(StrictModel):
 
 
 class PublicationOpeningSentence(StrictModel):
-    """Cited admitted findings grouped by publication or reading location, not study independence."""
+    """Cited findings grouped by publication or reading location, not study independence."""
 
     text: str = Field(min_length=1)
     ledger_claim_ids: tuple[UUID, ...] = Field(min_length=1)

@@ -465,7 +465,7 @@ def test_v2_export_and_api_schema_use_the_persisted_final_output(
     assert exported.output_path.endswith("v2-result.md")
     export_text = (tmp_path / "v2-result.md").read_text()
     assert "Research direction: supporting evidence only" in export_text
-    assert "The claim is not established by the admitted evidence" in export_text
+    assert "Claim not established by the admitted evidence" in export_text
     assert "Original released brief" in export_text
     assert output.all_surviving_sources[0].source_url in export_text
     assert "Publication identity is not verified here" in export_text

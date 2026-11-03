@@ -184,9 +184,11 @@ def _v2_reading_aid(
     ]
     from researchassistant.evidence.report_presentation import (
         citation as evidence_citation,
-        source_labels,
+    )
+    from researchassistant.evidence.report_presentation import (
         claim_status,
         recorded_doi_url,
+        source_labels,
     )
 
     if evidence is None:
@@ -233,9 +235,7 @@ def _v2_reading_aid(
         lines.append(claim_status(evidence.items) + ".")
         for assertion in evidence.study_opening:
             item = next(
-                item
-                for item in evidence.items
-                if item.ledger_claim_id == assertion.ledger_claim_id
+                item for item in evidence.items if item.ledger_claim_id == assertion.ledger_claim_id
             )
             lines.append(
                 f"{assertion.text} ({evidence_citation(item)}; read at: {item.source_url})"
@@ -252,7 +252,10 @@ def _v2_reading_aid(
             lines.append(f"{sentence.text} (Read at: {', '.join(citations)})")
         lines.append(
             evidence.opening_notice
-            or "Grouped by verified publication; separate publications do not establish independent studies."
+            or (
+                "Grouped by verified publication; separate publications do not establish "
+                "independent studies."
+            )
         )
     if not output.claim_coverage_map:
         lines.append("Claim coverage was not assessed; the reason was not recorded.")
@@ -336,30 +339,20 @@ def _v2_reading_aid(
     }
     for outcome in evidence.source_budget_outcomes if evidence else ():
         source = next(
-            (
-                item
-                for item in output.all_surviving_sources
-                if item.source_id == outcome.source_id
-            ),
+            (item for item in output.all_surviving_sources if item.source_id == outcome.source_id),
             None,
         )
         label = local_stop_labels.get(
             outcome.outcome,
             "A source-specific limit prevented further analysis; its details were not recorded.",
         )
-        lines.append(
-            f"- {source.title if source and source.title else 'Source'}: {label}"
-        )
+        lines.append(f"- {source.title if source and source.title else 'Source'}: {label}")
     for source in output.all_surviving_sources:
         if source.status.value == "budget_prevented_analysis" and not any(
             outcome.source_id == source.source_id
             for outcome in (evidence.source_budget_outcomes if evidence else ())
         ):
-            reason = (
-                source.budget_prevented_reason.value
-                if source.budget_prevented_reason
-                else ""
-            )
+            reason = source.budget_prevented_reason.value if source.budget_prevented_reason else ""
             explanation = queue_stop_labels.get(
                 reason, "The limit that prevented source analysis was not recorded."
             )
@@ -378,7 +371,9 @@ def _v2_reading_aid(
                     if publication.verification == "crossref_doi"
                     else "reviewed authoritative identifier"
                 )
-                citation = f"{title}; {author}; {date}; {venue}; {publication.canonical_url} ({basis})"
+                citation = (
+                    f"{title}; {author}; {date}; {venue}; {publication.canonical_url} ({basis})"
+                )
             else:
                 citation = (
                     f"{evidence_citation(item)}; recorded title: {item.title or 'Not recorded'}; "
@@ -392,9 +387,7 @@ def _v2_reading_aid(
             lines.append(
                 f"- {item.approved_factual_statement}\n  {citation}. Read at: {item.source_url}."
             )
-            lines.append(
-                "  Recorded passage (may be incomplete; check the source context):"
-            )
+            lines.append("  Recorded passage (may be incomplete; check the source context):")
             lines.append("  " + item.quote_passage)
             if item.limitations:
                 lines.append("  Recorded limitations: " + " ".join(item.limitations))
@@ -403,9 +396,7 @@ def _v2_reading_aid(
             if conflict:
                 lines.append("  Conflict of interest: " + conflict)
     else:
-        lines.append(
-            "- Detailed admitted passages are unavailable or none were admitted."
-        )
+        lines.append("- Detailed admitted passages are unavailable or none were admitted.")
     lines.extend(
         (
             "",
