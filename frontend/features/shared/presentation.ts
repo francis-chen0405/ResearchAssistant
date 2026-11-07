@@ -152,6 +152,21 @@ export function formatCost(value: string | number | null): string {
   return `$${Number(value).toFixed(4)}`;
 }
 
+function plannerFailureMessage(message: string, stage?: string): string | null {
+  if (/planner_duplicate_coverage_dimension/.test(message)) {
+    return "The planner repeated a coverage category, so research stopped before searching for sources. Start a new run to try again.";
+  }
+  if (stage === "claim_planner") {
+    if (/v2 (physical-call|total-token|cost) ceiling/.test(message)) {
+      return "The planner stopped because the remaining research budget could not cover another model call. Check the run limits before starting a new run.";
+    }
+    if (/schema diagnostics|semantic response contract|schema_validation_failed|V2InitialPlanner.*validation|not one complete JSON|markdown-fenced JSON/.test(message)) {
+      return "The planner returned an invalid research plan, so research stopped before searching for sources. Start a new run to try again.";
+    }
+  }
+  return null;
+}
+
 export function understandableAttemptMessage(attempt: NonNullable<RunSnapshot["attempt_diagnostic"]>): string {
   if (attempt.classification === "invalid_input") {
     return attempt.diagnostic_component === "resume"
@@ -159,7 +174,7 @@ export function understandableAttemptMessage(attempt: NonNullable<RunSnapshot["a
       : "The latest attempt could not use the requested settings. Check the research settings and try again.";
   }
   if (attempt.classification === "configuration_error") return "The latest attempt could not use the provider configuration. Check Provider setup and try again.";
-  return "The latest attempt did not finish. See the research trail for details.";
+  return plannerFailureMessage(attempt.message) ?? "The latest attempt did not finish. See the research trail for details.";
 }
 
 export function understandableRunMessage(snapshot: RunSnapshot): string {
@@ -171,7 +186,7 @@ export function understandableRunMessage(snapshot: RunSnapshot): string {
   if (snapshot.classification === "configuration_error")
     return "A provider could not be reached or configured. Check Provider setup, then try again.";
   if (snapshot.classification === "failed") {
-    return "This research run did not finish. See the research trail for details.";
+    return plannerFailureMessage(snapshot.message, snapshot.stage) ?? "This research run did not finish. See the research trail for details.";
   }
   if (snapshot.classification === "cancelled")
     return "This research run was cancelled. Its saved evidence and progress remain available for inspection.";

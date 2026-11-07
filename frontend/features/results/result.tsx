@@ -80,7 +80,7 @@ export function ResultView({
       <div className="report-layout">
         <article className="brief-paper">
           {v2Result ? (
-            <V2ResultPaper result={v2Result} evidence={v2Evidence} />
+            <V2ResultPaper result={v2Result} evidence={v2Evidence} run={snapshot} />
           ) : snapshot.final_brief ? (
             <Brief text={snapshot.final_brief} />
           ) : (
@@ -291,7 +291,7 @@ export function ResultView({
               <b>↓</b>
             </button>
           )}
-          <AllLiveSources runId={snapshot.run_id} database={snapshot.db_path} />
+          {!v2Result && <AllLiveSources runId={snapshot.run_id} database={snapshot.db_path} />}
           <button
             className="trail-action"
             type="button"

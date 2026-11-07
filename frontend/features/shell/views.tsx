@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { ProductPreview, StatusPill } from "@/components/workspace";
+import { ProductPreview } from "@/components/workspace";
 import type { MainView } from "../preferences/settings";
 
 export function Header({
@@ -108,21 +108,7 @@ export function WelcomeView({
       exit={{ opacity: 0 }}
     >
       <div className="welcome-hero">
-        <StatusPill tone={ready ? "support" : "neutral"}>
-          {ready
-            ? "Ready for your next question"
-            : "Your next discovery starts here"}
-        </StatusPill>
-        <h1>
-          Research a claim.
-          <br />
-          <span>See the whole picture.</span>
-        </h1>
-        <p>
-          Go beyond the first answer. Explore evidence, examine the sources,
-          <br className="desktop-break" /> and build a clearer view of what
-          holds up.
-        </p>
+        <h1>Research a claim</h1>
         <div className="welcome-actions">
           <button
             className="primary-action"
@@ -131,15 +117,11 @@ export function WelcomeView({
             {ready ? "Start research" : "Connect providers"}{" "}
             <span aria-hidden="true">↗</span>
           </button>
-          <button className="text-action" onClick={onStart}>
-            {ready ? "Write a question" : "Explore the workspace"}{" "}
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
-        <div className="welcome-promises">
-          <span>↗ Traceable sources</span>
-          <span>⊕ Support & challenge</span>
-          <span>◷ Your budget, your control</span>
+          {!ready && (
+            <button className="text-action" onClick={onStart}>
+              Explore the workspace <span aria-hidden="true">→</span>
+            </button>
+          )}
         </div>
       </div>
       <ProductPreview />

@@ -1,6 +1,25 @@
 import type { V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
 import { readableStage, researchStopLabel } from "../shared/presentation";
 
+export function hasIncompleteCoverage(
+  result: V2FinalResearchOutput,
+  evidence: V2EvidenceDisplay | null,
+): boolean {
+  const assessment = evidence?.post_analysis_assessment ?? result.post_analysis_assessment;
+  return Boolean(
+    assessment?.coverage_incomplete ||
+    assessment?.search_outcome === "incomplete_coverage" ||
+    (assessment?.unresolved_gap_count ?? 0) > 0 ||
+    (assessment?.partial_coverage_count ?? 0) > 0 ||
+    (assessment?.unavailable_coverage_count ?? 0) > 0 ||
+    result.unresolved_material_gaps?.length ||
+    result.claim_coverage_map?.some(
+      (item) => !["covered", "not_applicable"].includes(item.coverage_state),
+    ) ||
+    (assessment && !result.claim_coverage_map?.length)
+  );
+}
+
 export function CoverageStatus({
   result,
   evidence,
@@ -11,17 +30,7 @@ export function CoverageStatus({
   const coverage = evidence?.research_status;
   const statusLabel = coverage ? researchStopLabel(coverage.reason_code) : "";
   const assessment = evidence?.post_analysis_assessment;
-  const coverageIncomplete =
-    Boolean(assessment?.coverage_incomplete) ||
-    (!!assessment &&
-      (assessment.unresolved_gap_count > 0 ||
-        assessment.partial_coverage_count > 0 ||
-        assessment.unavailable_coverage_count > 0 ||
-        !result.claim_coverage_map?.length ||
-        result.claim_coverage_map.some(
-          (item) =>
-            !["covered", "not_applicable"].includes(item.coverage_state),
-        )));
+  const coverageIncomplete = hasIncompleteCoverage(result, evidence);
   const searchOutcome = assessment
     ? (coverageIncomplete ? "incomplete_coverage" : assessment.search_outcome ??
       (coverageIncomplete

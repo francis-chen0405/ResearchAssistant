@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from uuid import UUID
 
-from researchassistant.agents.v2_initial_planner import V2_INITIAL_PLANNER_PROMPT_PATH
+from researchassistant.agents.v2_initial_planner import load_initial_planner_prompt
 from researchassistant.api.live_contracts import LiveRunRequest
 from researchassistant.contracts.models import (
     V2InitialPlannerInput,
@@ -16,7 +16,6 @@ from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMRequest,
     LLMStage,
-    load_prompt_file,
     render_stage_prompt,
 )
 from researchassistant.providers.mimo import _direct_mimo_prompt
@@ -52,10 +51,7 @@ def check_start_reservation(
         discovery_providers=providers,
         search_lanes=V2InitialPlannerPolicy().search_lanes(request.directions, providers),
     )
-    prompt = load_prompt_file(
-        V2_INITIAL_PLANNER_PROMPT_PATH.with_name("v2_initial_planner_v2.md"),
-        expected_stage=LLMStage.PLANNER,
-    )
+    prompt = load_initial_planner_prompt()
     rendered = render_stage_prompt(prompt, artifact, V2InitialPlannerConceptsOutput)
     physical_request = LLMRequest(
         run_id=artifact.run_id,

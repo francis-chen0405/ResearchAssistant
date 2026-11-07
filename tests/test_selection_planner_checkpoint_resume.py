@@ -410,7 +410,7 @@ def test_failed_initial_planner_attempt_remains_consumed(tmp_path: Path) -> None
                 run_id=run_id,
                 clock=_advancing_clock(),
             )
-    assert len(provider.requests) == 1
+    assert len(provider.requests) == 2
 
 
 def test_selection_failed_attempt_cap_and_failure_records_survive_restart(

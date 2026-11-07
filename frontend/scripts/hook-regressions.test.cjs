@@ -115,7 +115,7 @@ test("source cards mark unassessed recommendations provisional and qualify parti
       gap_ids: [], selection_rationale: "Selected for comparison.",
     }, { source_id: directId, relationship_to_claim: "supports", claim_fit: 5, gap_ids: [] }],
   };
-  const rendered = JSON.stringify(elementNodes(harness.render("SourceSections", { result, evidence })));
+  const rendered = JSON.stringify(elementNodes(harness.render("SourceSections", { result, evidence, run: { run_id: "run", db_path: "db" } })));
   assert.match(rendered, /Provisional · claim relationship has not been assessed\./);
   assert.match(rendered, /Qualifying evidence/);
   assert.match(rendered, /Direct support/);
@@ -165,7 +165,7 @@ test("source cards link alternate URLs as locations for the same paper", () => {
     ledger_claim_ids: [], budget_prevented_reason: null,
   };
   const result = { recommended_sources: [source], all_surviving_sources: [source] };
-  const rendered = elementNodes(harness.render("SourceSections", { result, evidence: null }));
+  const rendered = elementNodes(harness.render("SourceSections", { result, evidence: null, run: { run_id: "run", db_path: "db" } }));
   const alternate = rendered.find(
     node => node.type === "a" && node.props.href === source.alternate_source_urls[0],
   );
@@ -746,17 +746,42 @@ test("claim status does not infer evidence balance from finding counts", () => {
   assert.doesNotMatch(text, /Supporting findings observed/);
 });
 
+test("overview reports incomplete assessment counts even when the coverage map is covered", () => {
+  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
+  const result = {
+    exact_claim: "Example claim", directions: { support_enabled: true },
+    synthesis: { sections: [] }, all_surviving_sources: [], recommended_sources: [],
+    claim_coverage_map: [{ coverage_state: "covered" }], unresolved_material_gaps: [],
+    post_analysis_assessment: { partial_coverage_count: 1 },
+  };
+  const tree = V2ResultPaper({ result, evidence: null });
+  const overview = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "brief-overview-heading");
+  assert.match(JSON.stringify(overview), /Research coverage was incomplete/);
+});
+
 test("unknown search stop and exception do not expose technical text", () => {
   const { researchStopLabel, understandableRunMessage } = hookHarness("features/shared/presentation.ts", {}).exports;
   assert.doesNotMatch(researchStopLabel("unexpected_internal_exception"), /unexpected_internal_exception/);
   assert.doesNotMatch(understandableRunMessage({ classification: "failed", message: "RuntimeError: private detail" }), /RuntimeError/);
 });
 
+test("planner failures explain grouping and budget limits without exposing provider text", () => {
+  const { understandableRunMessage, understandableAttemptMessage } = hookHarness("features/shared/presentation.ts", {}).exports;
+  const message = "LLMProviderExecutionError: private-input claim_coverage_focus:planner_duplicate_coverage_dimension";
+  const snapshot = { classification: "failed", stage: "claim_planner", message };
+  assert.match(understandableRunMessage(snapshot), /planner repeated a coverage category/);
+  assert.doesNotMatch(understandableRunMessage(snapshot), /private-input|LLMProviderExecutionError/);
+  assert.match(understandableAttemptMessage({ classification: "failed", message }), /before searching for sources/);
+  assert.match(understandableRunMessage({ ...snapshot, message: "v2 cost ceiling cannot cover this call" }), /remaining research budget/);
+  assert.match(understandableRunMessage({ ...snapshot, message: "provider content failed the semantic response contract" }), /invalid research plan/);
+  assert.equal(understandableRunMessage({ ...snapshot, classification: "released" }), "The saved research result is available.");
+});
+
 test("recommended sources are not repeated in survivor cards", () => {
   const { SourceSections } = hookHarness("features/results/source-sections.tsx", {}).exports;
   const source = { source_id: "one", source_url: "https://example.com", title: "A source",
     status: "recommended_analyzed", recommended: true, discovery_providers: [], discovery_round: 1 };
-  const tree = SourceSections({ result: { recommended_sources: [source], all_surviving_sources: [source] }, evidence: null });
+  const tree = SourceSections({ result: { recommended_sources: [source], all_surviving_sources: [source] }, evidence: null, run: { run_id: "run", db_path: "db" } });
   const cards = elementNodes(tree).filter((node) => node.type === "article");
   assert.equal(cards.length, 1);
 });
@@ -770,7 +795,7 @@ test("incomplete quotation does not discard a trailing qualification", () => {
     "The treatment reduced the outcome. However, only among adults.");
 });
 
-test("bottom line precedes status and does not rank repeated findings", () => {
+test("overview leads and optional bottom line preserves selected findings without ranking counts", () => {
   const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
   const item = (id, relationship) => ({ ledger_claim_id: id, source_id: id,
     source_url: "https://example.org/" + id, relationship_to_claim: relationship,
@@ -780,13 +805,16 @@ test("bottom line precedes status and does not rank repeated findings", () => {
     synthesis: {sections: []}, all_surviving_sources: [], recommended_sources: [] };
   const tree = V2ResultPaper({ result, evidence });
   const children = tree.props.children;
-  assert.equal(children[3].props["aria-labelledby"], "bottom-line-heading");
-  const text = JSON.stringify(children[3]);
+  assert.equal(children[3].props["aria-labelledby"], "brief-overview-heading");
+  const bottomLine = elementNodes(tree).find(node => node.props?.className === "brief-disclosure result-bottom-line");
+  assert.equal(bottomLine.type, "details");
+  assert.equal(bottomLine.props.open, undefined);
+  const text = JSON.stringify(bottomLine);
   assert.match(text, /copy finding/);
   assert.match(text, /contrast finding/);
   assert.doesNotMatch(text, /first finding/);
-  assert.match(text, /not necessarily representative/);
-  assert.match(text, /does not establish the balance/);
+  assert.match(text, /may not be representative/);
+  assert.match(text, /does not establish the claim or the balance/);
 });
 
 test("discovery grouping retains fragments together but preserves query distinctions", () => {
@@ -882,12 +910,40 @@ test("complete publication opening replaces illustrative selection and links all
   const result = { exact_claim: "Example claim", directions: { support_enabled: true, challenge_enabled: true },
     synthesis: { sections: [] }, all_surviving_sources: [], recommended_sources: [] };
   const tree = V2ResultPaper({ result, evidence });
-  const opening = tree.props.children[3];
+  const opening = elementNodes(tree).find(node => node.props?.className === "brief-disclosure result-bottom-line");
   assert.match(JSON.stringify(opening), /randomized study/);
   assert.match(JSON.stringify(opening), /observational study/);
   assert.match(JSON.stringify(opening), /do not establish independent studies/);
   assert.doesNotMatch(JSON.stringify(opening), /not necessarily representative/);
   assert.equal(elementNodes(opening).filter(node => node.type === "button").length, 3);
+});
+
+test("brief keeps qualifications and coverage collapsed before sources and shows one finding per direction", () => {
+  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
+  const item = id => ({ ledger_claim_id: id, approved_factual_statement: id + " finding." });
+  const result = {
+    exact_claim: "Example claim",
+    directions: { support_enabled: true, challenge_enabled: true },
+    synthesis: { sections: [
+      { section_type: "supporting", items: [item("first"), item("second")] },
+      { section_type: "limitations", items: [item("qualification")] },
+      { section_type: "limitations", items: [item("additional qualification")] },
+    ] },
+    all_surviving_sources: [], recommended_sources: [],
+    claim_coverage_map: [], unresolved_material_gaps: [],
+  };
+  const tree = V2ResultPaper({ result, evidence: { items: [] } });
+  const nodes = elementNodes(tree);
+  const disclosures = nodes.filter(node => node.type === "details" && node.props.className?.includes("brief-disclosure"));
+  assert.deepEqual(disclosures.map(node => node.props.children[0].props.children),
+    ["Bottom line", "Evidence qualifications", "Research status and coverage", "Admitted evidence"]);
+  assert.ok(disclosures.every(node => !node.props.open));
+  assert.match(JSON.stringify(disclosures[1]), /additional qualification finding/);
+  const findings = tree.props.children[4][0];
+  const visible = elementNodes(findings.props.children[1]);
+  assert.equal(visible.filter(node => node.props?.className === "overview-item").length, 1);
+  assert.match(JSON.stringify(findings.props.children[2]), /second finding/);
+  assert.match(JSON.stringify(tree.props.children[3]), /Claim coverage was not assessed/);
 });
 
 test("source pagination retries preserve earlier records and discard repeated record IDs", async () => {

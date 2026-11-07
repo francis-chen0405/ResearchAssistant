@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { researchApi, type LiveSource, type LiveSourcesResponse } from "@/lib/api";
 import { safeWebUrl } from "../results/source-leads";
@@ -142,7 +143,7 @@ export function LiveSourceShortlist({ runId, database, watching }: Run & { watch
   );
 }
 
-export function AllLiveSources({ runId, database }: Run) {
+export function AllLiveSources({ runId, database, children }: Run & { children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const [attempt, setAttempt] = useState(0);
@@ -177,6 +178,7 @@ export function AllLiveSources({ runId, database }: Run) {
       <summary>All sources</summary>
       {open && (
         <div className="all-live-sources-body">
+          {children}
           {!current ? <p role="status">Loading saved sources…</p>
             : !page ? (
               <>

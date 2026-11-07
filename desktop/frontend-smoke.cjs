@@ -26,6 +26,14 @@ async function main() {
     const context = await browser.newContext({viewport:{width:1280,height:860}, reducedMotion:'reduce', acceptDownloads:true, permissions:['clipboard-read','clipboard-write']});
     const page = await context.newPage();
     const errors = []; page.on('pageerror', e=>errors.push(e.message));
+    async function openReportDetails() {
+      await page.getByRole('heading', { name: 'Recommended Sources', exact: true }).waitFor();
+      const sections = page.locator('.brief-disclosure, .brief-paper > .all-live-sources');
+      for (const section of await sections.all()) {
+        if (!await section.evaluate(node => node.open)) await section.locator(':scope > summary').click();
+      }
+    }
+
     let preferences = {modelProfile:'configurable-2026-09',stageModels:{planner:'gpt-6-luna-xhigh',scout:'gpt-6-luna-high',gap_analysis:'gpt-6-luna-xhigh',search_agent:'gpt-6-luna-xhigh',source_selection:'gpt-6-luna-xhigh',extractor:'gpt-6-luna-high',analyst:'gpt-6-luna-xhigh'},dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
     let serviceReady = false; let serviceProbes = 0; let serviceStarts = 0;
     let studyReviewed = false; let assessmentPersisted = false; let assessmentFresh = false;
@@ -265,14 +273,22 @@ async function main() {
     evidenceFailure=false;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.locator('.evidence-card').first().waitFor();
+    await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor();
+    for (const section of await page.locator('.brief-disclosure').all()) {
+      assert.equal(await section.evaluate(node => node.open), false, 'Secondary sections start collapsed');
+    }
+    const sourceBrowser = page.locator('.brief-paper > .all-live-sources');
+    assert.equal(await sourceBrowser.evaluate(node => node.open), false, 'All sources starts collapsed after recommendations');
+    await page.screenshot({path:path.join(shots,'research-compact.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'View admitted quote and source'}).first().click();
+    assert.equal(await page.locator('.brief-evidence').evaluate(node => node.open), true, 'Evidence link opens its collapsed parent');
+    await openReportDetails();
     assert.equal(await page.locator('.evidence-card').first().evaluate(node=>node.open),true,'Brief findings open the exact admitted Ledger record');
     await page.locator('.evidence-card').first().getByText('Assessment relationship Adds a qualification',{exact:false}).waitFor();
     await page.getByText('Claim status · Claim not established by the admitted evidence',{exact:true}).waitFor();
     await page.getByText('This is an additional assessment of saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
     await page.getByText(/2 qualifying/).waitFor();
-    await page.getByRole('heading',{name:'Shared publisher/website',exact:true}).waitFor();
+    await page.locator('summary').getByText('Shared publisher/website',{exact:true}).waitFor();
     assert.ok(await page.getByText(/does not establish independent corroboration/i).count() >= 1,'Shared website pages are not presented as independent corroboration');
     await page.getByText(/all-50-states statement has not been independently verified/i).waitFor();
     await page.getByText(/separate links do not establish independent studies/i).waitFor();
@@ -280,7 +296,7 @@ async function main() {
     await page.getByText('Recommended outcomes: 1 evidence admitted',{exact:true}).waitFor();
     await page.getByText('Outcomes among all 5 surviving sources: 2 evidence admitted, 1 source token limit prevented analysis, 1 evidence not admitted, 1 not assessed',{exact:true}).waitFor();
     await page.getByText('Survived selection · source token limit prevented analysis',{exact:false}).waitFor();
-    await page.getByRole('heading',{name:'Source lineage',exact:true}).waitFor();
+    await page.locator('summary').getByText('Source lineage',{exact:true}).waitFor();
     assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');
     assert.equal(await page.getByText('family-raw-id-should-not-render',{exact:true}).count(),0,'Internal family identifiers are not shown in ordinary cards');
     await page.locator('blockquote').getByText('This is an exact illustrative quotation for the offline test.',{exact:false}).first().waitFor();
@@ -303,7 +319,7 @@ async function main() {
     await page.screenshot({path:path.join(shots,'research-evidence.png'),fullPage:true,animations:'disabled'});
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,'Result fits narrow viewport without horizontal overflow');
-    await page.getByRole('heading',{name:'Bottom line',exact:true}).waitFor();
+    await page.locator('.result-bottom-line > summary').waitFor();
     await page.screenshot({path:path.join(shots,'research-evidence-narrow.png'),fullPage:true,animations:'disabled'});
     await page.setViewportSize({width:1280,height:860});
     await page.getByRole('heading',{name:'Latest research coverage assessment',exact:true}).waitFor();
@@ -311,6 +327,7 @@ async function main() {
     invalidPlan=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openReportDetails();
     await page.getByText(/^Earlier search decision ·/).click();
     await page.getByText('Technical search record',{exact:true}).click();
     await page.locator('.result-limitation').getByText(/Follow-up search stopped after two invalid plans/).waitFor();
@@ -319,6 +336,7 @@ async function main() {
     invalidPlan=false; sufficientSourcePool=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openReportDetails();
     await page.getByText(/Earlier search decision · Search stopped after the source pool was considered sufficient/).waitFor();
     await page.getByText(/^Earlier search decision ·/).click();
     await page.getByText('Technical search record',{exact:true}).click();
@@ -330,6 +348,7 @@ async function main() {
     await page.locator('.welcome-view').waitFor();
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openReportDetails();
     await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
     await page.getByText('This assessment is included in the saved brief and export.',{exact:true}).waitFor();
     await page.getByText('Among 5 surviving sources, 3 had no admitted evidence and 2 had admitted evidence.',{exact:true}).waitFor();
@@ -344,6 +363,7 @@ async function main() {
     assessmentPersisted=false; assessmentFresh=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openReportDetails();
     await page.getByText('Post-analysis research status · Incomplete coverage',{exact:true}).waitFor();
     await page.getByText('This post-analysis status is included in the saved brief and export.',{exact:true}).waitFor();
     assert.equal(await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).count(),0);
@@ -352,6 +372,7 @@ async function main() {
     studyReviewed=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openReportDetails();
     await page.locator('.result-bottom-line').getByText('Surface temperatures only; not a general estimate of air temperature.',{exact:false}).waitFor();
     assert.equal(await page.locator('.result-bottom-line').getByText(/not necessarily representative/).count(),0);
     await page.setViewportSize({width:390,height:844});
@@ -364,6 +385,7 @@ async function main() {
       productionReport=true;
       await page.getByRole('button',{name:'Saved research',exact:true}).click();
       await page.getByRole('button',{name:/Can greener streets/}).click();
+      await openReportDetails();
       const opening = page.locator('.result-bottom-line');
       await opening.getByText(/randomized study REG-2024/).waitFor();
       await opening.getByText(/observational study REG-2025/).waitFor();

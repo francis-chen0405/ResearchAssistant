@@ -47,16 +47,21 @@ from researchassistant.contracts.query_compiler import compile_query
 from researchassistant.contracts.source_recovery import V2SavedSourceSuggestions
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
+    InvocationFailureCode,
     LLMInvocationError,
     LLMInvocationRecord,
     LLMProvider,
     LLMProviderExecutionError,
     LLMRequest,
     LLMStage,
+    PromptTemplate,
+    RetryMetadata,
+    compute_prompt_hash,
     invoke_llm,
     load_prompt_file,
     render_stage_prompt,
 )
+from researchassistant.providers.v2_budget import V2BudgetExceededError
 from researchassistant.providers.v2_routing import V2RoutingConfig
 from researchassistant.research.query_execution import freeze_query_execution
 from researchassistant.storage.saved_source_suggestions import saved_source_suggestions
@@ -76,6 +81,47 @@ from researchassistant.storage.store import (
 V2_INITIAL_PLANNER_PROMPT_PATH = prompt_resource("v2_initial_planner.md")
 _INITIAL_PLAN_KEY = "phase-3-initial-round-1-plan"
 _PLANNER_CHECKPOINT_KEY = "initial-planner-checkpoint-v1"
+_PLANNER_RESPONSE_POLICY = "grouped-coverage-retry-v1"
+_COVERAGE_GROUPING_INSTRUCTIONS = """
+
+# Claim coverage grouping
+
+Use each claim_coverage_focus dimension at most once across the entire response.
+Only effect_or_association, population_and_setting, and mechanism_or_pathway are allowed.
+When the claim names multiple populations or settings, group them into one
+population_and_setting entry. Copy the full exact phrase from the claim, preserving every
+named group. For example, for a claim naming "adolescents and adults",
+use that entire phrase in one claim_component. Do not create a separate entry per group.
+Apply the same grouping rule to multiple effects or mechanisms. Keep each claim_component
+an exact contiguous quotation from the claim. Omit a dimension when the claim does not
+assert it. Return at most three entries, with kind "claim_component", searchable true,
+and unavailable_reason null.
+"""
+
+
+def load_initial_planner_prompt(
+    *, legacy_prompt: bool = False, grouped_coverage: bool = True
+) -> PromptTemplate:
+    prompt = load_prompt_file(
+        V2_INITIAL_PLANNER_PROMPT_PATH
+        if legacy_prompt
+        else prompt_resource("v2_initial_planner_v2.md"),
+        expected_stage=LLMStage.PLANNER,
+    )
+    if not grouped_coverage:
+        return prompt
+    version = prompt.version + "-grouped-v1"
+    text = (
+        prompt.text.replace(f"Prompt-Version: {prompt.version}", f"Prompt-Version: {version}", 1)
+        + _COVERAGE_GROUPING_INSTRUCTIONS
+    )
+    return prompt.model_copy(
+        update={
+            "version": version,
+            "text": text,
+            "sha256": compute_prompt_hash(text),
+        }
+    )
 
 
 class V2InitialPlannerFingerprintMismatchError(RuntimeError):
@@ -241,12 +287,13 @@ def run_v2_initial_planner(
         search_lanes=policy.search_lanes(directions, discovery_providers),
         saved_source_leads=suggestions,
     )
-    prompt_path = (
-        V2_INITIAL_PLANNER_PROMPT_PATH
-        if legacy_prompt
-        else prompt_resource("v2_initial_planner_v2.md")
+    checkpoint = read_checkpoint(
+        path, resolved_run_id, _PLANNER_CHECKPOINT_KEY, V2PlannerInputCheckpoint
     )
-    prompt = load_prompt_file(prompt_path, expected_stage=LLMStage.PLANNER)
+    grouped_coverage = checkpoint is None or checkpoint.response_policy is not None
+    prompt = load_initial_planner_prompt(
+        legacy_prompt=legacy_prompt, grouped_coverage=grouped_coverage
+    )
     output_type = V2InitialPlannerModelOutput if legacy_prompt else V2InitialPlannerConceptsOutput
     request = LLMRequest(
         run_id=resolved_run_id,
@@ -272,62 +319,92 @@ def run_v2_initial_planner(
             "legacy_prompt": legacy_prompt,
         }
     )
-    checkpoint = read_checkpoint(
-        path, resolved_run_id, _PLANNER_CHECKPOINT_KEY, V2PlannerInputCheckpoint
-    )
     checkpoint_replayed = checkpoint is not None
     if checkpoint is None:
         checkpoint = V2PlannerInputCheckpoint(
-            run_id=resolved_run_id, input_hash=input_hash, planned_at=planned_at
+            run_id=resolved_run_id,
+            input_hash=input_hash,
+            response_policy=_PLANNER_RESPONSE_POLICY,
+            planned_at=planned_at,
         )
         insert_v2_artifact(path, _PLANNER_CHECKPOINT_KEY, checkpoint, planned_at)
     elif checkpoint.input_hash != input_hash:
         raise V2InitialPlannerFingerprintMismatchError("persisted initial Planner input changed")
     planned_at = checkpoint.planned_at
-    attempt, outcome, new_attempt = stage_attempt(
-        path=path,
-        key=_PLANNER_CHECKPOINT_KEY,
-        number=1,
-        request=request,
-        started_at=_aware_now(now),
-    )
-    if new_attempt:
-        try:
-            invocation = invoke_llm(
-                llm_provider,
-                request.model_copy(
-                    update={"input_artifact_ids": (*request.input_artifact_ids, attempt.attempt_id)}
-                ),
-                clock=now,
+    max_attempts = 2 if checkpoint.response_policy is not None else 1
+    for attempt_number in range(1, max_attempts + 1):
+        attempt_request = request
+        if attempt_number > 1:
+            attempt_request = request.model_copy(
+                update={
+                    "rendered_prompt": request.rendered_prompt
+                    + "\nYour previous response was rejected. Generate a complete replacement "
+                    "that satisfies the response schema and claim coverage grouping rules."
+                }
             )
-            response = invocation.output_artifact
-            if not isinstance(response, output_type):
-                raise TypeError("v2 initial Planner returned an unexpected typed artifact")
-        except Exception as exc:
-            outcome = V2StageOutcomeCheckpoint(
-                run_id=resolved_run_id,
-                attempt_id=attempt.attempt_id,
-                request_hash=attempt.request_hash,
-                invocation=exc.record if isinstance(exc, LLMInvocationError) else None,
-                failure=f"{type(exc).__name__}: {exc}"[:1000],
-                completed_at=_aware_now(now),
-            )
-            save_stage_outcome(path, attempt, outcome)
-            raise
-        outcome = V2StageOutcomeCheckpoint(
-            run_id=resolved_run_id,
-            attempt_id=attempt.attempt_id,
-            request_hash=attempt.request_hash,
-            candidate=response,
-            invocation=invocation.record,
-            completed_at=_aware_now(now),
+        attempt, outcome, new_attempt = stage_attempt(
+            path=path,
+            key=_PLANNER_CHECKPOINT_KEY,
+            number=attempt_number,
+            request=attempt_request,
+            started_at=_aware_now(now),
         )
-        save_stage_outcome(path, attempt, outcome)
-    assert outcome is not None
-    if outcome.failure is not None:
-        if outcome.invocation is not None:
-            raise LLMProviderExecutionError(outcome.failure, outcome.invocation)
-        raise RuntimeError(outcome.failure)
+        if new_attempt:
+            try:
+                invocation = invoke_llm(
+                    llm_provider,
+                    attempt_request.model_copy(
+                        update={
+                            "input_artifact_ids": (
+                                *attempt_request.input_artifact_ids,
+                                attempt.attempt_id,
+                            )
+                        }
+                    ),
+                    retry_metadata=RetryMetadata(
+                        attempt_number=attempt_number,
+                        max_attempts=max_attempts,
+                        retry_count=attempt_number - 1,
+                        automatic_retry_performed=attempt_number > 1,
+                    ),
+                    clock=now,
+                )
+                response = invocation.output_artifact
+                if not isinstance(response, output_type):
+                    raise TypeError("v2 initial Planner returned an unexpected typed artifact")
+            except Exception as exc:
+                outcome = V2StageOutcomeCheckpoint(
+                    run_id=resolved_run_id,
+                    attempt_id=attempt.attempt_id,
+                    request_hash=attempt.request_hash,
+                    invocation=exc.record if isinstance(exc, LLMInvocationError) else None,
+                    failure=f"{type(exc).__name__}: {exc}"[:1000],
+                    terminal_provider_failure=(
+                        isinstance(exc, LLMInvocationError)
+                        and isinstance(exc.__cause__, V2BudgetExceededError)
+                    ),
+                    completed_at=_aware_now(now),
+                )
+                save_stage_outcome(path, attempt, outcome)
+                if not _planner_can_retry(outcome, attempt_number, max_attempts):
+                    raise
+            else:
+                outcome = V2StageOutcomeCheckpoint(
+                    run_id=resolved_run_id,
+                    attempt_id=attempt.attempt_id,
+                    request_hash=attempt.request_hash,
+                    candidate=response,
+                    invocation=invocation.record,
+                    completed_at=_aware_now(now),
+                )
+                save_stage_outcome(path, attempt, outcome)
+        assert outcome is not None
+        if outcome.failure is None:
+            break
+        if not _planner_can_retry(outcome, attempt_number, max_attempts):
+            if outcome.invocation is not None:
+                raise LLMProviderExecutionError(outcome.failure, outcome.invocation)
+            raise RuntimeError(outcome.failure)
     response = outcome.candidate
     if not isinstance(response, output_type):
         raise ValueError("saved initial Planner outcome has the wrong output type")
@@ -346,6 +423,18 @@ def run_v2_initial_planner(
         provider_contract=persisted_contract,
         invocation=outcome.invocation,
         resumed=checkpoint_replayed,
+    )
+
+
+def _planner_can_retry(
+    outcome: V2StageOutcomeCheckpoint, attempt_number: int, max_attempts: int
+) -> bool:
+    failure = outcome.invocation.failure if outcome.invocation is not None else None
+    return (
+        attempt_number < max_attempts
+        and not outcome.terminal_provider_failure
+        and failure is not None
+        and (failure.retryable or failure.code is InvocationFailureCode.SCHEMA_VALIDATION_FAILED)
     )
 
 

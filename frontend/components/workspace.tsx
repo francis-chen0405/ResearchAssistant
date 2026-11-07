@@ -165,12 +165,6 @@ export function ProductPreview() {
           setPaused(false);
       }}
     >
-      <span className="floating-label label-source" aria-hidden="true">
-        ↗ Follow the source
-      </span>
-      <span className="floating-label label-finding" aria-hidden="true">
-        ✓ Keep the context
-      </span>
       <WorkspaceFrame
         title="Research in motion"
         example

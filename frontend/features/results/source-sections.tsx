@@ -1,16 +1,16 @@
-import type { V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
-import type { ReactNode } from "react";
+import type { RunSnapshot, V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
 import { evidenceSourceType, sourceTitles } from "./source-titles";
+import { AllLiveSources } from "../research/live-sources";
 import { sourceBudgetStop } from "../shared/presentation";
 
 export function SourceSections({
   result,
   evidence,
-  children,
+  run,
 }: {
   result: V2FinalResearchOutput;
   evidence: V2EvidenceDisplay | null;
-  children?: ReactNode;
+  run: Pick<RunSnapshot, "run_id" | "db_path">;
 }) {
   const { sourceHeading, capturedTitleDisclosure } = sourceTitles(
     result,
@@ -178,8 +178,8 @@ export function SourceSections({
   return (
     <>
       {groupedNotices.length ? (
-        <section>
-          <h2>Source lineage</h2>
+        <details className="brief-disclosure">
+          <summary>Source lineage</summary>
           <p>
             These notices cover sources that survived selection; separate links
             do not establish independent studies.
@@ -216,11 +216,11 @@ export function SourceSections({
               </p>
             ))}
           </aside>
-        </section>
+        </details>
       ) : null}
       {sharedWebsites.length ? (
-        <section>
-          <h2>Shared publisher/website</h2>
+        <details className="brief-disclosure">
+          <summary>Shared publisher/website</summary>
           <p>
             Pages from one website can add context, but the shared website alone
             does not establish independent corroboration.
@@ -257,9 +257,8 @@ export function SourceSections({
               </p>
             ))}
           </aside>
-        </section>
+        </details>
       ) : null}
-      {children}
       <section>
         <h2>Recommended Sources</h2>
         {result.recommended_sources.length > 0 && (
@@ -270,19 +269,18 @@ export function SourceSections({
         )}
         {sourceCards(result.recommended_sources)}
       </section>
-      {otherSources.length > 0 && <section>
-        <h2>Survivor Sources</h2>
-        {result.all_surviving_sources.length > 0 && (
-          <p>
-            <strong>
-              Outcomes among all {result.all_surviving_sources.length} surviving
-              sources:
-            </strong>{" "}
-            {sourceOutcomeSummary(result.all_surviving_sources)}
-          </p>
+      <AllLiveSources runId={run.run_id} database={run.db_path}>
+        {otherSources.length > 0 && (
+          <section>
+            <h3>Other retained sources</h3>
+            <p>
+              <strong>Outcomes among all {result.all_surviving_sources.length} surviving sources:</strong>{" "}
+              {sourceOutcomeSummary(result.all_surviving_sources)}
+            </p>
+            {sourceCards(otherSources)}
+          </section>
         )}
-        {sourceCards(otherSources)}
-      </section>}
+      </AllLiveSources>
     </>
   );
 }
