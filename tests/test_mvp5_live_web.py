@@ -477,8 +477,7 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
     owners = {
         "app/page.tsx": ("HistoryView", "ProviderSetup", "AdvancedPanel"),
         "features/shell/views.tsx": (
-            "Research a claim.",
-            "See the whole picture.",
+            "<h1>Research a claim</h1>",
             "Provider setup",
         ),
         "features/research/composer.tsx": ("Begin research",),

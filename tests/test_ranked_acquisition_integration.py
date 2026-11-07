@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from test_acquisition_usable_fallback import ABSTRACT
 from test_query_execution import CLAIM, DIRECTIONS, _action, _clock
 from test_v2_phase5_acquisition_probe import FixtureScraper, _response
 from test_v2_ranked_scout import NOW, _RecallScout, _routing, _snapshot
@@ -36,6 +37,9 @@ from researchassistant.contracts.model_research import (
     V2InitialPlannerOutput,
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
+)
+from researchassistant.contracts.research_policy import (
+    V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
 )
 from researchassistant.research.metadata_ranking import fair_ranked_ids
 from researchassistant.research.query_compiler import compile_query
@@ -270,7 +274,7 @@ def test_page_two_study_reaches_scout_shortlist_and_immutable_usable_snapshot(
     )
 
 
-@pytest.mark.parametrize("failure_mode", ["unavailable", "probe_unusable"])
+@pytest.mark.parametrize("failure_mode", ["unavailable", "probe_unusable", "abstract_only"])
 def test_ranked_acquisition_backfills_until_direction_target_is_usable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -314,6 +318,9 @@ def test_ranked_acquisition_backfills_until_direction_target_is_usable(
             scrape_responses[url] = ScraperProviderError(
                 AcquisitionFailureCode.CONNECTION, "fixture source unavailable"
             )
+    elif failure_mode == "abstract_only":
+        for url in (first_cluster.preferred_url, *first_cluster.alternate_urls):
+            scrape_responses[url] = _response(url, ABSTRACT)
     else:
         original_probe = v2_acquisition.probe_snapshot
 
@@ -329,7 +336,12 @@ def test_ranked_acquisition_backfills_until_direction_target_is_usable(
         db_path=str(path),
         discovery_output=discovery_run.output,
         wigolo_provider=scraper,
-        policy=V2AcquisitionPolicy(max_clusters=12),
+        exact_claim=CLAIM if failure_mode == "abstract_only" else None,
+        policy=V2AcquisitionPolicy(
+            max_clusters=12, policy_identity=V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY
+        )
+        if failure_mode == "abstract_only"
+        else V2AcquisitionPolicy(max_clusters=12),
         clock=lambda: NOW,
     )
 
@@ -342,11 +354,14 @@ def test_ranked_acquisition_backfills_until_direction_target_is_usable(
             for probe in acquired.output.probes
             if probe.cluster_id == first_cluster.cluster_id
         )
-        if failure_mode == "probe_unusable"
+        if failure_mode != "unavailable"
         else None
     )
     if first_probe is not None:
         assert not first_probe.succeeded
+    if failure_mode == "abstract_only":
+        assert first_probe.failure == "abstract_only"
+        assert audit.fetched_documents == 11
     assert len(acquired.output.survivors) == 10
     assert audit.usable_survivors == 10
     assert audit.acquisition_shortlisted_clusters == audit.fetched_documents + (

@@ -1,8 +1,8 @@
 """Fresh-v2 Phase-4 discovery normalization, identity clustering, and batched Scout.
 
-The module deliberately operates on metadata-only ``SearchResult`` values.  It never
-acquires a page, interprets provider snippets as evidence, or changes historical
-discovery ranking.
+The module uses discovery and bibliographic metadata for screening. It never
+acquires source full text, interprets provider snippets as evidence, or changes
+historical discovery ranking.
 """
 
 from __future__ import annotations
@@ -81,6 +81,13 @@ from researchassistant.providers.llm import (
     load_prompt_file,
     render_stage_prompt,
 )
+from researchassistant.providers.nber_metadata import (
+    NberPaperMetadata,
+    is_placeholder_title,
+    nber_metadata_url,
+    nber_paper_number,
+    resolve_nber_metadata,
+)
 from researchassistant.providers.pricing import conservative_token_estimate
 from researchassistant.providers.ranking import canonical_discovery_url
 from researchassistant.providers.v2_budget import V2BudgetSnapshot, V2CancellationRequested
@@ -142,6 +149,44 @@ class V2DiscoveryScoutRunResult(StrictModel):
     ranking_artifact: V2MetadataRankingArtifact | None = None
 
 
+class V2NberMetadataCheckpoint(StrictModel):
+    """An intent consumes the lookup even if interrupted before recording the outcome."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    paper_number: str
+    metadata: NberPaperMetadata | None = None
+
+
+def _repair_nber_metadata(
+    db_path: str,
+    run_id: UUID,
+    number: str,
+    clock: Callable[[], datetime],
+    cancellation_requested: Callable[[], bool] | None,
+) -> NberPaperMetadata | None:
+    key = f"scout-nber-metadata-v1/{number}"
+    _raise_if_cancelled(cancellation_requested)
+    intent = read_checkpoint(db_path, run_id, key, V2NberMetadataCheckpoint)
+    if intent is not None:
+        outcome = read_checkpoint(db_path, run_id, key + "/outcome", V2NberMetadataCheckpoint)
+        if intent.paper_number != number or (
+            outcome is not None and outcome.paper_number != number
+        ):
+            raise ValueError("saved NBER lookup belongs to another paper")
+        return outcome.metadata if outcome is not None else None
+
+    # The production worker owns the database lock across this request and its outcome.
+    intent = V2NberMetadataCheckpoint(run_id=run_id, paper_number=number)
+    insert_v2_artifact(db_path, key, intent, clock())
+    metadata = resolve_nber_metadata(number)
+    outcome = intent.model_copy(update={"metadata": metadata})
+    insert_v2_artifact(db_path, key + "/outcome", outcome, clock())
+    _raise_if_cancelled(cancellation_requested)
+    return metadata
+
+
 def normalize_discovery_responses(
     *,
     run_id: UUID,
@@ -151,6 +196,7 @@ def normalize_discovery_responses(
     crossref_resolver: Callable[[str], CrossrefIdentityMetadata] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     url_identity_version: Literal[1, 2] = 2,
+    nber_resolver: Callable[[str], NberPaperMetadata | None] | None = None,
 ) -> tuple[NormalizedDiscoveryItem, ...]:
     """Normalize every provider result while retaining all provider/query provenance."""
     _require_aware(discovered_at, "discovered_at")
@@ -178,7 +224,36 @@ def normalize_discovery_responses(
                 exact_identifiers=query.compiled_query is not None
                 or (isinstance(query, V2AdaptiveSearchQuery) and query.graph_action is not None),
             )
-            crossref = _crossref_identity(provider_doi, crossref_resolver)
+            number = (
+                nber_paper_number(result.original_url)
+                if nber_resolver is not None and is_placeholder_title(result.title)
+                else None
+            )
+            repaired = nber_resolver(number) if nber_resolver and number is not None else None
+            crossref = (
+                _crossref_identity(provider_doi, crossref_resolver) if repaired is None else None
+            )
+            provider_metadata = _metadata_entries(result)
+            if repaired is not None and number is not None:
+                provider_metadata += (
+                    DiscoveryMetadataEntry(
+                        key="nber_metadata_repair",
+                        value_json=json.dumps(
+                            {
+                                "handle": repaired.handle,
+                                "source_url": nber_metadata_url(number),
+                            }
+                        ),
+                    ),
+                )
+            title = result.title or None
+            abstract = _metadata_string(result, "abstract")
+            if repaired is not None:
+                title = repaired.title
+                if not (abstract or "").strip():
+                    abstract = repaired.abstract
+            elif crossref and crossref.canonical_title:
+                title = crossref.canonical_title
             doi = crossref.doi if crossref and crossref.doi else provider_doi
             item = NormalizedDiscoveryItem(
                 run_id=run_id,
@@ -196,11 +271,9 @@ def normalize_discovery_responses(
                 canonical_url=canonical_discovery_url(
                     result.original_url, version=url_identity_version
                 ),
-                title=crossref.canonical_title
-                if crossref and crossref.canonical_title
-                else result.title or None,
+                title=title,
                 snippet=result.snippet,
-                abstract=_metadata_string(result, "abstract"),
+                abstract=abstract,
                 doi=doi,
                 authors=_authors(result, crossref),
                 publication_date=(
@@ -209,7 +282,7 @@ def normalize_discovery_responses(
                     else result.metadata.published_at
                 ),
                 source_type=result.metadata.work_type or result.metadata.category,
-                provider_metadata=_metadata_entries(result),
+                provider_metadata=provider_metadata,
                 provenance_chain=(
                     DiscoveryProvenance(
                         provider=query.provider,
@@ -241,6 +314,7 @@ def cluster_discovery_items(
     *,
     include_provider_locations: bool = False,
     require_identity: bool = False,
+    ignore_placeholder_titles: bool = False,
 ) -> tuple[SourceCluster, ...]:
     """Group discovery locations, with verified anchors required by current ranking."""
     if not items:
@@ -261,7 +335,11 @@ def cluster_discovery_items(
         for item in items
     ]
     root_titles = [
-        {title} if require_identity and (title := paper_title_key(item.title)) else set()
+        {title}
+        if require_identity
+        and (title := paper_title_key(item.title))
+        and not (ignore_placeholder_titles and not _usable_reconsideration_title(item))
+        else set()
         for item in items
     ]
 
@@ -421,25 +499,92 @@ def _clustered_work_keys(
 
 def _progressive_clusters(
     items: tuple[NormalizedDiscoveryItem, ...],
-    prefix: V2DiscoveryScoutOutput | None,
-) -> tuple[tuple[SourceCluster, ...], tuple[V2LateDiscoveryMirror, ...], frozenset[UUID]]:
+    prefix: V2DiscoveryScoutOutput,
+    *,
+    allow_reconsideration: bool = False,
+) -> tuple[
+    tuple[SourceCluster, ...],
+    tuple[V2LateDiscoveryMirror, ...],
+    frozenset[UUID],
+    dict[UUID, UUID],
+]:
     combined = cluster_discovery_items(
         items, include_provider_locations=True, require_identity=True
     )
-    if prefix is None:
-        return combined, (), frozenset()
-    scouted = {item.item_id for batch in prefix.scout_batches for item in batch.items}
+    scouted = {
+        item.item_id: item.decision for batch in prefix.scout_batches for item in batch.items
+    }
     owned = {item_id: cluster for cluster in prefix.clusters for item_id in cluster.item_ids}
     by_id = {item.item_id: item for item in items}
     covered = {
         item_id
         for cluster in prefix.clusters
-        if set(cluster.item_ids) & scouted
+        if set(cluster.item_ids) & scouted.keys()
         for item_id in cluster.item_ids
     }
     mirrors: list[V2LateDiscoveryMirror] = []
     late_clusters: list[SourceCluster] = []
     replaced: set[UUID] = set()
+    reconsiderations: dict[UUID, UUID] = {}
+    merged_owners: dict[UUID, SourceCluster] = {}
+    if allow_reconsideration:
+        # A placeholder can block a DOI match. Use the alternate grouping only
+        # for a reconsidered work and never split an existing identity component.
+        original_groups = tuple(frozenset(cluster.item_ids) for cluster in combined)
+        original_members = {item_id: group for group in original_groups for item_id in group}
+        reconsideration_pool = cluster_discovery_items(
+            items,
+            include_provider_locations=True,
+            require_identity=True,
+            ignore_placeholder_titles=True,
+        )
+        absorbed: set[UUID] = set()
+        for cluster in reconsideration_pool:
+            member_ids = set(cluster.item_ids)
+            frozen = {owned[item_id].cluster_id for item_id in member_ids if item_id in owned}
+            if len(frozen) != 1 or any(
+                not original_members[item_id] <= member_ids for item_id in member_ids
+            ):
+                continue
+            owner = owned[next(item_id for item_id in cluster.item_ids if item_id in owned)]
+            prior = tuple(item_id for item_id in owner.item_ids if item_id in scouted)
+            if (
+                not prior
+                or any(scouted[item_id] != "skip" for item_id in prior)
+                or not set(owner.item_ids) <= member_ids
+            ):
+                continue
+            candidate = _reconsideration_candidate(
+                screened=tuple(by_id[item_id] for item_id in prior),
+                owner_items=tuple(by_id[item_id] for item_id in owner.item_ids),
+                late=tuple(by_id[item_id] for item_id in cluster.item_ids if item_id not in owned),
+            )
+            if candidate is None:
+                continue
+            reconsiderations[candidate.item_id] = prior[0]
+            absorbed.update(member_ids)
+            covered.update(member_ids - {candidate.item_id})
+            urls = {
+                cluster.preferred_url,
+                cluster.canonical_url,
+                *cluster.alternate_urls,
+                owner.preferred_url,
+                owner.canonical_url,
+                *owner.alternate_urls,
+            }
+            # Skipped owners have no capture to invalidate. Keep their work ID
+            # and use the improved record's location first for ordinary capture.
+            merged_owners[owner.cluster_id] = cluster.model_copy(
+                update={
+                    "cluster_id": owner.cluster_id,
+                    "canonical_url": owner.canonical_url,
+                    "preferred_url": candidate.source_url,
+                    "alternate_urls": tuple(
+                        sorted(urls - {owner.canonical_url, candidate.source_url})
+                    ),
+                }
+            )
+        combined = tuple(cluster for cluster in combined if cluster.item_ids[0] not in absorbed)
     for cluster in combined:
         frozen = {
             owned[item_id].cluster_id: owned[item_id]
@@ -469,8 +614,72 @@ def _progressive_clusters(
         late_clusters.extend(
             cluster_discovery_items(late, include_provider_locations=True, require_identity=True)
         )
-    owners = tuple(cluster for cluster in prefix.clusters if cluster.cluster_id not in replaced)
-    return (*owners, *late_clusters), tuple(mirrors), frozenset(covered)
+    owners = tuple(
+        merged_owners.get(cluster.cluster_id, cluster)
+        for cluster in prefix.clusters
+        if cluster.cluster_id not in replaced
+    )
+    return (
+        (*owners, *late_clusters),
+        tuple(mirrors),
+        frozenset(covered),
+        reconsiderations,
+    )
+
+
+def _reconsideration_candidate(
+    *,
+    screened: tuple[NormalizedDiscoveryItem, ...],
+    owner_items: tuple[NormalizedDiscoveryItem, ...],
+    late: tuple[NormalizedDiscoveryItem, ...],
+) -> NormalizedDiscoveryItem | None:
+    titles = {_usable_reconsideration_title(item) for item in (*owner_items, *late)} - {""}
+    if len(titles) > 1:
+        return None
+    had_title = any(_usable_reconsideration_title(item) for item in screened)
+    screened_metadata = tuple(_scout_candidate(item, bounded=True) for item in screened)
+    had_abstract = any(
+        len(set(_title_key(item.abstract).split())) >= 12 for item in screened_metadata
+    )
+    prior_text = {_title_key(item.snippet) for item in screened_metadata}
+    qualified = []
+    for item in late:
+        # Assess the text Scout can actually see and ignore a repeat of its snippet.
+        abstract = _title_key(_scout_candidate(item, bounded=True).abstract)
+        abstract_words = len(set(abstract.split()))
+        has_abstract = abstract_words >= 12 and abstract not in prior_text
+        has_title = bool(_usable_reconsideration_title(item))
+        if (has_title and not had_title) or (has_abstract and not had_abstract):
+            qualified.append(
+                (
+                    not has_abstract,
+                    not has_title,
+                    -abstract_words,
+                    str(item.item_id),
+                    item,
+                )
+            )
+    return min(qualified)[-1] if qualified else None
+
+
+def _usable_reconsideration_title(item: NormalizedDiscoveryItem) -> str:
+    title = paper_title_key(item.title)
+    if (
+        is_placeholder_title(item.title)
+        or is_placeholder_title(title)
+        or title
+        in {
+            "n a",
+            "no title",
+            "no title available",
+            "title unavailable",
+            "untitled",
+            "unknown",
+            "unknown title",
+        }
+    ):
+        return ""
+    return title
 
 
 def run_v2_discovery_and_scout(
@@ -544,6 +753,7 @@ def run_v2_discovery_and_scout(
     )
     prior_ranking = None
     if checkpoint is None:
+        reconsiderations: dict[UUID, UUID] = {}
         if binding is not None:
             try:
                 prior_ranking = read_v2_artifact(str(db_path), planner_output.run_id, ranking_key)
@@ -551,6 +761,12 @@ def run_v2_discovery_and_scout(
                 pass
             if prior_ranking is not None:
                 completed_at = prior_ranking.created_at
+
+        def resolve_nber(number: str) -> NberPaperMetadata | None:
+            return _repair_nber_metadata(
+                str(db_path), planner_output.run_id, number, now, cancellation_requested
+            )
+
         delta = normalize_discovery_responses(
             run_id=planner_output.run_id,
             directions=planner_output.directions,
@@ -560,13 +776,19 @@ def run_v2_discovery_and_scout(
             discovered_at=completed_at,
             crossref_resolver=crossref_resolver,
             cancellation_requested=cancellation_requested,
+            # Ranking-only historical checkpoints must reconstruct their original inputs.
+            nber_resolver=resolve_nber if prior_ranking is None else None,
             url_identity_version=(
                 2 if identity in {None, EXACT_URL_RANKING_IDENTITY, RANKING_IDENTITY} else 1
             ),
         )
         items = (*prefix.items, *delta) if prefix is not None else delta
         if prefix is not None:
-            clusters, mirrors, covered = _progressive_clusters(items, prefix)
+            clusters, mirrors, covered, reconsiderations = _progressive_clusters(
+                items,
+                prefix,
+                allow_reconsideration=claim_aware and prior_ranking is None,
+            )
         else:
             clusters = cluster_discovery_items(
                 items, include_provider_locations=binding is not None, require_identity=claim_aware
@@ -626,6 +848,7 @@ def run_v2_discovery_and_scout(
                     target_gaps=scout_gaps,
                     already_scouted=prefix_scouted,
                     excluded_items=covered | {link.item_id for link in mirrors},
+                    reconsiderations=reconsiderations,
                     candidate_limit=_scout_tranche_limit(
                         binding.policy.max_scout_per_round, first_pass_only, len(prefix_batches)
                     ),
@@ -634,6 +857,9 @@ def run_v2_discovery_and_scout(
         if prior_ranking is None:
             checkpoint = V2ScoutRoundCheckpoint(
                 run_id=planner_output.run_id,
+                policy=(
+                    "scout-round-checkpoint-v2" if reconsiderations else "scout-round-checkpoint-v1"
+                ),
                 input_hash=input_hash,
                 items=items,
                 clusters=clusters,
@@ -650,7 +876,22 @@ def run_v2_discovery_and_scout(
         for item in items:
             planner_output.directions.require_permitted(item.direction)
         if prefix is not None:
-            expected_clusters, mirrors, _covered = _progressive_clusters(items, prefix)
+            expected_clusters, mirrors, _, reconsiderations = _progressive_clusters(
+                items,
+                prefix,
+                allow_reconsideration=checkpoint.policy == "scout-round-checkpoint-v2",
+            )
+            saved_reconsiderations = (
+                {
+                    row.item_id: row.reconsidered_from_item_id
+                    for row in checkpoint.ranking_artifact.scout_dispositions
+                    if row.reconsidered_from_item_id is not None
+                }
+                if checkpoint.ranking_artifact is not None
+                else {}
+            )
+            if reconsiderations != saved_reconsiderations:
+                raise ValueError("persisted Scout reconsideration differs from its items")
         else:
             expected_clusters = cluster_discovery_items(
                 items, include_provider_locations=binding is not None, require_identity=claim_aware
@@ -894,6 +1135,7 @@ def _ranked_scout_selection(
     target_gaps: tuple[str, ...] = (),
     already_scouted: frozenset[UUID] = frozenset(),
     excluded_items: frozenset[UUID] = frozenset(),
+    reconsiderations: Mapping[UUID, UUID] | None = None,
     candidate_limit: int | None = None,
     batch_offset: int = 0,
 ) -> tuple[tuple[NormalizedDiscoveryItem, ...], V2MetadataRankingArtifact]:
@@ -966,6 +1208,7 @@ def _ranked_scout_selection(
     dispositions = tuple(
         V2ScoutDisposition(
             item_id=rank.item_id,
+            reconsidered_from_item_id=(reconsiderations or {}).get(rank.item_id),
             disposition=(
                 "scouted"
                 if rank.item_id in selected_ids

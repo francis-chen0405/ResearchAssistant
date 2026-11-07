@@ -42,7 +42,9 @@ class V2ScoutRoundCheckpoint(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     run_id: UUID
-    policy: Literal["scout-round-checkpoint-v1"] = "scout-round-checkpoint-v1"
+    policy: Literal["scout-round-checkpoint-v1", "scout-round-checkpoint-v2"] = (
+        "scout-round-checkpoint-v1"
+    )
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     items: tuple[NormalizedDiscoveryItem, ...]
     clusters: tuple[SourceCluster, ...]

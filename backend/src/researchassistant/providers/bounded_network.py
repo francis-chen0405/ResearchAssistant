@@ -121,11 +121,16 @@ class DeadlineBackend(SyncBackend):
 
 
 class DeadlineHTTPTransport(httpx.HTTPTransport):
-    def __init__(self, *, backend: httpcore.NetworkBackend | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        backend: httpcore.NetworkBackend | None = None,
+        ssl_context: ssl.SSLContext | None = None,
+    ) -> None:
         super().__init__(trust_env=False)
         self._pool.close()
         self._pool = httpcore.ConnectionPool(
-            ssl_context=ssl.create_default_context(),
+            ssl_context=ssl_context or ssl.create_default_context(),
             network_backend=backend or DeadlineBackend(),
             http2=False,
             retries=0,

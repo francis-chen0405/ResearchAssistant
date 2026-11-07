@@ -9,6 +9,7 @@ const states: Record<LiveSource["state"], string> = {
   lead: "Lead",
   screened: "Screened",
   captured: "Text captured",
+  abstract_only: "Abstract only",
   full_text: "Full text",
   assessed: "Assessed",
   admitted: "Admitted",

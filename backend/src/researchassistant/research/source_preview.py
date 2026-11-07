@@ -151,6 +151,8 @@ _PAGE_MARKER_RE = re.compile(
 )
 _PDF_MARKER_RE = re.compile(r"\[(?:page|p\.?)[ :#-]*\d{1,4}\]", re.I)
 _HEADING_PREFIX_RE = re.compile(r"^\s*(?:(?:\d+(?:\.\d+)*|[IVXLC]+)[.)]?\s+)?")
+_INLINE_ABSTRACT_RE = re.compile(r"^(?:abstract|summary)\s*[:.]\s+", re.I)
+_INLINE_INTRODUCTION_RE = re.compile(r"^introduction\s*[:.]\s+", re.I)
 
 
 @dataclass(frozen=True)
@@ -173,7 +175,9 @@ class _Candidate:
     signals: tuple[str, ...]
 
 
-def build_claim_preview(request: V2PreviewRequest, snapshot: SourceSnapshot) -> V2PreviewResult:
+def build_claim_preview(
+    request: V2PreviewRequest, snapshot: SourceSnapshot, *, require_body: bool = False
+) -> V2PreviewResult:
     """Select exact, bounded source windows using the frozen request and snapshot."""
     try:
         request = V2PreviewRequest.model_validate(request.model_dump(mode="python"))
@@ -185,12 +189,12 @@ def build_claim_preview(request: V2PreviewRequest, snapshot: SourceSnapshot) -> 
         raise ValueError("preview snapshot validation failed") from exc
     _verify_request_snapshot(request, snapshot)
     text = snapshot.normalized_text
-    segments, observed = _segments(text)
+    segments, observed = _segments(text, require_body=require_body)
     substantive_capture = any(
         not _is_excluded(segment.text) and _substantive(segment.text, segment.section)
         for segment in segments
     )
-    content_classification = _classify_capture(segments, snapshot.truncated)
+    content_classification = _classify_capture(segments, require_body=require_body)
     query_terms, phrases = _query_terms(request)
     candidates = _rank_candidates(segments, text, query_terms, phrases)
     selected = _select_non_overlapping(candidates)
@@ -232,7 +236,9 @@ def build_claim_preview(request: V2PreviewRequest, snapshot: SourceSnapshot) -> 
             missing_sections=missing,
             snapshot_truncated=snapshot.truncated,
             capture_usable=(
-                substantive_capture if content_classification not in {"shell", "error"} else False
+                substantive_capture
+                and content_classification not in {"shell", "error"}
+                and (not require_body or content_classification != "abstract_only")
             ),
             relevance_score=relevance_score,
         )
@@ -241,12 +247,18 @@ def build_claim_preview(request: V2PreviewRequest, snapshot: SourceSnapshot) -> 
     return result
 
 
+def capture_content_classification(snapshot: SourceSnapshot) -> str:
+    """Classify captured text independently of claim relevance."""
+    segments, _observed = _segments(snapshot.normalized_text, require_body=True)
+    return _classify_capture(segments, require_body=True)
+
+
 def capture_is_usable(snapshot: SourceSnapshot, *, allow_abstract_only: bool = True) -> bool:
     """Apply the existing preview capture gate without ranking against a claim."""
     if sha256(snapshot.normalized_text.encode("utf-8")).hexdigest() != snapshot.snapshot_sha256:
         raise ValueError("preview snapshot text hash is stale")
-    segments, _observed = _segments(snapshot.normalized_text)
-    classification = _classify_capture(segments, snapshot.truncated)
+    segments, _observed = _segments(snapshot.normalized_text, require_body=not allow_abstract_only)
+    classification = _classify_capture(segments, require_body=not allow_abstract_only)
     return (
         classification not in {"shell", "error"}
         and (allow_abstract_only or classification != "abstract_only")
@@ -257,7 +269,9 @@ def capture_is_usable(snapshot: SourceSnapshot, *, allow_abstract_only: bool = T
     )
 
 
-def build_capture_windows(snapshot: SourceSnapshot) -> tuple[V2PreviewSpan, ...]:
+def build_capture_windows(
+    snapshot: SourceSnapshot, *, allow_abstract_only: bool = True
+) -> tuple[V2PreviewSpan, ...]:
     """Return bounded substantive passages for Probe without claim ranking."""
     try:
         snapshot = SourceSnapshot.model_validate(snapshot.model_dump(mode="python"))
@@ -266,7 +280,9 @@ def build_capture_windows(snapshot: SourceSnapshot) -> tuple[V2PreviewSpan, ...]
     text = snapshot.normalized_text
     if sha256(text.encode("utf-8")).hexdigest() != snapshot.snapshot_sha256:
         raise ValueError("preview snapshot text hash is stale")
-    segments, _observed = _segments(text)
+    segments, _observed = _segments(text, require_body=not allow_abstract_only)
+    if not allow_abstract_only:
+        segments = [segment for segment in segments if segment.section != "abstract"]
     candidates = _rank_candidates(segments, text, set(), (), allow_structural=True)
     spans = tuple(_to_span(text, item) for item in _select_non_overlapping(candidates))
     for span in spans:
@@ -293,7 +309,7 @@ def _verify_request_snapshot(request: V2PreviewRequest, snapshot: SourceSnapshot
         raise ValueError("preview snapshot text hash is stale")
 
 
-def _segments(text: str) -> tuple[list[_Segment], set[str]]:
+def _segments(text: str, *, require_body: bool = False) -> tuple[list[_Segment], set[str]]:
     """Segment by exact source boundaries while tracking visible section headings."""
     segments: list[_Segment] = []
     observed: set[str] = set()
@@ -309,6 +325,14 @@ def _segments(text: str) -> tuple[list[_Segment], set[str]]:
         if not clean:
             continue
         heading, heading_section = _heading(clean)
+        unnumbered = _HEADING_PREFIX_RE.sub("", clean) if require_body else clean
+        if require_body:
+            if unnumbered.rstrip(" :.").casefold() == "introduction":
+                heading, heading_section = "introduction", "introduction"
+            elif _INLINE_INTRODUCTION_RE.match(unnumbered):
+                section = "introduction"
+            elif _INLINE_ABSTRACT_RE.match(clean):
+                section = "abstract"
         if heading_section == "bibliography":
             bibliography = True
             observed.add("bibliography")
@@ -316,7 +340,15 @@ def _segments(text: str) -> tuple[list[_Segment], set[str]]:
         if bibliography:
             continue
         if heading_section:
-            section = heading_section
+            # A structured abstract may contain its own methods and results.
+            # An introduction or numbered article heading establishes a body boundary.
+            if (
+                not require_body
+                or section != "abstract"
+                or heading_section == "introduction"
+                or unnumbered != clean
+            ):
+                section = heading_section
             observed.add(section)
             # Headings are retained as exact source text, but do not become preview
             # candidates by themselves.
@@ -344,7 +376,7 @@ def _segments(text: str) -> tuple[list[_Segment], set[str]]:
             )
     # A flattened text capture often uses long lines with inline section labels.
     # Split recognized headings into exact offsets without normalizing the source.
-    flattened, inline_observed = _split_inline_headings(segments, text)
+    flattened, inline_observed = _split_inline_headings(segments, text, require_body=require_body)
     observed.update(inline_observed)
     return flattened, observed
 
@@ -371,12 +403,15 @@ def _is_titleish(line: str, section: str) -> bool:
     )
 
 
-def _split_inline_headings(segments: list[_Segment], text: str) -> tuple[list[_Segment], set[str]]:
+def _split_inline_headings(
+    segments: list[_Segment], text: str, *, require_body: bool = False
+) -> tuple[list[_Segment], set[str]]:
     output: list[_Segment] = []
     observed: set[str] = set()
+    introduction = "introduction|" if require_body else ""
     inline = re.compile(
         r"(?i)(?<!\w)(?:\d+(?:\.\d+)*[.)]?\s+)?"
-        r"(title|abstract|summary|materials\s+and\s+methods|methods\s+and\s+materials|"
+        rf"({introduction}title|abstract|summary|materials\s+and\s+methods|methods\s+and\s+materials|"
         r"methods?|methodology|results?|findings|discussion|conclusions?|references|"
         r"bibliography|works\s+cited|literature\s+cited)(?:\s*[:.])\s+"
     )
@@ -386,11 +421,20 @@ def _split_inline_headings(segments: list[_Segment], text: str) -> tuple[list[_S
             output.append(segment)
             continue
         boundaries: list[tuple[int, int, str]] = []
+        current_section = segment.section
         for found in matches:
             section = _section_for_heading(found.group(1))
             if found.start() > 0 and len(segment.text[found.start() :].split()) < 4:
                 continue
+            if (
+                require_body
+                and current_section == "abstract"
+                and section not in {"introduction", "bibliography"}
+                and not found.group(0)[0].isdigit()
+            ):
+                section = "abstract"
             boundaries.append((found.start(), found.end(), section))
+            current_section = section
             observed.add(section)
             if section == "bibliography":
                 # Once a flattened reference heading appears, treat the rest as
@@ -426,6 +470,7 @@ def _section_for_heading(value: str) -> str:
     return {
         "abstract": "abstract",
         "title": "title",
+        "introduction": "introduction",
         "method": "methods",
         "methodology": "methods",
         "methods and material": "methods",
@@ -863,7 +908,7 @@ def _to_span(text: str, candidate: _Candidate) -> V2PreviewSpan:
         "start": candidate.start,
         "end": candidate.end,
         "text": text[candidate.start : candidate.end],
-        "section": candidate.section,
+        "section": "unknown" if candidate.section == "introduction" else candidate.section,
         "context_before": _context_before(text, candidate.start),
         "context_after": _context_after(text, candidate.end),
         "relevance_signals": candidate.signals,
@@ -911,7 +956,7 @@ def _relevance_score(candidates: list[_Candidate]) -> int:
     return max((item.relevance for item in candidates), default=0)
 
 
-def _classify_capture(segments: list[_Segment], truncated: bool) -> str:
+def _classify_capture(segments: list[_Segment], *, require_body: bool) -> str:
     text = " ".join(segment.text for segment in segments)
     lowered = text.casefold()
     if not text.strip():
@@ -926,11 +971,16 @@ def _classify_capture(segments: list[_Segment], truncated: bool) -> str:
         _substantive(segment.text) for segment in segments
     ):
         return "shell"
-    sections = {segment.section for segment in segments}
-    if sections & {"methods", "results", "discussion", "conclusion"}:
+    sections = {
+        segment.section
+        for segment in segments
+        if not require_body
+        or (not _is_excluded(segment.text) and _substantive(segment.text, segment.section))
+    }
+    if sections & {"introduction", "methods", "results", "discussion", "conclusion"}:
         # Observing study sections does not prove complete full-text capture.
         return "partial"
-    if "abstract" in sections:
+    if any(segment.section == "abstract" for segment in segments):
         return "abstract_only"
     if len(_tokens(text)) < 500 and not any(_substantive(segment.text) for segment in segments):
         return "landing"

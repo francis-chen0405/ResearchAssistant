@@ -57,6 +57,9 @@ class V2ScoutDisposition(StrictModel):
 
     item_id: UUID
     disposition: Literal["scouted", "not_scouted_cap", "not_scouted_budget"]
+    reconsidered_from_item_id: UUID | None = Field(
+        default=None, exclude_if=lambda item: item is None
+    )
 
 
 class MetadataIdentityConflict(StrictModel):
@@ -108,6 +111,16 @@ class V2MetadataRankingArtifact(StrictModel):
             raise ValueError("metadata ranking sidecar item IDs must be unique")
         if ranked != disposed:
             raise ValueError("every ranked item requires exactly one Scout disposition")
+        scouted = {row.item_id for row in self.scout_dispositions if row.disposition == "scouted"}
+        if any(
+            row.reconsidered_from_item_id is not None
+            and (
+                row.reconsidered_from_item_id not in scouted
+                or row.reconsidered_from_item_id == row.item_id
+            )
+            for row in self.scout_dispositions
+        ):
+            raise ValueError("Scout reconsideration requires a prior screened item")
         if sorted(item.rank for item in self.ranks) != list(range(1, len(self.ranks) + 1)):
             raise ValueError("metadata ranks must form a dense unique sequence")
         if any(not set(conflict.item_ids) <= ranked for conflict in self.identity_conflicts):

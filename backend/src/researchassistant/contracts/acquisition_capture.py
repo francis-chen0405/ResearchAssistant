@@ -29,7 +29,10 @@ class V2AcquisitionCaptureStart(StrictModel):
     url: str = Field(min_length=1)
     provider: V2AcquisitionProvider
     timeout_seconds: float = Field(gt=0, le=120)
-    policy_identity: Literal["researchassistant-v2-phase-5-acquisition-probe-v4"]
+    policy_identity: Literal[
+        "researchassistant-v2-phase-5-acquisition-probe-v4",
+        "researchassistant-v2-phase-5-acquisition-probe-v5",
+    ]
     started_at: datetime
     verified_preflight: VerifiedAcquisitionPreflight | None = None
     reuse_verified_html: bool = Field(default=False, exclude_if=lambda value: not value)

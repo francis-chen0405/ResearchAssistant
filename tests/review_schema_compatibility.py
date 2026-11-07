@@ -157,6 +157,10 @@ def verify_review_schema_additions(document: dict[str, Any]) -> None:
     normalize_approved_additive_fields(document)
     for model in (document, *document.get("$defs", {}).values()):
         properties = model.get("properties", {})
+        if model.get("title") in {"V2AcquisitionPolicy", "V2AcquisitionProbeOutput"}:
+            identities = properties["policy_identity"]["enum"]
+            assert identities[-1] == "researchassistant-v2-phase-5-acquisition-probe-v5"
+            identities.pop()
         if model.get("title") == "V2SourceSelectionSearchProvenance":
             assert properties.pop("provenance_version") == {
                 "default": 1,

@@ -52,7 +52,9 @@ class LiveSourceCard(StrictModel):
     url: str
     readable_url: str | None
     first_round: int = Field(ge=1, le=4)
-    state: Literal["lead", "screened", "captured", "full_text", "assessed", "admitted"]
+    state: Literal[
+        "lead", "screened", "captured", "abstract_only", "full_text", "assessed", "admitted"
+    ]
     note: str | None = Field(max_length=440)
     note_kind: Literal["metadata", "scout", "analyst"] | None
     angle: str | None

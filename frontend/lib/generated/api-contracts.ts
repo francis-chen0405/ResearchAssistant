@@ -178,7 +178,7 @@ export type ApiSchemas = {
     "url": string;
     "readable_url": (string | null);
     "first_round": number;
-    "state": "lead" | "screened" | "captured" | "full_text" | "assessed" | "admitted";
+    "state": "lead" | "screened" | "captured" | "abstract_only" | "full_text" | "assessed" | "admitted";
     "note": (string | null);
     "note_kind": ("metadata" | "scout" | "analyst" | null);
     "angle": (string | null);

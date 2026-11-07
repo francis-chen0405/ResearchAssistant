@@ -350,7 +350,12 @@ def enrich_discovery_diagnostics(
     ):
         messages.append("Some acquired sources have no saved preview for inspection.")
 
-    if any(item.capture_usable and item.relevance_score == 0 for item in preview_results):
+    if any(
+        item.capture_usable
+        and item.content_classification != "abstract_only"
+        and item.relevance_score == 0
+        for item in preview_results
+    ):
         messages.append("Some readable sources have no claim-relevant preview passage.")
     if any(item.content_classification == "abstract_only" for item in preview_results):
         messages.append(

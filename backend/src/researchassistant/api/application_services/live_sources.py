@@ -363,9 +363,10 @@ def _group_leads(
 
 def _captures(
     values: dict[str, BaseModel],
-) -> tuple[dict[UUID, list[SourceSnapshot]], set[UUID]]:
+) -> tuple[dict[UUID, list[SourceSnapshot]], set[UUID], set[UUID]]:
     captures: dict[UUID, list[SourceSnapshot]] = {}
     full_text: set[UUID] = set()
+    abstracts: set[UUID] = set()
     dispatches: dict[tuple[str, UUID], V2CaptureDispatch] = {}
     for key, value in values.items():
         if isinstance(value, V2CaptureDispatch):
@@ -389,7 +390,10 @@ def _captures(
                 snapshot = acquired.snapshot
                 probe = probes[snapshot.snapshot_id]
                 preview = probe.preview
-                if (
+                if preview and preview.content_classification == "abstract_only":
+                    captures.setdefault(acquired.cluster_id, []).append(snapshot)
+                    abstracts.add(snapshot.snapshot_id)
+                elif (
                     (preview.capture_usable if preview else None)
                     or (preview is None or preview.capture_usable is None)
                     and probe.succeeded
@@ -397,7 +401,7 @@ def _captures(
                     captures.setdefault(acquired.cluster_id, []).append(snapshot)
                     if preview and preview.content_classification == "full_text":
                         full_text.add(snapshot.snapshot_id)
-    return captures, full_text
+    return captures, full_text, abstracts
 
 
 def _admissions(connection: sqlite3.Connection, values: dict[str, BaseModel]) -> set[UUID]:
@@ -457,6 +461,7 @@ def _work(
     group: list[_Lead],
     captures: dict[UUID, list[SourceSnapshot]],
     full_text: set[UUID],
+    abstracts: set[UUID],
     analysis: dict[UUID, V2EvidenceAnalystSourceResult],
     admitted: set[UUID],
 ) -> _Work:
@@ -503,11 +508,21 @@ def _work(
         note, note_kind = (screened or next(iter(decisions.values()))).rationale, "scout"
     readable = min(
         snapshots,
-        key=lambda snapshot: (snapshot.snapshot_id not in full_text, snapshot.truncated),
+        key=lambda snapshot: (
+            snapshot.snapshot_id in abstracts,
+            snapshot.snapshot_id not in full_text,
+            snapshot.truncated,
+        ),
         default=None,
     )
     if readable:
-        state = "full_text" if readable.snapshot_id in full_text else "captured"
+        state = (
+            "abstract_only"
+            if readable.snapshot_id in abstracts
+            else "full_text"
+            if readable.snapshot_id in full_text
+            else "captured"
+        )
     relationship = None
     if assessed:
         state = "assessed"
@@ -518,7 +533,9 @@ def _work(
     if in_ledger:
         state = "admitted"
     merit = score + (0.06 if screened and screened.decision == "retrieve" else 0)
-    merit += (0.04 if snapshots else 0) + (0.06 if in_ledger else 0)
+    merit += (0.04 if any(s.snapshot_id not in abstracts for s in snapshots) else 0) + (
+        0.06 if in_ledger else 0
+    )
     method = next((method for lead in latest.values() if (method := _method(lead.item))), None)
     return _Work(
         card=LiveSourceCard(
@@ -601,9 +618,9 @@ def read_live_sources(
         for value in values.values()
         if isinstance(value, V2EvidenceAnalystSourceResult) and value.assessment is not None
     }
-    captures, full_text = _captures(values)
+    captures, full_text, abstracts = _captures(values)
     works = [
-        _work(group, captures, full_text, analysis, admitted)
+        _work(group, captures, full_text, abstracts, analysis, admitted)
         for group in _group_leads(values, captures)
     ]
     items = (

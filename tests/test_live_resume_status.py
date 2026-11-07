@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import frontend.live_service as live
+import researchassistant.research.v2_orchestrator as orchestrator
 from frontend.api import ApiRuntime, create_app
 from frontend.live_contracts import LiveRunRequest, LiveRunSnapshot
 from frontend.service_manager import WigoloServiceManager
@@ -152,6 +153,11 @@ def test_active_polling_returns_saved_discovery_diagnostics(
     run_fixture: _RunFixture, monkeypatch: pytest.MonkeyPatch, pause_stage: str
 ) -> None:
     entered, release = Event(), Event()
+    if pause_stage == "acquisition":
+        # Pause the only writer before checking that the polling reader leaves
+        # the database bytes alone. Progressive capture can still write while
+        # a scraper is blocked.
+        monkeypatch.setattr(orchestrator, "bind_capture_overlap", lambda *args: None)
     # Leave enough synthetic headroom for the mandatory analysis reservations
     # so this fixture actually reaches both discovery and acquisition.
     run_fixture.factory = run_fixture.factory.model_copy(

@@ -34,6 +34,7 @@ from researchassistant.agents.capture_overlap import (
     CaptureOverlap,
     bind_capture_overlap,
     initial_capture_slots,
+    production_capture_policy,
     supports_progressive_overlap,
 )
 from researchassistant.agents.discovery_overlap import (
@@ -53,10 +54,6 @@ from researchassistant.agents.v2_discovery import (
     run_v2_discovery_and_scout,
 )
 from researchassistant.contracts.discovery_v2 import V2GraphNeighborAction
-from researchassistant.contracts.model_research import (
-    V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-    V2AcquisitionPolicy,
-)
 from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryProvider,
@@ -121,10 +118,10 @@ def _run_round_from_plan(
         preview_binding is not None
         and preview_binding.preview_identity == "source-claim-preview-v2"
     )
+    key = acquisition_artifact_key(plan.round_number)
     policy = (
-        V2AcquisitionPolicy(
-            policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-            max_clusters=preview_binding.policy.max_acquisition_per_round,
+        production_capture_policy(
+            path, plan.run_id, key, preview_binding.policy.max_acquisition_per_round
         )
         if fresh_preview
         else None
@@ -220,7 +217,6 @@ def _run_round_from_plan(
     search = None
     completed_captures = None
     slots = initial_capture_slots(path, plan.run_id) if claim_ranking else None
-    key = acquisition_artifact_key(plan.round_number)
     slots = bind_capture_overlap(path, plan.run_id, key, slots, clock) if slots else None
     progressive = slots is not None and supports_progressive_overlap(path, plan.run_id, key)
 

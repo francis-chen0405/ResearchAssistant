@@ -42,6 +42,7 @@ V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisiti
 
 
 V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v4"
+V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY = "researchassistant-v2-phase-5-acquisition-probe-v5"
 
 
 V2_PREVIEW_SELECTION_LEGACY_POLICY_IDENTITY = "researchassistant-v2-phase-8-source-selection-v2"

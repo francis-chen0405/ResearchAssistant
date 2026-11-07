@@ -20,6 +20,7 @@ from researchassistant.agents.capture_overlap import (
     DEFAULT_CAPTURE_SLOTS,
     CaptureOverlap,
     bind_capture_overlap,
+    production_capture_policy,
     supports_progressive_overlap,
 )
 from researchassistant.agents.discovery_overlap import (
@@ -90,10 +91,6 @@ from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import SearchMode, V2MetadataDiscoveryPolicy
 from researchassistant.contracts.extraction import V2_EXTRACTION_POLICY_IDENTITY
 from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
-from researchassistant.contracts.model_research import (
-    V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-    V2AcquisitionPolicy,
-)
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
@@ -1019,9 +1016,11 @@ def _run_v2_production_pipeline(
         current_stage = Stage.DISCOVERY
         policy = discovery_policy or V2MetadataDiscoveryPolicy()
         acquisition_policy = (
-            V2AcquisitionPolicy(
-                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-                max_clusters=policy.max_acquisition_per_round,
+            production_capture_policy(
+                path,
+                resolved_run_id,
+                V2_ACQUISITION_PROBE_ARTIFACT_KEY,
+                policy.max_acquisition_per_round,
             )
             if not legacy_query_planning
             else None

@@ -61,7 +61,6 @@ from researchassistant.providers.llm import (
     load_prompt_file,
     render_stage_prompt,
 )
-from researchassistant.providers.v2_budget import V2BudgetExceededError
 from researchassistant.providers.v2_routing import V2RoutingConfig
 from researchassistant.research.query_execution import freeze_query_execution
 from researchassistant.storage.saved_source_suggestions import saved_source_suggestions
@@ -380,8 +379,8 @@ def run_v2_initial_planner(
                     invocation=exc.record if isinstance(exc, LLMInvocationError) else None,
                     failure=f"{type(exc).__name__}: {exc}"[:1000],
                     terminal_provider_failure=(
-                        isinstance(exc, LLMInvocationError)
-                        and isinstance(exc.__cause__, V2BudgetExceededError)
+                        isinstance(exc, LLMProviderExecutionError)
+                        and getattr(exc.__cause__, "retryable", False) is not True
                     ),
                     completed_at=_aware_now(now),
                 )

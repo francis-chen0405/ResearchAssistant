@@ -32,6 +32,9 @@ from researchassistant.contracts.research_policy import (
     V2_ACQUISITION_PROBE_POLICY_IDENTITY as V2_ACQUISITION_PROBE_POLICY_IDENTITY,
 )
 from researchassistant.contracts.research_policy import (
+    V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+)
+from researchassistant.contracts.research_policy import (
     V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY as V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
 )
 from researchassistant.contracts.research_policy import (
@@ -60,6 +63,7 @@ class V2AcquisitionPolicy(StrictModel):
         "researchassistant-v2-phase-5-acquisition-probe-v2",
         "researchassistant-v2-phase-5-acquisition-probe-v3",
         "researchassistant-v2-phase-5-acquisition-probe-v4",
+        "researchassistant-v2-phase-5-acquisition-probe-v5",
     ] = V2_ACQUISITION_PROBE_POLICY_IDENTITY
 
 
@@ -190,6 +194,7 @@ class V2AcquisitionProbeOutput(StrictModel):
         "researchassistant-v2-phase-5-acquisition-probe-v2",
         "researchassistant-v2-phase-5-acquisition-probe-v3",
         "researchassistant-v2-phase-5-acquisition-probe-v4",
+        "researchassistant-v2-phase-5-acquisition-probe-v5",
     ] = V2_ACQUISITION_PROBE_POLICY_IDENTITY
     completed_at: datetime
 
@@ -215,6 +220,7 @@ class V2AcquisitionProbeOutput(StrictModel):
             if self.policy_identity in {
                 V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
                 V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+                V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
             } and (
                 probe.preview is None
                 or probe.preview.request.preview_identity != "source-claim-preview-v2"
@@ -222,6 +228,12 @@ class V2AcquisitionProbeOutput(StrictModel):
                 raise ValueError("current Probe requires its exact versioned preview")
             if probe.preview is not None:
                 probe.preview.require_snapshot(source.snapshot)
+                if (
+                    self.policy_identity == V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY
+                    and probe.preview.content_classification == "abstract_only"
+                    and (probe.succeeded or probe.passages)
+                ):
+                    raise ValueError("abstract-only captures cannot pass article-body Probe")
                 if (
                     probe.preview.request.directions != self.directions
                     or probe.preview.request.direction != source.direction

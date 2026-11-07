@@ -62,6 +62,9 @@ from researchassistant.contracts.models import (
     V2ProbeResult,
     V2SurvivingSource,
 )
+from researchassistant.contracts.research_policy import (
+    V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+)
 from researchassistant.contracts.scraping import (
     ScrapeRequest,
     ScrapeResponse,
@@ -86,6 +89,7 @@ from researchassistant.research.metadata_ranking import RANKING_IDENTITY, fair_r
 from researchassistant.research.source_preview import (
     build_capture_windows,
     build_claim_preview,
+    capture_content_classification,
     capture_is_usable,
 )
 from researchassistant.storage.discovery_store import read_discovery_binding
@@ -180,7 +184,11 @@ def run_v2_acquisition_probe(
     policy = policy or V2AcquisitionPolicy()
     if (
         policy.policy_identity
-        in {V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY, V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY}
+        in {
+            V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
+            V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+            V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+        }
         and not exact_claim
     ):
         raise ValueError("claim-aware acquisition requires the frozen exact claim")
@@ -219,6 +227,7 @@ def run_v2_acquisition_probe(
         if policy.policy_identity in {
             V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
             V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+            V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
         }:
             if output.policy_identity != policy.policy_identity or any(
                 probe.preview is None
@@ -308,7 +317,10 @@ def run_v2_acquisition_probe(
     survivors: list[V2SurvivingSource] = []
     acquired_urls: set[str] = set()
     tried_urls: set[str] = set()
-    capture_aware = policy.policy_identity == V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY
+    capture_aware = policy.policy_identity in {
+        V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+        V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+    }
     duplicate_cluster_ids: set[UUID] = set()
     shortlisted_cluster_ids: set[UUID] = set()
     usable_by_direction: dict[ResearchDirection, int] = {}
@@ -329,6 +341,8 @@ def run_v2_acquisition_probe(
             captured = completed_captures.get(cluster.cluster_id)
             if captured is None:
                 continue
+            if captured.policy_identity != policy.policy_identity:
+                raise ValueError("overlapped capture policy differs from acquisition")
             shortlisted_cluster_ids.add(cluster.cluster_id)
             if not captured.attempts:
                 duplicate_cluster_ids.add(cluster.cluster_id)
@@ -524,7 +538,9 @@ def _probe_acquired_source(
     if policy_identity in {
         V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
         V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+        V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
     }:
+        require_body = policy_identity == V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY
         key = f"acquisition-preview/{source.cluster_id}/{source.snapshot.snapshot_id}"
         request = V2PreviewRequest(
             run_id=source.snapshot.run_id,
@@ -540,18 +556,21 @@ def _probe_acquired_source(
             asserted_components=asserted_components,
             target_gaps=target_gaps,
         )
-        preview = build_claim_preview(request, source.snapshot)
-        if not preview.capture_usable:
+        preview = build_claim_preview(request, source.snapshot, require_body=require_body)
+        abstract_only = require_body and preview.content_classification == "abstract_only"
+        if abstract_only or not preview.capture_usable:
             probe = V2ProbeResult(
                 cluster_id=source.cluster_id,
                 snapshot_id=source.snapshot.snapshot_id,
                 snapshot_sha256=source.snapshot.snapshot_sha256,
                 succeeded=False,
-                failure=preview.reason,
+                failure="abstract_only" if abstract_only else preview.reason,
                 preview=preview,
             )
         else:
-            capture_spans = build_capture_windows(source.snapshot)
+            capture_spans = build_capture_windows(
+                source.snapshot, allow_abstract_only=not require_body
+            )
             capture_text = " ".join(span.text for span in capture_spans)
             minimum_words = (
                 CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
@@ -559,7 +578,12 @@ def _probe_acquired_source(
                 else CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words
             )
             useful = bool(capture_spans) and count_words(capture_text) >= minimum_words
-            selected = preview.spans if preview.outcome == "completed" else capture_spans
+            selected = (
+                tuple(
+                    span for span in preview.spans if not require_body or span.section != "abstract"
+                )
+                or capture_spans
+            )
             probe = V2ProbeResult(
                 cluster_id=source.cluster_id,
                 snapshot_id=source.snapshot.snapshot_id,
@@ -847,7 +871,7 @@ def _capture_is_readable(
     """Use only observable source text, independently of claim terms or conclusions."""
     if not capture_is_usable(snapshot, allow_abstract_only=allow_abstract_only):
         return False
-    spans = build_capture_windows(snapshot)
+    spans = build_capture_windows(snapshot, allow_abstract_only=allow_abstract_only)
     text = " ".join(span.text for span in spans)
     minimum_words = (
         CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
@@ -873,6 +897,7 @@ def _capture_attempt(
         )
     except KeyError:
         saved_start = None
+    allow_abstract_only = start.policy_identity != V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY
     captured_response: V2AcquisitionCaptureResponse | None = None
     if saved_start is not None:
         # Restart timestamps may differ; dispatch controls and ownership may not.
@@ -910,7 +935,7 @@ def _capture_attempt(
             if completed.start != saved_start:
                 raise ValueError("acquisition completion differs from persisted dispatch")
             if completed.source is not None and completed.readable != _capture_is_readable(
-                completed.source.snapshot
+                completed.source.snapshot, allow_abstract_only=allow_abstract_only
             ):
                 raise ValueError("persisted capture readability differs from snapshot")
             return completed
@@ -994,7 +1019,8 @@ def _capture_attempt(
         attempt=attempt,
         response=response,
         source=source,
-        readable=source is not None and _capture_is_readable(source.snapshot),
+        readable=source is not None
+        and _capture_is_readable(source.snapshot, allow_abstract_only=allow_abstract_only),
         verified_preflight=context,
         finished_at=captured_response.finished_at,
         latency_ms=captured_response.latency_ms,
@@ -1025,6 +1051,8 @@ def _acquire_cluster_usable(
 ) -> tuple[V2AcquiredSource | None, tuple[V2AcquisitionAttempt, ...]]:
     attempts: list[V2AcquisitionAttempt] = []
     last_capture: V2AcquiredSource | None = None
+    abstract_capture: V2AcquiredSource | None = None
+    require_body = policy.policy_identity == V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY
     urls = (
         planned_locations
         if planned_locations is not None
@@ -1085,6 +1113,13 @@ def _acquire_cluster_usable(
                 last_capture = captured.source
             if captured.readable:
                 return captured.source, tuple(attempts)
+            if (
+                require_body
+                and abstract_capture is None
+                and captured.source is not None
+                and capture_content_classification(captured.source.snapshot) == "abstract_only"
+            ):
+                abstract_capture = captured.source
             # Fallback stays optional and needs independently verified HTML identity.
             # A shell is an extraction failure, never a claim-relevance failure.
             context = captured.verified_preflight
@@ -1113,7 +1148,7 @@ def _acquire_cluster_usable(
                 and context is not None
             ):
                 break
-    return last_capture, tuple(attempts)
+    return abstract_capture or last_capture, tuple(attempts)
 
 
 def _raise_if_cancelled(callback: Callable[[], bool] | None) -> None:

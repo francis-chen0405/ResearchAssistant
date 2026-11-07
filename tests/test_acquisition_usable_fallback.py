@@ -28,10 +28,26 @@ from researchassistant.contracts.model_research import (
     V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
 )
+from researchassistant.contracts.research_policy import (
+    V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+)
 from researchassistant.storage.store import ReadOnlyStore, read_v2_artifact
 
 LANDING = "https://example.org/landing"
 ALTERNATE = "https://mirror.example.org/fulltext"
+ABSTRACT = (
+    "Abstract\nThe randomized trial examined whether the intervention reduced symptoms in "
+    "120 adults. Researchers compared symptom scores against usual care and measured "
+    "outcomes at twelve weeks. The observed difference did not reach statistical significance."
+)
+ABSTRACT_METHODS = (
+    "The randomized trial enrolled 240 participants and assigned equal groups "
+    "to the intervention and usual care."
+)
+ABSTRACT_RESULTS = (
+    "Mean blood pressure fell by eight points in the intervention group versus "
+    "one point with usual care after six months."
+)
 
 
 def _clustered(run_id: UUID) -> V2DiscoveryScoutOutput:
@@ -50,7 +66,7 @@ def _clustered(run_id: UUID) -> V2DiscoveryScoutOutput:
 
 
 def _policy(**limits: int | float | bool) -> V2AcquisitionPolicy:
-    return V2AcquisitionPolicy(policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY, **limits)
+    return V2AcquisitionPolicy(policy_identity=V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY, **limits)
 
 
 def _captures(path: str, run_id: UUID) -> tuple[V2AcquisitionCaptureCompletion, ...]:
@@ -69,7 +85,18 @@ def _captures(path: str, run_id: UUID) -> tuple[V2AcquisitionCaptureCompletion, 
 
 
 @pytest.mark.parametrize(
-    "shell", ["OSF", "", "References\nDOI 10.1234/only 1999 2020 55 88", "Error 503.\n" + STUDY]
+    "shell",
+    [
+        "OSF",
+        "",
+        "References\nDOI 10.1234/only 1999 2020 55 88",
+        "Error 503.\n" + STUDY,
+        ABSTRACT,
+        ABSTRACT + "\nResults\nDownload PDF",
+        f"{ABSTRACT}\nMethods\n{ABSTRACT_METHODS}\nResults\n{ABSTRACT_RESULTS}",
+        f"Abstract: Background. {ABSTRACT_METHODS} Methods: {ABSTRACT_METHODS} "
+        f"Results: {ABSTRACT_RESULTS}",
+    ],
 )
 def test_shell_to_allowed_alternate_retains_every_capture(tmp_path: Path, shell: str) -> None:
     run_id = uuid4()
@@ -237,12 +264,14 @@ def test_lower_url_budget_prevents_alternate(tmp_path: Path) -> None:
     assert len(_captures(path, run_id)) == 1
 
 
-def test_cancel_after_shell_then_restart_reuses_capture_without_request(tmp_path: Path) -> None:
+def test_cancel_after_abstract_then_restart_reuses_capture_without_request(
+    tmp_path: Path,
+) -> None:
     run_id = uuid4()
     discovery = _clustered(run_id)
     path = _prepare_db(tmp_path, run_id)
     scraper = FixtureScraper(
-        {LANDING: _response(LANDING, "OSF"), ALTERNATE: _response(ALTERNATE, STUDY)}
+        {LANDING: _response(LANDING, ABSTRACT), ALTERNATE: _response(ALTERNATE, STUDY)}
     )
     with pytest.raises(V2CancellationRequested):
         run_v2_acquisition_probe(
@@ -315,7 +344,7 @@ def test_unknown_physical_attempt_is_never_replayed(tmp_path: Path) -> None:
 def test_verified_html_allows_optional_method_fallback(tmp_path: Path, readable: bool) -> None:
     run_id = uuid4()
     path = _prepare_db(tmp_path, run_id)
-    response = _response(LANDING, STUDY if readable else "OSF").model_copy(
+    response = _response(LANDING, STUDY if readable else ABSTRACT).model_copy(
         update={
             "media_type_provenance": MediaTypeProvenance(
                 verified_media_type="text/html", verified_source_url=LANDING
@@ -401,9 +430,10 @@ def test_readable_null_or_unrelated_capture_stops_without_seeking_agreement(
     run_id = uuid4()
     scraper = FixtureScraper(
         {
-            LANDING: _response(LANDING, STUDY),
+            LANDING: _response(LANDING, STUDY).model_copy(update={"truncated": True}),
             ALTERNATE: _response(
-                ALTERNATE, STUDY.replace("no significant effect", "a significant improvement")
+                ALTERNATE,
+                STUDY.replace("no significant effect", "a significant improvement"),
             ),
         }
     )
@@ -420,6 +450,33 @@ def test_readable_null_or_unrelated_capture_stops_without_seeking_agreement(
     if claim != CLAIM:
         assert output.probes[0].preview is not None
         assert output.probes[0].preview.relevance_score == 0
+
+
+@pytest.mark.parametrize("heading", ["Introduction", "1. Introduction", "Introduction:"])
+def test_truncated_introduction_after_abstract_is_usable_body(tmp_path: Path, heading: str) -> None:
+    run_id = uuid4()
+    body = (
+        "We report the results of a randomized trial involving 240 participants across three "
+        "sites. The intervention and control groups were compared after a year using outcomes "
+        "from clinic records. This report also examines how baseline differences affect the "
+        "interpretation of the observed changes in blood pressure."
+    )
+    separator = " " if heading.endswith(":") else "\n"
+    response = _response(LANDING, f"{ABSTRACT}\n{heading}{separator}{body}").model_copy(
+        update={"truncated": True}
+    )
+    scraper = FixtureScraper({LANDING: response})
+    output = run_v2_acquisition_probe(
+        db_path=_prepare_db(tmp_path, run_id),
+        discovery_output=_clustered(run_id),
+        wigolo_provider=scraper,
+        exact_claim=CLAIM,
+        policy=_policy(),
+    ).output
+    assert [request.url for request in scraper.requests] == [LANDING]
+    assert len(output.survivors) == 1
+    assert output.probes[0].preview.content_classification == "partial"
+    assert all(passage.text in body for passage in output.probes[0].passages)
 
 
 def test_same_location_appearing_twice_and_shared_shell_are_requested_once(tmp_path: Path) -> None:
@@ -488,7 +545,7 @@ def test_processing_interruption_retains_response_and_reuses_it(
     )
     original = acquisition._capture_is_readable
 
-    def interrupted(snapshot: acquisition.SourceSnapshot) -> bool:
+    def interrupted(snapshot: acquisition.SourceSnapshot, *, allow_abstract_only: bool) -> bool:
         raise RuntimeError("assessment interrupted")
 
     monkeypatch.setattr(acquisition, "_capture_is_readable", interrupted)
@@ -620,3 +677,73 @@ def test_canonical_metadata_does_not_mark_an_unvisited_alternate_tried(tmp_path:
     ).output
     assert [r.url for r in scraper.requests] == [LANDING, ALTERNATE]
     assert len(output.attempts) == 2 and len(output.survivors) == 1
+
+
+@pytest.mark.parametrize("max_urls", [1, 2])
+def test_abstract_exhaustion_retains_snapshot_without_evidence(
+    tmp_path: Path, max_urls: int
+) -> None:
+    from researchassistant.agents.adaptive_summary import _merge_survivors
+
+    run_id = uuid4()
+    path = _prepare_db(tmp_path, run_id)
+    discovery = _clustered(run_id)
+    primary = FixtureScraper(
+        {LANDING: _response(LANDING, ABSTRACT), ALTERNATE: _response(ALTERNATE, "OSF")}
+    )
+    fallback = FixtureScraper({LANDING: _response(LANDING, STUDY)})
+    output = run_v2_acquisition_probe(
+        db_path=path,
+        discovery_output=discovery,
+        wigolo_provider=primary,
+        firecrawl_provider=fallback,
+        exact_claim=CLAIM,
+        policy=_policy(max_urls_per_cluster=max_urls),
+    ).output
+    assert [request.url for request in primary.requests] == [LANDING, ALTERNATE][:max_urls]
+    assert not fallback.requests  # The abstract response has no verified HTML provenance.
+    assert len(output.attempts) == max_urls
+    assert output.attempts[0].succeeded
+    (source,) = output.acquisitions
+    (probe,) = output.probes
+    assert source.snapshot.normalized_text == ABSTRACT
+    assert _captures(path, run_id)[0].source == source
+    assert probe.preview.content_classification == "abstract_only"
+    assert probe.failure == "abstract_only" and not probe.succeeded and not probe.passages
+    assert not output.survivors
+    assert not _merge_survivors(run_id, ((1, discovery, output),)).sources
+
+
+def test_historical_v4_abstract_readability_is_preserved_on_resume(
+    tmp_path: Path,
+) -> None:
+    from researchassistant.agents.capture_overlap import production_capture_policy
+
+    run_id = uuid4()
+    path = _prepare_db(tmp_path, run_id)
+    discovery = _clustered(run_id)
+    scraper = FixtureScraper({LANDING: _response(LANDING, ABSTRACT)})
+    policy = V2AcquisitionPolicy(policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY)
+    with pytest.raises(V2CancellationRequested):
+        run_v2_acquisition_probe(
+            db_path=path,
+            discovery_output=discovery,
+            wigolo_provider=scraper,
+            exact_claim=CLAIM,
+            policy=policy,
+            cancellation_requested=lambda: bool(scraper.requests),
+        )
+    (capture,) = _captures(path, run_id)
+    assert capture.readable
+    resolved = production_capture_policy(path, run_id, "phase-5-acquisition-probe", 25)
+    assert resolved == policy
+    output = run_v2_acquisition_probe(
+        db_path=path,
+        discovery_output=discovery,
+        wigolo_provider=scraper,
+        exact_claim=CLAIM,
+        policy=resolved,
+    ).output
+    assert len(scraper.requests) == 1
+    assert output.survivors[0].snapshot_id == capture.source.snapshot.snapshot_id
+    assert _captures(path, run_id) == (capture,)

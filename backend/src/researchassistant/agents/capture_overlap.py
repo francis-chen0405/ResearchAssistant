@@ -20,6 +20,7 @@ from researchassistant.agents.evidence_checkpoint import EARLY_ANALYSIS_SLOTS
 from researchassistant.agents.v2_acquisition import (
     _MAX_RANKED_SOURCE_ATTEMPTS,
     V2_ACQUISITION_PROBE_ARTIFACT_KEY,
+    V2AcquisitionInputBinding,
     _acquire_cluster_usable,
     _capture_candidate_ids,
     _capture_is_readable,
@@ -43,6 +44,10 @@ from researchassistant.contracts.models import (
     V2AcquisitionProbeOutput,
     V2DiscoveryScoutOutput,
 )
+from researchassistant.contracts.research_policy import (
+    V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+    V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+)
 from researchassistant.contracts.scraping import ScrapeResponse
 from researchassistant.providers.acquisition import CaptureControls, capture_controls
 from researchassistant.providers.llm import LLMRequest
@@ -52,7 +57,10 @@ from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 if TYPE_CHECKING:
-    from researchassistant.agents.evidence_checkpoint import EarlyAssessment, V2EvidenceCheckpoint
+    from researchassistant.agents.evidence_checkpoint import (
+        EarlyAssessment,
+        V2EvidenceCheckpoint,
+    )
 
 DEFAULT_CAPTURE_SLOTS = 3
 LATER_SCOUT_CAPTURE_RESERVE = 2
@@ -75,6 +83,7 @@ class V2CaptureOverlapBinding(StrictModel):
     run_id: UUID
     capture_slots: int = Field(ge=1, le=5)
     progressive: bool = Field(default=False, exclude_if=lambda value: not value)
+    require_article_body: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class V2CaptureDispatch(StrictModel):
@@ -135,9 +144,35 @@ def bind_capture_overlap(
         except KeyError:
             continue
         return None
-    binding = V2CaptureOverlapBinding(run_id=run_id, capture_slots=slots, progressive=True)
+    binding = V2CaptureOverlapBinding(
+        run_id=run_id, capture_slots=slots, progressive=True, require_article_body=True
+    )
     insert_v2_artifact(path, key, binding, clock())
     return slots
+
+
+def production_capture_policy(
+    path: str, run_id: UUID, artifact_key: str, max_clusters: int
+) -> V2AcquisitionPolicy:
+    """Keep the policy that owns the round, including pre-aggregate overlap work."""
+    inputs = read_checkpoint(
+        path, run_id, f"{artifact_key}-input-binding", V2AcquisitionInputBinding
+    )
+    if inputs is not None:
+        return V2AcquisitionPolicy(
+            policy_identity=inputs.policy.policy_identity, max_clusters=max_clusters
+        )
+
+    output = read_checkpoint(path, run_id, artifact_key, V2AcquisitionProbeOutput)
+    overlap = read_checkpoint(path, run_id, f"{artifact_key}/overlap-v1", V2CaptureOverlapBinding)
+    identity = (
+        output.policy_identity
+        if output is not None
+        else V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY
+        if overlap is not None and not overlap.require_article_body
+        else V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY
+    )
+    return V2AcquisitionPolicy(policy_identity=identity, max_clusters=max_clusters)
 
 
 def initial_capture_slots(path: str, run_id: UUID) -> int | None:
@@ -413,8 +448,11 @@ class CaptureOverlap:
         key = f"{self.artifact_key}/overlap-v1/ready/{dispatch.cluster_id}"
         saved = read_checkpoint(self.path, self.run_id, key, V2CaptureReady)
         if saved is not None:
-            if saved.dispatch != dispatch:
-                raise ValueError("saved ready capture differs from its dispatch")
+            if (
+                saved.dispatch != dispatch
+                or saved.output.policy_identity != self.policy.policy_identity
+            ):
+                raise ValueError("saved ready capture differs from its dispatch or policy")
             return saved.output
 
         def accept_html(response: ScrapeResponse) -> bool:

@@ -17,7 +17,7 @@ import httpx
 import pytest
 import test_query_production as production
 import test_v2_phase12_production as phase12
-from test_acquisition_usable_fallback import _captures
+from test_acquisition_usable_fallback import ABSTRACT, _captures
 
 from researchassistant.agents import (
     v2_acquisition,
@@ -32,6 +32,7 @@ from researchassistant.agents.evidence_checkpoint import CHECKPOINT_KEY, V2Evide
 from researchassistant.agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
 from researchassistant.agents.v2_gap_analysis import V2_GAP_ANALYSIS_ARTIFACT_KEY
 from researchassistant.api.application_services.live_sources import read_live_sources
+from researchassistant.api.discovery_diagnostics import enrich_discovery_diagnostics
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     ResearchControls,
@@ -56,7 +57,7 @@ from researchassistant.research.v2_orchestrator import (
 )
 from researchassistant.storage.discovery_store import provider_attempt_audit
 from researchassistant.storage.query_retrieval_store import read_pages
-from researchassistant.storage.store import read_v2_artifact
+from researchassistant.storage.store import ReadOnlyStore, read_v2_artifact
 
 ACQUISITION = v2_acquisition.V2_ACQUISITION_PROBE_ARTIFACT_KEY
 
@@ -314,6 +315,9 @@ def test_verified_html_reuse_and_bounded_browser_fallback(tmp_path: Path) -> Non
             else "<html><p>JavaScript required</p>"
             f"<div hidden><div>{phase12.SOURCE_TEXT}</div></div></html>"
         )
+        if index == "/0":
+            heading, text = ABSTRACT.split("\n", 1)
+            markup = f"<main><article><h2>{heading}</h2><p>{text}</p></article></main>"
         return httpx.Response(200, text=markup, headers={"content-type": "text/html"})
 
     def wigolo(request: httpx.Request) -> httpx.Response:
@@ -865,6 +869,253 @@ def test_production_scouts_and_captures_before_deeper_search_finishes(
         }
 
 
+@pytest.mark.parametrize(
+    ("second_decision", "interruption", "limit", "repair"),
+    (
+        ("retrieve", None, None, False),
+        ("retrieve", None, None, True),
+        ("maybe", "plan", None, False),
+        ("retrieve", "outcome", None, False),
+        ("retrieve", "legacy plan", None, False),
+        ("skip", None, None, False),
+        ("retrieve", None, "budget", False),
+        ("retrieve", None, "cap", False),
+    ),
+)
+def test_progressive_reconsiders_skipped_work_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    second_decision: str,
+    interruption: str | None,
+    limit: str | None,
+    repair: bool,
+) -> None:
+    path, run_id = tmp_path / "reconsideration.sqlite", uuid4()
+    weak_url = "https://index.example.org/report"
+    shorter_abstract = (
+        "A controlled trial compared regional course completion outcomes "
+        "against a randomly matched comparison group."
+    )
+    checkpoint_key = "scout-checkpoint-v1/" + V2_SCOUT_ARTIFACT_KEY
+    first_key = V2_SCOUT_ARTIFACT_KEY + "/first-pass-v1"
+
+    class Search(_GatedPages):
+        MIRROR = "https://www.nber.org/papers/w12345" if repair else _GatedPages.MIRROR
+
+        def search(self, request: phase12.SearchRequest) -> phase12.SearchResponse:
+            response = super().search(request)
+            results = []
+            for item in response.results:
+                if item.original_url == self.ORIGINAL:
+                    item = item.model_copy(
+                        update={"metadata": item.metadata.model_copy(update={"abstract": None})}
+                    )
+                if item.original_url == self.MIRROR:
+                    results.append(
+                        item.model_copy(
+                            update={
+                                "original_url": weak_url,
+                                "rank": item.rank + 2,
+                                "metadata": item.metadata.model_copy(
+                                    update={"abstract": shorter_abstract}
+                                ),
+                            }
+                        )
+                    )
+                    if repair:
+                        item = item.model_copy(
+                            update={
+                                "title": "Working Paper No. 12345",
+                                "metadata": item.metadata.model_copy(update={"abstract": None}),
+                            }
+                        )
+                results.append(item)
+            return response.model_copy(
+                update={"results": sorted(results, key=lambda item: item.rank)}
+            )
+
+    class Model(production._ConceptModel):
+        def generate(self, request: Any) -> object:
+            if request.stage is LLMStage.SCOUT:
+                self.requests.append(request)
+                return ScoutBatch(
+                    run_id=run_id,
+                    items=tuple(
+                        ScoutItem(
+                            item_id=candidate.item_id,
+                            decision=(
+                                second_decision if candidate.source_url == search.MIRROR else "skip"
+                            ),
+                            rationale="Offline metadata screening.",
+                        )
+                        for candidate in request.input_artifact.candidates
+                    ),
+                )
+            return super().generate(request)
+
+    search, model, scraper = Search(), Model(), phase12._Scraper()
+    search.release_deep.set()
+    if repair:
+
+        def repair_metadata(number: str) -> v2_discovery.NberPaperMetadata:
+            assert number == "12345"
+            return v2_discovery.NberPaperMetadata(
+                handle="RePEc:nbr:nberwo:12345",
+                title="Regional program and course completion study 00",
+                abstract=(
+                    "A controlled trial measured regional program course completion against "
+                    "standard materials. The groups had different completion rates."
+                ),
+            )
+
+        monkeypatch.setattr(v2_discovery, "resolve_nber_metadata", repair_metadata)
+
+    def run() -> V2ProductionPipelineResult:
+        return production._run_fresh(
+            path,
+            model=model,
+            search=search,
+            scraper=scraper,
+            run_id=run_id,
+            providers=(DiscoveryProvider.SERPSEARCH, DiscoveryProvider.EXA),
+        )
+
+    if limit:
+        select = v2_discovery._ranked_scout_selection
+
+        def limited_selection(**kwargs: Any) -> object:
+            if kwargs["reconsiderations"]:
+                if limit == "cap":
+                    kwargs["policy"] = kwargs["policy"].model_copy(
+                        update={"max_scout_per_round": len(kwargs["already_scouted"])}
+                    )
+                else:
+                    snapshot = kwargs["llm_provider"].snapshot()
+                    kwargs["budget_snapshot"] = lambda: snapshot.model_copy(
+                        update={"physical_calls_remaining": 0}
+                    )
+            return select(**kwargs)
+
+        monkeypatch.setattr(v2_discovery, "_ranked_scout_selection", limited_selection)
+
+    if interruption:
+        with monkeypatch.context() as patch:
+            if interruption == "legacy plan":
+                cluster = v2_discovery._progressive_clusters
+                patch.setattr(
+                    v2_discovery,
+                    "_progressive_clusters",
+                    lambda items, prefix, **kwargs: cluster(items, prefix),
+                )
+            if interruption in {"plan", "legacy plan"}:
+                persist = v2_discovery.insert_v2_artifact
+
+                def interrupt_plan(*args: Any, **kwargs: Any) -> object:
+                    result = persist(*args, **kwargs)
+                    if args[1] == checkpoint_key:
+                        raise KeyboardInterrupt("saved Scout plan")
+                    return result
+
+                patch.setattr(v2_discovery, "insert_v2_artifact", interrupt_plan)
+            else:
+                save_outcome = v2_discovery.save_stage_outcome
+
+                def interrupt_outcome(*args: Any, **kwargs: Any) -> object:
+                    result = save_outcome(*args, **kwargs)
+                    if args[1].stage_key.startswith(checkpoint_key + "/batch-"):
+                        raise KeyboardInterrupt("saved Scout outcome")
+                    return result
+
+                patch.setattr(v2_discovery, "save_stage_outcome", interrupt_outcome)
+            with pytest.raises(KeyboardInterrupt, match="saved Scout"):
+                run()
+        saved = read_v2_artifact(path, run_id, checkpoint_key)
+        assert not scraper.requests
+        run()
+        assert read_v2_artifact(path, run_id, checkpoint_key) == saved
+    else:
+        run()
+
+    def discovery(key: str) -> V2DiscoveryScoutOutput:
+        return V2DiscoveryScoutOutput.model_validate_json(
+            read_v2_artifact(path, run_id, key).payload_json
+        )
+
+    first, final = discovery(first_key), discovery(V2_SCOUT_ARTIFACT_KEY)
+    by_url = {item.source_url: item for item in final.items}
+    original, improved = by_url[search.ORIGINAL], by_url[search.MIRROR]
+    assert original.abstract is None and improved.abstract
+    if repair:
+        assert improved.title == original.title
+        assert any(entry.key == "nber_metadata_repair" for entry in improved.provider_metadata)
+    assert final.scout_batches[: len(first.scout_batches)] == first.scout_batches
+    decisions = {row.item_id: row.decision for batch in final.scout_batches for row in batch.items}
+    assert decisions[original.item_id] == "skip"
+    if interruption == "legacy plan":
+        assert improved.item_id not in decisions and not scraper.requests
+        assert any(link.item_id == improved.item_id for link in final.late_mirrors)
+        return
+    assert decisions.get(improved.item_id) == (None if limit else second_decision)
+    assert by_url[weak_url].item_id not in decisions
+    owner = next(cluster for cluster in first.clusters if original.item_id in cluster.item_ids)
+    (work,) = [cluster for cluster in final.clusters if original.item_id in cluster.item_ids]
+    assert work.cluster_id == owner.cluster_id
+    assert set(work.item_ids) == {original.item_id, improved.item_id, by_url[weak_url].item_id}
+    checkpoint = v2_stage_checkpoint.V2ScoutRoundCheckpoint.model_validate_json(
+        read_v2_artifact(path, run_id, checkpoint_key).payload_json
+    )
+    assert checkpoint.policy == "scout-round-checkpoint-v2"
+    ranking = v2_discovery.V2MetadataRankingArtifact.model_validate_json(
+        read_v2_artifact(path, run_id, "phase-3-metadata-ranking-round-1").payload_json
+    )
+    assert ranking == checkpoint.ranking_artifact
+    assert len({rank.work_key for rank in ranking.ranks if rank.item_id in work.item_ids}) == 1
+    (disposition,) = [
+        row for row in ranking.scout_dispositions if row.reconsidered_from_item_id is not None
+    ]
+    assert disposition.item_id == improved.item_id
+    assert disposition.reconsidered_from_item_id == original.item_id
+    assert disposition.disposition == (f"not_scouted_{limit}" if limit else "scouted")
+    assert improved.provenance_chain[0] in work.metadata_provenance
+
+    screened = [
+        candidate.source_url
+        for request in model.requests
+        if request.stage is LLMStage.SCOUT
+        for candidate in request.input_artifact.candidates
+    ]
+    assert screened.count(search.ORIGINAL) == 1
+    assert screened.count(search.MIRROR) == (0 if limit else 1)
+    assert weak_url not in screened
+    if limit:
+        assert len([request for request in model.requests if request.stage is LLMStage.SCOUT]) == (
+            len(first.scout_batches)
+        )
+    should_capture = limit is None and second_decision != "skip"
+    assert [request.url for request in scraper.requests] == (
+        [search.MIRROR] if should_capture else []
+    )
+    acquisition = V2AcquisitionProbeOutput.model_validate_json(
+        read_v2_artifact(path, run_id, ACQUISITION).payload_json
+    )
+    assert [row.cluster_id for row in acquisition.survivors] == (
+        [owner.cluster_id] if should_capture else []
+    )
+    if should_capture:
+        dispatch = V2CaptureDispatch.model_validate_json(
+            read_v2_artifact(path, run_id, f"{ACQUISITION}/overlap-v1/dispatch-1").payload_json
+        )
+        assert dispatch.cluster_id == owner.cluster_id and dispatch.item_id == improved.item_id
+        evidence = V2EvidenceCheckpoint.model_validate_json(
+            read_v2_artifact(path, run_id, CHECKPOINT_KEY).payload_json
+        )
+        assert [wave.source_id for wave in evidence.waves] == [owner.cluster_id]
+        calls = len(model.requests)
+        run()
+        assert len(model.requests) == calls
+        assert [request.url for request in scraper.requests] == [search.MIRROR]
+
+
 class _SlowRuralCapture(phase12._Scraper):
     def __init__(self, *, include_rural_evidence: bool) -> None:
         super().__init__()
@@ -1154,3 +1405,92 @@ def test_pending_capture_defers_only_its_matched_gap_across_restart(
     assert late_source.cluster_id in {
         finding.source_id for finding in gap_calls[-1].assessed_source_findings
     }
+
+
+@pytest.mark.parametrize("recover", [True, False])
+def test_progressive_resume_reuses_abstract_and_tries_known_article(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recover: bool
+) -> None:
+    abstract_url = "https://study-0.example.org/preferred"
+    article_url = "https://study-0.example.org/0"
+
+    class _KnownLocations(_Works):
+        def search(self, request: phase12.SearchRequest) -> phase12.SearchResponse:
+            response = super().search(request)
+            item = response.results[0]
+            return response.model_copy(
+                update={
+                    "results": [
+                        item.model_copy(
+                            update={
+                                "metadata": item.metadata.model_copy(
+                                    update={"full_text_url": abstract_url}
+                                )
+                            }
+                        )
+                    ]
+                }
+            )
+
+    class _AbstractFirst(phase12._Scraper):
+        def scrape(self, request: phase12.ScrapeRequest) -> phase12.ScrapeResponse:
+            response = super().scrape(request)
+            if request.url == abstract_url:
+                return response.model_copy(update={"text": ABSTRACT})
+            return response if recover else response.model_copy(update={"text": ""})
+
+    path, run_id = tmp_path / "abstract-resume.sqlite", uuid4()
+    search, scraper, model = (
+        _KnownLocations(1),
+        _AbstractFirst(),
+        production._ConceptModel(),
+    )
+    persist = v2_acquisition.insert_v2_artifact
+
+    def interrupt(*args: Any, **kwargs: Any) -> object:
+        result = persist(*args, **kwargs)
+        if str(args[1]).endswith("/completion"):
+            raise KeyboardInterrupt("offline interruption after abstract completion")
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(v2_acquisition, "insert_v2_artifact", interrupt)
+        with pytest.raises(KeyboardInterrupt, match="after abstract completion"):
+            _run(path, run_id, model, search, scraper)
+    assert [request.url for request in scraper.requests] == [abstract_url]
+    (abstract,) = _captures(path, run_id)
+    assert abstract.attempt.succeeded and not abstract.readable
+    assert abstract.source.snapshot.normalized_text == ABSTRACT
+
+    result = _run(path, run_id, model, search, scraper)
+    assert [request.url for request in scraper.requests] == [abstract_url, article_url]
+    saved_abstract, article = _captures(path, run_id)
+    assert saved_abstract == abstract
+    output = V2AcquisitionProbeOutput.model_validate_json(
+        read_v2_artifact(path, run_id, ACQUISITION).payload_json
+    )
+    assert output.attempts == (abstract.attempt, article.attempt)
+    (card,) = read_live_sources(path, run_id).items
+    if recover:
+        assert article.readable
+        assert output.acquisitions == (article.source,)
+        assert output.survivors[0].snapshot_id == article.source.snapshot.snapshot_id
+        checkpoint = V2EvidenceCheckpoint.model_validate_json(
+            read_v2_artifact(path, run_id, CHECKPOINT_KEY).payload_json
+        )
+        assert checkpoint.waves[0].extraction.sources[0].candidate.snapshot_id == (
+            article.source.snapshot.snapshot_id
+        )
+        assert card.readable_url == article_url and card.state != "abstract_only"
+    else:
+        assert article.source is None and not article.attempt.succeeded
+        assert output.acquisitions == (abstract.source,)
+        assert output.probes[0].failure == "abstract_only"
+        assert not output.survivors
+        assert all(
+            req.stage not in {LLMStage.EXTRACTOR, LLMStage.ANALYST} for req in model.requests
+        )
+        assert card.readable_url == abstract_url and card.state == "abstract_only"
+        with ReadOnlyStore(path) as store:
+            diagnostics = enrich_discovery_diagnostics(store.connection, run_id, result.diagnostics)
+        assert any("abstracts only" in message for message in diagnostics.diagnostic_messages)

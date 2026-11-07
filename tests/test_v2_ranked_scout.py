@@ -9,6 +9,7 @@ import pytest
 
 from agents.v2_discovery import (
     V2DiscoveryResponse,
+    _progressive_clusters,
     _ranked_scout_selection,
     _scout_candidate,
     cluster_discovery_items,
@@ -36,6 +37,7 @@ from researchassistant.contracts.model_research import (
     ResearchDirection,
     ResearchDirections,
     ScoutBatch,
+    ScoutBatchAudit,
     ScoutItem,
     V2DiscoveryScoutOutput,
     V2InitialPlannerOutput,
@@ -194,6 +196,118 @@ def _snapshot(calls: int) -> V2BudgetSnapshot:
         tokens_remaining=500_000,
         cost_remaining_usd=Decimal("20"),
     )
+
+
+@pytest.mark.parametrize(
+    ("variant", "reconsider", "mirror"),
+    [
+        ("same metadata", False, True),
+        ("cosmetic title", False, True),
+        ("different doi", False, False),
+        ("same doi conflicting title", False, False),
+        ("title only match", False, False),
+        ("retrieve", False, True),
+        ("maybe", False, True),
+        ("unscreened", False, False),
+        ("placeholder title", True, False),
+        ("missing title", True, False),
+        ("placeholder abstract", True, False),
+        ("unseen abstract", True, False),
+        ("screened abstract", False, True),
+    ],
+)
+def test_progressive_reconsideration_requires_skipped_work_and_improved_metadata(
+    variant: str, reconsider: bool, mirror: bool
+) -> None:
+    original, late, unseen = _discovery_pool(3)
+    title = "A randomized study of regional course completion"
+    abstract = (
+        "A controlled trial measured regional program course completion against "
+        "standard materials. The groups had different completion rates."
+    )
+    original = original.model_copy(
+        update={
+            "title": "Working Paper No. 1234"
+            if variant == "placeholder title"
+            else None
+            if variant == "missing title"
+            else title,
+            "abstract": "N/A"
+            if variant == "placeholder abstract"
+            else abstract
+            if variant == "screened abstract"
+            else None,
+        }
+    )
+    late = late.model_copy(
+        update={
+            "doi": late.doi
+            if variant == "different doi"
+            else None
+            if variant == "title only match"
+            else original.doi,
+            "title": title.upper() + "!"
+            if variant == "cosmetic title"
+            else "A different paper"
+            if variant == "same doi conflicting title"
+            else title,
+            "abstract": abstract
+            if variant
+            in {
+                "different doi",
+                "same doi conflicting title",
+                "title only match",
+                "retrieve",
+                "maybe",
+                "unscreened",
+                "placeholder abstract",
+                "unseen abstract",
+                "screened abstract",
+            }
+            else None,
+        }
+    )
+    decision = variant if variant in {"retrieve", "maybe"} else "skip"
+    batches = (
+        (
+            ScoutBatch(
+                run_id=original.run_id,
+                items=(
+                    ScoutItem(item_id=original.item_id, decision=decision, rationale="Fixture"),
+                ),
+            ),
+        )
+        if variant != "unscreened"
+        else ()
+    )
+    prefix_items = (original,)
+    if variant == "unseen abstract":
+        prefix_items += (
+            unseen.model_copy(update={"title": title, "abstract": abstract, "doi": original.doi}),
+        )
+    prefix = V2DiscoveryScoutOutput(
+        run_id=original.run_id,
+        directions=ResearchDirections(support_enabled=True, challenge_enabled=False),
+        items=prefix_items,
+        clusters=cluster_discovery_items(prefix_items, require_identity=True),
+        scout_batches=batches,
+        scout_audits=(ScoutBatchAudit(batch_number=1, attempted_calls=1, fallback_used=False),)
+        if batches
+        else (),
+        completed_at=NOW,
+    )
+    clusters, mirrors, covered, reconsiderations = _progressive_clusters(
+        (*prefix_items, late), prefix, allow_reconsideration=True
+    )
+    assert reconsiderations == ({late.item_id: original.item_id} if reconsider else {})
+    assert tuple(link.item_id for link in mirrors) == ((late.item_id,) if mirror else ())
+    assert (late.item_id in covered) is False
+    if reconsider:
+        assert len(clusters) == 1 and clusters[0].cluster_id == prefix.clusters[0].cluster_id
+    else:
+        assert (clusters, mirrors, covered, reconsiderations) == _progressive_clusters(
+            (*prefix_items, late), prefix
+        )
 
 
 def test_ranked_scout_reserves_both_attempts_and_records_unseen_items() -> None:

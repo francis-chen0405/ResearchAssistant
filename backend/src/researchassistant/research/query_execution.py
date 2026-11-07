@@ -388,7 +388,10 @@ def freeze_query_execution(
         V2QueryParseReceipt,
         V2QueryRetrievalResult,
     )
-    from researchassistant.contracts.research_policy import V2_PREVIEW_SELECTION_POLICY_IDENTITY
+    from researchassistant.contracts.research_policy import (
+        V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
+        V2_PREVIEW_SELECTION_POLICY_IDENTITY,
+    )
     from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
 
     schema_hash = discovery_hash(
@@ -396,7 +399,7 @@ def freeze_query_execution(
             {
                 "foundation": binding.prompt_schema_hash,
                 "prompts": prompt_hashes,
-                "preview_probe_policy": "researchassistant-v2-phase-5-acquisition-probe-v4",
+                "preview_probe_policy": V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
                 "selection_policy": V2_PREVIEW_SELECTION_POLICY_IDENTITY,
                 "selection_input_cap": 24000,
                 "selection_model_view": "compact-selection-v1",
