@@ -23,6 +23,7 @@ from researchassistant.contracts.models import (
     V2InitialPlannerModelOutput,
     V2SourceSelectionInput,
     V2SourceSelectionModelOutput,
+    V2VerbatimQuoteSelection,
 )
 from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
 from researchassistant.providers.llm import InvocationStatus, LLMInvocationRecord, LLMRequest
@@ -151,6 +152,7 @@ class V2StageOutcomeCheckpoint(StrictModel):
         | V2SourceSelectionModelOutput
         | V2InitialPlannerModelOutput
         | V2InitialPlannerConceptsOutput
+        | V2VerbatimQuoteSelection
         | None
     ) = None
     invocation: LLMInvocationRecord | None = None
@@ -198,6 +200,10 @@ def read_checkpoint(
     return value
 
 
+class V2UnknownStageOutcomeError(RuntimeError):
+    """An intent owns an attempt whose outcome could not be recovered."""
+
+
 def stage_attempt(
     *, path: str, key: str, number: int, request: LLMRequest, started_at: datetime
 ) -> tuple[V2StageAttemptCheckpoint, V2StageOutcomeCheckpoint | None, bool]:
@@ -227,7 +233,9 @@ def stage_attempt(
             path, request.run_id, attempt_key + "/outcome", V2StageOutcomeCheckpoint
         )
         if outcome is None:
-            raise RuntimeError("bounded stage has an unknown outcome; its attempt remains consumed")
+            raise V2UnknownStageOutcomeError(
+                "bounded stage has an unknown outcome; its attempt remains consumed"
+            )
         if outcome.attempt_id != attempt_id or outcome.request_hash != digest:
             raise ValueError("stage outcome does not belong to its exact attempt")
         invocation = outcome.invocation

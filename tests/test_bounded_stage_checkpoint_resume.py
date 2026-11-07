@@ -10,11 +10,13 @@ from typing import Any
 import pytest
 from test_v2_phase4_discovery_scout import NOW, RecallScout, _routing, _single_scout_run
 from test_v2_phase6_gap_analysis import FakeLuna, _input, _prepare_db, _stop
+from test_v2_ranked_scout import _snapshot
 
 from researchassistant.agents import v2_discovery as scout
 from researchassistant.agents import v2_gap_analysis as gap
 from researchassistant.agents import v2_stage_checkpoint as journal
 from researchassistant.contracts.models import StrictModel, V2GapBudgetState
+from researchassistant.research.query_execution import freeze_query_execution
 from researchassistant.storage.store import read_v2_artifact
 
 
@@ -29,7 +31,7 @@ def _advancing_clock() -> Callable[[], datetime]:
     return now
 
 
-@pytest.mark.parametrize("stage", ("scout", "gap"))
+@pytest.mark.parametrize("stage", ("scout", "claim-scout", "gap"))
 @pytest.mark.parametrize("boundary", ("intent", "outcome", "aggregate"))
 @pytest.mark.parametrize("persist_first", (False, True))
 def test_interrupted_bounded_stage_never_repeats_known_or_unknown_calls(
@@ -40,10 +42,20 @@ def test_interrupted_bounded_stage_never_repeats_known_or_unknown_calls(
     persist_first: bool,
 ) -> None:
     clock = _advancing_clock()
-    module = scout if stage == "scout" else gap
-    if stage == "scout":
+    is_scout = stage != "gap"
+    module = scout if is_scout else gap
+    if is_scout:
         path, plan, response = _single_scout_run(tmp_path)
         provider = RecallScout()
+        if stage == "claim-scout":
+            freeze_query_execution(
+                str(path),
+                plan.run_id,
+                plan.raw_claim,
+                plan.directions,
+                plan.discovery_providers,
+                clock,
+            )
 
         def execute() -> object:
             return scout.run_v2_discovery_and_scout(
@@ -53,6 +65,7 @@ def test_interrupted_bounded_stage_never_repeats_known_or_unknown_calls(
                 llm_provider=provider,
                 routing_config=_routing(),
                 clock=clock,
+                budget_snapshot=(lambda: _snapshot(10)) if stage == "claim-scout" else None,
             )
     else:
         path = str(tmp_path / "gap.sqlite3")
@@ -71,9 +84,7 @@ def test_interrupted_bounded_stage_never_repeats_known_or_unknown_calls(
 
     target = journal if boundary in {"intent", "outcome"} else module
     function_name = (
-        "insert_v2_artifact_batch"
-        if stage == "scout" and boundary == "aggregate"
-        else "insert_v2_artifact"
+        "insert_v2_artifact_batch" if is_scout and boundary == "aggregate" else "insert_v2_artifact"
     )
     original = getattr(target, function_name)
 
@@ -81,7 +92,7 @@ def test_interrupted_bounded_stage_never_repeats_known_or_unknown_calls(
         key = args[1]
         matches = (
             boundary == "aggregate"
-            and (stage == "scout" or isinstance(args[2], gap.V2GapAnalysisOutput))
+            and (is_scout or isinstance(args[2], gap.V2GapAnalysisOutput))
             or boundary == "intent"
             and str(key).endswith("/attempt-1")
             or boundary == "outcome"

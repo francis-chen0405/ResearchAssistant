@@ -177,6 +177,7 @@ from researchassistant.agents.v2_adaptive_search import (
 )
 from researchassistant.agents.v2_coverage import claim_component_focus as claim_component_focus
 from researchassistant.agents.v2_discovery import V2_SCOUT_BATCH_SIZE as V2_SCOUT_BATCH_SIZE
+from researchassistant.agents.v2_discovery import uses_claim_ranking
 from researchassistant.agents.v2_gap_analysis import run_v2_gap_analysis as run_v2_gap_analysis
 from researchassistant.common.resources import prompt_resource as prompt_resource
 from researchassistant.contracts.discovery_v2 import SearchMode as SearchMode
@@ -329,6 +330,7 @@ def run_v2_round_four_continuation(
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
     assessed_source_findings: tuple[AssessedSourceFinding, ...] = (),
+    recover_incomplete_publications: bool = True,
 ) -> V2RoundFourRunResult:
     """Run Round 4 only after persisting its conservative preauthorization."""
     now = clock or _utc_now
@@ -344,12 +346,16 @@ def run_v2_round_four_continuation(
     round_three = continuation.rounds[-1]
     if round_three.round_number != 3 or round_three.status is not V2AdaptiveRoundStatus.COMPLETED:
         raise ValueError("Round-4 continuation requires a successful non-degraded Round 3")
+    recover_incomplete_papers = uses_claim_ranking(path, initial_plan.run_id)
     gap_input = build_post_round_three_gap_input(
         initial_plan=initial_plan,
         discovery_outputs=discovery_outputs,
         acquisition_outputs=acquisition_outputs,
         remaining_budget=budget,
         db_path=path,
+        excluded_mirror_ids=continuation.merged_survivors.mirror_alias_ids
+        if recover_incomplete_papers
+        else frozenset(),
     )
     if assessed_source_findings:
         visible_ids = {item.source_cluster_id for item in gap_input.surviving_sources}
@@ -594,6 +600,7 @@ def run_v2_round_four_continuation(
         known_urls=_known_urls(discovery_outputs),
         cancellation_requested=cancellation_requested,
         clock=now,
+        recover_incomplete_publications=recover_incomplete_publications,
     )
     post_plan_facts = _build_post_plan_facts(plan, summary, now)
     rounds_with_round_four = tuple(
@@ -627,6 +634,7 @@ def run_v2_round_four_continuation(
             deduplicate_papers=any(
                 query.compiled_query is not None for query in initial_plan.searches
             ),
+            recover_incomplete_papers=recover_incomplete_papers,
         )
         failed = continuation.model_copy(
             update={
@@ -656,6 +664,7 @@ def run_v2_round_four_continuation(
         initial_plan.run_id,
         rounds_with_round_four,
         deduplicate_papers=any(query.compiled_query is not None for query in initial_plan.searches),
+        recover_incomplete_papers=recover_incomplete_papers,
     )
     updated = continuation.model_copy(
         update={

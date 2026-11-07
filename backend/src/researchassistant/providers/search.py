@@ -78,8 +78,7 @@ def page_parameters(request: SearchRequest) -> dict[str, str | int | bool]:
         raise ValueError("page parameters require a compiled operation")
     parameters = {item.name: item.value for item in action.parameters}
     provider = request.provider
-    page_size = metadata_page_size(action)
-    offset = (request.page_number - 1) * page_size
+    offset = request.page_offset
     if offset + request.limit > action.effective_depth:
         raise ValueError("page limit exceeds cumulative operation depth")
     if provider is DiscoveryProvider.SERPSEARCH:

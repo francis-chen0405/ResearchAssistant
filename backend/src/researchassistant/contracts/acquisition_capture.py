@@ -32,6 +32,7 @@ class V2AcquisitionCaptureStart(StrictModel):
     policy_identity: Literal["researchassistant-v2-phase-5-acquisition-probe-v4"]
     started_at: datetime
     verified_preflight: VerifiedAcquisitionPreflight | None = None
+    reuse_verified_html: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class V2AcquisitionCaptureResponse(StrictModel):
@@ -44,6 +45,8 @@ class V2AcquisitionCaptureResponse(StrictModel):
     attempt: V2AcquisitionAttempt
     response: ScrapeResponse | None = None
     verified_preflight: VerifiedAcquisitionPreflight | None = None
+    finished_at: datetime | None = Field(default=None, exclude_if=lambda value: value is None)
+    latency_ms: float | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 
 
 class V2AcquisitionCaptureCompletion(StrictModel):
@@ -63,6 +66,8 @@ class V2AcquisitionCaptureCompletion(StrictModel):
     source: V2AcquiredSource | None = None
     readable: bool = False
     verified_preflight: VerifiedAcquisitionPreflight | None = None
+    finished_at: datetime | None = Field(default=None, exclude_if=lambda value: value is None)
+    latency_ms: float | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def validate_capture(self) -> V2AcquisitionCaptureCompletion:

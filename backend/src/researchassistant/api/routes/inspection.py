@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
+from researchassistant.api.application_services.live_sources import read_live_sources
 from researchassistant.api.application_services.result_reads import read_evidence, read_result
 from researchassistant.api.dependencies import ApiDependencies
 from researchassistant.api.http_errors import _inspection_http_error
@@ -13,7 +14,7 @@ from researchassistant.api.inspection_contracts import V2EvidenceDisplay
 from researchassistant.api.live_service import ResearchTrail
 from researchassistant.api.runtime import ApiRuntime
 from researchassistant.contracts.models import V2FinalResearchOutput
-from researchassistant.contracts.source_leads import SourceLeadsPage
+from researchassistant.contracts.source_leads import LiveSourcesPage, SourceLeadsPage
 from researchassistant.storage.source_leads import read_source_leads
 
 
@@ -65,6 +66,20 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
     ) -> SourceLeadsPage:
         try:
             return read_source_leads(db_path, run_id, offset=offset, limit=limit)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Research run not found.") from exc
+        except Exception as exc:
+            raise _inspection_http_error(exc) from exc
+
+    @router.get("/api/research/{run_id}/live-sources", response_model=LiveSourcesPage)
+    def live_sources(
+        run_id: UUID,
+        db_path: str = Query(min_length=1),
+        known: str | None = Query(default=None, pattern=r"^[0-9]{1,19}$"),
+        offset: int | None = Query(default=None, ge=0, le=1200),
+    ) -> LiveSourcesPage:
+        try:
+            return read_live_sources(db_path, run_id, known=known, offset=offset)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Research run not found.") from exc
         except Exception as exc:

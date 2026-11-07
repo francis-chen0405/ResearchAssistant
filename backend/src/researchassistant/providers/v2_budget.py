@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -284,7 +286,19 @@ class BudgetedV2LLMProvider:
         self._cancellation_requested = cancellation_requested
         self._clock = clock or _utc_now
         self._lock = Lock()
+        self._source_cost_limit: ContextVar[tuple[UUID, Decimal] | None] = ContextVar(
+            "v2_source_cost_limit", default=None
+        )
         self._starts, self._completions = _read_audit(self._path, run_id)
+
+    @contextmanager
+    def limit_source_cost(self, source_id: UUID, cost_usd: Decimal) -> Iterator[None]:
+        """Protect downstream reservations while one early source is assessed."""
+        token = self._source_cost_limit.set((source_id, cost_usd))
+        try:
+            yield
+        finally:
+            self._source_cost_limit.reset(token)
 
     def snapshot(self) -> V2BudgetSnapshot:
         with self._lock:
@@ -333,7 +347,15 @@ class BudgetedV2LLMProvider:
                 source_starts = [
                     item for item in self._starts if item.source_id == request.source_id
                 ]
-                source_tokens, _source_cost = _source_exposure(source_starts, self._completions)
+                source_tokens, source_cost = _source_exposure(source_starts, self._completions)
+                cost_limit = self._source_cost_limit.get()
+                if cost_limit is not None and (
+                    cost_limit[0] != request.source_id
+                    or add_usd(source_cost, reservation.reserved_cost_usd) > cost_limit[1]
+                ):
+                    raise V2SourceBudgetExceededError(
+                        f"source {request.source_id} cannot cover the call from its early reserve"
+                    )
                 source_token_cap = request.source_token_cap or V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP
                 source_call_cap = (
                     request.source_physical_call_cap or V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP

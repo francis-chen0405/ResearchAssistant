@@ -10,6 +10,12 @@ from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
 
+from researchassistant.agents.v2_stage_checkpoint import (
+    V2StageOutcomeCheckpoint,
+    V2UnknownStageOutcomeError,
+    save_stage_outcome,
+    stage_attempt,
+)
 from researchassistant.common.research_guidance import EXCERPT_GUIDANCE
 from researchassistant.contracts.extraction import (
     V2_EXTRACTION_MAX_ATTEMPTS as V2_EXTRACTION_MAX_ATTEMPTS,
@@ -100,6 +106,7 @@ def run_v2_exact_extraction(
     routing_config: V2RoutingConfig,
     artifact_key: str = V2_EXTRACTION_ARTIFACT_KEY,
     clock: Callable[[], datetime] | None = None,
+    journal_attempts: bool = False,
 ) -> V2ExactExtractionResult:
     """Select exact passages for every queued survivor, preserving per-source failure."""
     now = clock or _utc_now
@@ -170,6 +177,7 @@ def run_v2_exact_extraction(
             model_alias=route.logical_alias,
             recorded_model_name=artifact_model_name,
             clock=now,
+            attempt_journal=(path, checkpoint_key) if journal_attempts else None,
         )
         checkpoint = V2ExtractionSourceCheckpoint(
             run_id=queue_result.run_id,
@@ -210,6 +218,7 @@ def _extract_source(
     physical_model: str = "mimo-v2.5-pro",
     recorded_model_name: str | None = None,
     focus_passages: tuple[str, ...] = (),
+    attempt_journal: tuple[str, str] | None = None,
 ) -> V2ExtractionSourceResult:
     validate_snapshot_integrity(snapshot)
     try:
@@ -270,39 +279,98 @@ def _extract_source(
             generation=V2_LLM_ROUTING.for_stage(LLMStage.EXTRACTOR).generation,
             source_id=source_id,
         )
-        try:
-            invocation = invoke_llm(llm_provider, request, clock=clock)
-            selection = invocation.output_artifact
-            if not isinstance(selection, V2VerbatimQuoteSelection):
-                raise TypeError("Extractor returned an unexpected typed artifact")
-        except V2CancellationRequested:
-            raise
-        except Exception as exc:
-            budget_failure = _budget_failure(exc)
-            if budget_failure is not None:
+        intent, saved = None, None
+        if attempt_journal is not None:
+            path, key = attempt_journal
+            try:
+                intent, saved, _fresh = stage_attempt(
+                    path=path, key=key, number=attempt, request=request, started_at=clock()
+                )
+            except V2UnknownStageOutcomeError as exc:
                 return V2ExtractionSourceResult(
                     source_id=source_id,
                     direction=direction,
-                    state=(
-                        V2ExtractionState.SOURCE_BUDGET_BLOCKED
-                        if isinstance(budget_failure, V2SourceBudgetExceededError)
-                        else V2ExtractionState.BUDGET_EXHAUSTED
-                    ),
+                    state=V2ExtractionState.FAILED,
                     attempts=attempt,
-                    failure=f"{type(budget_failure).__name__}: {budget_failure}"[:1000],
+                    failure=str(exc),
                 )
-            last_failure = f"{type(exc).__name__}: {exc}"[:1000]
-            if attempt < V2_EXTRACTION_MAX_ATTEMPTS and not (
-                isinstance(exc, LLMInvocationError) and is_non_retryable_provider_error(exc)
-            ):
+        failure = None
+        terminal = False
+        budget_failure = None
+        extracted_at = None
+        if saved is not None:
+            selection = saved.candidate
+            failure = saved.failure
+            terminal = saved.terminal_provider_failure
+            extracted_at = saved.completed_at
+            if failure is not None:
+                if failure.startswith("V2SourceBudgetExceededError:"):
+                    budget_failure = V2SourceBudgetExceededError(failure.partition(": ")[2])
+                elif failure.startswith("V2BudgetExceededError:"):
+                    budget_failure = V2BudgetExceededError(failure.partition(": ")[2])
+        else:
+            record = None
+            selection = None
+            if intent is not None:
+                request = request.model_copy(
+                    update={"input_artifact_ids": (*request.input_artifact_ids, intent.attempt_id)}
+                )
+            try:
+                invocation = invoke_llm(llm_provider, request, clock=clock)
+                record = invocation.record
+                selection = invocation.output_artifact
+                if not isinstance(selection, V2VerbatimQuoteSelection):
+                    raise TypeError("Extractor returned an unexpected typed artifact")
+            except V2CancellationRequested:
+                raise
+            except Exception as exc:
+                selection = None
+                budget_failure = _budget_failure(exc)
+                cause = budget_failure or exc
+                failure = f"{type(cause).__name__}: {cause}"[:1000]
+                if isinstance(exc, LLMInvocationError):
+                    record = exc.record
+                    terminal = is_non_retryable_provider_error(exc)
+            if intent is not None:
+                extracted_at = clock()
+                save_stage_outcome(
+                    path,
+                    intent,
+                    V2StageOutcomeCheckpoint(
+                        run_id=snapshot.run_id,
+                        attempt_id=intent.attempt_id,
+                        request_hash=intent.request_hash,
+                        candidate=selection,
+                        invocation=record,
+                        failure=failure,
+                        terminal_provider_failure=terminal,
+                        completed_at=extracted_at,
+                    ),
+                )
+        if budget_failure is not None:
+            return V2ExtractionSourceResult(
+                source_id=source_id,
+                direction=direction,
+                state=(
+                    V2ExtractionState.SOURCE_BUDGET_BLOCKED
+                    if isinstance(budget_failure, V2SourceBudgetExceededError)
+                    else V2ExtractionState.BUDGET_EXHAUSTED
+                ),
+                attempts=attempt,
+                failure=f"{type(budget_failure).__name__}: {budget_failure}"[:1000],
+            )
+        if failure is not None:
+            if attempt < V2_EXTRACTION_MAX_ATTEMPTS and not terminal:
                 continue
             return V2ExtractionSourceResult(
                 source_id=source_id,
                 direction=direction,
                 state=V2ExtractionState.FAILED,
                 attempts=attempt,
-                failure=last_failure,
+                failure=failure,
             )
+        if not isinstance(selection, V2VerbatimQuoteSelection):
+            raise ValueError("saved extraction attempt has an unexpected output type")
         try:
             quote_block, selected_offsets = assemble_fresh_selected_quote(
                 snapshot.normalized_text, selection, truncated=snapshot.truncated
@@ -335,7 +403,7 @@ def _extract_source(
                 extraction_model_name=(
                     recorded_model_name if recorded_model_name is not None else physical_model
                 ),
-                extracted_at=_aware(clock()),
+                extracted_at=_aware(extracted_at or clock()),
             )
             filtered = filter_provisional_candidate(
                 provisional,

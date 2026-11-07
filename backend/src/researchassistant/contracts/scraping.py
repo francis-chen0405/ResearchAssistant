@@ -37,6 +37,7 @@ class ScrapeRequest(StrictModel):
     url: str = Field(min_length=1)
     timeout_seconds: float = Field(gt=0)
     verified_preflight: VerifiedAcquisitionPreflight | None = None
+    reuse_verified_html: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class ScrapeResponse(StrictModel):

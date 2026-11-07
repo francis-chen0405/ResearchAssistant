@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -29,17 +29,21 @@ from researchassistant.contracts.query_planning import (
     V2QueryConceptGroup,
     V2QueryConcepts,
 )
+from researchassistant.contracts.search import SearchRequest, SearchResponse, SearchResult
 from researchassistant.research.v2_orchestrator import (
     V2_PRODUCTION_ARTIFACT_KEY,
+    V2_ROUND_ONE_SEARCH_KEY,
     V2ProductionPipelineResult,
     V2ProductionState,
     run_v2_production_pipeline,
 )
 from researchassistant.storage.discovery_store import (
     compute_discovery_audit_counters,
+    provider_attempt_audit,
     read_discovery_artifacts,
     read_discovery_binding,
 )
+from researchassistant.storage.query_retrieval_store import read_pages
 from researchassistant.storage.store import read_v2_artifact
 
 CLAIM = "The regional program increases course completion."
@@ -112,6 +116,7 @@ def _run_fresh(
     directions: ResearchDirections = DIRECTIONS,
     providers: tuple[DiscoveryProvider, ...] = (DiscoveryProvider.EXA,),
     query_modes: Mapping[DiscoveryProvider, str] | None = None,
+    cancellation_requested: Callable[[], bool] | None = None,
 ) -> V2ProductionPipelineResult:
     return run_v2_production_pipeline(
         CLAIM,
@@ -126,8 +131,153 @@ def _run_fresh(
         run_id=run_id,
         query_modes=query_modes,
         legacy_query_planning=False,
+        cancellation_requested=cancellation_requested,
         clock=lambda: phase12.NOW,
     )
+
+
+class _PagingSearch(phase12._Search):
+    """Fill the first SERP query's pages in every round, leaving later queries short."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.first_serp_query: dict[int, UUID] = {}
+
+    def search(self, request: SearchRequest) -> SearchResponse:
+        self.requests.append(request)
+        action = request.compiled_query
+        assert action is not None
+        round_number = action.conceptual_query.round_number
+        rank_offset = 0
+        count = 1
+        if request.provider is DiscoveryProvider.SERPSEARCH:
+            rank_offset = 10 * (request.page_number - 1)
+            if (
+                self.first_serp_query.setdefault(round_number, action.artifact_id)
+                == action.artifact_id
+            ):
+                count = request.limit
+        return SearchResponse(
+            results=[
+                SearchResult(
+                    original_url=f"https://example.test/{action.artifact_id}/{rank}",
+                    title=f"Regional program evaluation {rank}",
+                    rank=rank,
+                )
+                for rank in range(rank_offset + 1, rank_offset + count + 1)
+            ],
+            provider_name=request.provider.value,
+        )
+
+
+class _InterruptedSearch(BaseException):
+    """Simulate losing the worker without letting it write a terminal run result."""
+
+
+@pytest.mark.slow
+def test_production_resumes_yielded_page_and_schedules_all_search_rounds(tmp_path: Path) -> None:
+    path = tmp_path / "first-pass-resume.sqlite"
+    run_id = uuid4()
+    search = _PagingSearch()
+    providers = (DiscoveryProvider.SERPSEARCH, DiscoveryProvider.EXA)
+
+    def interrupt_after_first_page() -> bool:
+        if search.requests:
+            raise _InterruptedSearch
+        return False
+
+    with pytest.raises(_InterruptedSearch):
+        _run_fresh(
+            path,
+            model=_ConceptModel(completed_rounds=4),
+            search=search,
+            scraper=phase12._Scraper(),
+            run_id=run_id,
+            providers=providers,
+            cancellation_requested=interrupt_after_first_page,
+        )
+    (first_request,) = search.requests
+    assert first_request.provider is DiscoveryProvider.SERPSEARCH
+    (first_page,) = read_pages(path, run_id)
+    assert first_page.page_number == 1 and len(first_page.response.results) == 10
+    initial_audit = provider_attempt_audit(path, run_id)
+    assert len(initial_audit.starts) == 1
+    with pytest.raises(KeyError):
+        read_v2_artifact(path, run_id, V2_ROUND_ONE_SEARCH_KEY)
+    with pytest.raises(KeyError):
+        read_v2_artifact(path, run_id, f"metadata-retrieval-v2:{first_page.operation_id}:result")
+
+    result = _run_fresh(
+        path,
+        model=_ConceptModel(completed_rounds=4),
+        search=search,
+        scraper=phase12._Scraper(),
+        run_id=run_id,
+        providers=providers,
+    )
+
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert result.final_output is not None
+    assert result.final_output.stopping.completed_rounds == 4
+    trace: dict[int, list[tuple[DiscoveryProvider, int]]] = {}
+    dispatched = set()
+    for request in search.requests:
+        action = request.compiled_query
+        assert action is not None
+        trace.setdefault(action.conceptual_query.round_number, []).append(
+            (request.provider, request.page_number)
+        )
+        key = (action.artifact_id, request.page_number)
+        assert key not in dispatched
+        dispatched.add(key)
+    assert set(trace) == {1, 2, 3, 4}
+    for round_trace in trace.values():
+        assert round_trace[:3] == [
+            (DiscoveryProvider.SERPSEARCH, 1),
+            (DiscoveryProvider.EXA, 1),
+            (DiscoveryProvider.SERPSEARCH, 2),
+        ]
+    for round_number in trace:
+        read_v2_artifact(path, run_id, f"query-first-pass-v1/round-{round_number}")
+        prefix_key = (
+            "phase-4-discovery-scout"
+            if round_number == 1
+            else "post-phase-13-round-4-discovery-scout-v1"
+            if round_number == 4
+            else f"phase-7-round-{round_number}-discovery-scout"
+        )
+        read_v2_artifact(path, run_id, prefix_key + "/first-pass-v1")
+    assert first_page in read_pages(path, run_id)
+    final_audit = provider_attempt_audit(path, run_id)
+    assert initial_audit.starts[0] in final_audit.starts
+    assert initial_audit.completions[0] in final_audit.completions
+    assert len(final_audit.starts) == len(dispatched)
+
+
+def test_production_cancellation_after_first_page_preserves_checkpoint(tmp_path: Path) -> None:
+    path = tmp_path / "first-pass-cancel.sqlite"
+    run_id = uuid4()
+    search = _PagingSearch()
+
+    result = _run_fresh(
+        path,
+        model=_ConceptModel(),
+        search=search,
+        scraper=phase12._Scraper(),
+        run_id=run_id,
+        providers=(DiscoveryProvider.SERPSEARCH, DiscoveryProvider.EXA),
+        cancellation_requested=lambda: bool(search.requests),
+    )
+
+    assert result.state is V2ProductionState.CANCELLED, result.failure_reason
+    (request,) = search.requests
+    assert request.provider is DiscoveryProvider.SERPSEARCH
+    (page,) = read_pages(path, run_id)
+    assert page.page_number == 1 and len(page.response.results) == 10
+    audit = provider_attempt_audit(path, run_id)
+    assert len(audit.starts) == 1 and not audit.interrupted_unknown
+    with pytest.raises(KeyError):
+        read_v2_artifact(path, run_id, f"metadata-retrieval-v2:{page.operation_id}:result")
 
 
 @pytest.mark.slow

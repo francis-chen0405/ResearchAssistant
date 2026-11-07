@@ -5,7 +5,11 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
+from dataclasses import dataclass
+from threading import Semaphore
 from time import monotonic
 from urllib.parse import urljoin, urlsplit
 
@@ -28,6 +32,8 @@ from researchassistant.providers.bounded_resolver import resolve_host_addresses
 from researchassistant.providers.config import WigoloConfig
 from researchassistant.providers.normalization import (
     NormalizationError,
+    NormalizedDocument,
+    normalize_html,
     normalize_markdown,
     normalize_pdf,
     normalize_plain_text,
@@ -86,6 +92,72 @@ class AcquisitionPreflight(StrictModel):
         )
 
 
+@dataclass
+class CaptureControls:
+    """One capture's lease on the shared transport and browser bounds."""
+
+    accept_verified_html: Callable[[ScrapeResponse], bool]
+    transport_slots: Semaphore
+    browser_slots: Semaphore
+    check_cancelled: Callable[[], None]
+    browser_waiting: Callable[[bool], None]
+    _has_transport: bool = False
+
+    def _acquire(self, slots: Semaphore) -> None:
+        while not slots.acquire(timeout=0.1):
+            self.check_cancelled()
+
+    @contextmanager
+    def transport_slot(self) -> Iterator[None]:
+        self._acquire(self.transport_slots)
+        self._has_transport = True
+        try:
+            self.check_cancelled()
+            yield
+        finally:
+            if self._has_transport:
+                self.transport_slots.release()
+
+    @contextmanager
+    def browser_slot(self) -> Iterator[None]:
+        if not self.browser_slots.acquire(blocking=False):
+            # Park the capture without occupying a slot that could read a
+            # static article or PDF. The coordinator bounds parked work too.
+            self.transport_slots.release()
+            self._has_transport = False
+            self.browser_waiting(True)
+            try:
+                self._acquire(self.browser_slots)
+                try:
+                    self._acquire(self.transport_slots)
+                    self._has_transport = True
+                except BaseException:
+                    self.browser_slots.release()
+                    raise
+            finally:
+                self.browser_waiting(False)
+        try:
+            self.check_cancelled()
+            yield
+        finally:
+            self.browser_slots.release()
+
+
+_CAPTURE_CONTROLS: ContextVar[CaptureControls | None] = ContextVar(
+    "source_capture_controls", default=None
+)
+
+
+@contextmanager
+def capture_controls(controls: CaptureControls) -> Iterator[None]:
+    token = _CAPTURE_CONTROLS.set(controls)
+    try:
+        with controls.transport_slot():
+            yield
+    finally:
+        _CAPTURE_CONTROLS.reset(token)
+
+
 class WigoloAcquisitionAdapter:
     """Preflight source metadata, then use Wigolo only for supported HTML extraction."""
 
@@ -133,6 +205,17 @@ class WigoloAcquisitionAdapter:
             elif media_type == "text/plain":
                 document = normalize_plain_text(payload, declared_charset=preflight.charset)
             elif media_type == "text/html":
+                controls = _CAPTURE_CONTROLS.get()
+                if request.reuse_verified_html and controls is not None:
+                    try:
+                        html = normalize_html(payload, declared_charset=preflight.charset)
+                    except NormalizationError:
+                        pass
+                    else:
+                        direct = self._response(request, preflight, html, rendered=False)
+                        if controls.accept_verified_html(direct):
+                            return direct
+                    controls.check_cancelled()
                 markdown, rendered = self._fetch_markdown(preflight.final_url)
                 document = normalize_markdown(markdown)
             else:
@@ -160,6 +243,17 @@ class WigoloAcquisitionAdapter:
                 retryable=exc.retryable,
                 verified_preflight=verified_preflight,
             ) from exc
+        return self._response(request, preflight, document, rendered=rendered)
+
+    def _response(
+        self,
+        request: ScrapeRequest,
+        preflight: AcquisitionPreflight,
+        document: NormalizedDocument,
+        *,
+        rendered: bool,
+    ) -> ScrapeResponse:
+        media_type = preflight.media_type
         return ScrapeResponse(
             resolved_url=preflight.final_url,
             original_url=request.url,
@@ -324,9 +418,11 @@ class WigoloAcquisitionAdapter:
             return first[1], False
         if first[0] not in {"challenge", "javascript_required"}:
             raise _wigolo_failure(first[0])
-        second = self._wigolo_fetch(
-            url, render_js="always", timeout=self._config.deadlines.browser_fetch_seconds
-        )
+        controls = _CAPTURE_CONTROLS.get()
+        with controls.browser_slot() if controls is not None else nullcontext():
+            second = self._wigolo_fetch(
+                url, render_js="always", timeout=self._config.deadlines.browser_fetch_seconds
+            )
         if second[0] != "ok":
             raise ScraperProviderError(
                 AcquisitionFailureCode.CHALLENGE,

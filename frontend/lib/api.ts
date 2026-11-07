@@ -48,6 +48,10 @@ export type SourceLeadsResponse = Required<
   ApiResponses["GET /api/research/{run_id}/source-leads"]
 >;
 export type SourceLead = SourceLeadsResponse["items"][number];
+export type LiveSourcesResponse = Required<
+  ApiResponses["GET /api/research/{run_id}/live-sources"]
+>;
+export type LiveSource = LiveSourcesResponse["items"][number];
 export type V2ResultSource = ApiSchemas["V2ResultSource"];
 export type V2FinalResearchOutput =
   ApiResponses["GET /api/research/{run_id}/v2-result"];
@@ -314,6 +318,20 @@ export const researchApi = {
       }).toString()}`,
       { signal },
     ),
+  liveSources: (
+    runId: string,
+    database: string,
+    options: { known?: string; offset?: number; signal: AbortSignal },
+  ) => {
+    const query = new URLSearchParams({ db_path: database });
+    if (options.known !== undefined) query.set("known", options.known);
+    if (options.offset !== undefined) query.set("offset", String(options.offset));
+    return request<LiveSourcesResponse>(
+      `/api/research/${runId}/live-sources?${query}`,
+      { signal: options.signal },
+      10_000,
+    );
+  },
   v2Result: (runId: string, database: string, signal?: AbortSignal) =>
     request<V2FinalResearchOutput>(
       `/api/research/${runId}/v2-result?db_path=${encodeURIComponent(database)}`,

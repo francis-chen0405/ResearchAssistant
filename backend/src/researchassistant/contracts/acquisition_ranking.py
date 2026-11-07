@@ -33,7 +33,10 @@ class V2AcquisitionRankingAudit(StrictModel):
     run_id: UUID
     round_number: int = Field(strict=True, ge=1, le=4)
     ranking_identity: Literal[
-        "source-candidate-ranking-v2", "source-candidate-ranking-v3", "source-candidate-ranking-v4"
+        "source-candidate-ranking-v2",
+        "source-candidate-ranking-v3",
+        "source-candidate-ranking-v4",
+        "source-candidate-ranking-v5",
     ] = "source-candidate-ranking-v2"
     raw_hits: int = Field(strict=True, ge=0)
     deduplicated_works: int = Field(strict=True, ge=0)

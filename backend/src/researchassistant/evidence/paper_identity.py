@@ -10,6 +10,13 @@ from researchassistant.contracts.discovery_v2 import normalize_doi
 from researchassistant.contracts.models import SourceSnapshot
 
 
+def fuller_paper_capture(earlier: SourceSnapshot, alternate: SourceSnapshot) -> bool:
+    """Prefer a complete alternate that actually adds captured text."""
+    return (
+        earlier.truncated and not alternate.truncated and alternate.word_count > earlier.word_count
+    )
+
+
 def paper_title_key(title: str | None) -> str:
     text = (title or "").split("|")[0]
     text = re.sub(r"\s+-\s+PMC\s*$", "", text, flags=re.I)

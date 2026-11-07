@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Iterator, Mapping
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
+from contextvars import copy_context
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -14,8 +16,20 @@ from uuid import UUID, uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from researchassistant.agents.capture_overlap import (
+    DEFAULT_CAPTURE_SLOTS,
+    CaptureOverlap,
+    bind_capture_overlap,
+    supports_progressive_overlap,
+)
+from researchassistant.agents.discovery_overlap import (
+    DiscoveryResponses,
+    FirstPass,
+    scout_during_search,
+)
 from researchassistant.agents.evidence_checkpoint import (
     CHECKPOINT_KEY,
+    EarlyAssessment,
     V2EvidenceCheckpoint,
     assess_initial_sources,
 )
@@ -38,8 +52,11 @@ from researchassistant.agents.v2_deep_analysis import (
 )
 from researchassistant.agents.v2_discovery import (
     V2_SCOUT_ARTIFACT_KEY,
+    ScoutHandoff,
     V2DiscoveryResponse,
+    V2DiscoveryScoutRunResult,
     run_v2_discovery_and_scout,
+    uses_claim_ranking,
 )
 from researchassistant.agents.v2_evidence_admission import V2_EVIDENCE_ADMISSION_ARTIFACT_KEY
 from researchassistant.agents.v2_extraction import V2_EXTRACTION_ARTIFACT_KEY
@@ -53,6 +70,7 @@ from researchassistant.agents.v2_final_output import (
 )
 from researchassistant.agents.v2_gap_analysis import (
     build_v2_gap_analysis_input,
+    pending_capture_gap_ids,
     run_v2_gap_analysis,
 )
 from researchassistant.agents.v2_initial_planner import run_v2_initial_planner
@@ -96,6 +114,7 @@ from researchassistant.contracts.models import (
     V2DeepAnalysisBudget,
     V2DiscoveryScoutOutput,
     V2FinalResearchOutput,
+    V2GapAnalysisInput,
     V2GapAnalysisOutput,
     V2GapBudgetState,
     V2PipelineIdentity,
@@ -106,7 +125,7 @@ from researchassistant.contracts.models import (
     V2SourceSelectionQueueResult,
 )
 from researchassistant.contracts.paper_identity import ConfirmedPaperGroup, V2PaperIdentityAudit
-from researchassistant.contracts.search import SearchFailureCode, SearchResult
+from researchassistant.contracts.search import SearchFailureCode, SearchResponse, SearchResult
 from researchassistant.evidence.evidence_core import (
     EVIDENCE_POLICY_VERSION,
     FRESH_QUOTE_CONTEXT_FILTER_VERSION,
@@ -116,7 +135,7 @@ from researchassistant.evidence.released_output import validate_saved_output
 from researchassistant.evidence.synthesizer import V2_DETERMINISTIC_SYNTHESIZER_VERSION
 from researchassistant.providers.llm import LLMProvider
 from researchassistant.providers.scraper import ScraperProvider
-from researchassistant.providers.search import SearchProvider, SearchProviderError
+from researchassistant.providers.search import SearchProvider
 from researchassistant.providers.v2_budget import (
     BudgetedV2LLMProvider,
     V2BudgetExceededError,
@@ -127,10 +146,10 @@ from researchassistant.providers.v2_budget import (
 from researchassistant.providers.v2_routing import V2RoutingConfig
 from researchassistant.research.product_discovery import resolve_product_discovery
 from researchassistant.research.query_execution import (
-    execute_query,
-    fair_query_order,
+    execute_query_round,
     freeze_query_execution,
     query_provider_budgets,
+    read_query_first_pass,
 )
 from researchassistant.research.research_governor import DEFAULT_RESEARCH_GOVERNOR_POLICY
 from researchassistant.storage.discovery_store import read_discovery_binding
@@ -716,6 +735,7 @@ def run_v2_production_pipeline(
     research_controls: ResearchControls | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
+    capture_slots: int = DEFAULT_CAPTURE_SLOTS,
     _database_lock_owned: bool = False,
 ) -> V2ProductionPipelineResult:
     """Run v2 under one database-scoped lock, unless the live controller owns it."""
@@ -743,6 +763,7 @@ def run_v2_production_pipeline(
                 research_controls=research_controls,
                 cancellation_requested=cancellation_requested,
                 clock=clock,
+                capture_slots=capture_slots,
             )
     with _v2_database_lock(db_path):
         return _run_v2_production_pipeline(
@@ -765,6 +786,7 @@ def run_v2_production_pipeline(
             research_controls=research_controls,
             cancellation_requested=cancellation_requested,
             clock=clock,
+            capture_slots=capture_slots,
         )
 
 
@@ -789,6 +811,7 @@ def _run_v2_production_pipeline(
     research_controls: ResearchControls | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
+    capture_slots: int = DEFAULT_CAPTURE_SLOTS,
 ) -> V2ProductionPipelineResult:
     """Run or resume the complete v2 path under one physical-call/token authority."""
     if research_controls is not None:
@@ -933,33 +956,250 @@ def _run_v2_production_pipeline(
         _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.DISCOVERY
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
-        round_one_search = _run_round_one_search(
-            path,
-            planner.searches,
-            search_providers,
-            effective_cancellation_requested,
-            now,
-        )
-        _raise_if_v2_cancelled(effective_cancellation_requested)
-        responses = tuple(
-            V2DiscoveryResponse(query=item.query, results=item.results)
-            for item in round_one_search.outcomes
-            if item.succeeded
-        )
+        round_one_search: V2RoundOneSearchResult | None = None
+
+        def execute_search(
+            first_pass: FirstPass | None,
+            cancelled: Callable[[], bool],
+        ) -> V2RoundOneSearchResult:
+            return _run_round_one_search(
+                path,
+                planner.searches,
+                search_providers,
+                cancelled,
+                now,
+                first_pass,
+            )
+
+        def search_responses(search: V2RoundOneSearchResult) -> DiscoveryResponses:
+            return tuple(
+                V2DiscoveryResponse(query=item.query, results=item.results)
+                for item in search.outcomes
+                if item.succeeded
+            )
+
+        def scout_pool(
+            responses: DiscoveryResponses,
+            on_batch: ScoutHandoff | None,
+            cancelled: Callable[[], bool],
+            first_pass_only: bool,
+            first_pass: V2DiscoveryScoutRunResult | None,
+        ) -> V2DiscoveryScoutRunResult:
+            _raise_if_v2_cancelled(cancelled)
+            return run_v2_discovery_and_scout(
+                db_path=path,
+                planner_output=planner,
+                responses=responses,
+                llm_provider=budgeted_llm,
+                routing_config=routing_config,
+                budget_snapshot=budgeted_llm.snapshot,
+                clock=now,
+                crossref_resolver=crossref_resolver,
+                cancellation_requested=cancelled,
+                on_batch=on_batch,
+                first_pass_only=first_pass_only,
+                first_pass=first_pass,
+            )
+
+        def discover(
+            on_batch: ScoutHandoff | None,
+            cancelled: Callable[[], bool],
+        ) -> V2DiscoveryScoutRunResult:
+            nonlocal round_one_search
+            round_one_search, output = scout_during_search(
+                execute=execute_search,
+                responses=search_responses,
+                scout=scout_pool,
+                on_batch=on_batch,
+                cancelled=cancelled,
+                progressive=progressive,
+            )
+            return output
+
         current_stage = Stage.DISCOVERY
-        discovery_one = run_v2_discovery_and_scout(
-            db_path=path,
-            planner_output=planner,
-            responses=responses,
-            llm_provider=budgeted_llm,
-            routing_config=routing_config,
-            budget_snapshot=budgeted_llm.snapshot,
-            clock=now,
-            crossref_resolver=crossref_resolver,
-            cancellation_requested=effective_cancellation_requested,
-        ).output
+        policy = discovery_policy or V2MetadataDiscoveryPolicy()
+        acquisition_policy = (
+            V2AcquisitionPolicy(
+                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+                max_clusters=policy.max_acquisition_per_round,
+            )
+            if not legacy_query_planning
+            else None
+        )
+        asserted_components = tuple(
+            x.claim_component
+            for x in planner.claim_coverage_focus
+            if x.claim_component in raw_claim
+        )
+        slots = (
+            bind_capture_overlap(
+                path, resolved_run_id, V2_ACQUISITION_PROBE_ARTIFACT_KEY, capture_slots, now
+            )
+            if uses_claim_ranking(path, resolved_run_id)
+            else None
+        )
+
+        progressive = slots is not None and supports_progressive_overlap(
+            path, resolved_run_id, V2_ACQUISITION_PROBE_ARTIFACT_KEY
+        )
+        gap_future: Future[V2GapAnalysisOutput] | None = None
+
+        def initial_gap_input(
+            discovery: V2DiscoveryScoutOutput,
+            acquisition: V2AcquisitionProbeOutput,
+            early: V2EvidenceCheckpoint | None,
+            pending: tuple[UUID, ...] = (),
+        ) -> V2GapAnalysisInput:
+            snapshot = budgeted_llm.snapshot()
+            return build_v2_gap_analysis_input(
+                planner_output=planner,
+                discovery_output=discovery,
+                acquisition_output=acquisition,
+                remaining_budget=V2GapBudgetState(
+                    model_calls_remaining=snapshot.physical_calls_remaining,
+                    tokens_remaining=snapshot.tokens_remaining,
+                    cost_remaining_usd=snapshot.cost_remaining_usd,
+                ),
+            ).model_copy(
+                update={
+                    "assessed_source_findings": early.findings if early else (),
+                    "outstanding_capture_source_ids": pending,
+                }
+            )
+
+        def analyze_gap(gap_input: V2GapAnalysisInput) -> V2GapAnalysisOutput:
+            return run_v2_gap_analysis(
+                db_path=path,
+                gap_input=gap_input,
+                llm_provider=budgeted_llm,
+                routing_config=routing_config,
+                clock=now,
+            )
+
+        def acquisition_stage() -> None:
+            nonlocal current_stage
+            current_stage = Stage.ACQUISITION
+            _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+
+        acquisition_one = None
+
+        def settle_acquisition(
+            discovery: V2DiscoveryScoutOutput,
+            captures: dict[UUID, V2AcquisitionProbeOutput] | None = None,
+        ) -> None:
+            nonlocal acquisition_one, current_stage
+            acquisition_one = run_v2_acquisition_probe(
+                db_path=path,
+                discovery_output=discovery,
+                exact_claim=raw_claim,
+                asserted_components=asserted_components,
+                policy=acquisition_policy,
+                completed_captures=captures,
+                wigolo_provider=wigolo_provider,
+                firecrawl_provider=firecrawl_provider,
+                cancellation_requested=effective_cancellation_requested,
+                clock=now,
+            ).output
+            if gap_future is None and not legacy_query_planning and acquisition_one.survivors:
+                current_stage = Stage.DEEP_ANALYSIS
+                _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+
+        checkpoint = None
+        if slots is not None and acquisition_policy is not None:
+            overlap = CaptureOverlap(
+                path=path,
+                run_id=resolved_run_id,
+                artifact_key=V2_ACQUISITION_PROBE_ARTIFACT_KEY,
+                policy=acquisition_policy,
+                exact_claim=raw_claim,
+                asserted_components=asserted_components,
+                target_gaps=(),
+                direction_target=getattr(policy, "sources_per_direction_per_round", None),
+                capture_slots=slots,
+                primary=wigolo_provider,
+                fallback=firecrawl_provider,
+                cancellation_requested=effective_cancellation_requested,
+                clock=now,
+                early=EarlyAssessment(
+                    path=path,
+                    run_id=resolved_run_id,
+                    exact_claim=raw_claim,
+                    llm=budgeted_llm,
+                    routing=routing_config,
+                    call_ceiling=resolved_ceilings.max_physical_calls,
+                    protected_calls=V2_MANDATORY_DOWNSTREAM_CALL_RESERVE,
+                    clock=now,
+                ),
+            )
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="initial-gap") as gap_worker:
+
+                def start_gap(
+                    discovery: V2DiscoveryScoutOutput,
+                    captures: dict[UUID, V2AcquisitionProbeOutput],
+                    pending: tuple[UUID, ...],
+                    early: V2EvidenceCheckpoint,
+                ) -> None:
+                    nonlocal gap_future, current_stage
+                    if not pending and acquisition_one is not None:
+                        # Preserve the ordinary complete-round input shape.
+                        candidate = initial_gap_input(discovery, acquisition_one, early)
+                    else:
+                        ordered = dict.fromkeys(
+                            [wave.source_id for wave in early.waves]
+                            + [cluster.cluster_id for cluster in discovery.clusters]
+                        )
+                        ready = tuple(
+                            captures[source_id] for source_id in ordered if source_id in captures
+                        )
+                        candidate = initial_gap_input(
+                            discovery,
+                            V2AcquisitionProbeOutput(
+                                run_id=discovery.run_id,
+                                directions=discovery.directions,
+                                acquisitions=tuple(
+                                    x for result in ready for x in result.acquisitions
+                                ),
+                                probes=tuple(x for result in ready for x in result.probes),
+                                survivors=tuple(x for result in ready for x in result.survivors),
+                                attempts=tuple(x for result in ready for x in result.attempts),
+                                policy_identity=acquisition_policy.policy_identity,
+                                completed_at=now(),
+                            ),
+                            early,
+                            pending,
+                        )
+                    key = "phase-6-initial-gap-overlap-input-v1"
+                    saved = _read_v2_payload(path, resolved_run_id, key)
+                    if saved is None:
+                        gap_input = candidate
+                        insert_v2_artifact(path, key, gap_input, now())
+                    else:
+                        gap_input = V2GapAnalysisInput.model_validate_json(saved)
+                        if (
+                            gap_input.run_id != candidate.run_id
+                            or gap_input.exact_claim != candidate.exact_claim
+                            or gap_input.assessed_source_findings
+                            != candidate.assessed_source_findings
+                        ):
+                            raise ValueError(
+                                "initial Gap handoff differs from its early checkpoint"
+                            )
+                    current_stage = Stage.GAP_ANALYSIS
+                    _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+                    gap_future = gap_worker.submit(copy_context().run, analyze_gap, gap_input)
+
+                discovered, _captures, checkpoint = overlap.run(
+                    discover,
+                    on_scout_finished=acquisition_stage,
+                    on_capture_settled=settle_acquisition,
+                    on_early_settled=start_gap if progressive else None,
+                )
+        else:
+            discovered = discover(None, effective_cancellation_requested)
+        discovery_one = discovered.output
         _raise_if_v2_cancelled(effective_cancellation_requested)
         if not discovery_one.items:
+            assert round_one_search is not None
             if not any(outcome.succeeded for outcome in round_one_search.outcomes):
                 raise ValueError(
                     "No source candidates were found because all Round-1 search requests failed. "
@@ -968,35 +1208,12 @@ def _run_v2_production_pipeline(
             raise ValueError(
                 "No source candidates were found in the completed Round-1 search results."
             )
-        current_stage = Stage.ACQUISITION
-        _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
-        acquisition_one = run_v2_acquisition_probe(
-            db_path=path,
-            discovery_output=discovery_one,
-            exact_claim=raw_claim,
-            asserted_components=tuple(
-                x.claim_component
-                for x in planner.claim_coverage_focus
-                if x.claim_component in raw_claim
-            ),
-            policy=V2AcquisitionPolicy(
-                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-                max_clusters=(
-                    discovery_policy or V2MetadataDiscoveryPolicy()
-                ).max_acquisition_per_round,
-            )
-            if not legacy_query_planning
-            else None,
-            wigolo_provider=wigolo_provider,
-            firecrawl_provider=firecrawl_provider,
-            cancellation_requested=effective_cancellation_requested,
-            clock=now,
-        ).output
+        if acquisition_one is None:
+            acquisition_stage()
+            settle_acquisition(discovery_one)
+        assert acquisition_one is not None
         _raise_if_v2_cancelled(effective_cancellation_requested)
-        checkpoint = None
-        if not legacy_query_planning and acquisition_one.survivors:
-            current_stage = Stage.DEEP_ANALYSIS
-            _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+        if checkpoint is None and not legacy_query_planning and acquisition_one.survivors:
             snapshot = budgeted_llm.snapshot()
             checkpoint = assess_initial_sources(
                 db_path=path,
@@ -1014,26 +1231,17 @@ def _run_v2_production_pipeline(
                     cost_remaining_usd=snapshot.cost_remaining_usd,
                 ),
             )
-        budget_after_round_one = budgeted_llm.snapshot()
-        current_stage = Stage.GAP_ANALYSIS
-        _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
-        gap_one = run_v2_gap_analysis(
-            db_path=path,
-            gap_input=build_v2_gap_analysis_input(
-                planner_output=planner,
-                discovery_output=discovery_one,
-                acquisition_output=acquisition_one,
-                remaining_budget=V2GapBudgetState(
-                    model_calls_remaining=budget_after_round_one.physical_calls_remaining,
-                    tokens_remaining=budget_after_round_one.tokens_remaining,
-                    cost_remaining_usd=budget_after_round_one.cost_remaining_usd,
-                ),
-            ).model_copy(
-                update={"assessed_source_findings": checkpoint.findings if checkpoint else ()}
-            ),
-            llm_provider=budgeted_llm,
-            routing_config=routing_config,
-            clock=now,
+        if gap_future is None:
+            current_stage = Stage.GAP_ANALYSIS
+            _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
+            gap_one = analyze_gap(initial_gap_input(discovery_one, acquisition_one, checkpoint))
+        else:
+            gap_one = gap_future.result()
+        deferred_initial_gap_ids = pending_capture_gap_ids(gap_one, acquisition_one)
+        reconciled_gap_input = (
+            initial_gap_input(discovery_one, acquisition_one, checkpoint)
+            if gap_one.input.outstanding_capture_source_ids
+            else None
         )
         _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.ADAPTIVE_SEARCH
@@ -1056,6 +1264,8 @@ def _run_v2_production_pipeline(
             budget=adaptive_budget,
             budget_snapshot=lambda: _adaptive_budget(budgeted_llm.snapshot(), routing_config),
             cancellation_requested=effective_cancellation_requested,
+            deferred_initial_gap_ids=deferred_initial_gap_ids,
+            completed_initial_context=reconciled_gap_input,
             clock=now,
         )
         if continuation.stopping_decision.stop_code is V2AdaptiveStopCode.CANCELLED:
@@ -1133,9 +1343,23 @@ def _run_v2_production_pipeline(
                 )
             continuation = round_four.continuation
             round_four_gap = round_four.post_round_three_gap
+        claim_ranking = uses_claim_ranking(path, resolved_run_id)
+        retained_snapshots = {
+            entry.survivor.cluster_id: entry.survivor.snapshot_id
+            for entry in continuation.merged_survivors.sources
+        }
+        early_snapshots = {
+            source.cluster_id: source.snapshot.snapshot_id
+            for source in acquisition_one.acquisitions
+        }
+        prior_waves = tuple(
+            wave
+            for wave in (checkpoint.waves if checkpoint else ())
+            if retained_snapshots.get(wave.source_id) == early_snapshots[wave.source_id]
+        )
         if (
             budgeted_llm.snapshot().physical_calls_remaining < V2_MANDATORY_DOWNSTREAM_CALL_RESERVE
-            and not (checkpoint and checkpoint.waves)
+            and not prior_waves
         ):
             raise V2BudgetExceededError(
                 "v2 downstream reserve cannot cover selection, extraction, analysis, and admission"
@@ -1156,7 +1380,9 @@ def _run_v2_production_pipeline(
         _set_run_state(path, resolved_run_id, RunStatus.RUNNING, current_stage, now)
         _raise_if_v2_cancelled(effective_cancellation_requested)
         if not legacy_query_planning:
-            identity_key = "retained-paper-identity-v1"
+            identity_key = (
+                "retained-paper-identity-v2" if claim_ranking else "retained-paper-identity-v1"
+            )
             try:
                 saved_identity = read_v2_artifact(path, resolved_run_id, identity_key)
             except KeyError:
@@ -1168,6 +1394,7 @@ def _run_v2_production_pipeline(
                 identity_key,
                 V2PaperIdentityAudit(
                     run_id=resolved_run_id,
+                    policy=identity_key,
                     groups=tuple(
                         ConfirmedPaperGroup(
                             canonical_source_id=source.survivor.cluster_id,
@@ -1218,7 +1445,7 @@ def _run_v2_production_pipeline(
             clock=now,
         ).result
         _raise_if_v2_cancelled(effective_cancellation_requested)
-        if not selection.queued_source_ids and not (checkpoint and checkpoint.waves):
+        if not selection.queued_source_ids and not prior_waves:
             reason = (
                 selection.limiting_reason.value
                 if selection.limiting_reason is not None
@@ -1240,7 +1467,7 @@ def _run_v2_production_pipeline(
             routing_config=routing_config,
             cancellation_requested=effective_cancellation_requested,
             clock=now,
-            prior_waves=checkpoint.waves if checkpoint else (),
+            prior_waves=prior_waves,
         )
         _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.EVIDENCE_ADMISSION
@@ -1257,6 +1484,8 @@ def _run_v2_production_pipeline(
                 discoveries=discoveries,
                 acquisitions=acquisitions,
                 gaps=gaps,
+                completed_initial_context=reconciled_gap_input,
+                deferred_initial_gap_ids=deferred_initial_gap_ids,
                 search_providers=search_providers,
                 llm_provider=budgeted_llm,
                 routing_config=routing_config,
@@ -1503,29 +1732,37 @@ def _run_round_one_search(
     providers: Mapping[DiscoveryProvider, SearchProvider],
     cancellation_requested: Callable[[], bool] | None,
     clock: Callable[[], datetime],
+    on_first_pass: FirstPass | None = None,
 ) -> V2RoundOneSearchResult:
     run_id = queries[0].run_id
     try:
         stored = read_v2_artifact(path, run_id, V2_ROUND_ONE_SEARCH_KEY)
     except KeyError:
         stored = None
+
+    def publish(rows: tuple[tuple[V2RoundOneSearchQuery, SearchResponse], ...]) -> None:
+        if on_first_pass is not None and rows:
+            on_first_pass(
+                tuple(
+                    V2DiscoveryResponse(query=query, results=tuple(response.results))
+                    for query, response in rows
+                )
+            )
+
     if stored is not None:
+        if on_first_pass is not None:
+            publish(read_query_first_pass(path, queries) or ())
         return V2RoundOneSearchResult.model_validate_json(stored.payload_json)
     outcomes: list[V2RoundOneSearchOutcome] = []
-    for query in fair_query_order(queries):
-        if _cancelled(cancellation_requested):
-            break
-        try:
-            response = execute_query(
-                path=path,
-                run_id=query.run_id,
-                provider=query.provider,
-                query_text=query.query_text,
-                compiled_query=query.compiled_query,
-                providers=providers,
-                clock=clock,
-                cancellation_requested=cancellation_requested,
-            )
+    for query, response in execute_query_round(
+        queries,
+        path=path,
+        providers=providers,
+        clock=clock,
+        cancellation_requested=cancellation_requested,
+        on_first_pass=publish if on_first_pass is not None else None,
+    ):
+        if isinstance(response, SearchResponse):
             outcomes.append(
                 V2RoundOneSearchOutcome(
                     query=query,
@@ -1533,22 +1770,13 @@ def _run_round_one_search(
                     results=tuple(response.results),
                 )
             )
-        except SearchProviderError as exc:
+        else:
             outcomes.append(
                 V2RoundOneSearchOutcome(
                     query=query,
                     succeeded=False,
-                    failure_code=exc.code.value,
-                    failure_message=str(exc) or exc.code.value,
-                )
-            )
-        except Exception as exc:
-            outcomes.append(
-                V2RoundOneSearchOutcome(
-                    query=query,
-                    succeeded=False,
-                    failure_code=SearchFailureCode.PERMANENT_FAILURE.value,
-                    failure_message=f"{type(exc).__name__}: {exc}"[:500],
+                    failure_code=response.code.value,
+                    failure_message=str(response) or response.code.value,
                 )
             )
     result = V2RoundOneSearchResult(

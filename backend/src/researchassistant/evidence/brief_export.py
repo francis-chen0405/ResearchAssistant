@@ -28,6 +28,7 @@ from researchassistant.contracts.models import (
 )
 from researchassistant.contracts.provider_results import ProviderRunStatus
 from researchassistant.evidence.released_output import validate_saved_output
+from researchassistant.evidence.shared_data import shared_data_limitations
 from researchassistant.evidence.text_compatibility import xml_invalid_codepoints
 from researchassistant.storage.provider_history import inspect_provider_run
 from researchassistant.storage.store import (
@@ -205,9 +206,15 @@ def _v2_reading_aid(
             "No evidence was admitted for this result, so the claim cannot be established from it."
         )
     if evidence and evidence.items:
+        lineage_notes = shared_data_limitations(item.source_family for item in evidence.items)
+        lines.extend(lineage_notes)
         lines.append(
-            "Study identity and evidence balance have not been verified. "
-            "Examples are selected by recorded claim fit, with a stable "
+            (
+                ""
+                if lineage_notes
+                else "Study identity and evidence balance have not been verified. "
+            )
+            + "Examples are selected by recorded claim fit, with a stable "
             "identifier used to break ties; they are not necessarily "
             "representative."
         )

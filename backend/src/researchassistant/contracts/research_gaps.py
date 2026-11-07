@@ -15,6 +15,7 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 from researchassistant.common.money import ExactUSD
 from researchassistant.contracts.discovery_v2 import (
@@ -223,6 +224,12 @@ class V2GapAnalysisInput(StrictModel):
     claim_coverage_specification: V2ClaimCoverageSpecification | None = None
     remaining_budget: V2GapBudgetState
     assessed_source_findings: tuple[AssessedSourceFinding, ...] = Field(default=(), max_length=4)
+    # Internal run metadata. Keep the public handoff schema byte-compatible.
+    outstanding_capture_source_ids: SkipJsonSchema[tuple[UUID, ...]] = Field(
+        default=(),
+        max_length=60,
+        exclude_if=lambda ids: not ids,
+    )
     policy_identity: Literal[
         "researchassistant-v2-phase-6-gap-analysis-v1",
         "researchassistant-v2-post-phase-13-gap-analysis-v1",
@@ -231,6 +238,12 @@ class V2GapAnalysisInput(StrictModel):
 
     @model_validator(mode="after")
     def validate_strategy_scope(self) -> V2GapAnalysisInput:
+        if len(set(self.outstanding_capture_source_ids)) != len(
+            self.outstanding_capture_source_ids
+        ) or set(self.outstanding_capture_source_ids) & {
+            source.source_cluster_id for source in self.surviving_sources
+        }:
+            raise ValueError("outstanding captures must be unique and distinct from survivors")
         if any(
             item.source_id not in {s.source_cluster_id for s in self.surviving_sources}
             for item in self.assessed_source_findings

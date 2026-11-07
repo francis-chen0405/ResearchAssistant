@@ -213,21 +213,26 @@ def enrich_discovery_diagnostics(
             "omitted by the input limit."
         )
         break
-    try:
-        envelope = read_v2_artifact(connection, run_id, "retained-paper-identity-v1")
-    except KeyError:
-        pass
-    else:
+    for policy in ("retained-paper-identity-v2", "retained-paper-identity-v1"):
+        try:
+            envelope = read_v2_artifact(connection, run_id, policy)
+        except KeyError:
+            continue
         identity = V2PaperIdentityAudit.model_validate_json(envelope.payload_json)
-        if identity.run_id != run_id:
-            raise sqlite3.IntegrityError("paper identity audit belongs to another run")
+        if identity.run_id != run_id or identity.policy != policy:
+            raise sqlite3.IntegrityError("paper identity audit does not match its saved run or key")
         if identity.groups:
             mirrors = sum(len(group.locations) - 1 for group in identity.groups)
             messages.append(
                 f"Grouped {mirrors} confirmed duplicate paper locations; original snapshots "
-                "and locations are preserved, with one copy assessed per paper "
-                "and search direction."
+                "and locations are preserved, "
+                + (
+                    "with one copy assessed per paper and search direction."
+                    if policy == "retained-paper-identity-v1"
+                    else "with one copy eligible for final evidence per paper group."
+                )
             )
+        break
     if any(item.blocked_queries or item.unknown_queries for item in diagnostics.provider_outcomes):
         blocked = sum(item.blocked_queries or 0 for item in diagnostics.provider_outcomes)
         unknown = sum(item.unknown_queries or 0 for item in diagnostics.provider_outcomes)

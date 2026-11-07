@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict
 
-from researchassistant.agents.v2_adaptive_search import V2MergedSurvivorPool
+from researchassistant.agents.adaptive_handoffs import V2MergedSurvivorPool
 from researchassistant.agents.v2_stage_checkpoint import (
     V2SelectionInputCheckpoint,
     V2StageOutcomeCheckpoint,
@@ -56,8 +56,8 @@ from researchassistant.contracts.source_selection_preview import (
     V2SelectionOmission,
     V2SelectionShortlistAudit,
 )
-from researchassistant.evidence.evidence_portfolio import identify_source_family
 from researchassistant.evidence.paper_identity import confirmed_parent_article_citation
+from researchassistant.evidence.shared_data import source_family_key
 from researchassistant.evidence.source_excerpt import extraction_source_view
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
@@ -74,6 +74,7 @@ from researchassistant.providers.llm import (
 from researchassistant.providers.pricing import conservative_token_estimate
 from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.providers.v2_routing import V2RoutingConfig
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY
 from researchassistant.research.source_preview import build_claim_preview
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
@@ -113,6 +114,7 @@ def build_v2_source_selection_input(
     asserted_components: tuple[str, ...] = (),
     metadata_ranking_outputs: tuple[V2MetadataRankingArtifact, ...] = (),
     compact_model_view: bool = False,
+    track_shared_data: bool = False,
     preview_builder: Callable[[V2PreviewRequest, SourceSnapshot], V2PreviewResult] | None = None,
 ) -> V2SourceSelectionInput:
     """Reconstruct every merged survivor with its persisted round context."""
@@ -156,6 +158,9 @@ def build_v2_source_selection_input(
             raise ValueError("selection ranking differs from discovery membership")
     if any(item.run_id != run_id for item in metadata_ranking_outputs):
         raise ValueError("selection metadata ranking belongs to another run")
+    track_shared_data = track_shared_data or any(
+        item.ranking_identity == RANKING_IDENTITY for item in metadata_ranking_outputs
+    )
     fresh_preview = claim_aware or preview_builder is build_claim_preview
     if fresh_preview and preview_builder is None:
         preview_builder = build_claim_preview
@@ -279,7 +284,9 @@ def build_v2_source_selection_input(
             V2SourceSelectionCandidate(
                 source_id=survivor.cluster_id,
                 direction=survivor.direction,
-                source_family_id=str(identify_source_family(source.snapshot).source_family_id),
+                source_family_id=source_family_key(
+                    source.snapshot, track_shared_data=track_shared_data
+                ),
                 research_round=merged.research_round,
                 source_url=merged.source_url,
                 title=citation[0] if citation else representative.title,

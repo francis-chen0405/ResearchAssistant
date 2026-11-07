@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime
+from uuid import UUID
 
 from researchassistant.agents.adaptive_handoffs import (
     V2AdaptivePlannedRound as V2AdaptivePlannedRound,
@@ -29,8 +30,29 @@ from researchassistant.agents.adaptive_handoffs import (
 from researchassistant.agents.adaptive_summary import (
     _cluster_urls as _cluster_urls,
 )
-from researchassistant.agents.v2_acquisition import run_v2_acquisition_probe
-from researchassistant.agents.v2_discovery import V2DiscoveryResponse, run_v2_discovery_and_scout
+from researchassistant.agents.capture_overlap import (
+    CaptureOverlap,
+    bind_capture_overlap,
+    initial_capture_slots,
+    supports_progressive_overlap,
+)
+from researchassistant.agents.discovery_overlap import (
+    DiscoveryResponses,
+    FirstPass,
+    scout_during_search,
+)
+from researchassistant.agents.v2_acquisition import (
+    acquisition_artifact_key,
+    prior_publication_clusters,
+    run_v2_acquisition_probe,
+)
+from researchassistant.agents.v2_discovery import (
+    ScoutHandoff,
+    V2DiscoveryResponse,
+    V2DiscoveryScoutRunResult,
+    run_v2_discovery_and_scout,
+)
+from researchassistant.contracts.discovery_v2 import V2GraphNeighborAction
 from researchassistant.contracts.model_research import (
     V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
     V2AcquisitionPolicy,
@@ -40,19 +62,18 @@ from researchassistant.contracts.models import (
     DiscoveryProvider,
     V2AcquisitionProbeOutput,
     V2AdaptiveRoundPlan,
+    V2AdaptiveSearchQuery,
     V2DiscoveryScoutOutput,
 )
-from researchassistant.contracts.search import SearchFailureCode
+from researchassistant.contracts.search import SearchResponse
 from researchassistant.providers.llm import (
     LLMProvider,
 )
 from researchassistant.providers.scraper import ScraperProvider
-from researchassistant.providers.search import SearchProvider, SearchProviderError
+from researchassistant.providers.search import SearchProvider
 from researchassistant.providers.v2_routing import V2RoutingConfig
-from researchassistant.research.query_execution import (
-    execute_query,
-    fair_query_order,
-)
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY
+from researchassistant.research.query_execution import execute_query_round, read_query_first_pass
 from researchassistant.research.seed_expansion import execute_expansion
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
@@ -74,6 +95,7 @@ def _run_round_from_plan(
     known_urls: frozenset[str],
     cancellation_requested: Callable[[], bool] | None,
     clock: Callable[[], datetime],
+    recover_incomplete_publications: bool = True,
 ) -> tuple[
     V2AdaptiveSearchResults,
     V2DiscoveryScoutOutput,
@@ -99,15 +121,39 @@ def _run_round_from_plan(
         preview_binding is not None
         and preview_binding.preview_identity == "source-claim-preview-v2"
     )
-    search = _execute_searches(path, plan, search_providers, cancellation_requested, clock)
-    cancelled_after_search = _cancelled(cancellation_requested)
-    responses = tuple(
-        V2DiscoveryResponse(query=item.query, results=item.results)
-        for item in search.outcomes
-        if item.succeeded
+    policy = (
+        V2AcquisitionPolicy(
+            policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+            max_clusters=preview_binding.policy.max_acquisition_per_round,
+        )
+        if fresh_preview
+        else None
     )
-    if responses and not cancelled_after_search:
-        discovery = run_v2_discovery_and_scout(
+    claim_ranking = (
+        preview_binding is not None and preview_binding.ranking_identity == RANKING_IDENTITY
+    )
+
+    def exclusions(output: V2DiscoveryScoutOutput) -> tuple[frozenset[UUID], frozenset[str]]:
+        return _capture_exclusions(
+            path,
+            output,
+            plan.round_number,
+            known_urls,
+            claim_ranking,
+            recover_incomplete_publications,
+        )
+
+    def scout(
+        responses: DiscoveryResponses,
+        on_batch: ScoutHandoff | None,
+        cancelled: Callable[[], bool],
+        first_pass_only: bool = False,
+        first_pass: V2DiscoveryScoutRunResult | None = None,
+    ) -> V2DiscoveryScoutRunResult:
+        if not responses or cancelled():
+            discovery = empty_discovery()
+            return V2DiscoveryScoutRunResult(output=discovery, resumed=False)
+        return run_v2_discovery_and_scout(
             db_path=path,
             planner_output=plan,
             responses=responses,
@@ -115,9 +161,14 @@ def _run_round_from_plan(
             routing_config=routing_config,
             clock=clock,
             crossref_resolver=crossref_resolver,
-            cancellation_requested=cancellation_requested,
-        ).output
-    else:
+            cancellation_requested=cancelled,
+            target_gaps=preview_gaps,
+            on_batch=on_batch,
+            first_pass_only=first_pass_only,
+            first_pass=first_pass,
+        )
+
+    def empty_discovery() -> V2DiscoveryScoutOutput:
         key = round_artifact_key(plan.round_number, "discovery-scout")
         try:
             saved_discovery = read_v2_artifact(path, plan.run_id, key)
@@ -144,9 +195,81 @@ def _run_round_from_plan(
             discovery,
             saved_discovery.created_at if saved_discovery is not None else discovery.completed_at,
         )
-    duplicate_ids = frozenset(
-        cluster.cluster_id for cluster in discovery.clusters if _cluster_urls(cluster) & known_urls
-    )
+        return discovery
+
+    def execute_search(
+        on_first_pass: FirstPass | None,
+        cancelled: Callable[[], bool],
+    ) -> V2AdaptiveSearchResults:
+        return _execute_searches(
+            path,
+            plan,
+            search_providers,
+            cancelled,
+            clock,
+            on_first_pass,
+        )
+
+    def search_responses(search: V2AdaptiveSearchResults) -> DiscoveryResponses:
+        return tuple(
+            V2DiscoveryResponse(query=item.query, results=item.results)
+            for item in search.outcomes
+            if item.succeeded
+        )
+
+    search = None
+    completed_captures = None
+    slots = initial_capture_slots(path, plan.run_id) if claim_ranking else None
+    key = acquisition_artifact_key(plan.round_number)
+    slots = bind_capture_overlap(path, plan.run_id, key, slots, clock) if slots else None
+    progressive = slots is not None and supports_progressive_overlap(path, plan.run_id, key)
+
+    def cancelled() -> bool:
+        return _cancelled(cancellation_requested)
+
+    if slots is not None and policy is not None and not cancelled():
+
+        def discover(
+            on_batch: ScoutHandoff | None,
+            stopped: Callable[[], bool],
+        ) -> V2DiscoveryScoutRunResult:
+            nonlocal search
+            search, output = scout_during_search(
+                execute=execute_search,
+                responses=search_responses,
+                scout=scout,
+                on_batch=on_batch,
+                cancelled=stopped,
+                progressive=progressive,
+            )
+            return output
+
+        overlap = CaptureOverlap(
+            path=path,
+            run_id=plan.run_id,
+            artifact_key=key,
+            policy=policy,
+            exact_claim=exact_claim,
+            asserted_components=asserted_components,
+            target_gaps=preview_gaps,
+            capture_slots=slots,
+            direction_target=getattr(
+                preview_binding.policy, "sources_per_direction_per_round", None
+            ),
+            primary=wigolo_provider,
+            fallback=firecrawl_provider,
+            cancellation_requested=cancellation_requested,
+            clock=clock,
+            exclusions=exclusions,
+        )
+        discovered, completed_captures, _checkpoint = overlap.run(discover)
+    else:
+        search = execute_search(None, cancelled)
+        discovered = scout(search_responses(search), None, cancelled)
+    assert search is not None
+    cancelled_after_search = cancelled()
+    discovery = discovered.output
+    duplicate_ids, excluded_capture_urls = exclusions(discovery)
     cancelled_before_acquisition = _cancelled(cancellation_requested)
     if discovery.items and not cancelled_before_acquisition:
         acquisition = run_v2_acquisition_probe(
@@ -155,15 +278,12 @@ def _run_round_from_plan(
             exact_claim=exact_claim,
             asserted_components=asserted_components,
             target_gaps=preview_gaps,
-            policy=V2AcquisitionPolicy(
-                policy_identity=V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-                max_clusters=preview_binding.policy.max_acquisition_per_round,
-            )
-            if fresh_preview
-            else None,
+            policy=policy,
+            completed_captures=completed_captures,
             wigolo_provider=wigolo_provider,
             firecrawl_provider=firecrawl_provider,
             excluded_cluster_ids=duplicate_ids,
+            excluded_capture_urls=excluded_capture_urls,
             cancellation_requested=cancellation_requested,
             clock=clock,
         ).output
@@ -233,72 +353,102 @@ def _run_round_from_plan(
     return search, discovery, acquisition, summary
 
 
+def _capture_exclusions(
+    path: str,
+    discovery: V2DiscoveryScoutOutput,
+    round_number: int,
+    known_urls: frozenset[str],
+    claim_ranking: bool,
+    recover_incomplete_publications: bool,
+) -> tuple[frozenset[UUID], frozenset[str]]:
+    cluster_locations = {
+        cluster.cluster_id: _cluster_urls(cluster) for cluster in discovery.clusters
+    }
+    duplicate_ids = frozenset(
+        cluster_id for cluster_id, locations in cluster_locations.items() if locations & known_urls
+    )
+    excluded_capture_urls = frozenset()
+    if discovery.items and claim_ranking:
+        adequate, incomplete, attempted_urls = prior_publication_clusters(
+            path, discovery, round_number, recover_incomplete=recover_incomplete_publications
+        )
+        recoverable = {
+            cluster_id
+            for cluster_id in incomplete
+            if cluster_locations[cluster_id] - attempted_urls
+        }
+        duplicate_ids = (duplicate_ids - recoverable) | adequate | (incomplete - recoverable)
+        excluded_capture_urls = attempted_urls & frozenset(
+            url for cluster_id in recoverable for url in cluster_locations[cluster_id]
+        )
+    return duplicate_ids, excluded_capture_urls
+
+
 def _execute_searches(
     path: str,
     plan: V2AdaptiveRoundPlan,
     providers: Mapping[DiscoveryProvider, SearchProvider],
     cancellation_requested: Callable[[], bool] | None,
     clock: Callable[[], datetime],
+    on_first_pass: FirstPass | None = None,
 ) -> V2AdaptiveSearchResults:
     key = round_artifact_key(plan.round_number, "search-results")
     try:
         stored = read_v2_artifact(path, plan.run_id, key)
     except KeyError:
         stored = None
-    if stored is not None:
-        return V2AdaptiveSearchResults.model_validate_json(stored.payload_json)
-    outcomes: list[V2AdaptiveSearchOutcome] = []
-    for query in fair_query_order(plan.searches):
-        if _cancelled(cancellation_requested):
-            break
-        try:
-            if query.graph_action is not None:
-                configured = providers.get(query.provider)
-                adapter = getattr(configured, "neighborhood_adapter", None)
-                if callable(adapter):
-                    adapter = adapter()
-                results = execute_expansion(
-                    path=path,
-                    action=query.graph_action,
-                    adapter=adapter,
-                    clock=clock,
-                    cancellation_requested=cancellation_requested,
-                )
-                from researchassistant.contracts.search import SearchResponse
 
-                response = SearchResponse(results=list(results), provider_name=query.provider.value)
-            else:
-                response = execute_query(
-                    path=path,
-                    run_id=query.run_id,
-                    provider=query.provider,
-                    query_text=query.query_text,
-                    compiled_query=query.compiled_query,
-                    providers=providers,
-                    clock=clock,
-                    cancellation_requested=cancellation_requested,
+    def publish(rows: tuple[tuple[V2AdaptiveSearchQuery, SearchResponse], ...]) -> None:
+        if on_first_pass is not None and rows:
+            on_first_pass(
+                tuple(
+                    V2DiscoveryResponse(query=query, results=tuple(response.results))
+                    for query, response in rows
                 )
+            )
+
+    if stored is not None:
+        if on_first_pass is not None:
+            publish(read_query_first_pass(path, plan.searches) or ())
+        return V2AdaptiveSearchResults.model_validate_json(stored.payload_json)
+
+    def execute_graph(action: V2GraphNeighborAction) -> SearchResponse:
+        configured = providers.get(action.provider)
+        adapter = getattr(configured, "neighborhood_adapter", None)
+        if callable(adapter):
+            adapter = adapter()
+        results = execute_expansion(
+            path=path,
+            action=action,
+            adapter=adapter,
+            clock=clock,
+            cancellation_requested=cancellation_requested,
+        )
+        return SearchResponse(results=list(results), provider_name=action.provider.value)
+
+    outcomes: list[V2AdaptiveSearchOutcome] = []
+    for query, response in execute_query_round(
+        plan.searches,
+        path=path,
+        providers=providers,
+        clock=clock,
+        cancellation_requested=cancellation_requested,
+        execute_graph=execute_graph,
+        on_first_pass=publish if on_first_pass is not None else None,
+    ):
+        if isinstance(response, SearchResponse):
             outcomes.append(
                 V2AdaptiveSearchOutcome(
                     query=query, succeeded=True, results=tuple(response.results)
                 )
             )
-        except SearchProviderError as exc:
+        else:
             outcomes.append(
                 V2AdaptiveSearchOutcome(
                     query=query,
                     succeeded=False,
-                    failure_code=exc.code.value,
-                    failure_message=str(exc) or exc.code.value,
-                )
-            )
-        except Exception as exc:
-            outcomes.append(
-                V2AdaptiveSearchOutcome(
-                    query=query,
-                    succeeded=False,
-                    failure_code=SearchFailureCode.PERMANENT_FAILURE.value,
-                    failure_message=f"{type(exc).__name__}: {exc}"[:500],
+                    failure_code=response.code.value,
+                    failure_message=str(response) or response.code.value,
                 )
             )
     result = V2AdaptiveSearchResults(

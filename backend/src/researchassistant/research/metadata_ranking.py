@@ -4,17 +4,27 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict, deque
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from uuid import UUID
 
 from researchassistant.contracts.discovery_v2 import V2DiscoveryPolicy, normalize_doi
 from researchassistant.contracts.metadata_ranking import MetadataRank, MetadataRankingWeights
 from researchassistant.contracts.models import NormalizedDiscoveryItem
+from researchassistant.research.claim_metadata_fit import ClaimFacets
 from researchassistant.research.discovery_policy import stable_work_key
 
-RANKING_IDENTITY = "source-candidate-ranking-v4"
+RANKING_IDENTITY = "source-candidate-ranking-v5"
+EXACT_URL_RANKING_IDENTITY = "source-candidate-ranking-v4"
 PREVIOUS_RANKING_IDENTITY = "source-candidate-ranking-v3"
 LEGACY_RANKING_IDENTITY = "source-candidate-ranking-v2"
+RANKING_IDENTITIES = frozenset(
+    {
+        RANKING_IDENTITY,
+        EXACT_URL_RANKING_IDENTITY,
+        PREVIOUS_RANKING_IDENTITY,
+        LEGACY_RANKING_IDENTITY,
+    }
+)
 _WORDS = re.compile(r"[a-z0-9]+")
 _STOP = frozenset(
     (
@@ -41,6 +51,9 @@ _PRIMARY_TYPES = frozenset(
     }
 )
 _GENERAL_TYPES = frozenset({"news", "blog", "magazine", "general", "opinion"})
+_RESULT_DIRECTION_TERMS = frozenset(
+    "no not null effect positive negative opposite contrary support challenge contradict".split()
+)
 
 
 def _tokens(text: str) -> frozenset[str]:
@@ -64,7 +77,9 @@ def _work_key(item: NormalizedDiscoveryItem, ranking_identity: str) -> str:
     return stable_work_key(
         doi=doi,
         canonical_url=item.canonical_url,
-        url_identity_version=2 if ranking_identity == RANKING_IDENTITY else 1,
+        url_identity_version=2
+        if ranking_identity in {EXACT_URL_RANKING_IDENTITY, RANKING_IDENTITY}
+        else 1,
     )
 
 
@@ -75,6 +90,8 @@ def rank_metadata(
     policy: V2DiscoveryPolicy,
     known_work_keys: Sequence[str] = (),
     ranking_identity: str = RANKING_IDENTITY,
+    clustered_work_keys: Mapping[UUID, str] | None = None,
+    target_gaps: Sequence[str] = (),
 ) -> tuple[MetadataRank, ...]:
     """Score common features, with unknowns neutral and no cross-engine score use.
 
@@ -82,11 +99,7 @@ def rank_metadata(
     identity grouping are linear; the only superlinear operation is stable sorting.
     Search direction and the sign of a finding never alter relevance scores.
     """
-    if ranking_identity not in {
-        LEGACY_RANKING_IDENTITY,
-        PREVIOUS_RANKING_IDENTITY,
-        RANKING_IDENTITY,
-    }:
+    if ranking_identity not in RANKING_IDENTITIES:
         raise ValueError("unsupported metadata ranking identity")
     method_tokens = _METHODS if ranking_identity == LEGACY_RANKING_IDENTITY else _NORMALIZED_METHODS
     if len(items) > policy.max_raw_per_round:
@@ -97,10 +110,23 @@ def rank_metadata(
         raise ValueError("metadata ranking cannot mix runs")
     weights = getattr(policy, "ranking_weights", MetadataRankingWeights())
     claim = _tokens(exact_claim[:8000])
+    facets = ClaimFacets.from_claim(exact_claim) if ranking_identity == RANKING_IDENTITY else None
+    material_gap_terms = tuple(
+        _tokens(gap[:500]) - claim - _RESULT_DIRECTION_TERMS for gap in target_gaps[:6]
+    )
     known = frozenset(known_work_keys)
-    keys = {item.item_id: _work_key(item, ranking_identity) for item in items}
+    keys = clustered_work_keys or {
+        item.item_id: _work_key(item, ranking_identity) for item in items
+    }
     frequencies = Counter(keys.values())
     types = Counter((item.source_type or "unknown").casefold() for item in items)
+    if facets is not None:
+        types = Counter(
+            source_type
+            for _, source_type in {
+                (keys[item.item_id], (item.source_type or "unknown").casefold()) for item in items
+            }
+        )
     lanes = Counter((item.direction, item.provider) for item in items)
     scored: list[tuple[NormalizedDiscoveryItem, dict[str, float | None], float]] = []
     for item in items:
@@ -122,22 +148,43 @@ def rank_metadata(
                 else None
             )
         )
+        if facets is not None:
+            directness, method = facets.fit(
+                title=item.title,
+                abstract=item.abstract,
+                snippet=item.snippet,
+                source_type=source_type,
+            )
         gap_tokens = _tokens((item.query_text or "")[:4000]) - claim
         targeted = any(p.targeted_gap_ids for p in item.provenance_chain)
         gap = (
             len(gap_tokens & words) / len(gap_tokens) if targeted and gap_tokens and text else None
         )
-        completeness = (
+        if facets is not None:
+            gap = max(
+                (len(terms & words) / len(terms) for terms in material_gap_terms if terms and text),
+                default=None,
+            )
+        identity_count = (
             int(keys[item.item_id].startswith("doi:"))
             + int(bool(item.title))
             + int(bool(item.authors))
             + int(bool(item.publication_date))
-            + int(bool(item.abstract))
-        ) / 5
-        novelty = 0.0 if keys[item.item_id] in known else 1.0 / frequencies[keys[item.item_id]]
+        )
+        completeness = (
+            (identity_count + int(bool(item.abstract))) / 5
+            if facets is None
+            else identity_count / 4
+        )
+        work_key = keys[item.item_id]
+        novelty = (
+            0.0 if work_key in known else 1.0 / (frequencies[work_key] if facets is None else 1)
+        )
         diversity = (
             1.0 / lanes[(item.direction, item.provider)] + 1.0 / types[source_type or "unknown"]
         ) / 2
+        if facets is not None:
+            diversity = 1.0 / types[source_type or "unknown"]
         signals = dict(
             directness=directness,
             method_fit=method,
@@ -187,7 +234,9 @@ def rank_metadata(
     )
 
 
-def fair_ranked_ids(ranks: Sequence[MetadataRank], limit: int) -> tuple[UUID, ...]:
+def fair_ranked_ids(
+    ranks: Sequence[MetadataRank], limit: int, *, highest_lane_first: bool = False
+) -> tuple[UUID, ...]:
     """Round-robin enabled lanes after retaining each work's best-ranked record."""
     if type(limit) is not int or limit < 0:
         raise ValueError("ranked allocation limit must be a nonnegative integer")
@@ -198,7 +247,7 @@ def fair_ranked_ids(ranks: Sequence[MetadataRank], limit: int) -> tuple[UUID, ..
     queues: dict[tuple[str, str], deque[MetadataRank]] = defaultdict(deque)
     for rank in best_by_work.values():
         queues[(rank.lane_direction.value, rank.lane_provider.value)].append(rank)
-    lanes = sorted(queues)
+    lanes = list(queues) if highest_lane_first else sorted(queues)
     chosen: list[UUID] = []
     seen: set[str] = set()
     while lanes and len(chosen) < limit:

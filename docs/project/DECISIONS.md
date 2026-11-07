@@ -133,6 +133,18 @@ records and the frozen Prompt 14 authorization are never relabeled.
 
 ## Source discovery foundations
 
+Each fresh search round gives the first planned text query for every configured
+provider one logical page before optional deeper pages or additional text queries.
+The first pass holds one retention slot for each pending eligible provider. If
+fewer slots remain, providers use them in query order. An empty page or known
+failure leaves its slot available. All physical steps use the existing request
+and cost limits. A genuine unknown outcome stops further transport and keeps its
+reservation. The scheduler leaves yielded queries open with their validated page
+checkpoints and cursors, then rechecks available budgets before continuing.
+OpenAlex and arXiv continue from the saved page length. A clipped fixed SERP page
+ends that query to avoid skipping its omitted ranks. OpenAlex citation expansion
+keeps its separately authorized one-hop execution and shares the provider limits.
+
 Fresh acquisition uses [Probe v4](../verification/acquisition-usable-fallback-2026-10-09.md)
 to continue after unusable captures within existing URL/method/time budgets. Usability
 is independent of claim relevance and evidence direction. Per-attempt response/snapshot
@@ -286,3 +298,39 @@ Derive blocked/unknown query counts from durable receipts and physical starts; k
 saved stop text/artifacts untouched and add truthful live diagnostics. Unknown request
 outcomes retain their conservative accounting and stop further provider dispatch.
 Offline replay verifies coverage and accounting mechanics, not research-quality gain.
+
+## Claim-aware source prioritization
+
+Fresh discovery binds ranking v5 and Scout v3. Rank plausible evidence using claim
+facets, primary-data and comparison cues, and actual material gaps. Search direction
+records provenance. Scout uses the exact claim and keeps useful uncertainty eligible
+for capture. Give one credible counterevidence lead and one strong gap lead early
+priority within the existing acquisition limit. The rank and Scout decisions remain
+metadata triage. Admission still requires the normal snapshot and quotation checks.
+
+Use exact location or consistent publication identifiers for mirrors. Preserve the
+earliest adequate capture. Before final analysis, a previously truncated capture can
+yield to a verified alternate with complete, longer text. Analyze the alternate under
+its own snapshot and retain the earlier assessment and both locations. Keep distinct
+publications and disclose common data when captured text
+explicitly identifies the same registered trial, cohort, or dataset as an input.
+Other overlaps remain unresolved. Historical prompt bytes, policy identities and
+the exact resume gate retain their existing behavior.
+
+
+## Live source shortlist
+
+Read one bounded database snapshot from the desktop inspection API. The durable
+Scout plan and completed batch outcomes can supply cards before a Scout aggregate
+exists. Use saved capture and Probe results for access labels and ledger rows for
+admission. Rank and screening notes remain labeled discovery material. Exact
+passages stay in the evidence views. Across rounds, a saved DOI rank key can
+link cards when the complete components agree on the DOI and a substantive
+normalized title. Explicit clusters, mirror links and verified paper audits
+retain their recorded ownership.
+
+Give up to four slots to the strongest matches, two to distinct recorded study
+designs or assessed relationships, and one to a promising later-round work. Keep
+other finds in All sources and the research trail. The renderer holds the visible
+cards while a reader hovers, focuses a card or opens its details. Saved results
+continue to load during that interaction.

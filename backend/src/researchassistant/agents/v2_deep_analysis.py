@@ -594,7 +594,11 @@ def _run_source_wave(
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime],
     admit: bool = True,
+    journal_early_attempts: bool = False,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> V2DeepAnalysisWave:
+    if check_cancelled is not None:
+        check_cancelled()
     suffix = f"source-{source_id}"
     extraction = run_v2_exact_extraction(
         db_path=path,
@@ -605,7 +609,10 @@ def _run_source_wave(
         routing_config=routing_config,
         artifact_key=f"phase-13-exact-extraction-{suffix}",
         clock=clock,
+        journal_attempts=journal_early_attempts,
     )
+    if check_cancelled is not None:
+        check_cancelled()
     analyst = run_v2_evidence_analyst(
         db_path=path,
         batch_input=extraction.analyst_input(snapshots_by_source(acquisition_outputs)),
@@ -613,6 +620,7 @@ def _run_source_wave(
         routing_config=routing_config,
         artifact_key=f"phase-13-luna-evidence-analyst-batch-{suffix}",
         clock=clock,
+        stop_on_unknown_attempt=journal_early_attempts,
     )
     admission = (
         run_v2_evidence_admission(

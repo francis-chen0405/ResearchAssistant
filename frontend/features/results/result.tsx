@@ -13,6 +13,7 @@ import {
 } from "../shared/presentation";
 import { V2ResultPaper } from "./paper";
 import { ResearchTrailDrawer } from "./trail";
+import { AllLiveSources } from "../research/live-sources";
 import { useResult } from "./use-result";
 
 export function ResultView({
@@ -290,6 +291,7 @@ export function ResultView({
               <b>↓</b>
             </button>
           )}
+          <AllLiveSources runId={snapshot.run_id} database={snapshot.db_path} />
           <button
             className="trail-action"
             type="button"

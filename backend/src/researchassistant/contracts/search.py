@@ -45,6 +45,11 @@ class SearchRequest(StrictModel):
     page_number: int = Field(default=1, strict=True, ge=1, le=3)
     page_cursor: str | None = Field(default=None, min_length=1, max_length=512)
 
+    @property
+    def page_offset(self) -> int:
+        page_size = metadata_page_size(self.compiled_query) if self.compiled_query else self.limit
+        return (self.page_number - 1) * page_size
+
     @model_validator(mode="after")
     def validate_provider_controls(self) -> SearchRequest:
         if self.semantic and self.provider is not DiscoveryProvider.OPENALEX:
@@ -73,8 +78,7 @@ class SearchRequest(StrictModel):
                 self.provider is DiscoveryProvider.OPENALEX and compiled.mode == "semantic"
             ):
                 page_budget = min(page_budget, 1)
-            page_count = (compiled.effective_depth + page_size - 1) // page_size
-            if self.page_number > min(page_budget, page_count):
+            if self.page_number > page_budget or self.page_offset >= compiled.effective_depth:
                 raise ValueError("page number exceeds physical request policy")
             if compiled.capabilities.executable_pagination == "none" and self.page_number != 1:
                 raise ValueError("provider does not support page transport")
@@ -107,6 +111,29 @@ class SearchRequest(StrictModel):
                 validate_compiled_action(compiled)
             except ValueError as exc:
                 raise ValueError("compiled query failed deterministic validation") from exc
+        return self
+
+
+class V2MetadataPageRequest(SearchRequest):
+    """Internal compiled request with an offset derived from completed pages."""
+
+    start_offset: int = Field(strict=True, ge=0, le=49)
+
+    @property
+    def page_offset(self) -> int:
+        return self.start_offset
+
+    @model_validator(mode="after")
+    def validate_page_offset(self) -> V2MetadataPageRequest:
+        if self.compiled_query is None:
+            raise ValueError("metadata page offset requires a compiled query")
+        nominal_offset = super().page_offset
+        if self.start_offset != nominal_offset and (
+            self.provider not in {DiscoveryProvider.OPENALEX, DiscoveryProvider.ARXIV}
+            or self.semantic
+            or not self.page_number - 1 <= self.start_offset < nominal_offset
+        ):
+            raise ValueError("metadata page offset differs from the provider's pagination")
         return self
 
 

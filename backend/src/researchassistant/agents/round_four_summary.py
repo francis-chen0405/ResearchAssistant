@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime
 from typing import TypeVar
+from uuid import UUID
 
 from researchassistant.agents.round_four_handoffs import (
     V2_POST13_GAP_AFTER_ROUND_THREE_KEY as V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
@@ -70,6 +71,7 @@ def build_post_round_three_gap_input(
     acquisition_outputs: tuple[V2AcquisitionProbeOutput, ...],
     remaining_budget: V2AdaptiveBudgetState,
     db_path: str,
+    excluded_mirror_ids: frozenset[UUID] = frozenset(),
 ) -> V2GapAnalysisInput:
     """Build the existing bounded Gap contract from cumulative Round 1–3 artifacts."""
     if len(discovery_outputs) != 3 or len(acquisition_outputs) != 3:
@@ -94,6 +96,8 @@ def build_post_round_three_gap_input(
         clusters = {item.cluster_id: item for item in discovery.clusters}
         acquired = {item.snapshot.snapshot_id: item for item in acquisition.acquisitions}
         for survivor in acquisition.survivors:
+            if survivor.cluster_id in excluded_mirror_ids:
+                continue
             cluster = clusters[survivor.cluster_id]
             representative = min(
                 (items[item_id] for item_id in cluster.item_ids),

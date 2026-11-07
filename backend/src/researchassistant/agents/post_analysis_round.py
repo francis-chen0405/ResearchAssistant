@@ -42,7 +42,7 @@ from researchassistant.agents.v2_adaptive_search import (
     V2AdaptiveStopCode,
 )
 from researchassistant.agents.v2_deep_analysis import run_v2_deep_analysis_with_backfill
-from researchassistant.agents.v2_discovery import V2_SCOUT_BATCH_SIZE
+from researchassistant.agents.v2_discovery import V2_SCOUT_BATCH_SIZE, uses_claim_ranking
 from researchassistant.agents.v2_gap_analysis import run_v2_gap_analysis
 from researchassistant.agents.v2_post_analysis import build_v2_post_analysis_assessment
 from researchassistant.agents.v2_round_four import run_v2_round_four_continuation
@@ -65,6 +65,7 @@ from researchassistant.contracts.models import (
     V2AcquisitionProbeOutput,
     V2DeepAnalysisBudget,
     V2DiscoveryScoutOutput,
+    V2GapAnalysisInput,
     V2GapAnalysisOutput,
     V2GapBudgetState,
     V2InitialPlannerOutput,
@@ -137,6 +138,8 @@ def run_v2_post_analysis_round(
     cancellation_requested: Callable[[], bool],
     clock: Callable[[], datetime],
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None = None,
+    completed_initial_context: V2GapAnalysisInput | None = None,
+    deferred_initial_gap_ids: frozenset[str] = frozenset(),
 ) -> V2PostAnalysisRoundOutcome:
     """Use at most the next unused round; every physical stage keeps its own checkpoint."""
     path = str(Path(db_path).resolve())
@@ -155,6 +158,18 @@ def run_v2_post_analysis_round(
         if saved.decision.input_sha256 != input_hash:
             raise ValueError("post-analysis replay input changed")
         return saved
+
+    deferred_gaps = (
+        tuple(gap for gap in gaps[0].result.material_gaps if gap.gap_id in deferred_initial_gap_ids)
+        if gaps and gaps[0].result is not None
+        else ()
+    )
+    preferred = (
+        frozenset(gaps[0].input.outstanding_capture_source_ids) if deferred_gaps else frozenset()
+    )
+    unresolved_gap_ids = {gap.gap_id for gap in deferred_gaps}
+    if gaps and gaps[-1].result is not None:
+        unresolved_gap_ids.update(gap.gap_id for gap in gaps[-1].result.material_gaps)
 
     previous_rounds = continuation.stopping_decision.completed_rounds
     existing = _read(path, run_id, POST_ANALYSIS_DECISION_KEY, V2PostAnalysisRoundDecision)
@@ -246,7 +261,7 @@ def run_v2_post_analysis_round(
             return finish(existing, existing.reason)
         next_round = existing.next_round
         if next_round == 4:
-            findings = _assessed_findings(admission, gaps[-1])
+            findings = _assessed_findings(admission, gaps[-1], preferred=preferred)
             round_four_result = run_v2_round_four_continuation(
                 db_path=path,
                 initial_plan=initial_plan,
@@ -264,6 +279,7 @@ def run_v2_post_analysis_round(
                 cancellation_requested=cancellation_requested,
                 clock=clock,
                 assessed_source_findings=findings,
+                recover_incomplete_publications=False,
             )
             gap = round_four_result.post_round_three_gap
         else:
@@ -301,14 +317,12 @@ def run_v2_post_analysis_round(
         assessment = build_v2_post_analysis_assessment(
             admission_result=admission,
             coverage=coverage,
-            unresolved_gap_count=len(gaps[-1].result.material_gaps)
-            if gaps[-1].result is not None
-            else 0,
+            unresolved_gap_count=len(unresolved_gap_ids),
         )
         if assessment.search_outcome == "analysis_complete":
             decision = decide("admitted evidence and claim coverage are adequate")
             return finish(decision, decision.reason)
-        findings = _assessed_findings(admission, gaps[-1])
+        findings = _assessed_findings(admission, gaps[-1], preferred=preferred)
         round_four_result = run_v2_round_four_continuation(
             db_path=path,
             initial_plan=initial_plan,
@@ -326,6 +340,7 @@ def run_v2_post_analysis_round(
             cancellation_requested=cancellation_requested,
             clock=clock,
             assessed_source_findings=findings,
+            recover_incomplete_publications=False,
         )
         gap = round_four_result.post_round_three_gap
         if cancellation_requested() or (
@@ -380,9 +395,7 @@ def run_v2_post_analysis_round(
         assessment = build_v2_post_analysis_assessment(
             admission_result=admission,
             coverage=coverage,
-            unresolved_gap_count=len(gaps[-1].result.material_gaps)
-            if gaps and gaps[-1].result is not None
-            else 0,
+            unresolved_gap_count=len(unresolved_gap_ids),
         )
         if assessment.search_outcome == "analysis_complete":
             decision = decide("admitted evidence and claim coverage are adequate")
@@ -391,8 +404,12 @@ def run_v2_post_analysis_round(
         if not gaps:
             decision = decide("no prior claim-gap input is available")
             return finish(decision, decision.reason)
-        findings = _assessed_findings(admission, gaps[-1])
-        gap_input = gaps[-1].input.model_copy(
+        prior_gap = gaps[-1]
+        preferred = preferred or frozenset(prior_gap.input.outstanding_capture_source_ids)
+        if prior_gap.input.completed_round == 1 and completed_initial_context is not None:
+            prior_gap = prior_gap.model_copy(update={"input": completed_initial_context})
+        findings = _assessed_findings(admission, prior_gap, preferred=preferred)
+        gap_input = prior_gap.input.model_copy(
             update={
                 "assessed_source_findings": findings,
                 "remaining_budget": V2GapBudgetState(
@@ -402,7 +419,11 @@ def run_v2_post_analysis_round(
                 ),
             }
         )
-        gap_input = type(gaps[-1].input).model_validate(gap_input.model_dump())
+        if deferred_gaps:
+            previous = {gap.gap_id: gap for gap in deferred_gaps}
+            previous.update({gap.gap_id: gap for gap in gap_input.previous_gaps})
+            gap_input = gap_input.model_copy(update={"previous_gaps": tuple(previous.values())[:6]})
+        gap_input = V2GapAnalysisInput.model_validate(gap_input.model_dump())
         saved_gap = _has_artifact(path, run_id, POST_ANALYSIS_GAP_KEY)
         if not saved_gap and (
             not _gap_envelope_fits(budget, gap_input, routing_config)
@@ -534,6 +555,7 @@ def run_v2_post_analysis_round(
             firecrawl_provider=firecrawl_provider,
             crossref_resolver=crossref_resolver,
             known_urls=_known_urls(discoveries),
+            recover_incomplete_publications=False,
             cancellation_requested=cancellation_requested,
             clock=clock,
         )
@@ -573,6 +595,7 @@ def run_v2_post_analysis_round(
             for n, (d, a) in enumerate(zip(all_discoveries, all_acquisitions, strict=True), 1)
         ),
         deduplicate_papers=True,
+        recover_incomplete_papers=uses_claim_ranking(path, run_id),
     )
     existing_ids = {item.survivor.cluster_id for item in continuation.merged_survivors.sources}
     new_ids = tuple(
@@ -622,6 +645,7 @@ def run_v2_post_analysis_round(
         gap_outputs=gap_outputs,
         claim_aware=True,
         compact_model_view=True,
+        track_shared_data=uses_claim_ranking(path, run_id),
         asserted_components=tuple(x.claim_component for x in initial_plan.claim_coverage_focus),
     )
     old_queue = admission.analyst_result.input.queue_result
@@ -705,7 +729,10 @@ def run_v2_post_analysis_round(
 
 
 def _assessed_findings(
-    admission: V2EvidenceAdmissionBatchResult, gap: V2GapAnalysisOutput
+    admission: V2EvidenceAdmissionBatchResult,
+    gap: V2GapAnalysisOutput,
+    *,
+    preferred: frozenset[UUID] = frozenset(),
 ) -> tuple[AssessedSourceFinding, ...]:
     visible_ids = {item.source_cluster_id for item in gap.input.surviving_sources}
     assessed = admission.analyst_result.source_results
@@ -713,6 +740,7 @@ def _assessed_findings(
     reviewed = sorted(
         (item for item in visible if item.assessment is not None),
         key=lambda item: (
+            item.source_id not in preferred,
             item.assessment.relationship_to_claim.value,
             str(item.source_id),
         ),

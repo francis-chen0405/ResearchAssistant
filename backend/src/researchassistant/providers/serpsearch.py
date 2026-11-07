@@ -130,6 +130,12 @@ class SerpSearchAdapter:
                 if isinstance(position, int) and not isinstance(position, bool) and position >= 1
                 else index
             )
+            if (
+                request.compiled_query is not None
+                and request.limit < 10
+                and local_rank > request.limit
+            ):
+                continue
             rank = (request.page_number - 1) * 10 + local_rank
             try:
                 result = SearchResult(

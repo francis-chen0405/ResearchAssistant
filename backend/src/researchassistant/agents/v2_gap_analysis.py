@@ -222,6 +222,64 @@ def build_v2_gap_analysis_input(
     )
 
 
+def pending_capture_gap_ids(
+    gap: V2GapAnalysisOutput,
+    acquisition: V2AcquisitionProbeOutput,
+) -> frozenset[str]:
+    """Identify gaps that warrant assessing a late capture before searching again."""
+    if gap.result is None or not gap.result.continue_research:
+        return frozenset()
+    from researchassistant.research.source_preview import _STOP_WORDS, _tokens
+
+    pending = set(gap.input.outstanding_capture_source_ids)
+    directions = {
+        source.cluster_id: source.direction
+        for source in acquisition.survivors
+        if source.cluster_id in pending
+    }
+    generic = {
+        "additional",
+        "adequate",
+        "available",
+        "data",
+        "evidence",
+        "finding",
+        "findings",
+        "lack",
+        "lacking",
+        "missing",
+        "needed",
+        "remains",
+        "research",
+        "source",
+        "sources",
+    }
+
+    def terms(value: str) -> set[str]:
+        return {
+            token.removesuffix("s") if len(token) > 5 else token
+            for token in _tokens(value)
+            if len(token) > 2 and token not in _STOP_WORDS | generic
+        }
+
+    passage_terms = tuple(
+        (directions[probe.cluster_id], terms(passage.text))
+        for probe in acquisition.probes
+        if probe.cluster_id in directions
+        for passage in probe.passages
+    )
+    claim_terms = terms(gap.input.exact_claim)
+    matched = set()
+    for missing in gap.result.material_gaps:
+        specific = terms(missing.missing_evidence) - claim_terms
+        if specific and any(
+            direction is missing.direction and len(specific & observed) >= min(2, len(specific))
+            for direction, observed in passage_terms
+        ):
+            matched.add(missing.gap_id)
+    return frozenset(matched)
+
+
 def run_v2_gap_analysis(
     *,
     db_path: str | Path,
@@ -278,7 +336,14 @@ def run_v2_gap_analysis(
         stage=LLMStage.GAP_ANALYSIS,
         prompt=prompt,
         rendered_prompt=render_stage_prompt(prompt, gap_input, V2GapAnalysisModelOutput)
-        + ("\n" + ASSESSED_FINDINGS_GUIDANCE if gap_input.assessed_source_findings else ""),
+        + ("\n" + ASSESSED_FINDINGS_GUIDANCE if gap_input.assessed_source_findings else "")
+        + (
+            "\nThe outstanding_capture_source_ids are authorized works queued or in progress. "
+            "Their absence is pending coverage, never evidence of a gap. Assess the findings "
+            "available now. The application will reconcile pending sources before follow-up."
+            if gap_input.outstanding_capture_source_ids
+            else ""
+        ),
         input_artifact=gap_input,
         input_artifact_ids=(gap_input.run_id,),
         requested_output_type=V2GapAnalysisModelOutput,

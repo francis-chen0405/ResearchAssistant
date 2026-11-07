@@ -241,14 +241,19 @@ def build_claim_preview(request: V2PreviewRequest, snapshot: SourceSnapshot) -> 
     return result
 
 
-def capture_is_usable(snapshot: SourceSnapshot) -> bool:
+def capture_is_usable(snapshot: SourceSnapshot, *, allow_abstract_only: bool = True) -> bool:
     """Apply the existing preview capture gate without ranking against a claim."""
     if sha256(snapshot.normalized_text.encode("utf-8")).hexdigest() != snapshot.snapshot_sha256:
         raise ValueError("preview snapshot text hash is stale")
     segments, _observed = _segments(snapshot.normalized_text)
-    return _classify_capture(segments, snapshot.truncated) not in {"shell", "error"} and any(
-        not _is_excluded(segment.text) and _substantive(segment.text, segment.section)
-        for segment in segments
+    classification = _classify_capture(segments, snapshot.truncated)
+    return (
+        classification not in {"shell", "error"}
+        and (allow_abstract_only or classification != "abstract_only")
+        and any(
+            not _is_excluded(segment.text) and _substantive(segment.text, segment.section)
+            for segment in segments
+        )
     )
 
 

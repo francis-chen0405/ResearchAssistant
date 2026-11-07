@@ -23,7 +23,6 @@ from researchassistant.contracts.search import (
     SearchRequest,
     SearchResponse,
     SearchResult,
-    metadata_page_size,
 )
 from researchassistant.providers.bounded_network import DeadlineHTTPTransport
 from researchassistant.providers.config import OpenAlexConfig
@@ -206,12 +205,8 @@ class OpenAlexSearchAdapter:
                 SearchFailureCode.MALFORMED_RESPONSE,
                 "OpenAlex response omitted results",
             )
-        page_size = (
-            metadata_page_size(request.compiled_query) if request.compiled_query else request.limit
-        )
-        rank_offset = (request.page_number - 1) * page_size
         results = _parse_results(
-            body["results"], request.limit, rank_offset, provider_page=request.page_number
+            body["results"], request.limit, request.page_offset, provider_page=request.page_number
         )
         if not results:
             raise SearchProviderError(

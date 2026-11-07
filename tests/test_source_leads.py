@@ -18,7 +18,7 @@ from test_v2_phase5_acquisition_probe import NOW, FixtureScraper, _prepare_db, _
 
 from researchassistant.agents.v2_acquisition import run_v2_acquisition_probe
 from researchassistant.api import api
-from researchassistant.contracts.source_leads import SourceLeadsPage
+from researchassistant.contracts.source_leads import LiveSourcesPage, SourceLeadsPage
 from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.storage.source_leads import read_source_leads
 from researchassistant.storage.store import DatabaseCompatibilityError, insert_v2_artifact
@@ -164,6 +164,34 @@ def test_http_leads_without_final_artifact_and_bounded_parameters(tmp_path: Path
     )
 
 
+def test_live_sources_empty_and_invalid_run_reads(tmp_path: Path) -> None:
+    path = tmp_path / "pages.sqlite"
+    run_id, _plan, _results = _fresh_case(path)
+    app = api.create_app(
+        api.ApiRuntime(controller=FakeController({}), services=FakeServices(), environment={}),
+        load_keychain_on_start=False,
+        allowed_hosts=("testserver",),
+    )
+    client = TestClient(app)
+    url = f"/api/research/{run_id}/live-sources"
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+    response = client.get(url, params={"db_path": str(path)})
+    assert response.status_code == 200
+    page = LiveSourcesPage.model_validate(response.json())
+    assert page.run_id == run_id and page.total == 0 and page.items == ()
+    unchanged = client.get(url, params={"db_path": str(path), "known": page.revision})
+    assert unchanged.json()["unchanged"] is True
+    assert client.get(url, params={"db_path": str(path), "offset": 1201}).status_code == 422
+    assert client.get(url, params={"db_path": str(path), "known": "invalid"}).status_code == 422
+    assert (
+        client.get(
+            f"/api/research/{uuid4()}/live-sources", params={"db_path": str(path)}
+        ).status_code
+        == 404
+    )
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+
+
 def test_cross_run_payload_fails_even_with_recomputed_checksum(tmp_path: Path) -> None:
     path, run_id = _captured(tmp_path)
     # Corruption fixture removes immutability protection explicitly, never in product code.
@@ -219,10 +247,28 @@ assert read_source_leads(sys.argv[1], UUID(sys.argv[2])).total == 2
 def test_full_production_pipeline_leads_keep_admission_families_and_released_bytes(
     tmp_path: Path,
 ) -> None:
-    from test_product_discovery_pipeline import _run
+    from test_product_discovery_pipeline import _run, phase12
 
+    from researchassistant.api.application_services.live_sources import read_live_sources
     from researchassistant.api.application_services.result_reads import read_result
     from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
+    from researchassistant.contracts.search import SearchDiscoveryMetadata
+
+    class _MirrorSearch(phase12._Search):
+        def search(self, request: phase12.SearchRequest) -> phase12.SearchResponse:
+            response = super().search(request)
+            if request.compiled_query.conceptual_query.round_number != 1:
+                return response
+            (source,) = response.results
+            return response.model_copy(
+                update={
+                    "results": [
+                        source.model_copy(
+                            update={"metadata": SearchDiscoveryMetadata(doi="10.5000/first-study")}
+                        )
+                    ]
+                }
+            )
 
     path = tmp_path / "product-leads.sqlite"
     result, _model, _search = _run(
@@ -231,6 +277,7 @@ def test_full_production_pipeline_leads_keep_admission_families_and_released_byt
             discovery_providers=(DiscoveryProvider.EXA,),
             seed_expansion_enabled=False,
         ),
+        search=_MirrorSearch(unique_results=True),
     )
     released = read_result(path, result.run_id).model_dump_json()
     before = path.read_bytes(), path.stat().st_mtime_ns
@@ -258,6 +305,11 @@ def test_full_production_pipeline_leads_keep_admission_families_and_released_byt
             ).fetchone()[0]
             == 1
         )
+    live = read_live_sources(path, result.run_id, offset=0)
+    shortlist = read_live_sources(path, result.run_id)
+    assert 1 <= len(shortlist.items) <= 7
+    assert any(card.first_round == 4 and card.state == "admitted" for card in live.items)
+    assert any(card.first_round > 1 and card.state == "admitted" for card in shortlist.items)
     assert read_result(path, result.run_id).model_dump_json() == released
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 

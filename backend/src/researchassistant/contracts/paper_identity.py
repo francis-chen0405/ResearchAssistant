@@ -36,15 +36,15 @@ class ConfirmedPaperGroup(StrictModel):
             raise ValueError("paper group requires distinct locations and its canonical source")
         if any(location.doi != self.doi for location in self.locations):
             raise ValueError("paper group DOI must match every location")
-        if len({location.direction for location in self.locations}) != 1:
-            raise ValueError("paper group must preserve its search direction")
         return self
 
 
 class V2PaperIdentityAudit(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     run_id: UUID
-    policy: Literal["retained-paper-identity-v1"] = "retained-paper-identity-v1"
+    policy: Literal["retained-paper-identity-v1", "retained-paper-identity-v2"] = (
+        "retained-paper-identity-v1"
+    )
     groups: tuple[ConfirmedPaperGroup, ...] = Field(default=(), max_length=120)
 
     @model_validator(mode="after")
@@ -52,4 +52,8 @@ class V2PaperIdentityAudit(StrictModel):
         ids = tuple(location.source_id for group in self.groups for location in group.locations)
         if len(set(ids)) != len(ids):
             raise ValueError("paper location belongs to multiple identity groups")
+        if self.policy == "retained-paper-identity-v1" and any(
+            len({location.direction for location in group.locations}) != 1 for group in self.groups
+        ):
+            raise ValueError("legacy paper groups must preserve a single search direction")
         return self

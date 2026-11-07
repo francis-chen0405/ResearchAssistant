@@ -67,7 +67,49 @@ async function main() {
     let startCalls = 0;
     let recoveryMode = false;
     let recoveryHealthy = false;
+    let recoveryTerminal = false;
     let cancelCalls = 0;
+    let sourcePhase = 0;
+    let releaseFirstRun = false;
+    let firstReleased = false;
+    let sourceCalls = 0;
+    const source = (index, overrides = {}) => ({
+      work_id: `work-${index}`,
+      title: [
+        "Regional education programs and course completion",
+        "Matched comparison of course completion across districts",
+        "Completion outcomes in a multi-site program evaluation",
+        "A follow-up study of program participation and completion",
+        "Course completion across regional programs: a systematic review",
+        "A rural cohort study of program participation",
+        "Course completion after a change to the intervention",
+        "An independent replication with a different outcome measure",
+      ][index - 1],
+      url: `https://studies.example.org/work/${index}`,
+      readable_url: null,
+      first_round: index >= 7 ? 2 : 1,
+      state: "lead",
+      note: "Saved metadata describes a comparison of course completion rates between program participants and a comparison group.",
+      note_kind: "metadata",
+      angle: null,
+      ...overrides,
+    });
+    const savedSources = () => {
+      if (sourcePhase === 0) return [];
+      if (sourcePhase === 1) return [source(1), source(2)];
+      const screened = source(1, { state: "screened", note_kind: "scout", note: "Scout identified a direct outcome comparison." });
+      if (sourcePhase === 2) return [screened, source(2)];
+      const stages = [
+        source(2, { state: "assessed", note_kind: "analyst", note: "The Analyst assessed the claim fit and evidence quality from the saved source." }),
+        source(3, { state: "admitted", note_kind: "analyst", note: "The Analyst identified an eligible comparison from the saved source." }),
+        source(4, { state: "screened", note_kind: "scout" }),
+        source(5, { angle: "Systematic review" }),
+        source(6, { angle: "Cohort study" }),
+      ];
+      return sourcePhase === 3
+        ? [{ ...screened, state: "full_text", readable_url: "https://archive.example.org/verified/1" }, ...stages, source(7, { angle: "New in round 2" })]
+        : [source(8, { state: "screened", note_kind: "scout" }), ...stages, source(7, { angle: "New in round 2" })];
+    };
     let confirmCancellation;
     let snapshotCalls = 0;
     let activeSnapshots = 0;
@@ -84,13 +126,15 @@ async function main() {
       raw_claim: started?.raw_claim ?? "A deterministic polling test claim",
       classification,
       exit_code: classification === "released" ? 0 : null,
-      stage: classification === "released" ? "validation" : "discovery",
+      stage: classification === "released" ? "validation"
+        : sourcePhase >= 3 ? "adaptive_search" : sourcePhase === 2 ? "scout" : "discovery",
       latest_checkpoint: null,
       completed_checkpoints: classification === "released" ? 1 : 0,
       total_checkpoints: 1,
-      current_research_round: 1,
+      current_research_round: sourcePhase >= 3 ? 2 : 1,
       progress_percent: classification === "released" ? 100 : 10,
-      message: classification === "released" ? "Research released." : "Finding sources.",
+      message: classification === "released" ? "Research released."
+        : sourcePhase >= 3 ? "Checking follow-up sources and comparing available evidence." : "Finding sources.",
       diagnostic_component: "poll-smoke",
       model_calls_used: 1,
       retrieval_attempts_used: 1,
@@ -229,6 +273,21 @@ async function main() {
           worker_active: false,
           message: "No active worker in this app. Saved progress and reservations are unchanged; resume with the original settings or start a new run.",
         });
+      } else if (pathname.endsWith("/live-sources")) {
+        const id = pathname.split("/")[3];
+        assert.equal(url.searchParams.get("db_path"), database);
+        const revision = String(sourcePhase);
+        const unchanged = url.searchParams.get("known") === revision;
+        let items = id === runId ? savedSources() : [];
+        if (id === runId && url.searchParams.has("offset") && sourcePhase === 4) {
+          items = [
+            ...items,
+            source(1, { state: "full_text", readable_url: "https://archive.example.org/verified/1" }),
+            source(9, { title: "Saved source with an unsafe link", url: "javascript:alert(1)" }),
+          ];
+        }
+        if (id === runId) sourceCalls++;
+        body = { run_id: id, revision, unchanged, items: unchanged ? [] : items, total: items.length };
       } else if (pathname === `/api/research/${runId}/cancel`) {
         cancelCalls++;
         await new Promise(resolve => { confirmCancellation = resolve; });
@@ -243,7 +302,7 @@ async function main() {
           if (recoveryMode) {
             assert.equal(request.method(), "GET");
             assert.equal(url.searchParams.get("db_path"), database);
-            if (recoveryHealthy) body = makeSnapshot("running");
+            if (recoveryHealthy) body = makeSnapshot(recoveryTerminal ? "cancelled" : "running");
             else { status = 503; body = { detail: "Progress read unavailable" }; }
           } else if (call === 1) {
             await WAIT(25);
@@ -253,10 +312,12 @@ async function main() {
             // This exceeds the old 1.5s interval, which would overlap call 3.
             await WAIT(1800);
             body = makeSnapshot("running");
-          } else if (call === 3) {
-            await WAIT(25);
-            run = "released";
-            body = makeSnapshot("released");
+          } else if (!firstReleased) {
+            if (releaseFirstRun) {
+              run = "released";
+              firstReleased = true;
+            }
+            body = makeSnapshot(run);
           } else {
             // The second run is intentionally left in flight until the page unmounts.
             await WAIT(5000);
@@ -278,24 +339,76 @@ async function main() {
 
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.getByRole("button", { name: "Research", exact: true }).click();
-    await page.getByLabel("Your research question", { exact: true }).fill("Can a delayed poll overlap its successor?");
+    await page.getByLabel("Your research question", { exact: true }).fill("Does the regional education program increase course completion?");
     await page.getByRole("checkbox").check();
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
+    await page.mouse.move(5, 5);
     await page.getByText("Temporary status outage", { exact: true }).waitFor();
-    const discovery = page.getByRole("region", { name: "Discovery activity", exact: true });
-    await discovery.waitFor();
-    assert.match(await discovery.innerText(), /Physical provider requests\/pages\s*3/);
-    assert.match(await discovery.innerText(), /Retained metadata records\s*12/);
-    await discovery.getByText("Offline saved coverage warning.", { exact: true }).waitFor();
+    const sources = page.getByRole("region", { name: "Sources found so far", exact: true });
+    const cards = sources.locator(".live-source-card");
+    await sources.getByText("Promising sources will appear here as they’re found.").waitFor();
+    assert.equal(await cards.count(), 0);
+    sourcePhase = 1;
+    const initialCard = cards.filter({ hasText: source(1).title });
+    await initialCard.getByText("Lead", { exact: true }).waitFor();
+    sourcePhase = 2;
+    await initialCard.getByText("Screened", { exact: true }).waitFor();
+    sourcePhase = 3;
+    await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await page.mouse.move(5, 5);
+    await initialCard.getByText("Full text", { exact: true }).waitFor();
+    assert.equal(await initialCard.getByRole("link").getAttribute("href"), "https://archive.example.org/verified/1");
+    assert.equal(await cards.count(), 7);
+    await cards.filter({ hasText: source(2).title }).getByText("Assessed", { exact: true }).waitFor();
+    await cards.filter({ hasText: source(3).title }).getByText("Admitted", { exact: true }).waitFor();
+    await sources.getByText("New in round 2", { exact: true }).waitFor();
+    if (process.env.RESEARCHASSISTANT_SHORTLIST_SCREENSHOTS) {
+      const screenshots = process.env.RESEARCHASSISTANT_SHORTLIST_SCREENSHOTS;
+      await page.screenshot({ path: path.join(screenshots, "shortlist-desktop.png"), fullPage: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: path.join(screenshots, "shortlist-narrow.png"), fullPage: true });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+      await page.setViewportSize({ width: 1280, height: 860 });
+    }
+    await initialCard.hover();
+    await initialCard.getByRole("link").focus();
+    await initialCard.locator("summary").focus();
+    await page.keyboard.press("Enter");
+    await initialCard.getByText("Scout screening", { exact: true }).waitFor();
+    const rotated = page.waitForResponse(async (response) =>
+      response.url().includes(`/api/research/${runId}/live-sources`) &&
+      (await response.json()).revision === "4"
+    );
+    sourcePhase = 4;
+    await rotated;
+    await page.mouse.move(5, 5);
+    assert.equal(await initialCard.count(), 1, "The focused and open card stays in place");
+    assert.equal(await page.locator(":focus").textContent(), "Source details");
+    await page.keyboard.press("Enter");
+    await initialCard.locator("details:not([open])").waitFor({ state: "attached" });
+    await page.mouse.move(5, 5);
+    await sources.locator(".all-live-sources > summary").focus();
+    await cards.filter({ hasText: source(8).title }).waitFor();
+    assert.equal(await initialCard.count(), 0);
+    const browse = sources.getByText("All sources", { exact: true });
+    await browse.click();
+    await sources.getByRole("link", { name: source(1).title }).waitFor();
+    await sources.getByText("Saved source with an unsafe link").waitFor();
+    assert.equal(await sources.getByRole("link", { name: "Saved source with an unsafe link" }).count(), 0);
+    await browse.click();
+    releaseFirstRun = true;
     await page.getByText("Poll smoke result", { exact: true }).waitFor({ timeout: 10000 });
-
+    await page.getByText("All sources", { exact: true }).click();
+    await page.getByRole("link", { name: source(1).title }).waitFor();
+    const sourceCallsAtStop = sourceCalls;
     assert.equal(maxActiveSnapshots, 1, "Delayed status responses must never overlap");
     const verifiedSameRunConcurrency = maxActiveSnapshots;
     const terminalCallCount = snapshotCalls;
     await WAIT(1800);
     assert.equal(snapshotCalls, terminalCallCount, "Terminal status must stop follow-up polling");
+    assert.equal(sourceCalls, sourceCallsAtStop, "Terminal status must stop shortlist polling");
 
     await page.getByRole("button", { name: "Start new research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does replacement cancel scheduled polling?");
@@ -309,6 +422,7 @@ async function main() {
     await page.getByText("Poll smoke result", { exact: true }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeReplacement, "Run replacement must cancel old follow-up polling");
+    assert.equal(await page.getByRole("link", { name: source(1).title }).count(), 0);
     await page.getByText("Latest execution attempt: The latest attempt could not use the requested settings. Check the research settings and try again.", { exact: true }).waitFor();
 
     await page.getByRole("button", { name: "Saved research", exact: true }).click();
@@ -347,7 +461,9 @@ async function main() {
     await page.getByLabel("Your research question", { exact: true }).fill("Can this same run reconnect safely?");
     await page.getByRole("checkbox").check();
     const beforeRecovery = snapshotCalls;
+    const recoveryStart = page.waitForResponse((response) => response.url().endsWith("/api/research/start"));
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
+    await recoveryStart;
     const recoveryStarts = startCalls;
     const connection = page.getByRole("region", { name: "Progress connection", exact: true });
     await connection.getByText(/Automatic retries paused/).waitFor();
@@ -364,12 +480,14 @@ async function main() {
     recoveryHealthy = true;
     await connection.getByRole("button", { name: "Reconnect", exact: true }).click();
     await connection.getByText("Progress connection restored.", { exact: true }).waitFor();
+    await cards.filter({ hasText: source(8).title }).waitFor();
     const lastConfirmed = await connection.locator("time").getAttribute("datetime");
     assert.ok(lastConfirmed);
     recoveryHealthy = false;
     await connection.getByText(/Automatic retries paused/).waitFor();
     assert.equal(await connection.locator("time").getAttribute("datetime"), lastConfirmed);
     await connection.getByText("Research may still be running.", { exact: true }).waitFor();
+    assert.equal(await cards.count(), 7, "Last saved sources stay visible when progress disconnects");
     await connection.getByRole("button", { name: "Cancel run", exact: true }).click();
     await connection.getByRole("button", { name: "Sending cancellation…", exact: true }).waitFor();
     assert.equal(await connection.getByRole("button", { name: "Cancellation requested", exact: true }).count(), 0);
@@ -379,8 +497,14 @@ async function main() {
     assert.equal(await confirmedCancel.isDisabled(), true);
     assert.equal(cancelCalls, 1);
     assert.equal(startCalls, recoveryStarts, "Reconnection cannot start replacement research");
+    recoveryHealthy = true;
+    recoveryTerminal = true;
+    await connection.getByRole("button", { name: "Reconnect", exact: true }).click();
+    await page.getByRole("heading", { name: "No brief was released." }).waitFor();
+    await page.getByText("All sources", { exact: true }).click();
+    await page.getByRole("link", { name: source(1).title }).waitFor();
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${snapshotCalls} deterministic snapshots, live discovery counts/warnings, max same-run concurrency ${verifiedSameRunConcurrency}, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement/unmount cleanup, bounded recovery before/after a snapshot, preserved retry budget, same-run reconnect and backend-confirmed cancellation.`);
+    console.log(`PASS: ${snapshotCalls} deterministic snapshots, live shortlist stages, rotation, stable focus, saved sources at stop, max same-run concurrency ${verifiedSameRunConcurrency}, terminal stop, committed release authority, rejected resume, interrupted restart, run replacement/unmount cleanup, bounded recovery before/after a snapshot, preserved retry budget, same-run reconnect and backend-confirmed cancellation.`);
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

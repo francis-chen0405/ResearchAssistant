@@ -123,7 +123,7 @@ export default function Home() {
               />
             ) : (
               <ProgressView
-                key={`progress-${snapshot.run_id}`}
+                key={`progress-${snapshot.db_path}-${snapshot.run_id}`}
                 snapshot={snapshot}
                 {...recovery}
               />

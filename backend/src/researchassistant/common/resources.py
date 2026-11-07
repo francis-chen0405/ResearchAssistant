@@ -23,6 +23,7 @@ PROMPT_NAMES = (
     "v2_initial_planner_v2.md",
     "v2_scout.md",
     "v2_scout_v2.md",
+    "v2_scout_v3.md",
 )
 
 

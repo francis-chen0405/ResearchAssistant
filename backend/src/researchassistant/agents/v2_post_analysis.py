@@ -13,6 +13,7 @@ from researchassistant.contracts.models import (
     V2EvidenceRelationship,
     V2PostAnalysisAssessment,
 )
+from researchassistant.evidence.shared_data import shared_data_limitations
 
 V2_POST_ANALYSIS_ASSESSMENT_LEGACY_POLICY = "researchassistant-v2-post-analysis-evidence-v1"
 V2_POST_ANALYSIS_ASSESSMENT_POLICY = "researchassistant-v2-post-analysis-evidence-v2"
@@ -42,6 +43,7 @@ def build_v2_post_analysis_assessment(
         raise ValueError("post-analysis Analyst source IDs must be unique")
     admitted_ids: list[UUID] = []
     relationships: list[V2EvidenceRelationship] = []
+    data_families: list[str] = []
     source_ids = tuple(source.source_id for source in admission_result.source_results)
     if len(set(source_ids)) != len(source_ids):
         raise ValueError("post-analysis admission source IDs must be unique")
@@ -64,6 +66,7 @@ def build_v2_post_analysis_assessment(
             raise ValueError("post-analysis admitted Claim Fit must match assessment")
         admitted_ids.append(source.source_id)
         relationships.append(assessed.assessment.relationship_to_claim)
+        data_families.append(source.provenance.source_family_id)
     support = relationships.count(V2EvidenceRelationship.SUPPORTS)
     challenge = relationships.count(V2EvidenceRelationship.CHALLENGES)
     qualifies = relationships.count(V2EvidenceRelationship.QUALIFIES)
@@ -127,6 +130,7 @@ def build_v2_post_analysis_assessment(
         )
     if unrelated:
         limitations.append("Historical unrelated items do not provide evidence for this claim.")
+    limitations.extend(shared_data_limitations(data_families))
     return V2PostAnalysisAssessment(
         run_id=run_id,
         policy_identity=policy_identity,

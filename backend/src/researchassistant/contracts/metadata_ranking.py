@@ -87,7 +87,10 @@ class V2MetadataRankingArtifact(StrictModel):
     run_id: UUID
     round_number: int = Field(strict=True, ge=1, le=4)
     ranking_identity: Literal[
-        "source-candidate-ranking-v2", "source-candidate-ranking-v3", "source-candidate-ranking-v4"
+        "source-candidate-ranking-v2",
+        "source-candidate-ranking-v3",
+        "source-candidate-ranking-v4",
+        "source-candidate-ranking-v5",
     ] = "source-candidate-ranking-v2"
     ranks: tuple[MetadataRank, ...] = Field(max_length=300)
     scout_dispositions: tuple[V2ScoutDisposition, ...] = Field(max_length=300)

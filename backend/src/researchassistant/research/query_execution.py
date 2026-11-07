@@ -29,6 +29,7 @@ from researchassistant.contracts.discovery_v2 import (
     V2DiscoveryFailure,
     V2DiscoveryOperation,
     V2DiscoveryProviderBudget,
+    V2GraphNeighborAction,
     V2MetadataDiscoveryPolicy,
     V2ProviderAttemptCompletion,
     V2ProviderAttemptStart,
@@ -36,7 +37,7 @@ from researchassistant.contracts.discovery_v2 import (
     discovery_hash,
     discovery_id,
 )
-from researchassistant.contracts.model_contracts import DiscoveryProvider, SearchIntent
+from researchassistant.contracts.model_contracts import DiscoveryProvider, SearchIntent, StrictModel
 from researchassistant.contracts.model_research import (
     V2AdaptiveSearchQuery,
     V2ProviderSearchBudget,
@@ -44,15 +45,18 @@ from researchassistant.contracts.model_research import (
 )
 from researchassistant.contracts.query_compiler import QUERY_COMPILER_ID, validate_compiled_action
 from researchassistant.contracts.research_directions import ResearchDirections
+from researchassistant.contracts.research_discovery import V2ClaimScoutRequest
 from researchassistant.contracts.search import (
     SearchFailureCode,
     SearchRequest,
     SearchResponse,
+    V2MetadataPageRequest,
     metadata_page_size,
 )
 from researchassistant.providers.discovery_transport import RequestKind, observe_physical_requests
 from researchassistant.providers.search import SearchProvider, SearchProviderError, page_parameters
 from researchassistant.research.discovery_policy import build_discovery_binding
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY
 from researchassistant.storage.discovery_store import (
     bind_discovery_run,
     complete_provider_attempt,
@@ -96,6 +100,158 @@ def fair_query_order(queries: tuple[_Query, ...]) -> tuple[_Query, ...]:
         counts[lane] = occurrence + 1
         ordered.append((occurrence, index, query))
     return tuple(query for _occurrence, _index, query in sorted(ordered, key=lambda item: item[:2]))
+
+
+def execute_query_round(
+    queries: tuple[_Query, ...],
+    *,
+    path: str,
+    providers: Mapping[DiscoveryProvider, SearchProvider],
+    clock: Callable[[], datetime],
+    cancellation_requested: Callable[[], bool] | None,
+    execute_graph: Callable[[V2GraphNeighborAction], SearchResponse] | None = None,
+    on_first_pass: Callable[[tuple[tuple[_Query, SearchResponse], ...]], None] | None = None,
+) -> tuple[tuple[_Query, SearchResponse | SearchProviderError], ...]:
+    """Give each configured text provider one page before continuing in fair query order."""
+    ordered = fair_query_order(queries)
+    first_queries: dict[DiscoveryProvider, tuple[int, V2CompiledQueryAction]] = {}
+    for index, query in enumerate(ordered):
+        if isinstance(query, V2AdaptiveSearchQuery) and query.graph_action is not None:
+            continue
+        if (
+            query.compiled_query is None
+            or query.compiled_query.compiler_identity != QUERY_COMPILER_ID
+        ):
+            # Keep historical and legacy-injected text searches in their original order.
+            first_queries.clear()
+            break
+        if query.provider in providers:
+            first_queries.setdefault(query.provider, (index, query.compiled_query))
+    first_pass = (
+        tuple(first_queries.values()) if len(first_queries) > 1 or on_first_pass is not None else ()
+    )
+    visits: list[tuple[int, tuple[V2CompiledQueryAction, ...] | None]] = [
+        (index, tuple(action for _, action in first_pass[position + 1 :]))
+        for position, (index, _) in enumerate(first_pass)
+    ]
+    visits.extend((index, None) for index in range(len(ordered)))
+
+    outcomes: dict[int, SearchResponse | SearchProviderError] = {}
+    yielded = False
+    for visit, (index, pending_first_pages) in enumerate(visits):
+        if visit == len(first_pass) and first_pass and on_first_pass is not None:
+            actions = tuple(action.artifact_id for _, action in first_pass)
+            prefix = read_query_first_pass(path, queries)
+            if prefix is None and yielded:
+                from researchassistant.storage.query_retrieval_store import read_pages
+                from researchassistant.storage.store import insert_v2_artifact
+
+                run_id = queries[0].run_id
+                first_pages = {
+                    page.operation_id: discovery_hash(page.response.model_dump_json())
+                    for page in read_pages(path, run_id)
+                    if page.page_number == 1 and page.response.results
+                }
+                checkpoint = V2QueryFirstPass(
+                    run_id=run_id,
+                    page_digests=tuple(
+                        (action_id, first_pages[action_id])
+                        for action_id in actions
+                        if action_id in first_pages
+                    ),
+                )
+                insert_v2_artifact(path, _first_pass_key(queries[0]), checkpoint, clock())
+                prefix = read_query_first_pass(path, queries)
+            if prefix:
+                on_first_pass(prefix)
+        if index in outcomes:
+            continue
+        if cancellation_requested and cancellation_requested():
+            break
+        query = ordered[index]
+        try:
+            if isinstance(query, V2AdaptiveSearchQuery) and query.graph_action is not None:
+                assert execute_graph is not None
+                response = execute_graph(query.graph_action)
+            else:
+                assert query.query_text is not None
+                response = _execute_query(
+                    path=path,
+                    run_id=query.run_id,
+                    provider=query.provider,
+                    query_text=query.query_text,
+                    compiled_query=query.compiled_query,
+                    providers=providers,
+                    clock=clock,
+                    cancellation_requested=cancellation_requested,
+                    pending_first_pages=pending_first_pages,
+                )
+            if response is not None:
+                outcomes[index] = response
+            elif pending_first_pages is not None:
+                yielded = True
+        except SearchProviderError as exc:
+            outcomes[index] = exc
+        except Exception as exc:
+            outcomes[index] = SearchProviderError(
+                SearchFailureCode.PERMANENT_FAILURE, f"{type(exc).__name__}: {exc}"[:500]
+            )
+    return tuple(
+        (query, outcomes[index]) for index, query in enumerate(ordered) if index in outcomes
+    )
+
+
+class V2QueryFirstPass(StrictModel):
+    """Freeze which operations contributed the first-pass pool."""
+
+    run_id: UUID
+    page_digests: tuple[tuple[UUID, str], ...]
+
+
+def _first_pass_key(query: V2RoundOneSearchQuery | V2AdaptiveSearchQuery) -> str:
+    return f"query-first-pass-v1/round-{query.round_number}"
+
+
+def read_query_first_pass(
+    path: str,
+    queries: tuple[_Query, ...],
+) -> tuple[tuple[_Query, SearchResponse], ...] | None:
+    """Rebuild the pool from the same verified parsed page receipts on every replay."""
+    from researchassistant.storage.query_retrieval_store import read_pages
+    from researchassistant.storage.store import read_v2_artifact
+
+    if not queries:
+        return None
+    run_id = queries[0].run_id
+    try:
+        artifact = read_v2_artifact(path, run_id, _first_pass_key(queries[0]))
+    except KeyError:
+        return None
+    checkpoint = V2QueryFirstPass.model_validate_json(artifact.payload_json)
+    by_action = {
+        query.compiled_query.artifact_id: query
+        for query in fair_query_order(queries)
+        if query.compiled_query is not None
+    }
+    owned = dict(checkpoint.page_digests)
+    if (
+        artifact.artifact_type != "V2QueryFirstPass"
+        or checkpoint.run_id != run_id
+        or len(owned) != len(checkpoint.page_digests)
+        or not owned.keys() <= by_action.keys()
+    ):
+        raise ValueError("first-pass checkpoint differs from its search owners")
+    pages = {
+        page.operation_id: page.response
+        for page in read_pages(path, run_id)
+        if page.page_number == 1 and page.operation_id in owned
+    }
+    if pages.keys() != owned.keys() or any(
+        discovery_hash(response.model_dump_json()) != owned[operation_id]
+        for operation_id, response in pages.items()
+    ):
+        raise ValueError("first-pass handoff differs from its verified parsed pages")
+    return tuple((by_action[operation_id], pages[operation_id]) for operation_id in owned)
 
 
 def _request_cost(provider: DiscoveryProvider, depth: int) -> Decimal:
@@ -195,7 +351,7 @@ def freeze_query_execution(
         for name in (
             "v2_initial_planner_v2.md",
             "search_agent_v2.md",
-            "v2_scout_v2.md",
+            "v2_scout_v3.md",
             "source_selection_v3.md",
             "search_agent_v3.md",
         )
@@ -245,7 +401,7 @@ def freeze_query_execution(
                 "selection_input_cap": 24000,
                 "selection_model_view": "compact-selection-v1",
                 "selection_preview_bytes": 320,
-                "paper_identity_policy": "retained-paper-identity-v1",
+                "paper_identity_policy": "retained-paper-identity-v2",
                 "seed_policy": "source-seed-expansion-v3",
                 "seed_selection": "relevant_owned_preview_exact_identifier_scholarly_type_year",
                 "relationships_priority": ["references", "citing", "related"],
@@ -273,6 +429,7 @@ def freeze_query_execution(
                     V2SelectionShortlistAudit.model_json_schema(),
                     V2InitialPlannerConceptsOutput.model_json_schema(),
                     V2AdaptiveSearchConceptsOutput.model_json_schema(),
+                    V2ClaimScoutRequest.model_json_schema(),
                     V2MetadataRankingArtifact.model_json_schema(),
                     V2AcquisitionRankingAudit.model_json_schema(),
                     V2DiscoveryPipelineCounters.model_json_schema(),
@@ -287,7 +444,7 @@ def freeze_query_execution(
     binding = binding.model_copy(
         update={
             "compiler_identity": QUERY_COMPILER_ID,
-            "ranking_identity": "source-candidate-ranking-v4",
+            "ranking_identity": RANKING_IDENTITY,
             "preview_identity": "source-claim-preview-v2",
             "seed_identity": "source-seed-expansion-v3",
             "prompt_schema_hash": schema_hash,
@@ -669,6 +826,33 @@ def execute_query(
     clock: Callable[[], datetime],
     cancellation_requested: Callable[[], bool] | None = None,
 ) -> SearchResponse:
+    response = _execute_query(
+        path=path,
+        run_id=run_id,
+        provider=provider,
+        query_text=query_text,
+        compiled_query=compiled_query,
+        providers=providers,
+        clock=clock,
+        cancellation_requested=cancellation_requested,
+        pending_first_pages=None,
+    )
+    assert response is not None
+    return response
+
+
+def _execute_query(
+    *,
+    path: str,
+    run_id: UUID,
+    provider: DiscoveryProvider,
+    query_text: str,
+    compiled_query: V2CompiledQueryAction | None,
+    providers: Mapping[DiscoveryProvider, SearchProvider],
+    clock: Callable[[], datetime],
+    cancellation_requested: Callable[[], bool] | None,
+    pending_first_pages: tuple[V2CompiledQueryAction, ...] | None,
+) -> SearchResponse | None:
     adapter = providers.get(provider)
     if adapter is None:
         raise SearchProviderError(
@@ -721,6 +905,7 @@ def execute_query(
         binding=binding,
         clock=clock,
         cancellation_requested=cancellation_requested,
+        pending_first_pages=pending_first_pages,
     )
 
 
@@ -801,7 +986,8 @@ def _execute_metadata_operation(
     binding: V2DiscoveryBinding,
     clock: Callable[[], datetime],
     cancellation_requested: Callable[[], bool] | None,
-) -> SearchResponse:
+    pending_first_pages: tuple[V2CompiledQueryAction, ...] | None,
+) -> SearchResponse | None:
     from researchassistant.contracts.query_retrieval import (
         V2QueryPageCheckpoint,
         V2QueryParseReceipt,
@@ -930,29 +1116,51 @@ def _execute_metadata_operation(
     reason = "depth_reached"
     pending_error: SearchProviderError | None = None
     headroom = retention_headroom(path, run_id, action.conceptual_query.round_number)
-    available = next(
-        (
-            budget.remaining_calls
-            for budget in available_query_budgets(path, run_id)
-            if budget.provider == provider
-        ),
-        0,
-    )
+    budgets = {
+        budget.provider: budget.remaining_calls for budget in available_query_budgets(path, run_id)
+    }
+    first_page_capacity = headroom
+    if pending_first_pages:
+        started = {start.operation_id for start in audit.starts}
+        pending_count = sum(
+            candidate.artifact_id not in started
+            and budgets.get(candidate.conceptual_query.provider, 0)
+            >= candidate.capabilities.physical_requests_per_page
+            for candidate in pending_first_pages
+        )
+        # If headroom cannot cover everyone, give earlier eligible providers the
+        # available slots in order. Empty or failed pages leave their slots free.
+        first_page_capacity = max(1, headroom - pending_count)
     physical_per_page = action.capabilities.physical_requests_per_page
     page_size = metadata_page_size(action)
+    single_page = action.capabilities.executable_pagination == "none" or action.mode == "semantic"
     remaining_pages = (
-        min(action.policy.max_pages_per_operation - observer.sequence, available)
+        min(action.policy.max_pages_per_operation - observer.sequence, budgets.get(provider, 0))
         // physical_per_page
     )
-    if action.capabilities.executable_pagination == "none" or action.mode == "semantic":
+    if single_page:
         remaining_pages = min(remaining_pages, max(0, 1 - completed_pages))
     effective = min(
         action.effective_depth, raw_hits + page_size * remaining_pages, raw_hits + headroom
     )
+
+    def clipped_fixed_page(page: V2QueryPageCheckpoint) -> bool:
+        nominal_offset = (page.page_number - 1) * page_size
+        return (
+            (single_page or provider is DiscoveryProvider.SERPSEARCH)
+            and bool(page.response.results)
+            and page.raw_hits >= page.requested_records
+            and page.requested_records < min(page_size, action.effective_depth - nominal_offset)
+        )
+
     if audit.interrupted_unknown:
         reason = "unknown_outcome"
     elif unparsed:
         reason = "completed_without_checkpoint"
+    elif pages and clipped_fixed_page(pages[-1]):
+        # A fixed native page cannot continue past an omitted suffix.
+        reason = "retention_cap"
+        effective = min(effective, sum(page.requested_records for page in pages))
     elif effective == raw_hits and raw_hits < action.effective_depth:
         reason = "retention_cap" if headroom == 0 else "provider_budget"
     else:
@@ -993,13 +1201,24 @@ def _execute_metadata_operation(
             for page_number in range(completed_pages + 1, completed_pages + remaining_pages + 1):
                 if raw_hits >= effective:
                     break
+                if pending_first_pages is not None and page_number > 1:
+                    # The page and parser receipt are durable. Leave the operation open
+                    # so the next visit can recheck budgets and resume from its cursor.
+                    return None
                 if cancellation_requested and cancellation_requested():
                     raise SearchProviderError(
                         SearchFailureCode.CANCELLED, "query cancelled before next metadata page"
                     )
                 limit = min(page_size, effective - raw_hits)
+                if page_number == 1:
+                    limit = min(limit, first_page_capacity)
+                offset = (
+                    raw_hits
+                    if provider in {DiscoveryProvider.OPENALEX, DiscoveryProvider.ARXIV}
+                    else (page_number - 1) * page_size
+                )
                 try:
-                    request = SearchRequest(
+                    request = V2MetadataPageRequest(
                         run_id=run_id,
                         provider=provider,
                         intent=intent,
@@ -1009,6 +1228,7 @@ def _execute_metadata_operation(
                         compiled_query=action,
                         page_number=page_number,
                         page_cursor=cursor,
+                        start_offset=offset,
                     )
                     before = len(observer.completions)
                     try:
@@ -1019,7 +1239,6 @@ def _execute_metadata_operation(
                         response = SearchResponse(results=[], provider_name=provider.value)
                     response = _bounded_response(response, limit)
                     ranks = [result.rank for result in response.results]
-                    offset = (page_number - 1) * page_size
                     if ranks != sorted(set(ranks)) or any(
                         rank <= offset or rank > offset + limit for rank in ranks
                     ):
@@ -1112,6 +1331,10 @@ def _execute_metadata_operation(
                     break
                 if page.raw_hits < limit:
                     reason = "provider_limit"
+                    break
+                if clipped_fixed_page(page):
+                    reason = "retention_cap"
+                    effective = min(effective, offset + limit)
                     break
                 if (
                     action.capabilities.executable_pagination == "cursor"

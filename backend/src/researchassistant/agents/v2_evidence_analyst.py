@@ -119,6 +119,7 @@ def run_v2_evidence_analyst(
     routing_config: V2RoutingConfig,
     artifact_key: str = V2_EVIDENCE_ANALYST_ARTIFACT_KEY,
     clock: Callable[[], datetime] | None = None,
+    stop_on_unknown_attempt: bool = False,
 ) -> V2EvidenceAnalystBatchResult:
     """Analyze the complete queue with Luna and persist status for every survivor."""
     now = clock or _utc_now
@@ -171,6 +172,7 @@ def run_v2_evidence_analyst(
                 llm_provider=llm_provider,
                 routing_config=routing_config,
                 clock=now,
+                stop_on_unknown_attempt=stop_on_unknown_attempt,
             )
             insert_v2_artifact(path, source_artifact_key, source_result, _aware_now(now))
         if source_result.source_id != survivor.source_id:
@@ -288,6 +290,7 @@ def _analyze_source(
     llm_provider: LLMProvider,
     routing_config: V2RoutingConfig,
     clock: Callable[[], datetime],
+    stop_on_unknown_attempt: bool = False,
 ) -> V2EvidenceAnalystSourceResult:
     candidate = source_input.candidate
     attempt_ids: list[UUID] = []
@@ -345,6 +348,7 @@ def _analyze_source(
             retry_guidance=_canonical_statement_retry_guidance(2),
             max_attempts=2,
             retry_validation_only=True,
+            stop_on_unknown_attempt=stop_on_unknown_attempt,
         )
         attempt_ids.extend(score_attempts)
         route = routing_config.preflight().for_stage(LLMStage.ANALYST)
@@ -431,6 +435,7 @@ def _invoke_bounded_analyst(
     retry_guidance: str | None = None,
     max_attempts: int | None = None,
     retry_validation_only: bool = False,
+    stop_on_unknown_attempt: bool = False,
 ) -> tuple[_OutputT, tuple[UUID, ...]]:
     preflight = routing_config.preflight()
     route = preflight.for_stage(LLMStage.ANALYST)
@@ -495,6 +500,10 @@ def _invoke_bounded_analyst(
         if attempt.status is ModelAttemptStatus.COMPLETED:
             return reuse_completion(attempt), tuple(attempt_ids)
         if attempt.status is ModelAttemptStatus.RUNNING:
+            if stop_on_unknown_attempt:
+                raise V2EvidenceAnalystFailure(
+                    "early Analyst has an unknown outcome; its attempt remains consumed"
+                )
             ended_at = _aware_now(clock)
             finish_model_route_attempt(
                 db_path,

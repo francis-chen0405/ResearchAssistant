@@ -255,6 +255,15 @@ class V2MergedSurvivorPool(StrictModel):
     run_id: UUID
     sources: tuple[V2MergedSurvivor, ...]
 
+    @property
+    def mirror_alias_ids(self) -> frozenset[UUID]:
+        return frozenset(
+            location.source_id
+            for source in self.sources
+            for location in source.paper_locations
+            if location.source_id != source.survivor.cluster_id
+        )
+
     @model_validator(mode="after")
     def validate_source_ownership(self) -> V2MergedSurvivorPool:
         ids = [source.survivor.cluster_id for source in self.sources]

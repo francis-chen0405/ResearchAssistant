@@ -11,6 +11,7 @@ import hashlib
 import ipaddress
 import json
 import re
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from importlib.resources.abc import Traversable
@@ -63,7 +64,12 @@ from researchassistant.contracts.models import (
     V2RoundOneSearchQuery,
     V2ScoutRequest,
 )
+from researchassistant.contracts.research_discovery import (
+    V2ClaimScoutRequest,
+    V2LateDiscoveryMirror,
+)
 from researchassistant.contracts.search import SearchResult
+from researchassistant.evidence.paper_identity import paper_title_key
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -79,8 +85,14 @@ from researchassistant.providers.pricing import conservative_token_estimate
 from researchassistant.providers.ranking import canonical_discovery_url
 from researchassistant.providers.v2_budget import V2BudgetSnapshot, V2CancellationRequested
 from researchassistant.providers.v2_routing import V2RoutingConfig
-from researchassistant.research.discovery_policy import safe_optional_model_prefix
-from researchassistant.research.metadata_ranking import fair_ranked_ids, rank_metadata
+from researchassistant.research.discovery_policy import safe_optional_model_prefix, stable_work_key
+from researchassistant.research.metadata_ranking import (
+    EXACT_URL_RANKING_IDENTITY,
+    RANKING_IDENTITIES,
+    RANKING_IDENTITY,
+    fair_ranked_ids,
+    rank_metadata,
+)
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.store import (
     insert_v2_artifact,
@@ -90,11 +102,17 @@ from researchassistant.storage.store import (
 
 V2_SCOUT_PROMPT_PATH = prompt_resource("v2_scout.md")
 V2_SCOUT_V2_PROMPT_PATH = prompt_resource("v2_scout_v2.md")
+V2_SCOUT_V3_PROMPT_PATH = prompt_resource("v2_scout_v3.md")
 V2_SCOUT_BATCH_SIZE = 20
 V2_SCOUT_ARTIFACT_KEY = "phase-4-discovery-scout"
 V2_RANKING_ARTIFACT_PREFIX = "phase-3-metadata-ranking-round-"
 _TITLE_TOKEN_RE = re.compile(r"[a-z0-9]+")
 _DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)\s*", re.IGNORECASE)
+
+
+ScoutHandoff = Callable[
+    [V2DiscoveryScoutOutput, V2MetadataRankingArtifact, tuple[LLMRequest, ...], bool], None
+]
 
 
 class V2DiscoveryResponse(StrictModel):
@@ -219,18 +237,32 @@ def normalize_discovery_responses(
 
 
 def cluster_discovery_items(
-    items: Sequence[NormalizedDiscoveryItem], *, include_provider_locations: bool = False
+    items: Sequence[NormalizedDiscoveryItem],
+    *,
+    include_provider_locations: bool = False,
+    require_identity: bool = False,
 ) -> tuple[SourceCluster, ...]:
-    """Conservatively union only exact URL/DOI/title or exact author-year-title identity."""
+    """Group discovery locations, with verified anchors required by current ranking."""
     if not items:
         return ()
     run_ids = {item.run_id for item in items}
     if len(run_ids) != 1:
         raise ValueError("a discovery pool cannot cluster more than one run")
     parent = list(range(len(items)))
-    root_dois = [{item.doi} if item.doi else set() for item in items]
+    dois = [
+        _normalized_doi(item.doi, exact_identifiers=True) if require_identity else item.doi
+        for item in items
+    ]
+    root_dois = [{doi} if doi else set() for doi in dois]
     root_provider_ids = [
-        _provider_identity_anchors(item) if include_provider_locations else set() for item in items
+        _provider_identity_anchors(item)
+        if include_provider_locations or require_identity
+        else set()
+        for item in items
+    ]
+    root_titles = [
+        {title} if require_identity and (title := paper_title_key(item.title)) else set()
+        for item in items
     ]
 
     def find(index: int) -> int:
@@ -239,19 +271,23 @@ def cluster_discovery_items(
             index = parent[index]
         return index
 
-    def union(left: int, right: int) -> None:
+    def union(left: int, right: int, kind: str) -> None:
         left_root, right_root = find(left), find(right)
         if left_root != right_root:
             combined_dois = root_dois[left_root] | root_dois[right_root]
             # Fresh metadata pools must not replace a distinct identified paper
             # merely because its title matches. Guard the entire union component
             # so an unidentified record cannot bridge contradictory DOI anchors.
-            if include_provider_locations and len(combined_dois) > 1:
+            if (include_provider_locations or require_identity) and len(combined_dois) > 1:
+                return
+            combined_titles = root_titles[left_root] | root_titles[right_root]
+            # An ambiguous DOI attached to different titles is a conflict, not proof of a mirror.
+            if require_identity and kind == "doi" and len(combined_titles) > 1:
                 return
             combined_ids = root_provider_ids[left_root] | root_provider_ids[right_root]
             shared_doi = bool(root_dois[left_root] & root_dois[right_root])
             if (
-                include_provider_locations
+                (include_provider_locations or require_identity)
                 and not shared_doi
                 and any(
                     len({identifier for provider, identifier in combined_ids if provider == owner})
@@ -263,6 +299,7 @@ def cluster_discovery_items(
             parent[right_root] = left_root
             root_dois[left_root] = combined_dois
             root_provider_ids[left_root] = combined_ids
+            root_titles[left_root] = combined_titles
 
     # Each identity predicate is equality on a normalized token. Bucket candidates by
     # token and union only bucket members, preserving the prior equivalence semantics
@@ -270,15 +307,16 @@ def cluster_discovery_items(
     identity_buckets: dict[tuple[str, str], list[int]] = {}
     for index, item in enumerate(items):
         keys = [("url", item.canonical_url)]
-        if item.doi:
-            keys.append(("doi", item.doi))
-        title = _title_key(item.title)
-        if title:
+        if dois[index]:
+            keys.append(("doi", dois[index]))
+        if require_identity:
+            keys.extend(sorted(root_provider_ids[index]))
+        elif title := _title_key(item.title):
             keys.append(("title", title))
         for key in keys:
             prior_members = identity_buckets.setdefault(key, [])
             for prior in prior_members:
-                union(index, prior)
+                union(index, prior, key[0])
             prior_members.append(index)
             # Keep one representative per component, preserving linear behavior
             # for duplicate-heavy historical pools and avoiding repeated unions.
@@ -289,7 +327,13 @@ def cluster_discovery_items(
     clusters: list[SourceCluster] = []
     for members in groups.values():
         ordered = sorted(members, key=lambda item: (item.canonical_url, str(item.item_id)))
-        preferred = min(ordered, key=_preferred_url_key)
+        preferred = min(
+            ordered,
+            key=lambda item: (
+                not bool(_provider_full_text_locations(item)) if require_identity else False,
+                _preferred_url_key(item),
+            ),
+        )
         provider_locations = (
             {location for member in ordered for location in _provider_full_text_locations(member)}
             if include_provider_locations
@@ -341,6 +385,94 @@ def cluster_discovery_items(
     )
 
 
+def _clustered_work_keys(
+    items: tuple[NormalizedDiscoveryItem, ...], clusters: tuple[SourceCluster, ...]
+) -> dict[UUID, str]:
+    by_id = {item.item_id: item for item in items}
+    cluster_keys = []
+    for cluster in clusters:
+        members = [by_id[item_id] for item_id in cluster.item_ids]
+        doi = next(
+            (doi for item in members if (doi := _normalized_doi(item.doi, exact_identifiers=True))),
+            None,
+        )
+        anchors = sorted(
+            {anchor for member in members for anchor in _provider_identity_anchors(member)}
+        )
+        key = (
+            stable_work_key(doi=doi, canonical_url=cluster.canonical_url, url_identity_version=2)
+            if doi or not anchors
+            else "provider:" + hashlib.sha256(":".join(anchors[0]).encode()).hexdigest()
+        )
+        if len(key) > 512:
+            key = "doi:sha256:" + hashlib.sha256(key.encode()).hexdigest()
+        cluster_keys.append(key)
+    duplicate_keys = {key for key, count in Counter(cluster_keys).items() if count > 1}
+    return {
+        item_id: (
+            "conflict:" + hashlib.sha256(f"{key}/{cluster.cluster_id}".encode()).hexdigest()
+            if key in duplicate_keys
+            else key
+        )
+        for cluster, key in zip(clusters, cluster_keys, strict=True)
+        for item_id in cluster.item_ids
+    }
+
+
+def _progressive_clusters(
+    items: tuple[NormalizedDiscoveryItem, ...],
+    prefix: V2DiscoveryScoutOutput | None,
+) -> tuple[tuple[SourceCluster, ...], tuple[V2LateDiscoveryMirror, ...], frozenset[UUID]]:
+    combined = cluster_discovery_items(
+        items, include_provider_locations=True, require_identity=True
+    )
+    if prefix is None:
+        return combined, (), frozenset()
+    scouted = {item.item_id for batch in prefix.scout_batches for item in batch.items}
+    owned = {item_id: cluster for cluster in prefix.clusters for item_id in cluster.item_ids}
+    by_id = {item.item_id: item for item in items}
+    covered = {
+        item_id
+        for cluster in prefix.clusters
+        if set(cluster.item_ids) & scouted
+        for item_id in cluster.item_ids
+    }
+    mirrors: list[V2LateDiscoveryMirror] = []
+    late_clusters: list[SourceCluster] = []
+    replaced: set[UUID] = set()
+    for cluster in combined:
+        frozen = {
+            owned[item_id].cluster_id: owned[item_id]
+            for item_id in cluster.item_ids
+            if item_id in owned
+        }
+        if not frozen:
+            late_clusters.append(cluster)
+            continue
+        late = tuple(by_id[item_id] for item_id in cluster.item_ids if item_id not in owned)
+        if not late:
+            continue
+        # A late bridge cannot change two existing owners or confer Scout approval.
+        if len(frozen) == 1:
+            owner = next(iter(frozen.values()))
+            prior = next((item_id for item_id in owner.item_ids if item_id in scouted), None)
+            if prior is None and set(owner.item_ids) <= set(cluster.item_ids):
+                # Unscreened work can use the richer cluster before it gains an owner.
+                replaced.add(owner.cluster_id)
+                late_clusters.append(cluster)
+                continue
+            if prior is not None:
+                mirrors.extend(
+                    V2LateDiscoveryMirror(item_id=item.item_id, scouted_item_id=prior)
+                    for item in late
+                )
+        late_clusters.extend(
+            cluster_discovery_items(late, include_provider_locations=True, require_identity=True)
+        )
+    owners = tuple(cluster for cluster in prefix.clusters if cluster.cluster_id not in replaced)
+    return (*owners, *late_clusters), tuple(mirrors), frozenset(covered)
+
+
 def run_v2_discovery_and_scout(
     *,
     db_path: str | Path,
@@ -353,15 +485,24 @@ def run_v2_discovery_and_scout(
     cancellation_requested: Callable[[], bool] | None = None,
     budget_snapshot: Callable[[], V2BudgetSnapshot] | None = None,
     downstream_input_tokens: Mapping[LLMStage, int] | None = None,
+    target_gaps: tuple[str, ...] = (),
+    on_batch: ScoutHandoff | None = None,
+    first_pass_only: bool = False,
+    first_pass: V2DiscoveryScoutRunResult | None = None,
 ) -> V2DiscoveryScoutRunResult:
     """Persist or resume one round of normalized discovery and batched Scout decisions."""
+    suffix = "/first-pass-v1" if first_pass_only else ""
+    output_key = _artifact_key(planner_output) + suffix
+    ranking_key = _ranking_artifact_key(planner_output) + suffix
+    prefix = first_pass.output if first_pass is not None else None
+    prefix_batches = prefix.scout_batches if prefix is not None else ()
+    prefix_audits = prefix.scout_audits if prefix is not None else ()
+    prefix_scouted = frozenset(item.item_id for batch in prefix_batches for item in batch.items)
     now = clock or _utc_now
     completed_at = now()
     _require_aware(completed_at, "clock result")
     try:
-        existing = read_v2_artifact(
-            str(db_path), planner_output.run_id, _artifact_key(planner_output)
-        )
+        existing = read_v2_artifact(str(db_path), planner_output.run_id, output_key)
     except KeyError:
         existing = None
     if existing is not None:
@@ -371,11 +512,16 @@ def run_v2_discovery_and_scout(
         return V2DiscoveryScoutRunResult(
             output=output,
             resumed=True,
-            ranking_artifact=_read_ranking_artifact(db_path, planner_output, output),
+            ranking_artifact=_read_ranking_artifact(db_path, planner_output, output, suffix=suffix),
         )
     routing_config.preflight()
     binding = _fresh_ranked_binding(db_path, planner_output.run_id)
-    checkpoint_key = "scout-checkpoint-v1/" + _artifact_key(planner_output)
+    identity = binding.ranking_identity if binding is not None else None
+    claim_aware = identity == RANKING_IDENTITY
+    exact_claim = binding.exact_claim if binding is not None and claim_aware else None
+    scout_gaps = tuple(gap[:500] for gap in target_gaps[:6]) if claim_aware else ()
+    prompt_path = _scout_prompt_path(identity)
+    checkpoint_key = "scout-checkpoint-v1/" + output_key
     input_hash = checkpoint_hash(
         {
             "planner": planner_output.model_dump(mode="json"),
@@ -388,10 +534,9 @@ def run_v2_discovery_and_scout(
             if binding is not None
             else None,
             "routing": routing_config.preflight().model_dump(mode="json"),
-            "prompt": load_prompt_file(
-                V2_SCOUT_V2_PROMPT_PATH if binding is not None else V2_SCOUT_PROMPT_PATH,
-                expected_stage=LLMStage.SCOUT,
-            ).sha256,
+            "prompt": load_prompt_file(prompt_path, expected_stage=LLMStage.SCOUT).sha256,
+            **({"target_gaps": scout_gaps} if claim_aware else {}),
+            **({"first_pass": prefix.model_dump(mode="json")} if prefix is not None else {}),
         }
     )
     checkpoint = read_checkpoint(
@@ -401,31 +546,34 @@ def run_v2_discovery_and_scout(
     if checkpoint is None:
         if binding is not None:
             try:
-                prior_ranking = read_v2_artifact(
-                    str(db_path), planner_output.run_id, _ranking_artifact_key(planner_output)
-                )
+                prior_ranking = read_v2_artifact(str(db_path), planner_output.run_id, ranking_key)
             except KeyError:
                 pass
             if prior_ranking is not None:
                 completed_at = prior_ranking.created_at
-        items = normalize_discovery_responses(
+        delta = normalize_discovery_responses(
             run_id=planner_output.run_id,
             directions=planner_output.directions,
-            responses=responses,
+            responses=_without_prefix_results(responses, prefix)
+            if prefix is not None
+            else responses,
             discovered_at=completed_at,
             crossref_resolver=crossref_resolver,
             cancellation_requested=cancellation_requested,
             url_identity_version=(
-                2
-                if binding is None or binding.ranking_identity == "source-candidate-ranking-v4"
-                else 1
+                2 if identity in {None, EXACT_URL_RANKING_IDENTITY, RANKING_IDENTITY} else 1
             ),
         )
-        clusters = cluster_discovery_items(items, include_provider_locations=binding is not None)
+        items = (*prefix.items, *delta) if prefix is not None else delta
+        if prefix is not None:
+            clusters, mirrors, covered = _progressive_clusters(items, prefix)
+        else:
+            clusters = cluster_discovery_items(
+                items, include_provider_locations=binding is not None, require_identity=claim_aware
+            )
+            mirrors, covered = (), frozenset()
         ranking_artifact: V2MetadataRankingArtifact | None = None
         scout_items = items
-        prompt_path = V2_SCOUT_PROMPT_PATH
-        bounded_metadata = False
         if binding is not None:
             ranks = rank_metadata(
                 items,
@@ -435,6 +583,8 @@ def run_v2_discovery_and_scout(
                 known_work_keys=_prior_work_keys(
                     db_path, planner_output.run_id, _round_number(planner_output)
                 ),
+                clustered_work_keys=_clustered_work_keys(items, clusters) if claim_aware else None,
+                target_gaps=scout_gaps,
             )
             if prior_ranking is not None:
                 ranking_artifact = V2MetadataRankingArtifact.model_validate_json(
@@ -454,7 +604,7 @@ def run_v2_discovery_and_scout(
                     for item in ranking_artifact.scout_dispositions
                     if item.disposition == "scouted"
                 }
-                ordered = fair_ranked_ids(ranks, binding.policy.max_scout_per_round)
+                ordered = _scout_ids(ranks, binding.policy.max_scout_per_round, claim_aware)
                 if not selected.issubset(ordered):
                     raise ValueError("partial ranking Scout selection exceeds its policy")
                 by_id = {item.item_id: item for item in items}
@@ -472,9 +622,15 @@ def run_v2_discovery_and_scout(
                     llm_provider=llm_provider,
                     budget_snapshot=budget_snapshot,
                     downstream_input_tokens=downstream_input_tokens,
+                    exact_claim=exact_claim,
+                    target_gaps=scout_gaps,
+                    already_scouted=prefix_scouted,
+                    excluded_items=covered | {link.item_id for link in mirrors},
+                    candidate_limit=_scout_tranche_limit(
+                        binding.policy.max_scout_per_round, first_pass_only, len(prefix_batches)
+                    ),
+                    batch_offset=len(prefix_batches),
                 )
-            prompt_path = V2_SCOUT_V2_PROMPT_PATH
-            bounded_metadata = True
         if prior_ranking is None:
             checkpoint = V2ScoutRoundCheckpoint(
                 run_id=planner_output.run_id,
@@ -493,15 +649,41 @@ def run_v2_discovery_and_scout(
         items, clusters = checkpoint.items, checkpoint.clusters
         for item in items:
             planner_output.directions.require_permitted(item.direction)
-        if clusters != cluster_discovery_items(
-            items, include_provider_locations=binding is not None
-        ):
+        if prefix is not None:
+            expected_clusters, mirrors, _covered = _progressive_clusters(items, prefix)
+        else:
+            expected_clusters = cluster_discovery_items(
+                items, include_provider_locations=binding is not None, require_identity=claim_aware
+            )
+            mirrors = ()
+        if clusters != expected_clusters:
             raise ValueError("persisted Scout clusters differ from their items")
         by_id = {item.item_id: item for item in items}
         scout_items = tuple(by_id[item_id] for item_id in checkpoint.scout_item_ids)
         ranking_artifact = checkpoint.ranking_artifact
-        prompt_path = V2_SCOUT_V2_PROMPT_PATH if binding is not None else V2_SCOUT_PROMPT_PATH
-        bounded_metadata = binding is not None
+
+    def publish_batch(
+        batches: tuple[ScoutBatch, ...],
+        audits: tuple[ScoutBatchAudit, ...],
+        pending: tuple[LLMRequest, ...],
+    ) -> None:
+        if on_batch is not None and ranking_artifact is not None:
+            on_batch(
+                V2DiscoveryScoutOutput(
+                    run_id=planner_output.run_id,
+                    directions=planner_output.directions,
+                    items=items,
+                    clusters=clusters,
+                    scout_batches=(*prefix_batches, *batches),
+                    scout_audits=(*prefix_audits, *audits),
+                    late_mirrors=mirrors,
+                    completed_at=completed_at,
+                ),
+                ranking_artifact,
+                pending,
+                first_pass_only,
+            )
+
     if prior_ranking is not None:
         # This formerly possible prefix was written after Scout, but did not save
         # its decisions. Physical-call records retain their original exposure.
@@ -543,29 +725,55 @@ def run_v2_discovery_and_scout(
             clock=now,
             cancellation_requested=cancellation_requested,
             prompt_path=prompt_path,
-            bounded_metadata=bounded_metadata,
+            bounded_metadata=binding is not None,
+            exact_claim=exact_claim,
+            target_gaps=scout_gaps,
             db_path=str(db_path),
             checkpoint_key=checkpoint_key,
+            on_batch=publish_batch if on_batch is not None else None,
+            batch_offset=len(prefix_batches),
         )
     output = V2DiscoveryScoutOutput(
         run_id=planner_output.run_id,
         directions=planner_output.directions,
         items=items,
         clusters=clusters,
-        scout_batches=batches,
-        scout_audits=audits,
+        scout_batches=(*prefix_batches, *batches),
+        scout_audits=(*prefix_audits, *audits),
+        late_mirrors=mirrors,
         completed_at=completed_at,
     )
-    artifacts = ((_artifact_key(planner_output), output, completed_at),)
+    artifacts = ((output_key, output, completed_at),)
     if ranking_artifact is not None:
         artifacts = (
-            (_ranking_artifact_key(planner_output), ranking_artifact, completed_at),
+            (ranking_key, ranking_artifact, completed_at),
             *artifacts,
         )
     insert_v2_artifact_batch(str(db_path), artifacts)
     return V2DiscoveryScoutRunResult(
         output=output, resumed=False, ranking_artifact=ranking_artifact
     )
+
+
+def _without_prefix_results(
+    responses: Sequence[V2DiscoveryResponse], prefix: V2DiscoveryScoutOutput
+) -> tuple[V2DiscoveryResponse, ...]:
+    prior = {item.item_id for item in prefix.items}
+    remaining = set(prior)
+    delta = []
+    for response in responses:
+        new = []
+        for result in response.results:
+            item_id = _item_id(prefix.run_id, response.query, result.rank, result.original_url)
+            if item_id in prior:
+                remaining.discard(item_id)
+            else:
+                new.append(result)
+        if new:
+            delta.append(V2DiscoveryResponse(query=response.query, results=tuple(new)))
+    if remaining:
+        raise ValueError("completed search lost a first-pass candidate")
+    return tuple(delta)
 
 
 def _raise_if_cancelled(callback: Callable[[], bool] | None) -> None:
@@ -579,11 +787,7 @@ def _fresh_ranked_binding(db_path: str | Path, run_id: UUID) -> V2DiscoveryBindi
     except KeyError:
         return None
     if binding.compiler_identity == "source-query-compiler-v3":
-        if binding.ranking_identity not in {
-            "source-candidate-ranking-v2",
-            "source-candidate-ranking-v3",
-            "source-candidate-ranking-v4",
-        }:
+        if binding.ranking_identity not in RANKING_IDENTITIES:
             raise ValueError("compiler v3 binding requires recognized metadata ranking")
         if not isinstance(binding.policy, V2MetadataDiscoveryPolicy):
             raise ValueError("compiler v3 binding requires the successor discovery policy")
@@ -591,8 +795,58 @@ def _fresh_ranked_binding(db_path: str | Path, run_id: UUID) -> V2DiscoveryBindi
     return None
 
 
+def uses_claim_ranking(db_path: str | Path, run_id: UUID) -> bool:
+    binding = _fresh_ranked_binding(db_path, run_id)
+    return binding is not None and binding.ranking_identity == RANKING_IDENTITY
+
+
 def _round_number(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) -> int:
     return 1 if isinstance(planner_output, V2InitialPlannerOutput) else planner_output.round_number
+
+
+def _scout_prompt_path(ranking_identity: str | None) -> Traversable:
+    if ranking_identity == RANKING_IDENTITY:
+        return V2_SCOUT_V3_PROMPT_PATH
+    return V2_SCOUT_V2_PROMPT_PATH if ranking_identity is not None else V2_SCOUT_PROMPT_PATH
+
+
+def _scout_ids(ranks: tuple[MetadataRank, ...], limit: int, claim_aware: bool) -> tuple[UUID, ...]:
+    if not claim_aware:
+        return fair_ranked_ids(ranks, limit)
+    by_work: dict[str, MetadataRank] = {}
+    for rank in ranks:
+        by_work.setdefault(rank.work_key, rank)
+    strong, uncertain = [], []
+    for rank in by_work.values():
+        # Balance provider and direction coverage within each tier.
+        if (rank.directness or 0) >= 0.6 and (rank.method_fit or 0) >= 0.8:
+            strong.append(rank)
+        else:
+            uncertain.append(rank)
+    first = fair_ranked_ids(strong, limit, highest_lane_first=True)
+    return (*first, *fair_ranked_ids(uncertain, limit - len(first), highest_lane_first=True))
+
+
+def _scout_request(
+    run_id: UUID,
+    directions: ResearchDirections,
+    batch_number: int,
+    candidates: tuple[ScoutCandidate, ...],
+    exact_claim: str | None,
+    target_gaps: tuple[str, ...],
+) -> V2ScoutRequest:
+    if exact_claim is not None:
+        return V2ClaimScoutRequest(
+            run_id=run_id,
+            directions=directions,
+            batch_number=batch_number,
+            candidates=candidates,
+            exact_claim=exact_claim,
+            target_gaps=target_gaps,
+        )
+    return V2ScoutRequest(
+        run_id=run_id, directions=directions, batch_number=batch_number, candidates=candidates
+    )
 
 
 def _selected_model_input_tokens(llm_provider: LLMProvider, request: LLMRequest) -> int:
@@ -614,6 +868,15 @@ def _selected_model_input_tokens(llm_provider: LLMProvider, request: LLMRequest)
     return estimate
 
 
+def _scout_tranche_limit(cap: int, first_pass_only: bool, prefix_batches: int) -> int | None:
+    if first_pass_only:
+        return min(V2_SCOUT_BATCH_SIZE, max(1, cap // 2))
+    if prefix_batches:
+        batches = (cap + V2_SCOUT_BATCH_SIZE - 1) // V2_SCOUT_BATCH_SIZE
+        return max(0, batches - prefix_batches) * V2_SCOUT_BATCH_SIZE
+    return None
+
+
 def _ranked_scout_selection(
     *,
     run_id: UUID,
@@ -627,10 +890,24 @@ def _ranked_scout_selection(
     llm_provider: LLMProvider,
     budget_snapshot: Callable[[], V2BudgetSnapshot] | None,
     downstream_input_tokens: Mapping[LLMStage, int] | None,
+    exact_claim: str | None = None,
+    target_gaps: tuple[str, ...] = (),
+    already_scouted: frozenset[UUID] = frozenset(),
+    excluded_items: frozenset[UUID] = frozenset(),
+    candidate_limit: int | None = None,
+    batch_offset: int = 0,
 ) -> tuple[tuple[NormalizedDiscoveryItem, ...], V2MetadataRankingArtifact]:
     ranked_by_id = {item.item_id: item for item in ranks}
     by_item = {item.item_id: item for item in items}
-    ordered_ids = fair_ranked_ids(ranks, policy.max_scout_per_round)
+    claim_aware = ranking_identity == RANKING_IDENTITY
+    available = policy.max_scout_per_round - len(already_scouted)
+    if candidate_limit is not None:
+        available = min(available, candidate_limit)
+    ordered_ids = _scout_ids(
+        tuple(rank for rank in ranks if rank.item_id not in excluded_items),
+        available,
+        claim_aware,
+    )
     capped_items = tuple(ranked_by_id[item_id] for item_id in ordered_ids)
     snapshot_provider = budget_snapshot or getattr(llm_provider, "snapshot", None)
     safe_capacity = 0
@@ -640,17 +917,19 @@ def _ranked_scout_selection(
         protected_inputs = downstream_input_tokens or {
             stage: 16_000 for stage, _stage_route in route.routing
         }
-        prompt = load_prompt_file(V2_SCOUT_V2_PROMPT_PATH, expected_stage=LLMStage.SCOUT)
+        prompt = load_prompt_file(
+            _scout_prompt_path(ranking_identity), expected_stage=LLMStage.SCOUT
+        )
         reservations = []
         for start in range(0, len(capped_items), V2_SCOUT_BATCH_SIZE):
             batch = capped_items[start : start + V2_SCOUT_BATCH_SIZE]
-            request_input = V2ScoutRequest(
-                run_id=run_id,
-                directions=directions,
-                batch_number=start // V2_SCOUT_BATCH_SIZE + 1,
-                candidates=tuple(
-                    _scout_candidate(by_item[item.item_id], bounded=True) for item in batch
-                ),
+            request_input = _scout_request(
+                run_id,
+                directions,
+                batch_offset + start // V2_SCOUT_BATCH_SIZE + 1,
+                tuple(_scout_candidate(by_item[item.item_id], bounded=True) for item in batch),
+                exact_claim,
+                target_gaps,
             )
             rendered = render_stage_prompt(prompt, request_input, ScoutBatch)
             request = LLMRequest(
@@ -679,10 +958,11 @@ def _ranked_scout_selection(
             (safe_attempts // 2) * V2_SCOUT_BATCH_SIZE,
             len(capped_items),
         )
-    selected_ids = set(fair_ranked_ids(ranks, safe_capacity))
+    selected_ids = set(ordered_ids[:safe_capacity])
     capped_ids = {item.item_id for item in capped_items}
     selected = tuple(ranked_by_id[item_id] for item_id in ordered_ids if item_id in selected_ids)
     scout_items = tuple(by_item[rank.item_id] for rank in selected)
+    selected_ids.update(already_scouted)
     dispositions = tuple(
         V2ScoutDisposition(
             item_id=rank.item_id,
@@ -774,12 +1054,14 @@ def _read_ranking_artifact(
     db_path: str | Path,
     planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan,
     output: V2DiscoveryScoutOutput,
+    *,
+    suffix: str = "",
 ) -> V2MetadataRankingArtifact | None:
     if _fresh_ranked_binding(db_path, planner_output.run_id) is None:
         return None
     try:
         artifact = read_v2_artifact(
-            str(db_path), planner_output.run_id, _ranking_artifact_key(planner_output)
+            str(db_path), planner_output.run_id, _ranking_artifact_key(planner_output) + suffix
         )
     except KeyError as exc:
         raise ValueError("ranked discovery checkpoint is missing its ranking sidecar") from exc
@@ -891,41 +1173,55 @@ def _run_scout_batches(
     cancellation_requested: Callable[[], bool] | None,
     prompt_path: Traversable = V2_SCOUT_PROMPT_PATH,
     bounded_metadata: bool = False,
+    exact_claim: str | None = None,
+    target_gaps: tuple[str, ...] = (),
     db_path: str | None = None,
     checkpoint_key: str | None = None,
+    on_batch: Callable[
+        [tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...], tuple[LLMRequest, ...]], None
+    ]
+    | None = None,
+    batch_offset: int = 0,
 ) -> tuple[tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...]]:
     _raise_if_cancelled(cancellation_requested)
     prompt = load_prompt_file(prompt_path, expected_stage=LLMStage.SCOUT)
     batches: list[ScoutBatch] = []
     audits: list[ScoutBatchAudit] = []
+    requests = []
     for start in range(0, len(items), V2_SCOUT_BATCH_SIZE):
-        _raise_if_cancelled(cancellation_requested)
         batch_items = items[start : start + V2_SCOUT_BATCH_SIZE]
-        request_input = V2ScoutRequest(
-            run_id=run_id,
-            directions=directions,
-            batch_number=start // V2_SCOUT_BATCH_SIZE + 1,
-            candidates=tuple(
-                _scout_candidate(item, bounded=bounded_metadata) for item in batch_items
-            ),
+        request_input = _scout_request(
+            run_id,
+            directions,
+            batch_offset + start // V2_SCOUT_BATCH_SIZE + 1,
+            tuple(_scout_candidate(item, bounded=bounded_metadata) for item in batch_items),
+            exact_claim,
+            target_gaps,
         )
+        requests.append(
+            (
+                request_input,
+                LLMRequest(
+                    run_id=run_id,
+                    stage=LLMStage.SCOUT,
+                    prompt=prompt,
+                    rendered_prompt=render_stage_prompt(prompt, request_input, ScoutBatch),
+                    input_artifact=request_input,
+                    input_artifact_ids=(run_id,),
+                    requested_output_type=ScoutBatch,
+                    model_alias=model_alias,
+                    generation=V2_LLM_ROUTING.for_stage(LLMStage.SCOUT).generation,
+                ),
+            )
+        )
+    for index, (request_input, request) in enumerate(requests):
+        _raise_if_cancelled(cancellation_requested)
         last_error: LLMInvocationError | None = None
         response: ScoutBatch | None = None
         attempted = 0
         for number in range(1, 3):
             _raise_if_cancelled(cancellation_requested)
             attempted += 1
-            request = LLMRequest(
-                run_id=run_id,
-                stage=LLMStage.SCOUT,
-                prompt=prompt,
-                rendered_prompt=render_stage_prompt(prompt, request_input, ScoutBatch),
-                input_artifact=request_input,
-                input_artifact_ids=(run_id,),
-                requested_output_type=ScoutBatch,
-                model_alias=model_alias,
-                generation=V2_LLM_ROUTING.for_stage(LLMStage.SCOUT).generation,
-            )
             attempt = None
             saved = None
             if db_path is not None and checkpoint_key is not None:
@@ -1031,6 +1327,12 @@ def _run_scout_batches(
                 ScoutBatchAudit(batch_number=request_input.batch_number, attempted_calls=attempted)
             )
         batches.append(response)
+        if on_batch is not None:
+            on_batch(
+                tuple(batches),
+                tuple(audits),
+                tuple(pending for _, pending in requests[index + 1 :]),
+            )
     return tuple(batches), tuple(audits)
 
 

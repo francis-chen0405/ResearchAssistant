@@ -25,7 +25,7 @@ CLAIM = "The camera enforcement intervention reduces traffic injuries."
 def test_version_three_normalizes_method_cues_without_rewriting_version_two(cue: str) -> None:
     item = _item(0, title=cue, abstract=None, source_type=None)
     options = {"exact_claim": CLAIM, "policy": V2MetadataDiscoveryPolicy()}
-    current = rank_metadata((item,), **options)[0]
+    current = rank_metadata((item,), ranking_identity="source-candidate-ranking-v4", **options)[0]
     historical = rank_metadata((item,), ranking_identity="source-candidate-ranking-v2", **options)[
         0
     ]
@@ -33,7 +33,8 @@ def test_version_three_normalizes_method_cues_without_rewriting_version_two(cue:
     assert historical.method_fit is None
     previous = rank_metadata((item,), ranking_identity="source-candidate-ranking-v3", **options)[0]
     assert previous == current
-    assert metadata_ranking.RANKING_IDENTITY == "source-candidate-ranking-v4"
+    assert metadata_ranking.RANKING_IDENTITY == "source-candidate-ranking-v5"
+    assert rank_metadata((item,), **options)[0].method_fit is None
 
 
 def _item(
@@ -159,6 +160,76 @@ def test_support_lane_keeps_a_relevant_contradictory_finding() -> None:
     assert ranks[0].item_id == contradictory.item_id
     assert ranks[0].lane_direction is ResearchDirection.SUPPORT
     assert ranks[0].directness is not None and ranks[0].directness > 0
+
+
+def test_claim_facets_and_design_outrank_word_overlap_without_favoring_result_sign() -> None:
+    claim = (
+        "Speed cameras reduce severe traffic injuries in urban school zones "
+        "compared with untreated roads."
+    )
+    candidates = (
+        _item(
+            1,
+            title="Speed cameras and severe traffic injuries in urban school zones",
+            abstract=(
+                "A controlled trial compared school zones on roads with speed cameras and "
+                "untreated roads. Severe injuries declined."
+            ),
+        ),
+        _item(
+            2,
+            title="Speed cameras and severe traffic injuries in urban school zones",
+            abstract=(
+                "A controlled trial compared school zones on roads with speed cameras and "
+                "untreated roads. Severe injuries did not decline."
+            ),
+            direction=ResearchDirection.CHALLENGE,
+        ),
+        _item(
+            3,
+            title="Opinion on speed cameras and severe traffic injuries in urban school zones",
+            abstract=claim,
+            source_type="opinion",
+        ),
+        _item(
+            4,
+            title="Speed cameras in urban school zones",
+            abstract="A controlled trial compared untreated roads and measured vehicle speeds.",
+        ),
+        _item(5, title="Severe traffic injuries in urban school zones", abstract=None),
+    )
+    ranks = rank_metadata(candidates, exact_claim=claim, policy=V2MetadataDiscoveryPolicy())
+    by_id = {rank.item_id: rank for rank in ranks}
+    positive, null, commentary, wrong_outcome, incomplete = (
+        by_id[candidate.item_id] for candidate in candidates
+    )
+    assert positive.score == null.score
+    assert positive.directness == null.directness == 1
+    assert positive.rank < wrong_outcome.rank and null.rank < commentary.rank
+    assert incomplete.method_fit is None
+    assert 0.5 < incomplete.directness < 1
+
+
+def test_descriptive_claim_can_rank_official_statistics_ahead_of_commentary() -> None:
+    claim = "In coastal counties, pediatric asthma admissions are seasonal."
+    report = _item(
+        1,
+        title="Pediatric asthma admissions in coastal counties",
+        abstract=(
+            "Official statistics from hospital records. The release tabulates seasonal "
+            "pediatric asthma admissions by county and month."
+        ),
+        source_type=None,
+        provider=DiscoveryProvider.EXA,
+    )
+    commentary = _item(
+        2, title="Opinion", abstract=claim, source_type="opinion", provider=DiscoveryProvider.EXA
+    )
+    primary, opinion = rank_metadata(
+        (commentary, report), exact_claim=claim, policy=V2MetadataDiscoveryPolicy()
+    )
+    assert (primary.item_id, opinion.item_id) == (report.item_id, commentary.item_id)
+    assert primary.method_fit == 0.8
 
 
 def test_duplicate_doi_is_grouped_conservatively_and_does_not_consume_two_slots() -> None:

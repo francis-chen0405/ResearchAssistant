@@ -177,6 +177,7 @@ from researchassistant.agents.v2_discovery import (
 from researchassistant.agents.v2_discovery import (
     run_v2_discovery_and_scout as run_v2_discovery_and_scout,
 )
+from researchassistant.agents.v2_discovery import uses_claim_ranking
 from researchassistant.agents.v2_gap_analysis import (
     V2GapAnalysisRunResult as V2GapAnalysisRunResult,
 )
@@ -397,6 +398,32 @@ from researchassistant.storage.store import (
 )
 
 
+def _gap_search_scope(
+    gap: V2GapAnalysisOutput, deferred_ids: frozenset[str]
+) -> V2GapAnalysisOutput | None:
+    """Project search authorization without changing the saved coverage assessment."""
+    if not deferred_ids or gap.result is None:
+        return gap
+    directions = tuple(
+        direction
+        for direction in gap.result.new_search_directions
+        if direction.gap_id not in deferred_ids
+    )
+    if not directions:
+        return None
+    gaps = tuple(item for item in gap.result.material_gaps if item.gap_id not in deferred_ids)
+    return gap.model_copy(
+        update={
+            "result": gap.result.model_copy(
+                update={
+                    "material_gaps": gaps,
+                    "new_search_directions": directions,
+                }
+            )
+        }
+    )
+
+
 def run_v2_adaptive_search_continuation(
     *,
     db_path: str | Path,
@@ -416,6 +443,8 @@ def run_v2_adaptive_search_continuation(
     legacy_prompt: bool = False,
     budget_snapshot: Callable[[], V2AdaptiveBudgetState] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
+    deferred_initial_gap_ids: frozenset[str] = frozenset(),
+    completed_initial_context: V2GapAnalysisInput | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> V2AdaptiveContinuationResult:
     """Continue a completed Round 1 through at most two gap-directed adaptive rounds."""
@@ -433,6 +462,7 @@ def run_v2_adaptive_search_continuation(
     legacy_prompt = legacy_prompt or all(
         query.compiled_query is None for query in initial_plan.searches
     )
+    recover_incomplete_papers = not legacy_prompt and uses_claim_ranking(path, initial_plan.run_id)
     resolved_query_modes = dict(query_modes or {})
     for query in initial_plan.searches:
         if query.compiled_query is not None:
@@ -441,6 +471,7 @@ def run_v2_adaptive_search_continuation(
         initial_plan.run_id,
         ((1, round_one_discovery, round_one_acquisition),),
         deduplicate_papers=not legacy_prompt,
+        recover_incomplete_papers=recover_incomplete_papers,
     )
     if _cancelled(cancellation_requested):
         return _finish(
@@ -466,6 +497,19 @@ def run_v2_adaptive_search_continuation(
         )
         return _finish(path, initial_plan.run_id, (), initial_pool, code, reason, 1, now)
 
+    round_two_scope = _gap_search_scope(round_one_gap, deferred_initial_gap_ids)
+    if round_two_scope is None:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (),
+            initial_pool,
+            V2AdaptiveStopCode.ROUND_ONE_COMPLETE,
+            "The remaining search directions concern gaps with late evidence awaiting assessment.",
+            1,
+            now,
+        )
+
     attempts = dict(provider_attempts or {})
     planned_round_one_counts = Counter(query.provider for query in initial_plan.searches)
     for provider, count in planned_round_one_counts.items():
@@ -475,7 +519,7 @@ def run_v2_adaptive_search_continuation(
         path=path,
         round_number=2,
         initial_plan=initial_plan,
-        gap_output=round_one_gap,
+        gap_output=round_two_scope,
         previous_queries=history,
         provider_attempts=attempts,
         previous_compiled_queries=tuple(
@@ -508,6 +552,7 @@ def run_v2_adaptive_search_continuation(
             (2, discovery_two, acquisition_two),
         ),
         deduplicate_papers=not legacy_prompt,
+        recover_incomplete_papers=recover_incomplete_papers,
     )
     if summary_two.status is V2AdaptiveRoundStatus.CANCELLED:
         return _finish(
@@ -536,7 +581,14 @@ def run_v2_adaptive_search_continuation(
 
     budget = budget_snapshot() if budget_snapshot else budget
     gap_two_input = _round_two_gap_input(
-        round_one_gap, plan_two, discovery_two, acquisition_two, budget
+        round_one_gap.model_copy(update={"input": completed_initial_context})
+        if completed_initial_context is not None
+        else round_one_gap,
+        plan_two,
+        discovery_two,
+        acquisition_two,
+        budget,
+        excluded_mirror_ids=pool_two.mirror_alias_ids if recover_incomplete_papers else frozenset(),
     )
     gap_two = run_v2_gap_analysis(
         db_path=path,
@@ -558,6 +610,19 @@ def run_v2_adaptive_search_continuation(
             else gap_two.result.stop_reason or "Luna recommended stopping after Round 2."
         )
         return _finish(path, initial_plan.run_id, (summary_two,), pool_two, code, reason, 2, now)
+
+    round_three_scope = _gap_search_scope(gap_two, deferred_initial_gap_ids)
+    if round_three_scope is None:
+        return _finish(
+            path,
+            initial_plan.run_id,
+            (summary_two,),
+            pool_two,
+            V2AdaptiveStopCode.ROUND_TWO_COMPLETE,
+            "The remaining search directions concern gaps with late evidence awaiting assessment.",
+            2,
+            now,
+        )
 
     for query in plan_two.searches:
         attempts[query.provider] = attempts.get(query.provider, 0) + 1
@@ -589,7 +654,7 @@ def run_v2_adaptive_search_continuation(
         None
         if previously_authorized
         else _round_three_precheck(
-            gap_two,
+            round_three_scope,
             initial_plan,
             attempts,
             search_providers,
@@ -619,7 +684,7 @@ def run_v2_adaptive_search_continuation(
             path=path,
             round_number=3,
             initial_plan=initial_plan,
-            gap_output=gap_two,
+            gap_output=round_three_scope,
             previous_queries=(
                 *history,
                 *(query.query_text for query in plan_two.searches if query.query_text is not None),
@@ -798,10 +863,14 @@ def run_v2_adaptive_search_continuation(
         V2RoundThreeGovernorInput(
             run_id=initial_plan.run_id,
             current_round=2,
-            material_gap_remains=bool(gap_two.result and gap_two.result.material_gaps),
-            luna_recommends_continue=bool(gap_two.result and gap_two.result.continue_research),
+            material_gap_remains=bool(
+                round_three_scope.result and round_three_scope.result.material_gaps
+            ),
+            luna_recommends_continue=bool(
+                round_three_scope.result and round_three_scope.result.continue_research
+            ),
             new_search_direction_exists=bool(
-                gap_two.result and gap_two.result.new_search_directions
+                round_three_scope.result and round_three_scope.result.new_search_directions
             ),
             eligible_provider_exists=True,
             materially_new_queries=bool(round_three_plan.plan.searches),
@@ -844,8 +913,8 @@ def run_v2_adaptive_search_continuation(
             for x in initial_plan.claim_coverage_focus
             if x.claim_component in initial_plan.raw_claim
         ),
-        preview_gaps=tuple(x.missing_evidence for x in gap_two.result.material_gaps)[:6]
-        if gap_two.result is not None
+        preview_gaps=tuple(x.missing_evidence for x in round_three_scope.result.material_gaps)[:6]
+        if round_three_scope.result is not None
         else (),
         search_providers=search_providers,
         llm_provider=llm_provider,
@@ -866,6 +935,7 @@ def run_v2_adaptive_search_continuation(
             (3, discovery_three, acquisition_three),
         ),
         deduplicate_papers=not legacy_prompt,
+        recover_incomplete_papers=recover_incomplete_papers,
     )
     if summary_three.status is V2AdaptiveRoundStatus.CANCELLED:
         stop_code = V2AdaptiveStopCode.CANCELLED
@@ -1069,7 +1139,7 @@ def _run_round(
 
 
 def _round_three_precheck(
-    gap: V2GapAnalysisRunResult,
+    gap: V2GapAnalysisOutput,
     plan: V2InitialPlannerOutput,
     attempted: Mapping[DiscoveryProvider, int],
     providers: Mapping[DiscoveryProvider, SearchProvider],

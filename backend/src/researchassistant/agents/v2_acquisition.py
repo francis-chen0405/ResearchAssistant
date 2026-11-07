@@ -11,10 +11,11 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
+from time import monotonic
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from researchassistant.agents.v2_discovery import _provider_full_text_locations
 from researchassistant.common.utils import count_words
@@ -34,7 +35,8 @@ from researchassistant.contracts.acquisition_ranking import (
 from researchassistant.contracts.artifact_keys import (
     V2_ACQUISITION_PROBE_ARTIFACT_KEY as V2_ACQUISITION_PROBE_ARTIFACT_KEY,
 )
-from researchassistant.contracts.discovery_v2 import V2PreviewRequest, discovery_id
+from researchassistant.contracts.artifact_keys import discovery_round_keys
+from researchassistant.contracts.discovery_v2 import V2PreviewRequest, discovery_id, normalize_doi
 from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
 from researchassistant.contracts.model_research import (
     V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
@@ -43,7 +45,10 @@ from researchassistant.contracts.model_research import (
 from researchassistant.contracts.models import (
     V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY,
     V2_ACQUISITION_PROBE_POLICY_IDENTITY,
+    NormalizedDiscoveryItem,
     ResearchDirection,
+    ResearchDirections,
+    ScoutItem,
     SourceCluster,
     SourceSnapshot,
     StrictModel,
@@ -68,10 +73,16 @@ from researchassistant.evidence.evidence_core import (
     fresh_sentence_spans,
     has_statistical_markers,
 )
+from researchassistant.evidence.paper_identity import (
+    confirmed_paper_anchor,
+    fuller_paper_capture,
+    paper_title_key,
+)
 from researchassistant.providers.acquisition import AcquisitionFailureCode
+from researchassistant.providers.ranking import canonical_discovery_url
 from researchassistant.providers.scraper import ScraperProvider, ScraperProviderError
 from researchassistant.providers.v2_budget import V2CancellationRequested
-from researchassistant.research.metadata_ranking import fair_ranked_ids
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY, fair_ranked_ids
 from researchassistant.research.source_preview import (
     build_capture_windows,
     build_claim_preview,
@@ -145,6 +156,7 @@ class V2AcquisitionInputBinding(StrictModel):
     asserted_components: tuple[str, ...]
     target_gaps: tuple[str, ...]
     excluded_cluster_ids: tuple[UUID, ...]
+    excluded_capture_urls: tuple[str, ...] = Field(default=(), exclude_if=lambda urls: not urls)
 
 
 def run_v2_acquisition_probe(
@@ -158,8 +170,10 @@ def run_v2_acquisition_probe(
     asserted_components: tuple[str, ...] = (),
     target_gaps: tuple[str, ...] = (),
     excluded_cluster_ids: frozenset[UUID] = frozenset(),
+    excluded_capture_urls: frozenset[str] = frozenset(),
     cancellation_requested: Callable[[], bool] | None = None,
     clock: Callable[[], datetime] | None = None,
+    completed_captures: dict[UUID, V2AcquisitionProbeOutput] | None = None,
 ) -> V2AcquisitionProbeRunResult:
     """Acquire ordered Scout candidates once, snapshot them, Probe them, and persist audit data."""
     now = clock or _utc_now
@@ -173,13 +187,7 @@ def run_v2_acquisition_probe(
     completed_at = now()
     _require_aware(completed_at, "clock result")
     round_number = _discovery_round(discovery_output)
-    artifact_key = (
-        V2_ACQUISITION_PROBE_ARTIFACT_KEY
-        if round_number == 1
-        else "post-phase-13-round-4-acquisition-probe-v1"
-        if round_number == 4
-        else f"phase-7-round-{round_number}-acquisition-probe"
-    )
+    artifact_key = acquisition_artifact_key(round_number)
     binding_key = f"{artifact_key}-input-binding"
     binding = V2AcquisitionInputBinding(
         run_id=discovery_output.run_id,
@@ -190,6 +198,7 @@ def run_v2_acquisition_probe(
         asserted_components=asserted_components,
         target_gaps=target_gaps,
         excluded_cluster_ids=tuple(sorted(excluded_cluster_ids, key=str)),
+        excluded_capture_urls=tuple(sorted(excluded_capture_urls)),
     )
     try:
         existing = read_v2_artifact(db_path, discovery_output.run_id, artifact_key)
@@ -246,6 +255,9 @@ def run_v2_acquisition_probe(
         key=lambda cluster: _cluster_order(cluster, item_by_id, decisions),
     )
     ranking: V2MetadataRankingArtifact | None = None
+    claim_aware_ranking = False
+    ranked_attempt_limit = policy.max_clusters
+    selected_items: dict[UUID, UUID] = {}
     try:
         binding = read_discovery_binding(db_path, discovery_output.run_id)
     except KeyError:
@@ -260,20 +272,14 @@ def run_v2_acquisition_probe(
             ranking.run_id != discovery_output.run_id
             or ranking.round_number != round_number
             or {item.item_id for item in ranking.ranks} != set(item_by_id)
+            or (
+                binding.ranking_identity == RANKING_IDENTITY
+                and ranking.ranking_identity != binding.ranking_identity
+            )
         ):
             raise ValueError("acquisition ranking sidecar differs from its discovery pool")
-        eligible = sorted(
-            (
-                rank
-                for rank in ranking.ranks
-                if decisions.get(rank.item_id) in {"retrieve", "maybe"}
-            ),
-            key=lambda rank: ({"retrieve": 0, "maybe": 1}[decisions[rank.item_id]], rank.rank),
-        )
-        eligible = tuple(
-            rank.model_copy(update={"rank": index}) for index, rank in enumerate(eligible, 1)
-        )
-        candidate_ids = fair_ranked_ids(eligible, len(eligible))
+        claim_aware_ranking = ranking.ranking_identity == RANKING_IDENTITY
+        candidate_ids = _capture_candidate_ids(discovery_output, ranking)
         cluster_by_item = {
             item_id: cluster
             for cluster in discovery_output.clusters
@@ -287,12 +293,15 @@ def run_v2_acquisition_probe(
                 continue
             chosen_ids.add(cluster.cluster_id)
             chosen_clusters.append(cluster)
-        max_attempts = min(
+            selected_items[cluster.cluster_id] = item_id
+        ranked_attempt_limit = min(
             policy.max_clusters,
             binding.policy.max_acquisition_per_round,
             _MAX_RANKED_SOURCE_ATTEMPTS,
         )
-        ordered_clusters = chosen_clusters[:max_attempts]
+        ordered_clusters = (
+            chosen_clusters if claim_aware_ranking else chosen_clusters[:ranked_attempt_limit]
+        )
     attempts: list[V2AcquisitionAttempt] = []
     acquired: list[V2AcquiredSource] = []
     probes: list[V2ProbeResult] = []
@@ -309,11 +318,44 @@ def run_v2_acquisition_probe(
         else None
     )
 
-    for cluster in ordered_clusters[: policy.max_clusters]:
+    if completed_captures is not None:
+        if not capture_aware or not claim_aware_ranking:
+            raise ValueError("overlapped captures require the current capture and ranking policy")
+        if len(completed_captures) > ranked_attempt_limit or set(completed_captures) - {
+            cluster.cluster_id for cluster in ordered_clusters
+        }:
+            raise ValueError("overlapped captures exceed the ranked acquisition plan")
+        for cluster in ordered_clusters:
+            captured = completed_captures.get(cluster.cluster_id)
+            if captured is None:
+                continue
+            shortlisted_cluster_ids.add(cluster.cluster_id)
+            if not captured.attempts:
+                duplicate_cluster_ids.add(cluster.cluster_id)
+            attempts.extend(captured.attempts)
+            acquired.extend(captured.acquisitions)
+            probes.extend(captured.probes)
+            survivors.extend(captured.survivors)
+
+    serial_clusters = (
+        ()
+        if completed_captures is not None
+        else ordered_clusters
+        if claim_aware_ranking
+        else ordered_clusters[: policy.max_clusters]
+    )
+    for cluster in serial_clusters:
+        if len(shortlisted_cluster_ids) >= ranked_attempt_limit:
+            break
         _raise_if_cancelled(cancellation_requested)
         if cluster.cluster_id in excluded_cluster_ids:
             continue
-        direction = _cluster_direction(cluster, item_by_id, decisions)
+        selected_item = item_by_id.get(selected_items.get(cluster.cluster_id))
+        direction = (
+            selected_item.direction
+            if claim_aware_ranking and selected_item is not None
+            else _cluster_direction(cluster, item_by_id, decisions)
+        )
         if direction is None:
             # Scout skip remains an audit-preserved discovery decision, not an acquisition.
             continue
@@ -340,13 +382,8 @@ def run_v2_acquisition_probe(
             policy=policy,
             retrieved_at=completed_at,
             cancellation_requested=cancellation_requested,
-            preferred_locations=tuple(
-                dict.fromkeys(
-                    url
-                    for item_id in cluster.item_ids
-                    for url in _provider_full_text_locations(item_by_id[item_id], pdf_only=True)
-                    if url in {cluster.preferred_url, *cluster.alternate_urls}
-                )
+            preferred_locations=_capture_locations(
+                cluster, item_by_id, selected_item if claim_aware_ranking else None
             )
             if ranking is not None
             else (),
@@ -354,6 +391,7 @@ def run_v2_acquisition_probe(
                 "db_path": db_path,
                 "artifact_key": artifact_key,
                 "tried_urls": tried_urls,
+                "excluded_capture_urls": excluded_capture_urls,
             }
             if capture_aware
             else {},
@@ -374,107 +412,17 @@ def run_v2_acquisition_probe(
             }
         )
         acquired.append(source)
-        try:
-            if policy.policy_identity == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY:
-                probe = probe_snapshot(
-                    snapshot=source.snapshot,
-                    cluster_id=cluster.cluster_id,
-                    policy_identity=policy.policy_identity,
-                )
-            else:
-                probe = probe_snapshot(
-                    snapshot=source.snapshot,
-                    cluster_id=cluster.cluster_id,
-                )
-        except Exception as exc:
-            probe = V2ProbeResult(
-                cluster_id=cluster.cluster_id,
-                snapshot_id=source.snapshot.snapshot_id,
-                snapshot_sha256=source.snapshot.snapshot_sha256,
-                succeeded=False,
-                failure=f"{type(exc).__name__}: {exc}"[:500],
-            )
-        if policy.policy_identity in {
-            V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
-            V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
-        }:
-            key = f"acquisition-preview/{cluster.cluster_id}/{source.snapshot.snapshot_id}"
-            request = V2PreviewRequest(
-                run_id=discovery_output.run_id,
-                artifact_id=discovery_id(discovery_output.run_id, "V2PreviewRequest", key),
-                identity_key=key,
-                exact_claim=exact_claim,
-                direction=direction,
-                directions=discovery_output.directions,
-                source_id=cluster.cluster_id,
-                snapshot_id=source.snapshot.snapshot_id,
-                snapshot_hash=source.snapshot.snapshot_sha256,
-                preview_identity="source-claim-preview-v2",
-                asserted_components=asserted_components,
-                target_gaps=target_gaps,
-            )
-            preview = build_claim_preview(request, source.snapshot)
-            if not preview.capture_usable:
-                probe = V2ProbeResult(
-                    cluster_id=cluster.cluster_id,
-                    snapshot_id=source.snapshot.snapshot_id,
-                    snapshot_sha256=source.snapshot.snapshot_sha256,
-                    succeeded=False,
-                    failure=preview.reason,
-                    preview=preview,
-                )
-            else:
-                capture_spans = build_capture_windows(source.snapshot)
-                capture_text = " ".join(span.text for span in capture_spans)
-                minimum_words = (
-                    CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
-                    if has_statistical_markers(capture_text)
-                    else CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words
-                )
-                useful = bool(capture_spans) and count_words(capture_text) >= minimum_words
-                selected = preview.spans if preview.outcome == "completed" else capture_spans
-                probe = V2ProbeResult(
-                    cluster_id=cluster.cluster_id,
-                    snapshot_id=source.snapshot.snapshot_id,
-                    snapshot_sha256=source.snapshot.snapshot_sha256,
-                    succeeded=useful,
-                    failure=None
-                    if useful
-                    else "acquired snapshot cannot meet the minimum quote length",
-                    preview=preview,
-                    passages=tuple(
-                        V2ProbePassage(
-                            passage_id=str(
-                                uuid5(
-                                    NAMESPACE_URL,
-                                    f"researchassistant-v2-probe-v3::{source.snapshot.snapshot_id}::{span.start}::{span.end}",
-                                )
-                            ),
-                            snapshot_id=source.snapshot.snapshot_id,
-                            snapshot_sha256=source.snapshot.snapshot_sha256,
-                            source_cluster_id=cluster.cluster_id,
-                            start_char=span.start,
-                            end_char=span.end,
-                            text=span.text,
-                            score=preview.relevance_score,
-                            signals=span.relevance_signals,
-                        )
-                        for span in selected
-                    )
-                    if useful
-                    else (),
-                )
+        probe, survivor = _probe_acquired_source(
+            source,
+            discovery_output.directions,
+            policy.policy_identity,
+            exact_claim,
+            asserted_components,
+            target_gaps,
+        )
         probes.append(probe)
-        if probe.succeeded and probe.passages:
-            survivors.append(
-                V2SurvivingSource(
-                    cluster_id=cluster.cluster_id,
-                    direction=direction,
-                    snapshot_id=source.snapshot.snapshot_id,
-                    snapshot_sha256=source.snapshot.snapshot_sha256,
-                    passage_ids=tuple(passage.passage_id for passage in probe.passages),
-                )
-            )
+        if survivor is not None:
+            survivors.append(survivor)
             usable_by_direction[direction] = usable_by_direction.get(direction, 0) + 1
     if capture_aware:
         _raise_if_cancelled(cancellation_requested)
@@ -543,6 +491,128 @@ def run_v2_acquisition_probe(
         artifacts = ((artifact_key, output, completed_at),)
     insert_v2_artifact_batch(db_path, artifacts)
     return V2AcquisitionProbeRunResult(output=output, resumed=False)
+
+
+def _probe_acquired_source(
+    source: V2AcquiredSource,
+    directions: ResearchDirections,
+    policy_identity: str,
+    exact_claim: str | None,
+    asserted_components: tuple[str, ...],
+    target_gaps: tuple[str, ...],
+) -> tuple[V2ProbeResult, V2SurvivingSource | None]:
+    try:
+        if policy_identity == V2_ACQUISITION_PROBE_LEGACY_POLICY_IDENTITY:
+            probe = probe_snapshot(
+                snapshot=source.snapshot,
+                cluster_id=source.cluster_id,
+                policy_identity=policy_identity,
+            )
+        else:
+            probe = probe_snapshot(
+                snapshot=source.snapshot,
+                cluster_id=source.cluster_id,
+            )
+    except Exception as exc:
+        probe = V2ProbeResult(
+            cluster_id=source.cluster_id,
+            snapshot_id=source.snapshot.snapshot_id,
+            snapshot_sha256=source.snapshot.snapshot_sha256,
+            succeeded=False,
+            failure=f"{type(exc).__name__}: {exc}"[:500],
+        )
+    if policy_identity in {
+        V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY,
+        V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
+    }:
+        key = f"acquisition-preview/{source.cluster_id}/{source.snapshot.snapshot_id}"
+        request = V2PreviewRequest(
+            run_id=source.snapshot.run_id,
+            artifact_id=discovery_id(source.snapshot.run_id, "V2PreviewRequest", key),
+            identity_key=key,
+            exact_claim=exact_claim,
+            direction=source.direction,
+            directions=directions,
+            source_id=source.cluster_id,
+            snapshot_id=source.snapshot.snapshot_id,
+            snapshot_hash=source.snapshot.snapshot_sha256,
+            preview_identity="source-claim-preview-v2",
+            asserted_components=asserted_components,
+            target_gaps=target_gaps,
+        )
+        preview = build_claim_preview(request, source.snapshot)
+        if not preview.capture_usable:
+            probe = V2ProbeResult(
+                cluster_id=source.cluster_id,
+                snapshot_id=source.snapshot.snapshot_id,
+                snapshot_sha256=source.snapshot.snapshot_sha256,
+                succeeded=False,
+                failure=preview.reason,
+                preview=preview,
+            )
+        else:
+            capture_spans = build_capture_windows(source.snapshot)
+            capture_text = " ".join(span.text for span in capture_spans)
+            minimum_words = (
+                CURRENT_QUOTE_LENGTH_POLICY.statistical_min_words
+                if has_statistical_markers(capture_text)
+                else CURRENT_QUOTE_LENGTH_POLICY.non_statistical_min_words
+            )
+            useful = bool(capture_spans) and count_words(capture_text) >= minimum_words
+            selected = preview.spans if preview.outcome == "completed" else capture_spans
+            probe = V2ProbeResult(
+                cluster_id=source.cluster_id,
+                snapshot_id=source.snapshot.snapshot_id,
+                snapshot_sha256=source.snapshot.snapshot_sha256,
+                succeeded=useful,
+                failure=None
+                if useful
+                else "acquired snapshot cannot meet the minimum quote length",
+                preview=preview,
+                passages=tuple(
+                    V2ProbePassage(
+                        passage_id=str(
+                            uuid5(
+                                NAMESPACE_URL,
+                                f"researchassistant-v2-probe-v3::{source.snapshot.snapshot_id}::{span.start}::{span.end}",
+                            )
+                        ),
+                        snapshot_id=source.snapshot.snapshot_id,
+                        snapshot_sha256=source.snapshot.snapshot_sha256,
+                        source_cluster_id=source.cluster_id,
+                        start_char=span.start,
+                        end_char=span.end,
+                        text=span.text,
+                        score=preview.relevance_score,
+                        signals=span.relevance_signals,
+                    )
+                    for span in selected
+                )
+                if useful
+                else (),
+            )
+    survivor = (
+        V2SurvivingSource(
+            cluster_id=source.cluster_id,
+            direction=source.direction,
+            snapshot_id=source.snapshot.snapshot_id,
+            snapshot_sha256=source.snapshot.snapshot_sha256,
+            passage_ids=tuple(passage.passage_id for passage in probe.passages),
+        )
+        if probe.succeeded and probe.passages
+        else None
+    )
+    return probe, survivor
+
+
+def acquisition_artifact_key(round_number: int) -> str:
+    return (
+        V2_ACQUISITION_PROBE_ARTIFACT_KEY
+        if round_number == 1
+        else "post-phase-13-round-4-acquisition-probe-v1"
+        if round_number == 4
+        else f"phase-7-round-{round_number}-acquisition-probe"
+    )
 
 
 def _discovery_round(output: V2DiscoveryScoutOutput) -> int:
@@ -769,9 +839,13 @@ def _acquire_cluster(
     return None, tuple(attempts)
 
 
-def _capture_is_readable(snapshot: SourceSnapshot) -> bool:
+def _capture_is_readable(
+    snapshot: SourceSnapshot,
+    *,
+    allow_abstract_only: bool = True,
+) -> bool:
     """Use only observable source text, independently of claim terms or conclusions."""
-    if not capture_is_usable(snapshot):
+    if not capture_is_usable(snapshot, allow_abstract_only=allow_abstract_only):
         return False
     spans = build_capture_windows(snapshot)
     text = " ".join(span.text for span in spans)
@@ -791,6 +865,7 @@ def _capture_attempt(
     cluster: SourceCluster,
     provider: ScraperProvider | None,
     cancellation_requested: Callable[[], bool] | None,
+    clock: Callable[[], datetime] | None = None,
 ) -> V2AcquisitionCaptureCompletion | None:
     try:
         saved_start = V2AcquisitionCaptureStart.model_validate_json(
@@ -814,7 +889,21 @@ def _capture_attempt(
                     read_v2_artifact(db_path, start.run_id, f"{key}/response").payload_json
                 )
             except KeyError as exc:
-                raise ValueError("acquisition attempt outcome is unknown; use a new run") from exc
+                if clock is None:
+                    raise ValueError(
+                        "acquisition attempt outcome is unknown; use a new run"
+                    ) from exc
+                return V2AcquisitionCaptureCompletion(
+                    run_id=start.run_id,
+                    start=start,
+                    attempt=_failed_attempt(
+                        start.cluster_id,
+                        start.url,
+                        start.provider,
+                        "unknown_outcome",
+                        "Interrupted capture remains consumed",
+                    ),
+                )
             if captured_response.start != saved_start or captured_response.run_id != start.run_id:
                 raise ValueError("acquisition response differs from persisted dispatch") from None
         else:
@@ -831,6 +920,7 @@ def _capture_attempt(
             return None
         _raise_if_cancelled(cancellation_requested)
         insert_v2_artifact(db_path, f"{key}/start", start, start.started_at)
+        timer = monotonic()
         response: ScrapeResponse | None = None
         context: VerifiedAcquisitionPreflight | None = None
         try:
@@ -839,6 +929,7 @@ def _capture_attempt(
                     url=start.url,
                     timeout_seconds=start.timeout_seconds,
                     verified_preflight=start.verified_preflight,
+                    reuse_verified_html=start.reuse_verified_html,
                 )
             )
             _require_response(response)
@@ -866,8 +957,15 @@ def _capture_attempt(
             attempt=attempt,
             response=response,
             verified_preflight=context,
+            finished_at=clock() if clock is not None else None,
+            latency_ms=(monotonic() - timer) * 1000 if clock is not None else None,
         )
-        insert_v2_artifact(db_path, f"{key}/response", captured_response, start.started_at)
+        insert_v2_artifact(
+            db_path,
+            f"{key}/response",
+            captured_response,
+            captured_response.finished_at or start.started_at,
+        )
     response = captured_response.response
     attempt = captured_response.attempt
     context = captured_response.verified_preflight
@@ -898,8 +996,12 @@ def _capture_attempt(
         source=source,
         readable=source is not None and _capture_is_readable(source.snapshot),
         verified_preflight=context,
+        finished_at=captured_response.finished_at,
+        latency_ms=captured_response.latency_ms,
     )
-    insert_v2_artifact(db_path, f"{key}/completion", completed, start.started_at)
+    insert_v2_artifact(
+        db_path, f"{key}/completion", completed, clock() if clock is not None else start.started_at
+    )
     return completed
 
 
@@ -917,12 +1019,24 @@ def _acquire_cluster_usable(
     retrieved_at: datetime,
     cancellation_requested: Callable[[], bool] | None,
     preferred_locations: tuple[str, ...] = (),
+    excluded_capture_urls: frozenset[str] = frozenset(),
+    clock: Callable[[], datetime] | None = None,
+    planned_locations: tuple[str, ...] | None = None,
 ) -> tuple[V2AcquiredSource | None, tuple[V2AcquisitionAttempt, ...]]:
     attempts: list[V2AcquisitionAttempt] = []
     last_capture: V2AcquiredSource | None = None
-    urls = tuple(
-        dict.fromkeys((*preferred_locations, cluster.preferred_url, *cluster.alternate_urls))
-    )[: policy.max_urls_per_cluster]
+    urls = (
+        planned_locations
+        if planned_locations is not None
+        else tuple(
+            url
+            for url in dict.fromkeys(
+                (*preferred_locations, cluster.preferred_url, *cluster.alternate_urls)
+            )
+            if not excluded_capture_urls
+            or canonical_discovery_url(url) not in excluded_capture_urls
+        )[: policy.max_urls_per_cluster]
+    )
     for url in urls:
         _raise_if_cancelled(cancellation_requested)
         if url in tried_urls:
@@ -941,8 +1055,9 @@ def _acquire_cluster_usable(
                 provider=method,
                 timeout_seconds=policy.timeout_seconds,
                 policy_identity=policy.policy_identity,
-                started_at=retrieved_at,
+                started_at=clock() if clock is not None else retrieved_at,
                 verified_preflight=context,
+                reuse_verified_html=clock is not None and method is V2AcquisitionProvider.WIGOLO,
             )
             location_hash = sha256(url.encode()).hexdigest()
             key = f"{artifact_key}/captures/{cluster.cluster_id}/{location_hash}/{method.value}"
@@ -953,6 +1068,7 @@ def _acquire_cluster_usable(
                 cluster=cluster,
                 provider=provider,
                 cancellation_requested=cancellation_requested,
+                clock=clock,
             )
             if captured is None:
                 if method is V2AcquisitionProvider.WIGOLO:
@@ -1051,6 +1167,167 @@ def _cluster_order(
         min(decision_order.get(decisions.get(member.item_id, "skip"), 2) for member in members),
         min(member.provider_rank for member in members),
         cluster.canonical_url,
+    )
+
+
+def prior_publication_clusters(
+    db_path: str,
+    discovery: V2DiscoveryScoutOutput,
+    round_number: int,
+    *,
+    recover_incomplete: bool,
+) -> tuple[frozenset[UUID], frozenset[UUID], frozenset[str]]:
+    """Return adequate matches, incomplete matches, and previously attempted locations."""
+    current = _publication_keys(discovery)
+    if not current:
+        return frozenset(), frozenset(), frozenset()
+    candidates = set(current.values())
+    captured: dict[tuple[str, str], SourceSnapshot] = {}
+    attempted_urls: set[str] = set()
+    for number in range(1, round_number):
+        discovery_key, acquisition_key = discovery_round_keys(number)
+        prior = V2DiscoveryScoutOutput.model_validate_json(
+            read_v2_artifact(db_path, discovery.run_id, discovery_key).payload_json
+        )
+        acquisition = V2AcquisitionProbeOutput.model_validate_json(
+            read_v2_artifact(db_path, discovery.run_id, acquisition_key).payload_json
+        )
+        if prior.run_id != discovery.run_id or acquisition.run_id != discovery.run_id:
+            raise ValueError("prior publication lookup cannot mix runs")
+        prior_keys = _publication_keys(prior)
+        snapshots = {
+            source.snapshot.snapshot_id: source.snapshot for source in acquisition.acquisitions
+        }
+        if recover_incomplete:
+            attempted_urls.update(
+                canonical_discovery_url(item.url) for item in acquisition.attempts
+            )
+            attempted_urls.update(
+                canonical_discovery_url(snapshot.source_url) for snapshot in snapshots.values()
+            )
+        for survivor in sorted(
+            acquisition.survivors,
+            key=lambda row: (-snapshots[row.snapshot_id].word_count, str(row.cluster_id)),
+        ):
+            key = prior_keys.get(survivor.cluster_id)
+            if key is not None and key in candidates:
+                doi, title = key
+                snapshot = snapshots[survivor.snapshot_id]
+                if confirmed_paper_anchor(snapshot, title, (doi,)):
+                    first = captured.get(key)
+                    if first is None or (
+                        canonical_discovery_url(first.source_url)
+                        != canonical_discovery_url(snapshot.source_url)
+                        and fuller_paper_capture(first, snapshot)
+                    ):
+                        captured[key] = snapshot
+    adequate, incomplete = set(), set()
+    for cluster_id, key in current.items():
+        if key in captured:
+            destination = incomplete if recover_incomplete and captured[key].truncated else adequate
+            destination.add(cluster_id)
+    return frozenset(adequate), frozenset(incomplete), frozenset(attempted_urls)
+
+
+def _publication_keys(discovery: V2DiscoveryScoutOutput) -> dict[UUID, tuple[str, str]]:
+    items = {item.item_id: item for item in discovery.items}
+    keys = {}
+    for cluster in discovery.clusters:
+        members = tuple(items[item_id] for item_id in cluster.item_ids)
+        titles = {paper_title_key(member.title) for member in members} - {""}
+        try:
+            dois = {normalize_doi(member.doi) for member in members if member.doi}
+        except ValueError:
+            continue
+        if len(dois) == len(titles) == 1 and len(title := next(iter(titles))) >= 24:
+            keys[cluster.cluster_id] = (next(iter(dois)), title)
+    return keys
+
+
+def _capture_scout_decisions(discovery: V2DiscoveryScoutOutput) -> dict[UUID, ScoutItem]:
+    scout = {item.item_id: item for batch in discovery.scout_batches for item in batch.items}
+    for link in discovery.late_mirrors:
+        owner = scout.get(link.scouted_item_id)
+        if owner is not None:
+            scout[link.item_id] = owner.model_copy(update={"item_id": link.item_id})
+    return scout
+
+
+def _capture_candidate_ids(
+    discovery: V2DiscoveryScoutOutput, ranking: V2MetadataRankingArtifact
+) -> tuple[UUID, ...]:
+    scout = _capture_scout_decisions(discovery)
+    eligible = sorted(
+        (
+            rank
+            for rank in ranking.ranks
+            if rank.item_id in scout and scout[rank.item_id].decision.value != "skip"
+        ),
+        key=lambda rank: (scout[rank.item_id].decision.value == "maybe", rank.rank),
+    )
+    if ranking.ranking_identity != RANKING_IDENTITY:
+        reranked = tuple(
+            rank.model_copy(update={"rank": index}) for index, rank in enumerate(eligible, 1)
+        )
+        return fair_ranked_ids(reranked, len(reranked))
+    if not eligible:
+        return ()
+
+    # Give one strong counterevidence lead and one strong gap lead early chances.
+    # Both use the existing cap. Unsupported tags confer no priority.
+    first = eligible[0].item_id
+    counter = next(
+        (
+            rank.item_id
+            for rank in eligible
+            if scout[rank.item_id].decision.value == "retrieve"
+            and scout[rank.item_id].rationale.casefold().startswith("counterevidence:")
+            and (rank.directness or 0) >= 0.65
+            and (rank.method_fit or 0) >= 0.8
+        ),
+        None,
+    )
+    gap = next(
+        (
+            rank.item_id
+            for rank in eligible
+            if scout[rank.item_id].decision.value == "maybe"
+            and scout[rank.item_id].rationale.casefold().startswith("material gap:")
+            and (rank.directness or 0) >= 0.6
+            and (rank.method_fit or 0) >= 0.8
+        ),
+        None,
+    )
+    return tuple(
+        dict.fromkeys(
+            (
+                first,
+                *(item for item in (counter, gap) if item is not None),
+                *(rank.item_id for rank in eligible),
+            )
+        )
+    )
+
+
+def _capture_locations(
+    cluster: SourceCluster,
+    items: dict[UUID, NormalizedDiscoveryItem],
+    selected: NormalizedDiscoveryItem | None,
+) -> tuple[str, ...]:
+    members = (
+        tuple(dict.fromkeys((selected.item_id, *cluster.item_ids)))
+        if selected
+        else cluster.item_ids
+    )
+    locations = {cluster.preferred_url, *cluster.alternate_urls}
+    return tuple(
+        dict.fromkeys(
+            url
+            for pdf_only in ((True, False) if selected else (True,))
+            for item_id in members
+            for url in _provider_full_text_locations(items[item_id], pdf_only=pdf_only)
+            if url in locations
+        )
     )
 
 

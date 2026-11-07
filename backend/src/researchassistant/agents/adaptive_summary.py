@@ -59,6 +59,8 @@ def _round_two_gap_input(
     discovery: V2DiscoveryScoutOutput,
     acquisition: V2AcquisitionProbeOutput,
     budget: V2AdaptiveBudgetState,
+    *,
+    excluded_mirror_ids: frozenset[UUID] = frozenset(),
 ) -> V2GapAnalysisInput:
     cluster_by_id = {item.cluster_id: item for item in discovery.clusters}
     item_by_id = {item.item_id: item for item in discovery.items}
@@ -66,6 +68,8 @@ def _round_two_gap_input(
     new_sources: list[V2GapSurvivingSourceMetadata] = []
     new_passages: list[V2GapProbePassage] = []
     for survivor in acquisition.survivors:
+        if survivor.cluster_id in excluded_mirror_ids:
+            continue
         cluster = cluster_by_id[survivor.cluster_id]
         representative = min(
             (item_by_id[item_id] for item_id in cluster.item_ids),
@@ -144,7 +148,11 @@ def _round_two_gap_input(
         exact_claim=prior.exact_claim,
         directions=prior.directions,
         completed_round=2,
-        assessed_source_findings=prior.assessed_source_findings,
+        assessed_source_findings=tuple(
+            item
+            for item in prior.assessed_source_findings
+            if item.source_id not in excluded_mirror_ids
+        ),
         attempted_queries=(
             *prior.attempted_queries,
             *(
@@ -160,9 +168,30 @@ def _round_two_gap_input(
                 for item in plan.searches
             ),
         ),
-        surviving_sources=(*prior.surviving_sources, *new_sources),
-        probe_passages=tuple((*new_passages, *prior.probe_passages))[:40],
-        source_families=(*prior.source_families, *families),
+        surviving_sources=(
+            *(
+                item
+                for item in prior.surviving_sources
+                if item.source_cluster_id not in excluded_mirror_ids
+            ),
+            *new_sources,
+        ),
+        probe_passages=(
+            *new_passages,
+            *(
+                item
+                for item in prior.probe_passages
+                if item.source_cluster_id not in excluded_mirror_ids
+            ),
+        )[:40],
+        source_families=(
+            *(
+                item
+                for item in prior.source_families
+                if not excluded_mirror_ids.intersection(item.source_cluster_ids)
+            ),
+            *families,
+        ),
         discovered_terms=tuple(dict.fromkeys((*prior.discovered_terms, *plan.discovered_terms)))[
             :40
         ],
@@ -184,6 +213,7 @@ def _merge_survivors(
     rounds: tuple[tuple[int, V2DiscoveryScoutOutput, V2AcquisitionProbeOutput], ...],
     *,
     deduplicate_papers: bool = False,
+    recover_incomplete_papers: bool = False,
 ) -> V2MergedSurvivorPool:
     merged: list[V2MergedSurvivor] = []
     seen: set[str] = set()
@@ -203,16 +233,24 @@ def _merge_survivors(
                 )
             )
     if deduplicate_papers:
-        merged = _merge_confirmed_papers(merged, rounds)
+        merged = _merge_confirmed_papers(
+            merged, rounds, recover_incomplete_papers=recover_incomplete_papers
+        )
     return V2MergedSurvivorPool(run_id=run_id, sources=tuple(merged))
 
 
 def _merge_confirmed_papers(
     sources: list[V2MergedSurvivor],
     rounds: tuple[tuple[int, V2DiscoveryScoutOutput, V2AcquisitionProbeOutput], ...],
+    *,
+    recover_incomplete_papers: bool,
 ) -> list[V2MergedSurvivor]:
     from researchassistant.contracts.paper_identity import ConfirmedPaperLocation
-    from researchassistant.evidence.paper_identity import confirmed_paper_anchor, paper_title_key
+    from researchassistant.evidence.paper_identity import (
+        confirmed_paper_anchor,
+        fuller_paper_capture,
+        paper_title_key,
+    )
 
     snapshots = {
         item.snapshot.snapshot_id: item.snapshot
@@ -231,6 +269,10 @@ def _merge_confirmed_papers(
         members = tuple(items[item_id] for item_id in cluster.item_ids)
         title = next((item.title for item in members if item.title), None)
         title_key = paper_title_key(title)
+        if recover_incomplete_papers and any(
+            member.title and paper_title_key(member.title) != title_key for member in members
+        ):
+            continue
         snapshot = snapshots[source.survivor.snapshot_id]
         anchor = confirmed_paper_anchor(
             snapshot, title, tuple(item.doi for item in members if item.doi)
@@ -248,15 +290,14 @@ def _merge_confirmed_papers(
             doi=doi,
             basis=basis,
         )
-        groups.setdefault((doi, source.survivor.direction, title_key), []).append(
-            (source, location)
-        )
+        lane = None if recover_incomplete_papers else source.survivor.direction
+        groups.setdefault((doi, lane, title_key), []).append((source, location))
     replacements: dict[UUID, V2MergedSurvivor | None] = {}
     for group in groups.values():
         if len(group) < 2:
             continue
-        # Prefer full readable captures within the earliest round. Later mirrors
-        # cannot displace a source whose early assessment may already be saved.
+        # Retain the earliest capture unless a complete alternate adds material
+        # that the earlier snapshot omitted. Each assessment keeps its own ID.
         ordered = sorted(
             group,
             key=lambda pair: (
@@ -266,14 +307,31 @@ def _merge_confirmed_papers(
             ),
         )
         canonical = ordered[0][0]
+        if recover_incomplete_papers:
+            earlier = snapshots[canonical.survivor.snapshot_id]
+            canonical = next(
+                (
+                    source
+                    for source, _ in ordered[1:]
+                    if fuller_paper_capture(earlier, snapshots[source.survivor.snapshot_id])
+                ),
+                canonical,
+            )
+        canonical_id = canonical.survivor.cluster_id
         replacements[canonical.survivor.cluster_id] = V2MergedSurvivor(
             research_round=canonical.research_round,
             source_url=canonical.source_url,
             survivor=canonical.survivor,
-            paper_locations=tuple(location for _, location in ordered),
+            paper_locations=tuple(
+                sorted(
+                    (location for _, location in ordered),
+                    key=lambda location: location.source_id != canonical_id,
+                )
+            ),
         )
-        for alias, _ in ordered[1:]:
-            replacements[alias.survivor.cluster_id] = None
+        for alias, _ in ordered:
+            if alias.survivor.cluster_id != canonical_id:
+                replacements[alias.survivor.cluster_id] = None
     return [
         replacements.get(source.survivor.cluster_id, source)
         for source in sources

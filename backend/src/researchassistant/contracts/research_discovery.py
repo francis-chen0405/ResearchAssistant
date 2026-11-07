@@ -15,6 +15,7 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 from researchassistant.contracts.discovery_v2 import (
     V2GraphNeighborAction,
@@ -250,6 +251,13 @@ class V2ScoutRequest(StrictModel):
         return self
 
 
+class V2ClaimScoutRequest(V2ScoutRequest):
+    """Versioned request used by claim-aware Scout."""
+
+    exact_claim: NonEmptyStr
+    target_gaps: tuple[NonEmptyStr, ...] = Field(default=(), max_length=6)
+
+
 class ScoutItem(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -303,6 +311,13 @@ class ScoutBatchAudit(StrictModel):
         return data
 
 
+class V2LateDiscoveryMirror(StrictModel):
+    """A later location linked to a frozen, screened work."""
+
+    item_id: UUID
+    scouted_item_id: UUID
+
+
 class V2DiscoveryScoutOutput(StrictModel):
     """Persistable Phase-4 output preserving discovery, clusters, Scout, and failures."""
 
@@ -314,6 +329,11 @@ class V2DiscoveryScoutOutput(StrictModel):
     clusters: tuple[SourceCluster, ...]
     scout_batches: tuple[ScoutBatch, ...]
     scout_audits: tuple[ScoutBatchAudit, ...]
+    # Internal run metadata. Keep the public handoff schema byte-compatible.
+    late_mirrors: SkipJsonSchema[tuple[V2LateDiscoveryMirror, ...]] = Field(
+        default=(),
+        exclude_if=lambda mirrors: not mirrors,
+    )
     policy_identity: Literal["researchassistant-v2-phase-4-discovery-scout-v1"] = (
         V2_DISCOVERY_POLICY_IDENTITY
     )
@@ -331,6 +351,27 @@ class V2DiscoveryScoutOutput(StrictModel):
             self.directions.require_permitted(item.direction)
         if len(self.scout_batches) != len(self.scout_audits):
             raise ValueError("every Scout batch requires one audit record")
+        if self.late_mirrors:
+            scouted = {item.item_id for batch in self.scout_batches for item in batch.items}
+            late = {item.item_id for item in self.late_mirrors}
+            cluster_by_item = {
+                item_id: cluster.cluster_id
+                for cluster in self.clusters
+                for item_id in cluster.item_ids
+            }
+            if (
+                len(late) != len(self.late_mirrors)
+                or late & scouted
+                or not late <= {item.item_id for item in self.items}
+                or any(
+                    link.scouted_item_id not in scouted
+                    or link.item_id not in cluster_by_item
+                    or link.scouted_item_id not in cluster_by_item
+                    or cluster_by_item[link.item_id] == cluster_by_item[link.scouted_item_id]
+                    for link in self.late_mirrors
+                )
+            ):
+                raise ValueError("late mirror must link an unscreened location to a screened work")
         return self
 
 

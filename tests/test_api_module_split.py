@@ -31,18 +31,20 @@ def test_routes_schemas_and_offline_responses_match_before_split(
 ) -> None:
     before = json.loads((Path(__file__).parent / "fixtures/api-contract-before.json").read_text())
     after = contract_inventory(monkeypatch, tmp_path)
-    # Prompt 15 adds one independent read-only projection. Preserve the frozen
-    # inventory of every pre-existing route/schema/response byte-for-byte.
+    # Compare all pre-existing routes and response bytes after excluding the
+    # separately tested read-only discovery projections.
     routes = after["routes"]
-    assert len(routes) == len({(method, path) for method, path, _, _ in routes}) == 22
-    lead_path = "/api/research/{run_id}/source-leads"
-    assert [row for row in routes if row[1] == lead_path] == [
-        ["GET", lead_path, "source_leads", 200]
-    ]
-    after["routes"] = [row for row in routes if row[1] != lead_path]
-    after["openapi"]["paths"].pop(lead_path)
-    for name in ("SourceLead", "SourceLeadStage", "SourceLeadsPage"):
-        after["openapi"]["components"]["schemas"].pop(name)
+    assert len(routes) == len({(method, path) for method, path, _, _ in routes}) == 23
+    for suffix, name, schemas in (
+        ("source-leads", "source_leads", ("SourceLead", "SourceLeadStage", "SourceLeadsPage")),
+        ("live-sources", "live_sources", ("LiveSourceCard", "LiveSourcesPage")),
+    ):
+        path = f"/api/research/{{run_id}}/{suffix}"
+        assert [row for row in routes if row[1] == path] == [["GET", path, name, 200]]
+        after["routes"] = [row for row in after["routes"] if row[1] != path]
+        after["openapi"]["paths"].pop(path)
+        for schema in schemas:
+            after["openapi"]["components"]["schemas"].pop(schema)
     # R21 documents the existing catalog wire projection without changing any
     # response bytes. Compare the rest of the original inventory unchanged.
     for name in ("ModelOptionDisplay", "ModelOptionsResponse"):
@@ -205,7 +207,7 @@ def test_legacy_lazy_app_and_runtime_are_one_explicitly_requested_pair(
         assert api.app is first
         assert api.runtime is calls[0]
         assert len(calls) == 1
-        assert len(list(registered_routes(first.routes))) == 22
+        assert len(list(registered_routes(first.routes))) == 23
     finally:
         api._default_application.cache_clear()
 

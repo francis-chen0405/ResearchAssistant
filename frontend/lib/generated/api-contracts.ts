@@ -172,6 +172,24 @@ export type ApiSchemas = {
     "research_controls"?: ApiSchemas["ResearchControls"];
     "v2_diagnostics"?: (ApiSchemas["V2RunDiagnostics"] | null);
   };
+  "LiveSourceCard": {
+    "work_id": string;
+    "title": (string | null);
+    "url": string;
+    "readable_url": (string | null);
+    "first_round": number;
+    "state": "lead" | "screened" | "captured" | "full_text" | "assessed" | "admitted";
+    "note": (string | null);
+    "note_kind": ("metadata" | "scout" | "analyst" | null);
+    "angle": (string | null);
+  };
+  "LiveSourcesPage": {
+    "run_id": string;
+    "revision": string;
+    "unchanged"?: boolean;
+    "items": Array<ApiSchemas["LiveSourceCard"]>;
+    "total": number;
+  };
   "LiveStartResult": {
     "started": boolean;
     "run_id": string;
@@ -1275,6 +1293,7 @@ export type ApiResponses = {
   "POST /api/research/start": ApiSchemas["LiveStartResult"];
   "GET /api/research/{run_id}": ApiSchemas["LiveRunSnapshot"];
   "POST /api/research/{run_id}/cancel": ApiSchemas["CancelResponse"];
+  "GET /api/research/{run_id}/live-sources": ApiSchemas["LiveSourcesPage"];
   "GET /api/research/{run_id}/source-leads": ApiSchemas["SourceLeadsPage"];
   "GET /api/research/{run_id}/trail": ApiSchemas["ResearchTrail"];
   "GET /api/research/{run_id}/v2-evidence": ApiSchemas["V2EvidenceDisplay"];

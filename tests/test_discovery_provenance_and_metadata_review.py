@@ -23,10 +23,35 @@ from researchassistant.contracts.models import (
     V2SourceSelectionSearchProvenance,
 )
 from researchassistant.contracts.query_planning import V2NeighborhoodSearchOutput
+from researchassistant.contracts.search import (
+    SearchDiscoveryMetadata,
+    SearchRequest,
+    SearchResponse,
+)
 from researchassistant.providers.llm import LLMRequest
 from researchassistant.research.seed_expansion import select_seeds
 from researchassistant.research.v2_orchestrator import V2ProductionState, run_v2_production_pipeline
 from researchassistant.storage.store import read_v2_artifact
+
+
+class _CrossLaneWideSearch(product._WideSearch):
+    def search(self, request: SearchRequest) -> SearchResponse:
+        response = super().search(request)
+        round_number = request.compiled_query.conceptual_query.round_number
+        return response.model_copy(
+            update={
+                "results": [
+                    result.model_copy(
+                        update={
+                            "metadata": SearchDiscoveryMetadata(
+                                doi=f"10.5000/fixture-{round_number}-{result.rank}"
+                            )
+                        }
+                    )
+                    for result in response.results
+                ]
+            }
+        )
 
 
 @pytest.mark.slow
@@ -38,7 +63,7 @@ def test_same_work_in_both_search_lanes_reconciles_without_cross_lane_evidence_c
         research_mode=ResearchMode.BALANCED,
         sources_per_stance_per_round=20,
     )
-    model, search = _BalancedModel(completed_rounds=4), product._WideSearch()
+    model, search = _BalancedModel(completed_rounds=4), _CrossLaneWideSearch()
     path = tmp_path / "generated.sqlite3"
     result = run_v2_production_pipeline(
         product.production.CLAIM,
@@ -173,7 +198,10 @@ class LongAuthorSearch(product.phase12._Search):
                         update={
                             "metadata": item.metadata.model_copy(
                                 update={
-                                    "doi": "10.1234/generated-course-study",
+                                    "doi": (
+                                        "10.1234/generated-course-study-"
+                                        f"{request.compiled_query.conceptual_query.round_number}"
+                                    ),
                                     "published_at": "2023-01-01",
                                     "work_type": "article",
                                     "author": (

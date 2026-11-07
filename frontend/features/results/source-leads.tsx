@@ -1,6 +1,6 @@
 import type { SourceLead } from "@/lib/api";
 
-function safeWebUrl(value: string): string | null {
+export function safeWebUrl(value: string): string | null {
   try {
     const parsed = new URL(value);
     if (

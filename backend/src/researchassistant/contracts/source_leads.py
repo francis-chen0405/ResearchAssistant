@@ -44,3 +44,23 @@ class SourceLeadsPage(StrictModel):
     limit: int = Field(ge=1, le=100)
     has_more: bool
     notice: str
+
+
+class LiveSourceCard(StrictModel):
+    work_id: UUID
+    title: str | None
+    url: str
+    readable_url: str | None
+    first_round: int = Field(ge=1, le=4)
+    state: Literal["lead", "screened", "captured", "full_text", "assessed", "admitted"]
+    note: str | None = Field(max_length=440)
+    note_kind: Literal["metadata", "scout", "analyst"] | None
+    angle: str | None
+
+
+class LiveSourcesPage(StrictModel):
+    run_id: UUID
+    revision: str
+    unchanged: bool = False
+    items: tuple[LiveSourceCard, ...] = Field(max_length=25)
+    total: int = Field(ge=0, le=1200)

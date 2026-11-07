@@ -6,10 +6,10 @@ import {
   StatusPill,
   ProgressPath,
 } from "@/components/workspace";
+import { LiveSourceShortlist } from "./live-sources";
 import { ModelUsageDisclosure } from "../shared/model-usage";
 import {
   readableStage,
-  diagnosticCount,
   formatCost,
 } from "../shared/presentation";
 
@@ -140,51 +140,12 @@ export function ProgressView({
             />
           )}
       </div>
-      {snapshot.v2_diagnostics && (
-        <section
-          className="provider-diagnostics"
-          aria-label="Discovery activity"
-        >
-          <span>Discovery so far</span>
-          <p>
-            <strong>Logical discovery operations</strong>
-            <small>
-              {diagnosticCount(
-                snapshot.v2_diagnostics.logical_discovery_operations,
-              )}
-            </small>
-          </p>
-          <p>
-            <strong>Physical provider requests/pages</strong>
-            <small>
-              {diagnosticCount(
-                snapshot.v2_diagnostics.physical_search_requests,
-              )}
-            </small>
-          </p>
-          <p>
-            <strong>Retained metadata records</strong>
-            <small>
-              {diagnosticCount(
-                snapshot.v2_diagnostics.retained_metadata_records,
-              )}
-            </small>
-          </p>
-          <p>
-            <strong>Usable captures</strong>
-            <small>{snapshot.v2_diagnostics.sources_survived_probe}</small>
-          </p>
-          <p>
-            <strong>Admitted evidence records</strong>
-            <small>{snapshot.v2_diagnostics.approved_evidence_records}</small>
-          </p>
-          {snapshot.v2_diagnostics.diagnostic_messages?.map(
-            (message, index) => (
-              <p key={`${index}-${message}`}>{message}</p>
-            ),
-          )}
-        </section>
-      )}
+      <LiveSourceShortlist
+        key={JSON.stringify([snapshot.db_path, snapshot.run_id])}
+        runId={snapshot.run_id}
+        database={snapshot.db_path}
+        watching={snapshot.worker_active !== false && recovery.connection.state === "connected"}
+      />
       <div className="run-footnote">
         <div>
           <span>Current stage</span>

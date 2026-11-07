@@ -131,7 +131,12 @@ def normalize_html(
     parser = _VisibleHTMLParser()
     parser.feed(decode_text(payload, declared_charset))
     parser.close()
-    return _document_from_text("\n".join(parser.lines), "text/html", max_words=max_words)
+    return _document_from_text(
+        "\n".join(parser.lines),
+        "text/html",
+        max_words=max_words,
+        normalization_version="ra-normalization-html-v1",
+    )
 
 
 def normalize_plain_text(
@@ -428,7 +433,35 @@ def _normalize_visible_text(text: str) -> str:
 
 
 class _VisibleHTMLParser(HTMLParser):
-    _SKIPPED = {"script", "style", "noscript", "svg", "nav", "header", "footer", "form"}
+    _SKIPPED = {
+        "head",
+        "script",
+        "style",
+        "noscript",
+        "template",
+        "svg",
+        "nav",
+        "header",
+        "footer",
+        "form",
+    }
+    _VOID = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+    _HIDDEN_STYLE = re.compile(r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\b", re.I)
     _BLOCKS = {
         "article",
         "aside",
@@ -456,22 +489,38 @@ class _VisibleHTMLParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.lines: list[str] = []
         self._current: list[str] = []
-        self._skip_depth = 0
+        self._hidden_tag: str | None = None
+        self._hidden_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in self._SKIPPED:
-            self._skip_depth += 1
-        elif not self._skip_depth and tag in self._BLOCKS:
+        if self._hidden_tag is not None:
+            if tag == self._hidden_tag:
+                self._hidden_depth += 1
+            return
+        attributes = dict(attrs)
+        if tag not in self._VOID and (
+            tag in self._SKIPPED
+            or "hidden" in attributes
+            or (attributes.get("aria-hidden") or "").casefold() == "true"
+            or self._HIDDEN_STYLE.search(attributes.get("style") or "")
+        ):
+            self._hidden_tag = tag
+            self._hidden_depth = 1
+        elif tag in self._BLOCKS:
             self._flush()
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in self._SKIPPED and self._skip_depth:
-            self._skip_depth -= 1
-        elif not self._skip_depth and tag in self._BLOCKS:
+        if self._hidden_tag is not None:
+            if tag == self._hidden_tag:
+                self._hidden_depth -= 1
+                if not self._hidden_depth:
+                    self._hidden_tag = None
+            return
+        if tag in self._BLOCKS:
             self._flush()
 
     def handle_data(self, data: str) -> None:
-        if not self._skip_depth:
+        if self._hidden_tag is None:
             self._current.append(data)
 
     def close(self) -> None:

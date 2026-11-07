@@ -220,15 +220,29 @@ def _inventory(connection: sqlite3.Connection, run_id: UUID) -> list[tuple[str, 
             )
         ],
     ]
+    first_pass_keys = [
+        key + "/first-pass-v1"
+        for number in range(1, 5)
+        for key in (discovery_round_keys(number)[0], f"phase-3-metadata-ranking-round-{number}")
+    ]
+    excluded_sql = ",".join("?" for _ in first_pass_keys)
     keys_sql = ",".join("?" for _ in stage_keys)
     patterns_sql = " OR ".join("artifact_key LIKE ?" for _ in patterns)
     rows = _read_execute(
         connection,
         f"SELECT artifact_key, artifact_type, length(CAST(payload_json AS BLOB)) AS size "
-        f"FROM v2_artifacts WHERE run_id = ? AND (artifact_type IN ({placeholders}) "
+        f"FROM v2_artifacts WHERE run_id = ? AND artifact_key NOT IN ({excluded_sql}) "
+        f"AND (artifact_type IN ({placeholders}) "
         f"OR artifact_key IN ({keys_sql}) OR {patterns_sql}) "
         "ORDER BY rowid LIMIT ?",
-        (str(run_id), *_TYPES, *stage_keys, *patterns, _MAX_ARTIFACTS + 1),
+        (
+            str(run_id),
+            *first_pass_keys,
+            *_TYPES,
+            *stage_keys,
+            *patterns,
+            _MAX_ARTIFACTS + 1,
+        ),
     ).fetchall()
     if len(rows) > _MAX_ARTIFACTS or sum(row["size"] for row in rows) > _MAX_BYTES:
         raise sqlite3.IntegrityError("source leads exceed the bounded inspection inventory")

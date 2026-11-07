@@ -24,10 +24,14 @@ from researchassistant.storage.discovery_store import read_discovery_binding
 
 
 def _run(
-    path: Path, controls: ResearchControls, *, run_id: UUID | None = None
+    path: Path,
+    controls: ResearchControls,
+    *,
+    run_id: UUID | None = None,
+    search: phase12._Search | None = None,
 ) -> tuple[V2ProductionPipelineResult, production._ConceptModel, phase12._Search]:
     model = production._ConceptModel(completed_rounds=4)
-    search = phase12._Search(unique_results=True)
+    search = search if search is not None else phase12._Search(unique_results=True)
     result = run_v2_production_pipeline(
         production.CLAIM,
         db_path=path,
