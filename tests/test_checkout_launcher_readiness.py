@@ -125,8 +125,16 @@ def test_checkout_readiness_has_one_deadline_and_preserves_process_ownership(
 ) -> None:
     launcher = _checkout(tmp_path / "checkout with spaces", scenario)
     sentinel = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    # The launcher starts Python test doubles whose startup counts against the deadline.
+    launcher_env = {
+        key: value for key, value in os.environ.items() if not key.startswith("COV_CORE_")
+    }
     process = subprocess.Popen(
-        [ZSH, str(launcher)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+        [ZSH, str(launcher)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+        env=launcher_env,
     )
     started = time.monotonic()
     try:
