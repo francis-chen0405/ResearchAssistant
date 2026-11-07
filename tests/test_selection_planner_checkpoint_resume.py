@@ -34,6 +34,7 @@ from researchassistant.contracts.models import (
     V2SourceSelectionRecommendation,
 )
 from researchassistant.providers.llm import LLMRequest
+from researchassistant.providers.mimo import MimoFailureCode, MimoProviderError
 from researchassistant.providers.v2_budget import read_v2_physical_call_audit
 from researchassistant.storage.store import list_runs, read_v2_artifact
 
@@ -389,11 +390,13 @@ def test_initial_planner_recovers_valid_legacy_projection_without_new_request(
     assert all(_prefix(str(path))[key] == row for key, row in before.items())
 
 
-def test_failed_initial_planner_attempt_remains_consumed(tmp_path: Path) -> None:
+def test_retryable_initial_planner_attempt_remains_consumed(tmp_path: Path) -> None:
     class FailingPlanner(FakeConceptPlanner):
         def generate(self, request: LLMRequest) -> object:
             self.requests.append(request)
-            raise RuntimeError("known provider failure")
+            raise MimoProviderError(
+                MimoFailureCode.SCHEMA, "known provider failure", retryable=True
+            )
 
     provider = FailingPlanner()
     path = tmp_path / "failed.sqlite3"
