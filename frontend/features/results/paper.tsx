@@ -1,9 +1,12 @@
 import type { RunSnapshot, V2FinalResearchOutput, V2EvidenceDisplay } from "@/lib/api";
 import { AdmittedEvidence } from "./admitted-evidence";
-import { CoverageResultSections, CoverageStatus, hasIncompleteCoverage } from "./coverage-status";
+import { CoverageResultSections, CoverageStatus } from "./coverage-status";
 import { SourceSections } from "./source-sections";
-import { sourceTitles, evidenceCitation } from "./source-titles";
+import {
+  evidenceCitation, evidenceReadLocation, evidenceSourceType, evidenceStudyDesign, sourceTitles,
+} from "./source-titles";
 import { selectedFindings as selectFindings } from "./reading-aid";
+import { safeWebUrl } from "./source-leads";
 
 export function V2ResultPaper({
   result,
@@ -14,12 +17,6 @@ export function V2ResultPaper({
   evidence: V2EvidenceDisplay | null;
   run: Pick<RunSnapshot, "run_id" | "db_path">;
 }) {
-  const direction =
-    result.directions.support_enabled && result.directions.challenge_enabled
-      ? "Support and challenge research directions"
-      : result.directions.support_enabled
-        ? "Support-directed research only"
-        : "Challenge-directed research only";
   const admittedFor = (ledgerClaimId: string) =>
     evidence?.items.find((item) => item.ledger_claim_id === ledgerClaimId);
   const { sourceHeading, capturedTitleDisclosure } = sourceTitles(
@@ -46,17 +43,24 @@ export function V2ResultPaper({
       detail.querySelector("summary")?.focus({ preventScroll: true });
     }
   };
-  const opening = evidence?.study_opening?.length
-    ? evidence.study_opening.map((item) => item.text)
-    : evidence?.publication_opening?.map((item) => item.text) ?? [];
-  const overviewStatus = evidence === null
-    ? "Detailed evidence is unavailable."
-    : !evidence.items.length && !opening.length
-      ? "No evidence was admitted for this result."
-      : opening.length
-        ? "These findings are limited to the sources and settings reviewed."
-        : "The admitted evidence does not establish the claim or the balance of independent studies.";
-  const coverageIncomplete = hasIncompleteCoverage(result, evidence);
+  const overviewCandidates = (evidence?.items ?? [])
+    .filter((item) => item.relationship_to_claim !== "unrelated" && item.approved_factual_statement.trim())
+    .sort((a, b) =>
+      Number(a.relationship_to_claim === "qualifies") - Number(b.relationship_to_claim === "qualifies") ||
+      (b.claim_fit ?? 0) - (a.claim_fit ?? 0) ||
+      Number(Boolean(b.verified_publication)) - Number(Boolean(a.verified_publication)) ||
+      a.ledger_claim_id.localeCompare(b.ledger_claim_id)
+    );
+  const primaryFinding = overviewCandidates[0];
+  const otherFindings = overviewCandidates.slice(1).filter(
+    (item) => item.approved_factual_statement.trim() !== primaryFinding.approved_factual_statement.trim(),
+  );
+  const contrastingFinding = otherFindings.find((item) =>
+    (primaryFinding.relationship_to_claim === "supports" && item.relationship_to_claim === "challenges") ||
+    (primaryFinding.relationship_to_claim === "challenges" && item.relationship_to_claim === "supports")
+  );
+  const secondFinding = contrastingFinding ?? otherFindings.find((item) => item.source_id !== primaryFinding.source_id);
+  const overviewFindings = [primaryFinding, secondFinding].filter((item) => item !== undefined);
   const renderFindings = (items: V2FinalResearchOutput["synthesis"]["sections"][number]["items"]) => (
     <div className="overview-items">
       {items.map((item) => (
@@ -81,11 +85,31 @@ export function V2ResultPaper({
       <p>Claim under review: {result.exact_claim}</p>
       <section aria-labelledby="brief-overview-heading">
         <h2 id="brief-overview-heading">Overview</h2>
-        <p>{direction}. {opening.join(" ")}{opening.length > 0 && " "}{overviewStatus}</p>
-        {coverageIncomplete && (
-          <p>Research coverage was incomplete. The findings apply to the evidence reviewed.</p>
+        {overviewFindings.length > 0 ? (
+          <p className="overview-synthesis">
+            {overviewFindings.map((item, index) => {
+              const href = safeWebUrl(item.verified_publication?.canonical_url ?? "")
+                ?? safeWebUrl(item.source_url);
+              const sourceTitle = sourceHeading(item.source_id, item.title, item.source_url);
+              const title = /not recorded/i.test(sourceTitle) ? evidenceReadLocation(item) : sourceTitle;
+              const reviewedDesign = evidence?.study_opening?.find(
+                (assertion) => assertion.ledger_claim_id === item.ledger_claim_id,
+              )?.design;
+              const labels = [evidenceSourceType(item), reviewedDesign || evidenceStudyDesign(item)]
+                .filter((label) => label && !/not recorded|unknown/i.test(label));
+              const statement = item.approved_factual_statement.trim().replace(/(?<!\.)\.$/, "");
+              return (
+                <span key={item.ledger_claim_id}>
+                  {index > 0 && " "}{statement}{" "}
+                  ({href ? <a href={href} target="_blank" rel="noreferrer">{title}</a> : title}
+                  {labels.length > 0 && `, ${labels.join(", ")}`}).
+                </span>
+              );
+            })}
+          </p>
+        ) : (
+          <p>{evidence === null ? "Detailed evidence is unavailable." : "No relevant admitted findings are available for this result."}</p>
         )}
-        {!result.claim_coverage_map?.length && <p>Claim coverage was not assessed.</p>}
       </section>
       {result.synthesis.sections.filter((section) => section.section_type !== "limitations").map((section) => (
         <section key={section.section_type}>
@@ -123,7 +147,7 @@ export function V2ResultPaper({
           </>
         ) : (
           <>
-            <p>{overviewStatus}</p>
+            <p>{evidence === null ? "Detailed evidence is unavailable." : !evidence.items.length ? "No evidence was admitted for this result." : "The available evidence is summarized below."}</p>
             {selectedFindings.length > 0 && (
               <p>These examples were selected by recorded claim fit. Study identity and evidence balance are unverified, so the examples may not be representative.</p>
             )}

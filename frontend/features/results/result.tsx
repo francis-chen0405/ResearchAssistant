@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
 import type { RunSnapshot, V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
 import { briefWithReadingAid } from "./reading-aid";
-import { ModelUsageDisclosure } from "../shared/model-usage";
+import { formatUsageTokenCount } from "../shared/model-usage";
 import {
   readableStage,
   readableProvider,
@@ -26,6 +26,16 @@ export function ResultView({
   const released = snapshot.classification === "released";
   const userStatus = understandableRunMessage(snapshot);
   const diagnostics = snapshot.v2_diagnostics;
+  const discoveryCounts = [
+    ["Logical discovery operations", diagnostics?.logical_discovery_operations],
+    ["Physical provider requests/pages", diagnostics?.physical_search_requests],
+    ["Retained metadata records", diagnostics?.retained_metadata_records],
+    ["Deduplicated work candidates", diagnostics?.deduplicated_work_candidates],
+    ["Seed-derived candidates", diagnostics?.seed_derived_candidates],
+    ["Acquisition shortlist", diagnostics?.shortlist_candidates],
+    ["Admitted evidence records", diagnostics?.approved_evidence_records],
+  ] as const;
+  const recordedDiscoveryCounts = discoveryCounts.filter(([, count]) => count != null);
   const pendingReservation = snapshot.known_cost_subtotal_usd != null && snapshot.conservative_reserved_cost_usd != null
     ? Math.max(0, Number(snapshot.conservative_reserved_cost_usd) - Number(snapshot.known_cost_subtotal_usd))
     : null;
@@ -92,7 +102,7 @@ export function ResultView({
           )}
         </article>
         <aside className="report-meta">
-          <p>{userStatus}</p>
+          {!released && <p>{userStatus}</p>}
           {snapshot.attempt_diagnostic &&
             !["planned", "running"].includes(
               snapshot.persisted_status ?? "",
@@ -101,37 +111,6 @@ export function ResultView({
                 Latest execution attempt: {understandableAttemptMessage(snapshot.attempt_diagnostic)}
               </p>
             )}
-          <section className="provider-diagnostics">
-            <span>Frozen research settings</span>
-            {snapshot.research_controls.sources_per_stance_per_round != null && (
-              <p>
-                <strong>Candidate sources to try per direction per round</strong>
-                <small>{snapshot.research_controls.sources_per_stance_per_round}</small>
-              </p>
-            )}
-            {snapshot.research_controls.metadata_depth != null && (
-              <p>
-                <strong>Metadata depth</strong>
-                <small>{snapshot.research_controls.metadata_depth}</small>
-              </p>
-            )}
-            {snapshot.research_controls.seed_expansion_enabled != null && (
-              <p>
-                <strong>Paper expansion</strong>
-                <small>
-                  {snapshot.research_controls.seed_expansion_enabled
-                    ? "Enabled"
-                    : "Disabled"}
-                </small>
-              </p>
-            )}
-            {snapshot.research_controls.scholarly_search_mode != null && (
-              <p>
-                <strong>Scholarly search</strong>
-                <small>{snapshot.research_controls.scholarly_search_mode}</small>
-              </p>
-            )}
-          </section>
           <dl>
             <div>
               <dt>Discovery sources</dt>
@@ -180,70 +159,51 @@ export function ResultView({
                 <dd>{pendingReservation == null ? "Not recorded" : formatCost(pendingReservation)}</dd>
               </div>
             )}
+            {snapshot.model_usage_details && (
+              <>
+                <div>
+                  <dt>Input tokens</dt>
+                  <dd>{formatUsageTokenCount(snapshot.model_usage_details.input_tokens)}</dd>
+                </div>
+                <div>
+                  <dt>Output tokens</dt>
+                  <dd>{formatUsageTokenCount(snapshot.model_usage_details.output_tokens)}</dd>
+                </div>
+                <div>
+                  <dt>Cached input tokens</dt>
+                  <dd>{formatUsageTokenCount(snapshot.model_usage_details.cached_input_tokens)}</dd>
+                </div>
+                <div>
+                  <dt>Cache-write tokens</dt>
+                  <dd>{formatUsageTokenCount(snapshot.model_usage_details.cache_write_tokens)}</dd>
+                </div>
+              </>
+            )}
           </dl>
-          <ModelUsageDisclosure snapshot={snapshot} />
-          {diagnostics && (
-            <section className="provider-diagnostics">
-              <span>Discovery counts</span>
-              {diagnostics.logical_discovery_operations != null && (
-                <p>
-                  <strong>Logical discovery operations</strong>
-                  <small>{diagnostics.logical_discovery_operations}</small>
-                </p>
-              )}
-              {diagnostics.physical_search_requests != null && (
-                <p>
-                  <strong>Physical provider requests/pages</strong>
-                  <small>{diagnostics.physical_search_requests}</small>
-                </p>
-              )}
-              {diagnostics.retained_metadata_records != null && (
-                <p>
-                  <strong>Retained metadata records</strong>
-                  <small>{diagnostics.retained_metadata_records}</small>
-                </p>
-              )}
-              {diagnostics.deduplicated_work_candidates != null && (
-                <p>
-                  <strong>Deduplicated work candidates</strong>
-                  <small>{diagnostics.deduplicated_work_candidates}</small>
-                </p>
-              )}
-              {diagnostics.seed_derived_candidates != null && (
-                <p>
-                  <strong>Seed-derived candidates</strong>
-                  <small>{diagnostics.seed_derived_candidates}</small>
-                </p>
-              )}
-              {diagnostics.shortlist_candidates != null && (
-                <p>
-                  <strong>Acquisition shortlist</strong>
-                  <small>{diagnostics.shortlist_candidates}</small>
-                </p>
-              )}
-              {diagnostics.approved_evidence_records != null && (
-                <p>
-                  <strong>Admitted evidence records</strong>
-                  <small>{diagnostics.approved_evidence_records}</small>
-                </p>
-              )}
-            </section>
-          )}
-          {Boolean(diagnostics?.diagnostic_messages?.length) && (
-            <section className="provider-diagnostics">
-              <span>Research notes</span>
-              <p>Additional technical details are available in the research trail.</p>
-            </section>
+          {recordedDiscoveryCounts.length > 0 && (
+            <details className="provider-diagnostics">
+              <summary>Discovery counts</summary>
+              <dl>
+                {recordedDiscoveryCounts.map(([label, count]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{count}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
           )}
           {Boolean(diagnostics?.provider_outcomes?.length) && (
             <section className="provider-diagnostics">
               <span>Provider outcomes</span>
-              {diagnostics?.provider_outcomes.map((outcome) => (
-                <p key={outcome.provider}>
-                  <strong>{readableProvider(outcome.provider)}</strong>
-                  <small>{providerOutcomeLabel(outcome)}</small>
-                </p>
-              ))}
+              <dl>
+                {diagnostics?.provider_outcomes.map((outcome) => (
+                  <div key={outcome.provider}>
+                    <dt>{readableProvider(outcome.provider)}</dt>
+                    <dd>{providerOutcomeLabel(outcome)}</dd>
+                  </div>
+                ))}
+              </dl>
             </section>
           )}
           {snapshot.rendered_brief_hash && (

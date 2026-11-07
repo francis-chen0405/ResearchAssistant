@@ -56,9 +56,7 @@ export function ResearchView({
       exit={{ opacity: 0 }}
     >
       <div className="page-heading">
-        <p className="eyebrow">A fresh line of inquiry</p>
-        <h1>What deserves a closer look?</h1>
-        <p>Start with a public question or claim. We’ll follow the sources.</p>
+        <h1>Start research</h1>
       </div>
       <form className="claim-composer" onSubmit={onSubmit}>
         <div className="composer-label">
@@ -104,15 +102,6 @@ export function ResearchView({
             </div>
           </fieldset>
           <label>
-            Model profile
-            <select value={settings.modelProfile} disabled>
-              <option value="configurable-2026-09">
-                Configurable research
-              </option>
-            </select>
-            <small>Choose each research role below.</small>
-          </label>
-          <label>
             Model budget limit
             <select
               value={settings.maxCost}
@@ -134,7 +123,6 @@ export function ResearchView({
           aria-labelledby="stage-model-heading"
         >
           <div>
-            <p className="eyebrow">Model routing</p>
             <h2 id="stage-model-heading">
               Choose a model for each research role
             </h2>
@@ -157,11 +145,6 @@ export function ResearchView({
                     </option>
                   ))}
                 </select>
-                <small>
-                  {stage === "scout" || stage === "extractor"
-                    ? "Default: Luna High"
-                    : "Default: Luna XHigh"}
-                </small>
               </label>
             ))}
           </div>
@@ -177,9 +160,6 @@ export function ResearchView({
           </span>
         </label>
         <div className="composer-footer">
-          <span>
-            Exact passages. Visible limitations. Saved on this device.
-          </span>
           {ready ? (
             <button
               type="submit"
@@ -196,20 +176,6 @@ export function ResearchView({
           )}
         </div>
       </form>
-      <div className="composer-guide">
-        <article>
-          <b>01 / Ask</b>
-          <p>Choose the direction and a model spending limit.</p>
-        </article>
-        <article>
-          <b>02 / Examine</b>
-          <p>Follow discovery, source checks and evidence analysis.</p>
-        </article>
-        <article>
-          <b>03 / Understand</b>
-          <p>Read the findings with quotations and their limitations.</p>
-        </article>
-      </div>
     </motion.section>
   );
 }

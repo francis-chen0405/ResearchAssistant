@@ -428,9 +428,7 @@ async function main() {
     await page.getByRole("button", { name: "Saved research", exact: true }).click();
     await page.getByText("A run with a rejected resume attempt", { exact: true }).click();
     await page.getByText("The latest resume attempt could not use the requested settings. Resume with the original settings or start a new run.", { exact: true }).first().waitFor();
-    const frozenMetadataDepth = page.getByText("Metadata depth", { exact: true }).locator("xpath=..");
-    await frozenMetadataDepth.waitFor();
-    assert.match(await frozenMetadataDepth.innerText(), /Metadata depth\s*20/);
+    assert.equal(await page.locator(".report-meta").getByText("Metadata depth", { exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "Cancel run", exact: true }).count(), 0, "A rejected resume with no worker must not show Cancel run");
     const rejectedResumePollCount = snapshotCalls;
     await WAIT(1800);

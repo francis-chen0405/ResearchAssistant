@@ -78,7 +78,11 @@ async function main() {
       const items=all.slice(offset,offset+limit);
       return {run_id:id,items,total:all.length,offset,limit,has_more:offset+items.length<all.length,notice:'Discovery leads are records of candidate sources.'};
     };
-    const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:productionReport ? productionFixture.result.exact_claim : started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',model_usage_details:{input_tokens:{total:null,known_subtotal:123,complete:false},output_tokens:{total:44,known_subtotal:44,complete:true},cached_input_tokens:{total:null,known_subtotal:0,complete:false},cache_write_tokens:{total:null,known_subtotal:4,complete:false},cost_basis_counts:[{basis:'published_cache_prices_reported_writes',physical_calls:1},{basis:'published_cache_prices_assumed_all_uncached_writes',physical_calls:1},{basis:null,physical_calls:1}]},supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:null});
+    const snapshot = () => ({run_id:id,db_path:preferences.dbPath,raw_claim:productionReport ? productionFixture.result.exact_claim : started.raw_claim,classification:run,stage:'discovery',current_research_round:1,progress_percent:25,message:run === 'cancelled' ? 'Cancelled; incomplete work is preserved.' : 'Finding sources for your question.',model_calls_used:1,retrieval_attempts_used:2,known_cost_subtotal_usd:'0.01',cost_usage_complete:false,conservative_reserved_cost_usd:'0.02',model_usage_details:{input_tokens:{total:null,known_subtotal:123,complete:false},output_tokens:{total:44,known_subtotal:44,complete:true},cached_input_tokens:{total:null,known_subtotal:0,complete:false},cache_write_tokens:{total:null,known_subtotal:4,complete:false},cost_basis_counts:[{basis:'published_cache_prices_reported_writes',physical_calls:1},{basis:'published_cache_prices_assumed_all_uncached_writes',physical_calls:1},{basis:null,physical_calls:1}]},supporting:{...progress,stance:'supporting'},opposing:{...progress,stance:'opposing'},validation_errors:[],research_controls:{research_mode:'balanced',sources_per_stance_per_round:10,discovery_providers:['arxiv']},final_brief:run === 'released' ? '# Research Brief\n\nA validated example finding.\n' : null,rendered_brief_hash:run === 'released' ? 'a'.repeat(64) : null,v2_diagnostics:detailed && run === 'released' ? {
+      configured_providers:['arxiv'], logical_discovery_operations:6,
+      physical_search_requests:10, seed_derived_candidates:0,
+      diagnostic_messages:['Recorded diagnostic'], provider_outcomes:[],
+    } : null});
     await page.route('**/api/**', async route => {
       const req=route.request(); const url=new URL(req.url()); const p=url.pathname; let body={}; let status=200;
       assert.equal(url.origin, `http://127.0.0.1:${server.address().port}`, 'Desktop API requests must use the exported app origin');
@@ -188,6 +192,9 @@ async function main() {
     await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({state:'hidden'}); assert.equal(await page.getByRole('dialog').count(),0);
     console.log('Verified keyboard dialog');
     await page.getByRole('button',{name:'Research',exact:true}).click();
+    assert.equal(await page.getByText('A fresh line of inquiry',{exact:true}).count(),0);
+    assert.equal(await page.getByText(/^Default: Luna/).count(),0);
+    assert.equal(await page.getByText('Model profile',{exact:true}).count(),0);
     await page.getByLabel('Your research question',{exact:true}).fill('Can greener streets make cities cooler?');
     await page.getByRole('button',{name:'Both sides',exact:true}).click();
     await page.getByLabel('Model budget limit').selectOption('0.50');
@@ -266,9 +273,9 @@ async function main() {
     evidenceFailure=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.getByText('Illustrative supporting finding.',{exact:true}).waitFor();
+    await page.locator('.overview-item').getByText('Illustrative supporting finding.',{exact:true}).waitFor();
     await page.getByText(/Detailed evidence could not be loaded/i).waitFor();
-    await page.getByText('Illustrative supporting finding.',{exact:true}).waitFor();
+    await page.locator('.overview-item').getByText('Illustrative supporting finding.',{exact:true}).waitFor();
     assert.equal(await page.getByText('No brief was released.',{exact:true}).count(),0,'Evidence failure keeps the validated brief visible');
     evidenceFailure=false;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
@@ -314,8 +321,18 @@ async function main() {
     await page.getByText(/^Earlier search decision ·/).click();
     await page.getByText(/The search assessment counted 0 unresolved evidence gaps for possible follow-up/).waitFor();
     await page.getByText(/Release checks passed: yes\./).waitFor();
-    await page.getByText('Recorded token usage and cost basis',{exact:true}).click();
-    await page.getByText(/published cache prices and reported cache-write tokens/).waitFor();
+    const sidebar = page.locator('.report-meta');
+    await sidebar.getByText('Input tokens',{exact:true}).waitFor();
+    await sidebar.getByText('at least 123 known; total incomplete',{exact:true}).waitFor();
+    assert.equal(await sidebar.getByText(/Recorded token usage and cost basis|Frozen research settings|Research notes|The saved research result is available/).count(),0);
+    const discovery = sidebar.locator('details').filter({hasText:'Discovery counts'});
+    assert.equal(await discovery.evaluate(node => node.open),false);
+    await discovery.locator('summary').click();
+    await discovery.getByText('Physical provider requests/pages',{exact:true}).waitFor();
+    await discovery.getByText('0',{exact:true}).waitFor();
+    await discovery.locator('summary').click();
+    assert.equal(await discovery.evaluate(node => node.open),false);
+    assert.doesNotMatch(await page.locator('[aria-labelledby="brief-overview-heading"]').innerText(), /Research coverage was incomplete|Support-directed research only/);
     await page.screenshot({path:path.join(shots,'research-evidence.png'),fullPage:true,animations:'disabled'});
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,'Result fits narrow viewport without horizontal overflow');

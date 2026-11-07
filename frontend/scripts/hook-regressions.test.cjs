@@ -746,7 +746,7 @@ test("claim status does not infer evidence balance from finding counts", () => {
   assert.doesNotMatch(text, /Supporting findings observed/);
 });
 
-test("overview reports incomplete assessment counts even when the coverage map is covered", () => {
+test("overview presents findings and source links in one paragraph without routine verdicts", () => {
   const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
   const result = {
     exact_claim: "Example claim", directions: { support_enabled: true },
@@ -754,9 +754,23 @@ test("overview reports incomplete assessment counts even when the coverage map i
     claim_coverage_map: [{ coverage_state: "covered" }], unresolved_material_gaps: [],
     post_analysis_assessment: { partial_coverage_count: 1 },
   };
-  const tree = V2ResultPaper({ result, evidence: null });
+  const evidence = { items: [
+    { ledger_claim_id: "trial", source_id: "trial", source_url: "https://example.org/trial",
+      source_type: "randomized_trial", relationship_to_claim: "supports", claim_fit: 3,
+      approved_factual_statement: "The intervention improved completion." },
+    { ledger_claim_id: "followup", source_id: "followup", source_url: "https://example.org/followup",
+      source_type: "observational_study", relationship_to_claim: "challenges", claim_fit: 2,
+      approved_factual_statement: "The follow-up found no difference." },
+  ] };
+  const tree = V2ResultPaper({ result, evidence });
   const overview = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "brief-overview-heading");
-  assert.match(JSON.stringify(overview), /Research coverage was incomplete/);
+  const nodes = elementNodes(overview);
+  assert.equal(nodes.filter(node => node.type === "p").length, 1);
+  assert.deepEqual(nodes.filter(node => node.type === "a").map(node => node.props.href),
+    ["https://example.org/trial", "https://example.org/followup"]);
+  const text = JSON.stringify(overview);
+  assert.match(text, /The intervention improved completion.*Randomized trial.*The follow-up found no difference.*Observational study/);
+  assert.doesNotMatch(text, /not recorded|Research coverage was incomplete|Claim coverage was not assessed|Support-directed research only/);
 });
 
 test("unknown search stop and exception do not expose technical text", () => {
@@ -814,7 +828,7 @@ test("overview leads and optional bottom line preserves selected findings withou
   assert.match(text, /contrast finding/);
   assert.doesNotMatch(text, /first finding/);
   assert.match(text, /may not be representative/);
-  assert.match(text, /does not establish the claim or the balance/);
+  assert.doesNotMatch(text, /does not establish the claim or the balance/);
 });
 
 test("discovery grouping retains fragments together but preserves query distinctions", () => {
@@ -943,7 +957,7 @@ test("brief keeps qualifications and coverage collapsed before sources and shows
   const visible = elementNodes(findings.props.children[1]);
   assert.equal(visible.filter(node => node.props?.className === "overview-item").length, 1);
   assert.match(JSON.stringify(findings.props.children[2]), /second finding/);
-  assert.match(JSON.stringify(tree.props.children[3]), /Claim coverage was not assessed/);
+  assert.doesNotMatch(JSON.stringify(tree.props.children[3]), /Claim coverage was not assessed/);
 });
 
 test("source pagination retries preserve earlier records and discard repeated record IDs", async () => {
