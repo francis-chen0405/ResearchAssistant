@@ -750,10 +750,11 @@ def test_production_scouts_and_captures_before_deeper_search_finishes(
             release_scout.set()
             assert first_capture.wait(15)
             assert aggregate_waiting.wait(15)
-            screened = read_live_sources(path, run_id)
-            assert any(
-                card.state == "screened" and card.note_kind == "scout" for card in screened.items
-            )
+            # Other captures can displace the blocked source from the live shortlist.
+            screened = read_live_sources(path, run_id, offset=0)
+            original_card = next(card for card in screened.items if card.url == search.ORIGINAL)
+            assert original_card.state == "screened"
+            assert original_card.note_kind == "scout"
             release_capture.set()
 
             def capture_is_ready() -> bool:
