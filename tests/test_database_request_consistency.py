@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+from contextvars import copy_context
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
 from uuid import UUID, uuid4
 
 import pytest
@@ -18,7 +22,7 @@ from researchassistant.research.v2_orchestrator import (
     V2ProductionPipelineResult,
     V2ProductionState,
 )
-from researchassistant.storage.sqlite_policy import DatabaseBusyError
+from researchassistant.storage.sqlite_policy import DatabaseBusyError, overlapping_database_writes
 from researchassistant.storage.store import (
     DatabaseCompatibilityError,
     _connect,
@@ -101,6 +105,37 @@ def test_writer_timeout_does_not_replay_or_disguise_contention(tmp_path: Path) -
         blocker.rollback()
         blocker.close()
         writer.close()
+
+
+@pytest.mark.slow
+def test_overlapping_research_writer_survives_contention_past_default_wait(tmp_path: Path) -> None:
+    database = str(tmp_path / "overlap.sqlite3")
+    init_db(database)
+    attempting = Event()
+    finished = Event()
+
+    def write() -> None:
+        try:
+            with closing(_connect(database)) as writer:
+                attempting.set()
+                writer.execute("BEGIN IMMEDIATE")
+                writer.commit()
+        finally:
+            finished.set()
+
+    with (
+        overlapping_database_writes(database),
+        ThreadPoolExecutor(max_workers=1) as pool,
+        closing(sqlite3.connect(database)) as blocker,
+    ):
+        blocker.execute("BEGIN IMMEDIATE")
+        future = pool.submit(copy_context().run, write)
+        try:
+            assert attempting.wait(5)
+            assert not finished.wait(1.25)
+        finally:
+            blocker.rollback()
+        future.result(timeout=5)
 
 
 @pytest.mark.slow

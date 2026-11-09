@@ -3,10 +3,25 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from pathlib import Path
 from typing import Any
 
 BUSY_TIMEOUT_MS = 1000
+OVERLAPPING_WRITE_TIMEOUT_MS = 5000
+_OVERLAPPING_DATABASE: ContextVar[Path | None] = ContextVar("overlapping_database", default=None)
+
+
+@contextmanager
+def overlapping_database_writes(path: str) -> Iterator[None]:
+    """Allow workers sharing one research database more time to acquire SQLite locks."""
+    token = _OVERLAPPING_DATABASE.set(Path(path).resolve())
+    try:
+        yield
+    finally:
+        _OVERLAPPING_DATABASE.reset(token)
 
 
 def is_busy_error(exc: BaseException) -> bool:
@@ -65,4 +80,12 @@ class PolicyConnection(sqlite3.Connection):
 
 
 def connect_database(path: str, *, uri: bool = False) -> sqlite3.Connection:
-    return sqlite3.connect(path, uri=uri, timeout=BUSY_TIMEOUT_MS / 1000, factory=PolicyConnection)
+    timeout_ms = BUSY_TIMEOUT_MS
+    overlapping_database = _OVERLAPPING_DATABASE.get()
+    if (
+        not uri
+        and overlapping_database is not None
+        and Path(path).resolve() == overlapping_database
+    ):
+        timeout_ms = OVERLAPPING_WRITE_TIMEOUT_MS
+    return sqlite3.connect(path, uri=uri, timeout=timeout_ms / 1000, factory=PolicyConnection)

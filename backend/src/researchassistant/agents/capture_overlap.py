@@ -54,6 +54,7 @@ from researchassistant.providers.llm import LLMRequest
 from researchassistant.providers.ranking import canonical_discovery_url
 from researchassistant.providers.scraper import ScraperProvider
 from researchassistant.providers.v2_budget import V2CancellationRequested
+from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 if TYPE_CHECKING:
@@ -534,6 +535,7 @@ class CaptureOverlap:
         V2DiscoveryScoutRunResult, dict[UUID, V2AcquisitionProbeOutput], V2EvidenceCheckpoint | None
     ]:
         with (
+            overlapping_database_writes(self.path),
             ThreadPoolExecutor(max_workers=1, thread_name_prefix="scout") as scout_pool,
             ThreadPoolExecutor(
                 max_workers=self.max_capture_jobs, thread_name_prefix="capture"
