@@ -31,7 +31,7 @@ export function useHistory(
     setHistory([]);
     setLoading(false);
   };
-  const refreshHistory = useCallback(async () => {
+  const refreshHistory = useCallback(async (quiet = false) => {
     if (!database) return;
     const id = ++listRequestId.current;
     setLoading(true);
@@ -41,7 +41,8 @@ export function useHistory(
       setHistory(result.items);
       setOffline(false);
     } catch {
-      if (id === listRequestId.current) {
+      // Home's recent list fails quietly; only the History page reports it.
+      if (id === listRequestId.current && !quiet) {
         notify("History is not available. Try again.");
         setOffline(true);
       }
@@ -51,8 +52,9 @@ export function useHistory(
   }, [database, notify, setOffline]);
 
   useEffect(() => {
-    if (view !== "history") return;
-    const timer = window.setTimeout(() => void refreshHistory(), 0);
+    // History and the Home page's recent research both read the saved list.
+    if (view !== "history" && view !== "home") return;
+    const timer = window.setTimeout(() => void refreshHistory(view === "home"), 0);
     return () => window.clearTimeout(timer);
   }, [view, refreshHistory]);
   useEffect(

@@ -338,8 +338,8 @@ async function main() {
     });
 
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    await page.getByRole("button", { name: "Research", exact: true }).click();
-    await page.getByLabel("Your research question", { exact: true }).fill("Does the regional education program increase course completion?");
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
+    await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Does the regional education program increase course completion?");
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
@@ -410,13 +410,13 @@ async function main() {
     assert.equal(snapshotCalls, terminalCallCount, "Terminal status must stop follow-up polling");
     assert.equal(sourceCalls, sourceCallsAtStop, "Terminal status must stop shortlist polling");
 
-    await page.getByRole("button", { name: "New research", exact: true }).click();
-    await page.getByLabel("Your research question", { exact: true }).fill("Does replacement cancel scheduled polling?");
+    await page.locator(".result-actions").getByRole("button", { name: "New research", exact: true }).click();
+    await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Does replacement cancel scheduled polling?");
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
     const callsBeforeReplacement = snapshotCalls;
-    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
     await page.getByText("A saved replacement run", { exact: true }).click();
     await page.getByText("Poll smoke result", { exact: true }).waitFor();
     await WAIT(1800);
@@ -424,7 +424,7 @@ async function main() {
     assert.equal(await page.getByRole("link", { name: source(1).title }).count(), 0);
     await page.getByText("Latest execution attempt: The latest attempt could not use the requested settings. Check the research settings and try again.", { exact: true }).waitFor();
 
-    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
     await page.getByText("A run with a rejected resume attempt", { exact: true }).click();
     await page.getByText("The latest resume attempt could not use the requested settings. Resume with the original settings or start a new run.", { exact: true }).first().waitFor();
     assert.equal(await page.locator(".result-page").getByText("Metadata depth", { exact: true }).count(), 0);
@@ -433,7 +433,7 @@ async function main() {
     await WAIT(1800);
     assert.equal(snapshotCalls, rejectedResumePollCount, "A rejected resume attempt must stop polling");
 
-    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
     await page.getByText("A run interrupted before restart", { exact: true }).click();
     await page.getByText("No active worker in this app. Saved progress and reservations are unchanged; resume with the original settings or start a new run.", { exact: true }).first().waitFor();
     assert.equal(await page.getByRole("button", { name: "Cancel run", exact: true }).count(), 0, "An interrupted run with no worker must not show Cancel run");
@@ -441,20 +441,20 @@ async function main() {
     await WAIT(1800);
     assert.equal(snapshotCalls, interruptedPollCount, "An interrupted run after restart must stop polling");
 
-    await page.getByRole("button", { name: "New research", exact: true }).click();
-    await page.getByLabel("Your research question", { exact: true }).fill("Does unmount cancel scheduled polling?");
+    await page.locator(".result-actions").getByRole("button", { name: "New research", exact: true }).click();
+    await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Does unmount cancel scheduled polling?");
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
     const callsBeforeUnmount = snapshotCalls;
     await page.reload();
-    await page.getByRole("heading", { name: "Research a claim" }).waitFor();
+    await page.getByRole("heading", { name: "Check a claim against the evidence" }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeUnmount, "Unmount must cancel the delayed follow-up");
     // Recover from repeated failures before the first snapshot, without a new run.
     recoveryMode = true;
-    await page.getByRole("button", { name: "Research", exact: true }).click();
-    await page.getByLabel("Your research question", { exact: true }).fill("Can this same run reconnect safely?");
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
+    await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Can this same run reconnect safely?");
     const beforeRecovery = snapshotCalls;
     const recoveryStart = page.waitForResponse((response) => response.url().endsWith("/api/research/start"));
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
@@ -468,7 +468,7 @@ async function main() {
     await page.getByRole("button", { name: "Cancel run", exact: true }).waitFor();
     await connection.getByRole("button", { name: "Open History", exact: true }).click();
     await page.getByText("A saved replacement run", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
     await connection.getByText(/Automatic retries paused/).waitFor();
     await WAIT(1700);
     assert.equal(snapshotCalls, beforeRecovery + 3, "Navigation preserves the exhausted retry budget");

@@ -1174,3 +1174,23 @@ test("finding cards use the projected heading, not a post's opening line", () =>
   assert.match(text, /Post on LinkedIn/);
   assert.doesNotMatch(text, /An unreliable first line/);
 });
+
+test("depth presets write the existing settings and anything else reads Custom", () => {
+  const { presetOf, depthPresets } = hookHarness("features/research/presets.ts", {}).exports;
+  for (const preset of depthPresets) assert.equal(presetOf(preset), preset.id);
+  assert.equal(presetOf({ sourceTarget: 10, metadataDepth: 30, maxCost: "0.20" }), "Standard");
+  assert.equal(presetOf({ sourceTarget: 10, metadataDepth: 30, maxCost: "0.50" }), "Custom");
+  assert.equal(presetOf({ sourceTarget: 30, metadataDepth: 50, maxCost: "1.00" }), "Custom");
+});
+
+test("history uses one plain outcome per run and explains where stopped runs ended", () => {
+  const { historyOutcome, historyReason } = hookHarness("features/history/outcome.ts", {}).exports;
+  assert.equal(historyOutcome("completed").label, "Complete");
+  assert.equal(historyOutcome("released").label, "Complete");
+  assert.equal(historyOutcome("blocked").label, "Stopped early");
+  assert.equal(historyOutcome("failed").label, "Failed");
+  assert.equal(historyReason({ status: "failed", stage: "claim_planner" }), "Stopped during planning");
+  assert.equal(historyReason({ status: "blocked", stage: "deep_analysis" }), "Stopped during analysis");
+  assert.equal(historyReason({ status: "completed", stage: "final_renderer_validator" }), null);
+  assert.equal(historyReason({ status: "interrupted", stage: "unknown_stage" }), "Stopped before completing");
+});

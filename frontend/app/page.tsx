@@ -2,13 +2,12 @@
 
 import { AnimatePresence, MotionConfig, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ProviderSetup } from "@/components/provider-setup";
-import { Header, Notice, PreferencesStatus, WelcomeView } from "@/features/shell/views";
+import { Header, HomeView, Notice, PreferencesStatus } from "@/features/shell/views";
 import { ResearchView, StartingView } from "@/features/research/composer";
 import { ProgressView } from "@/features/research/progress";
 import { ResultView } from "@/features/results/result";
 import { HistoryView } from "@/features/history/history";
-import { AdvancedPanel } from "@/features/preferences/panel";
+import { AdvancedPanel, type SettingsSection } from "@/features/preferences/panel";
 import { usePreferences } from "@/features/preferences/use-preferences";
 import { useConfiguration } from "@/features/preferences/use-configuration";
 import { useResearch } from "@/features/research/use-research";
@@ -28,8 +27,7 @@ const inferTone = (message: string): ToastTone =>
 export default function Home() {
   const reduceMotion = useReducedMotion();
   const [view, setView] = useState<MainView>("home");
-  const [setupOpen, setSetupOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState<SettingsSection | "auto" | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const setNotice = useCallback(
     (message: string | null) => setToast(message ? { message, tone: inferTone(message) } : null),
@@ -72,8 +70,9 @@ export default function Home() {
     history.invalidateSelection();
     research.reset();
     setNotice(null);
-    setView("research");
+    setView("home");
   };
+  const goNew = () => (runActive ? navigate("research") : newResearch());
   const retryRun = (kind: RetryKind) => {
     if (!snapshot) return;
     const providers = snapshot.research_controls.discovery_providers;
@@ -149,12 +148,12 @@ export default function Home() {
     >
       <main className="site-shell">
         <Header
-          view={view}
-          providerState={providerState}
+          view={view === "research" && !activeRun ? "home" : view}
+          setupNeeded={providerState !== "ready"}
           preferencesReady={preferencesReady}
-          onView={navigate}
-          onSetup={() => setSetupOpen(true)}
-          onAdvanced={() => setAdvancedOpen(true)}
+          onNew={goNew}
+          onHistory={() => navigate("history")}
+          onSettings={() => setSettingsOpen("auto")}
           runActive={runActive}
           onRun={() => navigate("research")}
         />
@@ -165,19 +164,43 @@ export default function Home() {
               status={preferencesStatus}
               onRetry={() => void retryPreferences()}
             />
-          ) : view === "home" ? (
-            <WelcomeView
-              key="home"
-              ready={Boolean(configuration?.configured)}
-              onStart={() => setView("research")}
-              onSetup={() => setSetupOpen(true)}
-            />
           ) : view === "history" ? (
             <HistoryView
               key="history"
               items={history.history}
               loading={history.loading}
               onOpen={history.openHistoryRun}
+              onNew={newResearch}
+            />
+          ) : view === "home" || (!snapshot && !activeRun) ? (
+            <HomeView
+              key="home"
+              firstRun={configuration ? !configuration.configured : false}
+              recent={history.history}
+              recentLoading={history.loading}
+              onOpen={history.openHistoryRun}
+              onHistory={() => navigate("history")}
+              onSettings={() => setSettingsOpen("providers")}
+              checklist={[
+                { label: "Add a key for your model provider", done: Boolean(configuration?.saved_credentials.some((id) => id === "mimo" || id === "openai")) },
+                { label: "Turn on at least one search provider with a key", done: Boolean(configuration?.configured) },
+                { label: "Write a claim and begin", done: false },
+              ]}
+              composer={
+                <ResearchView
+                  settings={settings}
+                  onSettings={updateSettings}
+                  ready={Boolean(configuration?.configured && !offline)}
+                  onSetup={() => setSettingsOpen("providers")}
+                  claim={research.claim}
+                  busy={research.busy}
+                  onClaim={research.setClaim}
+                  onSubmit={(event) => {
+                    setView("research");
+                    void research.beginResearch(event, settings, configuration, updateService);
+                  }}
+                />
+              }
             />
           ) : snapshot ? (
             terminalStates.has(snapshot.classification) ? (
@@ -203,58 +226,19 @@ export default function Home() {
               reduceMotion={Boolean(reduceMotion)}
               {...recovery}
             />
-          ) : (
-            <ResearchView
-              key="new"
-              settings={settings}
-              modelOptions={modelOptions}
-              onSettings={updateSettings}
-              ready={Boolean(configuration?.configured && !offline)}
-              onSetup={() => setSetupOpen(true)}
-              claim={research.claim}
-              busy={research.busy}
-              onClaim={research.setClaim}
-              onSubmit={(event) =>
-                research.beginResearch(
-                  event,
-                  settings,
-                  configuration,
-                  updateService,
-                )
-              }
-            />
-          )}
+          ) : null}
         </AnimatePresence>
         <AnimatePresence>
           {toast && (
             <Notice message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
           )}
-          {preferencesReady && setupOpen && (
-            <ProviderSetup
-              key="provider-setup"
-              configuration={configuration}
-              selectedProviders={{
-                use_serpsearch: settings.useSerpSearch,
-                use_exa: settings.useExa,
-                use_openalex: settings.useOpenAlex,
-                use_arxiv: settings.useArxiv,
-                use_pubmed: settings.usePubmed,
-                use_brave: settings.useBrave,
-                use_serper: settings.useSerper,
-              }}
-              stageModels={settings.stageModels}
-              onClose={() => setSetupOpen(false)}
-              onSaved={async (message) => {
-                setNotice(message);
-                await refreshConfiguration();
-              }}
-            />
-          )}
-          {preferencesReady && advancedOpen && (
+          {preferencesReady && settingsOpen && (
             <AdvancedPanel
-              key="advanced"
+              key="settings"
               settings={settings}
               configuration={configuration}
+              modelOptions={modelOptions}
+              initialSection={settingsOpen === "auto" ? undefined : settingsOpen}
               active={Boolean(
                 research.busy ||
                   (activeRun &&
@@ -262,8 +246,12 @@ export default function Home() {
               )}
               onSettings={updateSettings}
               onImportedDatabase={selectImportedDatabase}
-              onClose={() => setAdvancedOpen(false)}
+              onClose={() => setSettingsOpen(null)}
               onService={changeService}
+              onProvidersSaved={async (message) => {
+                setNotice(message);
+                await refreshConfiguration();
+              }}
             />
           )}
         </AnimatePresence>

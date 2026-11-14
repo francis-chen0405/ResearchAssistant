@@ -1,397 +1,278 @@
-import {
-  type Configuration,
-  type ServiceDiagnostic,
-} from "@/lib/api";
+import { useState } from "react";
+import { type Configuration, type ModelOptions, type ServiceDiagnostic } from "@/lib/api";
 import { Dialog } from "@/components/dialog";
-import { MAX_RUN_TOKENS, type Settings, budgetOptions } from "./settings";
-import { readableStage } from "../shared/presentation";
+import { ProviderSetup } from "@/components/provider-setup";
+import { Banner, Button, Switch } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { MAX_RUN_TOKENS, type Settings } from "./settings";
 import { useHistoryImport } from "./use-history-import";
+import { ModelSelection } from "./model-selection";
+import { useTheme, type ThemeChoice } from "./theme";
 
-const requestLimits = {
-  useSerpSearch: ["serpsearch", 12],
-  useExa: ["exa", 18],
-  useOpenAlex: ["openalex", 10],
-  useArxiv: ["arxiv", 6],
-  usePubmed: ["pubmed", 6],
-  useBrave: ["brave", 6],
-  useSerper: ["serper", 6],
-} as const;
+export type SettingsSection = "defaults" | "providers" | "models" | "data" | "appearance";
 
-const providerGroups = [
-  {
-    title: "Web search",
-    providers: [
-      [
-        "useSerpSearch",
-        "SERP Search",
-        "Google results for official pages, local documents, and recent news.",
-      ],
-      [
-        "useBrave",
-        "Brave Search",
-        "Search an independent web index for additional coverage.",
-      ],
-      [
-        "useSerper",
-        "Serper",
-        "Google results. Use it in place of SERP Search to limit overlap.",
-      ],
-      [
-        "useExa",
-        "Exa",
-        "Find relevant pages even when they use different wording from your query.",
-      ],
-    ],
-  },
-  {
-    title: "Scholarly search",
-    providers: [
-      ["useOpenAlex", "OpenAlex", "Find academic papers across disciplines."],
-      [
-        "useArxiv",
-        "arXiv",
-        "Find preprints in computing, math, and physics. No API key needed.",
-      ],
-      [
-        "usePubmed",
-        "PubMed",
-        "Find biomedical and public health literature. An optional key raises the request limit.",
-      ],
-    ],
-  },
-] as const;
+const sections: { id: SettingsSection; label: string }[] = [
+  { id: "defaults", label: "Research defaults" },
+  { id: "providers", label: "Search providers" },
+  { id: "models", label: "Models" },
+  { id: "data", label: "Data and advanced" },
+  { id: "appearance", label: "Appearance" },
+];
+
+function Segmented<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          type="button"
+          key={String(option.value)}
+          aria-pressed={value === option.value}
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function AdvancedPanel({
   settings,
   configuration,
+  modelOptions,
   active,
+  initialSection,
   onSettings,
   onImportedDatabase,
   onClose,
   onService,
+  onProvidersSaved,
 }: {
   settings: Settings;
   configuration: Configuration | null;
+  modelOptions: ModelOptions;
   active: boolean;
+  initialSection?: SettingsSection;
   onSettings: (settings: Settings) => void;
   onImportedDatabase: (database: string) => void;
   onClose: () => void;
   onService: (action: "start" | "stop") => void;
+  onProvidersSaved: (message: string) => Promise<void>;
 }) {
-  const { importing, importMessage, importDatabase } = useHistoryImport(
-    settings.dbPath,
-    active,
-    onImportedDatabase,
+  const [section, setSection] = useState<SettingsSection>(
+    initialSection ?? (configuration && !configuration.configured ? "providers" : "defaults"),
   );
-  const update = <K extends keyof Settings>(key: K, value: Settings[K]) =>
-    onSettings({ ...settings, [key]: value });
-  const selectedCount = providerGroups
-    .flatMap(({ providers }) => providers.map(([key]) => settings[key]))
-    .filter(Boolean).length;
-  const directionCount =
-    Number(settings.supportEnabled) + Number(settings.challengeEnabled);
+  const [theme, setTheme] = useTheme();
+  const { importing, importMessage, importDatabase } = useHistoryImport(settings.dbPath, active, onImportedDatabase);
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => onSettings({ ...settings, [key]: value });
+  const setupNeeded = Boolean(configuration && !configuration.configured);
   return (
-    <Dialog title="Research preferences" onClose={onClose}>
-      <section className="research-options">
-        <div className="option-copy">
-          <strong>Support</strong>
-          <span>Look for evidence that supports the claim.</span>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label="Support research"
-          aria-checked={settings.supportEnabled}
-          className={`switch ${settings.supportEnabled ? "on" : ""}`}
-          disabled={active || (directionCount === 1 && settings.supportEnabled)}
-          onClick={() => update("supportEnabled", !settings.supportEnabled)}
-        >
-          <i />
-        </button>
-        <div className="option-copy">
-          <strong>Challenge</strong>
-          <span>Look for evidence that challenges or limits the claim.</span>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label="Challenge research"
-          aria-checked={settings.challengeEnabled}
-          className={`switch ${settings.challengeEnabled ? "on" : ""}`}
-          disabled={
-            active || (directionCount === 1 && settings.challengeEnabled)
-          }
-          onClick={() => update("challengeEnabled", !settings.challengeEnabled)}
-        >
-          <i />
-        </button>
-      </section>
-      <details className="settings-disclosure provider-options">
-        <summary>Search providers <span>{selectedCount} enabled</span></summary>
-        <div className="provider-groups">
-          {providerGroups.map(({ title, providers }) => (
-            <fieldset className="provider-group" key={title}>
-              <legend>{title}</legend>
-              {providers.map(([key, label, copy]) => (
-                <div className="provider-option" key={key}>
-                  <div className="option-copy">
-                    <strong>{label}</strong>
-                    <span id={`provider-description-${key}`}>{copy}</span>
-                    <label>
-                      Max requests per run{" "}
-                      <select
-                        aria-label={`${label} maximum requests per run`}
-                        disabled={active || !settings[key]}
-                        value={settings.providerRequestLimits?.[requestLimits[key][0]] ?? ""}
-                        onChange={(event) => {
-                          const limits = { ...settings.providerRequestLimits };
-                          const provider = requestLimits[key][0];
-                          if (event.target.value) limits[provider] = Number(event.target.value);
-                          else delete limits[provider];
-                          update("providerRequestLimits", limits);
-                        }}
-                      >
-                        <option value="">Auto</option>
-                        {Array.from({ length: requestLimits[key][1] }, (_, index) => index + 1)
-                          .filter((limit) => key !== "usePubmed" || limit % 2 === 0)
-                          .map((limit) => <option key={limit} value={limit}>{limit}</option>)}
-                      </select>
-                    </label>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label={label}
-                    aria-describedby={`provider-description-${key}`}
-                    aria-checked={settings[key]}
-                    className={`switch ${settings[key] ? "on" : ""}`}
-                    disabled={active || (selectedCount === 1 && settings[key])}
-                    onClick={() => {
-                      if (
-                        key === "useOpenAlex" &&
-                        settings.useOpenAlex &&
-                        settings.scholarlySearchMode === "semantic"
-                      ) {
-                        onSettings({
-                          ...settings,
-                          useOpenAlex: false,
-                          scholarlySearchMode: "lexical",
-                        });
-                      } else {
-                        update(key, !settings[key]);
-                      }
-                    }}
-                  >
-                    <i />
-                  </button>
-                </div>
-              ))}
-            </fieldset>
-          ))}
-        </div>
-      </details>
-      <section className="research-options">
-        <div className="option-row">
-          <div className="option-copy">
-            <strong>Crossref metadata</strong>
-            <span>
-              Verify DOI bibliographic details for discovered sources. Crossref
-              is metadata only, not evidence.
-            </span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-label="Crossref metadata enrichment"
-            aria-checked={settings.useCrossref}
-            className={`switch ${settings.useCrossref ? "on" : ""}`}
-            disabled={active}
-            onClick={() => update("useCrossref", !settings.useCrossref)}
-          >
-            <i />
-          </button>
-        </div>
-        <div className="option-copy">
-          <strong>Sources to examine</strong>
-          <span>
-            Set the readable-source target per direction in each round.
-            Unavailable sources are replaced within the run limits.
-          </span>
-        </div>
-        <div
-          className="source-target"
-          role="group"
-          aria-label="Sources to examine"
-        >
-          {([5, 10, 20, 30] as const).map((value) => (
+    <Dialog title="Settings" onClose={onClose} wide>
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {sections.map((item) => (
             <button
               type="button"
-              key={value}
-              className={settings.sourceTarget === value ? "active" : ""}
-              disabled={active}
-              onClick={() => update("sourceTarget", value)}
+              key={item.id}
+              aria-current={section === item.id ? "page" : undefined}
+              className="settings-nav-item"
+              onClick={() => setSection(item.id)}
             >
-              {value}
+              {item.label}
+              {item.id === "providers" && setupNeeded && <span className="attention-dot" aria-hidden="true" title="Needs attention" />}
             </button>
           ))}
-        </div>
-        <div className="option-row">
-          <div className="option-copy">
-            <strong>Metadata search depth</strong>
-            <span>
-              Request a larger pool for ranking; providers may return fewer
-              items.
-            </span>
-          </div>
-          <div
-            className="source-target"
-            role="group"
-            aria-label="Metadata search depth"
-          >
-            {([10, 20, 30, 50] as const).map((value) => (
-              <button
-                type="button"
-                key={value}
-                className={settings.metadataDepth === value ? "active" : ""}
+        </nav>
+        <div className="settings-body">
+          {active && (
+            <Banner tone="info" title="Settings are locked while research runs">
+              <p>Changes would not apply to the run in progress. They unlock when it finishes or is cancelled.</p>
+            </Banner>
+          )}
+
+          {section === "defaults" && (
+            <section className="settings-section" aria-labelledby="settings-defaults">
+              <h3 id="settings-defaults">Research defaults</h3>
+              <p className="subtle">Direction and spend cap are chosen on the New research page for each run.</p>
+              <div className="setting">
+                <div className="setting-copy">
+                  <strong>Sources per side, per round</strong>
+                  <span>How many readable sources to aim for. Unreadable sources are replaced within the run limits.</span>
+                </div>
+                <Segmented
+                  label="Sources to examine"
+                  value={settings.sourceTarget}
+                  options={([5, 10, 20, 30] as const).map((value) => ({ value, label: String(value) }))}
+                  onChange={(value) => update("sourceTarget", value)}
+                  disabled={active}
+                />
+              </div>
+              <div className="setting">
+                <div className="setting-copy">
+                  <strong>Search depth</strong>
+                  <span>How many results to request for ranking. Providers may return fewer.</span>
+                </div>
+                <Segmented
+                  label="Metadata search depth"
+                  value={settings.metadataDepth}
+                  options={([10, 20, 30, 50] as const).map((value) => ({ value, label: String(value) }))}
+                  onChange={(value) => update("metadataDepth", value)}
+                  disabled={active}
+                />
+              </div>
+              <Switch
+                label="Expand from strong papers"
+                description="Follow citations from strong scholarly papers to find related work."
+                checked={settings.seedExpansionEnabled}
+                onChange={(value) => update("seedExpansionEnabled", value)}
                 disabled={active}
-                onClick={() => update("metadataDepth", value)}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
+              />
+              <Switch
+                label="Crossref metadata enrichment"
+                description="Check DOI details for sources found. Crossref provides metadata only, not evidence."
+                checked={settings.useCrossref}
+                onChange={(value) => update("useCrossref", value)}
+                disabled={active}
+              />
+              <div className="setting">
+                <div className="setting-copy">
+                  <strong>Scholarly search style</strong>
+                  <span>Automatic picks a supported style within the same request budget.</span>
+                </div>
+                <div className="select">
+                  <select
+                    aria-label="Scholarly search style"
+                    value={settings.scholarlySearchMode}
+                    disabled={active}
+                    onChange={(event) => update("scholarlySearchMode", event.target.value as Settings["scholarlySearchMode"])}
+                  >
+                    <option value="lexical">Keyword based</option>
+                    <option value="semantic" disabled={!settings.useOpenAlex}>Meaning based (OpenAlex)</option>
+                    <option value="auto">Automatic</option>
+                  </select>
+                  <Icon name="chevronDown" />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {section === "providers" && (
+            <section className="settings-section" aria-labelledby="settings-providers">
+              <h3 id="settings-providers">Search providers and keys</h3>
+              <ProviderSetup
+                configuration={configuration}
+                selectedProviders={{
+                  use_serpsearch: settings.useSerpSearch,
+                  use_exa: settings.useExa,
+                  use_openalex: settings.useOpenAlex,
+                  use_arxiv: settings.useArxiv,
+                  use_pubmed: settings.usePubmed,
+                  use_brave: settings.useBrave,
+                  use_serper: settings.useSerper,
+                }}
+                stageModels={settings.stageModels}
+                settings={settings}
+                onSettings={onSettings}
+                locked={active}
+                onSaved={onProvidersSaved}
+              />
+            </section>
+          )}
+
+          {section === "models" && (
+            <section className="settings-section" aria-labelledby="settings-models">
+              <h3 id="settings-models">Models</h3>
+              <p className="subtle">Each research step can use a different model. The defaults suit most claims.</p>
+              <ModelSelection
+                idPrefix="stage-model"
+                settings={settings}
+                modelOptions={modelOptions}
+                onSettings={onSettings}
+                disabled={active}
+              />
+            </section>
+          )}
+
+          {section === "data" && (
+            <section className="settings-section" aria-labelledby="settings-data">
+              <h3 id="settings-data">Data and advanced</h3>
+              <details className="disclosure advanced-details">
+                <summary><span className="disclosure-summary">Advanced limits & history import</span></summary>
+                <div className="disclosure-body settings-grid">
+                  <label className="field">
+                    <span>Token ceiling</span>
+                    <input type="number" min="1" max={MAX_RUN_TOKENS} value={settings.maxTokens} disabled={active}
+                      onChange={(event) => update("maxTokens", Number(event.target.value))} />
+                  </label>
+                  <label className="field">
+                    <span>Call ceiling</span>
+                    <input type="number" min="1" max="160" value={settings.maxCalls} disabled={active}
+                      onChange={(event) => update("maxCalls", Number(event.target.value))} />
+                  </label>
+                  <div className="field">
+                    <label className="field">
+                      <span>Run ID <span>optional</span></span>
+                      <input type="text" value={settings.runId} disabled={importing} aria-describedby="run-id-hint"
+                        onChange={(event) => update("runId", event.target.value)}
+                        placeholder="Created automatically" />
+                    </label>
+                    <small className="field-hint" id="run-id-hint">To resume a specific run, use Resume on that run&rsquo;s page.</small>
+                  </div>
+                  <label className="field full">
+                    <span>SQLite database</span>
+                    <input type="text" value={settings.dbPath} disabled={active || importing}
+                      onChange={(event) => update("dbPath", event.target.value)} />
+                  </label>
+                  <div className="full row">
+                    <Button disabled={active || importing || !settings.dbPath} onClick={() => void importDatabase()}>
+                      {importing ? "Importing saved research…" : "Import this database into app storage"}
+                    </Button>
+                    {importMessage && <p role="status">{importMessage}</p>}
+                  </div>
+                </div>
+              </details>
+              <PageReader service={configuration?.service ?? null} active={active} onService={onService} />
+            </section>
+          )}
+
+          {section === "appearance" && (
+            <section className="settings-section" aria-labelledby="settings-appearance">
+              <h3 id="settings-appearance">Appearance</h3>
+              <div className="setting">
+                <div className="setting-copy">
+                  <strong>Theme</strong>
+                  <span>System follows your computer&rsquo;s light or dark setting.</span>
+                </div>
+                <Segmented<ThemeChoice>
+                  label="Theme"
+                  value={theme}
+                  options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]}
+                  onChange={setTheme}
+                />
+              </div>
+            </section>
+          )}
         </div>
-        <div className="option-row">
-          <div className="option-copy">
-            <strong>Expand from strong papers</strong>
-            <span>
-              Use linked scholarly works as additional discovery candidates.
-            </span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-label="Expand from strong papers"
-            aria-checked={settings.seedExpansionEnabled}
-            className={`switch ${settings.seedExpansionEnabled ? "on" : ""}`}
-            disabled={active}
-            onClick={() =>
-              update("seedExpansionEnabled", !settings.seedExpansionEnabled)
-            }
-          >
-            <i />
-          </button>
-        </div>
-        <label className="option-row">
-          <span className="option-copy">
-            <strong>Scholarly search style</strong>
-            <span>
-              Automatic chooses a supported search style within the same request
-              budget.
-            </span>
-          </span>
-          <select
-            aria-label="Scholarly search style"
-            value={settings.scholarlySearchMode}
-            disabled={active}
-            onChange={(event) =>
-              update(
-                "scholarlySearchMode",
-                event.target.value as Settings["scholarlySearchMode"],
-              )
-            }
-          >
-            <option value="lexical">Keyword based</option>
-            <option value="semantic" disabled={!settings.useOpenAlex}>
-              Meaning based (OpenAlex)
-            </option>
-            <option value="auto">Automatic</option>
-          </select>
-        </label>
-      </section>
-      <details className="advanced-details">
-        <summary>Advanced limits & history import</summary>
-        <div className="settings-grid">
-          <label>
-            Token ceiling
-            <input
-              type="number"
-              min="1"
-              max={MAX_RUN_TOKENS}
-              value={settings.maxTokens}
-              onChange={(event) =>
-                update("maxTokens", Number(event.target.value))
-              }
-            />
-          </label>
-          <label>
-            Model cost ceiling
-            <select
-              value={settings.maxCost}
-              onChange={(event) => update("maxCost", event.target.value)}
-            >
-              {budgetOptions(settings.maxCost).map((value) => (
-                <option key={value} value={value}>
-                  ${Number(value).toFixed(2)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Call ceiling
-            <input
-              type="number"
-              min="1"
-              max="160"
-              value={settings.maxCalls}
-              onChange={(event) =>
-                update("maxCalls", Number(event.target.value))
-              }
-            />
-          </label>
-          <label>
-            Run ID <span>optional</span>
-            <input
-              type="text"
-              value={settings.runId}
-              disabled={importing}
-              onChange={(event) => update("runId", event.target.value)}
-              placeholder="Created automatically"
-            />
-          </label>
-          <label className="full">
-            SQLite database
-            <input
-              type="text"
-              value={settings.dbPath}
-              disabled={active || importing}
-              onChange={(event) => update("dbPath", event.target.value)}
-            />
-          </label>
-        </div>
-        <button
-          type="button"
-          disabled={active || importing || !settings.dbPath}
-          onClick={() => void importDatabase()}
-        >
-          {importing ? "Importing saved research…" : "Import this database into app storage"}
-        </button>
-        {importMessage && <p role="status">{importMessage}</p>}
-      </details>
-      <ServiceCard
-        service={configuration?.service ?? null}
-        active={active}
-        onService={onService}
-      />
-      <p className="security-note">
-        Directions determine the scope of research. A disabled direction is not
-        searched or inferred in the result.
-      </p>
+      </div>
     </Dialog>
   );
 }
 
-export function ServiceCard({
+/** The local page reader (Wigolo), described in plain words. */
+export function PageReader({
   service,
   active,
   onService,
@@ -401,27 +282,16 @@ export function ServiceCard({
   onService: (action: "start" | "stop") => void;
 }) {
   const ready = Boolean(service?.wigolo_ready);
+  const state = ready ? "Ready" : !service ? "Not responding" : service.state === "starting" ? "Starting" : "Stopped";
   return (
-    <section className="service-card">
-      <div>
-        <span className={`status-dot ${ready ? "ready" : "setup"}`} />
-        <p>Local acquisition</p>
-        <strong>
-          {ready
-            ? "Ready"
-            : service
-              ? readableStage(service.state)
-              : "Unavailable"}
-        </strong>
+    <div className="setting page-reader">
+      <div className="setting-copy">
+        <strong>Page reader: {state}</strong>
+        <span>The local tool that opens and reads source pages. It starts automatically when research begins.</span>
       </div>
-      <p>{service?.message ?? "The local API is not responding."}</p>
-      <button
-        type="button"
-        disabled={active || service?.state === "wrong_service"}
-        onClick={() => onService(ready ? "stop" : "start")}
-      >
-        {ready ? "Stop owned service" : "Start local service"}
-      </button>
-    </section>
+      <Button size="sm" disabled={active || service?.state === "wrong_service"} onClick={() => onService(ready ? "stop" : "start")}>
+        {ready ? "Stop page reader" : "Start page reader"}
+      </Button>
+    </div>
   );
 }

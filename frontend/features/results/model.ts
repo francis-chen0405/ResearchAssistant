@@ -265,9 +265,24 @@ export function foundSummary(result: V2FinalResearchOutput, evidence: V2Evidence
   const opening = evidence?.study_opening?.length
     ? evidence.study_opening.map((assertion) => assertion.ledger_claim_id)
     : evidence?.publication_opening?.flatMap((sentence) => sentence.ledger_claim_ids) ?? [];
+  // One entry per merged publication, matching the Evidence tab.
+  const groupOf = new Map(
+    relationshipOrder.flatMap((relationship) =>
+      findings[relationship].flatMap((finding) =>
+        [finding.item, ...finding.related].map((item) => [item.ledger_claim_id, `${relationship}:${finding.groupId}`] as const),
+      ),
+    ),
+  );
+  const seenGroups = new Set<string>();
   const openingItems = [...new Set(opening)]
     .map((id) => evidence?.items.find((item) => item.ledger_claim_id === id))
-    .filter((item): item is EvidenceItem => Boolean(item));
+    .filter((item): item is EvidenceItem => Boolean(item))
+    .filter((item) => {
+      const group = groupOf.get(item.ledger_claim_id) ?? item.ledger_claim_id;
+      if (seenGroups.has(group)) return false;
+      seenGroups.add(group);
+      return true;
+    });
   if (openingItems.length) return { paragraphs, items: openingItems, selection: "opening" as const };
   const top = relationshipOrder
     .map((relationship) => findings[relationship][0]?.item)

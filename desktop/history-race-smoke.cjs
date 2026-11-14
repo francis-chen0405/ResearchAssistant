@@ -137,11 +137,12 @@ async function main() {
     });
 
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
     await oldHistoryStarted;
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Settings/ }).click();
     const settingsDialog = page.getByRole("dialog");
-    await settingsDialog.locator("details.advanced-details > summary").click();
+    await settingsDialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await page.getByRole("dialog").locator("details.advanced-details > summary").click();
     await settingsDialog.getByLabel("SQLite database", { exact: true }).fill(databaseB);
     await newHistoryStarted;
     await page.keyboard.press("Escape");
@@ -157,40 +158,42 @@ async function main() {
     await page.waitForTimeout(900);
     assert.equal(await page.locator(".result-heading h1").innerText(), "Latest selected run", "The latest selected history row must win over an older delayed snapshot");
 
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Settings/ }).click();
     const changedDatabaseDialog = page.getByRole("dialog");
-    await changedDatabaseDialog.locator("details.advanced-details > summary").click();
+    await changedDatabaseDialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await page.getByRole("dialog").locator("details.advanced-details > summary").click();
     await changedDatabaseDialog.getByLabel("SQLite database", { exact: true }).fill(databaseC);
     await page.locator(".result-heading h1").waitFor({ state: "detached" });
     assert.equal(await page.locator(".result-heading h1").count(), 0, "Changing databases clears a terminal run selected from the previous database");
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
     await page.getByText("Your saved research will appear here.", { exact: false }).waitFor();
 
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Settings/ }).click();
     const restoreDatabaseDialog = page.getByRole("dialog");
-    await restoreDatabaseDialog.locator("details.advanced-details > summary").click();
+    await restoreDatabaseDialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await page.getByRole("dialog").locator("details.advanced-details > summary").click();
     await restoreDatabaseDialog.getByLabel("SQLite database", { exact: true }).fill(databaseB);
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: /Delayed older run/ }).waitFor();
     await page.getByRole("button", { name: /Delayed older run/ }).click();
-    await page.getByRole("button", { name: "Home", exact: true }).click();
-    await page.locator(".welcome-view").waitFor();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
+    await page.locator(".home").waitFor();
     await page.waitForTimeout(900);
-    assert.equal(await page.locator(".welcome-view").count(), 1, "A late run response must not override navigation away from history");
+    assert.equal(await page.locator(".home").count(), 1, "A late run response must not override navigation away from history");
     assert.equal(await page.locator(".result-heading h1").count(), 0, "An unselected delayed history run must not replace the current view");
     // Result and lazy trail reads belong to their keyed result mount. Leave
     // while both responses are pending, then let them arrive out of order.
     testResultRequests = true;
-    await page.getByRole("button", { name: "Saved research", exact: true }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
     await page.getByRole("button", { name: /Latest selected run/ }).click();
     await resultStarted;
     await page.getByRole("tab", { name: "Method" }).click();
     await page.getByRole("button", { name: "Open research trail" }).click();
     await trailStarted;
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "Home", exact: true }).click();
-    await page.locator(".welcome-view").waitFor();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
+    await page.locator(".home").waitFor();
     await page.waitForFunction(() => document.querySelector(".result-page") === null);
     await page.waitForTimeout(100);
     assert.equal(abortedResultRequests.length, 2, "Leaving a result aborts both detailed-result and trail reads");
@@ -200,7 +203,7 @@ async function main() {
     assert.equal(await page.getByText("Stale detailed result", { exact: true }).count(), 0);
     assert.equal(await page.getByText("Stale trail failure", { exact: true }).count(), 0);
     assert.equal(await page.getByRole("dialog").count(), 0);
-    assert.equal(await page.locator(".welcome-view").count(), 1);
+    assert.equal(await page.locator(".home").count(), 1);
     assert.deepEqual(errors, []);
     console.log("PASS: stale history responses, overlapping run opens, old-database selection cleanup, navigation during run loading, and aborted late result/trail responses.");
   } finally {

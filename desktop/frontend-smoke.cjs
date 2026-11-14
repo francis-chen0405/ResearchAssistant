@@ -43,7 +43,7 @@ async function main() {
       await page.getByRole('heading', { name: 'What the research found', exact: true }).waitFor();
     }
     async function openSavedRun() {
-      await page.getByRole('button',{name:'Saved research',exact:true}).click();
+      await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
       await page.getByRole('button',{name:/Can greener streets/}).click();
     }
 
@@ -170,7 +170,8 @@ async function main() {
       await page.waitForFunction(expected => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === String(expected), step);
       assert.equal(await preview.getAttribute('data-preview-step'),String(step),`Automatic ${state} state`);
       await page.screenshot({path:path.join(shots,`preview-${state}.png`),fullPage:true,animations:'disabled'});
-      assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),`Home fits at ${state}`);
+      const claimBox = await page.getByLabel('What claim do you want to check?',{exact:true}).boundingBox();
+      assert.ok(claimBox && claimBox.y + claimBox.height <= await page.evaluate(()=>innerHeight),`Home shows the claim field without scrolling at ${state}`);
     }
     const loopElapsed = Date.now() - loopStarted;
     assert.ok(loopElapsed > 10000 && loopElapsed < 14000, `Loop must stay over 10 seconds and finish promptly: ${loopElapsed}ms`);
@@ -184,11 +185,14 @@ async function main() {
     assert.equal(await preview.getAttribute('data-preview-step'),'2','Keyboard source inspection pauses the example');
     assert.equal(started,null,'Preview must not create a real run');
     await page.emulateMedia({reducedMotion:'reduce'});
-    await page.getByRole('button',{name:'Explore the workspace',exact:true}).click();
-    await page.getByText('Research models',{exact:true}).click();
-    for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await page.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
+    // Home is the composer; without providers its primary action opens Settings at Search providers.
+    await page.getByLabel('What claim do you want to check?',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
+    await dialog.getByRole('button',{name:'Models',exact:true}).click();
+    await dialog.getByText('Research models',{exact:true}).click();
+    for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await dialog.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
+    await dialog.getByRole('button',{name:'Search providers',exact:true}).click();
     assert.equal(await dialog.locator('input[type=password]').count(),9);
     assert.match(await dialog.innerText(),/OpenAI[\s\S]*Optional until a research role uses a GPT model/);
     await dialog.getByLabel('Xiaomi MiMo API key',{exact:true}).fill('offline-mimo-key');
@@ -204,13 +208,16 @@ async function main() {
     for(let i=0;i<30;i++) { await page.keyboard.press('Tab'); assert.equal(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement)),true, `Tab ${i}: ${await page.evaluate(()=>document.activeElement.outerHTML.slice(0,200))}`); }
     await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({state:'hidden'}); assert.equal(await page.getByRole('dialog').count(),0);
     console.log('Verified keyboard dialog');
-    await page.getByRole('button',{name:'Research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'New research',exact:true}).click();
     assert.equal(await page.getByText('A fresh line of inquiry',{exact:true}).count(),0);
     assert.equal(await page.getByText(/^Default: Luna/).count(),0);
     assert.equal(await page.getByText('Model profile',{exact:true}).count(),0);
-    await page.getByLabel('Your research question',{exact:true}).fill('Can greener streets make cities cooler?');
+    await page.getByLabel('What claim do you want to check?',{exact:true}).fill('Can greener streets make cities cooler?');
+    await page.getByRole('note').getByText(/claims work best as statements/).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Begin research',exact:true}).isDisabled(),false,'A question mark suggests rephrasing without blocking');
     await page.getByRole('button',{name:'Both sides',exact:true}).click();
-    await page.getByLabel('Model budget limit').selectOption('0.50');
+    await page.getByLabel('Spend cap').selectOption('0.50');
+    await page.getByText(/spend cap \$0\.50/).waitFor();
     await page.screenshot({path:path.join(shots,'composer.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Begin research',exact:true}).click();
     await page.getByRole('button',{name:'Cancel run',exact:true}).waitFor();
@@ -263,7 +270,7 @@ async function main() {
     ]);
     await page.screenshot({path:path.join(shots,'research-cancelled.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('dialog').getByRole('button',{name:'Close'}).click();
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     run='failed'; v2ResultRequests=0; v2EvidenceRequests=0;
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.getByText('No brief was produced',{exact:true}).waitFor();
@@ -273,7 +280,7 @@ async function main() {
     assert.equal(v2EvidenceRequests,0,'Failed runs do not request v2 evidence details');
     assert.equal(await page.getByText(/validated brief remains available/i).count(),0,'Failed runs do not claim a brief is available');
     run='released';
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.getByText('Research complete',{exact:true}).waitFor();
     await showTab('Method');
@@ -295,7 +302,7 @@ async function main() {
     await page.screenshot({path:path.join(shots,'research-result.png'),fullPage:true,animations:'disabled'});
     detailed=true;
     evidenceFailure=true;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.locator('.released-statement').getByText('Illustrative supporting finding.',{exact:false}).waitFor();
     await page.getByText(/Detailed evidence could not be loaded/i).first().waitFor();
@@ -390,7 +397,7 @@ async function main() {
     await page.screenshot({path:path.join(shots,'research-evidence-narrow.png'),fullPage:true,animations:'disabled'});
     await page.setViewportSize({width:1280,height:860});
     invalidPlan=true;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await openReportDetails();
     await page.getByRole('tabpanel').getByText('Long-term air temperature data is unavailable.',{exact:false}).waitFor();
@@ -408,9 +415,9 @@ async function main() {
     await methodPanel.getByText(/counted 1 open question for possible follow-up/).waitFor();
     sufficientSourcePool=false;
     assessmentPersisted=true;
-    await page.getByRole('button',{name:'Home',exact:true}).click();
-    await page.locator('.welcome-view').waitFor();
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'New research',exact:true}).click();
+    await page.locator('.home').waitFor();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await openReportDetails();
     methodPanel = await showTab('Method', true);
@@ -441,8 +448,9 @@ async function main() {
     const reviewedFound = page.locator('[aria-labelledby="summary-found"]');
     await reviewedFound.getByText('Strongest findings',{exact:true}).waitFor();
     assert.equal(await reviewedFound.getByText(/not necessarily representative|may not be representative/).count(),0);
-    assert.equal(await reviewedFound.getByRole('button',{name:'See evidence'}).count(),2);
-    await reviewedFound.getByRole('button',{name:'See evidence'}).nth(1).click();
+    // The two reviewed records are one publication, so the list shows it once.
+    assert.equal(await reviewedFound.getByRole('button',{name:'See evidence'}).count(),1);
+    await reviewedFound.getByRole('button',{name:'See evidence'}).first().click();
     await page.locator('.finding[open]').getByText('Surface temperatures only; not a general estimate of air temperature.',{exact:false}).first().waitFor();
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true);
@@ -452,7 +460,7 @@ async function main() {
     studyReviewed=false;
     if (productionFixture) {
       productionReport=true;
-      await page.getByRole('button',{name:'Saved research',exact:true}).click();
+      await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
       await page.getByRole('button',{name:/Can greener streets/}).click();
       await openReportDetails();
       const opening = page.locator('[aria-labelledby="summary-found"]');
@@ -477,29 +485,32 @@ async function main() {
       productionReport=false;
     }
     invalidRelease=true; v2ResultRequests=0; v2EvidenceRequests=0;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await page.getByText('A validated example finding.',{exact:true}).waitFor();
     await page.waitForTimeout(100);
     assert.equal(v2ResultRequests,1,'Released runs validate the stored v2 result before loading evidence');
     assert.equal(v2EvidenceRequests,0,'Evidence is not requested for an invalid v2 release');
     assert.equal(await page.getByText(/Detailed evidence could not be loaded/i).count(),0,'Invalid releases do not show the evidence retry warning');
-    await page.getByRole('button',{name:'Settings',exact:true}).click();
-    await page.getByRole('dialog').locator('summary').filter({hasText:'Search providers'}).click();
+    await page.getByRole('button',{name:/^Settings/}).click();
+    await page.getByRole('dialog').getByRole('button',{name:'Search providers',exact:true}).click();
     await page.getByRole('dialog').getByRole('switch',{name:'arXiv',exact:true}).click();
-    await page.keyboard.press('Escape');
-    await page.getByRole('button',{name:/Provider setup/}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Remove key',exact:true}).first().click();
     await page.getByText('Key removed.',{exact:true}).waitFor(); assert.equal(removed,1);
     await page.keyboard.press('Escape');
-    await page.getByRole('button',{name:'Home',exact:true}).click();
-    await page.locator('.welcome-view').waitFor();
+    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'New research',exact:true}).click();
+    await page.locator('.home').waitFor();
     for (const width of [1440,1280,1024,800,480]) {
       await page.setViewportSize({width,height:width>=1024?768:800});
       await page.screenshot({path:path.join(shots,`home-${width}.png`),fullPage:true,animations:'disabled'});
-      if(width>=1024) assert.ok(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),`Desktop home vertical overflow at ${width}: ${await page.evaluate(()=>document.documentElement.scrollHeight)}`);
+      if(width>=1024) {
+        const fold = await page.evaluate(() => innerHeight);
+        const claimBox = await page.getByLabel('What claim do you want to check?',{exact:true}).boundingBox();
+        assert.ok(claimBox && claimBox.y + claimBox.height <= fold, `Desktop home shows the claim field without scrolling at ${width}`);
+      }
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Horizontal overflow at ${width}`);
-      await page.getByRole('button',{name:/Provider setup/}).click();
+      await page.getByRole('button',{name:/^Settings/}).click();
+      await page.getByRole('dialog').getByRole('button',{name:'Search providers',exact:true}).click();
       await page.getByRole('dialog').getByRole('button',{name:'Save keys securely'}).scrollIntoViewIfNeeded();
       await page.screenshot({path:path.join(shots,`settings-${width}.png`),animations:'disabled'});
       await page.keyboard.press('Escape');
