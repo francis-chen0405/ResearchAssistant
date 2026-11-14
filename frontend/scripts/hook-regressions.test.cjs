@@ -191,11 +191,11 @@ for (const action of ["save", "remove", "check", "restore"]) {
     nodes = elementNodes(harness.render("ProviderSetup", props));
     const invoke = action === "save" ? () => nodes.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }) :
       nodes.find(node => node.type === "button" && node.props.children ===
-        ({ remove: "Remove key", check: "Check connection", restore: "Restore standard route" }[action])).props.onClick;
+        ({ remove: "Remove key", check: "Check connection", restore: "Reset OpenAI endpoint" }[action])).props.onClick;
     invoke(); invoke();
     assert.equal(calls, 1);
     nodes = elementNodes(harness.render("ProviderSetup", props));
-    assert.equal(nodes.filter(node => node.type === "input").length, 7);
+    assert.equal(nodes.filter(node => node.type === "input").length, 9);
     for (const input of nodes.filter(node => node.type === "input")) assert.equal(input.props.disabled, true);
     finish({ saved: true, message: "Generated action completed" });
     await new Promise(setImmediate);
@@ -425,7 +425,6 @@ for (const scenario of ["owned", "different-worker", "missing", "wrong-run"]) {
     const offline = () => {};
     let result = harness.render("useResearch", notify, offline);
     result.setClaim("Generated offline claim");
-    result.setAcknowledged(true);
     result = harness.render("useResearch", notify, offline);
     await result.beginResearch({ preventDefault() {} }, { runId: "requested", dbPath: "db" },
       { service: { wigolo_ready: true } }, () => {});

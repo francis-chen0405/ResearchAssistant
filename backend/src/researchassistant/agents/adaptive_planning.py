@@ -112,6 +112,7 @@ _PROVIDER_TOTAL_CEILINGS = {
     DiscoveryProvider.ARXIV: 6,
     DiscoveryProvider.PUBMED: 6,
     DiscoveryProvider.SERPER: 6,
+    DiscoveryProvider.BRAVE: 6,
 }
 
 
@@ -122,6 +123,7 @@ _ROUND_TWO_PER_DIRECTION_CAPS = {
     DiscoveryProvider.ARXIV: 1,
     DiscoveryProvider.PUBMED: 1,
     DiscoveryProvider.SERPER: 1,
+    DiscoveryProvider.BRAVE: 1,
 }
 
 
@@ -220,10 +222,6 @@ def _plan_round(
         prompt = load_prompt(LLMStage.SEARCH_AGENT)
         lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
     else:
-        if DiscoveryProvider.SERPER in base_request_input.eligible_providers:
-            raise V2AdaptiveNoEligibleProviderError(
-                "Serper has no provider-native conceptual query compiler"
-            )
         lanes = _adaptive_concept_lanes(base_request_input, resolved_query_modes)
         if not lanes:
             raise V2AdaptiveNoEligibleProviderError(
@@ -805,7 +803,7 @@ def _eligible_budgets(
     if path is not None and any(query.compiled_query is not None for query in plan.searches):
         return tuple(
             item
-            for item in available_query_budgets(path, plan.run_id)
+            for item in available_query_budgets(path, plan.run_id, skip_empty_arxiv=True)
             if item.provider in providers
         )
     return tuple(

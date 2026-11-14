@@ -104,6 +104,7 @@ class V2SelectionInputCheckpoint(StrictModel):
 
     run_id: UUID
     policy: Literal["selection-input-checkpoint-v1"] = "selection-input-checkpoint-v1"
+    compact_ranking: bool = False
     full_input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     input: V2SourceSelectionInput | None
     shortlist: V2SelectionShortlistAudit | None
@@ -207,11 +208,8 @@ class V2UnknownStageOutcomeError(RuntimeError):
     """An intent owns an attempt whose outcome could not be recovered."""
 
 
-def stage_attempt(
-    *, path: str, key: str, number: int, request: LLMRequest, started_at: datetime
-) -> tuple[V2StageAttemptCheckpoint, V2StageOutcomeCheckpoint | None, bool]:
-    """Record intent before dispatch; a previous intent without outcome cannot repeat."""
-    digest = checkpoint_hash(
+def stage_request_hash(request: LLMRequest) -> str:
+    return checkpoint_hash(
         {
             "request": request.model_dump(
                 mode="json", exclude={"requested_output_type", "input_artifact"}
@@ -221,6 +219,13 @@ def stage_attempt(
             "output_schema": request.requested_output_type.model_json_schema(),
         }
     )
+
+
+def stage_attempt(
+    *, path: str, key: str, number: int, request: LLMRequest, started_at: datetime
+) -> tuple[V2StageAttemptCheckpoint, V2StageOutcomeCheckpoint | None, bool]:
+    """Record intent before dispatch; a previous intent without outcome cannot repeat."""
+    digest = stage_request_hash(request)
     attempt_key = f"{key}/attempt-{number}"
     attempt_id = uuid5(NAMESPACE_URL, f"bounded-stage-v1::{request.run_id}::{attempt_key}")
     previous = read_checkpoint(path, request.run_id, attempt_key, V2StageAttemptCheckpoint)

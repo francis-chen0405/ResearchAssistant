@@ -50,7 +50,8 @@ def test_shared_alternate_url_is_audited_as_duplicate_after_one_fetch(tmp_path: 
 
     assert dispositions[fetched_cluster_id].disposition == "usable"
     assert len(duplicate_rows) == len(discovery.clusters) - 1
-    assert all(item.shortlisted for item in duplicate_rows)
+    assert any(item.shortlisted for item in duplicate_rows)
+    assert any(not item.shortlisted for item in duplicate_rows)
     assert audit.acquisition_shortlisted_clusters == sum(
         item.shortlisted for item in audit.dispositions
     )

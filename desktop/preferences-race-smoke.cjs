@@ -89,7 +89,6 @@ async function main() {
     await budget.selectOption("0.50");
     await page.getByRole("button", { name: "Both sides", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("A generated offline claim");
-    await page.getByRole("checkbox").check();
     const saveDeadline = Date.now() + 5000;
     while (saves.at(-1)?.maxCost !== "0.50" && Date.now() < saveDeadline) await page.waitForTimeout(20);
     assert.equal(saves.at(-1)?.maxCost, "0.50");

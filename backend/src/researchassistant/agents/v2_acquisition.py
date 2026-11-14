@@ -451,6 +451,13 @@ def run_v2_acquisition_probe(
         completed_at=completed_at,
     )
     if ranking is not None:
+        if not capture_aware:
+            duplicate_cluster_ids.update(
+                cluster.cluster_id for cluster in discovery_output.clusters
+                if cluster.cluster_id not in excluded_cluster_ids
+                and {cluster.preferred_url, cluster.canonical_url, *cluster.alternate_urls}
+                & acquired_urls
+            )
         shortlisted = shortlisted_cluster_ids
         fetched = {item.cluster_id for item in acquired}
         usable = {item.cluster_id for item in survivors}

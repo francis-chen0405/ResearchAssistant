@@ -8,6 +8,8 @@ import {
 
 export type MainView = "home" | "research" | "history";
 
+export const MAX_RUN_TOKENS = 1_000_000;
+
 export type Settings = InterfaceSettings & { runId: string };
 
 export const defaultModelOptions: ModelOption[] = [

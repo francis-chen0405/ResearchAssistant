@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-
 from researchassistant.contracts.discovery_v2 import V2ProviderCapabilities
 from researchassistant.contracts.model_contracts import DiscoveryProvider
 from researchassistant.research.discovery_capabilities import (
@@ -22,11 +21,11 @@ def test_catalog_covers_only_enabled_fresh_v2_providers() -> None:
         DiscoveryProvider.PUBMED,
         DiscoveryProvider.EXA,
         DiscoveryProvider.SERPSEARCH,
+        DiscoveryProvider.BRAVE,
+        DiscoveryProvider.SERPER,
     }
     with pytest.raises(TypeError):
         PROVIDER_CAPABILITIES[DiscoveryProvider.SERPER] = next(iter(PROVIDER_CAPABILITIES.values()))  # type: ignore[index]
-    with pytest.raises(ValueError, match="no fresh-v2"):
-        get_provider_capabilities(DiscoveryProvider.SERPER)
 
 
 @pytest.mark.parametrize("capability", PROVIDER_CAPABILITIES.values())

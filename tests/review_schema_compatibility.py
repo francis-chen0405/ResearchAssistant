@@ -85,6 +85,42 @@ def normalize_approved_additive_fields(
     for model in models:
         properties = model.get("properties", {})
         title = model.get("title")
+        limit_field = {
+            "ResearchControls": "provider_request_limits",
+            "ResearchStartInput": "provider_request_limits",
+            "InterfaceSettings": "providerRequestLimits",
+        }.get(title)
+        if limit_field is not None:
+            limits = properties.pop(limit_field)
+            mapping = limits["anyOf"][0] if "anyOf" in limits else limits
+            assert mapping["type"] == "object"
+            assert mapping["additionalProperties"] == {
+                "type": "integer", "minimum": 1, "maximum": 18,
+            }
+        if title == "ResearchControls":
+            depths = properties["metadata_depth"]["anyOf"][0]["enum"]
+            assert depths == [10, 20, 30, 50]
+            depths.remove(30)
+        if title == "DiscoveryProvider":
+            assert model["enum"].pop() == "brave"
+        provider = properties.get("provider", {})
+        if provider.get("enum", [])[-2:] == ["brave", "serper"]:
+            assert provider["enum"] == [
+                "openalex",
+                "arxiv",
+                "pubmed",
+                "exa",
+                "serpsearch",
+                "brave",
+                "serper",
+            ]
+            del provider["enum"][-2:]
+        if title == "V2DiscoveryBinding":
+            providers = properties["providers"]
+            assert providers["maxItems"] == 7
+            providers["maxItems"] = 5
+            assert providers["items"]["enum"][-2:] == ["brave", "serper"]
+            del providers["items"]["enum"][-2:]
         if title in {"CrossrefIdentityMetadata", "V2SourceSelectionCandidate"}:
             field, label = (
                 ("container_title", "Container Title")

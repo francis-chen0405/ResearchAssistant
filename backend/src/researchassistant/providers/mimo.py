@@ -230,11 +230,20 @@ class XiaomiMimoAdapter:
             headers=_auth_headers(self._config),
         )
 
+        # On macOS monotonic time can pause during sleep. Include elapsed wall
+        # time so an expired request fails at the first check after waking.
+        monotonic_start = time.monotonic()
+        wall_clock = getattr(time, "time", time.monotonic)
+        wall_start = wall_clock()
+
+        def deadline_clock() -> float:
+            return max(time.monotonic(), monotonic_start + (wall_clock() - wall_start))
+
         def check_deadline() -> None:
-            if time.monotonic() >= deadline:
+            if deadline_clock() >= deadline:
                 raise httpx.ReadTimeout("model exceeded absolute stage deadline", request=outgoing)
 
-        with network_deadline(time.monotonic, deadline):
+        with network_deadline(deadline_clock, deadline):
             check_deadline()
             response = self._client.send(outgoing, stream=True, follow_redirects=False)
             try:

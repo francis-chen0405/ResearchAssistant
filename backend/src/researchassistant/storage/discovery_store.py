@@ -64,6 +64,8 @@ _T = TypeVar("_T", bound=V2DiscoveryArtifact)
 _KEY_PREFIX = "source-discovery-v1"
 _MAX_REQUESTS = {
     "serpsearch": 12,
+    "brave": 6,
+    "serper": 6,
     "exa": 18,
     "openalex": 10,
     "arxiv": 6,

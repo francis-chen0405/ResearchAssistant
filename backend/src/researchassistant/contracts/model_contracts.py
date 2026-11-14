@@ -85,6 +85,7 @@ class DiscoveryProvider(StrEnum):
     ARXIV = "arxiv"
     PUBMED = "pubmed"
     SERPER = "serper"
+    BRAVE = "brave"
 
 
 class SearchIntent(StrEnum):
@@ -131,13 +132,17 @@ class ResearchFocus(StrictModel):
         return self
 
 
+ProviderRequestLimits = dict[DiscoveryProvider, Annotated[int, Field(strict=True, ge=1, le=18)]]
+
+
 class ResearchControls(StrictModel):
     """Frozen operator choices whose canonical JSON is part of run compatibility."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     # Absent on historical controls: never invent recorded settings on old runs.
-    metadata_depth: Literal[10, 20, 50] | None = None
+    provider_request_limits: ProviderRequestLimits | None = None
+    metadata_depth: Literal[10, 20, 30, 50] | None = None
     seed_expansion_enabled: bool | None = Field(default=None, strict=True)
     scholarly_search_mode: Literal["lexical", "semantic", "auto"] | None = None
 
@@ -146,7 +151,7 @@ class ResearchControls(StrictModel):
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, Any]:
         data = handler(self)
-        for name in ("metadata_depth", "seed_expansion_enabled", "scholarly_search_mode"):
+        for name in ("metadata_depth", "seed_expansion_enabled", "scholarly_search_mode", "provider_request_limits"):
             if getattr(self, name) is None:
                 data.pop(name, None)
         return data

@@ -49,6 +49,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
         use_openalex: bool = True,
         use_arxiv: bool = False,
         use_pubmed: bool = False,
+        use_brave: bool = False,
+        use_serper: bool = False,
     ) -> ConfigurationResponse:
         return configuration_service.configuration(
             runtime,
@@ -59,6 +61,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
             use_openalex=use_openalex,
             use_arxiv=use_arxiv,
             use_pubmed=use_pubmed,
+            use_brave=use_brave,
+            use_serper=use_serper,
         )
 
     @router.post("/api/configuration/check", response_model=ConfigurationResponse)

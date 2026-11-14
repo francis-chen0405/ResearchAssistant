@@ -297,6 +297,14 @@ class V2AdaptiveRoundExecution(StrictModel):
 
     _completed_at_is_aware = field_validator("completed_at")(_aware_datetime)
 
+    @property
+    def usable_for_follow_up(self) -> bool:
+        return self.status is V2AdaptiveRoundStatus.COMPLETED or (
+            self.status is V2AdaptiveRoundStatus.DEGRADED
+            and self.completed_query_count > 0
+            and self.survivor_additions > 0
+        )
+
 
 class V2AdaptiveStoppingDecision(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

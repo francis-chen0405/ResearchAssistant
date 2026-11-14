@@ -829,6 +829,8 @@ class LiveResearchController:
                     "SERPSEARCH_API_KEY",
                     "FIRECRAWL_API_KEY",
                     "PUBMED_API_KEY",
+                    "BRAVE_API_KEY",
+                    "SERPER_API_KEY",
                 )
             ),
         )

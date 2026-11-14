@@ -2,23 +2,22 @@
 
 import pytest
 from pydantic import ValidationError
-
 from researchassistant.platform_support.desktop_settings import InterfaceSettings
 
 
 def test_legacy_interface_preferences_receive_documented_discovery_defaults() -> None:
     settings = InterfaceSettings.model_validate({"sourceTarget": 10, "useOpenAlex": True})
 
-    assert settings.metadataDepth == 50
+    assert settings.metadataDepth == 30
     assert settings.seedExpansionEnabled is True
     assert settings.scholarlySearchMode == "lexical"
 
 
-def test_new_interface_preferences_default_to_twenty_sources() -> None:
+def test_new_interface_preferences_default_to_ten_sources() -> None:
     settings = InterfaceSettings()
 
-    assert settings.sourceTarget == 20
-    assert settings.metadataDepth == 50
+    assert settings.sourceTarget == 10
+    assert settings.metadataDepth == 30
     assert InterfaceSettings(sourceTarget=30).sourceTarget == 30
     # Existing preferences saved with 15 remain readable after the choice is hidden.
     assert InterfaceSettings(sourceTarget=15).sourceTarget == 15

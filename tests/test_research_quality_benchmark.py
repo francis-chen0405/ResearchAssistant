@@ -75,7 +75,9 @@ def test_current_product_settings_preserve_frozen_baseline_except_new_capacity()
     assert baseline["discovery_policy"]["max_acquisition_per_round"] == 25
     assert {**current_policy, "max_acquisition_per_round": 25} == baseline["discovery_policy"]
     assert model_options_payload().model_dump(mode="json") == baseline["model_options"]
-    assert V2RunCeilings().model_dump(mode="json") == baseline["model_ceilings"]
+    current_ceilings = V2RunCeilings().model_dump(mode="json")
+    assert current_ceilings["max_total_tokens"] == 1_000_000
+    assert {**current_ceilings, "max_total_tokens": 500_000} == baseline["model_ceilings"]
 
 
 def test_no_network_or_credentials_are_required(

@@ -2,7 +2,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Configuration,
-  ModelProfile,
   ProviderSelection,
   StageModels,
   researchApi,
@@ -31,6 +30,20 @@ const providers = [
     vault: "SERPSEARCH_API_KEY",
     name: "SERP Search",
     description: "Web search. Required when selected.",
+  },
+  {
+    id: "brave",
+    field: "brave_api_key",
+    vault: "BRAVE_API_KEY",
+    name: "Brave Search",
+    description: "Independent web search.",
+  },
+  {
+    id: "serper",
+    field: "serper_api_key",
+    vault: "SERPER_API_KEY",
+    name: "Serper",
+    description: "Google web results.",
   },
   {
     id: "exa",
@@ -88,7 +101,6 @@ export function ProviderSetup({
     stageModelsKey: "",
     messages: {},
   });
-  const [profiles, setProfiles] = useState<ModelProfile[]>([]);
   const stageModelsKey = JSON.stringify(stageModels);
   const currentStageModelsKey = useRef(stageModelsKey);
   const currentChecks =
@@ -99,16 +111,6 @@ export function ProviderSetup({
   const usesOpenAI = Object.values(stageModels).some((choice) =>
     choice.startsWith("gpt-"),
   );
-  useEffect(() => {
-    void researchApi
-      .profiles()
-      .then(setProfiles)
-      .catch(() =>
-        setMessage(
-          "Model profiles could not be loaded. Reopen settings to retry.",
-        ),
-      );
-  }, []);
   useEffect(() => {
     currentStageModelsKey.current = stageModelsKey;
   }, [stageModelsKey]);
@@ -238,32 +240,7 @@ export function ProviderSetup({
       : "Optional until a research role uses a GPT model.",
   };
   return (
-    <Dialog title="Connect your research tools" onClose={onClose} wide>
-      <p className="modal-intro">
-        Bring your provider accounts. Your keys stay in macOS Keychain or
-        Windows Credential Manager. Your research and settings stay on this
-        device.
-      </p>
-      <aside className="keychain-help">
-        <strong>About the macOS password prompt</strong>
-        <p>
-          If macOS asks to access your login keychain, it needs your Mac
-          login/keychain password. Enter provider API keys only in the fields
-          below. A rebuilt unsigned app may ask for access again after an
-          update.
-        </p>
-      </aside>
-      <div className="onboarding-steps">
-        <span>
-          <b>01</b> Connect required model providers
-        </span>
-        <span>
-          <b>02</b> Choose sources in Settings
-        </span>
-        <span>
-          <b>03</b> Start a question
-        </span>
-      </div>
+    <Dialog title="Provider connections" onClose={onClose} wide>
       <form className="connections-form" onSubmit={submit}>
         <div className="connection-grid">
           {providers.map((provider) => {
@@ -330,9 +307,7 @@ export function ProviderSetup({
           })}
         </div>
         <p className="security-note">
-          Connection checks for MiMo and OpenAI only list models; they do not
-          generate text. Saved source keys are checked during research. arXiv
-          requires no key; PubMed can also work without one.
+          Keys are stored in your system credential vault.
         </p>
         {message && (
           <p className="setup-status" role="status">
@@ -348,53 +323,17 @@ export function ProviderSetup({
           <span aria-hidden="true">↗</span>
         </button>
       </form>
-      <section className="profile-settings">
-        <p className="eyebrow">Models are separate from connections</p>
-        <h3>Per role model routing.</h3>
-        <p>
-          Each research role has its own selected model. Existing runs keep
-          their original configuration.
-        </p>
-        {profiles.map((profile) => (
-          <details key={profile.id}>
-            <summary>{profile.name} · roles and budget caps</summary>
-            <p>
-              {profile.description}. Price caps reviewed{" "}
-              {profile.pricing_reviewed}; these are conservative reservations,
-              not a billing estimate.
-            </p>
-            <div className="profile-table">
-              {profile.models.map((model) => (
-                <article key={model.model}>
-                  <strong>{model.model}</strong>
-                  <p>{model.roles}</p>
-                  <small>
-                    ${model.input_per_million} input / $
-                    {model.output_per_million} output per million tokens ·{" "}
-                    {model.completion_limit.toLocaleString()} output tokens per
-                    call
-                  </small>
-                </article>
-              ))}
-            </div>
-          </details>
-        ))}
-        <details>
-          <summary>Restore standard model routing</summary>
-          <p>
-            Restores the standard OpenAI endpoint and Luna model for legacy
-            deployments. Your selected model for each research role remains
-            unchanged.
-          </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void restoreStandardRoute()}
-          >
-            Restore standard route
-          </button>
-        </details>
-      </section>
+      <details className="advanced-details">
+        <summary>Connection troubleshooting</summary>
+        <p>If macOS prompts for Keychain access, enter your Mac login password.</p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void restoreStandardRoute()}
+        >
+          Reset OpenAI endpoint
+        </button>
+      </details>
     </Dialog>
   );
 }

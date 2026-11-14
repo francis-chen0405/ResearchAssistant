@@ -50,6 +50,8 @@ Provider = Literal[
     DiscoveryProvider.PUBMED,
     DiscoveryProvider.EXA,
     DiscoveryProvider.SERPSEARCH,
+    DiscoveryProvider.BRAVE,
+    DiscoveryProvider.SERPER,
 ]
 
 
@@ -773,6 +775,8 @@ class V2DiscoveryProviderBudget(V2DiscoveryValue):
     def bounded_provider_budget(self) -> V2DiscoveryProviderBudget:
         caps = {
             DiscoveryProvider.SERPSEARCH: 12,
+            DiscoveryProvider.BRAVE: 6,
+            DiscoveryProvider.SERPER: 6,
             DiscoveryProvider.EXA: 18,
             DiscoveryProvider.OPENALEX: 10,
             DiscoveryProvider.ARXIV: 6,
@@ -793,7 +797,7 @@ class V2DiscoveryProviderBudget(V2DiscoveryValue):
 class V2DiscoveryBinding(V2DiscoveryArtifact):
     exact_claim: Annotated[str, Field(min_length=1)]
     directions: ResearchDirections
-    providers: tuple[Provider, ...] = Field(min_length=1, max_length=5)
+    providers: tuple[Provider, ...] = Field(min_length=1, max_length=len(DiscoveryProvider))
     policy: V2DiscoveryPolicy | V2MetadataDiscoveryPolicy | V2ProductDiscoveryPolicy
     capabilities: tuple[V2ProviderCapabilities, ...]
     provider_budgets: tuple[V2DiscoveryProviderBudget, ...]

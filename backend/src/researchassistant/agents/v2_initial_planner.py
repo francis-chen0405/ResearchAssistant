@@ -276,8 +276,6 @@ def run_v2_initial_planner(
             if frozen.run_id != resolved_run_id or frozen.exact_claim != raw_claim:
                 raise ValueError("saved source suggestions changed run or claim")
         suggestions = frozen.leads
-    if not legacy_prompt and DiscoveryProvider.SERPER in discovery_providers:
-        raise ValueError("Serper has no provider-native conceptual query compiler")
     planner_input = V2InitialPlannerInput(
         run_id=resolved_run_id,
         raw_claim=raw_claim,

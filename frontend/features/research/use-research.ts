@@ -30,7 +30,6 @@ export function useResearch(
   enabled = true,
 ) {
   const [claim, setClaim] = useState("");
-  const [acknowledged, setAcknowledged] = useState(false);
   const [snapshot, updateSnapshot] = useState<RunSnapshot | null>(null);
   const [received, setReceived] = useState<{ runId: string; at: number } | null>(null);
   const setSnapshot = useCallback((next: RunSnapshot | null) => {
@@ -157,7 +156,7 @@ export function useResearch(
   ) => {
     event.preventDefault();
     const trimmedClaim = claim.trim();
-    if (!trimmedClaim || !acknowledged) return;
+    if (!trimmedClaim) return;
     if (!configuration) {
       notify("The local API is not ready yet.");
       return;
@@ -177,7 +176,6 @@ export function useResearch(
         model_profile: settings.modelProfile,
         stage_models: settings.stageModels,
         raw_claim: trimmedClaim,
-        acknowledged_public: acknowledged,
         db_path: settings.dbPath,
         run_id: settings.runId.trim() || null,
         max_tokens: settings.maxTokens,
@@ -191,7 +189,10 @@ export function useResearch(
         use_openalex: settings.useOpenAlex,
         use_arxiv: settings.useArxiv,
         use_pubmed: settings.usePubmed,
+        use_brave: settings.useBrave,
+        use_serper: settings.useSerper,
         use_crossref: settings.useCrossref,
+        provider_request_limits: settings.providerRequestLimits,
         metadata_depth: settings.metadataDepth,
         seed_expansion_enabled: settings.seedExpansionEnabled,
         scholarly_search_mode: settings.scholarlySearchMode,
@@ -259,7 +260,6 @@ export function useResearch(
     setActiveRun(null);
     setSnapshot(null);
     setClaim("");
-    setAcknowledged(false);
   };
   const clearTerminalOutsideDatabase = (database: string) => {
     if (
@@ -275,8 +275,6 @@ export function useResearch(
   return {
     claim,
     setClaim,
-    acknowledged,
-    setAcknowledged,
     snapshot,
     setSnapshot,
     activeRun,

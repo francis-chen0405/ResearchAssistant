@@ -16,6 +16,7 @@ PROMPT_NAMES = (
     "search_agent_v3.md",
     "source_selection.md",
     "source_selection_v3.md",
+    "source_selection_v4.md",
     "synthesizer.md",
     "v2_evidence_analyst.md",
     "v2_evidence_analyst_v9.md",
@@ -24,6 +25,7 @@ PROMPT_NAMES = (
     "v2_scout.md",
     "v2_scout_v2.md",
     "v2_scout_v3.md",
+    "v2_scout_v4.md",
 )
 
 

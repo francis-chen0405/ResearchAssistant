@@ -24,6 +24,7 @@ from researchassistant.contracts.models import (
     StrictModel,
     V2PersistedArtifact,
 )
+from researchassistant.contracts.research_policy import V2_MAX_TOTAL_TOKENS
 from researchassistant.providers.llm import (
     LLMProvider,
     LLMProviderCapabilities,
@@ -41,7 +42,6 @@ from researchassistant.storage.store import (
 )
 
 V2_MAX_PHYSICAL_CALLS = 160
-V2_MAX_TOTAL_TOKENS = 500_000
 V2_DEFAULT_TOTAL_COST_USD = Decimal("0.20")
 V2_BUDGET_POLICY_IDENTITY = "researchassistant-v2-phase-13-run-budget-analyzer-admission-v1"
 V2_PHYSICAL_CALL_LEGACY_ARTIFACT_PREFIX = "phase-12-physical-call"
@@ -60,7 +60,7 @@ class V2RunCeilings(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     max_physical_calls: int = Field(default=V2_MAX_PHYSICAL_CALLS, ge=1, le=160)
-    max_total_tokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=500_000)
+    max_total_tokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=V2_MAX_TOTAL_TOKENS)
     max_total_cost_usd: Decimal = Field(
         default=V2_DEFAULT_TOTAL_COST_USD, gt=0, le=Decimal("20.00")
     )

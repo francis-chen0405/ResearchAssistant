@@ -21,7 +21,7 @@ function readableValue(value: string): string {
     pending: "Pending", excluded: "Excluded", selected: "Selected", admitted: "Admitted",
     failed: "Failed", unknown: "Unknown", unusable: "Unusable", readable: "Readable",
     captured: "Captured", recorded: "Recorded", source_capture: "Source capture", capture: "Capture",
-    openalex: "OpenAlex", exa: "Exa", serper: "Serper", serpsearch: "SERP Search",
+    openalex: "OpenAlex", exa: "Exa", serper: "Serper", brave: "Brave Search", serpsearch: "SERP Search",
     pubmed: "PubMed", arxiv: "arXiv", crossref: "Crossref",
   };
   return labels[value.toLowerCase()] ?? "Other recorded value";

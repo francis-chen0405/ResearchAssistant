@@ -87,6 +87,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
         use_openalex: bool = True,
         use_arxiv: bool = False,
         use_pubmed: bool = False,
+        use_brave: bool = False,
+        use_serper: bool = False,
     ) -> CredentialSetupResponse:
         with runtime.lifecycle.idle_change(
             runtime.controller.has_active_runs, message="Wait for active research to finish."
@@ -106,6 +108,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
                     payload.openalex_api_key,
                     payload.firecrawl_api_key,
                     payload.pubmed_api_key,
+                    payload.brave_api_key,
+                    payload.serper_api_key,
                 )
             ):
                 raise HTTPException(status_code=422, detail="Enter at least one API key to save.")
@@ -155,6 +159,16 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
                     if payload.firecrawl_api_key is not None
                     else None
                 ),
+                brave_api_key=(
+                    payload.brave_api_key.get_secret_value()
+                    if payload.brave_api_key is not None
+                    else None
+                ),
+                serper_api_key=(
+                    payload.serper_api_key.get_secret_value()
+                    if payload.serper_api_key is not None
+                    else None
+                ),
             )
             try:
                 runtime.credential_saver(credentials)
@@ -168,6 +182,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
             use_openalex=use_openalex,
             use_arxiv=use_arxiv,
             use_pubmed=use_pubmed,
+            use_brave=use_brave,
+            use_serper=use_serper,
         )
         config_message = runtime.controller.configuration_message(
             discovery_providers=discovery_providers,

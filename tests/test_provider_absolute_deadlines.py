@@ -320,3 +320,28 @@ def test_provider_dns_and_numeric_fallback_share_one_deadline_and_original_tls_n
     assert b"Host: api.example" in wires[1].sent
     assert sni == ["api.example"]
     assert timeouts[:3] == [0.02, pytest.approx(0.015), pytest.approx(0.01)]
+
+
+def test_model_deadline_expires_after_wall_time_jump(monkeypatch: pytest.MonkeyPatch) -> None:
+    route_config = _config().routing
+    selected = route_config.mimo_v25
+    assert selected is not None
+    route = route_config.preflight().for_stage(LLMStage.SCOUT)
+    wall_times = iter((1000.0, 4600.0))
+    monkeypatch.setattr(
+        mimo, "time", SimpleNamespace(monotonic=lambda: 50.0, time=lambda: next(wall_times))
+    )
+
+    def unexpected_request(_: httpx.Request) -> httpx.Response:
+        pytest.fail("expired request reached the wire")
+
+    with httpx.Client(
+        base_url="http://api.example", transport=httpx.MockTransport(unexpected_request)
+    ) as client:
+        adapter = XiaomiMimoAdapter(
+            selected, client=client, price_cap=route.price_cap,
+            expected_model_alias=route.logical_alias,
+        )
+        with pytest.raises(MimoProviderError) as error:
+            adapter.generate(_request(LLMStage.SCOUT, uuid4()))
+        assert error.value.code is MimoFailureCode.TIMEOUT

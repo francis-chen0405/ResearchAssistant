@@ -340,7 +340,6 @@ async function main() {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.getByRole("button", { name: "Research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does the regional education program increase course completion?");
-    await page.getByRole("checkbox").check();
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
@@ -412,7 +411,6 @@ async function main() {
 
     await page.getByRole("button", { name: "Start new research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does replacement cancel scheduled polling?");
-    await page.getByRole("checkbox").check();
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
@@ -444,7 +442,6 @@ async function main() {
 
     await page.getByRole("button", { name: "Start new research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does unmount cancel scheduled polling?");
-    await page.getByRole("checkbox").check();
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
     await snapshotStarted;
@@ -457,7 +454,6 @@ async function main() {
     recoveryMode = true;
     await page.getByRole("button", { name: "Research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Can this same run reconnect safely?");
-    await page.getByRole("checkbox").check();
     const beforeRecovery = snapshotCalls;
     const recoveryStart = page.waitForResponse((response) => response.url().endsWith("/api/research/start"));
     await page.getByRole("button", { name: "Begin research", exact: true }).click();

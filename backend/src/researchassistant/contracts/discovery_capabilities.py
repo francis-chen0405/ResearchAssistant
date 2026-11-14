@@ -223,6 +223,32 @@ _CAPABILITIES: tuple[V2ProviderCapabilities, ...] = (
             "upstream Google interprets query syntax; this adapter does not validate it locally",
         ),
     ),
+    V2ProviderCapabilities(
+        provider=DiscoveryProvider.BRAVE,
+        search_modes=("lexical",),
+        fields=("q", "count"),
+        operators=("quoted_phrase",),
+        max_metadata_per_page=10,
+        max_metadata_per_operation=10,
+        pagination="none",
+        identity_lookup=False,
+        executable_search_modes=("lexical",),
+        documentation_urls=("https://api-dashboard.search.brave.com/api-reference/web/search/get",),
+        restrictions=("first page only; at most ten records per operation",),
+    ),
+    V2ProviderCapabilities(
+        provider=DiscoveryProvider.SERPER,
+        search_modes=("lexical",),
+        fields=("q", "num"),
+        operators=("quoted_phrase", "or"),
+        max_metadata_per_page=10,
+        max_metadata_per_operation=10,
+        pagination="none",
+        identity_lookup=False,
+        executable_search_modes=("lexical",),
+        documentation_urls=("https://serper.dev/",),
+        restrictions=("first page only; at most ten organic records per operation",),
+    ),
 )
 
 PROVIDER_CAPABILITIES: Mapping[DiscoveryProvider, V2ProviderCapabilities] = MappingProxyType(

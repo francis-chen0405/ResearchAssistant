@@ -45,8 +45,8 @@ def test_fresh_cli_uses_current_product_defaults_without_starting_research(
 
     assert result is CLIExitCode.CONFIGURATION_ERROR
     assert len(seen) == 1
-    assert seen[0].metadata_depth == 50
-    assert seen[0].sources_per_stance_per_round == 20
+    assert seen[0].metadata_depth == 30
+    assert seen[0].sources_per_stance_per_round == 10
     assert not path.exists()
 
 

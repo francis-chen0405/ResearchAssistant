@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-
 from frontend.api import ApiRuntime, ConnectionCheck, create_app
 from frontend.live_service import (
     LiveHistoryItem,
@@ -592,7 +591,7 @@ def test_start_uses_safe_defaults_and_requires_acknowledgement(tmp_path: Path) -
     assert accepted.status_code == 200
     request = controller.started[0]
     assert request.raw_claim == "A public claim"
-    assert request.max_tokens == 500_000
+    assert request.max_tokens == 1_000_000
     assert request.max_cost_usd == Decimal("0.20")
     assert request.max_llm_calls == 160
     assert request.research_controls.depth.value == "standard"
@@ -670,6 +669,8 @@ def test_configuration_reports_saved_key_presence_without_returning_secrets() ->
         "/api/credentials",
         json={
             "pubmed_api_key": "pubmed-super-secret",
+            "brave_api_key": "brave-super-secret",
+            "serper_api_key": "serper-super-secret",
             "mimo_v25_input_usd_per_million": "1.25",
         },
     )
@@ -678,7 +679,7 @@ def test_configuration_reports_saved_key_presence_without_returning_secrets() ->
 
     assert response.status_code == 200
     assert response.json()["configured"] is False
-    assert response.json()["saved_credentials"] == ["pubmed"]
+    assert response.json()["saved_credentials"] == ["pubmed", "brave", "serper"]
     assert response.json()["saved_settings"] == ["MiMo input price"]
     assert "secret" not in response.text
 

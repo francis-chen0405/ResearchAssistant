@@ -36,6 +36,8 @@ def _selected_discovery_providers(
     use_openalex: bool,
     use_arxiv: bool,
     use_pubmed: bool,
+    use_brave: bool = False,
+    use_serper: bool = False,
 ) -> tuple[DiscoveryProvider, ...]:
     """Resolve website provider switches in the canonical provider order."""
     return tuple(
@@ -46,6 +48,8 @@ def _selected_discovery_providers(
             (DiscoveryProvider.OPENALEX, use_openalex),
             (DiscoveryProvider.ARXIV, use_arxiv),
             (DiscoveryProvider.PUBMED, use_pubmed),
+            (DiscoveryProvider.SERPER, use_serper),
+            (DiscoveryProvider.BRAVE, use_brave),
         )
         if enabled
     )
@@ -60,6 +64,8 @@ def _saved_credential_names(environment: MutableMapping[str, str]) -> tuple[str,
         ("exa", "EXA_API_KEY"),
         ("openalex", "OPENALEX_API_KEY"),
         ("pubmed", "PUBMED_API_KEY"),
+        ("brave", "BRAVE_API_KEY"),
+        ("serper", "SERPER_API_KEY"),
         ("firecrawl", "FIRECRAWL_API_KEY"),
     )
     return tuple(label for label, key in labels if environment.get(key, "").strip())
@@ -114,6 +120,8 @@ def configuration(
     use_openalex: bool = True,
     use_arxiv: bool = False,
     use_pubmed: bool = False,
+    use_brave: bool = False,
+    use_serper: bool = False,
 ) -> ConfigurationResponse:
     discovery_providers = _selected_discovery_providers(
         use_serpsearch=use_serpsearch,
@@ -121,6 +129,8 @@ def configuration(
         use_openalex=use_openalex,
         use_arxiv=use_arxiv,
         use_pubmed=use_pubmed,
+        use_brave=use_brave,
+        use_serper=use_serper,
     )
     selected_profile = model_profile
     current_stage_models = DEFAULT_STAGE_MODELS
@@ -181,6 +191,8 @@ def configuration_check(
         use_openalex=payload.use_openalex,
         use_arxiv=payload.use_arxiv,
         use_pubmed=payload.use_pubmed,
+        use_brave=payload.use_brave,
+        use_serper=payload.use_serper,
     )
     selected_stage_models = (
         payload.stage_models if payload.model_profile == CONFIGURABLE_PROFILE_ID else None

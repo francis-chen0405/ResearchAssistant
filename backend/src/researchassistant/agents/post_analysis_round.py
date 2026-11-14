@@ -29,12 +29,13 @@ from researchassistant.agents.adaptive_handoffs import (
 from researchassistant.agents.adaptive_planning import _plan_round
 from researchassistant.agents.adaptive_summary import _known_urls, _merge_survivors
 from researchassistant.agents.round_four_authorization import (
-    _fits_reserve,
-    _gap_envelope_fits,
     _gap_reservation,
     _provider_attempts,
 )
-from researchassistant.agents.round_four_handoffs import V2RoundFourRunResult
+from researchassistant.agents.round_four_handoffs import (
+    V2_POST13_GAP_AFTER_ROUND_THREE_KEY,
+    V2RoundFourRunResult,
+)
 from researchassistant.agents.v2_adaptive_search import (
     V2AdaptiveBudgetState,
     V2AdaptiveContinuationResult,
@@ -42,7 +43,10 @@ from researchassistant.agents.v2_adaptive_search import (
     V2AdaptiveStopCode,
 )
 from researchassistant.agents.v2_deep_analysis import run_v2_deep_analysis_with_backfill
-from researchassistant.agents.v2_discovery import V2_SCOUT_BATCH_SIZE, uses_claim_ranking
+from researchassistant.agents.v2_discovery import (
+    V2_FRESH_SCOUT_BATCH_SIZE,
+    uses_claim_ranking,
+)
 from researchassistant.agents.v2_gap_analysis import run_v2_gap_analysis
 from researchassistant.agents.v2_post_analysis import build_v2_post_analysis_assessment
 from researchassistant.agents.v2_round_four import run_v2_round_four_continuation
@@ -215,6 +219,22 @@ def run_v2_post_analysis_round(
     ) -> V2PostAnalysisRoundOutcome:
         if final_admission is admission and (assessed_gap or round_four_gap):
             final_admission = _attach_assessed_gap(admission, assessed_gap or round_four_gap)
+        if reason.startswith("Follow-up budget exceeded") or reason in {
+            "insufficient complete protected follow-up budget",
+            "insufficient protected source-assessment budget",
+            "insufficient complete follow-up budget before dispatch",
+        }:
+            final_continuation = final_continuation.model_copy(
+                update={
+                    "stopping_decision": final_continuation.stopping_decision.model_copy(
+                        update={
+                            "stop_code": V2AdaptiveStopCode.BUDGET,
+                            "stopping_reason": reason,
+                            "decided_at": decision.decided_at,
+                        }
+                    )
+                }
+            )
         if any(
             state in {"unknown", "blocked"}
             for state in query_dispatch_states(path, run_id).values()
@@ -293,7 +313,7 @@ def run_v2_post_analysis_round(
         if (
             not continuation.rounds
             or continuation.rounds[-1].round_number != 3
-            or continuation.rounds[-1].status is not V2AdaptiveRoundStatus.COMPLETED
+            or not continuation.rounds[-1].usable_for_follow_up
         ):
             decision = decide("prior round did not complete safely")
             return finish(decision, decision.reason)
@@ -322,6 +342,24 @@ def run_v2_post_analysis_round(
         if assessment.search_outcome == "analysis_complete":
             decision = decide("admitted evidence and claim coverage are adequate")
             return finish(decision, decision.reason)
+        if (
+            continuation.rounds[-1].survivor_additions == 0
+            and not _has_artifact(path, run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY)
+        ):
+            reason = "Round 3 found no new usable sources. Remaining gaps are reported in the brief."
+            decision = decide(reason)
+            stopping = continuation.stopping_decision.model_copy(
+                update={
+                    "stop_code": V2AdaptiveStopCode.ROUND_THREE_COMPLETE,
+                    "stopping_reason": reason,
+                    "decided_at": decision.decided_at,
+                }
+            )
+            return finish(
+                decision,
+                reason,
+                final_continuation=continuation.model_copy(update={"stopping_decision": stopping}),
+            )
         findings = _assessed_findings(admission, gaps[-1], preferred=preferred)
         round_four_result = run_v2_round_four_continuation(
             db_path=path,
@@ -426,14 +464,13 @@ def run_v2_post_analysis_round(
         gap_input = V2GapAnalysisInput.model_validate(gap_input.model_dump())
         saved_gap = _has_artifact(path, run_id, POST_ANALYSIS_GAP_KEY)
         if not saved_gap and (
-            not _gap_envelope_fits(budget, gap_input, routing_config)
-            or not _source_budget_fits(
+            reason := _source_budget_shortfall(
                 budget,
                 routing_config,
                 gap_reservation=_gap_reservation(gap_input, routing_config),
             )
         ):
-            decision = decide("insufficient complete protected follow-up budget")
+            decision = decide(reason)
             return finish(decision, decision.reason)
         gap = run_v2_gap_analysis(
             db_path=path,
@@ -449,10 +486,10 @@ def run_v2_post_analysis_round(
             decision = decide("no useful novel evidence-gap action")
             return finish(decision, decision.reason, assessed_gap=gap)
         budget = budget_snapshot()
-        if not _source_budget_fits(budget, routing_config) and not _has_artifact(
+        if (reason := _source_budget_shortfall(budget, routing_config)) and not _has_artifact(
             path, run_id, f"phase-7-round-{next_round}-plan"
         ):
-            decision = decide("insufficient protected source-assessment budget")
+            decision = decide(reason)
             return finish(decision, decision.reason, assessed_gap=gap)
         decision = decide(
             "one gap-driven follow-up authorized",
@@ -532,16 +569,14 @@ def run_v2_post_analysis_round(
                 f"follow-up planning stopped: {type(exc).__name__}",
                 assessed_gap=gap,
             )
-        if not _source_budget_fits(
-            budget_snapshot(),
-            routing_config,
-            planned_queries=len(planned.plan.searches),
-        ) and not _has_artifact(path, run_id, round_artifact_key(next_round, "search-results")):
-            return finish(
-                decision,
-                "insufficient complete follow-up budget before dispatch",
-                assessed_gap=gap,
+        if (
+            reason := _source_budget_shortfall(
+                budget_snapshot(),
+                routing_config,
+                planned_queries=len(planned.plan.searches),
             )
+        ) and not _has_artifact(path, run_id, round_artifact_key(next_round, "search-results")):
+            return finish(decision, reason, assessed_gap=gap)
         search, discovery, acquisition, summary = _run_round_from_plan(
             path=path,
             planned=planned,
@@ -779,20 +814,20 @@ def _assessed_findings(
     return tuple(rows)
 
 
-def _source_budget_fits(
+def _source_budget_shortfall(
     budget: V2AdaptiveBudgetState,
     routing_config: V2RoutingConfig,
     *,
     gap_reservation: V2ModelReservation | None = None,
     planned_queries: int = 1,
-) -> bool:
+) -> str | None:
     """Keep one source assessment and finalization affordable before provider dispatch."""
     preflight = routing_config.preflight()
     extractor = preflight.reserve(LLMStage.EXTRACTOR, 3_000)
     analyst = preflight.reserve(LLMStage.ANALYST, 3_000)
     scout = preflight.reserve(LLMStage.SCOUT, 1)
     scout_calls = (
-        (max(1, planned_queries) * 5 + V2_SCOUT_BATCH_SIZE - 1) // V2_SCOUT_BATCH_SIZE
+        (max(1, planned_queries) * 5 + V2_FRESH_SCOUT_BATCH_SIZE - 1) // V2_FRESH_SCOUT_BATCH_SIZE
     ) * 2
     calls = 3 + scout_calls
     tokens = V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP + scout_calls * scout.reserved_tokens
@@ -819,7 +854,23 @@ def _source_budget_fits(
         tokens += search.reserved_tokens
         cost_components.append(search.reserved_cost_usd)
     cost = add_usd(*cost_components)
-    return _fits_reserve(budget, calls=calls, tokens=tokens, cost=cost)
+    limits: list[str] = []
+    if budget.model_calls_remaining < budget.protected_downstream_model_calls + calls:
+        limits.append("model calls")
+    if (
+        budget.tokens_remaining is not None
+        and budget.tokens_remaining < budget.protected_downstream_tokens + tokens
+    ):
+        limits.append("tokens")
+    if budget.cost_remaining_usd is not None and budget.cost_remaining_usd < add_usd(
+        budget.protected_downstream_cost_usd, cost
+    ):
+        limits.append("model cost")
+    return (
+        f"Follow-up budget exceeded the remaining allowance for {', '.join(limits)}."
+        if limits
+        else None
+    )
 
 
 def _unique_gap_outputs(

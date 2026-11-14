@@ -5,6 +5,7 @@ import {
   type ModelOptions,
 } from "@/lib/api";
 import {
+  MAX_RUN_TOKENS,
   defaultModelOptions,
   mergeStageModels,
   type Settings,
@@ -15,13 +16,14 @@ const defaultSettings: Settings = {
   stageModels: DEFAULT_STAGE_MODELS,
   dbPath: "",
   runId: "",
-  maxTokens: 500_000,
+  maxTokens: MAX_RUN_TOKENS,
   maxCost: "0.20",
   maxCalls: 160,
   supportEnabled: true,
   challengeEnabled: false,
-  sourceTarget: 20,
-  metadataDepth: 50,
+  sourceTarget: 10,
+  providerRequestLimits: {},
+  metadataDepth: 30,
   seedExpansionEnabled: true,
   scholarlySearchMode: "lexical",
   useSerpSearch: true,
@@ -29,6 +31,8 @@ const defaultSettings: Settings = {
   useOpenAlex: true,
   useArxiv: false,
   usePubmed: false,
+  useBrave: false,
+  useSerper: false,
   useCrossref: true,
 };
 

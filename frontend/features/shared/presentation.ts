@@ -90,6 +90,7 @@ export function readableProvider(provider: string): string {
     (
       {
         serpsearch: "SERP Search",
+        brave: "Brave Search",
         exa: "Exa",
         openalex: "OpenAlex",
         arxiv: "arXiv",

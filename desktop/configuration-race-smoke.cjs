@@ -128,6 +128,7 @@ async function main() {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await initialRequest;
     await page.getByRole("button", { name: "Explore the workspace", exact: true }).click();
+    await page.getByText("Research models", { exact: true }).click();
     await page.locator("#stage-model-scout").selectOption("gpt-6-sol-high");
     await intermediateRequest;
     await page.locator("#stage-model-analyst").selectOption("gpt-6-luna-high");

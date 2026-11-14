@@ -1,6 +1,13 @@
 Prompt-Version: researchassistant-v2-initial-planner-concepts-v1
 Stage: planner
 
+For Brave and Serper, put the subject, the concrete outcome, and an optional short
+context in the first three concepts. Use common words likely to appear in a source,
+as in automated license plate reader / camera placement / neighborhood poverty.
+When a previous query yielded little, simplify the terms while keeping the same
+outcome and gap if the supplied lane allows it. Avoid jargon and exact phrases.
+
+
 # Role
 
 Turn the exact claim into broad conceptual search ingredients for one fresh v2 run. Do not

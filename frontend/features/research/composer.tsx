@@ -1,23 +1,13 @@
 import { motion } from "motion/react";
 import type { FormEvent } from "react";
-import {
-  STAGE_MODEL_KEYS,
-  type StageModelKey,
-  type ModelChoiceId,
-  type ModelOptions,
-} from "@/lib/api";
 import { StatusPill } from "@/components/workspace";
+import type { ModelOptions } from "@/lib/api";
+import { ModelSelection } from "../preferences/model-selection";
+import { type Settings, budgetOptions } from "../preferences/settings";
 import { ResearchRecovery, type ResearchRecoveryProps } from "./connection";
-import {
-  type Settings,
-  budgetOptions,
-  providerRequirement,
-  stageLabels,
-} from "../preferences/settings";
 
 export function ResearchView({
   claim,
-  acknowledged,
   busy,
   settings,
   modelOptions,
@@ -25,29 +15,18 @@ export function ResearchView({
   ready,
   onSetup,
   onClaim,
-  onAcknowledged,
   onSubmit,
 }: {
   claim: string;
-  acknowledged: boolean;
   busy: boolean;
   settings: Settings;
   modelOptions: ModelOptions;
   onSettings: (settings: Settings) => void;
   ready: boolean;
   onSetup: () => void;
-  supportEnabled: boolean;
-  challengeEnabled: boolean;
-  reduceMotion: boolean;
   onClaim: (claim: string) => void;
-  onAcknowledged: (acknowledged: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const updateStageModel = (stage: StageModelKey, choice: ModelChoiceId) =>
-    onSettings({
-      ...settings,
-      stageModels: { ...settings.stageModels, [stage]: choice },
-    });
   return (
     <motion.section
       className="composer-view"
@@ -118,53 +97,19 @@ export function ResearchView({
             <small>Search service charges are separate.</small>
           </label>
         </div>
-        <section
-          className="stage-model-settings"
-          aria-labelledby="stage-model-heading"
-        >
-          <div>
-            <h2 id="stage-model-heading">
-              Choose a model for each research role
-            </h2>
-            <p>{providerRequirement(settings.stageModels)}</p>
-          </div>
-          <div className="stage-model-grid">
-            {STAGE_MODEL_KEYS.map((stage) => (
-              <label key={stage} htmlFor={`stage-model-${stage}`}>
-                {stageLabels[stage]}
-                <select
-                  id={`stage-model-${stage}`}
-                  value={settings.stageModels[stage]}
-                  onChange={(event) =>
-                    updateStageModel(stage, event.target.value as ModelChoiceId)
-                  }
-                >
-                  {modelOptions.choices.map((choice) => (
-                    <option key={choice.id} value={choice.id}>
-                      {choice.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-        </section>
-        <label className="acknowledgement">
-          <input
-            type="checkbox"
-            checked={acknowledged}
-            onChange={(event) => onAcknowledged(event.target.checked)}
-          />
-          <span>
-            This is public and non-sensitive, and I’ll review what comes back.
-          </span>
-        </label>
+        <ModelSelection
+          idPrefix="stage-model"
+          settings={settings}
+          modelOptions={modelOptions}
+          onSettings={onSettings}
+          disabled={busy}
+        />
         <div className="composer-footer">
           {ready ? (
             <button
               type="submit"
               className="primary-action"
-              disabled={!claim.trim() || !acknowledged || busy}
+              disabled={!claim.trim() || busy}
             >
               {busy ? "Starting…" : "Begin research"}{" "}
               <span aria-hidden="true">↗</span>

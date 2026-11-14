@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -7,8 +8,6 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from test_discovery_store import _init_run
-
 from agents.v2_adaptive_search import _execute_searches
 from providers.arxiv import ArxivSearchAdapter
 from providers.config import ArxivConfig, OpenAlexConfig, PubMedConfig
@@ -39,6 +38,7 @@ from researchassistant.contracts.model_research import (
     V2MaterialGap,
     V2RoundOneSearchQuery,
 )
+from researchassistant.providers.web_search import WebSearchAdapter, WebSearchConfig
 from researchassistant.research.query_compiler import compile_query
 from researchassistant.research.query_execution import (
     available_query_budgets,
@@ -54,6 +54,8 @@ from researchassistant.storage.discovery_store import (
 )
 from researchassistant.storage.query_dispatch import query_dispatch_states
 from researchassistant.storage.store import insert_v2_artifact
+
+from test_discovery_store import _init_run
 
 NOW = datetime(2026, 10, 6, tzinfo=UTC)
 CLAIM = "The intervention changes the outcome."
@@ -229,6 +231,65 @@ def test_round_one_uses_frozen_openalex_semantic_mode_and_durable_reservation(
     assert audit.starts[0].operation_id == action.artifact_id
     assert adapter._calls_by_run.get(run_id, 0) == 0
     assert run_id not in adapter._cost_by_run
+
+
+def test_binding_accepts_all_selectable_search_providers(tmp_path: Path) -> None:
+    path = tmp_path / "all-providers.sqlite"
+    run_id = uuid4()
+    _init_run(path, run_id)
+    providers = tuple(DiscoveryProvider)
+    binding = freeze_query_execution(str(path), run_id, CLAIM, DIRECTIONS, providers, _clock())
+    assert binding.providers == providers
+    assert read_discovery_binding(str(path), run_id) == binding
+
+
+@pytest.mark.parametrize("provider", (DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER))
+def test_new_web_providers_execute_and_account_for_compiled_search(
+    tmp_path: Path, provider: DiscoveryProvider
+) -> None:
+    path = tmp_path / "web-search.sqlite"
+    run_id, binding = _freeze(path, provider)
+    action = _action(run_id, provider)
+    expected_url = "https://example.org/report"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if provider is DiscoveryProvider.BRAVE:
+            assert request.method == "GET"
+            assert request.url.host == "api.search.brave.com"
+            assert request.url.path == "/res/v1/web/search"
+            assert request.headers["X-Subscription-Token"] == "offline-key"
+            assert dict(request.url.params) == {
+                "q": action.query_text,
+                "count": str(action.effective_depth),
+            }
+            body = {"web": {"results": [{"title": "Report", "url": expected_url}]}}
+        else:
+            assert request.method == "POST"
+            assert request.url.host == "google.serper.dev"
+            assert request.url.path == "/search"
+            assert request.headers["X-API-KEY"] == "offline-key"
+            assert json.loads(request.content) == {
+                "q": action.query_text,
+                "num": action.effective_depth,
+            }
+            body = {"organic": [{"title": "Report", "link": expected_url}]}
+        return httpx.Response(200, json=body)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        config = WebSearchConfig(provider=provider, api_key="offline-key")
+        adapter = WebSearchAdapter(config, client=client)
+        result = _run_round_one_search(
+            str(path), (_round_one_query(action),), {provider: adapter}, None, _clock()
+        )
+
+    assert result.outcomes[0].succeeded, result.outcomes[0]
+    audit = provider_attempt_audit(str(path), run_id)
+    assert len(audit.starts) == len(audit.completions) == 1
+    assert (
+        audit.starts[0].reserved_cost_usd == binding.provider_budgets[0].reservation_per_request_usd
+    )
+    assert audit.completions[0].metadata_records == 1
+    assert "offline-key" not in audit.starts[0].model_dump_json()
 
 
 def test_adaptive_search_uses_same_compiled_executor(tmp_path: Path) -> None:
@@ -900,3 +961,17 @@ def test_frozen_mode_cannot_be_changed_by_a_compiled_operation(tmp_path: Path) -
     assert seen == 0
     assert read_discovery_binding(str(path), run_id).providers == (DiscoveryProvider.OPENALEX,)
     assert provider_attempt_audit(str(path), run_id).starts == ()
+
+
+def test_configured_request_limit_can_only_lower_existing_provider_budget():
+    from researchassistant.research.query_execution import query_provider_budgets
+
+    providers = (DiscoveryProvider.EXA, DiscoveryProvider.BRAVE)
+    adapters = dict.fromkeys(providers, object())
+    budgets = query_provider_budgets(
+        providers,
+        adapters,
+        None,
+        request_limits={DiscoveryProvider.EXA: 3, DiscoveryProvider.BRAVE: 18},
+    )
+    assert [budget.max_requests for budget in budgets] == [3, 6]

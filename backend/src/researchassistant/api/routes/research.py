@@ -30,7 +30,7 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
 
     @router.post("/api/research/start", response_model=LiveStartResult)
     def start_research(payload: ResearchStartInput) -> LiveStartResult:
-        if not payload.acknowledged_public:
+        if payload.acknowledged_public is False:
             raise HTTPException(
                 status_code=422,
                 detail=(
@@ -44,6 +44,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
             or payload.use_openalex
             or payload.use_arxiv
             or payload.use_pubmed
+            or payload.use_brave
+            or payload.use_serper
         ):
             raise HTTPException(status_code=422, detail="Select at least one research source.")
         database = payload.db_path or str(dependencies.prepare_default_database())
@@ -64,6 +66,7 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
                         else ResearchMode.FOCUSED
                     ),
                     sources_per_stance_per_round=payload.sources_per_stance_per_round,
+                    provider_request_limits=payload.provider_request_limits or None,
                     metadata_depth=payload.metadata_depth,
                     seed_expansion_enabled=payload.seed_expansion_enabled,
                     scholarly_search_mode=payload.scholarly_search_mode,
@@ -73,6 +76,8 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
                         use_openalex=payload.use_openalex,
                         use_arxiv=payload.use_arxiv,
                         use_pubmed=payload.use_pubmed,
+                        use_brave=payload.use_brave,
+                        use_serper=payload.use_serper,
                     ),
                 ),
                 directions=payload.directions(),

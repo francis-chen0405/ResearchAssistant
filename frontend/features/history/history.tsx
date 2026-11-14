@@ -32,7 +32,6 @@ export function HistoryView({
       exit={{ opacity: 0 }}
     >
       <div className="history-heading">
-        <p className="eyebrow">Persisted locally</p>
         <h1>Past research</h1>
         <p>
           Return to an earlier evidence trail without starting the work again.

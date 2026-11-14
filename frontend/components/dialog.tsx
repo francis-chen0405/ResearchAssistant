@@ -71,7 +71,6 @@ export function Dialog({
       >
         ×
       </button>
-      <p className="eyebrow">Your local workspace</p>
       <h2 id={titleId}>{title}</h2>
       {children}
     </dialog>

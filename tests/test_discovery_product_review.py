@@ -9,7 +9,6 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-
 from frontend.api import ApiRuntime, create_app
 from frontend.live_contracts import LiveRunRequest
 from frontend.service_manager import ServiceDiagnostic
@@ -92,8 +91,8 @@ def test_start_endpoint_accepts_product_settings_and_defaults_old_clients(
 
     assert old_client.status_code == 200
     assert configured.status_code == 200
-    assert controller.requests[0].research_controls.metadata_depth == 50
-    assert controller.requests[0].research_controls.sources_per_stance_per_round == 20
+    assert controller.requests[0].research_controls.metadata_depth == 30
+    assert controller.requests[0].research_controls.sources_per_stance_per_round == 10
     assert controller.requests[0].research_controls.seed_expansion_enabled is True
     assert controller.requests[0].research_controls.scholarly_search_mode == "lexical"
     assert controller.requests[1].research_controls.metadata_depth == 50
@@ -101,6 +100,27 @@ def test_start_endpoint_accepts_product_settings_and_defaults_old_clients(
     assert controller.requests[1].research_controls.scholarly_search_mode == "semantic"
     assert controller.requests[1].research_controls.discovery_providers == (
         DiscoveryProvider.OPENALEX,
+    )
+
+
+def test_research_can_start_with_new_web_providers_and_no_checkbox(tmp_path: Path) -> None:
+    client, controller = _start_client()
+    response = client.post(
+        "/api/research/start",
+        json={
+            "raw_claim": "A public claim",
+            "db_path": str(tmp_path / "live.sqlite3"),
+            "use_serpsearch": False,
+            "use_exa": False,
+            "use_openalex": False,
+            "use_brave": True,
+            "use_serper": True,
+        },
+    )
+    assert response.status_code == 200
+    assert controller.requests[0].research_controls.discovery_providers == (
+        DiscoveryProvider.SERPER,
+        DiscoveryProvider.BRAVE,
     )
 
 
@@ -141,7 +161,7 @@ def test_cli_parses_product_controls_and_rejects_them_at_legacy_runner_boundary(
             "--max-tokens",
             "1000",
             "--metadata-depth",
-            "50",
+            "30",
             "--no-seed-expansion",
             "--scholarly-search-mode",
             "semantic",

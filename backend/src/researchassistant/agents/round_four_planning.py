@@ -128,10 +128,6 @@ def _build_round_four_search_agent_request(
         output_type = V2AdaptiveSearchModelOutput
         prompt = load_prompt(LLMStage.SEARCH_AGENT)
     else:
-        if DiscoveryProvider.SERPER in request_input.eligible_providers:
-            raise V2AdaptivePlanValidationError(
-                "Serper has no provider-native conceptual query compiler"
-            )
         lanes = _adaptive_concept_lanes(request_input, modes)
         if not lanes:
             return None

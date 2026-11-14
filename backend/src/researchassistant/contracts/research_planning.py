@@ -151,6 +151,7 @@ class V2InitialPlannerPolicy(StrictModel):
             DiscoveryProvider.ARXIV: ("preprints",),
             DiscoveryProvider.PUBMED: ("biomedical_studies",),
             DiscoveryProvider.SERPER: ("broad_web",),
+            DiscoveryProvider.BRAVE: ("broad_web",),
         }
         return tuple(
             V2InitialPlannerSearchLane(

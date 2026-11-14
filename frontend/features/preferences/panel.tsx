@@ -3,9 +3,63 @@ import {
   type ServiceDiagnostic,
 } from "@/lib/api";
 import { Dialog } from "@/components/dialog";
-import { type Settings, budgetOptions } from "./settings";
+import { MAX_RUN_TOKENS, type Settings, budgetOptions } from "./settings";
 import { readableStage } from "../shared/presentation";
 import { useHistoryImport } from "./use-history-import";
+
+const requestLimits = {
+  useSerpSearch: ["serpsearch", 12],
+  useExa: ["exa", 18],
+  useOpenAlex: ["openalex", 10],
+  useArxiv: ["arxiv", 6],
+  usePubmed: ["pubmed", 6],
+  useBrave: ["brave", 6],
+  useSerper: ["serper", 6],
+} as const;
+
+const providerGroups = [
+  {
+    title: "Web search",
+    providers: [
+      [
+        "useSerpSearch",
+        "SERP Search",
+        "Google results for official pages, local documents, and recent news.",
+      ],
+      [
+        "useBrave",
+        "Brave Search",
+        "Search an independent web index for additional coverage.",
+      ],
+      [
+        "useSerper",
+        "Serper",
+        "Google results. Use it in place of SERP Search to limit overlap.",
+      ],
+      [
+        "useExa",
+        "Exa",
+        "Find relevant pages even when they use different wording from your query.",
+      ],
+    ],
+  },
+  {
+    title: "Scholarly search",
+    providers: [
+      ["useOpenAlex", "OpenAlex", "Find academic papers across disciplines."],
+      [
+        "useArxiv",
+        "arXiv",
+        "Find preprints in computing, math, and physics. No API key needed.",
+      ],
+      [
+        "usePubmed",
+        "PubMed",
+        "Find biomedical and public health literature. An optional key raises the request limit.",
+      ],
+    ],
+  },
+] as const;
 
 export function AdvancedPanel({
   settings,
@@ -31,42 +85,13 @@ export function AdvancedPanel({
   );
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     onSettings({ ...settings, [key]: value });
-  const sources = [
-    [
-      "useSerpSearch",
-      "SERP Search",
-      "Best for familiar Google results across the wider web, including current pages and everyday sources.",
-    ],
-    [
-      "useExa",
-      "Exa",
-      "Best for finding relevant pages by meaning, not just exact keywords.",
-    ],
-    [
-      "useOpenAlex",
-      "OpenAlex",
-      "Best for academic studies, papers, and other scholarly research.",
-    ],
-    [
-      "useArxiv",
-      "arXiv",
-      "Best for research preprints. arXiv does not require an API key.",
-    ],
-    [
-      "usePubmed",
-      "PubMed",
-      "Best for biomedical literature. It works without a key; a key raises its request allowance.",
-    ],
-  ] as const;
-  const selectedCount = sources.filter(([key]) => settings[key]).length;
+  const selectedCount = providerGroups
+    .flatMap(({ providers }) => providers.map(([key]) => settings[key]))
+    .filter(Boolean).length;
   const directionCount =
     Number(settings.supportEnabled) + Number(settings.challengeEnabled);
   return (
     <Dialog title="Research preferences" onClose={onClose}>
-      <p className="panel-intro">
-        Choose the research direction, discovery providers, and local limits. At
-        least one source is required.
-      </p>
       <section className="research-options">
         <div className="option-copy">
           <strong>Support</strong>
@@ -100,25 +125,72 @@ export function AdvancedPanel({
         >
           <i />
         </button>
-        {sources.map(([key, label, copy]) => (
-          <div className="option-row" key={key}>
-            <div className="option-copy">
-              <strong>{label}</strong>
-              <span>{copy}</span>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-label={label}
-              aria-checked={settings[key]}
-              className={`switch ${settings[key] ? "on" : ""}`}
-              disabled={active || (selectedCount === 1 && settings[key])}
-              onClick={() => update(key, !settings[key])}
-            >
-              <i />
-            </button>
-          </div>
-        ))}
+      </section>
+      <details className="settings-disclosure provider-options">
+        <summary>Search providers <span>{selectedCount} enabled</span></summary>
+        <div className="provider-groups">
+          {providerGroups.map(({ title, providers }) => (
+            <fieldset className="provider-group" key={title}>
+              <legend>{title}</legend>
+              {providers.map(([key, label, copy]) => (
+                <div className="provider-option" key={key}>
+                  <div className="option-copy">
+                    <strong>{label}</strong>
+                    <span id={`provider-description-${key}`}>{copy}</span>
+                    <label>
+                      Max requests per run{" "}
+                      <select
+                        aria-label={`${label} maximum requests per run`}
+                        disabled={active || !settings[key]}
+                        value={settings.providerRequestLimits?.[requestLimits[key][0]] ?? ""}
+                        onChange={(event) => {
+                          const limits = { ...settings.providerRequestLimits };
+                          const provider = requestLimits[key][0];
+                          if (event.target.value) limits[provider] = Number(event.target.value);
+                          else delete limits[provider];
+                          update("providerRequestLimits", limits);
+                        }}
+                      >
+                        <option value="">Auto</option>
+                        {Array.from({ length: requestLimits[key][1] }, (_, index) => index + 1)
+                          .filter((limit) => key !== "usePubmed" || limit % 2 === 0)
+                          .map((limit) => <option key={limit} value={limit}>{limit}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label={label}
+                    aria-describedby={`provider-description-${key}`}
+                    aria-checked={settings[key]}
+                    className={`switch ${settings[key] ? "on" : ""}`}
+                    disabled={active || (selectedCount === 1 && settings[key])}
+                    onClick={() => {
+                      if (
+                        key === "useOpenAlex" &&
+                        settings.useOpenAlex &&
+                        settings.scholarlySearchMode === "semantic"
+                      ) {
+                        onSettings({
+                          ...settings,
+                          useOpenAlex: false,
+                          scholarlySearchMode: "lexical",
+                        });
+                      } else {
+                        update(key, !settings[key]);
+                      }
+                    }}
+                  >
+                    <i />
+                  </button>
+                </div>
+              ))}
+            </fieldset>
+          ))}
+        </div>
+      </details>
+      <section className="research-options">
         <div className="option-row">
           <div className="option-copy">
             <strong>Crossref metadata</strong>
@@ -176,7 +248,7 @@ export function AdvancedPanel({
             role="group"
             aria-label="Metadata search depth"
           >
-            {([10, 20, 50] as const).map((value) => (
+            {([10, 20, 30, 50] as const).map((value) => (
               <button
                 type="button"
                 key={value}
@@ -230,7 +302,9 @@ export function AdvancedPanel({
             }
           >
             <option value="lexical">Keyword based</option>
-            <option value="semantic">Meaning based</option>
+            <option value="semantic" disabled={!settings.useOpenAlex}>
+              Meaning based (OpenAlex)
+            </option>
             <option value="auto">Automatic</option>
           </select>
         </label>
@@ -243,7 +317,7 @@ export function AdvancedPanel({
             <input
               type="number"
               min="1"
-              max="500000"
+              max={MAX_RUN_TOKENS}
               value={settings.maxTokens}
               onChange={(event) =>
                 update("maxTokens", Number(event.target.value))

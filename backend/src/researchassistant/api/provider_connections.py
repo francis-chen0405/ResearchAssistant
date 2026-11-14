@@ -37,6 +37,8 @@ def check_connection(
         "exa": "EXA_API_KEY",
         "openalex": "OPENALEX_API_KEY",
         "pubmed": "PUBMED_API_KEY",
+        "brave": "BRAVE_API_KEY",
+        "serper": "SERPER_API_KEY",
         "firecrawl": "FIRECRAWL_API_KEY",
     }
     if name not in names:

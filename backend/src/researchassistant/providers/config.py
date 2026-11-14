@@ -34,7 +34,7 @@ class DeadlineConfig(StrictModel):
     gap_analysis_seconds: float = Field(default=120.0, gt=0, le=180.0)
     search_agent_seconds: float = Field(default=90.0, gt=0, le=180.0)
     source_selection_seconds: float = Field(default=90.0, gt=0, le=180.0)
-    extractor_seconds: float = Field(default=180.0, gt=0, le=180.0)
+    extractor_seconds: float = Field(default=90.0, gt=0, le=180.0)
     analyst_seconds: float = Field(default=120.0, gt=0, le=120.0)
     reviewer_seconds: float = Field(default=90.0, gt=0, le=90.0)
     synthesizer_seconds: float = Field(default=180.0, gt=0, le=180.0)

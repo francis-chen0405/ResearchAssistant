@@ -2,25 +2,28 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Barrier
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from pydantic import ValidationError
-
 from agents.v2_discovery import (
+    V2_FRESH_SCOUT_BATCH_SIZE,
     V2_SCOUT_BATCH_SIZE,
+    V2_SCOUT_MAX_WORKERS,
     V2DiscoveryResponse,
+    _run_scout_batches,
     cluster_discovery_items,
     normalize_discovery_responses,
     run_v2_discovery_and_scout,
     scout_ordered_item_ids,
 )
 from providers.crossref import CrossrefEnricher, CrossrefEnrichmentError
-from providers.llm import LLMProviderCapabilities
+from providers.llm import LLMProviderCapabilities, LLMStage
 from providers.search import SearchDiscoveryMetadata, SearchResult
 from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
+from pydantic import ValidationError
 from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryProvider,
@@ -374,6 +377,58 @@ def test_crossref_callback_cannot_relabel_an_owned_candidate(verified: bool) -> 
     assert items[0].doi == "10.1000/abc"
     assert items[0].title == response.results[0].title
     assert items[0].crossref is not None and not items[0].crossref.verified
+
+
+def test_three_fresh_scout_batches_overlap_and_publish_in_order() -> None:
+    run_id = uuid4()
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    query = _query(run_id, DiscoveryProvider.EXA, ResearchDirection.SUPPORT)
+    items = normalize_discovery_responses(
+        run_id=run_id,
+        directions=directions,
+        responses=(
+            V2DiscoveryResponse(
+                query=query,
+                results=tuple(
+                    SearchResult(
+                        original_url=f"https://example.org/{index}",
+                        title=f"Study {index}",
+                        rank=index + 1,
+                    )
+                    for index in range(45)
+                ),
+            ),
+        ),
+        discovered_at=NOW,
+    )
+    ready = Barrier(3)
+
+    class ConcurrentScout(RecallScout):
+        def generate(self, request: object) -> ScoutBatch:
+            ready.wait(timeout=5)
+            return super().generate(request)
+
+    published = []
+
+    def on_batch(batches, audits, pending):
+        published.append((tuple(audit.batch_number for audit in audits), len(pending)))
+
+    batches, audits = _run_scout_batches(
+        run_id=run_id,
+        directions=directions,
+        items=items,
+        llm_provider=ConcurrentScout(),
+        model_alias=_routing().preflight().for_stage(LLMStage.SCOUT).logical_alias,
+        clock=lambda: NOW,
+        cancellation_requested=None,
+        batch_size=V2_FRESH_SCOUT_BATCH_SIZE,
+        max_workers=V2_SCOUT_MAX_WORKERS,
+        on_batch=on_batch,
+    )
+
+    assert [len(batch.items) for batch in batches] == [15, 15, 15]
+    assert all(audit.attempted_calls == 1 and not audit.fallback_used for audit in audits)
+    assert published == [((1,), 2), ((1, 2), 1), ((1, 2, 3), 0)]
 
 
 def test_v2_scout_batches_twenty_items_retries_falls_back_and_persists(tmp_path: Path) -> None:

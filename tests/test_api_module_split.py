@@ -12,18 +12,18 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from api_contract_support import contract_inventory, registered_routes
 from fastapi.testclient import TestClient
-from review_schema_compatibility import normalize_approved_additive_fields
-from test_mlp3_api import FakeController, FakeServices
-from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved, _run
-from test_v2_phase11_final_output import _continuation, _synthesis
-
 from researchassistant.agents.v2_final_output import build_v2_final_research_output
 from researchassistant.api import api
 from researchassistant.api.application_services import result_reads
 from researchassistant.contracts.models import ValidationError
 from researchassistant.storage.store import ReadOnlyStore, insert_v2_artifact
+
+from api_contract_support import contract_inventory, registered_routes
+from review_schema_compatibility import normalize_approved_additive_fields
+from test_mlp3_api import FakeController, FakeServices
+from test_v2_phase10_reviewer_ledger import Phase10Provider, _approved, _run
+from test_v2_phase11_final_output import _continuation, _synthesis
 
 
 def test_routes_schemas_and_offline_responses_match_before_split(
@@ -98,12 +98,21 @@ def test_routes_schemas_and_offline_responses_match_before_split(
         ("ResearchStartInput", "sources_per_stance_per_round", "metadata_depth", 10),
     ):
         properties = schemas[schema_name]["properties"]
-        assert properties[source_field]["default"] == 20
+        assert properties[source_field]["default"] == old_source
         assert properties[source_field]["enum"][-1] == 30
-        assert properties[depth_field]["default"] == 50
+        assert properties[depth_field]["default"] == 30
+        assert properties[depth_field]["enum"] == [10, 20, 30, 50]
+        properties[depth_field]["enum"].remove(30)
         properties[source_field]["default"] = old_source
         properties[source_field]["enum"].pop()
         properties[depth_field]["default"] = 20
+    for schema_name, token_field in (
+        ("InterfaceSettings", "maxTokens"),
+        ("ResearchStartInput", "max_tokens"),
+    ):
+        token_limit = schemas[schema_name]["properties"][token_field]
+        assert token_limit["default"] == token_limit["maximum"] == 1_000_000
+        token_limit.update(default=500_000, maximum=500_000)
     product = schemas["V2ProductDiscoveryPolicy"]["properties"]
     assert product["max_acquisition_per_round"]["default"] == 60
     assert product["max_acquisition_per_round"]["maximum"] == 60
@@ -112,9 +121,11 @@ def test_routes_schemas_and_offline_responses_match_before_split(
     product["sources_per_direction_per_round"]["enum"].pop()
     for response in after["responses"]:
         if response["path"] == "/api/preferences" and response["status"] == 200:
-            assert response["body"]["sourceTarget"] == 20
-            assert response["body"]["metadataDepth"] == 50
-            response["body"].update(sourceTarget=10, metadataDepth=20)
+            assert response["body"].pop("providerRequestLimits") == {}
+            assert response["body"]["sourceTarget"] == 10
+            assert response["body"]["metadataDepth"] == 30
+            assert response["body"]["maxTokens"] == 1_000_000
+            response["body"].update(sourceTarget=10, metadataDepth=20, maxTokens=500_000)
     normalize_approved_additive_fields(
         after["openapi"]["components"]["schemas"], reference_root="components/schemas"
     )
@@ -144,6 +155,39 @@ def test_routes_schemas_and_offline_responses_match_before_split(
     ]
     assert len(snapshots) == 1
     assert snapshots[0]["body"].pop("cost_budget_limit_usd") is None
+    # New optional providers and the retired checkbox extend the product contract.
+    for path, method in (("/api/credentials", "post"), ("/api/configuration", "get")):
+        parameters = after["openapi"]["paths"][path][method]["parameters"]
+        assert [item["name"] for item in parameters[-2:]] == ["use_brave", "use_serper"]
+        assert all(item["schema"]["default"] is False for item in parameters[-2:])
+        del parameters[-2:]
+    for provider in ("brave", "serper"):
+        for model, field in (
+            ("InterfaceSettings", f"use{provider.title()}"),
+            ("ConfigurationCheckInput", f"use_{provider}"),
+            ("ResearchStartInput", f"use_{provider}"),
+        ):
+            assert schemas[model]["properties"].pop(field)["default"] is False
+        key = schemas["CredentialSetupRequest"]["properties"].pop(f"{provider}_api_key")
+        assert {"type": "null"} in key["anyOf"]
+    start = schemas["ResearchStartInput"]
+    assert "acknowledged_public" not in start["required"]
+    assert start["properties"]["acknowledged_public"]["anyOf"] == [
+        {"type": "boolean"},
+        {"type": "null"},
+    ]
+    previous = before["openapi"]["components"]["schemas"]["ResearchStartInput"]
+    start["required"] = previous["required"]
+    start["properties"]["acknowledged_public"] = previous["properties"]["acknowledged_public"]
+    for response in after["responses"]:
+        if response["path"] == "/api/preferences" and response["status"] == 200:
+            assert response["body"].pop("useBrave") is False
+            assert response["body"].pop("useSerper") is False
+        # macOS resolves /fixture through the /private symlink.
+        if response["status"] == 404 and isinstance(response["body"].get("detail"), dict):
+            detail = response["body"]["detail"]
+            if detail.get("message", "").endswith("/private/fixture/absent.sqlite3"):
+                detail["message"] = detail["message"].replace("/private/fixture/", "/fixture/")
     assert after == before
 
 

@@ -11,11 +11,9 @@ from threading import Event
 from time import monotonic, sleep
 from uuid import UUID, uuid4
 
+import frontend.service_manager as service_manager_module
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
-
-import frontend.service_manager as service_manager_module
 from frontend.api import ApiRuntime, create_app
 from frontend.live_service import (
     LiveResearchController,
@@ -25,6 +23,7 @@ from frontend.live_service import (
 from frontend.security import redact_text
 from frontend.service_manager import WigoloServiceManager
 from providers.search import SearchFailureCode, SearchProviderError
+from pydantic import ValidationError
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     PresentationTone,
@@ -499,7 +498,7 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
     ]
     source = " ".join((page + "\n" + "\n".join(feature_sources)).split())
 
-    assert "disabled={!claim.trim() || !acknowledged || busy}" in source
+    assert "disabled={!claim.trim() || busy}" in source
     assert all(
         removed not in source
         for removed in (
@@ -516,6 +515,7 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
             "nature-path",
             "Research principles",
             "Human review still matters",
+            "This is public and non-sensitive",
         )
     )
 
@@ -539,22 +539,21 @@ def test_live_next_provider_setup_uses_password_fields() -> None:
             "Xiaomi MiMo",
             "OpenAI",
             "SERP Search",
+            "Brave Search",
+            "Serper",
             "Exa",
             "OpenAlex",
             "PubMed",
             "Firecrawl",
             "luna_base_url",
             "luna_model",
-            "input_per_million",
-            "output_per_million",
-            "completion_limit",
-            "Restore standard route",
+            "Reset OpenAI endpoint",
         )
     )
-    # Seven data-driven fields; the browser smoke asserts seven rendered password inputs.
-    assert source.count('vault: "') == 7
+    assert source.count('vault: "') == 9
     assert 'type="password"' in source
-    assert "macOS Keychain or Windows Credential Manager" in source
+    assert "system credential vault" in source
+    assert "roles and budget caps" not in source
     assert "setKeys({})" in source
     assert "Enter a key to replace the saved key" in source
 

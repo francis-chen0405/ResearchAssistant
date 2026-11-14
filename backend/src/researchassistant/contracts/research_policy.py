@@ -21,6 +21,7 @@ from researchassistant.contracts.model_contracts import (
 )
 
 V2_PIPELINE_IDENTITY = "researchassistant-v2"
+V2_MAX_TOTAL_TOKENS = 1_000_000
 
 
 V2_POLICY_IDENTITY = "researchassistant-v2-phase-1"

@@ -12,7 +12,10 @@ from pydantic import Field, field_validator, model_serializer
 from pydantic.functional_serializers import SerializerFunctionWrapHandler
 
 from researchassistant.common.money import ExactUSD
-from researchassistant.contracts.discovery_v2 import V2GraphNeighborAction, V2PreviewResult
+from researchassistant.contracts.discovery_v2 import (
+    V2GraphNeighborAction,
+    V2PreviewResult,
+)
 from researchassistant.contracts.historical import RecordCompatibilityResult
 from researchassistant.contracts.metadata_ranking import MetadataRank
 from researchassistant.contracts.models import (
@@ -24,6 +27,7 @@ from researchassistant.contracts.models import (
     StrictModel,
     V2RunDiagnostics,
 )
+from researchassistant.contracts.research_policy import V2_MAX_TOTAL_TOKENS
 from researchassistant.providers.model_choices import (
     DEFAULT_STAGE_MODELS,
     StageModelSelections,
@@ -73,7 +77,7 @@ class LiveRunRequest(StrictModel):
     raw_claim: str = Field(min_length=1)
     db_path: str = Field(min_length=1)
     run_id: UUID | None = None
-    max_tokens: int = Field(ge=1, le=500_000)
+    max_tokens: int = Field(ge=1, le=V2_MAX_TOTAL_TOKENS)
     max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("20.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     research_controls: ResearchControls = LEGACY_LIVE_RESEARCH_CONTROLS

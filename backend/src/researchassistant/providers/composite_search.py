@@ -37,6 +37,7 @@ class CompositeSearchProvider:
         arxiv: SearchProvider | None = None,
         pubmed: SearchProvider | None = None,
         serper: SearchProvider | None = None,
+        brave: SearchProvider | None = None,
     ) -> None:
         self._exa = exa
         self._openalex = openalex
@@ -44,6 +45,7 @@ class CompositeSearchProvider:
         self._arxiv = arxiv
         self._pubmed = pubmed
         self._serper = serper
+        self._brave = brave
 
     def query_budget(
         self, provider: DiscoveryProvider, mode: SearchMode
@@ -71,6 +73,8 @@ class CompositeSearchProvider:
             return self._require_optional_provider(self._pubmed, "PubMed").search(request)
         if request.provider is DiscoveryProvider.SERPER:
             return self._require_optional_provider(self._serper, "Serper").search(request)
+        if request.provider is DiscoveryProvider.BRAVE:
+            return self._require_optional_provider(self._brave, "Brave Search").search(request)
         if self._openalex is None:
             raise SearchProviderError(
                 SearchFailureCode.MISSING_CONFIGURATION, "OpenAlex is disabled"

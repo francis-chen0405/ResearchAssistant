@@ -50,6 +50,8 @@ class ProviderCredentials(StrictModel):
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
     pubmed_api_key: SecretStr | None = None
+    brave_api_key: SecretStr | None = None
+    serper_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
     @field_validator(
@@ -65,6 +67,8 @@ class ProviderCredentials(StrictModel):
         "openalex_api_key",
         "serpsearch_api_key",
         "pubmed_api_key",
+        "brave_api_key",
+        "serper_api_key",
         "firecrawl_api_key",
         mode="before",
     )
@@ -122,6 +126,10 @@ class ProviderCredentials(StrictModel):
             items += (("SERPSEARCH_API_KEY", self.serpsearch_api_key.get_secret_value()),)
         if self.pubmed_api_key is not None:
             items += (("PUBMED_API_KEY", self.pubmed_api_key.get_secret_value()),)
+        if self.brave_api_key is not None:
+            items += (("BRAVE_API_KEY", self.brave_api_key.get_secret_value()),)
+        if self.serper_api_key is not None:
+            items += (("SERPER_API_KEY", self.serper_api_key.get_secret_value()),)
         if self.firecrawl_api_key is None:
             return items
         return items + (("FIRECRAWL_API_KEY", self.firecrawl_api_key.get_secret_value()),)
@@ -165,6 +173,8 @@ def load_saved_credentials() -> ProviderCredentials | None:
             openalex_api_key=_read_optional_secret("OPENALEX_API_KEY"),
             serpsearch_api_key=_read_optional_secret("SERPSEARCH_API_KEY"),
             pubmed_api_key=_read_optional_secret("PUBMED_API_KEY"),
+            brave_api_key=_read_optional_secret("BRAVE_API_KEY"),
+            serper_api_key=_read_optional_secret("SERPER_API_KEY"),
             firecrawl_api_key=_read_optional_secret(),
         )
     except ValidationError:
@@ -401,6 +411,8 @@ SECRET_NAMES = frozenset(
         "EXA_API_KEY",
         "OPENALEX_API_KEY",
         "PUBMED_API_KEY",
+        "BRAVE_API_KEY",
+        "SERPER_API_KEY",
         "FIRECRAWL_API_KEY",
     }
 )

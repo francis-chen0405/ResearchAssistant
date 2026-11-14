@@ -2062,7 +2062,7 @@ def test_empty_deep_analysis_queue_reports_budget_reason_and_persists_failure(
 def test_default_v2_ceiling_matches_product_budget() -> None:
     defaults = V2RunCeilings()
 
-    assert defaults.max_total_tokens == 500_000
+    assert defaults.max_total_tokens == 1_000_000
     assert defaults.max_total_cost_usd == Decimal("0.20")
 
 

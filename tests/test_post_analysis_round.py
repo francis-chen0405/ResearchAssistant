@@ -7,9 +7,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-import test_query_production as production
-import test_v2_phase12_production as phase12
-
 import researchassistant.agents.post_analysis_round as post_module
 import researchassistant.research.v2_orchestrator as orchestrator
 from researchassistant.agents.post_analysis_round import (
@@ -44,6 +41,9 @@ from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.research.v2_orchestrator import V2ProductionState
 from researchassistant.storage.source_leads import read_source_leads
 from researchassistant.storage.store import read_v2_artifact
+
+import test_query_production as production
+import test_v2_phase12_production as phase12
 
 
 class _MissingAfterInitialAssessment(production._ConceptModel):
@@ -320,21 +320,94 @@ def test_round_four_slot_waits_for_admitted_source_assessments(tmp_path: Path) -
     )
 
 
+@pytest.mark.parametrize(
+    ("completed_queries", "survivors", "eligible"),
+    [(2, 7, True), (2, 0, False), (0, 0, False)],
+)
+def test_partial_search_requires_successful_queries_and_usable_results(
+    completed_queries: int, survivors: int, eligible: bool
+) -> None:
+    from datetime import UTC, datetime
+
+    from researchassistant.agents.adaptive_handoffs import V2AdaptiveRoundExecution
+
+    round_summary = V2AdaptiveRoundExecution(
+        run_id=uuid4(),
+        round_number=3,
+        targeted_gap_ids=(),
+        status=V2AdaptiveRoundStatus.DEGRADED,
+        planned_query_count=3,
+        completed_query_count=completed_queries,
+        failed_query_count=3 - completed_queries,
+        new_source_count=survivors,
+        duplicate_source_count=0,
+        survivor_additions=survivors,
+        completed_at=datetime.now(UTC),
+    )
+    assert round_summary.usable_for_follow_up is eligible
+
+
+def test_empty_round_three_skips_another_search_and_retains_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_id = uuid4()
+    model = production._ConceptModel(completed_rounds=4)
+    outcomes = []
+    reason = "Round 3 found no new usable sources. Remaining gaps are reported in the brief."
+
+    def simulate_empty_round(**kwargs):
+        continuation = kwargs["continuation"]
+        last_round = continuation.rounds[-1]
+        assert last_round.round_number == 3
+        assert last_round.status is V2AdaptiveRoundStatus.COMPLETED
+        kwargs["continuation"] = continuation.model_copy(
+            update={
+                "rounds": (
+                    *continuation.rounds[:-1],
+                    last_round.model_copy(update={"survivor_additions": 0}),
+                ),
+            }
+        )
+        model_calls = len(model.requests)
+        outcome = run_v2_post_analysis_round(**kwargs)
+        assert len(model.requests) == model_calls
+        assert outcome.admission == kwargs["admission"]
+        assert run_v2_post_analysis_round(**kwargs) == outcome
+        outcomes.append(outcome)
+        return outcome
+
+    monkeypatch.setattr(orchestrator, "run_v2_post_analysis_round", simulate_empty_round)
+    result = production._run_fresh(
+        tmp_path / "no-round-four.sqlite",
+        model=model,
+        search=phase12._Search(unique_results=True),
+        scraper=phase12._Scraper(),
+        run_id=run_id,
+    )
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    assert len(outcomes) == 1
+    assert outcomes[0].decision.next_round is None
+    assert outcomes[0].continuation.stopping_decision.stopping_reason == reason
+
+
 def test_budget_gate_stops_before_gap_or_search(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     kwargs, model, search = _admitted_inputs(tmp_path, monkeypatch)
     kwargs["budget_snapshot"] = lambda: V2AdaptiveBudgetState(
-        model_calls_remaining=6,
+        model_calls_remaining=100,
         tokens_remaining=60_000,
-        cost_remaining_usd=0,
+        cost_remaining_usd="10",
         protected_downstream_model_calls=4,
         protected_downstream_tokens=1,
     )
     model_count, provider_count = len(model.requests), len(search.requests)
     outcome = run_v2_post_analysis_round(**kwargs)
     assert outcome.decision.next_round is None
-    assert "budget" in outcome.stop_reason
+    assert outcome.stop_reason == "Follow-up budget exceeded the remaining allowance for tokens."
+    stopping = outcome.continuation.stopping_decision
+    assert stopping.stop_code is V2AdaptiveStopCode.BUDGET
+    assert stopping.stopping_reason == outcome.stop_reason
     assert len(model.requests) == model_count
     assert len(search.requests) == provider_count
 

@@ -940,14 +940,18 @@ def run_v2_adaptive_search_continuation(
     if summary_three.status is V2AdaptiveRoundStatus.CANCELLED:
         stop_code = V2AdaptiveStopCode.CANCELLED
         reason = "Research stopped at the Round-3 boundary because cancellation was requested."
-    elif summary_three.status is V2AdaptiveRoundStatus.DEGRADED:
+    elif not summary_three.usable_for_follow_up:
         stop_code = V2AdaptiveStopCode.PROVIDER_FAILURE
         from researchassistant.agents.adaptive_execution import search_failure_explanation
 
         reason = search_failure_explanation(path, search_three)
     else:
         stop_code = V2AdaptiveStopCode.ROUND_THREE_COMPLETE
-        reason = "Research stopped at the fixed three-round maximum after the narrow Round 3."
+        reason = (
+            "Round 3 retained usable sources despite some search failures."
+            if summary_three.status is V2AdaptiveRoundStatus.DEGRADED
+            else "Research stopped at the fixed three-round maximum after the narrow Round 3."
+        )
     return _finish(
         path,
         initial_plan.run_id,

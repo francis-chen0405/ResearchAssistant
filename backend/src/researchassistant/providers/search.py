@@ -83,6 +83,10 @@ def page_parameters(request: SearchRequest) -> dict[str, str | int | bool]:
         raise ValueError("page limit exceeds cumulative operation depth")
     if provider is DiscoveryProvider.SERPSEARCH:
         parameters["page"] = request.page_number
+    elif provider is DiscoveryProvider.BRAVE:
+        parameters["count"] = request.limit
+    elif provider is DiscoveryProvider.SERPER:
+        parameters["num"] = request.limit
     elif provider is DiscoveryProvider.ARXIV:
         parameters.update(start=offset, max_results=request.limit)
     elif provider is DiscoveryProvider.PUBMED:

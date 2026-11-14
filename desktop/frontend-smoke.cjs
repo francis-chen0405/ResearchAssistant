@@ -172,7 +172,7 @@ async function main() {
     assert.equal(started,null,'Preview must not create a real run');
     await page.emulateMedia({reducedMotion:'reduce'});
     await page.getByRole('button',{name:'Explore the workspace',exact:true}).click();
-    await page.getByRole('heading',{name:'Choose a model for each research role',exact:true}).waitFor();
+    await page.getByText('Research models',{exact:true}).click();
     for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await page.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
@@ -198,7 +198,6 @@ async function main() {
     await page.getByLabel('Your research question',{exact:true}).fill('Can greener streets make cities cooler?');
     await page.getByRole('button',{name:'Both sides',exact:true}).click();
     await page.getByLabel('Model budget limit').selectOption('0.50');
-    await page.getByRole('checkbox').check();
     await page.screenshot({path:path.join(shots,'composer.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Begin research',exact:true}).click();
     await page.getByRole('button',{name:'Cancel run',exact:true}).waitFor();
@@ -431,6 +430,7 @@ async function main() {
     assert.equal(v2EvidenceRequests,0,'Evidence is not requested for an invalid v2 release');
     assert.equal(await page.getByText(/Detailed evidence could not be loaded/i).count(),0,'Invalid releases do not show the evidence retry warning');
     await page.getByRole('button',{name:'Settings',exact:true}).click();
+    await page.getByRole('dialog').locator('summary').filter({hasText:'Search providers'}).click();
     await page.getByRole('dialog').getByRole('switch',{name:'arXiv',exact:true}).click();
     await page.keyboard.press('Escape');
     await page.getByRole('button',{name:/Provider setup/}).click();

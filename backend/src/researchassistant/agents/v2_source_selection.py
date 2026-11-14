@@ -414,9 +414,18 @@ def run_v2_source_selection_and_queue(
     insert_v2_artifact(path, V2_SOURCE_SELECTION_POOL_KEY, selection_input, completed_at)
     route = routing_config.preflight().for_stage(LLMStage.SOURCE_SELECTION)
     fresh = selection_input.policy_identity in V2_CLAIM_PREVIEW_SELECTION_POLICIES
+    checkpoint_key = "selection-checkpoint-v1"
+    routing_hash = checkpoint_hash(routing_config.preflight().model_dump(mode="json"))
+    full_input_hash = checkpoint_hash(selection_input.model_dump(mode="json"))
+    checkpoint = read_checkpoint(
+        path, selection_input.run_id, checkpoint_key, V2SelectionInputCheckpoint
+    )
+    compact_ranking = fresh and (checkpoint is None or checkpoint.compact_ranking)
     prompt = (
         load_prompt_file(
-            prompt_resource("source_selection_v3.md"),
+            prompt_resource(
+                "source_selection_v4.md" if compact_ranking else "source_selection_v3.md"
+            ),
             expected_stage=LLMStage.SOURCE_SELECTION,
         )
         if fresh
@@ -437,12 +446,6 @@ def run_v2_source_selection_and_queue(
         model_alias=route.logical_alias,
         generation=V2_LLM_ROUTING.for_stage(LLMStage.SOURCE_SELECTION).generation,
     )
-    checkpoint_key = "selection-checkpoint-v1"
-    routing_hash = checkpoint_hash(routing_config.preflight().model_dump(mode="json"))
-    full_input_hash = checkpoint_hash(selection_input.model_dump(mode="json"))
-    checkpoint = read_checkpoint(
-        path, selection_input.run_id, checkpoint_key, V2SelectionInputCheckpoint
-    )
     checkpoint_replayed = checkpoint is not None
     if checkpoint is None:
         shortlist = None
@@ -450,6 +453,7 @@ def run_v2_source_selection_and_queue(
             request, shortlist = _bounded_selection_request(request, selection_input, llm_provider)
         checkpoint = V2SelectionInputCheckpoint(
             run_id=selection_input.run_id,
+            compact_ranking=compact_ranking,
             full_input_hash=full_input_hash,
             input=request.input_artifact if request is not None else None,
             shortlist=shortlist,

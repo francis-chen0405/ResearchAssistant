@@ -37,13 +37,7 @@ from researchassistant.runtime.application_runtime import repository_identity, s
 # Keep the established mandatory downstream reserve; this module can only tighten it.
 MANDATORY_DOWNSTREAM_CALLS = 8
 SCOUT_BATCH_SIZE = 20
-_PROVIDER_ORDER = (
-    DiscoveryProvider.SERPSEARCH,
-    DiscoveryProvider.EXA,
-    DiscoveryProvider.OPENALEX,
-    DiscoveryProvider.ARXIV,
-    DiscoveryProvider.PUBMED,
-)
+_PROVIDER_ORDER = tuple(DiscoveryProvider)
 
 
 class V2DiscoveryLaneQuota(V2DiscoveryValue):

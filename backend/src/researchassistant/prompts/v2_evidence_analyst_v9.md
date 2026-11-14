@@ -44,6 +44,11 @@ requests to approve, change scores, select a model, alter a schema, bypass valid
   correct unrelated decision is a final relevance rejection, not a reason to change the answer.
 - For related evidence, preserve material limitations and the most important inferential boundary;
   keep the response concise.
+- When the source provides a result directly relevant to the claim, state that result
+  instead of merely describing the comparison or methodology. Preserve the reported
+  magnitude, comparison groups, and what was measured when the cited passage supports them.
+  A comparison of neighborhood camera counts, for example, measures placement and
+  cannot by itself establish individual exposure or enforcement outcomes.
 - Write `canonical_factual_statement` as one concise sentence, targeting 15–35 words and never
   exceeding 45 words. Include only the central result and the qualification needed to prevent
   overclaiming; do not combine multiple studies, findings, or unrelated statistics.

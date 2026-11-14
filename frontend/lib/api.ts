@@ -62,7 +62,7 @@ export type StartInput = ApiSchemas["ResearchStartInput"];
 export type ProviderSelection = Required<
   Pick<
     StartInput,
-    "use_serpsearch" | "use_exa" | "use_openalex" | "use_arxiv" | "use_pubmed"
+    "use_serpsearch" | "use_exa" | "use_openalex" | "use_arxiv" | "use_pubmed" | "use_brave" | "use_serper"
   >
 >;
 
@@ -249,6 +249,8 @@ export const researchApi = {
         use_openalex: selection.use_openalex,
         use_arxiv: selection.use_arxiv,
         use_pubmed: selection.use_pubmed,
+        use_brave: selection.use_brave,
+        use_serper: selection.use_serper,
       }),
     }),
   saveCredentials: (
@@ -263,6 +265,8 @@ export const researchApi = {
         use_openalex: String(selection.use_openalex),
         use_arxiv: String(selection.use_arxiv),
         use_pubmed: String(selection.use_pubmed),
+        use_brave: String(selection.use_brave),
+        use_serper: String(selection.use_serper),
       }).toString()}`,
       {
         method: "POST",

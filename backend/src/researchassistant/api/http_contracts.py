@@ -11,7 +11,9 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from researchassistant.api.constants import API_VERSION
 from researchassistant.api.live_service import LiveHistoryItem
 from researchassistant.api.service_manager import ServiceDiagnostic
+from researchassistant.contracts.model_contracts import ProviderRequestLimits
 from researchassistant.contracts.models import ResearchDirections, StrictModel
+from researchassistant.contracts.research_policy import V2_MAX_TOTAL_TOKENS
 from researchassistant.platform_support.credential_store import ProviderCredentials
 from researchassistant.providers.model_choices import (
     CONFIGURABLE_PROFILE_ID,
@@ -69,6 +71,8 @@ class ConfigurationCheckInput(StrictModel):
     use_openalex: bool = True
     use_arxiv: bool = False
     use_pubmed: bool = False
+    use_brave: bool = False
+    use_serper: bool = False
 
 
 class ConnectionCheckInput(StrictModel):
@@ -93,6 +97,8 @@ class CredentialSetupRequest(StrictModel):
     openalex_api_key: SecretStr | None = None
     serpsearch_api_key: SecretStr | None = None
     pubmed_api_key: SecretStr | None = None
+    brave_api_key: SecretStr | None = None
+    serper_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
 
     @field_validator(
@@ -102,6 +108,8 @@ class CredentialSetupRequest(StrictModel):
         "openalex_api_key",
         "serpsearch_api_key",
         "pubmed_api_key",
+        "brave_api_key",
+        "serper_api_key",
         "firecrawl_api_key",
         "luna_model",
         mode="before",
@@ -132,23 +140,26 @@ class ResearchStartInput(StrictModel):
     model_profile: ProfileId = CONFIGURABLE_PROFILE_ID
     stage_models: StageModelSelections = DEFAULT_STAGE_MODELS
     raw_claim: str = Field(min_length=1)
-    acknowledged_public: bool
+    acknowledged_public: bool | None = None
     db_path: str | None = None
     run_id: UUID | None = None
-    max_tokens: int = Field(default=500_000, ge=1, le=500_000)
+    max_tokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=V2_MAX_TOTAL_TOKENS)
     max_cost_usd: Decimal = Field(default=Decimal("0.20"), gt=0, le=Decimal("20.00"))
     max_llm_calls: int = Field(default=160, ge=1, le=160)
     support_enabled: bool = True
     challenge_enabled: bool = False
     include_counterevidence: bool = False
-    sources_per_stance_per_round: Literal[5, 10, 15, 20, 30] = 20
+    sources_per_stance_per_round: Literal[5, 10, 15, 20, 30] = 10
     use_serpsearch: bool = True
     use_exa: bool = True
     use_openalex: bool = True
     use_arxiv: bool = False
     use_pubmed: bool = False
+    use_brave: bool = False
+    use_serper: bool = False
     use_crossref: bool = True
-    metadata_depth: Literal[10, 20, 50] = 50
+    provider_request_limits: ProviderRequestLimits = Field(default_factory=dict)
+    metadata_depth: Literal[10, 20, 30, 50] = 30
     seed_expansion_enabled: bool = Field(default=True, strict=True)
     scholarly_search_mode: Literal["lexical", "semantic", "auto"] = "lexical"
 

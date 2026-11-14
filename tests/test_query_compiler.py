@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from researchassistant.contracts.discovery_v2 import (
     V2ConceptGroup,
     V2ConceptualQuery,
@@ -200,3 +199,49 @@ def test_material_signature_ignores_alias_order_but_keeps_substantive_changes() 
 
     assert conceptual_signature(first, "lexical") == conceptual_signature(reordered, "lexical")
     assert conceptual_signature(first, "lexical") != conceptual_signature(changed, "lexical")
+
+
+@pytest.mark.parametrize("provider", [DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER])
+def test_general_web_queries_use_plain_subject_outcome_and_context(provider):
+    query = _query(
+        provider,
+        (
+            ("automated license plate readers", ("ALPR",)),
+            ("economic disadvantage", ("poverty",)),
+            ("vehicle and traffic enforcement", ()),
+            ("surveillance equity", ()),
+            ("socioeconomic discrimination", ()),
+        ),
+        purpose="gap",
+        outcomes=("enforcement outcomes",),
+    )
+    action = compile_query(query)
+    assert action.query_text == 'automated license plate readers economic disadvantage vehicle traffic enforcement'
+    assert next(item.value for item in action.parameters if item.name == "q") == action.query_text
+
+
+def test_arxiv_initial_query_keeps_topic_aliases_without_secondary_constraints():
+    query = _query(
+        DiscoveryProvider.ARXIV,
+        (("license plate recognition", ("ALPR",)), ("neighborhood poverty", ())),
+    )
+    action = compile_query(query)
+    assert 'ti:"license plate recognition"' in action.query_text
+    assert 'abs:"ALPR"' in action.query_text
+    assert "poverty" not in action.query_text
+
+
+@pytest.mark.parametrize("provider", [DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER])
+def test_camera_placement_query_reaches_web_provider_unquoted(provider):
+    query = _query(
+        provider,
+        (
+            ("automated license plate reader", ("ALPR",)),
+            ("camera placement", ()),
+            ("neighborhood poverty", ()),
+        ),
+    )
+    action = compile_query(query)
+    assert next(item.value for item in action.parameters if item.name == "q") == (
+        "automated license plate reader camera placement neighborhood poverty"
+    )

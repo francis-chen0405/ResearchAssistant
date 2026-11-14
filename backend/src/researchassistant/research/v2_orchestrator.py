@@ -899,6 +899,7 @@ def _run_v2_production_pipeline(
                     search_providers,
                     query_modes,
                     discovery_policy=discovery_policy,
+                    request_limits=research_controls.provider_request_limits if research_controls else None,
                 ),
                 discovery_policy=discovery_policy,
             )

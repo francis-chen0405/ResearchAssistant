@@ -11,7 +11,7 @@ from researchassistant.agents.adaptive_planning import _budget_after_rejected_pl
 from researchassistant.agents.evidence_checkpoint import _checkpoint_cost_allowance
 from researchassistant.agents.post_analysis_round import (
     _combined_queue_cost,
-    _source_budget_fits,
+    _source_budget_shortfall,
 )
 from researchassistant.agents.round_four_summary import _gap_budget_after_protection
 from researchassistant.agents.v2_gap_analysis import _budget_can_reserve
@@ -109,7 +109,8 @@ def test_post_analysis_cost_gate_counts_repeated_reservations_exactly() -> None:
         protected_downstream_model_calls=0,
     )
 
-    assert not _source_budget_fits(budget, _RoutingConfig(), planned_queries=2)  # type: ignore[arg-type]
+    reason = _source_budget_shortfall(budget, _RoutingConfig(), planned_queries=2)  # type: ignore[arg-type]
+    assert reason == "Follow-up budget exceeded the remaining allowance for model cost."
 
 
 def test_combined_post_analysis_queue_cost_preserves_precision() -> None:

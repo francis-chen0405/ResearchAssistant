@@ -144,13 +144,8 @@ export default function Home() {
               ready={Boolean(configuration?.configured && !offline)}
               onSetup={() => setSetupOpen(true)}
               claim={research.claim}
-              acknowledged={research.acknowledged}
               busy={research.busy}
-              supportEnabled={settings.supportEnabled}
-              challengeEnabled={settings.challengeEnabled}
-              reduceMotion={Boolean(reduceMotion)}
               onClaim={research.setClaim}
-              onAcknowledged={research.setAcknowledged}
               onSubmit={(event) =>
                 research.beginResearch(
                   event,
@@ -176,6 +171,8 @@ export default function Home() {
                 use_openalex: settings.useOpenAlex,
                 use_arxiv: settings.useArxiv,
                 use_pubmed: settings.usePubmed,
+                use_brave: settings.useBrave,
+                use_serper: settings.useSerper,
               }}
               stageModels={settings.stageModels}
               onClose={() => setSetupOpen(false)}

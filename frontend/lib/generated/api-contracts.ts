@@ -25,6 +25,8 @@ export type ApiSchemas = {
     "use_openalex"?: boolean;
     "use_arxiv"?: boolean;
     "use_pubmed"?: boolean;
+    "use_brave"?: boolean;
+    "use_serper"?: boolean;
   };
   "ConfigurationResponse": {
     "configured": boolean;
@@ -59,6 +61,8 @@ export type ApiSchemas = {
     "openalex_api_key"?: (string | null);
     "serpsearch_api_key"?: (string | null);
     "pubmed_api_key"?: (string | null);
+    "brave_api_key"?: (string | null);
+    "serper_api_key"?: (string | null);
     "firecrawl_api_key"?: (string | null);
   };
   "CredentialSetupResponse": {
@@ -67,7 +71,7 @@ export type ApiSchemas = {
     "message": string;
     "saved_settings"?: Array<string>;
   };
-  "DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper";
+  "DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper" | "brave";
   "DiscoveryScoreBreakdown": {
     "relevance": number;
     "intent_match": number;
@@ -95,7 +99,8 @@ export type ApiSchemas = {
     "supportEnabled"?: boolean;
     "challengeEnabled"?: boolean;
     "sourceTarget"?: 5 | 10 | 15 | 20 | 30;
-    "metadataDepth"?: 10 | 20 | 50;
+    "providerRequestLimits"?: Record<string, number>;
+    "metadataDepth"?: 10 | 20 | 30 | 50;
     "seedExpansionEnabled"?: boolean;
     "scholarlySearchMode"?: "lexical" | "semantic" | "auto";
     "useSerpSearch"?: boolean;
@@ -103,6 +108,8 @@ export type ApiSchemas = {
     "useOpenAlex"?: boolean;
     "useArxiv"?: boolean;
     "usePubmed"?: boolean;
+    "useBrave"?: boolean;
+    "useSerper"?: boolean;
     "useCrossref"?: boolean;
   };
   "LiveAttemptDiagnostic": {
@@ -296,7 +303,7 @@ export type ApiSchemas = {
     "model_profile"?: "standard-2026-09" | "configurable-2026-09";
     "stage_models"?: ApiSchemas["StageModelSelections"];
     "raw_claim": string;
-    "acknowledged_public": boolean;
+    "acknowledged_public"?: (boolean | null);
     "db_path"?: (string | null);
     "run_id"?: (string | null);
     "max_tokens"?: number;
@@ -311,8 +318,11 @@ export type ApiSchemas = {
     "use_openalex"?: boolean;
     "use_arxiv"?: boolean;
     "use_pubmed"?: boolean;
+    "use_brave"?: boolean;
+    "use_serper"?: boolean;
     "use_crossref"?: boolean;
-    "metadata_depth"?: 10 | 20 | 50;
+    "provider_request_limits"?: Record<string, number>;
+    "metadata_depth"?: 10 | 20 | 30 | 50;
     "seed_expansion_enabled"?: boolean;
     "scholarly_search_mode"?: "lexical" | "semantic" | "auto";
   };
@@ -411,7 +421,7 @@ export type ApiSchemas = {
     "basis": "matching_doi" | "matching_title" | "matching_archive_id";
     "explanation": string;
   };
-  "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper";
+  "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper" | "brave";
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__LiveAttemptDiagnostic": {
     "classification": "invalid_input" | "configuration_error" | "failed";
     "exit_code"?: (number | null);
@@ -438,7 +448,8 @@ export type ApiSchemas = {
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__PresentationTone": "neutral" | "executive" | "academic" | "plain_language";
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__ReportLength": "brief" | "report";
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__ResearchControls": {
-    "metadata_depth"?: (10 | 20 | 50 | null);
+    "provider_request_limits"?: (Record<string, number> | null);
+    "metadata_depth"?: (10 | 20 | 30 | 50 | null);
     "seed_expansion_enabled"?: (boolean | null);
     "scholarly_search_mode"?: ("lexical" | "semantic" | "auto" | null);
     "depth"?: ApiSchemas["Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__ResearchDepth"];
@@ -506,7 +517,7 @@ export type ApiSchemas = {
     "evidence_language": number;
     "penalties": number;
   };
-  "Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper";
+  "Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper" | "brave";
   "Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__DiscoveryScoreBreakdown": {
     "relevance": number;
     "intent_match": number;
@@ -566,7 +577,7 @@ export type ApiSchemas = {
     "action_type"?: "graph_neighbors";
     "seed": ApiSchemas["Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__V2SeedEligibility"];
     "relationship": "references" | "citing" | "related";
-    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch";
+    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch" | "brave" | "serper";
     "direction": ApiSchemas["Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__ResearchDirection"];
     "round_number": number;
     "target_gap_ids"?: Array<string>;
@@ -654,7 +665,7 @@ export type ApiSchemas = {
     "scholarly_search_mode"?: "lexical" | "semantic" | "auto";
   };
   "Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__V2ProviderCapabilities": {
-    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch";
+    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch" | "brave" | "serper";
     "capability_identity"?: "source-provider-capabilities-v1" | "source-provider-capabilities-v2" | "source-provider-capabilities-v3" | "source-provider-capabilities-v4";
     "search_modes": Array<"lexical" | "semantic" | "provider_default">;
     "fields"?: Array<string>;
@@ -726,7 +737,7 @@ export type ApiSchemas = {
     "omitted_before"?: (boolean | null);
     "omitted_after"?: (boolean | null);
   };
-  "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper";
+  "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper" | "brave";
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__Entailment": "Strong" | "Partial" | "Weak";
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__Placement": "primary" | "secondary" | "supporting" | "qualified_only";
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__ResearchDirection": "support" | "challenge";
@@ -1042,7 +1053,7 @@ export type ApiSchemas = {
     "action_type"?: "graph_neighbors";
     "seed": ApiSchemas["Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__V2SeedEligibility"];
     "relationship": "references" | "citing" | "related";
-    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch";
+    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch" | "brave" | "serper";
     "direction": ApiSchemas["Supplemental__researchassistant.api.live_contracts.ResearchTrailItem__ResearchDirection"];
     "round_number": number;
     "target_gap_ids"?: Array<string>;
@@ -1115,7 +1126,7 @@ export type ApiSchemas = {
     "scholarly_search_mode"?: "lexical" | "semantic" | "auto";
   };
   "V2ProviderCapabilities": {
-    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch";
+    "provider": "openalex" | "arxiv" | "pubmed" | "exa" | "serpsearch" | "brave" | "serper";
     "capability_identity"?: "source-provider-capabilities-v1" | "source-provider-capabilities-v2" | "source-provider-capabilities-v3" | "source-provider-capabilities-v4";
     "search_modes": Array<"lexical" | "semantic" | "provider_default">;
     "fields"?: Array<string>;

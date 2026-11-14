@@ -344,8 +344,8 @@ def run_v2_round_four_continuation(
     if continuation.stopping_decision.completed_rounds != 3 or not continuation.rounds:
         raise ValueError("Round-4 continuation requires exactly one completed Round 3")
     round_three = continuation.rounds[-1]
-    if round_three.round_number != 3 or round_three.status is not V2AdaptiveRoundStatus.COMPLETED:
-        raise ValueError("Round-4 continuation requires a successful non-degraded Round 3")
+    if round_three.round_number != 3 or not round_three.usable_for_follow_up:
+        raise ValueError("Round-4 continuation requires a completed Round 3 or usable results from a partially successful Round 3")
     recover_incomplete_papers = uses_claim_ranking(path, initial_plan.run_id)
     gap_input = build_post_round_three_gap_input(
         initial_plan=initial_plan,

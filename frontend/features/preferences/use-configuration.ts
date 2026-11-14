@@ -33,9 +33,11 @@ export function useConfiguration(
       use_openalex: settings.useOpenAlex,
       use_arxiv: settings.useArxiv,
       use_pubmed: settings.usePubmed,
+      use_brave: settings.useBrave,
+      use_serper: settings.useSerper,
     },
   }), [settings.stageModels, settings.useSerpSearch, settings.useExa,
-    settings.useOpenAlex, settings.useArxiv, settings.usePubmed]);
+    settings.useOpenAlex, settings.useArxiv, settings.usePubmed, settings.useBrave, settings.useSerper]);
   const selectionKey = JSON.stringify(selection);
   const currentSelection = useRef({ selection, key: selectionKey });
   useLayoutEffect(() => {

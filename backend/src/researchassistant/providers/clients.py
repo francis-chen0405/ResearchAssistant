@@ -20,6 +20,8 @@ class ProviderClients(StrictModel):
     serpsearch: httpx.Client | None = None
     arxiv_search: httpx.Client | None = None
     pubmed_search: httpx.Client | None = None
+    brave_search: httpx.Client | None = None
+    serper_search: httpx.Client | None = None
     crossref: httpx.Client | None = None
     source: httpx.Client | None = None
     acquisition: httpx.Client | None = None

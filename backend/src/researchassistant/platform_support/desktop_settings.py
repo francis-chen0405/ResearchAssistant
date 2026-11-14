@@ -11,7 +11,9 @@ from typing import Literal
 
 from pydantic import Field, StrictBool, field_validator
 
+from researchassistant.contracts.model_contracts import ProviderRequestLimits
 from researchassistant.contracts.models import StrictModel
+from researchassistant.contracts.research_policy import V2_MAX_TOTAL_TOKENS
 from researchassistant.platform_support.desktop_paths import application_data_dir
 from researchassistant.platform_support.file_lock import FileLock
 from researchassistant.providers.model_choices import (
@@ -26,13 +28,14 @@ class InterfaceSettings(StrictModel):
     modelProfile: ProfileId = CONFIGURABLE_PROFILE_ID
     stageModels: StageModelSelections = DEFAULT_STAGE_MODELS
     dbPath: str = ""
-    maxTokens: int = Field(default=500_000, ge=1, le=500_000)
+    maxTokens: int = Field(default=V2_MAX_TOTAL_TOKENS, ge=1, le=V2_MAX_TOTAL_TOKENS)
     maxCost: str = Field(default="0.20", pattern=r"^\d+(?:\.\d+)?$")
     maxCalls: int = Field(default=160, ge=1, le=160)
     supportEnabled: bool = True
     challengeEnabled: bool = False
-    sourceTarget: Literal[5, 10, 15, 20, 30] = 20
-    metadataDepth: Literal[10, 20, 50] = 50
+    sourceTarget: Literal[5, 10, 15, 20, 30] = 10
+    providerRequestLimits: ProviderRequestLimits = Field(default_factory=dict)
+    metadataDepth: Literal[10, 20, 30, 50] = 30
     seedExpansionEnabled: StrictBool = True
     scholarlySearchMode: Literal["lexical", "semantic", "auto"] = "lexical"
     useSerpSearch: bool = True
@@ -40,6 +43,8 @@ class InterfaceSettings(StrictModel):
     useOpenAlex: bool = True
     useArxiv: bool = False
     usePubmed: bool = False
+    useBrave: bool = False
+    useSerper: bool = False
     useCrossref: bool = True
 
     @field_validator("maxCost")

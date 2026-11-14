@@ -57,6 +57,7 @@ from researchassistant.providers.discovery_transport import RequestKind, observe
 from researchassistant.providers.search import SearchProvider, SearchProviderError, page_parameters
 from researchassistant.research.discovery_policy import build_discovery_binding
 from researchassistant.research.metadata_ranking import RANKING_IDENTITY
+from researchassistant.providers.web_search import web_result_records
 from researchassistant.storage.discovery_store import (
     bind_discovery_run,
     complete_provider_attempt,
@@ -72,12 +73,16 @@ _PROVIDER_CAPS = {
     DiscoveryProvider.PUBMED: 6,
     DiscoveryProvider.EXA: 18,
     DiscoveryProvider.SERPSEARCH: 12,
+    DiscoveryProvider.BRAVE: 6,
+    DiscoveryProvider.SERPER: 6,
 }
 # Distinct mode price bases are frozen even when current documented rates coincide.
 _COSTS = {
     DiscoveryProvider.OPENALEX: Decimal("0.001"),
     DiscoveryProvider.EXA: Decimal("0.01"),
     DiscoveryProvider.SERPSEARCH: Decimal("0.01"),
+    DiscoveryProvider.BRAVE: Decimal("0.005"),
+    DiscoveryProvider.SERPER: Decimal("0.001"),
     DiscoveryProvider.ARXIV: Decimal("0"),
     DiscoveryProvider.PUBMED: Decimal("0"),
 }
@@ -282,8 +287,6 @@ def freeze_query_execution(
     provider_budgets: tuple[V2DiscoveryProviderBudget, ...] | None = None,
     discovery_policy: V2MetadataDiscoveryPolicy | None = None,
 ) -> V2DiscoveryBinding:
-    if DiscoveryProvider.SERPER in providers:
-        raise ValueError("Serper has no provider-native conceptual query compiler")
     policy = discovery_policy or V2MetadataDiscoveryPolicy()
     modes = dict(query_modes or {})
     if not set(modes) <= set(providers):
@@ -352,7 +355,9 @@ def freeze_query_execution(
             "v2_initial_planner_v2.md",
             "search_agent_v2.md",
             "v2_scout_v3.md",
+            "v2_scout_v4.md",
             "source_selection_v3.md",
+            "source_selection_v4.md",
             "search_agent_v3.md",
         )
     }
@@ -463,6 +468,7 @@ def query_provider_budgets(
     query_modes: Mapping[DiscoveryProvider, SearchMode] | None,
     *,
     discovery_policy: V2MetadataDiscoveryPolicy | None = None,
+    request_limits: Mapping[DiscoveryProvider, int] | None = None,
 ) -> tuple[V2DiscoveryProviderBudget, ...]:
     policy = discovery_policy or V2MetadataDiscoveryPolicy()
     results = []
@@ -486,10 +492,14 @@ def query_provider_budgets(
                 cost_policy_identity=_cost_identity(provider, mode, policy.metadata_depth),
             )
         )
-    return tuple(results)
+    return tuple(
+        budget.model_copy(update={"max_requests": min(budget.max_requests, request_limits[budget.provider])})
+        if request_limits and budget.provider in request_limits else budget
+        for budget in results
+    )
 
 
-def available_query_budgets(path: str, run_id: UUID) -> tuple[V2ProviderSearchBudget, ...]:
+def available_query_budgets(path: str, run_id: UUID, *, skip_empty_arxiv: bool = False) -> tuple[V2ProviderSearchBudget, ...]:
     """Expose actual physical request headroom, including retries and PubMed summaries."""
     binding = read_discovery_binding(path, run_id)
     audit = provider_attempt_audit(path, run_id)
@@ -502,6 +512,11 @@ def available_query_budgets(path: str, run_id: UUID) -> tuple[V2ProviderSearchBu
             for start, completion in zip(audit.starts, audit.completions, strict=True)
             if start.provider == budget.provider
         )
+        if skip_empty_arxiv and budget.provider is DiscoveryProvider.ARXIV and pairs and all(
+            completion is not None and completion.status == "completed"
+            and completion.metadata_records == 0 for _, completion in pairs
+        ):
+            continue
         spent = add_usd(
             *(
                 max(
@@ -756,6 +771,8 @@ class _PhysicalExecution:
                     return min(len(ids), request.limit)
                 records = body.get("result", {})
                 return sum(item in records for item in self.pubmed_ids)
+            if request.provider in {DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER}:
+                return min(len(web_result_records(request.provider, body) or []), request.limit)
             records = (
                 body.get("organic_results", [])
                 if request.provider is DiscoveryProvider.SERPSEARCH
@@ -965,6 +982,10 @@ def _search_metadata_page(
                 if request.provider is DiscoveryProvider.SERPSEARCH
                 else "results": [x.model_dump(mode="json") for x in result.results]
             }
+            if request.provider is DiscoveryProvider.BRAVE:
+                body = {"web": {"results": body["results"]}}
+            elif request.provider is DiscoveryProvider.SERPER:
+                body = {"organic": body["results"]}
             if result.cost_usd is not None:
                 if request.provider is DiscoveryProvider.EXA:
                     body["costDollars"] = {"total": str(result.cost_usd)}

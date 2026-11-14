@@ -13,9 +13,13 @@ import json
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
+from contextvars import copy_context
 from datetime import UTC, datetime
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from threading import Event
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -24,11 +28,13 @@ from pydantic import ConfigDict
 
 from researchassistant.agents.v2_stage_checkpoint import (
     V2ScoutRoundCheckpoint,
+    V2StageAttemptCheckpoint,
     V2StageOutcomeCheckpoint,
     checkpoint_hash,
     read_checkpoint,
     save_stage_outcome,
     stage_attempt,
+    stage_request_hash,
 )
 from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import (
@@ -90,9 +96,15 @@ from researchassistant.providers.nber_metadata import (
 )
 from researchassistant.providers.pricing import conservative_token_estimate
 from researchassistant.providers.ranking import canonical_discovery_url
-from researchassistant.providers.v2_budget import V2BudgetSnapshot, V2CancellationRequested
+from researchassistant.providers.v2_budget import (
+    V2BudgetSnapshot,
+    V2CancellationRequested,
+)
 from researchassistant.providers.v2_routing import V2RoutingConfig
-from researchassistant.research.discovery_policy import safe_optional_model_prefix, stable_work_key
+from researchassistant.research.discovery_policy import (
+    safe_optional_model_prefix,
+    stable_work_key,
+)
 from researchassistant.research.metadata_ranking import (
     EXACT_URL_RANKING_IDENTITY,
     RANKING_IDENTITIES,
@@ -101,6 +113,7 @@ from researchassistant.research.metadata_ranking import (
     rank_metadata,
 )
 from researchassistant.storage.discovery_store import read_discovery_binding
+from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import (
     insert_v2_artifact,
     insert_v2_artifact_batch,
@@ -111,6 +124,8 @@ V2_SCOUT_PROMPT_PATH = prompt_resource("v2_scout.md")
 V2_SCOUT_V2_PROMPT_PATH = prompt_resource("v2_scout_v2.md")
 V2_SCOUT_V3_PROMPT_PATH = prompt_resource("v2_scout_v3.md")
 V2_SCOUT_BATCH_SIZE = 20
+V2_FRESH_SCOUT_BATCH_SIZE = 15
+V2_SCOUT_MAX_WORKERS = 3
 V2_SCOUT_ARTIFACT_KEY = "phase-4-discovery-scout"
 V2_RANKING_ARTIFACT_PREFIX = "phase-3-metadata-ranking-round-"
 _TITLE_TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -118,7 +133,8 @@ _DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)\s*", re.IGNO
 
 
 ScoutHandoff = Callable[
-    [V2DiscoveryScoutOutput, V2MetadataRankingArtifact, tuple[LLMRequest, ...], bool], None
+    [V2DiscoveryScoutOutput, V2MetadataRankingArtifact, tuple[LLMRequest, ...], bool],
+    None,
 ]
 
 
@@ -727,6 +743,7 @@ def run_v2_discovery_and_scout(
     binding = _fresh_ranked_binding(db_path, planner_output.run_id)
     identity = binding.ranking_identity if binding is not None else None
     claim_aware = identity == RANKING_IDENTITY
+    batch_size = V2_FRESH_SCOUT_BATCH_SIZE if claim_aware else V2_SCOUT_BATCH_SIZE
     exact_claim = binding.exact_claim if binding is not None and claim_aware else None
     scout_gaps = tuple(gap[:500] for gap in target_gaps[:6]) if claim_aware else ()
     prompt_path = _scout_prompt_path(identity)
@@ -791,7 +808,9 @@ def run_v2_discovery_and_scout(
             )
         else:
             clusters = cluster_discovery_items(
-                items, include_provider_locations=binding is not None, require_identity=claim_aware
+                items,
+                include_provider_locations=binding is not None,
+                require_identity=claim_aware,
             )
             mirrors, covered = (), frozenset()
         ranking_artifact: V2MetadataRankingArtifact | None = None
@@ -850,7 +869,10 @@ def run_v2_discovery_and_scout(
                     excluded_items=covered | {link.item_id for link in mirrors},
                     reconsiderations=reconsiderations,
                     candidate_limit=_scout_tranche_limit(
-                        binding.policy.max_scout_per_round, first_pass_only, len(prefix_batches)
+                        binding.policy.max_scout_per_round,
+                        first_pass_only,
+                        len(prefix_batches),
+                        batch_size,
                     ),
                     batch_offset=len(prefix_batches),
                 )
@@ -894,7 +916,9 @@ def run_v2_discovery_and_scout(
                 raise ValueError("persisted Scout reconsideration differs from its items")
         else:
             expected_clusters = cluster_discovery_items(
-                items, include_provider_locations=binding is not None, require_identity=claim_aware
+                items,
+                include_provider_locations=binding is not None,
+                require_identity=claim_aware,
             )
             mirrors = ()
         if clusters != expected_clusters:
@@ -973,6 +997,8 @@ def run_v2_discovery_and_scout(
             checkpoint_key=checkpoint_key,
             on_batch=publish_batch if on_batch is not None else None,
             batch_offset=len(prefix_batches),
+            batch_size=batch_size,
+            max_workers=V2_SCOUT_MAX_WORKERS if claim_aware else 1,
         )
     output = V2DiscoveryScoutOutput(
         run_id=planner_output.run_id,
@@ -1065,7 +1091,10 @@ def _scout_ids(ranks: tuple[MetadataRank, ...], limit: int, claim_aware: bool) -
         else:
             uncertain.append(rank)
     first = fair_ranked_ids(strong, limit, highest_lane_first=True)
-    return (*first, *fair_ranked_ids(uncertain, limit - len(first), highest_lane_first=True))
+    return (
+        *first,
+        *fair_ranked_ids(uncertain, limit - len(first), highest_lane_first=True),
+    )
 
 
 def _scout_request(
@@ -1086,7 +1115,10 @@ def _scout_request(
             target_gaps=target_gaps,
         )
     return V2ScoutRequest(
-        run_id=run_id, directions=directions, batch_number=batch_number, candidates=candidates
+        run_id=run_id,
+        directions=directions,
+        batch_number=batch_number,
+        candidates=candidates,
     )
 
 
@@ -1109,12 +1141,14 @@ def _selected_model_input_tokens(llm_provider: LLMProvider, request: LLMRequest)
     return estimate
 
 
-def _scout_tranche_limit(cap: int, first_pass_only: bool, prefix_batches: int) -> int | None:
+def _scout_tranche_limit(
+    cap: int, first_pass_only: bool, prefix_batches: int, batch_size: int
+) -> int | None:
     if first_pass_only:
-        return min(V2_SCOUT_BATCH_SIZE, max(1, cap // 2))
+        return min(batch_size, max(1, cap // 2))
     if prefix_batches:
-        batches = (cap + V2_SCOUT_BATCH_SIZE - 1) // V2_SCOUT_BATCH_SIZE
-        return max(0, batches - prefix_batches) * V2_SCOUT_BATCH_SIZE
+        batches = (cap + batch_size - 1) // batch_size
+        return max(0, batches - prefix_batches) * batch_size
     return None
 
 
@@ -1142,6 +1176,7 @@ def _ranked_scout_selection(
     ranked_by_id = {item.item_id: item for item in ranks}
     by_item = {item.item_id: item for item in items}
     claim_aware = ranking_identity == RANKING_IDENTITY
+    batch_size = V2_FRESH_SCOUT_BATCH_SIZE if claim_aware else V2_SCOUT_BATCH_SIZE
     available = policy.max_scout_per_round - len(already_scouted)
     if candidate_limit is not None:
         available = min(available, candidate_limit)
@@ -1163,12 +1198,12 @@ def _ranked_scout_selection(
             _scout_prompt_path(ranking_identity), expected_stage=LLMStage.SCOUT
         )
         reservations = []
-        for start in range(0, len(capped_items), V2_SCOUT_BATCH_SIZE):
-            batch = capped_items[start : start + V2_SCOUT_BATCH_SIZE]
+        for start in range(0, len(capped_items), batch_size):
+            batch = capped_items[start : start + batch_size]
             request_input = _scout_request(
                 run_id,
                 directions,
-                batch_offset + start // V2_SCOUT_BATCH_SIZE + 1,
+                batch_offset + start // batch_size + 1,
                 tuple(_scout_candidate(by_item[item.item_id], bounded=True) for item in batch),
                 exact_claim,
                 target_gaps,
@@ -1197,7 +1232,7 @@ def _ranked_scout_selection(
         )
         safe_capacity = min(
             policy.max_scout_per_round,
-            (safe_attempts // 2) * V2_SCOUT_BATCH_SIZE,
+            (safe_attempts // 2) * batch_size,
             len(capped_items),
         )
     selected_ids = set(ordered_ids[:safe_capacity])
@@ -1304,7 +1339,9 @@ def _read_ranking_artifact(
         return None
     try:
         artifact = read_v2_artifact(
-            str(db_path), planner_output.run_id, _ranking_artifact_key(planner_output) + suffix
+            str(db_path),
+            planner_output.run_id,
+            _ranking_artifact_key(planner_output) + suffix,
         )
     except KeyError as exc:
         raise ValueError("ranked discovery checkpoint is missing its ranking sidecar") from exc
@@ -1421,22 +1458,25 @@ def _run_scout_batches(
     db_path: str | None = None,
     checkpoint_key: str | None = None,
     on_batch: Callable[
-        [tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...], tuple[LLMRequest, ...]], None
+        [tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...], tuple[LLMRequest, ...]],
+        None,
     ]
     | None = None,
     batch_offset: int = 0,
+    batch_size: int = V2_SCOUT_BATCH_SIZE,
+    max_workers: int = 1,
 ) -> tuple[tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...]]:
     _raise_if_cancelled(cancellation_requested)
     prompt = load_prompt_file(prompt_path, expected_stage=LLMStage.SCOUT)
     batches: list[ScoutBatch] = []
     audits: list[ScoutBatchAudit] = []
     requests = []
-    for start in range(0, len(items), V2_SCOUT_BATCH_SIZE):
-        batch_items = items[start : start + V2_SCOUT_BATCH_SIZE]
+    for start in range(0, len(items), batch_size):
+        batch_items = items[start : start + batch_size]
         request_input = _scout_request(
             run_id,
             directions,
-            batch_offset + start // V2_SCOUT_BATCH_SIZE + 1,
+            batch_offset + start // batch_size + 1,
             tuple(_scout_candidate(item, bounded=bounded_metadata) for item in batch_items),
             exact_claim,
             target_gaps,
@@ -1457,13 +1497,37 @@ def _run_scout_batches(
                 ),
             )
         )
-    for index, (request_input, request) in enumerate(requests):
-        _raise_if_cancelled(cancellation_requested)
+    stopped = Event()
+
+    def cancelled() -> bool:
+        return stopped.is_set() or bool(cancellation_requested and cancellation_requested())
+
+    def run_batch(
+        request_input: V2ScoutRequest, request: LLMRequest
+    ) -> tuple[ScoutBatch, ScoutBatchAudit]:
+        _raise_if_cancelled(cancelled)
+        if prompt_path == V2_SCOUT_V3_PROMPT_PATH:
+            first = (
+                read_checkpoint(
+                    db_path, run_id, f"{checkpoint_key}/batch-{request_input.batch_number}/attempt-1",
+                    V2StageAttemptCheckpoint,
+                )
+                if db_path is not None and checkpoint_key is not None
+                else None
+            )
+            if first is None or first.request_hash != stage_request_hash(request):
+                compact = load_prompt_file(
+                    prompt_resource("v2_scout_v4.md"), expected_stage=LLMStage.SCOUT
+                )
+                request = request.model_copy(update={
+                    "prompt": compact,
+                    "rendered_prompt": render_stage_prompt(compact, request_input, ScoutBatch),
+                })
         last_error: LLMInvocationError | None = None
         response: ScoutBatch | None = None
         attempted = 0
         for number in range(1, 3):
-            _raise_if_cancelled(cancellation_requested)
+            _raise_if_cancelled(cancelled)
             attempted += 1
             attempt = None
             saved = None
@@ -1493,7 +1557,10 @@ def _run_scout_batches(
                 current = (
                     request.model_copy(
                         update={
-                            "input_artifact_ids": (*request.input_artifact_ids, attempt.attempt_id)
+                            "input_artifact_ids": (
+                                *request.input_artifact_ids,
+                                attempt.attempt_id,
+                            )
                         }
                     )
                     if attempt is not None
@@ -1557,25 +1624,48 @@ def _run_scout_batches(
                 ),
             )
             failure = str(last_error) if last_error is not None else "Scout response mapping failed"
-            audits.append(
-                ScoutBatchAudit(
-                    batch_number=request_input.batch_number,
-                    attempted_calls=attempted,
-                    fallback_used=True,
-                    failure=failure,
-                )
+            return response, ScoutBatchAudit(
+                batch_number=request_input.batch_number,
+                attempted_calls=attempted,
+                fallback_used=True,
+                failure=failure,
             )
-        else:
-            audits.append(
-                ScoutBatchAudit(batch_number=request_input.batch_number, attempted_calls=attempted)
-            )
+        return response, ScoutBatchAudit(
+            batch_number=request_input.batch_number, attempted_calls=attempted
+        )
+
+    def publish(index: int, result: tuple[ScoutBatch, ScoutBatchAudit]) -> None:
+        response, audit = result
         batches.append(response)
+        audits.append(audit)
         if on_batch is not None:
             on_batch(
                 tuple(batches),
                 tuple(audits),
                 tuple(pending for _, pending in requests[index + 1 :]),
             )
+
+    if max_workers == 1 or len(requests) <= 1:
+        for index, (request_input, request) in enumerate(requests):
+            publish(index, run_batch(request_input, request))
+    else:
+        write_scope = overlapping_database_writes(db_path) if db_path else nullcontext()
+        with (
+            write_scope,
+            ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="scout-batch") as pool,
+        ):
+            futures = [
+                pool.submit(copy_context().run, run_batch, request_input, request)
+                for request_input, request in requests
+            ]
+            try:
+                # Publish only complete prefixes so capture and replay keep deterministic ordering.
+                for index, future in enumerate(futures):
+                    publish(index, future.result())
+            finally:
+                stopped.set()
+                for future in futures:
+                    future.cancel()
     return tuple(batches), tuple(audits)
 
 
