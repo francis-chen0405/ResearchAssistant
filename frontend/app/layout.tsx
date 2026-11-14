@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
+import { themeBootScript } from "@/features/preferences/theme-script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ResearchAssistant — Evidence, in context",
+  title: "ResearchAssistant",
   description:
-    "Research a public claim and release a source-grounded brief you can inspect.",
+    "Check a claim against sources, with exact quotes and an evidence-backed brief you can inspect.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body>{children}</body>
     </html>
   );

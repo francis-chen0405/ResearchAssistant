@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { ProductPreview } from "@/components/workspace";
+import { Icon } from "@/components/icons";
 import type { MainView } from "../preferences/settings";
 
 export function Header({
@@ -131,22 +132,25 @@ export function WelcomeView({
 
 export function Notice({
   message,
+  tone = "info",
   onClose,
 }: {
   message: string;
+  tone?: "info" | "success" | "warning" | "error";
   onClose: () => void;
 }) {
   return (
     <motion.div
-      className="notice"
-      role="status"
+      className={`toast toast-${tone}`}
+      role={tone === "error" ? "alert" : "status"}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
     >
+      <Icon name={tone === "success" ? "check" : tone === "info" ? "info" : "alert"} size={18} />
       <span>{message}</span>
-      <button type="button" onClick={onClose} aria-label="Dismiss">
-        ×
+      <button type="button" className="toast-close" onClick={onClose} aria-label="Dismiss">
+        <Icon name="x" />
       </button>
     </motion.div>
   );
