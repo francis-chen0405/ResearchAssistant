@@ -42,6 +42,15 @@ The desktop progress page shows up to seven promising works as soon as a ranked
 first pass is saved. The cards show what Scout, capture, assessment and admission have
 recorded so far. All sources keeps earlier finds available during and after the run.
 
+In current source the renderer is redesigned (light and dark themes). Results lead
+with a conservative evidence-picture label (rules in DECISIONS.md), then findings
+grouped by relationship to the claim, sources, and a Method audit view; mirrors of one
+publication merge for display. Released briefs export as Markdown, PDF or Word from the
+result page through a read-only route. Runs that did not complete offer Resume and
+Retry. Settings is one dialog. The redesign has passed offline renderer checks but no
+packaged build or human acceptance yet; desktop notifications were not added because
+the app denies browser permission requests.
+
 Progress screens preserve the last confirmed state when the connection fails and let
 the user reconnect to the same run. Cancellation is confirmed by the backend before
 the screen reports it as requested. Recorded source, renderer, browser and distribution
