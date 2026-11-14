@@ -712,15 +712,53 @@ test("recovery controls expose scoped status, last-confirmed time and confirmed 
       lastConfirmedAt, cancellation: { state: "unconfirmed", message: "Check History" },
       onReconnect() {}, onHistory() {}, onCancel() {},
     };
-    const nodes = elementNodes(h.render("ResearchRecovery", props));
+    // Walk children and the Banner's title/action slots.
+    const walk = (value) => !value || typeof value !== "object" ? [] : Array.isArray(value) ? value.flatMap(walk)
+      : [value, ...walk(value.props?.children), ...walk(value.props?.title), ...walk(value.props?.action)];
+    const isButton = (node, label) => (node.type === "button" || node.type?.name === "Button") && node.props.children === label;
+    const nodes = walk(h.render("ResearchRecovery", props));
     assert.ok(nodes.some(node => node.props.role === "status" && node.props["aria-live"] === "polite"));
-    assert.ok(nodes.some(node => node.type === "button" && node.props.children === "Reconnect" && !node.props.disabled));
-    assert.ok(nodes.some(node => node.type === "button" && node.props.children === "Open History"));
-    assert.ok(nodes.some(node => node.type === "button" && node.props.children === "Cancel run"));
+    assert.ok(nodes.some(node => isButton(node, "Reconnect") && !node.props.disabled));
+    assert.ok(nodes.some(node => isButton(node, "Open History")));
     assert.match(JSON.stringify(nodes), /Research may still be running/);
     if (lastConfirmedAt === null) assert.match(JSON.stringify(nodes), /No progress snapshot confirmed/);
     else assert.ok(nodes.some(node => node.type === "time" && node.props.dateTime));
+    // A healthy connection keeps only the polite status region; no banner or buttons.
+    const healthy = walk(h.render("ResearchRecovery", { ...props, connection: { state: "connected", error: null, recovered: false } }));
+    assert.ok(healthy.some(node => node.props.role === "status" && node.props["aria-live"] === "polite"));
+    assert.equal(healthy.filter(node => node.type?.name === "Banner" || node.type?.name === "Button").length, 0);
   }
+  // Cancel is a separate action that asks for confirmation and states saved work is kept.
+  let cancelled = 0;
+  const cancelProps = { cancellation: { state: "idle", message: null }, onCancel() { cancelled += 1; } };
+  const walk = (value) => !value || typeof value !== "object" ? [] : Array.isArray(value) ? value.flatMap(walk)
+    : [value, ...walk(value.props?.children)];
+  let nodes = walk(h.render("CancelRun", cancelProps));
+  const open = nodes.find(node => node.type?.name === "Button" && node.props.children === "Cancel run");
+  assert.ok(open);
+  open.props.onClick();
+  assert.equal(cancelled, 0, "Opening the confirmation does not cancel");
+  nodes = walk(h.render("CancelRun", cancelProps));
+  assert.match(JSON.stringify(nodes), /Work saved so far is kept/);
+  nodes.find(node => node.type?.name === "Button" && node.props.children === "Stop research").props.onClick();
+  assert.equal(cancelled, 1);
+  const sending = walk(h.render("CancelRun", { ...cancelProps, cancellation: { state: "sending", message: "Sending cancellation request…" } }));
+  assert.ok(sending.some(node => node.type?.name === "Button" && node.props.children === "Sending cancellation…" && node.props.disabled));
+  assert.equal(walk(h.render("CancelRun", { ...cancelProps, canCancel: false })).length, 0);
+});
+
+test("progress phases map every known stage and later rounds never move back", () => {
+  const { phaseOf, activitySentence, phases } = hookHarness("features/research/phases.ts", {}).exports;
+  assert.deepEqual([...phases], ["Plan", "Search", "Read", "Analyse", "Write up"]);
+  for (const stage of ["claim_planner", "discovery", "scout", "gap_analysis", "adaptive_search", "acquisition",
+    "source_selection", "deep_analysis", "evidence_admission", "review", "synthesis", "final_renderer_validator"]) {
+    assert.notEqual(phaseOf(stage), null, stage);
+  }
+  assert.equal(phaseOf("an_unknown_future_stage"), null, "Unknown stages do not map to step one");
+  assert.equal(activitySentence("adaptive_search", 2), "Follow-up search, round 2");
+  assert.equal(activitySentence("claim_planner", 3), "Follow-up search, round 3");
+  assert.equal(activitySentence("acquisition", 1), "Reading sources");
+  assert.doesNotMatch(activitySentence("an_unknown_future_stage", 1), /unknown_future/);
 });
 
 test("a fresh explicit selection of the same run clears the previous cancellation guard", async () => {

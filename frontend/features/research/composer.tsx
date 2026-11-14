@@ -4,7 +4,7 @@ import { StatusPill } from "@/components/workspace";
 import type { ModelOptions } from "@/lib/api";
 import { ModelSelection } from "../preferences/model-selection";
 import { type Settings, budgetOptions } from "../preferences/settings";
-import { ResearchRecovery, type ResearchRecoveryProps } from "./connection";
+import { CancelRun, ResearchRecovery, type ResearchRecoveryProps } from "./connection";
 
 export function ResearchView({
   claim,
@@ -134,24 +134,26 @@ export function StartingView({
   reduceMotion: boolean;
 } & ResearchRecoveryProps) {
   return (
-    <motion.section
-      className="starting-view"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
-      <div className="orbital-loader" aria-hidden="true">
-        <motion.i
-          animate={reduceMotion ? undefined : { rotate: 360 }}
-          transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
-        />
-        <span>01</span>
-      </div>
-      <p className="eyebrow">Preparing the trail</p>
-      <h2>{claim}</h2>
-      <p>
-        Waiting for confirmed progress from this run. The worker may already be running.
-      </p>
+    <motion.section className="page progress-page starting-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <ResearchRecovery {...recovery} />
+      <header className="progress-hero card">
+        <div className="progress-hero-main">
+          <p className="eyebrow row">
+            <motion.span
+              className="spinner"
+              aria-hidden="true"
+              animate={reduceMotion ? undefined : { rotate: 360 }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+            />
+            Starting your research
+          </p>
+          <h1>{claim}</h1>
+          <p className="activity">Waiting for the first progress update. This usually takes a few seconds.</p>
+        </div>
+        <div className="progress-hero-side">
+          <CancelRun cancellation={recovery.cancellation} onCancel={recovery.onCancel} canCancel={recovery.canCancel} />
+        </div>
+      </header>
     </motion.section>
   );
 }

@@ -224,6 +224,8 @@ async function main() {
     assert.equal(started.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(started.stage_models),Array(7).fill('mimo-v2.6-flash')); assert.equal(started.max_cost_usd,'0.50'); assert.equal(started.challenge_enabled,true);
     await page.screenshot({path:path.join(shots,'research-active.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Cancel run',exact:true}).click();
+    await page.getByRole('dialog').getByText(/Work saved so far is kept/).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'Stop research',exact:true}).click();
     await page.getByText('No brief was produced',{exact:true}).waitFor();
     await page.getByText('Cancelled',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Resume this run',exact:true}).waitFor();

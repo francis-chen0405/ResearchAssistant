@@ -6,18 +6,18 @@ import { safeWebUrl } from "../results/source-leads";
 type Run = { runId: string; database: string };
 const pageSize = 25;
 const states: Record<LiveSource["state"], string> = {
-  lead: "Lead",
+  lead: "Found",
   screened: "Screened",
-  captured: "Text captured",
-  abstract_only: "Abstract only",
-  full_text: "Full text",
-  assessed: "Assessed",
-  admitted: "Admitted",
+  captured: "Reading",
+  abstract_only: "Read (abstract only)",
+  full_text: "Read",
+  assessed: "Read",
+  admitted: "Used as evidence",
 };
 const noteLabels = {
-  metadata: "Discovery summary",
-  scout: "Scout screening",
-  analyst: "Analyst assessment",
+  metadata: "Search summary",
+  scout: "Screening note",
+  analyst: "Assessment note",
 };
 
 function SourceLink({ source }: { source: LiveSource }) {
@@ -47,7 +47,7 @@ function ShortlistCard({ source }: { source: LiveSource }) {
           {source.note_kind && source.note && (
             <p><strong>{noteLabels[source.note_kind]}</strong>{source.note}</p>
           )}
-          {source.state === "admitted" && <p>Entered the evidence ledger. Report validation is separate.</p>}
+          {source.state === "admitted" && <p>A finding from this source was checked against its text and kept.</p>}
         </details>
       )}
     </li>

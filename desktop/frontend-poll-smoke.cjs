@@ -351,17 +351,17 @@ async function main() {
     assert.equal(await cards.count(), 0);
     sourcePhase = 1;
     const initialCard = cards.filter({ hasText: source(1).title });
-    await initialCard.getByText("Lead", { exact: true }).waitFor();
+    await initialCard.getByText("Found", { exact: true }).waitFor();
     sourcePhase = 2;
     await initialCard.getByText("Screened", { exact: true }).waitFor();
     sourcePhase = 3;
     await page.getByRole("button", { name: "Dismiss", exact: true }).click();
     await page.mouse.move(5, 5);
-    await initialCard.getByText("Full text", { exact: true }).waitFor();
+    await initialCard.getByText("Read", { exact: true }).waitFor();
     assert.equal(await initialCard.getByRole("link").getAttribute("href"), "https://archive.example.org/verified/1");
     assert.equal(await cards.count(), 7);
-    await cards.filter({ hasText: source(2).title }).getByText("Assessed", { exact: true }).waitFor();
-    await cards.filter({ hasText: source(3).title }).getByText("Admitted", { exact: true }).waitFor();
+    await cards.filter({ hasText: source(2).title }).getByText("Read", { exact: true }).waitFor();
+    await cards.filter({ hasText: source(3).title }).getByText("Used as evidence", { exact: true }).waitFor();
     await sources.getByText("New in round 2", { exact: true }).waitFor();
     if (process.env.RESEARCHASSISTANT_SHORTLIST_SCREENSHOTS) {
       const screenshots = process.env.RESEARCHASSISTANT_SHORTLIST_SCREENSHOTS;
@@ -375,7 +375,7 @@ async function main() {
     await initialCard.getByRole("link").focus();
     await initialCard.locator("summary").focus();
     await page.keyboard.press("Enter");
-    await initialCard.getByText("Scout screening", { exact: true }).waitFor();
+    await initialCard.getByText("Screening note", { exact: true }).waitFor();
     const rotated = page.waitForResponse(async (response) =>
       response.url().includes(`/api/research/${runId}/live-sources`) &&
       (await response.json()).revision === "4"
@@ -463,9 +463,9 @@ async function main() {
     const connection = page.getByRole("region", { name: "Progress connection", exact: true });
     await connection.getByText(/Automatic retries paused/).waitFor();
     assert.equal(snapshotCalls, beforeRecovery + 3);
-    await page.getByText("Preparing the trail", { exact: true }).waitFor();
+    await page.getByText("Starting your research", { exact: true }).waitFor();
     await connection.getByText("No progress snapshot confirmed yet.", { exact: true }).waitFor();
-    await connection.getByRole("button", { name: "Cancel run", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Cancel run", exact: true }).waitFor();
     await connection.getByRole("button", { name: "Open History", exact: true }).click();
     await page.getByText("A saved replacement run", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Research", exact: true }).click();
@@ -483,11 +483,15 @@ async function main() {
     assert.equal(await connection.locator("time").getAttribute("datetime"), lastConfirmed);
     await connection.getByText("Research may still be running.", { exact: true }).waitFor();
     assert.equal(await cards.count(), 7, "Last saved sources stay visible when progress disconnects");
-    await connection.getByRole("button", { name: "Cancel run", exact: true }).click();
-    await connection.getByRole("button", { name: "Sending cancellation…", exact: true }).waitFor();
-    assert.equal(await connection.getByRole("button", { name: "Cancellation requested", exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Cancel run", exact: true }).click();
+    const confirmStop = page.getByRole("dialog", { name: "Stop this research?" });
+    await confirmStop.getByText(/Work saved so far is kept/).waitFor();
+    assert.equal(cancelCalls, 0, "Opening the confirmation does not send cancellation");
+    await confirmStop.getByRole("button", { name: "Stop research", exact: true }).click();
+    await page.getByRole("button", { name: "Sending cancellation…", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Cancellation requested", exact: true }).count(), 0);
     confirmCancellation();
-    const confirmedCancel = connection.getByRole("button", { name: "Cancellation requested", exact: true });
+    const confirmedCancel = page.getByRole("button", { name: "Cancellation requested", exact: true });
     await confirmedCancel.waitFor();
     assert.equal(await confirmedCancel.isDisabled(), true);
     assert.equal(cancelCalls, 1);

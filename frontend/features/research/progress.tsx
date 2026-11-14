@@ -1,221 +1,103 @@
 import { motion } from "motion/react";
+import { useEffect, useState } from "react";
 import type { RunSnapshot } from "@/lib/api";
-import { ResearchRecovery, type ResearchRecoveryProps } from "./connection";
-import {
-  WorkspaceFrame,
-  StatusPill,
-  ProgressPath,
-} from "@/components/workspace";
+import { Meter } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { CancelRun, ResearchRecovery, type ResearchRecoveryProps } from "./connection";
 import { LiveSourceShortlist } from "./live-sources";
+import { formatCost } from "../shared/presentation";
+import { activitySentence, formatElapsed, phaseOf, phases } from "./phases";
 import { ModelUsageDisclosure } from "../shared/model-usage";
-import {
-  readableStage,
-  formatCost,
-} from "../shared/presentation";
 
-export const stageOrder = [
-  { key: "planning", label: "Planning" },
-  { key: "discovery", label: "Discovery" },
-  { key: "source_evaluation", label: "Source Evaluation" },
-  { key: "acquisition", label: "Acquisition" },
-  { key: "evidence_extraction", label: "Evidence Extraction" },
-  { key: "gap_analysis", label: "Gap Analysis" },
-  { key: "adaptive_search", label: "Adaptive Search" },
-  { key: "deep_analysis", label: "Deep Analysis" },
-  { key: "evidence_admission", label: "Evidence Admission" },
-  { key: "synthesis", label: "Synthesis" },
-  { key: "validation", label: "Validation" },
-];
-
-export function stageIndex(stage: string): number {
-  const stages: Record<string, number> = {
-    claim_planner: 0,
-    v2_initial_planner: 0,
-    discovery: 1,
-    v2_discovery: 1,
-    researchers: 2,
-    supporting_researcher: 2,
-    opposing_researcher: 2,
-    scout: 2,
-    acquisition: 3,
-    probe: 3,
-    extractor: 4,
-    evidence_extraction: 4,
-    gap_analysis: 5,
-    adaptive_search: 6,
-    evidence_analyst: 7,
-    deep_analysis: 7,
-    evidence_admission: 8,
-    statement_reviewer: 8,
-    claim_ledger: 8,
-    debate_synthesizer: 9,
-    synthesis: 9,
-    final_renderer_validator: 10,
-    validation: 10,
-  };
-  return stages[stage] ?? 0;
+function useElapsed(startedAt: number | null): string | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (startedAt === null) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [startedAt]);
+  return startedAt === null ? null : formatElapsed(now - startedAt);
 }
 
 export function ProgressView({
   snapshot,
+  startedAt = null,
   ...recovery
 }: {
   snapshot: RunSnapshot;
+  startedAt?: number | null;
 } & ResearchRecoveryProps) {
-  const activeStage =
-    snapshot.current_research_round > 1 &&
-    ["claim_planner", "supporting_researcher", "opposing_researcher"].includes(
-      snapshot.stage,
-    )
-      ? 1
-      : stageIndex(snapshot.stage);
-  const overall = snapshot.progress_percent;
+  // Phases never move backwards: a later round's search keeps the furthest phase
+  // reached, and an unrecognized stage keeps the last known phase.
+  const reported = phaseOf(snapshot.stage);
+  const [furthest, setFurthest] = useState(reported ?? 0);
+  if (reported !== null && reported > furthest) setFurthest(reported);
+  const current = Math.max(furthest, reported ?? 0);
+  const round = snapshot.current_research_round ?? 1;
+  const elapsed = useElapsed(startedAt);
+  const spent = Number(snapshot.known_cost_subtotal_usd ?? 0);
+  const cap = snapshot.cost_budget_limit_usd != null ? Number(snapshot.cost_budget_limit_usd) : null;
+  const found = snapshot.supporting.candidates + snapshot.opposing.candidates;
+  const read = snapshot.supporting.usable_snapshots + snapshot.opposing.usable_snapshots;
+  const findings = snapshot.v2_diagnostics?.approved_evidence_records;
+  const live = snapshot.worker_active !== false && recovery.connection.state === "connected";
   return (
-    <motion.section
-      className="progress-view"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div className="progress-heading">
-        <div>
-          <p className="eyebrow">
-            {recovery.connection.state === "connected" ? "Research in motion" : "Last confirmed progress"} · round {snapshot.current_research_round}
-          </p>
-          <motion.h2 layoutId={`claim-${snapshot.run_id}`}>
-            {snapshot.raw_claim}
-          </motion.h2>
-          <p>{snapshot.message}</p>
-        </div>
-        <div
-          className="progress-dial"
-          style={{ "--progress": `${overall * 3.6}deg` } as React.CSSProperties}
-        >
-          <div>
-            <motion.strong
-              key={overall}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              {overall}%
-            </motion.strong>
-            <span>complete</span>
-          </div>
-        </div>
-      </div>
+    <motion.section className="page progress-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <ResearchRecovery {...recovery} />
-      <WorkspaceFrame
-        title="Your research notebook"
-        status={<StatusPill tone="active">{recovery.connection.state === "connected" ? "Research in progress" : "Last confirmed progress"}</StatusPill>}
-      >
-        <ProgressPath
-          labels={stageOrder.map((stage) => stage.label)}
-          current={activeStage}
-        />
-        <p className="workspace-description">
-          {snapshot.cost_usage_complete
-            ? "Known model usage"
-            : "Usage incomplete; reservations retained"}
-          : {formatCost(snapshot.known_cost_subtotal_usd)} · Reserved exposure:{" "}
-          {formatCost(snapshot.conservative_reserved_cost_usd)}
-        </p>
+      <header className="progress-hero card">
+        <div className="progress-hero-main">
+          <p className="eyebrow row">
+            {live ? <span className="pulse" aria-hidden="true" /> : <Icon name="clock" size={14} />}
+            {live ? "Research running" : "Last confirmed progress"}
+            {elapsed && <span className="subtle">· {elapsed} elapsed</span>}
+          </p>
+          <motion.h1 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h1>
+          <p className="activity">{activitySentence(snapshot.stage, round)}</p>
+        </div>
+        <div className="progress-hero-side">
+          <div className="spend">
+            <span className="spend-label">
+              <strong>{formatCost(spent)}</strong>
+              {cap != null && <> of {formatCost(cap)}</>} spent
+            </span>
+            {cap != null && <Meter value={spent} max={cap} label={`Model spend ${formatCost(spent)} of ${formatCost(cap)} cap`} />}
+            {!snapshot.cost_usage_complete && <small className="subtle">Some usage is not reported yet; the cap still holds.</small>}
+          </div>
+          <CancelRun cancellation={recovery.cancellation} onCancel={recovery.onCancel} canCancel={recovery.canCancel} />
+        </div>
+      </header>
+
+      <ol className="phases" aria-label="Research phases">
+        {phases.map((label, index) => (
+          <li
+            key={label}
+            className={index < current ? "done" : index === current ? "current" : ""}
+            aria-current={index === current ? "step" : undefined}
+          >
+            <span className="phase-dot" aria-hidden="true">
+              {index < current ? <Icon name="check" size={12} /> : index + 1}
+            </span>
+            <span>{index === 1 && round > 1 && current >= 1 ? `${label} · round ${round}` : label}</span>
+          </li>
+        ))}
+      </ol>
+
+      <dl className="counters">
+        <div><dt>Sources found</dt><dd>{found}</dd></div>
+        <div><dt>Sources read</dt><dd>{read}</dd></div>
+        <div><dt>Findings so far</dt><dd>{findings ?? "—"}</dd></div>
+      </dl>
+
+      <div className="usage-row">
         <ModelUsageDisclosure snapshot={snapshot} />
-      </WorkspaceFrame>
-      <div
-        className={`stance-grid ${snapshot.research_controls.research_mode === "focused" ? "single" : ""}`}
-      >
-        {snapshot.supporting.status !== "disabled" && (
-          <StanceCard
-            title="Evidence that supports"
-            progress={snapshot.supporting}
-            accent="warm"
-          />
-        )}
-        {snapshot.opposing.status !== "disabled" &&
-          snapshot.research_controls.research_mode === "balanced" && (
-            <StanceCard
-              title="Evidence that challenges"
-              progress={snapshot.opposing}
-              accent="cool"
-            />
-          )}
       </div>
+
       <LiveSourceShortlist
         key={JSON.stringify([snapshot.db_path, snapshot.run_id])}
         runId={snapshot.run_id}
         database={snapshot.db_path}
-        watching={snapshot.worker_active !== false && recovery.connection.state === "connected"}
+        watching={live}
       />
-      <div className="run-footnote">
-        <div>
-          <span>Current stage</span>
-          <strong>{readableStage(snapshot.stage)}</strong>
-        </div>
-        <div>
-          <span>Model calls</span>
-          <strong>{snapshot.model_calls_used}</strong>
-        </div>
-        <div>
-          <span>Acquisition attempts</span>
-          <strong>{snapshot.retrieval_attempts_used}</strong>
-        </div>
-        <div>
-          <span>Estimated model cost</span>
-          <strong>{formatCost(snapshot.known_cost_subtotal_usd)}</strong>
-        </div>
-      </div>
     </motion.section>
-  );
-}
-
-export function StanceCard({
-  title,
-  progress,
-  accent,
-}: {
-  title: string;
-  progress: RunSnapshot["supporting"];
-  accent: "warm" | "cool";
-}) {
-  const fill = Math.min(
-    100,
-    progress.usable_snapshots * 12 +
-      progress.candidates * 5 +
-      progress.retrieval_attempts * 2,
-  );
-  return (
-    <article className={`stance-card ${accent}`}>
-      <div className="stance-title">
-        <span>{accent === "warm" ? "+" : "−"}</span>
-        <h3>{title}</h3>
-      </div>
-      <p>{progress.status.replaceAll("_", " ")}</p>
-      <div className="evidence-meter">
-        <motion.i
-          initial={{ width: 0 }}
-          animate={{ width: `${Math.max(fill, 4)}%` }}
-        />
-      </div>
-      <dl>
-        <div>
-          <dt>Usable captures</dt>
-          <motion.dd
-            key={progress.usable_snapshots}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            {progress.usable_snapshots}
-          </motion.dd>
-        </div>
-        <div>
-          <dt>Candidates</dt>
-          <dd>{progress.candidates}</dd>
-        </div>
-        <div>
-          <dt>Acquisition attempts</dt>
-          <dd>{progress.retrieval_attempts}</dd>
-        </div>
-      </dl>
-    </article>
   );
 }

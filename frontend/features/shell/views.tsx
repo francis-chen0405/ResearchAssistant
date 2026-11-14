@@ -10,7 +10,11 @@ export function Header({
   onView,
   onSetup,
   onAdvanced,
+  runActive = false,
+  onRun,
 }: {
+  runActive?: boolean;
+  onRun?: () => void;
   view: MainView;
   providerState: "offline" | "ready" | "saved" | "setup";
   preferencesReady: boolean;
@@ -51,6 +55,12 @@ export function Header({
         ))}
       </nav>
       <div className="header-actions">
+        {runActive && (
+          <button type="button" className="run-indicator" onClick={onRun}>
+            <span className="pulse" aria-hidden="true" />
+            Research running
+          </button>
+        )}
         <button className="advanced-link" type="button" disabled={!preferencesReady} onClick={onAdvanced}>
           Settings
         </button>

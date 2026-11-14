@@ -38,6 +38,8 @@ export function useResearch(
   }, []);
   const [activeRun, updateActiveRun] = useState<ActiveRun | null>(null);
   const [busy, setBusy] = useState(false);
+  // Elapsed time is known only for runs this window started; the snapshot has no start time.
+  const [started, setStarted] = useState<{ runId: string; at: number } | null>(null);
   const activeRunIsTerminal = snapshot
     ? terminalStates.has(snapshot.classification)
     : false;
@@ -204,6 +206,7 @@ export function useResearch(
           : result.message,
       );
       if (result.started) {
+        setStarted({ runId: result.run_id, at: Date.now() });
         setActiveRun({ id: result.run_id, database: settings.dbPath });
         setSnapshot(null);
       } else if (result.classification === "duplicate_active") {
@@ -274,6 +277,7 @@ export function useResearch(
     }
   };
   return {
+    startedAt: started && started.runId === activeRun?.id ? started.at : null,
     claim,
     setClaim,
     snapshot,

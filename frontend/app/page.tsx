@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, useReducedMotion } from "motion/react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ProviderSetup } from "@/components/provider-setup";
 import { Header, Notice, PreferencesStatus, WelcomeView } from "@/features/shell/views";
 import { ResearchView, StartingView } from "@/features/research/composer";
@@ -114,6 +114,24 @@ export default function Home() {
       : configuration?.saved_credentials.length
         ? "saved"
         : "setup";
+  const runActive = Boolean(
+    activeRun && (!snapshot || !terminalStates.has(snapshot.classification)) && snapshot?.worker_active !== false,
+  );
+  // Tell the user when a run they are watching finishes. Polling runs on the
+  // research view; the header indicator keeps the run reachable from elsewhere.
+  const watched = useRef<{ runId: string; terminal: boolean } | null>(null);
+  useEffect(() => {
+    if (!snapshot) return;
+    const terminal = terminalStates.has(snapshot.classification);
+    const previous = watched.current;
+    watched.current = { runId: snapshot.run_id, terminal };
+    if (previous?.runId !== snapshot.run_id || previous.terminal || !terminal) return;
+    const timer = window.setTimeout(() => {
+      if (snapshot.classification === "released") notify("Research complete. The result is ready.", "success");
+      else notify("Research stopped before completing. The page explains what was saved.", "warning");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [snapshot, notify]);
   const recovery = {
     connection: research.connection,
     lastConfirmedAt: research.lastConfirmedAt,
@@ -137,6 +155,8 @@ export default function Home() {
           onView={navigate}
           onSetup={() => setSetupOpen(true)}
           onAdvanced={() => setAdvancedOpen(true)}
+          runActive={runActive}
+          onRun={() => navigate("research")}
         />
         <AnimatePresence mode="wait">
           {preferencesStatus !== "ready" ? (
@@ -172,6 +192,7 @@ export default function Home() {
               <ProgressView
                 key={`progress-${snapshot.db_path}-${snapshot.run_id}`}
                 snapshot={snapshot}
+                startedAt={research.startedAt}
                 {...recovery}
               />
             )
