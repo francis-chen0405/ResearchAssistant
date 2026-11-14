@@ -1,6 +1,24 @@
 import type { V2EvidenceDisplay, V2FinalResearchOutput } from "@/lib/api";
-import { evidenceCitation, evidenceSourceType, evidenceStudyDesign, evidenceConflictNotice } from "./source-titles";
 import { researchStopLabel, sourceBudgetStop, sourceLocalStop } from "../shared/presentation";
+
+type Item = V2EvidenceDisplay["items"][number];
+
+// Export wording keeps explicit "not recorded" phrases; labels come from the
+// backend display projection (evidence.report_presentation), the single owner.
+function labelsFor(evidence: V2EvidenceDisplay | null, item: Item) {
+  const title = evidence?.source_titles?.find((entry) => entry.source_id === item.source_id);
+  const authors = item.verified_publication?.authors ?? item.authors ?? [];
+  const author = title?.lead_author ?? (authors[0] ? `${authors[0]}${authors.length > 1 ? " et al." : ""}` : "Author not recorded");
+  const date = item.verified_publication ? item.verified_publication.publication_date : item.publication_date;
+  const year = title?.year ?? date?.match(/(?:18|19|20)\d{2}/)?.[0] ?? "Year not recorded";
+  const venue = (item.verified_publication ? item.verified_publication.venue : item.publication_venue) || "Venue not recorded";
+  return {
+    citation: `${author} · ${year} · ${venue}`,
+    kind: title?.source_kind ?? "Source type not recorded",
+    design: title?.study_design ?? "Study design not recorded",
+    interest: title?.publisher_interest ?? null,
+  };
+}
 
 export function selectedFindings(evidence: V2EvidenceDisplay | null) {
   return ["supports", "challenges", "qualifies"]
@@ -65,9 +83,10 @@ export function briefWithReadingAid(brief: string, result: V2FinalResearchOutput
     const publication = item.verified_publication;
     const citation = publication
       ? `${publication.title || "Title not recorded"}; ${(publication.authors ?? []).join(", ") || "Author not recorded"}; ${publication.publication_date || "Year not recorded"}; ${publication.venue || "Venue not recorded"}; ${publication.canonical_url} (${publication.verification === "crossref_doi" ? "Crossref DOI metadata" : "reviewed authoritative identifier"})`
-      : `${evidenceCitation(item)}; recorded title: ${item.title || "Not recorded"}; Publication identity is not verified here`;
-    lines.push(`- ${item.approved_factual_statement}\n  ${citation}. Read at: ${item.source_url}.`, "  The recorded passage may be incomplete; check the reading location for context.", `  Source type: ${evidenceSourceType(item)}; ${evidenceStudyDesign(item)}.`);
-    const conflict = evidenceConflictNotice(item);
+      : `${labelsFor(evidence, item).citation}; recorded title: ${item.title || "Not recorded"}; Publication identity is not verified here`;
+    const labels = labelsFor(evidence, item);
+    lines.push(`- ${item.approved_factual_statement}\n  ${citation}. Read at: ${item.source_url}.`, "  The recorded passage may be incomplete; check the reading location for context.", `  Source type: ${labels.kind}; ${labels.design}.`);
+    const conflict = labels.interest;
     if (conflict) lines.push(`  Conflict of interest: ${conflict}`);
   }
   if (!evidence?.items.length) lines.push("- Detailed admitted passages are unavailable or none were admitted.");

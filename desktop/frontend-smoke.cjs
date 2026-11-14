@@ -26,12 +26,25 @@ async function main() {
     const context = await browser.newContext({viewport:{width:1280,height:860}, reducedMotion:'reduce', acceptDownloads:true, permissions:['clipboard-read','clipboard-write']});
     const page = await context.newPage();
     const errors = []; page.on('pageerror', e=>errors.push(e.message));
-    async function openReportDetails() {
-      await page.getByRole('heading', { name: 'Recommended Sources', exact: true }).waitFor();
-      const sections = page.locator('.brief-disclosure, .brief-paper > .all-live-sources');
-      for (const section of await sections.all()) {
-        if (!await section.evaluate(node => node.open)) await section.locator(':scope > summary').click();
+    // Result sections are tabs; open one and expand every disclosure inside it.
+    async function showTab(name, expand = false) {
+      await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+      const panel = page.getByRole('tabpanel');
+      await panel.waitFor();
+      if (expand) {
+        for (const button of await panel.getByRole('button', { name: /^Show all/ }).all()) await button.click();
+        for (const section of await panel.locator('details').all()) {
+          if (!await section.evaluate(node => node.open)) await section.locator(':scope > summary').click();
+        }
       }
+      return panel;
+    }
+    async function openReportDetails() {
+      await page.getByRole('heading', { name: 'What the research found', exact: true }).waitFor();
+    }
+    async function openSavedRun() {
+      await page.getByRole('button',{name:'Saved research',exact:true}).click();
+      await page.getByRole('button',{name:/Can greener streets/}).click();
     }
 
     let preferences = {modelProfile:'configurable-2026-09',stageModels:{planner:'gpt-6-luna-xhigh',scout:'gpt-6-luna-high',gap_analysis:'gpt-6-luna-xhigh',search_agent:'gpt-6-luna-xhigh',source_selection:'gpt-6-luna-xhigh',extractor:'gpt-6-luna-high',analyst:'gpt-6-luna-xhigh'},dbPath:'/example/history.sqlite3',maxTokens:500000,maxCost:'0.20',maxCalls:160,supportEnabled:true,challengeEnabled:false,sourceTarget:10,useSerpSearch:true,useExa:true,useOpenAlex:true,useArxiv:false,usePubmed:false,useCrossref:true};
@@ -211,7 +224,10 @@ async function main() {
     assert.equal(started.model_profile,'configurable-2026-09'); assert.deepEqual(Object.values(started.stage_models),Array(7).fill('mimo-v2.6-flash')); assert.equal(started.max_cost_usd,'0.50'); assert.equal(started.challenge_enabled,true);
     await page.screenshot({path:path.join(shots,'research-active.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Cancel run',exact:true}).click();
-    await page.getByText('No brief was released.',{exact:true}).waitFor();
+    await page.getByText('No brief was produced',{exact:true}).waitFor();
+    await page.getByText('Cancelled',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Resume this run',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Retry with the same settings',exact:true}).waitFor();
     await page.getByRole('button',{name:/Research trail/}).click();
     await page.locator('.trail-source-leads > summary').click();
     await page.locator('.source-lead').first().waitFor();
@@ -248,7 +264,8 @@ async function main() {
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     run='failed'; v2ResultRequests=0; v2EvidenceRequests=0;
     await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.getByText('No brief was released.',{exact:true}).waitFor();
+    await page.getByText('No brief was produced',{exact:true}).waitFor();
+    await page.getByText('Failed',{exact:true}).waitFor();
     await page.waitForTimeout(100);
     assert.equal(v2ResultRequests,0,'Failed runs do not request v2 result details');
     assert.equal(v2EvidenceRequests,0,'Failed runs do not request v2 evidence details');
@@ -256,108 +273,137 @@ async function main() {
     run='released';
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.getByRole('button',{name:/Research trail/}).click();
+    await page.getByText('Research complete',{exact:true}).waitFor();
+    await showTab('Method');
+    await page.getByRole('button',{name:'Open research trail'}).click();
     await page.locator('.trail-source-leads > summary').click();
     await page.locator('.source-lead').first().waitFor();
     assert.equal(await page.locator('.source-lead').count(),50,'Released run loads source leads independently of the brief');
     assert.ok(sourceLeadRequests.some(request=>request.run==='released' && request.method==='GET' && request.offset===0 && request.limit===50),'The released run requests its first lead page');
     assert.ok(sourceLeadRequests.every(request=>request.method==='GET' && request.limit<=50),'Every source-lead request is a bounded GET');
     await page.getByRole('dialog').getByRole('button',{name:'Close'}).click();
-    await page.getByRole('button',{name:'Copy brief',exact:false}).click();
+    await page.getByRole('button',{name:'Copy',exact:true}).click();
     assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/validated example finding/);
-    const downloadEvent=page.waitForEvent('download'); await page.getByRole('button',{name:'Download brief'}).click();
+    await page.getByRole('status').filter({hasText:'Brief copied.'}).waitFor();
+    assert.equal(await page.locator('.toast-error').count(),0,'A successful copy is not shown as an error');
+    await page.getByRole('button',{name:'Export'}).click();
+    for (const format of ['PDF','Word (DOCX)']) await page.getByRole('button',{name:format,exact:true}).waitFor();
+    const downloadEvent=page.waitForEvent('download'); await page.getByRole('button',{name:/Download brief/}).click();
     const download=await downloadEvent; assert.match(fs.readFileSync(await download.path(),'utf8'),/validated example finding/);
     await page.screenshot({path:path.join(shots,'research-result.png'),fullPage:true,animations:'disabled'});
     detailed=true;
     evidenceFailure=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.locator('.overview-item').getByText('Illustrative supporting finding.',{exact:true}).waitFor();
-    await page.getByText(/Detailed evidence could not be loaded/i).waitFor();
-    await page.locator('.overview-item').getByText('Illustrative supporting finding.',{exact:true}).waitFor();
-    assert.equal(await page.getByText('No brief was released.',{exact:true}).count(),0,'Evidence failure keeps the validated brief visible');
+    await page.locator('.released-statement').getByText('Illustrative supporting finding.',{exact:false}).waitFor();
+    await page.getByText(/Detailed evidence could not be loaded/i).first().waitFor();
+    await page.locator('.released-statement').getByText('Illustrative challenging finding.',{exact:false}).waitFor();
+    assert.equal(await page.getByText('No brief was produced',{exact:true}).count(),0,'Evidence failure keeps the validated brief visible');
     evidenceFailure=false;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
-    await page.getByRole('button',{name:/Can greener streets/}).click();
-    await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor();
-    for (const section of await page.locator('.brief-disclosure').all()) {
-      assert.equal(await section.evaluate(node => node.open), false, 'Secondary sections start collapsed');
+    await openSavedRun();
+    await page.getByRole('heading', { name: 'What the research found', exact: true }).waitFor();
+    assert.equal(await page.getByRole('tabpanel').locator('details').count(), 0, 'The Summary has no collapsed sections to open');
+    await showTab('Evidence');
+    for (const card of await page.locator('.finding').all()) {
+      assert.equal(await card.evaluate(node => node.open), false, 'Evidence cards start collapsed');
     }
-    const sourceBrowser = page.locator('.brief-paper > .all-live-sources');
-    assert.equal(await sourceBrowser.evaluate(node => node.open), false, 'All sources starts collapsed after recommendations');
+    await showTab('Summary');
     await page.screenshot({path:path.join(shots,'research-compact.png'),fullPage:true,animations:'disabled'});
-    await page.getByRole('button',{name:'View admitted quote and source'}).first().click();
-    assert.equal(await page.locator('.brief-evidence').evaluate(node => node.open), true, 'Evidence link opens its collapsed parent');
-    await openReportDetails();
-    assert.equal(await page.locator('.evidence-card').first().evaluate(node=>node.open),true,'Brief findings open the exact admitted Ledger record');
-    await page.locator('.evidence-card').first().getByText('Assessment relationship Adds a qualification',{exact:false}).waitFor();
-    await page.getByText('Claim status · Claim not established by the admitted evidence',{exact:true}).waitFor();
-    await page.getByText('This is an additional assessment of saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
-    await page.getByText(/2 qualifying/).waitFor();
-    await page.locator('summary').getByText('Shared publisher/website',{exact:true}).waitFor();
-    assert.ok(await page.getByText(/does not establish independent corroboration/i).count() >= 1,'Shared website pages are not presented as independent corroboration');
-    await page.getByText(/all-50-states statement has not been independently verified/i).waitFor();
-    await page.getByText(/separate links do not establish independent studies/i).waitFor();
-    assert.equal(await page.getByText('Recommended · evidence admitted',{exact:false}).count(),1,'Recommended source is shown only once');
-    await page.getByText('Recommended outcomes: 1 evidence admitted',{exact:true}).waitFor();
-    await page.getByText('Outcomes among all 5 surviving sources: 2 evidence admitted, 1 source token limit prevented analysis, 1 evidence not admitted, 1 not assessed',{exact:true}).waitFor();
-    await page.getByText('Survived selection · source token limit prevented analysis',{exact:false}).waitFor();
-    await page.locator('summary').getByText('Source lineage',{exact:true}).waitFor();
-    assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');
-    assert.equal(await page.getByText('family-raw-id-should-not-render',{exact:true}).count(),0,'Internal family identifiers are not shown in ordinary cards');
-    await page.locator('blockquote').getByText('This is an exact illustrative quotation for the offline test.',{exact:false}).first().waitFor();
-    await page.getByRole('link',{name:'10.1000/example',exact:true}).waitFor();
-    await page.locator('.evidence-card').nth(1).locator('summary').first().focus();
-    await page.keyboard.press('Enter');
-    await page.locator('.evidence-card').nth(1).getByText(/recorded passage may be incomplete/i).waitFor();
-    await page.locator('.evidence-card').nth(1).getByText('Recorded passage and context').click();
-    await page.locator('.evidence-card').nth(1).getByText('The outcome was lower. However, only among',{exact:true}).waitFor();
-    assert.equal(await page.locator('.evidence-card.support').count(),1);
-    assert.equal(await page.locator('.evidence-card.challenge').count(),1);
+    // Summary: answer first, plain label, each disclosure once, no raw identifiers.
+    const summary = page.getByRole('tabpanel');
+    await summary.getByText('Evidence is limited or indirect',{exact:true}).waitFor();
+    await summary.getByText('Direct evidence remains incomplete.',{exact:true}).waitFor();
+    await page.getByRole('heading',{name:'What is still unknown',exact:true}).waitFor();
+    await summary.getByText('Long-term air temperature data is unavailable.',{exact:true}).waitFor();
+    await summary.getByText(/Coverage is partial, with 1 open question/).waitFor();
     assert.equal(await page.getByText('internal-gap-example',{exact:true}).count(),0);
-    await page.getByRole('heading',{name:'Unresolved evidence gaps',exact:true}).waitFor();
-    await page.getByText('1 gap remains unresolved.',{exact:true}).waitFor();
-    await page.getByText(/^Earlier search decision ·/).click();
-    await page.getByText(/The search assessment counted 0 unresolved evidence gaps for possible follow-up/).waitFor();
-    await page.getByText(/Release checks passed: yes\./).waitFor();
-    const sidebar = page.locator('.report-meta');
-    await sidebar.getByText('Input tokens',{exact:true}).waitFor();
-    await sidebar.getByText('at least 123 known; total incomplete',{exact:true}).waitFor();
-    assert.equal(await sidebar.getByText(/Recorded token usage and cost basis|Frozen research settings|Research notes|The saved research result is available/).count(),0);
-    const discovery = sidebar.locator('details').filter({hasText:'Discovery counts'});
-    assert.equal(await discovery.evaluate(node => node.open),false);
-    await discovery.locator('summary').click();
-    await discovery.getByText('Physical provider requests/pages',{exact:true}).waitFor();
-    await discovery.getByText('0',{exact:true}).waitFor();
-    await discovery.locator('summary').click();
-    assert.equal(await discovery.evaluate(node => node.open),false);
-    assert.doesNotMatch(await page.locator('[aria-labelledby="brief-overview-heading"]').innerText(), /Research coverage was incomplete|Support-directed research only/);
+    const summaryText = await summary.innerText();
+    assert.doesNotMatch(summaryText, /not recorded|Support-directed|Challenge-directed|claim (is|was) (true|false|proven)/i);
+    assert.equal((summaryText.match(/independently reviewed/gi) ?? []).length, 1, 'The review disclosure appears once');
+    assert.doesNotMatch(await page.locator('[aria-labelledby="summary-found"]').innerText(), /Only supporting evidence|Support-directed research only/);
+    // Deep link from the Summary opens the exact admitted record on the Evidence tab.
+    await page.getByRole('button',{name:'See evidence'}).first().click();
+    assert.equal(await page.getByRole('tab',{name:/^Evidence/}).getAttribute('aria-selected'),'true','Evidence link switches to the Evidence tab');
+    await page.waitForFunction(() => document.querySelector('#evidence-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')?.open === true);
+    // Evidence: grouped by relationship to the claim, never by search direction.
+    await page.getByRole('heading',{name:/^Adds context/}).waitFor();
+    // The two sources share a lineage notice, so they are one publication: one card, both records kept.
+    assert.equal(await page.locator('.finding[data-relationship="qualifies"]').count(),1);
+    assert.equal(await page.locator('.finding[data-relationship="supports"]').count(),0,'A support-directed finding that qualifies the claim is not listed as support');
+    assert.equal(await page.locator('.finding[data-relationship="challenges"]').count(),0);
+    const firstCard = page.locator('.finding').first();
+    await firstCard.getByText('Adds context',{exact:true}).waitFor();
+    await firstCard.getByText('Background',{exact:true}).waitFor();
+    await firstCard.locator('blockquote').getByText('This is an exact illustrative quotation for the offline test.',{exact:false}).waitFor();
+    await firstCard.getByText(/all-50-states statement has not been independently verified/i).waitFor();
+    await page.getByRole('link',{name:'10.1000/example',exact:true}).waitFor();
+    // Keyboard: Enter on the card summary closes and reopens it.
+    await firstCard.locator('summary').first().focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await firstCard.evaluate(node => node.open), false);
+    await page.keyboard.press('Enter');
+    assert.equal(await firstCard.evaluate(node => node.open), true);
+    // The second record of the merged publication keeps its own exact (possibly cut-off) passage.
+    const mirrorRecord = firstCard.locator('#evidence-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    await mirrorRecord.getByText(/may be cut off/i).waitFor();
+    await mirrorRecord.getByText('The outcome was lower. However, only among',{exact:true}).waitFor();
+    await firstCard.getByText('These records come from the same publication and count once.',{exact:true}).waitFor();
+    assert.equal(await page.getByText('family-raw-id-should-not-render',{exact:true}).count(),0,'Internal family identifiers are not shown in ordinary cards');
+    assert.equal(await page.getByText(/0 Reviewer-approved/).count(),0,'Fresh analyzer-admission runs do not imply an active Reviewer with zero approvals');
     await page.screenshot({path:path.join(shots,'research-evidence.png'),fullPage:true,animations:'disabled'});
+    // Sources: recommended once, plain outcomes, relationship notices kept.
+    const sources = await showTab('Sources');
+    assert.equal(await sources.locator('.source-list').getByRole('link',{name:'Illustrative canopy study',exact:true}).count(),1,'Recommended source is shown only once');
+    assert.equal(await sources.getByText('Used as evidence',{exact:true}).count(),2);
+    await sources.getByText('A per-source token limit stopped the reading',{exact:true}).waitFor();
+    await sources.getByText('Read; no finding kept',{exact:true}).waitFor();
+    await sources.getByText('Shortlisted; not read in depth',{exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Related sources',exact:true}).waitFor();
+    await sources.getByText(/may report the same study; identity is unverified/).waitFor();
+    assert.ok(await sources.getByText(/does not establish independent corroboration/i).count() >= 1,'Shared website pages are not presented as independent corroboration');
+    await sources.getByRole('link',{name:'PDF file: paper.pdf (example.org)',exact:true}).waitFor();
+    await sources.getByText('Title as captured: S2056608520000082jra 1..28',{exact:true}).waitFor();
+    // Method: audit detail with full precision, collapsed by default.
+    const method = await showTab('Method');
+    for (const section of await method.locator('details').all()) assert.equal(await section.evaluate(node => node.open), false, 'Method sections start collapsed');
+    await showTab('Method', true);
+    await method.getByText('This is an additional assessment of saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
+    await method.getByText(/2 adding context/).waitFor();
+    await method.getByText(/At that point the search counted 0 open questions for possible follow-up/).waitFor();
+    await method.getByText('Release checks passed',{exact:true}).waitFor();
+    await method.getByText('Input tokens',{exact:true}).waitFor();
+    await method.getByText('at least 123 known; total incomplete',{exact:true}).waitFor();
+    await method.getByText('Provider requests and pages',{exact:true}).waitFor();
+    assert.equal(await page.getByText(/The saved research result is available/).count(),0);
     await page.setViewportSize({width:390,height:844});
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,'Result fits narrow viewport without horizontal overflow');
-    await page.locator('.result-bottom-line > summary').waitFor();
+    for (const name of ['Summary','Evidence','Sources','Method']) {
+      await showTab(name);
+      const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')]
+        .filter(node => node.getBoundingClientRect().right > window.innerWidth + 1)
+        .slice(0, 5).map(node => `${node.tagName}.${node.className}`));
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,`Result ${name} fits narrow viewport without horizontal overflow: ${overflow.join(', ')}`);
+    }
+    await showTab('Summary');
+    await page.locator('.summary-picture').waitFor();
     await page.screenshot({path:path.join(shots,'research-evidence-narrow.png'),fullPage:true,animations:'disabled'});
     await page.setViewportSize({width:1280,height:860});
-    await page.getByRole('heading',{name:'Latest research coverage assessment',exact:true}).waitFor();
-    await page.getByText('Direct evidence remains incomplete.',{exact:true}).waitFor();
     invalidPlan=true;
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await openReportDetails();
-    await page.getByText(/^Earlier search decision ·/).click();
-    await page.getByText('Technical search record',{exact:true}).click();
-    await page.locator('.result-limitation').getByText(/Follow-up search stopped after two invalid plans/).waitFor();
-    await page.getByText('Long-term air temperature data is unavailable.',{exact:false}).waitFor();
+    await page.getByRole('tabpanel').getByText('Long-term air temperature data is unavailable.',{exact:false}).waitFor();
+    let methodPanel = await showTab('Method', true);
+    await methodPanel.getByText('The follow-up search plan could not be used.',{exact:true}).waitFor();
+    await methodPanel.getByText(/Follow-up search stopped after two invalid plans\. Results use sources already collected\./).waitFor();
+    await methodPanel.getByText(/Follow-up search stopped after two invalid plans; coverage may remain partial/).waitFor();
     await page.screenshot({path:path.join(shots,'adaptive-search-limitations.png'),fullPage:true,animations:'disabled'});
     invalidPlan=false; sufficientSourcePool=true;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
-    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openSavedRun();
     await openReportDetails();
-    await page.getByText(/Earlier search decision · Search stopped after the source pool was considered sufficient/).waitFor();
-    await page.getByText(/^Earlier search decision ·/).click();
-    await page.getByText('Technical search record',{exact:true}).click();
-    await page.locator('.result-limitation').getByText(/Further searches overlap with the existing source families/).waitFor();
-    await page.locator('.result-limitation').getByText(/counted 1 unresolved evidence gap for possible follow-up/).waitFor();
+    methodPanel = await showTab('Method', true);
+    await methodPanel.getByText('The search stopped because further searches were unlikely to find new sources.',{exact:true}).waitFor();
+    await methodPanel.getByText(/Further searches overlap with the existing source families/).waitFor();
+    await methodPanel.getByText(/counted 1 open question for possible follow-up/).waitFor();
     sufficientSourcePool=false;
     assessmentPersisted=true;
     await page.getByRole('button',{name:'Home',exact:true}).click();
@@ -365,32 +411,37 @@ async function main() {
     await page.getByRole('button',{name:'Saved research',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
     await openReportDetails();
-    await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
-    await page.getByText('This assessment is included in the saved brief and export.',{exact:true}).waitFor();
-    await page.getByText('Among 5 surviving sources, 3 had no admitted evidence and 2 had admitted evidence.',{exact:true}).waitFor();
-    await page.getByRole('heading',{name:'Context and evidence qualifications',exact:true}).waitFor();
-    await page.locator('.evidence-card').first().locator('summary').first().click();
-    await page.locator('.evidence-card').first().getByText('Limited relevance',{exact:true}).waitFor();
-    await page.locator('.evidence-card').first().getByText('Claim Fit 2/5',{exact:false}).waitFor();
-    const pdfSource = page.locator('.source-card').filter({has:page.getByRole('link',{name:'Source page at Example',exact:true})});
-    await pdfSource.getByRole('link',{name:'Source page at Example',exact:true}).waitFor();
-    await pdfSource.getByText('Captured title and provenance',{exact:true}).click();
-    await pdfSource.getByText('Original captured title S2056608520000082jra 1..28',{exact:true}).waitFor();
+    methodPanel = await showTab('Method', true);
+    await methodPanel.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
+    await methodPanel.getByText('This assessment is included in the saved brief and export.',{exact:true}).waitFor();
+    await methodPanel.getByText('Of 5 shortlisted sources, 2 produced findings and 3 did not.',{exact:true}).waitFor();
+    await showTab('Evidence');
+    await page.getByRole('heading',{name:/^Adds context/}).waitFor();
+    await page.locator('.finding').first().getByText('Background',{exact:true}).waitFor();
+    await page.locator('.finding').first().locator('summary').first().click();
+    await page.locator('.finding').first().getByText('Why it matters',{exact:true}).waitFor();
+    const sourcesPanel = await showTab('Sources');
+    await sourcesPanel.getByRole('link',{name:'PDF file: paper.pdf (example.org)',exact:true}).waitFor();
+    await sourcesPanel.getByText('Title as captured: S2056608520000082jra 1..28',{exact:true}).waitFor();
     assessmentPersisted=false; assessmentFresh=true;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
-    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openSavedRun();
     await openReportDetails();
-    await page.getByText('Post-analysis research status · Incomplete coverage',{exact:true}).waitFor();
-    await page.getByText('This post-analysis status is included in the saved brief and export.',{exact:true}).waitFor();
+    methodPanel = await showTab('Method', true);
+    await methodPanel.getByText('Status after analysis: Incomplete coverage',{exact:true}).waitFor();
+    await methodPanel.getByText('This post-analysis status is included in the saved brief and export.',{exact:true}).waitFor();
     assert.equal(await page.getByText('Supplemental post-analysis status from saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).count(),0);
     assessmentFresh=false;
     assessmentPersisted=false;
     studyReviewed=true;
-    await page.getByRole('button',{name:'Saved research',exact:true}).click();
-    await page.getByRole('button',{name:/Can greener streets/}).click();
+    await openSavedRun();
     await openReportDetails();
-    await page.locator('.result-bottom-line').getByText('Surface temperatures only; not a general estimate of air temperature.',{exact:false}).waitFor();
-    assert.equal(await page.locator('.result-bottom-line').getByText(/not necessarily representative/).count(),0);
+    // A reviewed opening replaces the illustrative selection, so it is not labelled unrepresentative.
+    const reviewedFound = page.locator('[aria-labelledby="summary-found"]');
+    await reviewedFound.getByText('Strongest findings',{exact:true}).waitFor();
+    assert.equal(await reviewedFound.getByText(/not necessarily representative|may not be representative/).count(),0);
+    assert.equal(await reviewedFound.getByRole('button',{name:'See evidence'}).count(),2);
+    await reviewedFound.getByRole('button',{name:'See evidence'}).nth(1).click();
+    await page.locator('.finding[open]').getByText('Surface temperatures only; not a general estimate of air temperature.',{exact:false}).first().waitFor();
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true);
     await page.screenshot({path:path.join(shots,'reviewed-opening-narrow.png'),fullPage:true,animations:'disabled'});
@@ -402,21 +453,23 @@ async function main() {
       await page.getByRole('button',{name:'Saved research',exact:true}).click();
       await page.getByRole('button',{name:/Can greener streets/}).click();
       await openReportDetails();
-      const opening = page.locator('.result-bottom-line');
-      await opening.getByText(/randomized study REG-2024/).waitFor();
-      await opening.getByText(/observational study REG-2025/).waitFor();
-      await opening.getByText(/Recorded limitations/).waitFor();
-      assert.equal(await opening.getByText(/not necessarily representative/).count(), 0);
-      assert.equal(await page.locator('.evidence-card').count(), 3);
-      await opening.getByRole('button',{name:'View evidence and source'}).first().click();
-      assert.equal(await page.locator('.evidence-card[open]').count(),1);
-      await page.getByRole('link',{name:'Canonical publication',exact:true}).first().waitFor();
+      const opening = page.locator('[aria-labelledby="summary-found"]');
+      for (const assertion of productionFixture.evidence.study_opening ?? []) {
+        const item = productionFixture.evidence.items.find(entry => entry.ledger_claim_id === assertion.ledger_claim_id);
+        if (item) await opening.getByText(item.approved_factual_statement,{exact:false}).first().waitFor();
+      }
+      assert.equal(await opening.getByText(/not necessarily representative|may not be representative/).count(), 0);
+      await opening.getByRole('button',{name:'See evidence'}).first().click();
+      await page.waitForFunction(() => document.querySelectorAll('.finding[open]').length === 1);
+      assert.ok(await page.locator('.finding').count() >= 1);
+      await page.getByRole('link',{name:/^10\.|Canonical publication/}).first().waitFor();
       for (const width of [1280,390]) {
         await page.setViewportSize({width,height:844});
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true);
         await page.screenshot({path:path.join(shots,`production-report-${width}.png`),fullPage:true,animations:'disabled'});
       }
-      const [download] = await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Download brief'}).click()]);
+      await page.getByRole('button',{name:'Export'}).click();
+      const [download] = await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:/Download brief/}).click()]);
       assert.equal(fs.readFileSync(await download.path(),'utf8'),productionFixture.evidence.reading_aid_markdown);
       await page.setViewportSize({width:1280,height:860});
       productionReport=false;

@@ -334,3 +334,31 @@ designs or assessed relationships, and one to a promising later-round work. Keep
 other finds in All sources and the research trail. The renderer holds the visible
 cards while a reader hovers, focuses a card or opens its details. Saved results
 continue to load during that interaction.
+
+## Result page evidence picture — November 13
+
+The result Summary shows one conservative label computed by the renderer from the
+admitted evidence display projection. It is display only: the saved brief, release
+hash, validator and exports are unchanged. Approved by the user on 2026-11-13.
+
+- Count each publication once. Records are one publication when they share a data
+  family, a verified DOI or canonical URL, a recorded study-lineage notice, or the
+  same normalized title. A title-only grouping is disclosed as unconfirmed. Grouping
+  only lowers counts.
+- A Direct finding has claim fit 4 or higher (3 is Partial, 2 Background).
+- "No usable evidence found" when there are no findings.
+- "Evidence mostly supports" (or "mostly challenges") only when that side has at
+  least two Direct publications, at least twice as many Direct publications as the
+  other side, and at least two thirds of all counted publications.
+- "Evidence is mixed" when both sides have a Direct publication and neither passes
+  that test; otherwise "Evidence is limited or indirect".
+- When one direction was not researched, a scope note accompanies the label.
+- The label never states that a claim is true, false, proven or established. The
+  existing policy still holds: finding counts alone do not establish balance; the
+  label describes the findings collected and the Summary discloses that once.
+
+Source labels (publisher name, type, study design, year, lead author, publisher
+interest) have one owner, `evidence/report_presentation.py`, exposed as optional
+display fields on `V2SourceTitleDisplay`: a generic host rule plus one small
+publisher table. Missing values stay missing in the result page; export wording
+keeps its explicit "not recorded" phrases.

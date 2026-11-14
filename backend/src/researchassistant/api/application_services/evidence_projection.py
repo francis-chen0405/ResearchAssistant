@@ -36,6 +36,7 @@ from researchassistant.contracts.models import (
     V2EvidenceAnalystSourceResult,
     V2FinalResearchOutput,
     V2GapAnalysisOutput,
+    V2ResultSource,
     V2ReviewerLedgerBatchResult,
     V2RoundFourGovernorDecision,
 )
@@ -43,6 +44,7 @@ from researchassistant.evidence.evidence_core import (
     parse_extracted_quote_block,
     validate_snapshot_integrity,
 )
+from researchassistant.evidence.report_presentation import source_display
 from researchassistant.evidence.source_display import display_source_title
 from researchassistant.evidence.study_lineage import build_study_lineage_notices
 
@@ -264,21 +266,40 @@ def _build_v2_evidence_display(
         run_id=output.run_id,
         items=tuple(items),
         source_titles=tuple(
-            V2SourceTitleDisplay(
-                source_id=source.source_id,
-                display_title=display_source_title(
-                    title=source.title,
-                    source_url=source.source_url,
-                ),
-                captured_title=source.title,
-            )
-            for source in output.all_surviving_sources
+            _source_title_display(source, items) for source in output.all_surviving_sources
         ),
         study_lineage=build_study_lineage_notices(candidates),
         source_budget_outcomes=source_budget_outcomes,
         shared_website_groups=_build_shared_website_groups(tuple(items)),
         research_status=research_status,
         post_analysis_assessment=post_analysis_assessment,
+    )
+
+
+def _source_title_display(
+    source: V2ResultSource, items: list[V2EvidenceDisplayItem]
+) -> V2SourceTitleDisplay:
+    display_title = display_source_title(title=source.title, source_url=source.source_url)
+    item = next((item for item in items if item.source_id == source.source_id), None)
+    labels = source_display(
+        title=source.title,
+        display_title=display_title,
+        source_url=source.source_url,
+        source_type=source.source_type,
+        publication_date=source.publication_date,
+        item=item,
+    )
+    return V2SourceTitleDisplay(
+        source_id=source.source_id,
+        display_title=display_title,
+        captured_title=source.title,
+        heading=labels.heading,
+        source_name=labels.source_name,
+        source_kind=labels.source_kind,
+        study_design=labels.study_design,
+        publisher_interest=labels.publisher_interest,
+        year=labels.year,
+        lead_author=labels.lead_author,
     )
 
 

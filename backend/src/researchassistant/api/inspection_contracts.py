@@ -89,6 +89,14 @@ class V2SourceTitleDisplay(StrictModel):
     source_id: UUID
     display_title: str = Field(min_length=1)
     captured_title: str | None = None
+    # Display-only labels from evidence.report_presentation; None means not recorded.
+    heading: str | None = None
+    source_name: str | None = None
+    source_kind: str | None = None
+    study_design: str | None = None
+    publisher_interest: str | None = None
+    year: str | None = None
+    lead_author: str | None = None
 
 
 class PublicationOpeningSentence(StrictModel):

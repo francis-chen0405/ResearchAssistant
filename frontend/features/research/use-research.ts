@@ -149,13 +149,14 @@ export function useResearch(
   const reconnect = () => reconnectAction.current();
 
   const beginResearch = async (
-    event: FormEvent<HTMLFormElement>,
+    event: FormEvent<HTMLFormElement> | null,
     settings: Settings,
     configuration: Configuration | null,
     updateService: (service: ServiceDiagnostic) => void,
+    claimOverride?: string,
   ) => {
-    event.preventDefault();
-    const trimmedClaim = claim.trim();
+    event?.preventDefault();
+    const trimmedClaim = (claimOverride ?? claim).trim();
     if (!trimmedClaim) return;
     if (!configuration) {
       notify("The local API is not ready yet.");

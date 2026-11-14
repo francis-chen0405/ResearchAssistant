@@ -34,7 +34,7 @@ def test_routes_schemas_and_offline_responses_match_before_split(
     # Compare all pre-existing routes and response bytes after excluding the
     # separately tested read-only discovery projections.
     routes = after["routes"]
-    assert len(routes) == len({(method, path) for method, path, _, _ in routes}) == 23
+    assert len(routes) == len({(method, path) for method, path, _, _ in routes}) == 24
     for suffix, name, schemas in (
         ("source-leads", "source_leads", ("SourceLead", "SourceLeadStage", "SourceLeadsPage")),
         ("live-sources", "live_sources", ("LiveSourceCard", "LiveSourcesPage")),
@@ -188,6 +188,35 @@ def test_routes_schemas_and_offline_responses_match_before_split(
             detail = response["body"]["detail"]
             if detail.get("message", "").endswith("/private/fixture/absent.sqlite3"):
                 detail["message"] = detail["message"].replace("/private/fixture/", "/fixture/")
+    # The redesigned result page reads display-only source labels and can request
+    # a read-only, revalidated export of a released brief.
+    title_display = schemas["V2SourceTitleDisplay"]["properties"]
+    for field in (
+        "heading",
+        "source_name",
+        "source_kind",
+        "study_design",
+        "publisher_interest",
+        "year",
+        "lead_author",
+    ):
+        assert title_display.pop(field) == {
+            "anyOf": optional_string,
+            "title": field.replace("_", " ").title(),
+        }
+    assert schemas.pop("BriefExportFormat") == {
+        "enum": ["markdown", "pdf", "docx"],
+        "title": "BriefExportFormat",
+        "type": "string",
+    }
+    export_operation = after["openapi"]["paths"].pop("/api/research/{run_id}/export")
+    assert list(export_operation) == ["get"]
+    assert set(export_operation["get"]["responses"]["200"]["content"]) == {
+        "text/markdown; charset=utf-8",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    after["routes"].remove(["GET", "/api/research/{run_id}/export", "export_brief", 200])
     assert after == before
 
 
@@ -251,7 +280,7 @@ def test_legacy_lazy_app_and_runtime_are_one_explicitly_requested_pair(
         assert api.app is first
         assert api.runtime is calls[0]
         assert len(calls) == 1
-        assert len(list(registered_routes(first.routes))) == 23
+        assert len(list(registered_routes(first.routes))) == 24
     finally:
         api._default_application.cache_clear()
 

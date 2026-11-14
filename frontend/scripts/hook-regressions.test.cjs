@@ -60,7 +60,9 @@ function hookHarness(relative, api, options = {}) {
         if (name === "./dialog") return { Dialog: "Dialog" };
         if (name === "./workspace" || name === "@/components/workspace") return { StatusPill: "StatusPill" };
         if (name === "@/lib/api") return { ...load(path.resolve(__dirname, "../lib/api.ts")), researchApi: api };
-        const resolved = path.resolve(path.dirname(file), `${name}.ts`);
+        const resolved = name.startsWith("@/")
+          ? path.resolve(__dirname, "..", `${name.slice(2)}.ts`)
+          : path.resolve(path.dirname(file), `${name}.ts`);
         return load(fs.existsSync(resolved) ? resolved : resolved.replace(/\.ts$/, ".tsx"));
       },
     });
@@ -93,8 +95,8 @@ function elementNodes(value) {
   return [value, ...elementNodes(value.props?.children)];
 }
 
-test("source cards mark unassessed recommendations provisional and qualify partial evidence", () => {
-  const harness = hookHarness("features/results/source-sections.tsx", {});
+test("source rows mark unassessed recommendations provisional and qualify partial evidence", () => {
+  const harness = hookHarness("features/results/sources-tab.tsx", {});
   const unassessedId = "unassessed-source";
   const partialId = "partial-source";
   const directId = "direct-source";
@@ -115,10 +117,29 @@ test("source cards mark unassessed recommendations provisional and qualify parti
       gap_ids: [], selection_rationale: "Selected for comparison.",
     }, { source_id: directId, relationship_to_claim: "supports", claim_fit: 5, gap_ids: [] }],
   };
-  const rendered = JSON.stringify(elementNodes(harness.render("SourceSections", { result, evidence, run: { run_id: "run", db_path: "db" } })));
-  assert.match(rendered, /Provisional · claim relationship has not been assessed\./);
-  assert.match(rendered, /Qualifying evidence/);
-  assert.match(rendered, /Direct support/);
+  const row = (source) => JSON.stringify(elementNodes(harness.render("SourceRow", {
+    source, title: undefined, evidence, showReason: true,
+  })));
+  assert.match(row(result.recommended_sources[0]), /Not yet assessed; recommended from its search ranking\./);
+  assert.match(row(result.recommended_sources[1]), /Direct · Adds context/);
+  assert.match(row(result.recommended_sources[1]), /Selected for comparison\./);
+  assert.match(row(result.recommended_sources[2]), /Direct · Supports/);
+  assert.doesNotMatch(row(result.recommended_sources[1]), /Supports/);
+});
+
+test("every shortlisted-source status maps to one plain outcome", () => {
+  const { sourceOutcome } = hookHarness("features/results/sources-tab.tsx", {}).exports;
+  const label = (status, budgetOutcome) => sourceOutcome({ status, budget_prevented_reason: "token_reserve" }, budgetOutcome).label;
+  assert.equal(label("surviving_not_deeply_analyzed"), "Shortlisted; not read in depth");
+  assert.equal(label("recommended_analyzed"), "Read and assessed");
+  assert.equal(label("surviving_analyzed"), "Read and assessed");
+  assert.equal(label("recommended_analyzer_admitted"), "Used as evidence");
+  assert.equal(label("surviving_analyzer_rejected"), "Read; no finding kept");
+  assert.equal(label("recommended_analyzer_failed"), "Assessment failed");
+  assert.equal(label("recommended_no_ledger_evidence"), "Not yet assessed");
+  assert.match(label("budget_prevented_analysis"), /token allowance/);
+  assert.equal(label("surviving_analyzer_failed", "token_cap_blocked"), "A per-source token limit stopped the reading");
+  assert.equal(label("unknown_internal_status"), "Outcome not recognized");
 });
 
 test("provider outcome labels separate blocked and unknown requests from failures", () => {
@@ -154,8 +175,8 @@ test("provider outcome labels separate blocked and unknown requests from failure
   );
 });
 
-test("source cards link alternate URLs as locations for the same paper", () => {
-  const harness = hookHarness("features/results/source-sections.tsx", {});
+test("source rows link alternate URLs as locations for the same paper", () => {
+  const harness = hookHarness("features/results/sources-tab.tsx", {});
   const source = {
     source_id: "same-paper", direction: "support", source_url: "https://example.test/main",
     alternate_source_urls: ["https://example.test/alternate"],
@@ -164,17 +185,17 @@ test("source cards link alternate URLs as locations for the same paper", () => {
     recommendation_rank: 1, queue_rank: 1, status: "recommended_no_ledger_evidence",
     ledger_claim_ids: [], budget_prevented_reason: null,
   };
-  const result = { recommended_sources: [source], all_surviving_sources: [source] };
-  const rendered = elementNodes(harness.render("SourceSections", { result, evidence: null, run: { run_id: "run", db_path: "db" } }));
+  const rendered = elementNodes(harness.render("SourceRow", { source, title: undefined, evidence: null, showReason: true }));
   const alternate = rendered.find(
     node => node.type === "a" && node.props.href === source.alternate_source_urls[0],
   );
   assert.ok(alternate);
   assert.equal(alternate.props.children, "Alternate location");
+  assert.equal(alternate.props.rel, "noopener noreferrer");
   const content = JSON.stringify(rendered);
-  assert.match(content, /Alternate locations for the same paper/);
-  assert.match(content, /not additional independent evidence/);
-  assert.match(content, /Provisional/);
+  assert.match(content, /Also available at/);
+  assert.match(content, /Same paper, not separate evidence/);
+  assert.match(content, /Not yet assessed/);
 });
 
 for (const action of ["save", "remove", "check", "restore"]) {
@@ -725,33 +746,94 @@ test("a fresh explicit selection of the same run clears the previous cancellatio
   h.dispose();
 });
 
-test("citation labels do not infer randomization or vendor identity from unrelated sources", () => {
-  const { exports } = hookHarness("features/results/source-titles.tsx", {});
-  assert.notEqual(exports.evidenceSourceType({ source_type: "clinical trial", source_url: "https://example.org/study" }), "Randomized trial");
-  assert.equal(exports.evidenceConflictNotice({ source_url: "https://notflocksafety.com/article" }), null);
-  assert.match(exports.evidenceConflictNotice({ source_url: "https://blog.flocksafety.com/article" }), /commercial interest/);
+// Label inference itself moved to the backend owner (tests/test_result_display_projection.py).
+test("export copies take labels from the backend projection and infer none themselves", () => {
+  const { briefWithReadingAid } = hookHarness("features/results/reading-aid.ts", {}).exports;
+  const item = (id, url) => ({ ledger_claim_id: id, source_id: id, source_url: url, source_type: "clinical trial",
+    relationship_to_claim: "supports", claim_fit: 4, approved_factual_statement: id + " finding." });
+  const result = { exact_claim: "Claim", directions: { support_enabled: true }, all_surviving_sources: [],
+    claim_coverage_map: [], unresolved_material_gaps: [], stopping: { reason: "budget" } };
+  const evidence = { items: [item("vendor", "https://blog.flocksafety.com/a"), item("other", "https://notflocksafety.com/a")],
+    source_titles: [{ source_id: "vendor", display_title: "t", publisher_interest: "The publisher has a commercial interest." }] };
+  const copy = briefWithReadingAid("# Release", result, evidence);
+  assert.equal((copy.match(/Conflict of interest/g) ?? []).length, 1);
+  assert.match(copy, /commercial interest/);
+  assert.doesNotMatch(copy, /Randomized trial/);
+  assert.match(copy, /Study design not recorded/);
 });
 
-test("claim status does not infer evidence balance from finding counts", () => {
-  const { CoverageStatus } = hookHarness("features/results/coverage-status.tsx", {}).exports;
-  const assessment = { supporting_count: 20, challenging_count: 1, qualifying_count: 0,
-    unrelated_count: 0, admitted_source_ids: [], limitations: [], unresolved_gap_count: 0,
-    partial_coverage_count: 0, unavailable_coverage_count: 0, coverage_incomplete: true };
-  const tree = CoverageStatus({ result: { all_surviving_sources: [], claim_coverage_map: [] },
-    evidence: { post_analysis_assessment: assessment } });
-  const text = JSON.stringify(tree);
-  assert.match(text, /Claim not established by the admitted evidence/);
-  assert.match(text, /reason was not recorded/);
-  assert.doesNotMatch(text, /Supporting findings observed/);
+test("evidence picture does not infer balance from raw finding counts", () => {
+  const { findingsByRelationship, evidencePicture } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, relationship, fit, family = id) => ({ ledger_claim_id: id, source_id: id, source_family: family,
+    source_url: `https://example.org/${id}`, relationship_to_claim: relationship, claim_fit: fit,
+    approved_factual_statement: `${id} finding.` });
+  // Twenty supporting records from one publication count once, so they cannot outweigh by number.
+  const onePublication = Array.from({ length: 20 }, (_, index) => item(`s${index}`, "supports", 5, "family:one"));
+  const picture = evidencePicture(findingsByRelationship({ items: [...onePublication, item("c", "challenges", 5)] }),
+    { support_enabled: true, challenge_enabled: true });
+  assert.equal(picture.label, "Evidence is mixed");
+  assert.doesNotMatch(picture.label, /true|false|proven|established|dominat/i);
+  // Many indirect findings never earn a "mostly" label.
+  const indirect = Array.from({ length: 6 }, (_, index) => item(`p${index}`, "supports", 3));
+  assert.equal(evidencePicture(findingsByRelationship({ items: indirect }), { support_enabled: true, challenge_enabled: true }).label,
+    "Evidence is limited or indirect");
+  assert.equal(evidencePicture(findingsByRelationship({ items: [] }), { support_enabled: true }).label, "No usable evidence found");
 });
 
-test("overview presents findings and source links in one paragraph without routine verdicts", () => {
-  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
+test("evidence picture follows the recorded rules and always carries the scope note", () => {
+  const { findingsByRelationship, evidencePicture } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, relationship, fit) => ({ ledger_claim_id: id, source_id: id, source_family: id,
+    source_url: `https://example.org/${id}`, relationship_to_claim: relationship, claim_fit: fit,
+    approved_factual_statement: `${id} finding.` });
+  const both = { support_enabled: true, challenge_enabled: true };
+  const label = (items, directions = both) => evidencePicture(findingsByRelationship({ items }), directions);
+  assert.equal(label([item("a", "supports", 4), item("b", "supports", 5), item("c", "qualifies", 3)]).label, "Evidence mostly supports");
+  // One direct publication is not enough for "mostly".
+  assert.equal(label([item("a", "supports", 5), item("c", "qualifies", 3)]).label, "Evidence is limited or indirect");
+  // The side must hold two thirds of all counted publications.
+  assert.equal(label([item("a", "supports", 4), item("b", "supports", 4), item("c", "qualifies", 3), item("d", "qualifies", 3)]).label,
+    "Evidence is limited or indirect");
+  // Twice the other side's direct publications is required.
+  assert.equal(label([item("a", "challenges", 4), item("b", "challenges", 4), item("c", "challenges", 5), item("d", "supports", 4), item("e", "supports", 4)]).label,
+    "Evidence is mixed");
+  assert.equal(label([item("a", "challenges", 4), item("b", "challenges", 4)]).label, "Evidence mostly challenges");
+  assert.equal(label([item("a", "supports", 4)], { support_enabled: true, challenge_enabled: false }).scopeNote,
+    "Only supporting evidence was searched for.");
+  assert.equal(label([item("a", "supports", 4)]).scopeNote, null);
+});
+
+test("mirrors of one publication merge into one finding and count once", () => {
+  const { findingsByRelationship, publicationCounts } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, url, title, fit = 4) => ({ ledger_claim_id: id, source_id: id, source_family: `unverified-data:${id}`,
+    source_url: url, title, relationship_to_claim: "challenges", claim_fit: fit, approved_factual_statement: `${id} statement.` });
+  const evidence = {
+    items: [
+      item("ojp", "https://www.ojp.gov/a", "License Plate Reader (LPR) Police Patrols in Crime Hot Spots"),
+      item("nij", "https://nij.ojp.gov/a", "License Plate Reader (LPR) Police Patrols in Crime Hot Spots", 3),
+      item("other", "https://example.org/b", "A different evaluation of plate readers in two cities"),
+    ],
+    source_titles: [],
+    study_lineage: [],
+  };
+  const findings = findingsByRelationship(evidence);
+  assert.equal(findings.challenges.length, 2);
+  const merged = findings.challenges.find((finding) => finding.item.ledger_claim_id === "ojp");
+  assert.deepEqual(Array.from(merged.alsoAt, (location) => location.url), ["https://nij.ojp.gov/a"]);
+  assert.equal(merged.mergeBasis, "matching title");
+  assert.equal(merged.related[0].approved_factual_statement, "nij statement.");
+  assert.equal(publicationCounts(findings).publications, 2);
+  const { strengthLabel } = hookHarness("features/results/model.ts", {}).exports;
+  assert.deepEqual([5, 4, 3, 2, null].map(strengthLabel), ["Direct", "Direct", "Partial", "Background", null]);
+});
+
+test("summary leads with findings, says each disclosure once and never prints not recorded", () => {
+  const { ResultSummary } = hookHarness("features/results/summary.tsx", {}).exports;
+  const { findingsByRelationship } = hookHarness("features/results/model.ts", {}).exports;
   const result = {
     exact_claim: "Example claim", directions: { support_enabled: true },
     synthesis: { sections: [] }, all_surviving_sources: [], recommended_sources: [],
-    claim_coverage_map: [{ coverage_state: "covered" }], unresolved_material_gaps: [],
-    post_analysis_assessment: { partial_coverage_count: 1 },
+    claim_coverage_map: [{ coverage_state: "covered", evidence_summary: "" }], unresolved_material_gaps: [],
+    post_analysis_assessment: { partial_coverage_count: 1 }, stopping: { reason: "budget" },
   };
   const evidence = { items: [
     { ledger_claim_id: "trial", source_id: "trial", source_url: "https://example.org/trial",
@@ -761,15 +843,22 @@ test("overview presents findings and source links in one paragraph without routi
       source_type: "observational_study", relationship_to_claim: "challenges", claim_fit: 2,
       approved_factual_statement: "The follow-up found no difference." },
   ] };
-  const tree = V2ResultPaper({ result, evidence });
-  const overview = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "brief-overview-heading");
-  const nodes = elementNodes(overview);
-  assert.equal(nodes.filter(node => node.type === "p").length, 1);
-  assert.deepEqual(nodes.filter(node => node.type === "a").map(node => node.props.href),
-    ["https://example.org/trial", "https://example.org/followup"]);
-  const text = JSON.stringify(overview);
-  assert.match(text, /The intervention improved completion.*Randomized trial.*The follow-up found no difference.*Observational study/);
-  assert.doesNotMatch(text, /not recorded|Research coverage was incomplete|Claim coverage was not assessed|Support-directed research only/);
+  evidence.items.forEach((item) => { item.source_family = item.source_id; });
+  const opened = [];
+  const tree = ResultSummary({ result, evidence, findings: findingsByRelationship(evidence), onOpenEvidence: (id) => opened.push(id) });
+  const found = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "summary-found");
+  const foundText = JSON.stringify(found);
+  assert.match(foundText, /The intervention improved completion.*The follow-up found no difference/);
+  assert.match(foundText, /may not be representative/);
+  for (const button of elementNodes(found).filter(node => node.type === "button")) button.props.onClick();
+  assert.deepEqual(opened, ["trial", "followup"]);
+  const text = JSON.stringify(tree);
+  assert.doesNotMatch(text, /not recorded|Support-directed/i);
+  assert.equal((text.match(/independently reviewed/g) ?? []).length, 1);
+  assert.equal((text.match(/Only supporting evidence was searched for\./g) ?? []).length, 1, "scope disclosure appears once");
+  assert.doesNotMatch(foundText, /Only supporting evidence/);
+  const picture = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "evidence-picture");
+  assert.doesNotMatch(JSON.stringify(picture), /true|false|proven|established/i);
 });
 
 test("unknown search stop and exception do not expose technical text", () => {
@@ -790,44 +879,44 @@ test("planner failures explain grouping and budget limits without exposing provi
   assert.equal(understandableRunMessage({ ...snapshot, classification: "released" }), "The saved research result is available.");
 });
 
-test("recommended sources are not repeated in survivor cards", () => {
-  const { SourceSections } = hookHarness("features/results/source-sections.tsx", {}).exports;
+test("recommended sources are not repeated in the other shortlisted sources", () => {
+  const { SourcesTab } = hookHarness("features/results/sources-tab.tsx", {}).exports;
   const source = { source_id: "one", source_url: "https://example.com", title: "A source",
     status: "recommended_analyzed", recommended: true, discovery_providers: [], discovery_round: 1 };
-  const tree = SourceSections({ result: { recommended_sources: [source], all_surviving_sources: [source] }, evidence: null, run: { run_id: "run", db_path: "db" } });
-  const cards = elementNodes(tree).filter((node) => node.type === "article");
-  assert.equal(cards.length, 1);
+  const tree = SourcesTab({ result: { recommended_sources: [source], all_surviving_sources: [source] }, evidence: null, run: { run_id: "run", db_path: "db" } });
+  const rows = elementNodes(tree).filter((node) => node.type?.name === "SourceRow");
+  assert.equal(rows.length, 1);
 });
 
 
 test("incomplete quotation does not discard a trailing qualification", () => {
-  const { completeQuote } = hookHarness("features/results/admitted-evidence.tsx", {}).exports;
+  const { completeQuote } = hookHarness("features/results/quote.ts", {}).exports;
   assert.equal(completeQuote("The treatment reduced the outcome. However, only among"), null);
   assert.equal(completeQuote("An incomplete passage without an ending"), null);
   assert.equal(completeQuote("The treatment reduced the outcome. However, only among adults." ).text,
     "The treatment reduced the outcome. However, only among adults.");
 });
 
-test("overview leads and optional bottom line preserves selected findings without ranking counts", () => {
-  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
-  const item = (id, relationship) => ({ ledger_claim_id: id, source_id: id,
+test("summary falls back to one finding per group, chosen by a stable rule and disclosed as illustrative", () => {
+  const { ResultSummary } = hookHarness("features/results/summary.tsx", {}).exports;
+  const { findingsByRelationship, foundSummary } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, relationship) => ({ ledger_claim_id: id, source_id: id, source_family: id,
     source_url: "https://example.org/" + id, relationship_to_claim: relationship,
     approved_factual_statement: id + " finding." });
   const evidence = { items: [item("first", "supports"), item("copy", "supports"), item("contrast", "challenges")], source_titles: [] };
   const result = { exact_claim: "Example claim", directions: {support_enabled: true, challenge_enabled: true},
-    synthesis: {sections: []}, all_surviving_sources: [], recommended_sources: [] };
-  const tree = V2ResultPaper({ result, evidence });
-  const children = tree.props.children;
-  assert.equal(children[3].props["aria-labelledby"], "brief-overview-heading");
-  const bottomLine = elementNodes(tree).find(node => node.props?.className === "brief-disclosure result-bottom-line");
-  assert.equal(bottomLine.type, "details");
-  assert.equal(bottomLine.props.open, undefined);
-  const text = JSON.stringify(bottomLine);
+    synthesis: {sections: []}, all_surviving_sources: [], recommended_sources: [], unresolved_material_gaps: [],
+    stopping: { reason: "budget" } };
+  const findings = findingsByRelationship(evidence);
+  const found = foundSummary(result, evidence, findings);
+  assert.equal(found.selection, "top");
+  assert.equal(found.paragraphs.length, 0);
+  assert.deepEqual(Array.from(found.items, item => item.ledger_claim_id), ["copy", "contrast"]);
+  const text = JSON.stringify(ResultSummary({ result, evidence, findings, onOpenEvidence() {} }));
   assert.match(text, /copy finding/);
   assert.match(text, /contrast finding/);
   assert.doesNotMatch(text, /first finding/);
   assert.match(text, /may not be representative/);
-  assert.doesNotMatch(text, /does not establish the claim or the balance/);
 });
 
 test("discovery grouping retains fragments together but preserves query distinctions", () => {
@@ -846,7 +935,7 @@ test("discovery grouping retains fragments together but preserves query distinct
 
 
 test("quotation preserves recorded omissions and abbreviations", () => {
-  const { completeQuote } = hookHarness("features/results/admitted-evidence.tsx", {}).exports;
+  const { completeQuote } = hookHarness("features/results/quote.ts", {}).exports;
   const passage = "Dr. Smith reported a result. ... However, the sample was small.";
   assert.equal(completeQuote(passage).text, passage);
   assert.equal(completeQuote("The effect was observed. ... However, only"), null);
@@ -867,25 +956,31 @@ test("new brief copies add the same bounded findings and retain the original rel
   assert.match(briefWithReadingAid("# Original release", result, null), /detailed evidence is unavailable/);
 });
 
-test("study design is separate from publication type and unknown interests stay unknown", () => {
-  const { evidenceSourceType, evidenceStudyDesign, evidenceConflictNotice } = hookHarness("features/results/source-titles.tsx", {}).exports;
-  const trial = {source_type:"randomized_trial", source_url:"https://example.org/copy"};
-  assert.equal(evidenceStudyDesign(trial), "Randomized trial");
-  assert.equal(evidenceSourceType(trial), "Publication type not recorded");
-  assert.equal(evidenceStudyDesign({source_type:"working_paper"}), "Study design not recorded");
-  assert.equal(evidenceConflictNotice(trial), null);
+// Study-design and publication-type inference is pinned on the backend owner
+// (tests/test_result_display_projection.py); cards only show what it projected.
+test("finding source lines show projected labels and omit unrecorded ones", () => {
+  const { sourceLine } = hookHarness("features/results/evidence-list.tsx", {}).exports;
+  const item = { source_url: "https://www.example.org/copy", source_type: "randomized_trial" };
+  assert.equal(sourceLine({ source_name: "Journal", year: "2024", source_kind: null, study_design: "Randomized trial" }, item),
+    "Journal · 2024 · Randomized trial");
+  assert.equal(sourceLine(undefined, item), "example.org");
+  assert.doesNotMatch(sourceLine({ source_name: null, year: null }, item), /not recorded|Randomized/);
 });
 
-test("verified DOI metadata takes priority over an unreliable captured title", () => {
-  const { evidenceCitation, sourceTitles } = hookHarness("features/results/source-titles.tsx", {}).exports;
-  const item = {source_id:"one", source_url:"https://mirror.example/file.pdf", title:"paper.pdf",
-    authors:["Unverified name"], publication_venue:"Unverified host", verified_publication:{
+test("verified publication heading and link take priority in finding cards", () => {
+  const { FindingCard } = hookHarness("features/results/evidence-list.tsx", {}).exports;
+  const item = {source_id:"one", ledger_claim_id:"one", source_url:"https://mirror.example/file.pdf", title:"paper.pdf",
+    quote_passage: "The program reduced theft.", evidence_summary: "Directly measured.", limitations: [],
+    approved_factual_statement: "The program reduced theft.", verified_publication:{
       doi:"10.1000/abc", canonical_url:"https://doi.org/10.1000/abc", title:"Verified publication",
       authors:["A. Author"], publication_date:"2024-02-01", venue:"Journal", verification:"crossref_doi"}};
-  const helper = sourceTitles({all_surviving_sources:[]}, {items:[item], source_titles:[{source_id:"one",display_title:"PDF file: file.pdf"}]});
-  assert.equal(helper.sourceHeading("one", item.title, item.source_url), "Verified publication");
-  assert.match(evidenceCitation(item), /A. Author · 2024 · Journal/);
-  assert.doesNotMatch(evidenceCitation(item), /Unverified/);
+  const titles = new Map([["one", { source_id: "one", display_title: "PDF file: file.pdf", heading: "Verified publication", source_name: "Journal" }]]);
+  const nodes = elementNodes(FindingCard({ finding: { item, relationship: "supports", strength: "Direct", groupId: "one", related: [], alsoAt: [], mergeBasis: null }, titles }));
+  const text = JSON.stringify(nodes);
+  assert.match(text, /Verified publication/);
+  assert.doesNotMatch(text, /paper\.pdf|PDF file/);
+  assert.ok(nodes.some(node => node.type === "a" && node.props.href === "https://doi.org/10.1000/abc" && node.props.children === "10.1000/abc"));
+  assert.ok(nodes.some(node => node.type === "a" && node.props.href === "https://mirror.example/file.pdf" && node.props.rel === "noopener noreferrer"));
 });
 
 test("recorded source stops distinguish calls, tokens, money and unknown limits", () => {
@@ -898,13 +993,29 @@ test("recorded source stops distinguish calls, tokens, money and unknown limits"
   assert.match(sourceLocalStop("physical_call_cap_blocked"), /call limit/);
 });
 
-test("nonrandomized working papers retain both publication type and study design", () => {
-  const { evidenceSourceType, evidenceStudyDesign } = hookHarness("features/results/source-titles.tsx", {}).exports;
-  for (const source_type of ["nonrandomized working paper", "non-randomized working paper", "not randomized working paper"]) {
-    const item = { source_type, source_url: "https://institute.example/paper" };
-    assert.equal(evidenceSourceType(item), "Working paper");
-    assert.equal(evidenceStudyDesign(item), "Observational study");
-  }
+test("finding cards show the stored passage verbatim, flagging a possibly cut-off one", () => {
+  const { FindingCard } = hookHarness("features/results/evidence-list.tsx", {}).exports;
+  // Render nested Passage elements so their text is part of the card output.
+  const expand = (nodes) => nodes.flatMap((node) => node.type?.name === "Passage" ? [node, ...elementNodes(node.type(node.props))] : [node]);
+  const record = (id, quote_passage) => ({ source_id: id, ledger_claim_id: id, source_url: `https://example.org/${id}`, quote_passage,
+    evidence_summary: "Why.", limitations: ["Surface temperatures only."], approved_factual_statement: `${id} statement.` });
+  const card = (quote_passage, related = []) => JSON.stringify(expand(elementNodes(FindingCard({
+    finding: { item: record("main", quote_passage), relationship: "qualifies", strength: "Background", groupId: "s",
+      related, alsoAt: [], mergeBasis: related.length ? "matching title" : null },
+    titles: new Map(),
+  }))));
+  const partial = card("The outcome was lower. However, only among");
+  assert.match(partial, /may be cut off/);
+  assert.match(partial, /The outcome was lower\. However, only among/);
+  const complete = card("The outcome was lower among adults.");
+  assert.match(complete, /The outcome was lower among adults\./);
+  assert.doesNotMatch(complete, /may be cut off/);
+  assert.match(complete, /Surface temperatures only\./);
+  // A merged mirror keeps every record's own exact passage.
+  const merged = card("The outcome was lower among adults.", [record("mirror", "A second exact passage. However, only among")]);
+  assert.match(merged, /mirror statement\./);
+  assert.match(merged, /A second exact passage\. However, only among/);
+  assert.match(merged, /may be cut off/);
 });
 
 test("copies and downloads use the server's canonical report interpretation verbatim", () => {
@@ -914,49 +1025,49 @@ test("copies and downloads use the server's canonical report interpretation verb
 });
 
 test("complete publication opening replaces illustrative selection and links all findings", () => {
-  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
-  const evidence = { items: [], publication_opening: [
-    { text: "The randomized study measured theft.", ledger_claim_ids: ["trial", "copy"] },
-    { text: "The observational study measured clearance.", ledger_claim_ids: ["observation"] },
+  const { ResultSummary } = hookHarness("features/results/summary.tsx", {}).exports;
+  const { findingsByRelationship } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, statement) => ({ ledger_claim_id: id, source_id: id, source_family: id, source_url: `https://example.org/${id}`,
+    relationship_to_claim: "supports", claim_fit: 4, approved_factual_statement: statement });
+  const evidence = { items: [item("trial", "The randomized study measured theft."), item("copy", "The copy measured theft."),
+    item("observation", "The observational study measured clearance.")],
+  opening_notice: "Grouped by publication. Separate publications do not establish independent studies.",
+  publication_opening: [
+    { text: "Citation: The randomized study measured theft.", ledger_claim_ids: ["trial", "copy"] },
+    { text: "Citation: The observational study measured clearance.", ledger_claim_ids: ["observation"] },
     { text: "Recorded limitations: follow-up was six months.", ledger_claim_ids: ["trial", "observation"] },
   ] };
   const result = { exact_claim: "Example claim", directions: { support_enabled: true, challenge_enabled: true },
-    synthesis: { sections: [] }, all_surviving_sources: [], recommended_sources: [] };
-  const tree = V2ResultPaper({ result, evidence });
-  const opening = elementNodes(tree).find(node => node.props?.className === "brief-disclosure result-bottom-line");
+    synthesis: { sections: [] }, all_surviving_sources: [], recommended_sources: [], unresolved_material_gaps: [],
+    stopping: { reason: "budget" } };
+  const tree = ResultSummary({ result, evidence, findings: findingsByRelationship(evidence), onOpenEvidence() {} });
+  const opening = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "summary-found");
   assert.match(JSON.stringify(opening), /randomized study/);
   assert.match(JSON.stringify(opening), /observational study/);
   assert.match(JSON.stringify(opening), /do not establish independent studies/);
-  assert.doesNotMatch(JSON.stringify(opening), /not necessarily representative/);
+  assert.doesNotMatch(JSON.stringify(opening), /not necessarily representative|may not be representative/);
   assert.equal(elementNodes(opening).filter(node => node.type === "button").length, 3);
 });
 
-test("brief keeps qualifications and coverage collapsed before sources and shows one finding per direction", () => {
-  const { V2ResultPaper } = hookHarness("features/results/paper.tsx", {}).exports;
-  const item = id => ({ ledger_claim_id: id, approved_factual_statement: id + " finding." });
-  const result = {
-    exact_claim: "Example claim",
-    directions: { support_enabled: true, challenge_enabled: true },
-    synthesis: { sections: [
-      { section_type: "supporting", items: [item("first"), item("second")] },
-      { section_type: "limitations", items: [item("qualification")] },
-      { section_type: "limitations", items: [item("additional qualification")] },
-    ] },
-    all_surviving_sources: [], recommended_sources: [],
-    claim_coverage_map: [], unresolved_material_gaps: [],
-  };
-  const tree = V2ResultPaper({ result, evidence: { items: [] } });
-  const nodes = elementNodes(tree);
-  const disclosures = nodes.filter(node => node.type === "details" && node.props.className?.includes("brief-disclosure"));
-  assert.deepEqual(disclosures.map(node => node.props.children[0].props.children),
-    ["Bottom line", "Evidence qualifications", "Research status and coverage", "Admitted evidence"]);
-  assert.ok(disclosures.every(node => !node.props.open));
-  assert.match(JSON.stringify(disclosures[1]), /additional qualification finding/);
-  const findings = tree.props.children[4][0];
-  const visible = elementNodes(findings.props.children[1]);
-  assert.equal(visible.filter(node => node.props?.className === "overview-item").length, 1);
-  assert.match(JSON.stringify(findings.props.children[2]), /second finding/);
-  assert.doesNotMatch(JSON.stringify(tree.props.children[3]), /Claim coverage was not assessed/);
+test("evidence groups by relationship, shows three per group and keeps the rest behind Show all", () => {
+  const { EvidenceGroups } = hookHarness("features/results/evidence-list.tsx", {}).exports;
+  const { findingsByRelationship } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, relationship, direction) => ({ ledger_claim_id: id, source_id: id, source_family: id, direction,
+    source_url: `https://example.org/${id}`, relationship_to_claim: relationship, claim_fit: 4,
+    approved_factual_statement: id + " finding.", quote_passage: "Text.", evidence_summary: "Why." });
+  // A challenge found by the support-directed search must appear under Challenges.
+  const items = ["a", "b", "c", "d", "e"].map((id) => item(id, "supports", "support"))
+    .concat([item("caution", "challenges", "support"), item("context", "qualifies", "support")]);
+  const evidence = { items, source_titles: [] };
+  const render = (expanded) => elementNodes(EvidenceGroups({ findings: findingsByRelationship(evidence), evidence, expanded, onExpand() {} }));
+  const collapsed = render(new Set());
+  const cards = (nodes, relationship) => nodes.filter(node => node.type?.name === "FindingCard" && node.props.finding.relationship === relationship);
+  assert.equal(cards(collapsed, "supports").length, 3);
+  assert.deepEqual(cards(collapsed, "challenges").map(node => node.props.finding.item.ledger_claim_id), ["caution"]);
+  assert.equal(cards(collapsed, "qualifies").length, 1);
+  assert.ok(collapsed.some(node => node.type?.name === "ShowAll" && node.props.count === 5));
+  assert.equal(cards(render(new Set(["supports"])), "supports").length, 5);
+  assert.doesNotMatch(JSON.stringify(collapsed), /Support-directed|Challenge-directed/);
 });
 
 test("source pagination retries preserve earlier records and discard repeated record IDs", async () => {
@@ -1001,20 +1112,27 @@ test("lead grouping ignores tracking and query order but preserves publication v
   assert.notEqual(leadPageKey("https://example.org/a?version=1"), leadPageKey("https://example.org/a?version=2"));
 });
 
-test("claim status names admitted challenges without inferring dominance", () => {
-  const { CoverageStatus } = hookHarness("features/results/coverage-status.tsx", {}).exports;
-  const assessment = { supporting_count: 20, challenging_count: 1, qualifying_count: 0,
-    unrelated_count: 0, admitted_source_ids: [], limitations: [], unresolved_gap_count: 0,
-    partial_coverage_count: 0, unavailable_coverage_count: 0, coverage_incomplete: true };
-  const tree = CoverageStatus({ result: { all_surviving_sources: [], claim_coverage_map: [] },
-    evidence: { items: [{relationship_to_claim:"challenges"}], post_analysis_assessment: assessment } });
-  assert.match(JSON.stringify(tree), /Challenging evidence admitted; claim not established/);
-  assert.doesNotMatch(JSON.stringify(tree), /dominates|Supporting findings observed/);
+test("admitted challenges are named without inferring dominance from counts", () => {
+  const { findingsByRelationship, evidencePicture } = hookHarness("features/results/model.ts", {}).exports;
+  const item = (id, relationship, fit) => ({ ledger_claim_id: id, source_id: id, source_family: id,
+    source_url: `https://example.org/${id}`, relationship_to_claim: relationship, claim_fit: fit,
+    approved_factual_statement: `${id} finding.` });
+  // Twenty indirect supporting publications and one direct challenge: no "mostly" label.
+  const items = Array.from({ length: 20 }, (_, index) => item(`s${index}`, "supports", 3)).concat([item("c", "challenges", 5)]);
+  const findings = findingsByRelationship({ items });
+  assert.equal(findings.challenges.length, 1);
+  const picture = evidencePicture(findings, { support_enabled: true, challenge_enabled: true });
+  assert.equal(picture.label, "Evidence is limited or indirect");
+  assert.doesNotMatch(picture.label, /dominat|established|true|false/i);
 });
 
-test("social source headings do not fall back to a post's opening line", () => {
-  const { sourceTitles } = hookHarness("features/results/source-titles.tsx", {}).exports;
-  const helper = sourceTitles({ all_surviving_sources: [] }, null);
-  const heading = helper.sourceHeading("post", "An unreliable first line of a post", "https://www.linkedin.com/posts/example");
-  assert.equal(heading, "Source page at LinkedIn");
+// Social-post headings are pinned on the backend owner (tests/test_result_display_projection.py).
+test("finding cards use the projected heading, not a post's opening line", () => {
+  const { FindingCard } = hookHarness("features/results/evidence-list.tsx", {}).exports;
+  const item = { source_id: "post", ledger_claim_id: "post", source_url: "https://www.linkedin.com/posts/example",
+    title: "An unreliable first line of a post", quote_passage: "Text.", evidence_summary: "Why.", approved_factual_statement: "Statement." };
+  const titles = new Map([["post", { source_id: "post", display_title: item.title, heading: "Post on LinkedIn", source_name: "LinkedIn", source_kind: "Social post" }]]);
+  const text = JSON.stringify(elementNodes(FindingCard({ finding: { item, relationship: "supports", strength: "Direct", groupId: "post", related: [], alsoAt: [], mergeBasis: null }, titles })));
+  assert.match(text, /Post on LinkedIn/);
+  assert.doesNotMatch(text, /An unreliable first line/);
 });

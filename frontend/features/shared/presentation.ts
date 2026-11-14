@@ -37,34 +37,32 @@ export function assessmentRelationshipLabel(
   }[relationship];
 }
 
+/** Why the search stopped, in plain words (no trailing period). */
 export function researchStopLabel(reason: string): string {
   return (
     (
       {
-        sufficient_source_pool:
-          "Search stopped after the source pool was considered sufficient",
-        no_useful_new_direction: "No useful new research direction was found",
-        no_actionable_material_gap: "No actionable research gap remained",
-        no_productive_new_search: "No productive new search was available",
-        no_productive_search: "No productive new search was available",
-        duplicate_heavy: "Search results substantially overlapped",
-        provider_eligibility_exhausted: "No eligible search provider remained",
-        budget: "A research limit stopped further work; the specific limit and amount are not recorded in this brief.",
-        budget_limit: "A research limit stopped further work; the specific limit and amount are not recorded in this brief.",
-        cancelled: "Research was cancelled",
-        hard_round_limit: "The maximum number of research rounds was reached",
-        degraded_gap_search_agent:
-          "The follow-up search could not be completed",
-        invalid_search_agent_plan: "The follow-up search plan was invalid",
-        gap_analysis_unusable: "The follow-up gap assessment could not be used",
-        no_novel_query: "No new search query was available",
-        no_eligible_provider: "No eligible search provider remained",
-        unproductive: "The latest search did not add useful evidence",
-        insufficient_reservation:
-          "The remaining budget could not reserve another search",
+        sufficient_source_pool: "The search stopped because further searches were unlikely to find new sources",
+        no_useful_new_direction: "The search stopped because no useful new direction was found",
+        no_actionable_material_gap: "The search stopped because no open question could be searched further",
+        no_productive_new_search: "The search stopped because no productive new search was available",
+        no_productive_search: "The search stopped because no productive new search was available",
+        duplicate_heavy: "The search stopped because new results mostly repeated earlier ones",
+        provider_eligibility_exhausted: "The search stopped because no search provider could run another search",
+        no_eligible_provider: "The search stopped because no search provider could run another search",
+        budget: "A research limit stopped further work",
+        budget_limit: "A research limit stopped further work",
+        cancelled: "The research was cancelled",
+        hard_round_limit: "The search reached the maximum number of rounds",
+        degraded_gap_search_agent: "The follow-up search could not be completed",
+        invalid_search_agent_plan: "The follow-up search plan could not be used",
+        gap_analysis_unusable: "The check for open questions could not be used",
+        no_novel_query: "The search stopped because no new search query was available",
+        unproductive: "The search stopped because the latest search added no useful evidence",
+        insufficient_reservation: "The remaining budget could not cover another search",
         terminal_failure: "Research ended after a processing failure",
       } as Record<string, string>
-    )[reason] ?? "The reason the search stopped was not recorded in a recognizable form"
+    )[reason] ?? "The reason the search stopped was not recognized"
   );
 }
 
@@ -148,9 +146,25 @@ export function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-export function formatCost(value: string | number | null): string {
+/** Money to the cent for everyday display; "—" when nothing was recorded. */
+export function formatCost(value: string | number | null | undefined): string {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  const amount = Number(value);
+  if (amount > 0 && amount < 0.005) return "<$0.01";
+  return `$${amount.toFixed(2)}`;
+}
+
+/** Full recorded precision, used only in the Method audit view. */
+export function formatCostExact(value: string | number | null | undefined): string {
   if (value == null || !Number.isFinite(Number(value))) return "Not recorded";
-  return `$${Number(value).toFixed(4)}`;
+  return `$${String(value)}`;
+}
+
+export function formatShortDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
 function plannerFailureMessage(message: string, stage?: string): string | null {

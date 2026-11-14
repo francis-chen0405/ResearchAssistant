@@ -13,6 +13,7 @@ export type ApiSchemas = {
     "product"?: string;
     "api_version"?: string;
   };
+  "BriefExportFormat": "markdown" | "pdf" | "docx";
   "CancelResponse": {
     "cancelled"?: boolean;
     "message": string;
@@ -1247,6 +1248,13 @@ export type ApiSchemas = {
     "source_id": string;
     "display_title": string;
     "captured_title"?: (string | null);
+    "heading"?: (string | null);
+    "source_name"?: (string | null);
+    "source_kind"?: (string | null);
+    "study_design"?: (string | null);
+    "publisher_interest"?: (string | null);
+    "year"?: (string | null);
+    "lead_author"?: (string | null);
   };
   "V2UnresolvedMaterialGap": {
     "gap_id": string;
@@ -1304,6 +1312,7 @@ export type ApiResponses = {
   "POST /api/research/start": ApiSchemas["LiveStartResult"];
   "GET /api/research/{run_id}": ApiSchemas["LiveRunSnapshot"];
   "POST /api/research/{run_id}/cancel": ApiSchemas["CancelResponse"];
+  "GET /api/research/{run_id}/export": unknown;
   "GET /api/research/{run_id}/live-sources": ApiSchemas["LiveSourcesPage"];
   "GET /api/research/{run_id}/source-leads": ApiSchemas["SourceLeadsPage"];
   "GET /api/research/{run_id}/trail": ApiSchemas["ResearchTrail"];

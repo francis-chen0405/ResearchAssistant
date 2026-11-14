@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from researchassistant.api.application_services.live_sources import read_live_sources
 from researchassistant.api.application_services.result_reads import read_evidence, read_result
@@ -15,6 +19,7 @@ from researchassistant.api.live_service import ResearchTrail
 from researchassistant.api.runtime import ApiRuntime
 from researchassistant.contracts.models import V2FinalResearchOutput
 from researchassistant.contracts.source_leads import LiveSourcesPage, SourceLeadsPage
+from researchassistant.evidence.brief_export import BriefExportFormat, export_released_brief
 from researchassistant.storage.source_leads import read_source_leads
 
 
@@ -85,4 +90,48 @@ def build_router(runtime: ApiRuntime, dependencies: ApiDependencies) -> APIRoute
         except Exception as exc:
             raise _inspection_http_error(exc) from exc
 
+    @router.get(
+        "/api/research/{run_id}/export",
+        response_class=Response,
+        responses={
+            200: {
+                "content": {
+                    _EXPORT_MEDIA_TYPES[export_format]: {} for export_format in BriefExportFormat
+                },
+                "description": "A revalidated export of a released brief.",
+            }
+        },
+    )
+    def export_brief(
+        run_id: UUID,
+        export_format: Annotated[BriefExportFormat, Query(alias="format")],
+        db_path: str = Query(min_length=1),
+    ) -> Response:
+        """Read-only: re-verify a released run and return a fresh export file."""
+        suffix = {"markdown": ".md", "pdf": ".pdf", "docx": ".docx"}[export_format.value]
+        filename = f"research-brief-{run_id}{suffix}"
+        try:
+            with TemporaryDirectory(prefix="researchassistant-export-") as directory:
+                destination = Path(directory) / filename
+                export_released_brief(db_path, str(run_id), destination, export_format)
+                payload = destination.read_bytes()
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Research run not found.") from exc
+        except Exception as exc:
+            raise _inspection_http_error(exc) from exc
+        return Response(
+            content=payload,
+            media_type=_EXPORT_MEDIA_TYPES[export_format],
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     return router
+
+
+_EXPORT_MEDIA_TYPES = {
+    BriefExportFormat.MARKDOWN: "text/markdown; charset=utf-8",
+    BriefExportFormat.PDF: "application/pdf",
+    BriefExportFormat.DOCX: (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+}

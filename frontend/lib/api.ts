@@ -346,6 +346,22 @@ export const researchApi = {
       `/api/research/${runId}/v2-evidence?db_path=${encodeURIComponent(database)}`,
       { signal },
     ),
+  /** Read-only: the server re-verifies the release, then renders a fresh file. */
+  exportBrief: async (
+    runId: string,
+    database: string,
+    format: "pdf" | "docx" | "markdown",
+  ): Promise<Blob> => {
+    const response = await fetch(
+      `${API_URL}/api/research/${runId}/export?${new URLSearchParams({ db_path: database, format })}`,
+      { cache: "no-store", signal: AbortSignal.timeout(60_000) },
+    );
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+      throw new Error(readableErrorDetail(payload?.detail) ?? "The export could not be created.");
+    }
+    return response.blob();
+  },
   service: () => request<ServiceDiagnostic>("/api/service"),
   startService,
   stopService: () =>

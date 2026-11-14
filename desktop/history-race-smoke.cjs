@@ -153,16 +153,16 @@ async function main() {
     const olderRunButton = page.getByRole("button", { name: /Delayed older run/ });
     await olderRunButton.evaluate((element) => element.click());
     await page.getByRole("button", { name: /Latest selected run/ }).click();
-    await page.getByText("No brief was released.", { exact: true }).waitFor();
+    await page.getByText("No brief was produced", { exact: true }).waitFor();
     await page.waitForTimeout(900);
-    assert.equal(await page.locator(".result-masthead h2").innerText(), "Latest selected run", "The latest selected history row must win over an older delayed snapshot");
+    assert.equal(await page.locator(".result-heading h1").innerText(), "Latest selected run", "The latest selected history row must win over an older delayed snapshot");
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const changedDatabaseDialog = page.getByRole("dialog");
     await changedDatabaseDialog.locator("details.advanced-details > summary").click();
     await changedDatabaseDialog.getByLabel("SQLite database", { exact: true }).fill(databaseC);
-    await page.locator(".result-masthead h2").waitFor({ state: "detached" });
-    assert.equal(await page.locator(".result-masthead h2").count(), 0, "Changing databases clears a terminal run selected from the previous database");
+    await page.locator(".result-heading h1").waitFor({ state: "detached" });
+    assert.equal(await page.locator(".result-heading h1").count(), 0, "Changing databases clears a terminal run selected from the previous database");
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Saved research", exact: true }).click();
     await page.getByText("Your saved research will appear here.", { exact: false }).waitFor();
@@ -178,19 +178,20 @@ async function main() {
     await page.locator(".welcome-view").waitFor();
     await page.waitForTimeout(900);
     assert.equal(await page.locator(".welcome-view").count(), 1, "A late run response must not override navigation away from history");
-    assert.equal(await page.locator(".result-masthead h2").count(), 0, "An unselected delayed history run must not replace the current view");
+    assert.equal(await page.locator(".result-heading h1").count(), 0, "An unselected delayed history run must not replace the current view");
     // Result and lazy trail reads belong to their keyed result mount. Leave
     // while both responses are pending, then let them arrive out of order.
     testResultRequests = true;
     await page.getByRole("button", { name: "Saved research", exact: true }).click();
     await page.getByRole("button", { name: /Latest selected run/ }).click();
     await resultStarted;
-    await page.getByRole("button", { name: /Research trail/ }).click();
+    await page.getByRole("tab", { name: "Method" }).click();
+    await page.getByRole("button", { name: "Open research trail" }).click();
     await trailStarted;
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Home", exact: true }).click();
     await page.locator(".welcome-view").waitFor();
-    await page.waitForFunction(() => document.querySelector(".result-view") === null);
+    await page.waitForFunction(() => document.querySelector(".result-page") === null);
     await page.waitForTimeout(100);
     assert.equal(abortedResultRequests.length, 2, "Leaving a result aborts both detailed-result and trail reads");
     releaseOldTrail();

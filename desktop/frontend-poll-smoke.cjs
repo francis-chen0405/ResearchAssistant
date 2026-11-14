@@ -399,6 +399,7 @@ async function main() {
     await browse.click();
     releaseFirstRun = true;
     await page.getByText("Poll smoke result", { exact: true }).waitFor({ timeout: 10000 });
+    await page.getByRole("tab", { name: "Method" }).click();
     await page.getByText("All sources", { exact: true }).click();
     await page.getByRole("link", { name: source(1).title }).waitFor();
     const sourceCallsAtStop = sourceCalls;
@@ -409,7 +410,7 @@ async function main() {
     assert.equal(snapshotCalls, terminalCallCount, "Terminal status must stop follow-up polling");
     assert.equal(sourceCalls, sourceCallsAtStop, "Terminal status must stop shortlist polling");
 
-    await page.getByRole("button", { name: "Start new research", exact: true }).click();
+    await page.getByRole("button", { name: "New research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does replacement cancel scheduled polling?");
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
@@ -426,7 +427,7 @@ async function main() {
     await page.getByRole("button", { name: "Saved research", exact: true }).click();
     await page.getByText("A run with a rejected resume attempt", { exact: true }).click();
     await page.getByText("The latest resume attempt could not use the requested settings. Resume with the original settings or start a new run.", { exact: true }).first().waitFor();
-    assert.equal(await page.locator(".report-meta").getByText("Metadata depth", { exact: true }).count(), 0);
+    assert.equal(await page.locator(".result-page").getByText("Metadata depth", { exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "Cancel run", exact: true }).count(), 0, "A rejected resume with no worker must not show Cancel run");
     const rejectedResumePollCount = snapshotCalls;
     await WAIT(1800);
@@ -440,7 +441,7 @@ async function main() {
     await WAIT(1800);
     assert.equal(snapshotCalls, interruptedPollCount, "An interrupted run after restart must stop polling");
 
-    await page.getByRole("button", { name: "Start new research", exact: true }).click();
+    await page.getByRole("button", { name: "New research", exact: true }).click();
     await page.getByLabel("Your research question", { exact: true }).fill("Does unmount cancel scheduled polling?");
     armSnapshotStart();
     await page.getByRole("button", { name: "Begin research", exact: true }).click();
@@ -494,7 +495,7 @@ async function main() {
     recoveryHealthy = true;
     recoveryTerminal = true;
     await connection.getByRole("button", { name: "Reconnect", exact: true }).click();
-    await page.getByRole("heading", { name: "No brief was released." }).waitFor();
+    await page.getByRole("heading", { name: "No brief was produced" }).waitFor();
     await page.getByText("All sources", { exact: true }).click();
     await page.getByRole("link", { name: source(1).title }).waitFor();
     assert.deepEqual(errors, []);

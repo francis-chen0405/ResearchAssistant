@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, useReducedMotion } from "motion/react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ProviderSetup } from "@/components/provider-setup";
 import { Header, Notice, PreferencesStatus, WelcomeView } from "@/features/shell/views";
 import { ResearchView, StartingView } from "@/features/research/composer";
@@ -15,13 +15,30 @@ import { useResearch } from "@/features/research/use-research";
 import { useHistory } from "@/features/history/use-history";
 import { terminalStates } from "@/features/shared/presentation";
 import type { MainView, Settings } from "@/features/preferences/settings";
+import type { RetryKind } from "@/features/results/result";
+
+type ToastTone = "info" | "success" | "warning" | "error";
+const inferTone = (message: string): ToastTone =>
+  /could not|couldn.t|failed|not available|unavailable|error|not ready|refus/i.test(message)
+    ? "error"
+    : /saved|removed|restored|copied|started/i.test(message)
+      ? "success"
+      : "info";
 
 export default function Home() {
   const reduceMotion = useReducedMotion();
   const [view, setView] = useState<MainView>("home");
   const [setupOpen, setSetupOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
+  const setNotice = useCallback(
+    (message: string | null) => setToast(message ? { message, tone: inferTone(message) } : null),
+    [],
+  );
+  const notify = useCallback(
+    (message: string, tone: ToastTone = "info") => setToast({ message, tone }),
+    [],
+  );
   const [offline, setOffline] = useState(false);
   const { settings, setSettings, modelOptions, preferencesStatus, retryPreferences } =
     usePreferences(setNotice);
@@ -56,6 +73,34 @@ export default function Home() {
     research.reset();
     setNotice(null);
     setView("research");
+  };
+  const retryRun = (kind: RetryKind) => {
+    if (!snapshot) return;
+    const providers = snapshot.research_controls.discovery_providers;
+    const uses = (name: string) => providers.includes(name as never);
+    const frozen: Settings = {
+      ...settings,
+      runId: kind === "resume" ? snapshot.run_id : "",
+      dbPath: snapshot.db_path,
+      supportEnabled: snapshot.supporting.status !== "disabled",
+      challengeEnabled: snapshot.opposing.status !== "disabled",
+      sourceTarget: (snapshot.research_controls.sources_per_stance_per_round ?? settings.sourceTarget) as Settings["sourceTarget"],
+      maxCost: snapshot.cost_budget_limit_usd != null ? String(snapshot.cost_budget_limit_usd) : settings.maxCost,
+      ...(providers.length
+        ? {
+            useSerpSearch: uses("serpsearch"),
+            useExa: uses("exa"),
+            useOpenAlex: uses("openalex"),
+            useArxiv: uses("arxiv"),
+            usePubmed: uses("pubmed"),
+            useBrave: uses("brave"),
+            useSerper: uses("serper"),
+          }
+        : {}),
+    };
+    history.invalidateSelection();
+    research.setClaim(snapshot.raw_claim);
+    void research.beginResearch(null, frozen, configuration, updateService, snapshot.raw_claim);
   };
   const navigate = (next: MainView) => {
     if (next !== "history") history.invalidateSelection();
@@ -120,6 +165,8 @@ export default function Home() {
                 key={`result-${snapshot.db_path}-${snapshot.run_id}-${snapshot.classification}`}
                 snapshot={snapshot}
                 onNew={newResearch}
+                onRetry={retryRun}
+                notify={notify}
               />
             ) : (
               <ProgressView
@@ -158,8 +205,8 @@ export default function Home() {
           )}
         </AnimatePresence>
         <AnimatePresence>
-          {notice && (
-            <Notice message={notice} onClose={() => setNotice(null)} />
+          {toast && (
+            <Notice message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
           )}
           {preferencesReady && setupOpen && (
             <ProviderSetup
