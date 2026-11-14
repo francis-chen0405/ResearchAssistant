@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+
 from researchassistant.platform_support.desktop_settings import InterfaceSettings
 
 

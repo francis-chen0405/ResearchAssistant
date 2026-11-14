@@ -11,9 +11,11 @@ from threading import Event
 from time import monotonic, sleep
 from uuid import UUID, uuid4
 
-import frontend.service_manager as service_manager_module
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+import frontend.service_manager as service_manager_module
 from frontend.api import ApiRuntime, create_app
 from frontend.live_service import (
     LiveResearchController,
@@ -23,7 +25,6 @@ from frontend.live_service import (
 from frontend.security import redact_text
 from frontend.service_manager import WigoloServiceManager
 from providers.search import SearchFailureCode, SearchProviderError
-from pydantic import ValidationError
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     PresentationTone,

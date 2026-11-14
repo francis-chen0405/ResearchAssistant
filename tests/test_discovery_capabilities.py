@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+
 from researchassistant.contracts.discovery_v2 import V2ProviderCapabilities
 from researchassistant.contracts.model_contracts import DiscoveryProvider
 from researchassistant.research.discovery_capabilities import (

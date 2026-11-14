@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from test_discovery_store import _init_run
+
 from agents.v2_adaptive_search import _execute_searches
 from providers.arxiv import ArxivSearchAdapter
 from providers.config import ArxivConfig, OpenAlexConfig, PubMedConfig
@@ -54,8 +56,6 @@ from researchassistant.storage.discovery_store import (
 )
 from researchassistant.storage.query_dispatch import query_dispatch_states
 from researchassistant.storage.store import insert_v2_artifact
-
-from test_discovery_store import _init_run
 
 NOW = datetime(2026, 10, 6, tzinfo=UTC)
 CLAIM = "The intervention changes the outcome."

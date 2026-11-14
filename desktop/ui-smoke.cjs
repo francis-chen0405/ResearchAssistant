@@ -44,7 +44,7 @@ async function quitNormally(desktop) {
     assert.equal(health, 200);
     assert.equal(await page.evaluate(() => localStorage.length), 0);
     await page.getByRole("button", { name: /provider setup/i }).click();
-    assert.equal(await page.locator('input[type="password"]').count(), 7);
+    assert.equal(await page.locator('input[type="password"]').count(), 9);
     assert.equal(await page.locator('input[type="password"]').first().inputValue(), "");
     await page.screenshot({ path: path.join(__dirname, "build/desktop-provider-setup.png") });
     assert.deepEqual(errors, []);
@@ -60,7 +60,7 @@ async function quitNormally(desktop) {
     assert.equal(desktop.windows().filter((candidate) => !candidate.isClosed()).length, 1);
     await quitNormally(desktop);
     desktop = null;
-    console.log("PASS: desktop window, authenticated renderer requests, seven empty password fields, no browser storage or renderer Node access, duplicate launch exclusion, normal shutdown");
+    console.log("PASS: desktop window, authenticated renderer requests, nine empty password fields, no browser storage or renderer Node access, duplicate launch exclusion, normal shutdown");
   } finally {
     if (desktop) await quitNormally(desktop);
     rmSync(data, { recursive: true, force: true });

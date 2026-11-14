@@ -7,6 +7,9 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+import test_query_production as production
+import test_v2_phase12_production as phase12
+
 import researchassistant.agents.post_analysis_round as post_module
 import researchassistant.research.v2_orchestrator as orchestrator
 from researchassistant.agents.post_analysis_round import (
@@ -41,9 +44,6 @@ from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.research.v2_orchestrator import V2ProductionState
 from researchassistant.storage.source_leads import read_source_leads
 from researchassistant.storage.store import read_v2_artifact
-
-import test_query_production as production
-import test_v2_phase12_production as phase12
 
 
 class _MissingAfterInitialAssessment(production._ConceptModel):

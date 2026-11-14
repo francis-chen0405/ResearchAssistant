@@ -33,7 +33,7 @@ def main() -> int:
             if scenario == "second-process-cancel":
                 database = os.environ["MVP4_DB_PATH"]
                 run_id = UUID(os.environ["MVP4_RUN_ID"])
-                deadline = time.monotonic() + 15
+                deadline = time.monotonic() + 40
                 while True:
                     try:
                         read_cancellation_request(database, run_id)

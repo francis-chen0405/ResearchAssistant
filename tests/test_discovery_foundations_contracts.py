@@ -633,6 +633,13 @@ def test_discovery_metadata_keeps_fingerprint_except_approved_quote_context_vers
     assert payload["semantic_policy"].pop("quote_context_filter_policy") == (
         "researchassistant-v2-phase-12-post-filter-v2"
     )
+    prompts = payload["semantic_policy"]["custom_prompt_hashes"]
+    assert prompts["v2_evidence_analyst_v9.md"] == (
+        "4b34d72f6849d144aec309b2014e1b207621146912eb4f165195131bed760a5b"
+    )
+    prompts["v2_evidence_analyst_v9.md"] = (
+        "4146344e4a5ab62942c2fcf3a4b38ef7ea35b955b29cb117e88b906eb230f270"
+    )
     preceding = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     assert sha256(preceding.encode()).hexdigest() == (
         "97a0d5eb65a527849dfaf25b3ee99d611568b9c4adf26f46ef6e78e77518754d"

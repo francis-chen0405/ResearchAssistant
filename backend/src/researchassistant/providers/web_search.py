@@ -81,9 +81,7 @@ class WebSearchConfig(StrictModel):
         name = f"{provider.value.upper()}_API_KEY"
         key = environment.get(name, "").strip()
         if not key:
-            raise ProviderConfigurationError(
-                f"{name} is required when {provider.value} is enabled"
-            )
+            raise ProviderConfigurationError(f"{name} is required when {provider.value} is enabled")
         return cls(provider=provider, api_key=SecretStr(key))
 
 
@@ -107,9 +105,7 @@ class WebSearchAdapter:
 
     physical_accounting = True
 
-    def __init__(
-        self, config: WebSearchConfig, *, client: httpx.Client | None = None
-    ) -> None:
+    def __init__(self, config: WebSearchConfig, *, client: httpx.Client | None = None) -> None:
         self._config = config
         self._endpoint = _ENDPOINTS[config.provider]
         self._client = client or httpx.Client(
@@ -128,16 +124,13 @@ class WebSearchAdapter:
         if (
             request.provider is not provider
             or request.compiled_query is None
-            or compiled_parameters(request, allowed_names=names, required_names=names)
-            != expected
+            or compiled_parameters(request, allowed_names=names, required_names=names) != expected
         ):
             raise SearchProviderError(
                 SearchFailureCode.PERMANENT_FAILURE,
                 "Web search requires a matching compiled query",
             )
-        payload = (
-            {"params": expected} if endpoint.method == "GET" else {"json": expected}
-        )
+        payload = {"params": expected} if endpoint.method == "GET" else {"json": expected}
         try:
             response = physical_request(
                 request,
@@ -147,9 +140,7 @@ class WebSearchAdapter:
                     endpoint.method,
                     endpoint.origin + endpoint.path,
                     expected_base_url=endpoint.origin,
-                    headers={
-                        endpoint.key_header: self._config.api_key.get_secret_value()
-                    },
+                    headers={endpoint.key_header: self._config.api_key.get_secret_value()},
                     timeout=self._config.deadlines.search_seconds,
                     **payload,
                 ),

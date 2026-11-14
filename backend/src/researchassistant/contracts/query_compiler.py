@@ -25,16 +25,9 @@ MAX_ENCODED_PARAMETERS = 7500
 
 def _term(value: str) -> str:
     if any(unicodedata.category(char).startswith("C") for char in value):
-        raise ValueError(
-            "query concepts cannot contain control or formatting characters"
-        )
-    if any(
-        char in value
-        for char in ('"', "\\", "[", "]", "{", "}", "<", ">", "|", ":", "(", ")")
-    ):
-        raise ValueError(
-            "query concepts cannot contain executable syntax or reserved characters"
-        )
+        raise ValueError("query concepts cannot contain control or formatting characters")
+    if any(char in value for char in ('"', "\\", "[", "]", "{", "}", "<", ">", "|", ":", "(", ")")):
+        raise ValueError("query concepts cannot contain executable syntax or reserved characters")
     normalized = " ".join(unicodedata.normalize("NFC", value).split())
     if not normalized or len(normalized) > 180 or len(normalized.split()) > 14:
         raise ValueError("query concept must be a concise bounded phrase")
@@ -48,14 +41,10 @@ def _phrase(value: str, field: str = "") -> str:
     return f'{field}"{term}"'
 
 
-def conceptual_signature(
-    query: V2ConceptualQuery, mode: SearchMode
-) -> tuple[object, ...]:
+def conceptual_signature(query: V2ConceptualQuery, mode: SearchMode) -> tuple[object, ...]:
     """Compare executable concepts/mode, ignoring diagnostic and unused metadata."""
     groups = [
-        tuple(
-            sorted(_term(term).casefold() for term in (group.concept, *group.synonyms))
-        )
+        tuple(sorted(_term(term).casefold() for term in (group.concept, *group.synonyms)))
         for group in query.required_concepts
     ]
     if query.purpose == "methods" and query.methods:
@@ -64,9 +53,7 @@ def conceptual_signature(
         groups.append(tuple(sorted(_term(x).casefold() for x in query.outcomes)))
     elif query.purpose == "gap" and (query.methods or query.outcomes):
         groups.append(
-            tuple(
-                sorted({_term(x).casefold() for x in (*query.methods, *query.outcomes)})
-            )
+            tuple(sorted({_term(x).casefold() for x in (*query.methods, *query.outcomes)}))
         )
     return (mode, tuple(sorted(groups)))
 
@@ -104,18 +91,13 @@ def compile_query(
         remaining_requests=resolved_policy.max_pages_per_operation,
         mode=resolved_mode,
     )
-    if (
-        conceptual.provider is DiscoveryProvider.OPENALEX
-        and resolved_mode == "semantic"
-    ):
+    if conceptual.provider is DiscoveryProvider.OPENALEX and resolved_mode == "semantic":
         depth = min(depth, 50)
     groups: list[tuple[str, ...]] = []
     for group in conceptual.required_concepts:
         terms = tuple(_term(x) for x in (group.concept, *group.synonyms))
         if len(terms) > 4:
-            raise ValueError(
-                "query compiler permits at most three justified aliases per concept"
-            )
+            raise ValueError("query compiler permits at most three justified aliases per concept")
         if len(terms[0]) <= 4 and terms[0].isupper() and len(terms) == 1:
             raise ValueError("ambiguous acronym-only concept requires a full phrase")
         if len({term.casefold() for term in terms}) != len(terms):
@@ -145,14 +127,12 @@ def compile_query(
     parameters: dict[str, str | int | bool]
     if provider is DiscoveryProvider.EXA or resolved_mode == "semantic":
         parts = [
-            f"{terms[0]}"
-            + (f" (also called {', '.join(terms[1:])})" if len(terms) > 1 else "")
+            f"{terms[0]}" + (f" (also called {', '.join(terms[1:])})" if len(terms) > 1 else "")
             for terms in groups
         ]
         required_count = len(conceptual.required_concepts)
         optional_parts = [
-            f"{label} evidence involving {' or '.join(terms)}"
-            for label, terms in context_groups
+            f"{label} evidence involving {' or '.join(terms)}" for label, terms in context_groups
         ]
         parts = parts[:required_count] + optional_parts
         text = "; ".join(parts)
@@ -172,9 +152,7 @@ def compile_query(
             groups = groups[:1]
         text = " AND ".join(
             "("
-            + " OR ".join(
-                _phrase(term, field) for term in terms for field in ("ti:", "abs:")
-            )
+            + " OR ".join(_phrase(term, field) for term in terms for field in ("ti:", "abs:"))
             + ")"
             for terms in groups
         )
@@ -187,8 +165,7 @@ def compile_query(
         }
     elif provider is DiscoveryProvider.PUBMED:
         text = " AND ".join(
-            "(" + " OR ".join(_phrase(term) + "[tiab]" for term in terms) + ")"
-            for terms in groups
+            "(" + " OR ".join(_phrase(term) + "[tiab]" for term in terms) + ")" for terms in groups
         )
         parameters = {
             "term": text,
@@ -208,14 +185,17 @@ def compile_query(
     elif provider in {DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER} and not _legacy_syntax:
         if _single_phrase_syntax:
             text = " ".join(
-                word for word in groups[0][0].split()
+                word
+                for word in groups[0][0].split()
                 if word.upper() not in {"AND", "OR", "NOT", "ANDNOT"}
             )
             if len(groups) > 1:
                 text += " " + _phrase(groups[1][0])
         else:
             text = " ".join(
-                word for terms in groups[:3] for word in terms[0].split()
+                word
+                for terms in groups[:3]
+                for word in terms[0].split()
                 if word.upper() not in {"AND", "OR", "NOT", "ANDNOT"}
                 and not word.startswith(("+", "-"))
             )
@@ -231,9 +211,7 @@ def compile_query(
             remaining_chars = 600 - len(" ".join(phrases)) - bool(phrases) - 2
             remaining_groups = len(groups) - len(phrases)
             words = terms[0].split()[: remaining_words // remaining_groups]
-            char_share = (
-                remaining_chars - 3 * (remaining_groups - 1)
-            ) // remaining_groups
+            char_share = (remaining_chars - 3 * (remaining_groups - 1)) // remaining_groups
             while words and len(" ".join(words)) > char_share:
                 words.pop()
             if not words:
@@ -260,16 +238,12 @@ def compile_query(
         raise ValueError(f"unsupported query compiler provider: {provider}")
     if resolved_mode == "semantic" and len(text) > 2000:
         raise ValueError("semantic query exceeds documented input limit")
-    encoded_limit = (
-        3000 if provider is DiscoveryProvider.OPENALEX else MAX_ENCODED_PARAMETERS
-    )
+    encoded_limit = 3000 if provider is DiscoveryProvider.OPENALEX else MAX_ENCODED_PARAMETERS
     if (
         len(text.encode("utf-8")) > MAX_QUERY_BYTES
         or len(urlencode(parameters).encode("ascii")) > encoded_limit
     ):
-        raise ValueError(
-            "compiled query or encoded parameter length exceeds request policy"
-        )
+        raise ValueError("compiled query or encoded parameter length exceeds request policy")
     identity = discovery_hash(
         (
             str(conceptual.artifact_id),
@@ -287,9 +261,7 @@ def compile_query(
         identity_key=key,
         conceptual_query=conceptual,
         query_text=text,
-        parameters=tuple(
-            V2SanitizedParameter(name=k, value=v) for k, v in parameters.items()
-        ),
+        parameters=tuple(V2SanitizedParameter(name=k, value=v) for k, v in parameters.items()),
         mode=resolved_mode,
         requested_depth=requested_depth,
         effective_depth=depth,
@@ -299,9 +271,7 @@ def compile_query(
     )
     # Hash exactly the canonical persisted action, before validated construction.
     provisional = V2CompiledQueryAction.model_construct(**payload, fingerprint="0" * 64)
-    payload["fingerprint"] = discovery_hash(
-        provisional.model_dump_without_fingerprint()
-    )
+    payload["fingerprint"] = discovery_hash(provisional.model_dump_without_fingerprint())
     return V2CompiledQueryAction(**payload)
 
 
@@ -314,7 +284,9 @@ def validate_compiled_action(action: V2CompiledQueryAction) -> None:
         policy=action.policy,
     )
     if action != expected and action.conceptual_query.provider in {
-        DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER, DiscoveryProvider.ARXIV
+        DiscoveryProvider.BRAVE,
+        DiscoveryProvider.SERPER,
+        DiscoveryProvider.ARXIV,
     }:
         expected = compile_query(
             action.conceptual_query,
@@ -324,7 +296,8 @@ def validate_compiled_action(action: V2CompiledQueryAction) -> None:
             _legacy_syntax=True,
         )
     if action != expected and action.conceptual_query.provider in {
-        DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER
+        DiscoveryProvider.BRAVE,
+        DiscoveryProvider.SERPER,
     }:
         expected = compile_query(
             action.conceptual_query,

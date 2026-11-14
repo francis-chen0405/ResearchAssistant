@@ -342,11 +342,12 @@ def run_v2_post_analysis_round(
         if assessment.search_outcome == "analysis_complete":
             decision = decide("admitted evidence and claim coverage are adequate")
             return finish(decision, decision.reason)
-        if (
-            continuation.rounds[-1].survivor_additions == 0
-            and not _has_artifact(path, run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY)
+        if continuation.rounds[-1].survivor_additions == 0 and not _has_artifact(
+            path, run_id, V2_POST13_GAP_AFTER_ROUND_THREE_KEY
         ):
-            reason = "Round 3 found no new usable sources. Remaining gaps are reported in the brief."
+            reason = (
+                "Round 3 found no new usable sources. Remaining gaps are reported in the brief."
+            )
             decision = decide(reason)
             stopping = continuation.stopping_decision.model_copy(
                 update={

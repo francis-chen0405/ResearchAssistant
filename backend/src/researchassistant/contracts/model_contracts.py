@@ -151,7 +151,12 @@ class ResearchControls(StrictModel):
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, Any]:
         data = handler(self)
-        for name in ("metadata_depth", "seed_expansion_enabled", "scholarly_search_mode", "provider_request_limits"):
+        for name in (
+            "metadata_depth",
+            "seed_expansion_enabled",
+            "scholarly_search_mode",
+            "provider_request_limits",
+        ):
             if getattr(self, name) is None:
                 data.pop(name, None)
         return data

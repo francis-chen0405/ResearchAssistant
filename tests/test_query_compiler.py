@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+
 from researchassistant.contracts.discovery_v2 import (
     V2ConceptGroup,
     V2ConceptualQuery,
@@ -216,7 +217,10 @@ def test_general_web_queries_use_plain_subject_outcome_and_context(provider):
         outcomes=("enforcement outcomes",),
     )
     action = compile_query(query)
-    assert action.query_text == 'automated license plate readers economic disadvantage vehicle traffic enforcement'
+    assert (
+        action.query_text
+        == "automated license plate readers economic disadvantage vehicle traffic enforcement"
+    )
     assert next(item.value for item in action.parameters if item.name == "q") == action.query_text
 
 

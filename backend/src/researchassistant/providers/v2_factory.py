@@ -40,9 +40,9 @@ from researchassistant.providers.pubmed import PubMedSearchAdapter
 from researchassistant.providers.scraper import ScraperProvider
 from researchassistant.providers.search import SearchProvider
 from researchassistant.providers.serpsearch import SerpSearchAdapter
-from researchassistant.providers.web_search import WebSearchAdapter, WebSearchConfig
 from researchassistant.providers.v2_budget import RoutedV2LLMProvider, V2RunCeilings
 from researchassistant.providers.v2_routing import V2RoutingConfig
+from researchassistant.providers.web_search import WebSearchAdapter, WebSearchConfig
 from researchassistant.research.product_discovery import resolve_product_discovery
 
 
@@ -72,9 +72,7 @@ class V2ProductionFactoryConfig(StrictModel):
             resolve_product_discovery(self.research_controls, self.discovery_providers)
         enabled = set(self.discovery_providers)
         if not enabled or len(enabled) != len(self.discovery_providers):
-            raise ValueError(
-                "fresh v2 discovery providers must be unique and non-empty"
-            )
+            raise ValueError("fresh v2 discovery providers must be unique and non-empty")
         configured = {
             provider
             for provider, value in (
@@ -89,18 +87,10 @@ class V2ProductionFactoryConfig(StrictModel):
             if value is not None
         }
         if configured != enabled:
-            raise ValueError(
-                "fresh v2 discovery configuration must match enabled providers"
-            )
-        if (
-            self.brave is not None
-            and self.brave.provider is not DiscoveryProvider.BRAVE
-        ):
+            raise ValueError("fresh v2 discovery configuration must match enabled providers")
+        if self.brave is not None and self.brave.provider is not DiscoveryProvider.BRAVE:
             raise ValueError("brave configuration must match its provider")
-        if (
-            self.serper is not None
-            and self.serper.provider is not DiscoveryProvider.SERPER
-        ):
+        if self.serper is not None and self.serper.provider is not DiscoveryProvider.SERPER:
             raise ValueError("serper configuration must match its provider")
         return self
 
@@ -171,9 +161,7 @@ class V2ProductionFactoryConfig(StrictModel):
         payload = {
             "discovery_providers": [item.value for item in self.discovery_providers],
             "wigolo": self.wigolo.model_dump(mode="json"),
-            "exa": self.exa.model_dump(mode="json", exclude={"api_key"})
-            if self.exa
-            else None,
+            "exa": self.exa.model_dump(mode="json", exclude={"api_key"}) if self.exa else None,
             "openalex": (
                 self.openalex.model_dump(mode="json", exclude={"api_key"})
                 if self.openalex
@@ -186,9 +174,7 @@ class V2ProductionFactoryConfig(StrictModel):
             ),
             "arxiv": self.arxiv.model_dump(mode="json") if self.arxiv else None,
             "pubmed": (
-                self.pubmed.model_dump(mode="json", exclude={"api_key"})
-                if self.pubmed
-                else None
+                self.pubmed.model_dump(mode="json", exclude={"api_key"}) if self.pubmed else None
             ),
             "crossref_enabled": self.crossref_enabled,
             "firecrawl": (
@@ -198,14 +184,10 @@ class V2ProductionFactoryConfig(StrictModel):
             ),
         }
         if self.research_controls is not None:
-            payload["research_controls"] = self.research_controls.model_dump(
-                mode="json"
-            )
+            payload["research_controls"] = self.research_controls.model_dump(mode="json")
         for config in (self.brave, self.serper):
             if config is not None:
-                payload[config.provider.value] = config.model_dump(
-                    mode="json", exclude={"api_key"}
-                )
+                payload[config.provider.value] = config.model_dump(mode="json", exclude={"api_key"})
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -228,9 +210,7 @@ def build_v2_production_bundle(
     """Build explicitly routed search, acquisition, and three-model adapters."""
     injected = clients or ProviderClients()
     composite = CompositeSearchProvider(
-        exa=(
-            ExaSearchAdapter(config.exa, client=injected.search) if config.exa else None
-        ),
+        exa=(ExaSearchAdapter(config.exa, client=injected.search) if config.exa else None),
         openalex=(
             OpenAlexSearchAdapter(config.openalex, client=injected.openalex_search)
             if config.openalex
@@ -242,9 +222,7 @@ def build_v2_production_bundle(
             else None
         ),
         arxiv=(
-            ArxivSearchAdapter(config.arxiv, client=injected.arxiv_search)
-            if config.arxiv
-            else None
+            ArxivSearchAdapter(config.arxiv, client=injected.arxiv_search) if config.arxiv else None
         ),
         pubmed=(
             PubMedSearchAdapter(config.pubmed, client=injected.pubmed_search)
@@ -252,9 +230,7 @@ def build_v2_production_bundle(
             else None
         ),
         brave=(
-            WebSearchAdapter(config.brave, client=injected.brave_search)
-            if config.brave
-            else None
+            WebSearchAdapter(config.brave, client=injected.brave_search) if config.brave else None
         ),
         serper=(
             WebSearchAdapter(config.serper, client=injected.serper_search)
@@ -286,17 +262,11 @@ def build_v2_production_bundle(
                     config.routing.configuration_for_stage(stage).config,
                     client=(
                         injected.luna_llm or injected.llm
-                        if config.routing.configuration_for_stage(
-                            stage
-                        ).route.provider_name
+                        if config.routing.configuration_for_stage(stage).route.provider_name
                         == "openai"
-                        else injected.mimo_v25_pro_llm
-                        or injected.mimo_v25_llm
-                        or injected.llm
+                        else injected.mimo_v25_pro_llm or injected.mimo_v25_llm or injected.llm
                     ),
-                    price_cap=config.routing.configuration_for_stage(
-                        stage
-                    ).route.price_cap,
+                    price_cap=config.routing.configuration_for_stage(stage).route.price_cap,
                     max_call_cost_usd=per_call_cost,
                     max_call_tokens=per_call_tokens,
                     expected_model_alias=config.routing.configuration_for_stage(
@@ -342,15 +312,11 @@ def build_v2_production_bundle(
             }
         )
     return V2ProductionProviderBundle(
-        search_providers={
-            provider: composite for provider in config.discovery_providers
-        },
+        search_providers={provider: composite for provider in config.discovery_providers},
         wigolo=wigolo,
         firecrawl=firecrawl,
         llm=llm,
         crossref_resolver=(
-            CrossrefEnricher(client=injected.crossref).resolve
-            if config.crossref_enabled
-            else None
+            CrossrefEnricher(client=injected.crossref).resolve if config.crossref_enabled else None
         ),
     )

@@ -176,7 +176,12 @@ async function main() {
     for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await page.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
-    assert.equal(await dialog.locator('input[type=password]').count(),7);
+    assert.deepEqual(
+      await dialog.locator('input[type=password]').evaluateAll(inputs =>
+        inputs.map(input => input.labels[0].textContent.trim())),
+      ['Xiaomi MiMo', 'OpenAI', 'SERP Search', 'Brave Search', 'Serper', 'Exa', 'OpenAlex', 'PubMed', 'Firecrawl']
+        .map(provider => `${provider} API key`),
+    );
     assert.match(await dialog.innerText(),/OpenAI[\s\S]*Optional until a research role uses a GPT model/);
     await dialog.getByLabel('Xiaomi MiMo API key',{exact:true}).fill('offline-mimo-key');
     await dialog.getByRole('button',{name:'Save keys securely'}).click();
@@ -450,7 +455,7 @@ async function main() {
       await page.keyboard.press('Escape');
     }
     assert.deepEqual(errors,[]);
-    console.log('PASS: automatic offline preview/recovery, hover/focus pause, static reduced motion, desktop viewport fit, 7 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.');
+    console.log('PASS: automatic offline preview/recovery, hover/focus pause, static reduced motion, desktop viewport fit, 9 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.');
   } finally { if(browser) await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

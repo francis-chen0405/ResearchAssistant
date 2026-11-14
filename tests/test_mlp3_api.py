@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+
 from frontend.api import ApiRuntime, ConnectionCheck, create_app
 from frontend.live_service import (
     LiveHistoryItem,
