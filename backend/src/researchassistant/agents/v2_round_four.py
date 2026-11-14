@@ -421,7 +421,13 @@ def run_v2_round_four_continuation(
             now,
         )
     attempts = _provider_attempts(initial_plan, path)
-    eligible = _eligible_budgets(initial_plan, attempts, search_providers, path=path)
+    eligible = _eligible_budgets(
+        initial_plan,
+        attempts,
+        search_providers,
+        path=path,
+        usable_source_urls=tuple(source.source_url for source in gap.input.surviving_sources),
+    )
     if not eligible:
         return _finish(
             path,

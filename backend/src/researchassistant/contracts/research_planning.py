@@ -141,6 +141,8 @@ class V2InitialPlannerPolicy(StrictModel):
         self,
         directions: ResearchDirections,
         providers: tuple[DiscoveryProvider, ...],
+        *,
+        expanded_web: bool = False,
     ) -> tuple[V2InitialPlannerSearchLane, ...]:
         """Return the only valid Round-1 slots for enabled directions and providers."""
         _validate_v2_discovery_providers(providers)
@@ -153,6 +155,9 @@ class V2InitialPlannerPolicy(StrictModel):
             DiscoveryProvider.SERPER: ("broad_web",),
             DiscoveryProvider.BRAVE: ("broad_web",),
         }
+        if expanded_web:
+            for provider in (DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER):
+                strategies[provider] += ("institutional_coverage",)
         return tuple(
             V2InitialPlannerSearchLane(
                 direction=direction,
@@ -185,7 +190,10 @@ class V2InitialPlannerPolicy(StrictModel):
             raise ValueError("v2 Round-1 query IDs must be unique")
         if len(set(actual_lanes)) != len(actual_lanes):
             raise ValueError("v2 Round-1 search lanes must not contain duplicate queries")
-        if set(actual_lanes) != set(expected_lanes):
+        if set(actual_lanes) not in (
+            set(expected_lanes),
+            set(self.search_lanes(directions, providers, expanded_web=True)),
+        ):
             raise ValueError("v2 Round-1 queries must exactly fill the enabled policy lanes")
         normalized_lanes: set[tuple[ResearchDirection, DiscoveryProvider, int, str]] = set()
         for search in searches:
@@ -239,7 +247,10 @@ class V2InitialPlannerInput(StrictModel):
     @model_validator(mode="after")
     def validate_policy_lanes(self) -> V2InitialPlannerInput:
         expected = V2InitialPlannerPolicy().search_lanes(self.directions, self.discovery_providers)
-        if self.search_lanes != expected:
+        expanded = V2InitialPlannerPolicy().search_lanes(
+            self.directions, self.discovery_providers, expanded_web=True
+        )
+        if self.search_lanes not in (expected, expanded):
             raise ValueError("v2 initial planner lanes must be application-owned policy lanes")
         return self
 

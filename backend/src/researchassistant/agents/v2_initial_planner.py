@@ -276,16 +276,20 @@ def run_v2_initial_planner(
             if frozen.run_id != resolved_run_id or frozen.exact_claim != raw_claim:
                 raise ValueError("saved source suggestions changed run or claim")
         suggestions = frozen.leads
+    checkpoint = read_checkpoint(
+        path, resolved_run_id, _PLANNER_CHECKPOINT_KEY, V2PlannerInputCheckpoint
+    )
     planner_input = V2InitialPlannerInput(
         run_id=resolved_run_id,
         raw_claim=raw_claim,
         directions=directions,
         discovery_providers=discovery_providers,
-        search_lanes=policy.search_lanes(directions, discovery_providers),
+        search_lanes=policy.search_lanes(
+            directions,
+            discovery_providers,
+            expanded_web=not legacy_prompt and (checkpoint is None or checkpoint.expanded_web),
+        ),
         saved_source_leads=suggestions,
-    )
-    checkpoint = read_checkpoint(
-        path, resolved_run_id, _PLANNER_CHECKPOINT_KEY, V2PlannerInputCheckpoint
     )
     grouped_coverage = checkpoint is None or checkpoint.response_policy is not None
     prompt = load_initial_planner_prompt(
@@ -322,6 +326,7 @@ def run_v2_initial_planner(
             run_id=resolved_run_id,
             input_hash=input_hash,
             response_policy=_PLANNER_RESPONSE_POLICY,
+            expanded_web=not legacy_prompt,
             planned_at=planned_at,
         )
         insert_v2_artifact(path, _PLANNER_CHECKPOINT_KEY, checkpoint, planned_at)

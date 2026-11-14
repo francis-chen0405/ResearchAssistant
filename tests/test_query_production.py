@@ -396,3 +396,26 @@ def test_fresh_challenge_only_run_preserves_existing_admission_policy(
         or item.evidence_record.admission_method is V2AdmissionMethod.ANALYZER_ADMITTED
         for item in admission.source_results
     )
+
+
+def test_expanded_web_opening_slots_preserve_historical_plan_shape() -> None:
+    from researchassistant.contracts.research_planning import V2InitialPlannerPolicy
+
+    policy = V2InitialPlannerPolicy()
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    providers = tuple(
+        provider
+        for provider in DiscoveryProvider
+        if provider in {DiscoveryProvider.EXA, DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER}
+    )
+    legacy = policy.search_lanes(directions, providers)
+    fresh = policy.search_lanes(directions, providers, expanded_web=True)
+    for provider in (DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER):
+        assert [lane.strategy for lane in legacy if lane.provider is provider] == ["broad_web"]
+        assert [lane.strategy for lane in fresh if lane.provider is provider] == [
+            "broad_web",
+            "institutional_coverage",
+        ]
+    assert [lane for lane in fresh if lane.provider is DiscoveryProvider.EXA] == [
+        lane for lane in legacy if lane.provider is DiscoveryProvider.EXA
+    ]
