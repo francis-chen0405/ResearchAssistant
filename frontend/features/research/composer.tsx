@@ -7,12 +7,6 @@ import { depthPresets, presetOf } from "./presets";
 import { readableProvider } from "../shared/presentation";
 import { CancelRun, ResearchRecovery, type ResearchRecoveryProps } from "./connection";
 
-export const examples = [
-  "Urban tree cover lowers summer street temperatures.",
-  "A four-day work week increases productivity.",
-  "Raising the minimum wage reduces employment.",
-];
-
 const directions = [
   { label: "Both sides", support: true, challenge: true, hint: "Look for evidence for and against the claim." },
   { label: "Support", support: true, challenge: false, hint: "Look only for evidence that backs the claim." },
@@ -88,14 +82,6 @@ export function ResearchView({
             <Icon name="info" /> Tip: claims work best as statements, for example &ldquo;{trimmed.slice(0, -1).replace(/^(does|do|is|are|can|will)\s+/i, "")}.&rdquo; You can still begin as written.
           </p>
         )}
-        <div className="examples" aria-label="Example claims">
-          <span className="subtle">Try:</span>
-          {examples.map((example) => (
-            <button key={example} type="button" className="example" onClick={() => onClaim(example)}>
-              {example}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="composer-row">

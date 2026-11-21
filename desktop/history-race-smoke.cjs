@@ -177,7 +177,7 @@ async function main() {
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: /Delayed older run/ }).waitFor();
     await page.getByRole("button", { name: /Delayed older run/ }).click();
-    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
+    await page.getByRole("button", { name: "ResearchAssistant, home" }).click();
     await page.locator(".home").waitFor();
     await page.waitForTimeout(900);
     assert.equal(await page.locator(".home").count(), 1, "A late run response must not override navigation away from history");
@@ -192,7 +192,7 @@ async function main() {
     await page.getByRole("button", { name: "Open research trail" }).click();
     await trailStarted;
     await page.keyboard.press("Escape");
-    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
+    await page.getByRole("button", { name: "ResearchAssistant, home" }).click();
     await page.locator(".home").waitFor();
     await page.waitForFunction(() => document.querySelector(".result-page") === null);
     await page.waitForTimeout(100);

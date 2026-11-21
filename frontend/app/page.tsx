@@ -2,7 +2,7 @@
 
 import { AnimatePresence, MotionConfig, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Header, HomeView, Notice, PreferencesStatus } from "@/features/shell/views";
+import { Header, HomeView, Notice, PreferencesStatus, ResearchPage } from "@/features/shell/views";
 import { ResearchView, StartingView } from "@/features/research/composer";
 import { ProgressView } from "@/features/research/progress";
 import { ResultView } from "@/features/results/result";
@@ -70,7 +70,7 @@ export default function Home() {
     history.invalidateSelection();
     research.reset();
     setNotice(null);
-    setView("home");
+    setView("research");
   };
   const goNew = () => (runActive ? navigate("research") : newResearch());
   const retryRun = (kind: RetryKind) => {
@@ -148,7 +148,9 @@ export default function Home() {
     >
       <main className="site-shell">
         <Header
-          view={view === "research" && !activeRun ? "home" : view}
+          // "New research" is highlighted only on the composer, not on a run in progress.
+          view={view === "research" && activeRun ? "home" : view}
+          onHome={() => navigate("home")}
           setupNeeded={providerState !== "ready"}
           preferencesReady={preferencesReady}
           onNew={goNew}
@@ -172,20 +174,11 @@ export default function Home() {
               onOpen={history.openHistoryRun}
               onNew={newResearch}
             />
-          ) : view === "home" || (!snapshot && !activeRun) ? (
-            <HomeView
-              key="home"
-              firstRun={configuration ? !configuration.configured : false}
-              recent={history.history}
-              recentLoading={history.loading}
-              onOpen={history.openHistoryRun}
-              onHistory={() => navigate("history")}
-              onSettings={() => setSettingsOpen("providers")}
-              checklist={[
-                { label: "Add a key for your model provider", done: Boolean(configuration?.saved_credentials.some((id) => id === "mimo" || id === "openai")) },
-                { label: "Turn on at least one search provider with a key", done: Boolean(configuration?.configured) },
-                { label: "Write a claim and begin", done: false },
-              ]}
+          ) : view === "home" ? (
+            <HomeView key="home" onResearch={goNew} />
+          ) : !snapshot && !activeRun ? (
+            <ResearchPage
+              key="compose"
               composer={
                 <ResearchView
                   settings={settings}
@@ -195,10 +188,7 @@ export default function Home() {
                   claim={research.claim}
                   busy={research.busy}
                   onClaim={research.setClaim}
-                  onSubmit={(event) => {
-                    setView("research");
-                    void research.beginResearch(event, settings, configuration, updateService);
-                  }}
+                  onSubmit={(event) => void research.beginResearch(event, settings, configuration, updateService)}
                 />
               }
             />

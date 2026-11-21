@@ -165,6 +165,7 @@ async function main() {
     await attention.waitFor();
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Research a Claim", exact: true }).click();
     await page.getByRole("button", { name: "Connect providers", exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "Begin research", exact: true }).count(), 0);
     assert.deepEqual(pageErrors, []);

@@ -448,7 +448,7 @@ async function main() {
     await snapshotStarted;
     const callsBeforeUnmount = snapshotCalls;
     await page.reload();
-    await page.getByRole("heading", { name: "Check a claim against the evidence" }).waitFor();
+    await page.getByRole("button", { name: "Research a Claim", exact: true }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeUnmount, "Unmount must cancel the delayed follow-up");
     // Recover from repeated failures before the first snapshot, without a new run.

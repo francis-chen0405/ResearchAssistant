@@ -1,23 +1,21 @@
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
-import { ProductPreview } from "@/components/workspace";
 import { Icon } from "@/components/icons";
 import { Button, Skeleton } from "@/components/ui";
-import type { HistoryItem } from "@/lib/api";
 import type { MainView } from "../preferences/settings";
-import { historyOutcome } from "../history/outcome";
-import { formatShortDate } from "../shared/presentation";
 
 export function Header({
   view,
   setupNeeded,
   preferencesReady,
+  onHome,
   onNew,
   onHistory,
   onSettings,
   runActive = false,
   onRun,
 }: {
+  onHome: () => void;
   view: MainView;
   setupNeeded: boolean;
   preferencesReady: boolean;
@@ -29,12 +27,12 @@ export function Header({
 }) {
   return (
     <header className="topbar">
-      <button className="wordmark" type="button" onClick={onNew} aria-label="ResearchAssistant, new research">
+      <button className="wordmark" type="button" onClick={onHome} aria-label="ResearchAssistant, home">
         <span className="mark" aria-hidden="true">R</span>
         <span className="wordmark-text">ResearchAssistant</span>
       </button>
       <nav className="primary-nav" aria-label="Primary navigation">
-        <button type="button" className="nav-link" aria-current={view === "home" ? "page" : undefined} onClick={onNew}>
+        <button type="button" className="nav-link" aria-current={view === "research" ? "page" : undefined} onClick={onNew}>
           <Icon name="plus" /> New research
         </button>
         <button type="button" className="nav-link" aria-current={view === "history" ? "page" : undefined} onClick={onHistory}>
@@ -81,105 +79,24 @@ export function PreferencesStatus({ status, onRetry }: { status: "loading" | "er
   );
 }
 
-const steps = [
-  { title: "Search", text: "Searches the web and scholarly sources for evidence on both sides, as you choose." },
-  { title: "Read and quote", text: "Reads the most promising sources and keeps exact quotes, checked against the source text." },
-  { title: "Sum up", text: "Shows what the evidence says, what is still unknown and where every finding came from." },
-];
-
-export function HomeView({
-  composer,
-  firstRun,
-  recent,
-  recentLoading,
-  onOpen,
-  onHistory,
-  onSettings,
-  checklist,
-}: {
-  composer: ReactNode;
-  firstRun: boolean;
-  recent: HistoryItem[];
-  recentLoading: boolean;
-  onOpen: (item: HistoryItem) => void;
-  onHistory: () => void;
-  onSettings: () => void;
-  checklist: { label: string; done: boolean }[];
-}) {
+/** Minimal home: one way in, to the research page. */
+export function HomeView({ onResearch }: { onResearch: () => void }) {
   return (
-    <motion.section
-      className={`page home ${firstRun ? "home-first-run" : ""}`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div className="home-main">
-        <header className="page-header">
-          <h1>Check a claim against the evidence</h1>
-          <p>Get sourced findings for and against a claim, with exact quotes you can check.</p>
-        </header>
-        {composer}
-      </div>
-      <aside className="home-side">
-        {firstRun ? (
-          <>
-            <section className="card checklist" aria-labelledby="setup-heading">
-              <h2 id="setup-heading">Get set up</h2>
-              <ol>
-                {checklist.map((item) => (
-                  <li key={item.label} className={item.done ? "done" : ""}>
-                    <span className="check-mark" aria-hidden="true">{item.done ? <Icon name="check" size={12} /> : null}</span>
-                    <span>{item.label}</span>
-                    <span className="sr-only">{item.done ? "(done)" : "(to do)"}</span>
-                  </li>
-                ))}
-              </ol>
-              <Button variant="secondary" icon="settings" onClick={onSettings}>Open Settings</Button>
-            </section>
-            <ProductPreview />
-          </>
-        ) : (
-          <>
-            <section aria-labelledby="recent-heading" className="recent">
-              <div className="row">
-                <h2 id="recent-heading">Recent research</h2>
-                <span className="spacer" />
-                <button type="button" className="link-button" onClick={onHistory}>All history</button>
-              </div>
-              {recentLoading && !recent.length ? (
-                <Skeleton lines={3} />
-              ) : recent.length ? (
-                <ul className="recent-list">
-                  {recent.slice(0, 4).map((item) => {
-                    const outcome = historyOutcome(item.status);
-                    return (
-                      <li key={item.run_id}>
-                        <button type="button" onClick={() => onOpen(item)}>
-                          <span className="recent-claim">{item.raw_claim}</span>
-                          <span className="subtle">{outcome.label} · {formatShortDate(item.updated_at)}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="muted">Your research will appear here.</p>
-              )}
-            </section>
-            <section aria-labelledby="how-heading" className="how-it-works">
-              <h2 id="how-heading">How it works</h2>
-              <ol>
-                {steps.map((step, index) => (
-                  <li key={step.title}>
-                    <span className="step-number" aria-hidden="true">{index + 1}</span>
-                    <span><strong>{step.title}.</strong> {step.text}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          </>
-        )}
-      </aside>
+    <motion.section className="page home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <Button variant="primary" icon="search" className="home-cta" onClick={onResearch}>Research a Claim</Button>
+    </motion.section>
+  );
+}
+
+/** The research page: the claim composer on its own. */
+export function ResearchPage({ composer }: { composer: ReactNode }) {
+  return (
+    <motion.section className="page research-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <header className="page-header">
+        <h1>Check a claim against the evidence</h1>
+        <p>Get sourced findings for and against a claim, with exact quotes you can check.</p>
+      </header>
+      {composer}
     </motion.section>
   );
 }

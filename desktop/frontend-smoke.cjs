@@ -147,45 +147,17 @@ async function main() {
       await route.fulfill({status,json:body});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    const preview = page.locator('.preview-wrap');
-    await page.getByText('Example complete',{exact:true}).waitFor();
-    await page.waitForTimeout(4000);
-    assert.equal(await preview.getAttribute('data-preview-step'),'3','Reduced motion keeps the complete example still');
-    assert.equal(await preview.getByRole('button').count(),0,'Example has no playback or direction buttons');
-    assert.equal(await preview.locator('.evidence-tile').count(),4,'Completed example has four sourced cards');
-    assert.equal(await preview.locator('.evidence-tile.support').count(),2);
-    assert.equal(await preview.locator('.evidence-tile.challenge').count(),2);
-    assert.equal(await preview.locator('.preview-conclusion').count(),0,'No takeaway panel');
-    assert.equal(await preview.getByText(/Illustrative study|Illustrative review/).count(),0);
-    assert.match(await preview.locator('h2').innerText(),/Green technology solves climate change/);
-    const sourceLinks = await preview.locator('.evidence-source-row a').evaluateAll(links => links.map(link => link.href));
-    assert.equal(new Set(sourceLinks).size,4,'Four distinct source documents');
-    for (const link of sourceLinks) assert.ok(['www.iea.org','www.ipcc.ch','wedocs.unep.org'].includes(new URL(link).hostname));
-    const loopStarted = Date.now();
-    await page.emulateMedia({reducedMotion:'no-preference'});
-    await page.getByText('Ready to begin',{exact:true}).waitFor();
-    await page.mouse.move(0,0);
+    // Home is a single entry point; the composer is its own page and shows no example claims.
+    const home = page.locator('.home');
+    await home.getByRole('button',{name:'Research a Claim',exact:true}).waitFor();
+    assert.equal(await home.getByRole('button').count(),1,'Home has only the Research a Claim button');
+    assert.equal(await page.getByText(/Recent research|How it works|^Try:/).count(),0);
     await page.screenshot({path:path.join(shots,'home-ready.png'),fullPage:true,animations:'disabled'});
-    for (const [step,state] of [[1,'active'],[2,'review'],[3,'complete'],[4,'error'],[1,'retry'],[2,'review-recovered'],[3,'complete-recovered'],[0,'loop-reset']]) {
-      await page.waitForFunction(expected => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === String(expected), step);
-      assert.equal(await preview.getAttribute('data-preview-step'),String(step),`Automatic ${state} state`);
-      await page.screenshot({path:path.join(shots,`preview-${state}.png`),fullPage:true,animations:'disabled'});
-      const claimBox = await page.getByLabel('What claim do you want to check?',{exact:true}).boundingBox();
-      assert.ok(claimBox && claimBox.y + claimBox.height <= await page.evaluate(()=>innerHeight),`Home shows the claim field without scrolling at ${state}`);
-    }
-    const loopElapsed = Date.now() - loopStarted;
-    assert.ok(loopElapsed > 10000 && loopElapsed < 14000, `Loop must stay over 10 seconds and finish promptly: ${loopElapsed}ms`);
-    console.log(`Preview loop: ${loopElapsed}ms`);
-    await page.waitForFunction(() => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === '1');
-    await preview.hover(); await page.waitForTimeout(4000);
-    assert.equal(await preview.getAttribute('data-preview-step'),'1','Hover pauses the example');
-    await page.mouse.move(0,0); await page.waitForFunction(() => document.querySelector('.preview-wrap')?.getAttribute('data-preview-step') === '2');
-    assert.equal(await preview.getAttribute('data-preview-step'),'2','Example resumes after hover');
-    await preview.locator('summary').first().focus(); await page.waitForTimeout(4000);
-    assert.equal(await preview.getAttribute('data-preview-step'),'2','Keyboard source inspection pauses the example');
-    assert.equal(started,null,'Preview must not create a real run');
-    await page.emulateMedia({reducedMotion:'reduce'});
-    // Home is the composer; without providers its primary action opens Settings at Search providers.
+    await home.getByRole('button',{name:'Research a Claim',exact:true}).click();
+    await page.getByRole('heading',{name:'Check a claim against the evidence'}).waitFor();
+    assert.equal(await page.locator('.example').count(),0,'No example claims are suggested');
+    assert.equal(started,null,'Opening the research page must not create a run');
+    // Without providers, the composer's primary action opens Settings at Search providers.
     await page.getByLabel('What claim do you want to check?',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
@@ -203,7 +175,7 @@ async function main() {
     await dialog.getByRole('button',{name:'Check connection',exact:true}).first().click();
     await dialog.getByText(/Key accepted and selected model IDs/).waitFor(); assert.equal(checked,1);
     await page.screenshot({path:path.join(shots,'provider-settings.png'),fullPage:true,animations:'disabled'});
-    console.log('Verified preview and provider setup');
+    console.log('Verified home, research page and provider setup');
     // Native dialog keyboard containment and Escape restoration.
     for(let i=0;i<30;i++) { await page.keyboard.press('Tab'); assert.equal(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement)),true, `Tab ${i}: ${await page.evaluate(()=>document.activeElement.outerHTML.slice(0,200))}`); }
     await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({state:'hidden'}); assert.equal(await page.getByRole('dialog').count(),0);
@@ -415,7 +387,7 @@ async function main() {
     await methodPanel.getByText(/counted 1 open question for possible follow-up/).waitFor();
     sufficientSourcePool=false;
     assessmentPersisted=true;
-    await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'New research',exact:true}).click();
+    await page.getByRole('button',{name:'ResearchAssistant, home'}).click();
     await page.locator('.home').waitFor();
     await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'History',exact:true}).click();
     await page.getByRole('button',{name:/Can greener streets/}).click();
@@ -499,14 +471,14 @@ async function main() {
     await page.getByText('Key removed.',{exact:true}).waitFor(); assert.equal(removed,1);
     await page.keyboard.press('Escape');
     await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'New research',exact:true}).click();
-    await page.locator('.home').waitFor();
+    await page.locator('.research-page').waitFor();
     for (const width of [1440,1280,1024,800,480]) {
       await page.setViewportSize({width,height:width>=1024?768:800});
-      await page.screenshot({path:path.join(shots,`home-${width}.png`),fullPage:true,animations:'disabled'});
+      await page.screenshot({path:path.join(shots,`research-page-${width}.png`),fullPage:true,animations:'disabled'});
       if(width>=1024) {
         const fold = await page.evaluate(() => innerHeight);
         const claimBox = await page.getByLabel('What claim do you want to check?',{exact:true}).boundingBox();
-        assert.ok(claimBox && claimBox.y + claimBox.height <= fold, `Desktop home shows the claim field without scrolling at ${width}`);
+        assert.ok(claimBox && claimBox.y + claimBox.height <= fold, `Desktop research page shows the claim field without scrolling at ${width}`);
       }
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`Horizontal overflow at ${width}`);
       await page.getByRole('button',{name:/^Settings/}).click();
@@ -516,7 +488,7 @@ async function main() {
       await page.keyboard.press('Escape');
     }
     assert.deepEqual(errors,[]);
-    console.log('PASS: automatic offline preview/recovery, hover/focus pause, static reduced motion, desktop viewport fit, 9 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.');
+    console.log('PASS: minimal home and separate research page, desktop viewport fit, 9 transient password fields, save/check/remove, profile/direction/budget, startup/progress/cancellation, history, copy/export, keyboard dialogs, reduced motion and resizing.');
   } finally { if(browser) await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
