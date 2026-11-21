@@ -37,7 +37,8 @@ async function quitNormally(desktop) {
     assert.ok(page, "Desktop did not expose its loaded local window");
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.getByRole("heading", { name: /Research a claim/ }).waitFor({ timeout: 30000 });
+    // The redesigned home page is a single "Research a Claim" button (no heading).
+    await page.getByRole("button", { name: "Research a Claim", exact: true }).waitFor({ timeout: 30000 });
     assert.match(await page.title(), /ResearchAssistant/);
     assert.equal(await page.evaluate(() => typeof window.require), "undefined");
     const health = await page.evaluate(async () => (await fetch("/api/health")).status);
