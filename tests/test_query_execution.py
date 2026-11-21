@@ -963,7 +963,7 @@ def test_frozen_mode_cannot_be_changed_by_a_compiled_operation(tmp_path: Path) -
     assert provider_attempt_audit(str(path), run_id).starts == ()
 
 
-def test_configured_request_limit_can_only_lower_existing_provider_budget():
+def test_configured_request_limit_can_only_lower_existing_provider_budget() -> None:
     from researchassistant.research.query_execution import query_provider_budgets
 
     providers = (DiscoveryProvider.EXA, DiscoveryProvider.BRAVE)

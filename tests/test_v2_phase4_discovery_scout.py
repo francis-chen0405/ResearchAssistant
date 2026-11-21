@@ -21,7 +21,7 @@ from agents.v2_discovery import (
     scout_ordered_item_ids,
 )
 from providers.crossref import CrossrefEnricher, CrossrefEnrichmentError
-from providers.llm import LLMProviderCapabilities, LLMStage
+from providers.llm import LLMProviderCapabilities, LLMRequest, LLMStage
 from providers.search import SearchDiscoveryMetadata, SearchResult
 from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
@@ -33,6 +33,7 @@ from researchassistant.contracts.models import (
     RunManifest,
     RunStatus,
     ScoutBatch,
+    ScoutBatchAudit,
     ScoutItem,
     Stage,
     V2InitialPlannerOutput,
@@ -411,7 +412,11 @@ def test_three_fresh_scout_batches_overlap_and_publish_in_order() -> None:
 
     published = []
 
-    def on_batch(batches, audits, pending):
+    def on_batch(
+        batches: tuple[ScoutBatch, ...],
+        audits: tuple[ScoutBatchAudit, ...],
+        pending: tuple[LLMRequest, ...],
+    ) -> None:
         published.append((tuple(audit.batch_number for audit in audits), len(pending)))
 
     batches, audits = _run_scout_batches(

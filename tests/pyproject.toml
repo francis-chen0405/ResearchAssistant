@@ -9,6 +9,9 @@ markers = [
 
 [tool.coverage.run]
 branch = true
+# Keep coverage data (including per-process .coverage.* files) out of the
+# repository root, which may only hold README.md.
+data_file = "tests/.coverage"
 source = ["backend/src/researchassistant"]
 omit = [
     "tests/*",

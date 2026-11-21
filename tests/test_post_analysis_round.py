@@ -355,7 +355,7 @@ def test_empty_round_three_skips_another_search_and_retains_evidence(
     outcomes = []
     reason = "Round 3 found no new usable sources. Remaining gaps are reported in the brief."
 
-    def simulate_empty_round(**kwargs):
+    def simulate_empty_round(**kwargs: object) -> V2PostAnalysisRoundOutcome:
         continuation = kwargs["continuation"]
         last_round = continuation.rounds[-1]
         assert last_round.round_number == 3

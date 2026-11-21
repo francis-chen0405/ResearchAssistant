@@ -203,7 +203,9 @@ def test_material_signature_ignores_alias_order_but_keeps_substantive_changes() 
 
 
 @pytest.mark.parametrize("provider", [DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER])
-def test_general_web_queries_use_plain_subject_outcome_and_context(provider):
+def test_general_web_queries_use_plain_subject_outcome_and_context(
+    provider: DiscoveryProvider,
+) -> None:
     query = _query(
         provider,
         (
@@ -224,7 +226,7 @@ def test_general_web_queries_use_plain_subject_outcome_and_context(provider):
     assert next(item.value for item in action.parameters if item.name == "q") == action.query_text
 
 
-def test_arxiv_initial_query_keeps_topic_aliases_without_secondary_constraints():
+def test_arxiv_initial_query_keeps_topic_aliases_without_secondary_constraints() -> None:
     query = _query(
         DiscoveryProvider.ARXIV,
         (("license plate recognition", ("ALPR",)), ("neighborhood poverty", ())),
@@ -236,7 +238,7 @@ def test_arxiv_initial_query_keeps_topic_aliases_without_secondary_constraints()
 
 
 @pytest.mark.parametrize("provider", [DiscoveryProvider.BRAVE, DiscoveryProvider.SERPER])
-def test_camera_placement_query_reaches_web_provider_unquoted(provider):
+def test_camera_placement_query_reaches_web_provider_unquoted(provider: DiscoveryProvider) -> None:
     query = _query(
         provider,
         (

@@ -14,6 +14,7 @@ from test_v2_ranked_scout import NOW, _RecallScout, _routing, _snapshot
 import agents.v2_acquisition as v2_acquisition
 from agents.v2_acquisition import run_v2_acquisition_probe
 from agents.v2_discovery import (
+    V2_FRESH_SCOUT_BATCH_SIZE,
     V2DiscoveryResponse,
     V2DiscoveryScoutRunResult,
     run_v2_discovery_and_scout,
@@ -236,7 +237,10 @@ def test_page_two_study_reaches_scout_shortlist_and_immutable_usable_snapshot(
         item for item in discovery_run.ranking_artifact.ranks if item.item_id == study.item_id
     )
     assert study_rank.rank <= 3
-    assert discovery_run.ranking_artifact.scouted_count == 19
+    # One affordable scout call covers one V2_FRESH_SCOUT_BATCH_SIZE batch (15 of the
+    # 19 deduplicated works); the remainder is recorded as budget-limited.
+    assert discovery_run.ranking_artifact.scouted_count == V2_FRESH_SCOUT_BATCH_SIZE
+    assert discovery_run.ranking_artifact.budget_limited_count == 4
     assert len(scout.requests) == 1
 
     acquisition_text = SOURCE_TEXT
@@ -258,7 +262,7 @@ def test_page_two_study_reaches_scout_shortlist_and_immutable_usable_snapshot(
         read_v2_artifact(str(path), run_id, "metadata-acquisition-v2-round-1").payload_json
     )
     assert (audit.raw_hits, audit.deduplicated_works) == (20, 19)
-    assert audit.scouted_candidates == 19
+    assert audit.scouted_candidates == V2_FRESH_SCOUT_BATCH_SIZE
     assert audit.acquisition_shortlisted_clusters == 3
     assert audit.fetched_documents == audit.usable_survivors == 3
     assert STUDY_URL in {request.url for request in scraper.requests}
