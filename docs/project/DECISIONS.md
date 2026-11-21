@@ -359,6 +359,8 @@ hash, validator and exports are unchanged. Approved by the user on 2026-11-13.
 - On 2026-11-20 the user removed the Summary's "How to read this" notes (model-only
   review, unresearched direction, incomplete coverage, counts not deciding
   balance). The Summary's coverage sentence and the header's direction chip remain.
+  The counts note moved to the top of the Method tab; the model-only review note was
+  dropped.
 
 Source labels (publisher name, type, study design, year, lead author, publisher
 interest) have one owner, `evidence/report_presentation.py`, exposed as optional

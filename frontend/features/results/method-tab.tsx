@@ -99,6 +99,11 @@ export function MethodTab({
       <p className="muted">
         How this result was produced, for checking and auditing. Nothing here changes the saved brief.
       </p>
+      <p className="muted">
+        The label and counts describe the findings collected, counting each publication once. Study design, relevance
+        and limitations decide how much each finding should weigh; counts alone cannot settle where the balance lies or
+        decide the claim.
+      </p>
 
       {result && (
         <Disclosure summary="Coverage of the claim">

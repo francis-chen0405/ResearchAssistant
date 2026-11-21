@@ -346,6 +346,7 @@ async function main() {
     await sources.getByText('Title as captured: S2056608520000082jra 1..28',{exact:true}).waitFor();
     // Method: audit detail with full precision, collapsed by default.
     const method = await showTab('Method');
+    await method.getByText(/counts alone cannot settle where the balance lies or decide the claim/).waitFor();
     for (const section of await method.locator('details').all()) assert.equal(await section.evaluate(node => node.open), false, 'Method sections start collapsed');
     await showTab('Method', true);
     await method.getByText('This is an additional assessment of saved evidence. The saved brief is unchanged; new copies and exports may include a reading aid.',{exact:true}).waitFor();
