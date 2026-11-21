@@ -55,9 +55,9 @@ from researchassistant.contracts.search import (
 )
 from researchassistant.providers.discovery_transport import RequestKind, observe_physical_requests
 from researchassistant.providers.search import SearchProvider, SearchProviderError, page_parameters
+from researchassistant.providers.web_search import web_result_records
 from researchassistant.research.discovery_policy import build_discovery_binding
 from researchassistant.research.metadata_ranking import RANKING_IDENTITY
-from researchassistant.providers.web_search import web_result_records
 from researchassistant.storage.discovery_store import (
     bind_discovery_run,
     complete_provider_attempt,
@@ -493,13 +493,18 @@ def query_provider_budgets(
             )
         )
     return tuple(
-        budget.model_copy(update={"max_requests": min(budget.max_requests, request_limits[budget.provider])})
-        if request_limits and budget.provider in request_limits else budget
+        budget.model_copy(
+            update={"max_requests": min(budget.max_requests, request_limits[budget.provider])}
+        )
+        if request_limits and budget.provider in request_limits
+        else budget
         for budget in results
     )
 
 
-def available_query_budgets(path: str, run_id: UUID, *, skip_empty_arxiv: bool = False) -> tuple[V2ProviderSearchBudget, ...]:
+def available_query_budgets(
+    path: str, run_id: UUID, *, skip_empty_arxiv: bool = False
+) -> tuple[V2ProviderSearchBudget, ...]:
     """Expose actual physical request headroom, including retries and PubMed summaries."""
     binding = read_discovery_binding(path, run_id)
     audit = provider_attempt_audit(path, run_id)
@@ -512,9 +517,16 @@ def available_query_budgets(path: str, run_id: UUID, *, skip_empty_arxiv: bool =
             for start, completion in zip(audit.starts, audit.completions, strict=True)
             if start.provider == budget.provider
         )
-        if skip_empty_arxiv and budget.provider is DiscoveryProvider.ARXIV and pairs and all(
-            completion is not None and completion.status == "completed"
-            and completion.metadata_records == 0 for _, completion in pairs
+        if (
+            skip_empty_arxiv
+            and budget.provider is DiscoveryProvider.ARXIV
+            and pairs
+            and all(
+                completion is not None
+                and completion.status == "completed"
+                and completion.metadata_records == 0
+                for _, completion in pairs
+            )
         ):
             continue
         spent = add_usd(

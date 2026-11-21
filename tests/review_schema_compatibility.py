@@ -95,7 +95,9 @@ def normalize_approved_additive_fields(
             mapping = limits["anyOf"][0] if "anyOf" in limits else limits
             assert mapping["type"] == "object"
             assert mapping["additionalProperties"] == {
-                "type": "integer", "minimum": 1, "maximum": 18,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 18,
             }
         if title == "ResearchControls":
             depths = properties["metadata_depth"]["anyOf"][0]["enum"]

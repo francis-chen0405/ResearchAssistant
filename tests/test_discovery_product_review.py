@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+
 from frontend.api import ApiRuntime, create_app
 from frontend.live_contracts import LiveRunRequest
 from frontend.service_manager import ServiceDiagnostic

@@ -165,7 +165,12 @@ async function main() {
     await dialog.getByText('Research models',{exact:true}).click();
     for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await dialog.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
     await dialog.getByRole('button',{name:'Search providers',exact:true}).click();
-    assert.equal(await dialog.locator('input[type=password]').count(),9);
+    assert.deepEqual(
+      await dialog.locator('input[type=password]').evaluateAll(inputs =>
+        inputs.map(input => input.labels[0].textContent.trim())),
+      ['Xiaomi MiMo', 'OpenAI', 'SERP Search', 'Brave Search', 'Serper', 'Exa', 'OpenAlex', 'PubMed', 'Firecrawl']
+        .map(provider => `${provider} API key`),
+    );
     assert.match(await dialog.innerText(),/OpenAI[\s\S]*Optional until a research role uses a GPT model/);
     await dialog.getByLabel('Xiaomi MiMo API key',{exact:true}).fill('offline-mimo-key');
     await dialog.getByRole('button',{name:'Save keys securely'}).click();

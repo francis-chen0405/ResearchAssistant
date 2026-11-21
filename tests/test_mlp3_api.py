@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+
 from frontend.api import ApiRuntime, ConnectionCheck, create_app
 from frontend.live_service import (
     LiveHistoryItem,
@@ -603,7 +604,7 @@ def test_browser_claim_submission_trims_whitespace_before_api_request() -> None:
         Path(__file__).parents[1] / "frontend/features/research/use-research.ts"
     ).read_text(encoding="utf-8")
 
-    assert "const trimmedClaim = claim.trim();" in page_source
+    assert "const trimmedClaim = (claimOverride ?? claim).trim();" in page_source
     assert "raw_claim: trimmedClaim" in page_source
 
 

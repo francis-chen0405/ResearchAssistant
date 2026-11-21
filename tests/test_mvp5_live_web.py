@@ -11,9 +11,11 @@ from threading import Event
 from time import monotonic, sleep
 from uuid import UUID, uuid4
 
-import frontend.service_manager as service_manager_module
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+import frontend.service_manager as service_manager_module
 from frontend.api import ApiRuntime, create_app
 from frontend.live_service import (
     LiveResearchController,
@@ -23,7 +25,6 @@ from frontend.live_service import (
 from frontend.security import redact_text
 from frontend.service_manager import WigoloServiceManager
 from providers.search import SearchFailureCode, SearchProviderError
-from pydantic import ValidationError
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     PresentationTone,
@@ -474,16 +475,17 @@ def test_stop_never_kills_unowned_listener(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
     owners = {
-        "app/page.tsx": ("HistoryView", "ProviderSetup", "AdvancedPanel"),
+        "app/page.tsx": ("HistoryView", "HomeView", "ResearchPage", "AdvancedPanel"),
         "features/shell/views.tsx": (
-            "<h1>Research a claim</h1>",
-            "Provider setup",
+            "Research a Claim",
+            "<h1>Check a claim against the evidence</h1>",
+            "Settings",
         ),
-        "features/research/composer.tsx": ("Begin research",),
+        "features/research/composer.tsx": ("Begin research", "Spend cap"),
         "features/preferences/panel.tsx": (
-            "Research preferences",
+            "ProviderSetup",
+            "Research defaults",
             "Token ceiling",
-            "Model cost ceiling",
             "Call ceiling",
             "Run ID",
             "SQLite database",
@@ -498,7 +500,8 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
     ]
     source = " ".join((page + "\n" + "\n".join(feature_sources)).split())
 
-    assert "disabled={!claim.trim() || busy}" in source
+    assert "const trimmed = claim.trim();" in source
+    assert "disabled={!trimmed || busy}" in source
     assert all(
         removed not in source
         for removed in (

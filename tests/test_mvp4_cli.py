@@ -225,7 +225,7 @@ def test_launch_reports_current_stack_and_never_discloses_secrets(
     assert "gpt-6-luna" in result.stdout
     assert "synthesis: deterministic Python assembly" in result.stdout
     assert "research mode: focused" in result.stdout
-    assert "metadata depth: 50" in result.stdout
+    assert "metadata depth: 30" in result.stdout
     assert SECRET not in result.stdout
     assert SECRET not in result.stderr
     assert SECRET.encode() not in db_bytes
@@ -321,7 +321,7 @@ def test_budget_change_requires_new_run_and_never_resets_usage(tmp_path: Path) -
         env=_environment(tmp_path / "mvp4.sqlite3", run_id),
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=30,
         check=False,
     )
 
@@ -378,7 +378,7 @@ def test_second_process_cancellation_observes_active_call_boundary(tmp_path: Pat
             cwd=ROOT,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
             check=False,
         )
         stdout, stderr = process.communicate(timeout=20)

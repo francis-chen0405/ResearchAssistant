@@ -180,7 +180,7 @@ class _EvidenceScout(production._ConceptModel):
         assert isinstance(artifact, V2ClaimScoutRequest)
         assert artifact.exact_claim == production.CLAIM
         assert "A missing abstract is uncertainty" in request.rendered_prompt
-        assert request.prompt.version == "researchassistant-v2-phase-3-ranked-scout-v3"
+        assert request.prompt.version == "phase4-v2-scout-v4-compact"
         decisions = {
             OPINION: ("skip", "Opinion with no original observations."),
             SPECULATIVE: ("maybe", "Material gap: An unsupported fixture priority tag."),

@@ -139,6 +139,7 @@ class V2PlannerInputCheckpoint(StrictModel):
     policy: Literal["initial-planner-input-checkpoint-v1"] = "initial-planner-input-checkpoint-v1"
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     response_policy: Literal["grouped-coverage-retry-v1"] | None = None
+    expanded_web: bool = Field(default=False, exclude_if=lambda value: not value)
     planned_at: datetime
 
     _planned_is_aware = field_validator("planned_at")(_aware_timestamp)

@@ -1509,7 +1509,9 @@ def _run_scout_batches(
         if prompt_path == V2_SCOUT_V3_PROMPT_PATH:
             first = (
                 read_checkpoint(
-                    db_path, run_id, f"{checkpoint_key}/batch-{request_input.batch_number}/attempt-1",
+                    db_path,
+                    run_id,
+                    f"{checkpoint_key}/batch-{request_input.batch_number}/attempt-1",
                     V2StageAttemptCheckpoint,
                 )
                 if db_path is not None and checkpoint_key is not None
@@ -1519,10 +1521,12 @@ def _run_scout_batches(
                 compact = load_prompt_file(
                     prompt_resource("v2_scout_v4.md"), expected_stage=LLMStage.SCOUT
                 )
-                request = request.model_copy(update={
-                    "prompt": compact,
-                    "rendered_prompt": render_stage_prompt(compact, request_input, ScoutBatch),
-                })
+                request = request.model_copy(
+                    update={
+                        "prompt": compact,
+                        "rendered_prompt": render_stage_prompt(compact, request_input, ScoutBatch),
+                    }
+                )
         last_error: LLMInvocationError | None = None
         response: ScoutBatch | None = None
         attempted = 0

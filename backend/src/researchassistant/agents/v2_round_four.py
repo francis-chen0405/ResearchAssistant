@@ -345,7 +345,7 @@ def run_v2_round_four_continuation(
         raise ValueError("Round-4 continuation requires exactly one completed Round 3")
     round_three = continuation.rounds[-1]
     if round_three.round_number != 3 or not round_three.usable_for_follow_up:
-        raise ValueError("Round-4 continuation requires a completed Round 3 or usable results from a partially successful Round 3")
+        raise ValueError("Round 3 is ineligible for Round-4 continuation")
     recover_incomplete_papers = uses_claim_ranking(path, initial_plan.run_id)
     gap_input = build_post_round_three_gap_input(
         initial_plan=initial_plan,
@@ -421,7 +421,13 @@ def run_v2_round_four_continuation(
             now,
         )
     attempts = _provider_attempts(initial_plan, path)
-    eligible = _eligible_budgets(initial_plan, attempts, search_providers, path=path)
+    eligible = _eligible_budgets(
+        initial_plan,
+        attempts,
+        search_providers,
+        path=path,
+        usable_source_urls=tuple(source.source_url for source in gap.input.surviving_sources),
+    )
     if not eligible:
         return _finish(
             path,

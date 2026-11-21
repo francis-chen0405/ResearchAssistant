@@ -599,7 +599,7 @@ def _open_read_connection(source: str | Path) -> sqlite3.Connection:
                 f"inspection database is not a regular file: {path}",
             )
         encoded_path = quote(path.as_posix(), safe="/")
-        conn = connect_database(f"file:{encoded_path}?mode=ro", uri=True)
+        conn = connect_database(f"file:{encoded_path}?mode=ro", uri=True, database_path=path)
         conn.row_factory = sqlite3.Row
         with closing(conn.execute("PRAGMA foreign_keys = ON")):
             pass

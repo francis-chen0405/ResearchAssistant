@@ -339,7 +339,9 @@ def test_model_deadline_expires_after_wall_time_jump(monkeypatch: pytest.MonkeyP
         base_url="http://api.example", transport=httpx.MockTransport(unexpected_request)
     ) as client:
         adapter = XiaomiMimoAdapter(
-            selected, client=client, price_cap=route.price_cap,
+            selected,
+            client=client,
+            price_cap=route.price_cap,
             expected_model_alias=route.logical_alias,
         )
         with pytest.raises(MimoProviderError) as error:

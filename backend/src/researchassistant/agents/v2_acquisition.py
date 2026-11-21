@@ -453,7 +453,8 @@ def run_v2_acquisition_probe(
     if ranking is not None:
         if not capture_aware:
             duplicate_cluster_ids.update(
-                cluster.cluster_id for cluster in discovery_output.clusters
+                cluster.cluster_id
+                for cluster in discovery_output.clusters
                 if cluster.cluster_id not in excluded_cluster_ids
                 and {cluster.preferred_url, cluster.canonical_url, *cluster.alternate_urls}
                 & acquired_urls

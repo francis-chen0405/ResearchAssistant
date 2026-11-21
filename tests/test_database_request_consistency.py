@@ -26,6 +26,7 @@ from researchassistant.storage.sqlite_policy import DatabaseBusyError, overlappi
 from researchassistant.storage.store import (
     DatabaseCompatibilityError,
     _connect,
+    _open_read_connection,
     init_db,
     insert_run,
     insert_v2_artifact,
@@ -185,3 +186,36 @@ def test_interrupted_validation_closes_local_connection(
         open_read_only_store(database)
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
         opened[0].execute("SELECT 1")
+
+
+@pytest.mark.slow
+def test_overlapping_research_reader_waits_for_exclusive_writer(tmp_path: Path) -> None:
+    database = str(tmp_path / "overlap read #1.sqlite3")
+    with closing(sqlite3.connect(database)) as blocker:
+        blocker.execute("CREATE TABLE example (value INTEGER)")
+        blocker.execute("INSERT INTO example VALUES (7)")
+        blocker.commit()
+        with closing(_open_read_connection(database)) as reader:
+            assert reader.execute("PRAGMA busy_timeout").fetchone()[0] == 1000
+
+        attempting = Event()
+        finished = Event()
+
+        def read() -> int:
+            try:
+                with closing(_open_read_connection(database)) as reader:
+                    assert reader.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+                    attempting.set()
+                    return reader.execute("SELECT value FROM example").fetchone()[0]
+            finally:
+                finished.set()
+
+        blocker.execute("BEGIN EXCLUSIVE")
+        with overlapping_database_writes(database), ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(copy_context().run, read)
+            try:
+                assert attempting.wait(5)
+                assert not finished.wait(1.25)
+            finally:
+                blocker.rollback()
+            assert future.result(timeout=5) == 7

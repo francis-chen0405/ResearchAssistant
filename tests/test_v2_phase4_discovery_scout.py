@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from pydantic import ValidationError
+
 from agents.v2_discovery import (
     V2_FRESH_SCOUT_BATCH_SIZE,
     V2_SCOUT_BATCH_SIZE,
@@ -23,7 +25,6 @@ from providers.llm import LLMProviderCapabilities, LLMStage
 from providers.search import SearchDiscoveryMetadata, SearchResult
 from providers.v2_budget import V2CancellationRequested
 from providers.v2_routing import V2RoutingConfig
-from pydantic import ValidationError
 from researchassistant.contracts.models import (
     CrossrefIdentityMetadata,
     DiscoveryProvider,

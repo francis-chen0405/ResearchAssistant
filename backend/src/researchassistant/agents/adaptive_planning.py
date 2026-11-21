@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime
 from decimal import Decimal
 from hashlib import sha256
+from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, uuid5
 
 from researchassistant.agents.adaptive_handoffs import (
@@ -194,7 +195,15 @@ def _plan_round(
         raise V2AdaptiveNoContinuationError(
             "Luna did not authorize a material adaptive search recommendation"
         )
-    budgets = _eligible_budgets(initial_plan, provider_attempts, search_providers, path=path)
+    budgets = _eligible_budgets(
+        initial_plan,
+        provider_attempts,
+        search_providers,
+        path=path,
+        usable_source_urls=tuple(
+            source.source_url for source in gap_output.input.surviving_sources
+        ),
+    )
     if not budgets:
         raise V2AdaptiveNoEligibleProviderError(
             "No eligible enabled provider remains within its search ceiling."
@@ -799,12 +808,18 @@ def _eligible_budgets(
     providers: Mapping[DiscoveryProvider, SearchProvider],
     *,
     path: str | None = None,
+    usable_source_urls: tuple[str, ...] | None = None,
 ) -> tuple[V2ProviderSearchBudget, ...]:
     if path is not None and any(query.compiled_query is not None for query in plan.searches):
+        arxiv_usable = usable_source_urls is None or any(
+            (urlsplit(url).hostname or "").removeprefix("www.") == "arxiv.org"
+            for url in usable_source_urls
+        )
         return tuple(
             item
             for item in available_query_budgets(path, plan.run_id, skip_empty_arxiv=True)
             if item.provider in providers
+            and (item.provider is not DiscoveryProvider.ARXIV or arxiv_usable)
         )
     return tuple(
         V2ProviderSearchBudget(
