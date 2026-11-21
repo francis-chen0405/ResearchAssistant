@@ -77,15 +77,6 @@ export function ResultSummary({
           </div>
         )}
       </section>
-      <aside className="how-to-read" aria-labelledby="how-to-read">
-        <h3 id="how-to-read"><Icon name="info" /> How to read this</h3>
-        <ul>
-          <li>Each finding was checked against the source text by the analysis model. No person has independently reviewed it.</li>
-          {picture.scopeNote && <li>{picture.scopeNote} Evidence on the other side was not researched, so its absence here means nothing.</li>}
-          {coverage.level !== "complete" && <li>Coverage is incomplete, so important evidence may be missing.</li>}
-          <li>The label and counts describe the findings collected, counting each publication once. Study design, relevance and limitations decide how much each finding should weigh; counts alone cannot settle where the balance lies or decide the claim.</li>
-        </ul>
-      </aside>
       </div>
 
       <div className="summary-main">

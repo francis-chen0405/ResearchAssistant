@@ -300,7 +300,7 @@ async function main() {
     assert.equal(await page.getByText('internal-gap-example',{exact:true}).count(),0);
     const summaryText = await summary.innerText();
     assert.doesNotMatch(summaryText, /not recorded|Support-directed|Challenge-directed|claim (is|was) (true|false|proven)/i);
-    assert.equal((summaryText.match(/independently reviewed/gi) ?? []).length, 1, 'The review disclosure appears once');
+    assert.doesNotMatch(summaryText, /How to read this/, 'The Summary has no reading-notes block');
     assert.doesNotMatch(await page.locator('[aria-labelledby="summary-found"]').innerText(), /Only supporting evidence|Support-directed research only/);
     // Deep link from the Summary opens the exact admitted record on the Evidence tab.
     await page.getByRole('button',{name:'See evidence'}).first().click();

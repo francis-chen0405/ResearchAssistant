@@ -352,10 +352,13 @@ hash, validator and exports are unchanged. Approved by the user on 2026-11-13.
   other side, and at least two thirds of all counted publications.
 - "Evidence is mixed" when both sides have a Direct publication and neither passes
   that test; otherwise "Evidence is limited or indirect".
-- When one direction was not researched, a scope note accompanies the label.
+- When one direction was not researched, the result header says which direction
+  was searched (for example "Supporting evidence only").
 - The label never states that a claim is true, false, proven or established. The
-  existing policy still holds: finding counts alone do not establish balance; the
-  label describes the findings collected and the Summary discloses that once.
+  existing policy still holds: finding counts alone do not establish balance.
+- On 2026-11-20 the user removed the Summary's "How to read this" notes (model-only
+  review, unresearched direction, incomplete coverage, counts not deciding
+  balance). The Summary's coverage sentence and the header's direction chip remain.
 
 Source labels (publisher name, type, study design, year, lead author, publisher
 interest) have one owner, `evidence/report_presentation.py`, exposed as optional

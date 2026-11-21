@@ -892,8 +892,7 @@ test("summary leads with findings, says each disclosure once and never prints no
   assert.deepEqual(opened, ["trial", "followup"]);
   const text = JSON.stringify(tree);
   assert.doesNotMatch(text, /not recorded|Support-directed/i);
-  assert.equal((text.match(/independently reviewed/g) ?? []).length, 1);
-  assert.equal((text.match(/Only supporting evidence was searched for\./g) ?? []).length, 1, "scope disclosure appears once");
+  assert.doesNotMatch(text, /How to read this/, "The Summary has no reading-notes block");
   assert.doesNotMatch(foundText, /Only supporting evidence/);
   const picture = elementNodes(tree).find(node => node.props?.["aria-labelledby"] === "evidence-picture");
   assert.doesNotMatch(JSON.stringify(picture), /true|false|proven|established/i);
