@@ -68,7 +68,7 @@ async function main() {
     assert.equal(await page.getByRole("button", { name: /^Settings/ }).isDisabled(), true);
     assert.equal(await page.getByLabel("What claim do you want to check?").count(), 0);
     assert.equal(await page.getByLabel("Spend cap").count(), 0);
-    assert.equal(await page.getByRole("button", { name: /Begin research/ }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: /Start research/ }).count(), 0);
     await page.waitForTimeout(450);
     assert.equal(saves.length, 0); assert.equal(starts.length, 0);
     await page.screenshot({ path: path.join(shots, "loading.png"), fullPage: true });
@@ -93,7 +93,7 @@ async function main() {
     while (saves.at(-1)?.maxCost !== "0.50" && Date.now() < saveDeadline) await page.waitForTimeout(20);
     assert.equal(saves.at(-1)?.maxCost, "0.50");
     assert.equal(saves.at(-1)?.challengeEnabled, true);
-    await page.getByRole("button", { name: /Begin research/ }).click();
+    await page.getByRole("button", { name: /Start research/ }).click();
     await page.getByText("Offline submission captured; no research started.", { exact: true }).waitFor();
     assert.equal(starts.length, 1);
     assert.equal(starts[0].max_cost_usd, "0.50");
@@ -101,7 +101,7 @@ async function main() {
     assert.equal(await budget.inputValue(), "0.50");
     await page.getByRole("button", { name: /^Settings/ }).click();
     let dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await dialog.getByRole("button", { name: "Research defaults", exact: true }).click();
     await dialog.getByText("Advanced limits & history import", { exact: true }).click();
     await dialog.getByRole("button", { name: "Import this database into app storage", exact: true }).click();
     const importing = dialog.getByRole("button", { name: "Importing saved research…", exact: true });
@@ -131,7 +131,7 @@ async function main() {
     pendingImports.shift()({ status: 200, json: { db_path: "/example/late-import.sqlite3", run_count: 3 } });
     await page.getByRole("button", { name: /^Settings/ }).click();
     dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await dialog.getByRole("button", { name: "Research defaults", exact: true }).click();
     await dialog.getByText("Advanced limits & history import", { exact: true }).click();
     assert.equal(await dialog.getByLabel("SQLite database", { exact: true }).inputValue(), "/example/imported.sqlite3");
     assert.equal(await dialog.getByLabel("Token ceiling").inputValue(), "400000");

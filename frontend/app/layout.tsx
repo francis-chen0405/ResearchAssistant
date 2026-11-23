@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { themeBootScript } from "@/features/preferences/theme-script";
 import "./globals.css";
+import "./research-design.css";
 
 export const metadata: Metadata = {
   title: "ResearchAssistant",

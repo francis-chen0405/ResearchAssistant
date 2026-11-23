@@ -2,7 +2,8 @@
 
 import { AnimatePresence, MotionConfig, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Header, HomeView, Notice, PreferencesStatus, ResearchPage } from "@/features/shell/views";
+import { Header, Notice, PreferencesStatus, ResearchPage } from "@/features/shell/views";
+import { HomeView } from "@/features/shell/home";
 import { ResearchView, StartingView } from "@/features/research/composer";
 import { ProgressView } from "@/features/research/progress";
 import { ResultView } from "@/features/results/result";
@@ -25,7 +26,9 @@ const inferTone = (message: string): ToastTone =>
       : "info";
 
 export default function Home() {
-  const reduceMotion = useReducedMotion();
+  const systemReducedMotion = useReducedMotion();
+  const [lessMotion, setLessMotion] = useState(false);
+  const reduceMotion = lessMotion || systemReducedMotion;
   const [view, setView] = useState<MainView>("home");
   const [settingsOpen, setSettingsOpen] = useState<SettingsSection | "auto" | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
@@ -72,7 +75,7 @@ export default function Home() {
     setNotice(null);
     setView("research");
   };
-  const goNew = () => (runActive ? navigate("research") : newResearch());
+  const goNew = () => (runActive || research.busy ? navigate("research") : newResearch());
   const retryRun = (kind: RetryKind) => {
     if (!snapshot) return;
     const providers = snapshot.research_controls.discovery_providers;
@@ -143,13 +146,12 @@ export default function Home() {
 
   return (
     <MotionConfig
-      reducedMotion="user"
+      reducedMotion={lessMotion ? "always" : "user"}
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
     >
-      <main className="site-shell">
+      <main className="site-shell" data-reduced={Boolean(reduceMotion)}>
         <Header
-          // "New research" is highlighted only on the composer, not on a run in progress.
-          view={view === "research" && activeRun ? "home" : view}
+          view={view === "research" && activeRun ? null : view}
           onHome={() => navigate("home")}
           setupNeeded={providerState !== "ready"}
           preferencesReady={preferencesReady}
@@ -228,6 +230,8 @@ export default function Home() {
               settings={settings}
               configuration={configuration}
               modelOptions={modelOptions}
+              lessMotion={lessMotion}
+              onLessMotion={setLessMotion}
               initialSection={settingsOpen === "auto" ? undefined : settingsOpen}
               active={Boolean(
                 research.busy ||

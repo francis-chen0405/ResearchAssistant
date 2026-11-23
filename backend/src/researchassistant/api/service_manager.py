@@ -152,6 +152,7 @@ class WigoloServiceManager:
                 base_url=self._config.base_url,
                 timeout=httpx.Timeout(self._config.deadlines.health_seconds),
                 follow_redirects=False,
+                trust_env=False,
             ) as client:
                 adapter = WigoloSearchAdapter(self._config, client=client)
                 adapter.verify_health()

@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { type Settings, budgetOptions } from "../preferences/settings";
@@ -47,12 +47,12 @@ export function ResearchView({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const trimmed = claim.trim();
-  const preset = presetOf(settings);
+  const [editingDepth, setEditingDepth] = useState(false);
+  const preset = editingDepth ? "Custom" : presetOf(settings);
   const direction = directions.find(
     (item) => item.support === settings.supportEnabled && item.challenge === settings.challengeEnabled,
   );
   const providers = enabledProviders(settings);
-  const blocked = !ready ? "Set up providers to begin." : !trimmed ? "Enter a claim to begin." : busy ? "Starting…" : null;
   return (
     <form
       className="composer card"
@@ -65,16 +65,12 @@ export function ResearchView({
       }}
     >
       <div className="field">
-        <label htmlFor="claim" className="composer-label">What claim do you want to check?</label>
-        <small className="field-hint" id="claim-hint">
-          Write it as a statement. The app looks for sources, quotes them exactly and shows what the evidence says.
-        </small>
         <textarea
           id="claim"
           value={claim}
-          aria-describedby="claim-hint"
+          aria-label="What claim do you want to check?"
           onChange={(event) => onClaim(event.target.value)}
-          placeholder="e.g. Urban tree cover lowers summer street temperatures."
+          placeholder="e.g. biodiversity loss increases the risk of extinction."
           rows={3}
         />
         {trimmed.endsWith("?") && (
@@ -109,17 +105,18 @@ export function ResearchView({
                 type="button"
                 key={item.id}
                 aria-pressed={preset === item.id}
-                onClick={() =>
-                  onSettings({ ...settings, sourceTarget: item.sourceTarget, metadataDepth: item.metadataDepth, maxCost: item.maxCost })
-                }
+                onClick={() => {
+                  setEditingDepth(false);
+                  onSettings({ ...settings, sourceTarget: item.sourceTarget, metadataDepth: item.metadataDepth, maxCost: item.maxCost });
+                }}
               >
                 {item.id}
               </button>
             ))}
-            {preset === "Custom" && <span className="segmented-note" aria-live="polite">Custom</span>}
+            <button type="button" aria-pressed={preset === "Custom"} onClick={() => setEditingDepth(true)}>Custom</button>
           </div>
           <small className="field-hint">
-            {depthPresets.find((item) => item.id === preset)?.hint ?? "Your own mix of sources, depth and spend cap."}
+            {settings.sourceTarget} sources per side per round · Search depth {settings.metadataDepth}
           </small>
         </fieldset>
         <div className="field spend-field">
@@ -140,16 +137,27 @@ export function ResearchView({
         </div>
       </div>
 
+      {preset === "Custom" && <div className="composer-row custom-depth">
+        <label className="field">Sources per side per round
+          <select value={settings.sourceTarget} onChange={event => onSettings({ ...settings, sourceTarget: Number(event.target.value) as Settings["sourceTarget"] })}>
+            {[5, 10, 15, 20, 30].map(n => <option key={n}>{n}</option>)}
+          </select>
+        </label>
+        <label className="field">Search depth
+          <select value={settings.metadataDepth} onChange={event => onSettings({ ...settings, metadataDepth: Number(event.target.value) as Settings["metadataDepth"] })}>
+            {[10, 20, 30, 50].map(n => <option key={n}>{n}</option>)}
+          </select>
+        </label>
+      </div>}
       <p className="run-summary">
         {providers.length ? `Searches ${providers.join(", ")}` : "No search provider selected"} · up to {settings.sourceTarget} sources per
         side per round · spend cap ${Number(settings.maxCost).toFixed(2)}
       </p>
 
       <div className="composer-footer">
-        {blocked && !busy && <span className="subtle" id="begin-reason">{blocked}</span>}
         {ready ? (
-          <Button type="submit" variant="primary" iconAfter="arrowRight" disabled={!trimmed || busy} aria-describedby={blocked ? "begin-reason" : undefined}>
-            {busy ? "Starting…" : "Begin research"}
+          <Button type="submit" variant="primary" iconAfter="arrowRight" disabled={!trimmed || busy}>
+            {busy ? "Starting…" : "Start research"}
           </Button>
         ) : (
           <Button variant="primary" icon="key" onClick={onSetup}>Connect providers</Button>

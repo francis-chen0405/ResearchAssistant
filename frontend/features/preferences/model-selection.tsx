@@ -19,8 +19,7 @@ export function ModelSelection({
   idPrefix: string;
 }) {
   return (
-    <details className="settings-disclosure model-selection">
-      <summary>Research models</summary>
+    <div className="model-selection">
       <p className="provider-options-note">
         {providerRequirement(settings.stageModels)}
       </p>
@@ -49,6 +48,6 @@ export function ModelSelection({
           </select>
         </label>
       ))}
-    </details>
+    </div>
   );
 }

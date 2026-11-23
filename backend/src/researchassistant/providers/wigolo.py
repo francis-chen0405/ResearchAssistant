@@ -38,6 +38,7 @@ class WigoloSearchAdapter:
             base_url=config.base_url,
             timeout=httpx.Timeout(config.deadlines.search_seconds),
             follow_redirects=False,
+            trust_env=False,
         )
         self._health_verified = health_verified
         self._health_lock = Lock()

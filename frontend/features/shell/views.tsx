@@ -16,7 +16,7 @@ export function Header({
   onRun,
 }: {
   onHome: () => void;
-  view: MainView;
+  view: MainView | null;
   setupNeeded: boolean;
   preferencesReady: boolean;
   onNew: () => void;
@@ -32,6 +32,7 @@ export function Header({
         <span className="wordmark-text">ResearchAssistant</span>
       </button>
       <nav className="primary-nav" aria-label="Primary navigation">
+        <button type="button" className="nav-link" aria-current={view === "home" ? "page" : undefined} onClick={onHome}>Home</button>
         <button type="button" className="nav-link" aria-current={view === "research" ? "page" : undefined} onClick={onNew}>
           <Icon name="plus" /> New research
         </button>
@@ -79,22 +80,12 @@ export function PreferencesStatus({ status, onRetry }: { status: "loading" | "er
   );
 }
 
-/** Minimal home: one way in, to the research page. */
-export function HomeView({ onResearch }: { onResearch: () => void }) {
-  return (
-    <motion.section className="page home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <Button variant="primary" icon="search" className="home-cta" onClick={onResearch}>Research a Claim</Button>
-    </motion.section>
-  );
-}
-
 /** The research page: the claim composer on its own. */
 export function ResearchPage({ composer }: { composer: ReactNode }) {
   return (
     <motion.section className="page research-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <header className="page-header">
-        <h1>Check a claim against the evidence</h1>
-        <p>Get sourced findings for and against a claim, with exact quotes you can check.</p>
+        <h1>New research</h1>
       </header>
       {composer}
     </motion.section>

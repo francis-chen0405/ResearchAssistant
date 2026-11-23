@@ -132,7 +132,6 @@ async function main() {
     await page.getByRole("button", { name: /^Settings/ }).click();
     let dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Models", exact: true }).click();
-    await dialog.getByText("Research models", { exact: true }).click();
     await dialog.locator("#stage-model-scout").selectOption("gpt-6-sol-high");
     await intermediateRequest;
     await dialog.locator("#stage-model-analyst").selectOption("gpt-6-luna-high");
@@ -154,7 +153,6 @@ async function main() {
     await page.getByRole("button", { name: /^Settings/ }).click();
     dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Models", exact: true }).click();
-    await dialog.getByText("Research models", { exact: true }).click();
     await dialog.locator("#stage-model-scout").selectOption("mimo-v2.6-flash");
     await attention.waitFor();
     saveCompleted = true;
@@ -165,9 +163,9 @@ async function main() {
     await attention.waitFor();
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden" });
-    await page.getByRole("button", { name: "Research a Claim", exact: true }).click();
+    await page.getByRole("button", { name: "Start research", exact: true }).click();
     await page.getByRole("button", { name: "Connect providers", exact: true }).waitFor();
-    assert.equal(await page.getByRole("button", { name: "Begin research", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Start research", exact: true }).count(), 0);
     assert.deepEqual(pageErrors, []);
     console.log("Verified stale configuration success/failure ownership, protected pending key inputs and late-save refresh of the latest models.");
   } finally {

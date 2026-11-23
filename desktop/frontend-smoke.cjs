@@ -149,12 +149,18 @@ async function main() {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     // Home is a single entry point; the composer is its own page and shows no example claims.
     const home = page.locator('.home');
-    await home.getByRole('button',{name:'Research a Claim',exact:true}).waitFor();
-    assert.equal(await home.getByRole('button').count(),1,'Home has only the Research a Claim button');
+    await home.getByRole('button',{name:'Start research',exact:true}).waitFor();
+    await home.getByRole('button',{name:'Space',exact:true}).click();
+    await home.getByRole('heading',{name:/Europa/}).waitFor();
+    assert.equal(await home.getByRole('button',{name:'Open report'}).count(),0);
+    await home.getByRole('button',{name:'Ecology',exact:true}).click();
+    await home.getByRole('button',{name:'Open report'}).click();
+    await page.getByRole('dialog').getByRole('heading',{name:'Findings'}).waitFor();
+    await page.keyboard.press('Escape');
     assert.equal(await page.getByText(/Recent research|How it works|^Try:/).count(),0);
     await page.screenshot({path:path.join(shots,'home-ready.png'),fullPage:true,animations:'disabled'});
-    await home.getByRole('button',{name:'Research a Claim',exact:true}).click();
-    await page.getByRole('heading',{name:'Check a claim against the evidence'}).waitFor();
+    await home.getByRole('button',{name:'Start research',exact:true}).click();
+    await page.getByRole('heading',{name:'New research'}).waitFor();
     assert.equal(await page.locator('.example').count(),0,'No example claims are suggested');
     assert.equal(started,null,'Opening the research page must not create a run');
     // Without providers, the composer's primary action opens Settings at Search providers.
@@ -162,7 +168,6 @@ async function main() {
     await page.getByRole('button',{name:'Connect providers',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.waitFor();
     await dialog.getByRole('button',{name:'Models',exact:true}).click();
-    await dialog.getByText('Research models',{exact:true}).click();
     for (const stage of ['planner','scout','gap_analysis','search_agent','source_selection','extractor','analyst']) await dialog.locator(`#stage-model-${stage}`).selectOption('mimo-v2.6-flash');
     await dialog.getByRole('button',{name:'Search providers',exact:true}).click();
     assert.deepEqual(
@@ -191,12 +196,12 @@ async function main() {
     assert.equal(await page.getByText('Model profile',{exact:true}).count(),0);
     await page.getByLabel('What claim do you want to check?',{exact:true}).fill('Can greener streets make cities cooler?');
     await page.getByRole('note').getByText(/claims work best as statements/).waitFor();
-    assert.equal(await page.getByRole('button',{name:'Begin research',exact:true}).isDisabled(),false,'A question mark suggests rephrasing without blocking');
+    assert.equal(await page.getByRole('button',{name:'Start research',exact:true}).isDisabled(),false,'A question mark suggests rephrasing without blocking');
     await page.getByRole('button',{name:'Both sides',exact:true}).click();
     await page.getByLabel('Spend cap').selectOption('0.50');
     await page.getByText(/spend cap \$0\.50/).waitFor();
     await page.screenshot({path:path.join(shots,'composer.png'),fullPage:true,animations:'disabled'});
-    await page.getByRole('button',{name:'Begin research',exact:true}).click();
+    await page.getByRole('button',{name:'Start research',exact:true}).click();
     await page.getByRole('button',{name:'Cancel run',exact:true}).waitFor();
     await page.getByText('Recorded token usage and cost basis',{exact:true}).click();
     await page.getByText('at least 123 known; total incomplete',{exact:true}).waitFor();

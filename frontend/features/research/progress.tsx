@@ -42,7 +42,7 @@ export function ProgressView({
   const findings = snapshot.v2_diagnostics?.approved_evidence_records;
   const live = snapshot.worker_active !== false && recovery.connection.state === "connected";
   return (
-    <motion.section className="page progress-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.section className="page progress-page" data-live={live} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <ResearchRecovery {...recovery} />
       <header className="progress-hero card">
         <div className="progress-hero-main">
@@ -52,7 +52,7 @@ export function ProgressView({
             {elapsed && <span className="subtle">· {elapsed} elapsed</span>}
           </p>
           <motion.h1 layoutId={`claim-${snapshot.run_id}`}>{snapshot.raw_claim}</motion.h1>
-          <p className="activity">{activitySentence(snapshot.stage, round)}</p>
+          <p className="activity" key={snapshot.stage + String(round)}>{activitySentence(snapshot.stage, round)}</p>
         </div>
         <div className="progress-hero-side">
           <div className="spend">

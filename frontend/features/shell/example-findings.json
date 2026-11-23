@@ -1,0 +1,180 @@
+[
+  {
+    "title": "Ecological traits predict extinction risk of the world's traded carnivores",
+    "finding": "According to the article, wildlife trade is a major driver of biodiversity loss, and carnivores are disproportionately exploited and more vulnerable to extinction than other taxa; trade’s interaction with extinction risk remains underexplored.",
+    "passage": "[Abstract] \"Wildlife trade is a major driver of biodiversity loss, yet how trade interacts with species’ ecological traits and extinction risk remains underexplored. Carnivores warrant special attention because they are disproportionately exploited and vulnerable to extinction compared to other taxa.\" [We analyzed 171,637 international trade records spanning 50 years (1975–2024) for 129 carnivore species listed under the Convention on International Trade in Endangered Species of Wild Fauna and Flora (CITES).]",
+    "url": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0362196",
+    "limitations": [
+      "The excerpt provides background characterization rather than a direct result testing whether biodiversity loss raises extinction risk.",
+      "The stated research context concerns wildlife trade, species traits, and extinction risk; it does not resolve the broader claim.",
+      "The excerpt does not establish that biodiversity loss causes or increases extinction risk.",
+      "The reported vulnerability comparison concerns carnivores relative to other taxa."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Guterres urges faster action and financing to stop biodiversity loss",
+    "finding": "The UN chief said environmental pressures drive a planetary crisis that includes biodiversity loss, while more than a million species face extinction risk as a result.",
+    "passage": "[Extinction risk] \"The UN chief said factors such as climate disruption, overgrazing and excessive use of fertilisers and pesticides “are driving the triple planetary crisis of pollution, biodiversity loss and climate chaos”.\nAs a result, more than a million species face the risk of extinction, “edging us ever closer towards an uninhabitable world,” he warned, adding that “it doesn’t have to be this way”.\" [Tweet URL]",
+    "url": "https://news.un.org/en/story/2026/10/1168610",
+    "limitations": [
+      "The passage reports the UN chief's statement and provides no underlying study or method for the species estimate.",
+      "The passage does not establish that biodiversity loss itself, rather than the cited environmental pressures or the broader crisis, increases extinction risk."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Where we stand on biodiversity loss and footprinting",
+    "finding": "According to the article, about 25% of species—roughly one million plant and animal species—are at risk of extinction by 2050; the passage does not link this risk to biodiversity loss.",
+    "passage": "[Why does biodiversity matter?] \"Healthy functioning ecosystems underpin society: they produce the oxygen we breathe, help mitigate climate change and support at least 55% of the global economy.But about 25% of all species is at risk of extinction by 2050 – that is roughly one million species of plants and animals.\" [There are five main threats to biodiversity]",
+    "url": "https://www.bnpparibas-am.com/en-sg/forward-thinking/where-we-stand-on-biodiversity-loss-and-footprinting/",
+    "limitations": [
+      "It reports the share of species at risk, but provides no comparison or explanation linking that risk to biodiversity loss.",
+      "The passage does not establish that biodiversity loss increases extinction risk."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Biodiversity loss can increase risk of 'extinction cascades', research shows",
+    "finding": "The study reports that biodiversity loss can increase extinction-cascade risk, especially when other species are unavailable to fill the ecological role of a lost species.",
+    "passage": "[Start of Text] \"New research shows that the loss of biodiversity can increase the risk of \"extinction cascades\", where an initial species loss leads to a domino effect of further extinctions.\n\nThe researchers, from the University of Exeter, showed there is a higher risk of extinction cascades when other species are not present to fill the \"gap\" created by the loss of a species.\n\nEven if the loss of one species does not directly cause knock-on extinctions, the study shows that this leads to simpler ecological communities that are at greater risk of \"run-away extinction cascades\" with the potential loss of many species.\" [With extinction rates at their highest levels ever and numerous species under threat due to human activity, the findings are a further warning about the consequences of eroding biodiversity.]",
+    "url": "https://www.news-medical.net/news/20180220/Biodiversity-loss-can-increase-risk-of-extinction-cascades-research-shows.aspx",
+    "limitations": [
+      "The reported risk concerns extinction cascades and is higher when other species do not fill the ecological gap.",
+      "The excerpt does not quantify the increase in risk.",
+      "This does not establish that every biodiversity loss causes further extinctions or increases every form of extinction risk."
+    ],
+    "relationship": "supports"
+  },
+  {
+    "title": "One million species face extinction risk as biodiversity loss accelerates",
+    "finding": "The article reports that species declines driven by land-use change, overexploitation, climate change, pollution, and invasive species increase extinction risk worldwide.",
+    "passage": "[This, he warned, reduces the ability of species to adapt to climate change, pests and diseases, ultimately weakening resilience and adaptive capacity.] \"Regarding species diversity, Professor Thakadu said species loss is accelerating, with extinction rates estimated to be between 100 and 1,000 times higher than natural levels. More than 40 per cent of amphibian species are threatened, while about one-third of corals and marine mammals face similar risks.\nThese declines are being driven by land-use change, overexploitation, climate change, pollution and invasive species, increasing the risk of extinction worldwide.\" [On ecosystem diversity, he said ecosystems are becoming increasingly degraded, fragmented and converted to other uses.]",
+    "url": "https://thepanafrikanist.com/one-million-species-face-extinction-risk-as-biodiversity-loss-accelerates/",
+    "limitations": [
+      "The passage attributes the assessment to Professor Thakadu but provides no underlying study or methods in the supplied material.",
+      "The passage does not quantify the increase in risk or isolate the contribution of each listed pressure."
+    ],
+    "relationship": "supports"
+  },
+  {
+    "title": "LIVING PLANET REPORT 2020",
+    "finding": "According to the report, the 2020 global Living Planet Index showed an average 68% decline in mammal, bird, amphibian, reptile and fish populations from 1970 to 2016; it does not state an extinction-risk effect.",
+    "passage": "[AN SOS FOR NATURE] \"The evidence is unequivocal – nature is being changed and\ndestroyed by us at a rate unprecedented in history. The 2020\nglobal Living Planet Index shows an average 68% fall in\npopulations of mammals, birds, amphibians, reptiles and fish\nbetween 1970 and 2016.\" [In this chapter we also look at life in]",
+    "url": "https://www.wwf.org.uk/sites/default/files/2020-09/LPR20_Full_report.pdf",
+    "limitations": [
+      "The passage reports population declines but does not report extinction risk.",
+      "The reported population decline alone does not establish that biodiversity loss increases extinction risk."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Global meta-analysis shows action is needed to halt genetic diversity loss",
+    "finding": "The article reports that genetic diversity loss occurs globally and is predicted for many species, especially birds and mammals, amid threats including land-use change, disease, abiotic natural phenomena, and harvesting or harassment.",
+    "passage": "[Threats impacted two-thirds of the populations that we analysed, and less than half of the populations analysed received conservation management.] \"Genetic diversity loss occurs globally and is a realistic prediction for many species, especially birds and mammals, in the face of threats such as land use change, disease, abiotic natural phenomena and harvesting or harassment.\" [Conservation strategies designed to improve environmental conditions, increase population growth rates and introduce new individuals (for example, restoring connectivity or performing translocations) may maintain or even increase genetic diversity.]",
+    "url": "https://www.nature.com/articles/s41586-024-08458-x?code=eced44c3-7789-453b-a415-877c673582c3&error=cookies_not_supported",
+    "limitations": [
+      "The excerpt addresses genetic diversity, not biodiversity loss in all its forms.",
+      "It does not report an effect of biodiversity loss on extinction risk.",
+      "A prediction of genetic diversity loss does not establish that extinction risk increases."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Linking Indices for Biodiversity Monitoring to Extinction Risk Theory",
+    "finding": "In butterfly and woodland-plant field data and experimental protozoan-community studies, the referenced indices correlated with local extinction rates, showing association rather than establishing causation.",
+    "passage": "[These indices require the same data as previous indices, but they also relate directly to extinction risk.] \"Field data for butterflies and woodland plants and experimental studies of protozoan communities show that the indices correlate with local extinction rates. Applying the index based on the geometric mean to global data on changes in avian abundance suggested that the average extinction probability of birds has increased approximately 1% from 1970 to 2009.\" [Conectando Índices para el Monitoreo de la Biodiversidad con la Teoría de Riesgo de Extinción]",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4253318/",
+    "limitations": [
+      "The reported evidence concerns specified taxa and communities, not all biodiversity or extinction contexts.",
+      "The reported correlations do not establish causation.",
+      "The excerpt does not establish that biodiversity loss itself caused extinction risk to increase."
+    ],
+    "relationship": "supports"
+  },
+  {
+    "title": "Informing conservation problems and actions using an indicator of extinction risk: A detailed assessment of applying the LIFE metric",
+    "finding": "The paper states that human-activity-driven declines in biodiversity increase species’ extinction risk, citing prior assessments.",
+    "passage": "[Introduction] \"Human activity is driving significant declines in biodiversity,\nincreasing species' extinction risk, and undermining ecosystem func -\ntioning and resilience ( Brondizio et al., 2019 ; Díaz et al., 2019 ). To track\nand mitigate these losses we need robust metrics linking extinctions to\nland-cover change - our most significant influence on wild terrestrial\nspecies ( Jaureguiberry et al., 2022 ).\" [Here we explore the scope, flexi -]",
+    "url": "https://anil.recoil.org/papers/2025-life-uses.pdf",
+    "limitations": [
+      "The quoted statement appears in the introduction and cites prior assessments rather than presenting supporting results in this passage.",
+      "The passage does not quantify the increase in extinction risk or establish that the relationship applies in every context."
+    ],
+    "relationship": "supports"
+  },
+  {
+    "title": "Linking species local trends from assemblage monitoring to global extinction risk | Nature Communications",
+    "finding": "In assemblage monitoring data, species with decreasing temporal prevalence were associated with higher IUCN extinction risk, while species with increasing prevalence were associated with lower risk.",
+    "passage": "[Our analysis has uncovered a previously undocumented relationship between species’ IUCN extinction risk and directional change in temporal prevalence within assemblages that is detectable across ecological realms and several taxonomic groups.] \"Overall, species with decreasing temporal prevalence were associated with a higher risk of extinction, whereas species with increasing prevalence were associated with lower extinction risk, revealing some degree of consistency between IUCN risk categories and local trends in temporal prevalence estimated from assemblage monitoring data.\" [Moreover, we also revealed that the relationship between local temporal prevalence and extinction risk is complex.]",
+    "url": "https://www.nature.com/articles/s41467-026-74132-7",
+    "limitations": [
+      "The finding concerns temporal prevalence measured within assemblages, not biodiversity loss in every form or context.",
+      "The source reports an association, not a causal effect.",
+      "The finding does not show that biodiversity loss directly causes increased extinction risk.",
+      "It does not establish that every instance of biodiversity loss increases extinction risk."
+    ],
+    "relationship": "supports"
+  },
+  {
+    "title": "Extinction Risk Assessment of the Greek Endemic Flora",
+    "finding": "The paper reports that, in the Anthropocene, climate and land-use change are projected to alter biodiversity patterns and may force many species to extinction.",
+    "passage": "[network might need to be at least partially redesigned.] \"In the Anthropocene era, where climate\nand land-use change are projected to alter biodiversity patterns and may force many species to\nextinction, our assessment provides the baseline for future conservation research, ecosystem services\nmaintenance, and might prove crucial for the timely, systematic and effective aversion of plant\nextinctions in Greece.\" [Keywords: biodiversity conservation; conservation prioritization; GIS analysis; EDGE; EU Biodiver-]",
+    "url": "https://pdfs.semanticscholar.org/1cac/e15d536d84de1791b273c51788b0ff1b1bb7.pdf",
+    "limitations": [
+      "The passage describes projections, not measured effects.",
+      "It does not explicitly state that biodiversity loss itself increases extinction risk.",
+      "The passage does not establish biodiversity-pattern changes as the cause of the projected extinctions."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Goal 15 | Department of Economic and Social Affairs",
+    "finding": "The UN report states that extinction risk worsened globally across species groups from 1993 to 2025, while attributing elevated risk among warm-water reef-building corals to climate change and accumulated local and global pressures.",
+    "passage": "[Targets 14.5, 15.1 and 15.4: Globally, the average proportion of Key Biodiversity Areas covered by protected and conserved areas across marine, terrestrial, freshwater and mountain biomes has increased from 25% in 2000 to 45% in 2025.] \"Target 15.5: Globally across all species groups, extinction risk continues to worsen, with the Red List Index value of 0.80 in 1993 now below 0.75 in 2025. Recent reassessment establishes warm-water reef-building corals as the species group facing the most severe deteriorations with 44% of species facing elevated extinction risk, due to climate change and accumulated local and global pressures.\" [Target 15.6: As of 2025, 84 countries (up from 5 countries in 2015) and 98 countries (up from 12 countries in 2015) have reported about their legislative, administrative or policy measures under the Nagoya Protocol and the International Treaty on Plant Genetic Resources for Food and Agriculture, respectively.]",
+    "url": "https://sdgs.un.org/goals/goal15",
+    "limitations": [
+      "The stated attribution to climate change and accumulated pressures is specific to warm-water reef-building corals.",
+      "The reported global trend does not identify biodiversity loss itself as a cause of increased extinction risk.",
+      "The coral-specific attribution does not establish causes of extinction risk across all species groups."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "Unravelling the structure of species extinction risk for predictive conservation science",
+    "finding": "Among birds, projected future range losses from climate and land-use change are described as exacerbating an already grim outlook.",
+    "passage": "[In contrast to mammals and amphibians (e.g. [4]), a global assessment of species-level extinction risk correlates in birds is currently missing (but see [11] for analysis at family level).] \"Birds have undergone a high rate of past extinctions, particularly on islands, and breeding populations are currently exposed to threats from anthropogenic activities (e.g. land-use change) worldwide [22,23]. This grim outlook is exacerbated by the future range losses projected owing to climate and land-use change [17].\" [Population declines and species extinctions may have devastating ecological consequences by disrupting key ecosystem processes such as decomposition, pollination and seed dispersal [24].]",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3061137/",
+    "limitations": [
+      "The evidence concerns birds, not biodiversity across all taxa.",
+      "The range losses are projected and attributed to climate and land-use change.",
+      "The passage does not establish that biodiversity loss generally causes increased extinction risk.",
+      "Projected range loss is not necessarily equivalent to biodiversity loss itself."
+    ],
+    "relationship": "supports"
+  },
+  {
+    "title": "Biodiversity",
+    "finding": "The WHO fact sheet reports accelerating biodiversity loss alongside approximately one million species at risk of extinction, but does not state that biodiversity loss increases that risk.",
+    "passage": "[For example, forests absorb over 2.6 billion tonnes of CO2 annually, contributing to climate regulation and reducing the incidence of diseases linked to pollution.] \"However, biodiversity loss is accelerating at an unprecedented rate, with approximately 1 million species at risk of extinction, threatening these vital services and exacerbating public health risks globally.\" [Impact]",
+    "url": "https://www.who.int/news-room/fact-sheets/detail/biodiversity",
+    "limitations": [
+      "The excerpt does not specify a causal link or change in extinction risk attributable to biodiversity loss.",
+      "The reported co-occurrence does not establish that biodiversity loss increases extinction risk."
+    ],
+    "relationship": "qualifies"
+  },
+  {
+    "title": "2030 Targets (with Guidance Notes)",
+    "finding": "CBD Target 4 calls for species management, recovery, and conservation to reduce extinction risk, and for maintaining genetic diversity to preserve adaptive potential.",
+    "passage": "[TARGET 4: Halt Species Extinction, Protect Genetic Diversity, and Manage Human-Wildlife Conflicts] \"Ensure urgent management actions to halt human induced extinction of known threatened species and for the recovery and conservation of species, in particular threatened species, to significantly reduce extinction risk, as well as to maintain and restore the genetic diversity within and between populations of native, wild and domesticated species to maintain their adaptive potential, including through in situ and ex situ conservation and sustainable management practices, and effectively manage human-wildlife interactions to minimize human-wildlife conflict for coexistence.\" [TARGET 5: Ensure Sustainable, Safe and Legal Harvesting and Trade of Wild Species]",
+    "url": "https://www.cbd.int/gbf/targets",
+    "limitations": [
+      "The source states policy objectives, not empirical findings.",
+      "The target concerns human-induced extinction and gives particular attention to threatened species.",
+      "The source does not directly state that biodiversity loss increases extinction risk.",
+      "The intended risk reduction from conservation does not by itself establish the converse claim."
+    ],
+    "relationship": "qualifies"
+  }
+]

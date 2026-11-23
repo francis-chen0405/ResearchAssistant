@@ -9,13 +9,12 @@ import { useHistoryImport } from "./use-history-import";
 import { ModelSelection } from "./model-selection";
 import { useTheme, type ThemeChoice } from "./theme";
 
-export type SettingsSection = "defaults" | "providers" | "models" | "data" | "appearance";
+export type SettingsSection = "defaults" | "providers" | "models" | "appearance";
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: "defaults", label: "Research defaults" },
   { id: "providers", label: "Search providers" },
   { id: "models", label: "Models" },
-  { id: "data", label: "Data and advanced" },
   { id: "appearance", label: "Appearance" },
 ];
 
@@ -55,6 +54,8 @@ export function AdvancedPanel({
   modelOptions,
   active,
   initialSection,
+  lessMotion,
+  onLessMotion,
   onSettings,
   onImportedDatabase,
   onClose,
@@ -66,6 +67,8 @@ export function AdvancedPanel({
   modelOptions: ModelOptions;
   active: boolean;
   initialSection?: SettingsSection;
+  lessMotion: boolean;
+  onLessMotion: (value: boolean) => void;
   onSettings: (settings: Settings) => void;
   onImportedDatabase: (database: string) => void;
   onClose: () => void;
@@ -166,6 +169,42 @@ export function AdvancedPanel({
                   <Icon name="chevronDown" />
                 </div>
               </div>
+              <details className="disclosure advanced-details">
+                <summary><span className="disclosure-summary">Advanced limits & history import</span></summary>
+                <div className="disclosure-body settings-grid">
+                  <label className="field">
+                    <span>Token ceiling</span>
+                    <input type="number" min="1" max={MAX_RUN_TOKENS} value={settings.maxTokens} disabled={active}
+                      onChange={(event) => update("maxTokens", Number(event.target.value))} />
+                  </label>
+                  <label className="field">
+                    <span>Call ceiling</span>
+                    <input type="number" min="1" max="160" value={settings.maxCalls} disabled={active}
+                      onChange={(event) => update("maxCalls", Number(event.target.value))} />
+                  </label>
+                  <div className="field">
+                    <label htmlFor="resume-run-id">
+                      <span>Run ID <span>optional</span></span>
+                      <input id="resume-run-id" type="text" value={settings.runId} disabled={active || importing} aria-describedby="run-id-hint"
+                        onChange={(event) => update("runId", event.target.value)}
+                        placeholder="Created automatically" />
+                    </label>
+                    <small className="field-hint" id="run-id-hint">To resume a specific run, use Resume on that run&rsquo;s page.</small>
+                  </div>
+                  <label className="field full">
+                    <span>SQLite database</span>
+                    <input type="text" value={settings.dbPath} disabled={active || importing}
+                      onChange={(event) => update("dbPath", event.target.value)} />
+                  </label>
+                  <div className="full row">
+                    <Button disabled={active || importing || !settings.dbPath} onClick={() => void importDatabase()}>
+                      {importing ? "Importing saved research…" : "Import this database into app storage"}
+                    </Button>
+                    {importMessage && <p role="status">{importMessage}</p>}
+                  </div>
+                </div>
+              </details>
+              <PageReader service={configuration?.service ?? null} active={active} onService={onService} />
             </section>
           )}
 
@@ -206,51 +245,10 @@ export function AdvancedPanel({
             </section>
           )}
 
-          {section === "data" && (
-            <section className="settings-section" aria-labelledby="settings-data">
-              <h3 id="settings-data">Data and advanced</h3>
-              <details className="disclosure advanced-details">
-                <summary><span className="disclosure-summary">Advanced limits & history import</span></summary>
-                <div className="disclosure-body settings-grid">
-                  <label className="field">
-                    <span>Token ceiling</span>
-                    <input type="number" min="1" max={MAX_RUN_TOKENS} value={settings.maxTokens} disabled={active}
-                      onChange={(event) => update("maxTokens", Number(event.target.value))} />
-                  </label>
-                  <label className="field">
-                    <span>Call ceiling</span>
-                    <input type="number" min="1" max="160" value={settings.maxCalls} disabled={active}
-                      onChange={(event) => update("maxCalls", Number(event.target.value))} />
-                  </label>
-                  <div className="field">
-                    <label className="field">
-                      <span>Run ID <span>optional</span></span>
-                      <input type="text" value={settings.runId} disabled={importing} aria-describedby="run-id-hint"
-                        onChange={(event) => update("runId", event.target.value)}
-                        placeholder="Created automatically" />
-                    </label>
-                    <small className="field-hint" id="run-id-hint">To resume a specific run, use Resume on that run&rsquo;s page.</small>
-                  </div>
-                  <label className="field full">
-                    <span>SQLite database</span>
-                    <input type="text" value={settings.dbPath} disabled={active || importing}
-                      onChange={(event) => update("dbPath", event.target.value)} />
-                  </label>
-                  <div className="full row">
-                    <Button disabled={active || importing || !settings.dbPath} onClick={() => void importDatabase()}>
-                      {importing ? "Importing saved research…" : "Import this database into app storage"}
-                    </Button>
-                    {importMessage && <p role="status">{importMessage}</p>}
-                  </div>
-                </div>
-              </details>
-              <PageReader service={configuration?.service ?? null} active={active} onService={onService} />
-            </section>
-          )}
-
           {section === "appearance" && (
             <section className="settings-section" aria-labelledby="settings-appearance">
               <h3 id="settings-appearance">Appearance</h3>
+              <Switch label="Reduce motion" description="Pause automatic examples and reduce movement for this session." checked={lessMotion} onChange={onLessMotion} />
               <div className="setting">
                 <div className="setting-copy">
                   <strong>Theme</strong>

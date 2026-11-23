@@ -1193,3 +1193,88 @@ test("history uses one plain outcome per run and explains where stopped runs end
   assert.equal(historyReason({ status: "completed", stage: "final_renderer_validator" }), null);
   assert.equal(historyReason({ status: "interrupted", stage: "unknown_stage" }), "Stopped before completing");
 });
+
+test("research start rejects concurrent submissions and ignores a response after reset", async () => {
+  let finish;
+  let calls = 0;
+  const h = hookHarness("features/research/use-research.ts", {
+    start: () => { calls++; return new Promise(resolve => { finish = resolve; }); },
+  });
+  const notices = [];
+  const render = () => h.render("useResearch", message => notices.push(message), () => {});
+  let research = render();
+  research.setClaim("A claim");
+  research = render();
+  const settings = { runId: "", dbPath: "original" };
+  const configuration = { service: { wigolo_ready: true } };
+  const pending = research.beginResearch(null, settings, configuration, () => {});
+  await research.beginResearch(null, settings, configuration, () => {});
+  assert.equal(calls, 1);
+  render().reset();
+  finish({ started: true, run_id: "stale", message: "Started" });
+  await pending;
+  research = render();
+  assert.equal(research.activeRun, null);
+  assert.equal(research.busy, false);
+  assert.equal(notices.includes("Started"), false);
+});
+
+test("reset during tool startup prevents a stale paid research request", async () => {
+  let finish;
+  let starts = 0;
+  const h = hookHarness("features/research/use-research.ts", {
+    startService: () => new Promise(resolve => { finish = resolve; }),
+    start: async () => { starts++; },
+  });
+  const render = () => h.render("useResearch", () => {}, () => {});
+  let research = render();
+  research.setClaim("A claim");
+  research = render();
+  const pending = research.beginResearch(null, { runId: "", dbPath: "db" },
+    { service: { wigolo_ready: false } }, () => {});
+  render().reset();
+  finish({ wigolo_ready: true });
+  await pending;
+  assert.equal(starts, 0);
+  assert.equal(render().busy, false);
+});
+
+test("successful research start clears busy before showing the active run", async () => {
+  const h = hookHarness("features/research/use-research.ts", {
+    start: async () => ({ started: true, run_id: "started", message: "Started" }),
+  });
+  const render = () => h.render("useResearch", () => {}, () => {});
+  let research = render();
+  research.setClaim("A claim");
+  research = render();
+  const pending = research.beginResearch(null, { runId: "", dbPath: "db" },
+    { service: { wigolo_ready: true } }, () => {});
+  assert.equal(render().busy, true);
+  await pending;
+  research = render();
+  assert.equal(research.activeRun.id, "started");
+  assert.equal(research.busy, false);
+});
+
+test("reset during duplicate-run snapshot lookup ignores its late ownership result", async () => {
+  let finishSnapshot;
+  const h = hookHarness("features/research/use-research.ts", {
+    start: async () => ({ started: false, classification: "duplicate_active", run_id: "duplicate", message: "Already active" }),
+    snapshot: () => new Promise(resolve => { finishSnapshot = resolve; }),
+  });
+  const render = () => h.render("useResearch", () => {}, () => {});
+  let research = render();
+  research.setClaim("A claim");
+  research = render();
+  const pending = research.beginResearch(null, { runId: "", dbPath: "db" },
+    { service: { wigolo_ready: true } }, () => {});
+  await new Promise(setImmediate);
+  assert.equal(render().busy, true);
+  render().reset();
+  finishSnapshot({ run_id: "duplicate", db_path: "db", worker_active: true });
+  await pending;
+  research = render();
+  assert.equal(research.activeRun, null);
+  assert.equal(research.snapshot, null);
+  assert.equal(research.busy, false);
+});

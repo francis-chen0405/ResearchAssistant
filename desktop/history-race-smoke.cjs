@@ -141,7 +141,7 @@ async function main() {
     await oldHistoryStarted;
     await page.getByRole("button", { name: /^Settings/ }).click();
     const settingsDialog = page.getByRole("dialog");
-    await settingsDialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await settingsDialog.getByRole("button", { name: "Research defaults", exact: true }).click();
     await page.getByRole("dialog").locator("details.advanced-details > summary").click();
     await settingsDialog.getByLabel("SQLite database", { exact: true }).fill(databaseB);
     await newHistoryStarted;
@@ -160,7 +160,7 @@ async function main() {
 
     await page.getByRole("button", { name: /^Settings/ }).click();
     const changedDatabaseDialog = page.getByRole("dialog");
-    await changedDatabaseDialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await changedDatabaseDialog.getByRole("button", { name: "Research defaults", exact: true }).click();
     await page.getByRole("dialog").locator("details.advanced-details > summary").click();
     await changedDatabaseDialog.getByLabel("SQLite database", { exact: true }).fill(databaseC);
     await page.locator(".result-heading h1").waitFor({ state: "detached" });
@@ -171,7 +171,7 @@ async function main() {
 
     await page.getByRole("button", { name: /^Settings/ }).click();
     const restoreDatabaseDialog = page.getByRole("dialog");
-    await restoreDatabaseDialog.getByRole("button", { name: "Data and advanced", exact: true }).click();
+    await restoreDatabaseDialog.getByRole("button", { name: "Research defaults", exact: true }).click();
     await page.getByRole("dialog").locator("details.advanced-details > summary").click();
     await restoreDatabaseDialog.getByLabel("SQLite database", { exact: true }).fill(databaseB);
     await page.keyboard.press("Escape");

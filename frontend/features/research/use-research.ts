@@ -62,6 +62,7 @@ export function useResearch(
   const cancelRequest = useRef<AbortController | null>(null);
   const cancellationConfirmed = useRef("");
   const selectionEpoch = useRef(0);
+  const startInFlight = useRef(false);
   const setActiveRun = useCallback((next: ActiveRun | null) => {
     // An explicit selection starts a new UI cancellation lifecycle, even when
     // reopening the same saved run after a reset.
@@ -159,16 +160,20 @@ export function useResearch(
   ) => {
     event?.preventDefault();
     const trimmedClaim = (claimOverride ?? claim).trim();
-    if (!trimmedClaim) return;
+    if (!trimmedClaim || startInFlight.current) return;
     if (!configuration) {
       notify("The local API is not ready yet.");
       return;
     }
+    startInFlight.current = true;
+    const epoch = selectionEpoch.current;
+    const isCurrent = () => selectionEpoch.current === epoch;
     setBusy(true);
     notify(null);
     try {
       if (!configuration.service.wigolo_ready) {
         const service = await researchApi.startService();
+        if (!isCurrent()) return;
         if (!service.wigolo_ready)
           throw new Error(
             "Research tools could not start. Open Settings to retry.",
@@ -200,12 +205,14 @@ export function useResearch(
         seed_expansion_enabled: settings.seedExpansionEnabled,
         scholarly_search_mode: settings.scholarlySearchMode,
       });
+      if (!isCurrent()) return;
       notify(
         result.classification === "configuration_error"
           ? understandableConfigurationMessage(result.message)
           : result.message,
       );
       if (result.started) {
+        setBusy(false);
         setStarted({ runId: result.run_id, at: Date.now() });
         setActiveRun({ id: result.run_id, database: settings.dbPath });
         setSnapshot(null);
@@ -214,7 +221,8 @@ export function useResearch(
         // after the requested run's snapshot confirms ownership by this app.
         try {
           const current = await researchApi.snapshot(result.run_id, settings.dbPath);
-          if (current.run_id === result.run_id && current.worker_active) {
+          if (isCurrent() && current.run_id === result.run_id && current.worker_active) {
+            setBusy(false);
             setSnapshot(current);
             setActiveRun({ id: current.run_id, database: current.db_path });
           }
@@ -223,11 +231,12 @@ export function useResearch(
         }
       }
     } catch (error) {
-      notify(
+      if (isCurrent()) notify(
         error instanceof Error ? error.message : "Research could not start.",
       );
     } finally {
-      setBusy(false);
+      startInFlight.current = false;
+      if (isCurrent()) setBusy(false);
     }
   };
 

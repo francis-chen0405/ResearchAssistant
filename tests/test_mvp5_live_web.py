@@ -364,6 +364,13 @@ def test_live_controller_redacts_every_provider_key_value() -> None:
 
 
 def test_service_probe_requires_exact_wigolo_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Loopback service health must ignore workstation proxy settings, including
+    # SOCKS URLs when the optional SOCKS transport extra is not installed.
+    monkeypatch.setenv("ALL_PROXY", "socks5://127.0.0.1:9999")
+    monkeypatch.setenv("all_proxy", "socks5://127.0.0.1:9999")
+    monkeypatch.setenv("HTTP_PROXY", "socks5://127.0.0.1:9999")
+    monkeypatch.setenv("http_proxy", "socks5://127.0.0.1:9999")
+
     class HealthyAdapter:
         def __init__(self, config: object, **kwargs: object) -> None:
             pass
@@ -477,11 +484,11 @@ def test_live_next_surface_preserves_the_simplified_product_contract() -> None:
     owners = {
         "app/page.tsx": ("HistoryView", "HomeView", "ResearchPage", "AdvancedPanel"),
         "features/shell/views.tsx": (
-            "Research a Claim",
-            "<h1>Check a claim against the evidence</h1>",
+            "<h1>New research</h1>",
             "Settings",
         ),
-        "features/research/composer.tsx": ("Begin research", "Spend cap"),
+        "features/shell/home.tsx": ("Start research", "Open report", "Read exact passage"),
+        "features/research/composer.tsx": ("Start research", "Spend cap"),
         "features/preferences/panel.tsx": (
             "ProviderSetup",
             "Research defaults",

@@ -341,7 +341,7 @@ async function main() {
     await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "New research", exact: true }).click();
     await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Does the regional education program increase course completion?");
     armSnapshotStart();
-    await page.getByRole("button", { name: "Begin research", exact: true }).click();
+    await page.getByRole("button", { name: "Start research", exact: true }).click();
     await snapshotStarted;
     await page.mouse.move(5, 5);
     await page.getByText("Temporary status outage", { exact: true }).waitFor();
@@ -413,7 +413,7 @@ async function main() {
     await page.locator(".result-actions").getByRole("button", { name: "New research", exact: true }).click();
     await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Does replacement cancel scheduled polling?");
     armSnapshotStart();
-    await page.getByRole("button", { name: "Begin research", exact: true }).click();
+    await page.getByRole("button", { name: "Start research", exact: true }).click();
     await snapshotStarted;
     const callsBeforeReplacement = snapshotCalls;
     await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "History", exact: true }).click();
@@ -444,11 +444,11 @@ async function main() {
     await page.locator(".result-actions").getByRole("button", { name: "New research", exact: true }).click();
     await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Does unmount cancel scheduled polling?");
     armSnapshotStart();
-    await page.getByRole("button", { name: "Begin research", exact: true }).click();
+    await page.getByRole("button", { name: "Start research", exact: true }).click();
     await snapshotStarted;
     const callsBeforeUnmount = snapshotCalls;
     await page.reload();
-    await page.getByRole("button", { name: "Research a Claim", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Start research", exact: true }).waitFor();
     await WAIT(1800);
     assert.equal(snapshotCalls, callsBeforeUnmount, "Unmount must cancel the delayed follow-up");
     // Recover from repeated failures before the first snapshot, without a new run.
@@ -457,7 +457,7 @@ async function main() {
     await page.getByLabel("What claim do you want to check?", { exact: true }).fill("Can this same run reconnect safely?");
     const beforeRecovery = snapshotCalls;
     const recoveryStart = page.waitForResponse((response) => response.url().endsWith("/api/research/start"));
-    await page.getByRole("button", { name: "Begin research", exact: true }).click();
+    await page.getByRole("button", { name: "Start research", exact: true }).click();
     await recoveryStart;
     const recoveryStarts = startCalls;
     const connection = page.getByRole("region", { name: "Progress connection", exact: true });

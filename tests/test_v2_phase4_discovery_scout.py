@@ -40,6 +40,8 @@ from researchassistant.contracts.models import (
     V2PipelineIdentity,
     V2RoundOneSearchQuery,
 )
+from researchassistant.contracts.research_discovery import ScoutBatchAudit
+from researchassistant.providers.llm import LLMRequest
 from researchassistant.storage.store import init_db, insert_run, insert_v2_pipeline_identity
 
 NOW = datetime(2026, 8, 20, tzinfo=UTC)

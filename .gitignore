@@ -1,0 +1,29 @@
+# Local configuration and application data
+.env
+.env.*
+!.env.example
+.researchassistant/
+.DS_Store
+
+# Dependencies and generated builds
+.venv/
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+live-smoke-output/
+
+# Test, coverage, and lint output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/

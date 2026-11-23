@@ -1,0 +1,106 @@
+@font-face {
+  font-family: Spectral;
+  src: url("/fonts/spectral-medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+}
+:root {
+  --font: Aptos, "Segoe UI", system-ui, sans-serif;
+  --display: Spectral, Georgia, serif;
+  --bg: #faf9f5; --surface: #fffefa; --surface-2: #f0f0e9; --surface-3: #e5eadc;
+  --text: #20251f; --text-2: #465044; --text-3: #62675f; --border: #d9dbd2;
+  --brand: #283d2d; --brand-hover: #354f3c; --focus: #53764b;
+}
+:root[data-theme="dark"] {
+  --bg: #171c18; --surface: #222923; --surface-2: #2d352e; --surface-3: #374339;
+  --brand: #bfd5ac; --brand-hover: #d4e6c5; --focus: #acc895; --border: #404a41;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171c18; --surface: #222923; --surface-2: #2d352e; --surface-3: #374339;
+    --brand: #bfd5ac; --brand-hover: #d4e6c5; --focus: #acc895; --border: #404a41;
+  }
+}
+.topbar {position:relative; top:auto; max-width:1160px; margin:auto; height:auto; min-height:70px; background:var(--bg); display:grid; grid-template-columns:1fr auto 1fr; padding:8px 12px}
+.wordmark {justify-self:start; font-size:18px; letter-spacing:-.045em}
+.mark {font:500 23px/1 var(--display)}
+.primary-nav {border-radius:32px; padding:3px; border:1px solid var(--border); background:var(--surface)}
+.primary-nav .nav-link {border-radius:25px}
+.header-actions {justify-self:end}
+.result-tabs {top:0}
+.page-header h1,.result-heading h1,.progress-hero h1,.native-dialog>h2 {font:500 clamp(32px,4vw,55px)/1.08 var(--display); letter-spacing:-.05em}
+.native-dialog>h2 {font-size:30px}
+.home.landing {display:grid; grid-template-columns:.86fr 1.14fr; align-items:center; justify-items:stretch; width:min(1280px,100%); margin:auto; padding:44px clamp(24px,4.5vw,74px) 60px; gap:32px; min-height:min(700px,calc(100svh - 70px)); overflow:clip}
+.hero-copy h1 {font:500 clamp(62px,6.8vw,98px)/.99 var(--display); letter-spacing:-.073em}
+.hero-copy em {font-style:normal;color:var(--brand)}
+.hero-copy .btn {border-radius:40px; min-height:44px; margin-top:30px; padding-inline:22px}
+.sample-deck {min-width:0}
+.arrangement {position:relative; isolation:isolate; display:grid; align-content:start; min-height:465px; padding:40px 4% 16px 5%; --cover:#273f70; --leaf:#ced88c}
+.arrangement[data-topic="1"] {--cover:#524234;--leaf:#e0b988}
+.arrangement[data-topic="2"] {--cover:#3e4161;--leaf:#c3bdde}
+.printing,.arrangement:before {position:absolute;z-index:-1}
+.printing {inset:0 -8px 9% 15%; overflow:hidden; transform:rotate(2deg); background:repeating-linear-gradient(98deg,transparent 0 4px,#ffffff0c 4px 5px),var(--cover)}
+.printing span {position:absolute;right:3px;top:-.14em;color:#ffffff73;font:500 clamp(64px,7.5vw,108px)/1 var(--display);letter-spacing:-.075em}
+.arrangement:before {content:"";inset:22% 33% 5% 0;background:var(--leaf);transform:rotate(-2deg)}
+.folio {position:relative;width:94%;padding:24px 30px 50px;background:#f7f6ee;color:#242a25;border:1px solid #d7d8cc;border-radius:7px;box-shadow:0 10px 30px -10px #18243752}
+.folio-top,.clip-byline {display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+.folio-top button,.sample-finding,.sample-controls button,.clipping button {cursor:pointer;background:none;color:inherit;border:0}
+.folio-top {color:#51594f;min-height:25px}
+.folio-top button {border:1px solid #c3c9bc;border-radius:20px;padding:4px 10px}
+.folio h2 {font:500 clamp(30px,3.05vw,46px)/1.02 var(--display);letter-spacing:-.053em;margin:18px 0 8px}
+.folio-meta {font-size:13px;color:#626958}
+.folio h2,.folio-top button,.sample-finding {overflow-wrap:anywhere}
+.folio-rule {border-top:1px solid #cbd0c2;margin:15px 0 12px}
+.sample-finding {text-align:left;padding:0;font-size:16px;line-height:1.4}
+.sample-finding small,.clipping button,.clipping a {display:block;text-decoration:underline;text-underline-offset:3px;margin-top:8px;color:#375235;padding:0}
+.clipping {position:relative;justify-self:end;margin:-28px -3% 0 0;width:75%;padding:14px 18px;background:#fffef6;color:#273028;border:1px solid #dedfcf;border-left:3px solid #a5b158;box-shadow:0 5px 13px #19282527;transform:rotate(-1.3deg)}
+.clip-byline span {font-size:12px;color:#535e52}
+.clipping p {font:500 19px/1.24 var(--display);margin-top:8px}
+.clipping blockquote {margin-top:8px}
+.clipping mark {background:#e0e8b4;color:#263326}
+.sample-controls {display:flex;justify-content:center;gap:16px;margin-top:10px}
+.sample-controls button {position:relative;color:var(--text-3);padding:8px 2px;font-size:13px}
+.sample-controls button[aria-pressed=true] {color:var(--text);font-weight:600}
+.sample-controls i {position:absolute;bottom:1px;left:0;right:0;height:2px;background:var(--border)}
+.sample-controls b {display:block;height:100%;background:var(--brand);transform-origin:left}
+.sample-report {display:grid;gap:12px}.sample-report details {padding:12px 0;border-top:1px solid var(--border)}.sample-report summary {cursor:pointer}.sample-report h4,.sample-report blockquote {margin:12px 0}.sample-report blockquote {white-space:pre-line;overflow-wrap:anywhere;border-left:2px solid var(--brand);padding-left:16px}
+.research-page {max-width:1040px;padding-top:40px}
+.composer textarea {font-size:clamp(21px,2vw,28px);background:transparent;border-color:transparent}
+.composer-row {padding-top:16px;border-top:1px solid var(--border)}
+.composer-footer {justify-content:flex-end}
+.model-selection .model-selection-row {grid-template-columns:9rem minmax(0,1fr);gap:16px;padding:14px 0}
+.model-selection-row select {min-width:0;width:100%}
+@media(max-width:760px){
+  .home.landing {display:block;padding:42px 20px}.hero-copy h1 {font-size:clamp(52px,11vw,72px)}
+  .sample-deck {margin:34px auto 0;max-width:525px}.arrangement {min-height:0;padding-top:28px}
+  .folio {padding:20px 20px 46px;width:97%}.clipping {width:87%;margin-right:0}
+  .topbar {display:flex;justify-content:space-between;gap:4px}.topbar .nav-link {padding:6px;font-size:13px}
+}
+@media(max-width:560px){.model-selection .model-selection-row {grid-template-columns:1fr;gap:5px}}
+@keyframes sample-clock {from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes file-in {from{opacity:0;transform:translate(18px,12px) rotate(2.5deg)}to{opacity:1;transform:none}}
+@keyframes clip-in {from{opacity:0;translate:18px 14px;rotate:2deg}to{opacity:1;translate:0 0;rotate:0deg}}
+@keyframes cover-drift {50%{transform:rotate(3.8deg) translate(4px,-5px)}}
+@keyframes leaf-drift {50%{transform:rotate(-4deg) translate(-5px,3px)}}
+@keyframes content-in {from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
+@keyframes ring {50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--brand) 20%,transparent)}}
+@media(prefers-reduced-motion:no-preference){
+  .sample-controls b {animation:sample-clock 8s linear forwards}
+  .folio {animation:file-in 600ms cubic-bezier(.16,1,.3,1) both}
+  .clipping {animation:clip-in 550ms 110ms cubic-bezier(.16,1,.3,1) both}
+  .printing {animation:cover-drift 7s ease-in-out infinite}
+  .arrangement:before {animation:leaf-drift 6s ease-in-out infinite}
+  .sample-deck[data-paused=true],.sample-deck:focus-within,.sample-deck:has(.arrangement button:hover),body:has(dialog[open]) .sample-deck {--deck-play:paused}
+  .sample-controls b,.arrangement:before,.printing {animation-play-state:var(--deck-play,running)}
+  .hero-copy h1,.hero-copy .btn,.history-row,.composer>.field,.composer-row,.composer-footer,.tab-panel,.finding[open]>.finding-body,.live-source-card,.progress-hero .activity,.native-dialog[open] {animation:content-in 360ms cubic-bezier(.16,1,.3,1) backwards}
+  .hero-copy .btn,.history-row:nth-child(2),.composer-row {animation-delay:70ms}
+  .history-row:nth-child(n+3),.composer-footer {animation-delay:120ms}
+  .progress-page[data-live=true] .phases .current .phase-dot {animation:ring 1.8s ease-out infinite}
+  .history-open,.segmented button,.btn {transition:background-color 160ms ease,transform 160ms ease}
+  .btn:active:not(:disabled),.segmented button:active:not(:disabled){transform:translateY(1px)}
+}
+@media(prefers-reduced-motion:reduce){.play-toggle{display:none}}
+.custom-depth select {border:1px solid var(--border);border-radius:6px;padding:6px 10px;background:var(--surface)}
+@media(prefers-reduced-motion:no-preference){.custom-depth{animation:content-in 220ms ease-out}}
+.site-shell[data-reduced="true"] *, .site-shell[data-reduced="true"] *::before, .site-shell[data-reduced="true"] *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
+.site-shell[data-reduced="true"] .play-toggle {display:none}
