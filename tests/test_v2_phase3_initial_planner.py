@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from agents.v2_initial_planner import (
     V2InitialPlannerFingerprintMismatchError,
+    _assemble_initial_plan,
     run_v2_initial_planner,
 )
 from providers.llm import LLMProviderCapabilities
@@ -18,6 +19,7 @@ from researchassistant.contracts.models import (
     ResearchDirection,
     ResearchDirections,
     V2InitialPlannerConceptsOutput,
+    V2InitialPlannerInput,
     V2InitialPlannerModelOutput,
     V2InitialPlannerOutput,
     V2InitialPlannerPolicy,
@@ -73,6 +75,26 @@ class FakeConceptPlanner(FakeInitialPlanner):
                             concept=f"claim evidence {lane.strategy.replace('_', ' ')}"
                         ),
                     ),
+                    purpose="broad",
+                )
+                for lane in request.input_artifact.search_lanes
+            )
+        )
+
+
+class CollidingWebConceptPlanner(FakeInitialPlanner):
+    def generate(self, request: object) -> V2InitialPlannerConceptsOutput:
+        self.requests.append(request)
+        common = (
+            V2QueryConceptGroup(concept="natural grass and artificial turf"),
+            V2QueryConceptGroup(concept="sports injuries"),
+            V2QueryConceptGroup(concept="sports fields"),
+        )
+        return V2InitialPlannerConceptsOutput(
+            queries=tuple(
+                V2QueryConcepts(
+                    required_concepts=common
+                    + (V2QueryConceptGroup(concept=f"context {lane.strategy}"),),
                     purpose="broad",
                 )
                 for lane in request.input_artifact.search_lanes
@@ -179,6 +201,71 @@ def test_fresh_planner_compiles_concepts_for_application_owned_lanes(tmp_path: P
     assert resumed.resumed
     assert resumed.planner_output == result.planner_output
     assert len(provider.requests) == 1
+
+
+def test_duplicate_short_web_queries_recompile_from_supplied_context(tmp_path: Path) -> None:
+    provider = CollidingWebConceptPlanner()
+    result = run_v2_initial_planner(
+        "Grass is safer than turf.",
+        db_path=tmp_path / "web-collision.sqlite3",
+        directions=ResearchDirections(),
+        discovery_providers=(DiscoveryProvider.SERPER,),
+        llm_provider=provider,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    searches = result.planner_output.searches
+    assert {search.strategy for search in searches} == {"broad_web", "institutional_coverage"}
+    assert len({" ".join(search.query_text.split()).casefold() for search in searches}) == 2
+    assert all(search.compiled_query is not None for search in searches)
+    assert all(search.compiled_query.query_text == search.query_text for search in searches)
+    assert len(provider.requests) == 1
+
+
+def test_saved_grass_turf_candidate_replays_without_model_call() -> None:
+    candidate = V2InitialPlannerConceptsOutput.model_validate_json(
+        (Path(__file__).parent / "fixtures/planner_duplicate_candidate_grass_turf.json").read_text()
+    )
+    run_id = uuid4()
+    directions = ResearchDirections(support_enabled=True, challenge_enabled=False)
+    providers = tuple(
+        provider
+        for provider in DiscoveryProvider
+        if provider
+        in {
+            DiscoveryProvider.SERPSEARCH,
+            DiscoveryProvider.EXA,
+            DiscoveryProvider.ARXIV,
+            DiscoveryProvider.SERPER,
+            DiscoveryProvider.BRAVE,
+        }
+    )
+    lanes = V2InitialPlannerPolicy().search_lanes(directions, providers, expanded_web=True)
+    planner_input = V2InitialPlannerInput(
+        run_id=run_id,
+        raw_claim="Grass is safer than turf.",
+        directions=directions,
+        discovery_providers=providers,
+        search_lanes=lanes,
+    )
+
+    plan = _assemble_initial_plan(
+        planner_input=planner_input,
+        response=candidate,
+        prompt_version="saved-candidate-replay",
+        planned_at=NOW,
+        query_modes={},
+    )
+
+    assert len(plan.searches) == len(lanes) == 10
+    assert {query.provider for query in plan.searches} == set(providers)
+    assert len(
+        {
+            (query.direction, query.provider, " ".join(query.query_text.split()).casefold())
+            for query in plan.searches
+        }
+    ) == len(plan.searches)
 
 
 def test_v2_initial_planner_respects_provider_toggles_and_never_plans_future_rounds(

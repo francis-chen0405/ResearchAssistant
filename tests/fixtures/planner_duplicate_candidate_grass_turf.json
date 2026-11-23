@@ -1,0 +1,428 @@
+{
+  "claim_coverage_focus": [
+    {
+      "claim_component": "Grass is safer than turf",
+      "dimension": "effect_or_association",
+      "kind": "claim_component",
+      "searchable": true,
+      "unavailable_reason": null
+    }
+  ],
+  "queries": [
+    {
+      "methods": [
+        "comparative studies",
+        "injury surveillance"
+      ],
+      "outcomes": [
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injuries",
+            "player injuries"
+          ],
+          "concept": "sports injuries"
+        },
+        {
+          "aliases": [
+            "playing fields",
+            "athletic fields"
+          ],
+          "concept": "sports fields"
+        },
+        {
+          "aliases": [
+            "field surface comparison"
+          ],
+          "concept": "playing surface comparison"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "systematic reviews",
+        "injury surveillance"
+      ],
+      "outcomes": [
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injuries",
+            "player injuries"
+          ],
+          "concept": "sports injuries"
+        },
+        {
+          "aliases": [
+            "playing fields",
+            "athletic fields"
+          ],
+          "concept": "sports fields"
+        },
+        {
+          "aliases": [
+            "athletic medicine research"
+          ],
+          "concept": "sports medicine research"
+        },
+        {
+          "aliases": [
+            "school sports fields"
+          ],
+          "concept": "school athletic facilities"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "cohort studies",
+        "injury surveillance",
+        "comparative studies"
+      ],
+      "outcomes": [
+        "sports injuries",
+        "injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injury rates",
+            "player injury rates"
+          ],
+          "concept": "sports injury rates"
+        },
+        {
+          "aliases": [
+            "athletic field surfaces",
+            "playing surfaces"
+          ],
+          "concept": "sports field surfaces"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "biomechanical testing",
+        "surface testing"
+      ],
+      "outcomes": [
+        "impact forces",
+        "sports injuries"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "causes of athletic injuries"
+          ],
+          "concept": "sports injury mechanisms"
+        },
+        {
+          "aliases": [
+            "field hardness",
+            "ground firmness"
+          ],
+          "concept": "surface hardness"
+        },
+        {
+          "aliases": [
+            "shoe-surface traction",
+            "footing"
+          ],
+          "concept": "traction and grip"
+        },
+        {
+          "aliases": [
+            "shock absorption",
+            "surface cushioning"
+          ],
+          "concept": "impact absorption"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "systematic reviews",
+        "comparative studies",
+        "meta-analyses"
+      ],
+      "outcomes": [
+        "injury risk",
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "playing surface safety"
+          ],
+          "concept": "comparative sports safety"
+        },
+        {
+          "aliases": [
+            "athletic injury research",
+            "player injury studies"
+          ],
+          "concept": "sports injury evidence"
+        },
+        {
+          "aliases": [
+            "athletic field surfaces",
+            "playing surfaces"
+          ],
+          "concept": "sports field surfaces"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "biomechanical studies",
+        "observational studies"
+      ],
+      "outcomes": [
+        "injury rates",
+        "impact forces"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injury biomechanics"
+          ],
+          "concept": "sports injury biomechanics"
+        },
+        {
+          "aliases": [
+            "sports field surfaces",
+            "playing surfaces"
+          ],
+          "concept": "athletic field surfaces"
+        },
+        {
+          "aliases": [
+            "impact forces and grip",
+            "surface mechanics"
+          ],
+          "concept": "surface impact and traction"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "comparative studies",
+        "injury surveillance"
+      ],
+      "outcomes": [
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injuries",
+            "player injuries"
+          ],
+          "concept": "sports injuries"
+        },
+        {
+          "aliases": [
+            "playing fields",
+            "athletic fields"
+          ],
+          "concept": "sports fields"
+        },
+        {
+          "aliases": [
+            "field surface comparison"
+          ],
+          "concept": "playing surface comparison"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "systematic reviews",
+        "injury surveillance"
+      ],
+      "outcomes": [
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injuries",
+            "player injuries"
+          ],
+          "concept": "sports injuries"
+        },
+        {
+          "aliases": [
+            "playing fields",
+            "athletic fields"
+          ],
+          "concept": "sports fields"
+        },
+        {
+          "aliases": [
+            "athletic medicine research"
+          ],
+          "concept": "sports medicine research"
+        },
+        {
+          "aliases": [
+            "school sports fields"
+          ],
+          "concept": "school athletic facilities"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "comparative studies",
+        "injury surveillance"
+      ],
+      "outcomes": [
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injuries",
+            "player injuries"
+          ],
+          "concept": "sports injuries"
+        },
+        {
+          "aliases": [
+            "playing fields",
+            "athletic fields"
+          ],
+          "concept": "sports fields"
+        }
+      ]
+    },
+    {
+      "methods": [
+        "systematic reviews",
+        "injury surveillance"
+      ],
+      "outcomes": [
+        "sports injury rates"
+      ],
+      "purpose": "broad",
+      "required_concepts": [
+        {
+          "aliases": [
+            "grass and synthetic turf",
+            "natural grass versus synthetic turf"
+          ],
+          "concept": "natural grass and artificial turf"
+        },
+        {
+          "aliases": [
+            "athletic injuries",
+            "player injuries"
+          ],
+          "concept": "sports injuries"
+        },
+        {
+          "aliases": [
+            "playing fields",
+            "athletic fields"
+          ],
+          "concept": "sports fields"
+        },
+        {
+          "aliases": [
+            "athletic medicine research"
+          ],
+          "concept": "sports medicine research"
+        },
+        {
+          "aliases": [
+            "school sports fields"
+          ],
+          "concept": "school athletic facilities"
+        }
+      ]
+    }
+  ],
+  "scope_interpretations": [
+    {
+      "description": "The claim does not specify whether turf means artificial playing turf or turfgrass, or which safety outcome is meant.",
+      "impact": "Comparative evidence may differ by surface type and outcome; sports injury evidence is a likely reading but may not cover every safety concern."
+    }
+  ]
+}

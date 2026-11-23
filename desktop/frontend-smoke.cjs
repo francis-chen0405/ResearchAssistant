@@ -367,13 +367,15 @@ async function main() {
     await method.getByText('at least 123 known; total incomplete',{exact:true}).waitFor();
     await method.getByText('Provider requests and pages',{exact:true}).waitFor();
     assert.equal(await page.getByText(/The saved research result is available/).count(),0);
-    await page.setViewportSize({width:390,height:844});
-    for (const name of ['Summary','Evidence','Sources','Method']) {
-      await showTab(name);
-      const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')]
-        .filter(node => node.getBoundingClientRect().right > window.innerWidth + 1)
-        .slice(0, 5).map(node => `${node.tagName}.${node.className}`));
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,`Result ${name} fits narrow viewport without horizontal overflow: ${overflow.join(', ')}`);
+    for (const width of [320,390]) {
+      await page.setViewportSize({width,height:844});
+      for (const name of ['Summary','Evidence','Sources','Method']) {
+        await showTab(name);
+        const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')]
+          .filter(node => node.getBoundingClientRect().right > window.innerWidth + 1)
+          .slice(0, 5).map(node => `${node.tagName}.${node.className}`));
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),true,`Result ${name} fits ${width}px viewport without horizontal overflow: ${overflow.join(', ')}`);
+      }
     }
     await showTab('Summary');
     await page.locator('.summary-picture').waitFor();

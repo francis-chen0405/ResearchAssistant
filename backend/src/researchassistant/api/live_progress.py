@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from sqlite3 import Connection
@@ -51,7 +52,10 @@ from researchassistant.contracts.models import (
     V2RunDiagnostics,
     V2SourceSelectionQueueResult,
 )
-from researchassistant.contracts.provider_results import ProviderPipelineResult, ProviderRunStatus
+from researchassistant.contracts.provider_results import (
+    ProviderPipelineResult,
+    ProviderRunStatus,
+)
 from researchassistant.providers.v2_budget import (
     V2BudgetSnapshot,
     V2RunCeilings,
@@ -304,10 +308,12 @@ def _read_v2_usage_summary(
     cost_complete = cost_complete and terminal
     details = LiveModelUsageDetails(
         input_tokens=_live_token_count(
-            detail_subtotals["input_tokens"], terminal and detail_complete["input_tokens"]
+            detail_subtotals["input_tokens"],
+            terminal and detail_complete["input_tokens"],
         ),
         output_tokens=_live_token_count(
-            detail_subtotals["output_tokens"], terminal and detail_complete["output_tokens"]
+            detail_subtotals["output_tokens"],
+            terminal and detail_complete["output_tokens"],
         ),
         cached_input_tokens=_live_token_count(
             detail_subtotals["cached_input_tokens"],
@@ -321,7 +327,10 @@ def _read_v2_usage_summary(
             LiveCostBasisCount(basis=basis, physical_calls=count)
             for basis, count in sorted(
                 basis_counts.items(),
-                key=lambda item: (item[0] is not None, item[0].value if item[0] else ""),
+                key=lambda item: (
+                    item[0] is not None,
+                    item[0].value if item[0] else "",
+                ),
             )
         ),
     )
@@ -360,7 +369,10 @@ def _read_v2_ceilings(
         return None
 
 
-def _v2_current_round(db_path: str | Path | Connection, run_id: UUID) -> int:
+def _v2_current_round(
+    db_path: str | Path | Connection, run_id: UUID, *, active_stage: str | None = None
+) -> int:
+    completed_round = 1
     for round_number in (4, 3, 2):
         for suffix in ("search-results", "discovery-scout", "acquisition-probe"):
             try:
@@ -375,8 +387,16 @@ def _v2_current_round(db_path: str | Path | Connection, run_id: UUID) -> int:
                 )
             except KeyError:
                 continue
-            return round_number
-    return 1
+            completed_round = round_number
+            break
+        if completed_round == round_number:
+            break
+    # A live search-agent call is the planner for the next adaptive round. Its
+    # plan artifact is only written after the model returns, so result artifacts
+    # alone still point at the previous completed round while planning is active.
+    if active_stage == "search_agent" and completed_round < 4:
+        return completed_round + 1
+    return completed_round
 
 
 def _read_v2_directional_progress(
@@ -463,7 +483,10 @@ def _read_v2_directional_progress(
         queue_artifact = _read_first_v2_artifact(
             db_path,
             run_id,
-            (V2_SOURCE_SELECTION_COMPLETION_KEY, V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY),
+            (
+                V2_SOURCE_SELECTION_COMPLETION_KEY,
+                V2_SOURCE_SELECTION_LEGACY_COMPLETION_KEY,
+            ),
         )
     except KeyError:
         pass
@@ -583,7 +606,10 @@ def _research_round_and_progress(result: ProviderPipelineResult) -> tuple[int, i
     if result.status is not ProviderRunStatus.RUNNING:
         return current_round, 100
     if result.current_stage.value in {"debate_synthesizer", "final_renderer_validator"}:
-        return current_round, 88 if result.current_stage.value == "debate_synthesizer" else 96
+        return (
+            current_round,
+            88 if result.current_stage.value == "debate_synthesizer" else 96,
+        )
     stage_progress = {
         "claim_planner": 10,
         "supporting_researcher": 28,
@@ -638,6 +664,19 @@ def adaptive_planning_message(
     return f"Research is running in {stage.value}."
 
 
+def _active_llm_stage(
+    db_path: str | Path | Connection, run_id: UUID, *, since: datetime
+) -> str | None:
+    """Return a still-running model stage started during the current run-state interval."""
+    audit = read_v2_physical_call_audit(db_path, run_id)
+    active = [
+        start
+        for start, completion in zip(audit.starts, audit.completions, strict=True)
+        if completion is None and start.started_at >= since
+    ]
+    return active[-1].stage if active else None
+
+
 def _diagnostic_component(result: ProviderPipelineResult) -> str:
     if result.status is ProviderRunStatus.BLOCKED:
         return "validation"
@@ -679,7 +718,10 @@ def snapshot_from_v2_progress(
 ) -> LiveRunSnapshot:
     """Build a v2 live snapshot using only persisted run data."""
     read_source = source if source is not None else db_path
-    from researchassistant.storage.store import open_read_only_store, read_snapshot_connection
+    from researchassistant.storage.store import (
+        open_read_only_store,
+        read_snapshot_connection,
+    )
 
     if not isinstance(read_source, Connection):
         with open_read_only_store(read_source) as store:
@@ -690,14 +732,34 @@ def snapshot_from_v2_progress(
     manifest = read_run(read_source, run_id)
     directions = _read_v2_directions(read_source, run_id)
     diagnostics = enrich_discovery_diagnostics(
-        read_source, run_id, build_v2_run_diagnostics_or_empty(read_source, run_id, providers)
+        read_source,
+        run_id,
+        build_v2_run_diagnostics_or_empty(read_source, run_id, providers),
     )
     ceilings = _read_v2_ceilings(read_source, run_id)
     budget = _read_v2_budget_snapshot(read_source, run_id, ceilings=ceilings)
     terminal = manifest.status is not RunStatus.RUNNING
     usage = _read_v2_usage_summary(read_source, run_id, terminal=terminal)
     stage = infer_v2_stage(read_source, run_id, manifest.current_stage, False)
-    current_round = _v2_current_round(read_source, run_id)
+    display_stage = stage.value
+    # A persisted open physical call is a more specific live stage than the
+    # coarse orchestrator boundary. Completed historical calls never rewind it.
+    active_stage = (
+        _active_llm_stage(read_source, run_id, since=manifest.updated_at) if not terminal else None
+    )
+    if active_stage in {
+        "planner",
+        "scout",
+        "gap_analysis",
+        "search_agent",
+        "source_selection",
+        "extractor",
+        "analyst",
+        "reviewer",
+        "synthesizer",
+    }:
+        display_stage = active_stage
+    current_round = _v2_current_round(read_source, run_id, active_stage=active_stage)
     contract = None
     try:
         contract = read_provider_run_contract(read_source, run_id)
@@ -733,7 +795,7 @@ def snapshot_from_v2_progress(
         raw_claim=manifest.raw_claim,
         classification=classification,
         exit_code=int(exit_code) if exit_code is not None else None,
-        stage=stage.value,
+        stage=display_stage,
         latest_checkpoint=stage.value,
         completed_checkpoints=0,
         total_checkpoints=10,
@@ -789,7 +851,10 @@ def snapshot_from_v2_result(
 ) -> LiveRunSnapshot:
     """Build a terminal v2 live snapshot without constructing runtime services."""
     read_source = source if source is not None else result.db_path
-    from researchassistant.storage.store import open_read_only_store, read_snapshot_connection
+    from researchassistant.storage.store import (
+        open_read_only_store,
+        read_snapshot_connection,
+    )
 
     if not isinstance(read_source, Connection):
         with open_read_only_store(read_source) as store:

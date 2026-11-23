@@ -1,8 +1,6 @@
 import type { HistoryItem } from "@/lib/api";
 import type { Tone } from "@/components/ui";
-import { phaseOf } from "../research/phases";
-
-const phaseWords = ["planning", "searching", "reading", "analysis", "writing up"];
+import { phaseWordOf } from "../research/phases";
 
 export type Outcome = { label: string; tone: Tone; group: "complete" | "stopped" | "running" };
 
@@ -32,6 +30,6 @@ export function historyOutcome(status: string): Outcome {
 export function historyReason(item: Pick<HistoryItem, "status" | "stage">): string | null {
   const outcome = historyOutcome(item.status);
   if (outcome.group !== "stopped") return null;
-  const phase = phaseOf(item.stage);
-  return phase === null ? "Stopped before completing" : `Stopped during ${phaseWords[phase]}`;
+  const phase = phaseWordOf(item.stage);
+  return phase === null ? "Stopped before completing" : `Stopped during ${phase}`;
 }

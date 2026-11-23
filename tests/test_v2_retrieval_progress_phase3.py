@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -11,7 +11,7 @@ import pytest
 
 import researchassistant.storage.store as store
 from frontend.live_progress import _read_v2_directional_progress, snapshot_from_v2_progress
-from providers.v2_budget import V2RunCeilings
+from providers.v2_budget import V2PhysicalCallStart, V2RunCeilings
 from researchassistant.contracts.models import (
     DiscoveryProvenance,
     DiscoveryProvider,
@@ -58,6 +58,7 @@ def _init_run(db_path: str, run_id: UUID, status: RunStatus = RunStatus.RUNNING)
             current_stage=Stage.ACQUISITION,
             created_at=NOW,
             updated_at=NOW,
+            completed_at=NOW if status is not RunStatus.RUNNING else None,
         ),
     )
 
@@ -480,3 +481,147 @@ def test_snapshot_reports_unassigned_attempts_for_running_and_terminal_runs(
         assert snapshot.supporting.status == expected_directional_status
         assert snapshot.opposing.retrieval_attempts == 0
         assert snapshot.opposing.status == "disabled"
+
+
+def test_snapshot_exposes_an_active_scout_call_as_the_live_stage(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "active-scout.sqlite3")
+    run_id = uuid4()
+    _init_run(db_path, run_id)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    _persist_fingerprint(db_path, run_id, ResearchDirections())
+    insert_v2_artifact(
+        db_path,
+        "phase-13-physical-call-001-start",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=1,
+            stage="scout",
+            model_alias="gpt-6-luna-high",
+            reserved_tokens=100,
+            reserved_cost_usd="0.01",
+            started_at=NOW,
+        ),
+        NOW,
+    )
+
+    snapshot = snapshot_from_v2_progress(db_path, run_id, (DiscoveryProvider.EXA,))
+
+    assert snapshot.stage == "scout"
+    assert snapshot.latest_checkpoint == "acquisition"
+
+
+def test_snapshot_ignores_an_unfinished_call_before_the_current_run_update(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "stale-scout.sqlite3")
+    run_id = uuid4()
+    _init_run(db_path, run_id)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    _persist_fingerprint(db_path, run_id, ResearchDirections())
+    insert_v2_artifact(
+        db_path,
+        "phase-13-physical-call-001-start",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=1,
+            stage="scout",
+            model_alias="gpt-6-luna-high",
+            reserved_tokens=100,
+            reserved_cost_usd="0.01",
+            started_at=NOW - timedelta(seconds=1),
+        ),
+        NOW - timedelta(seconds=1),
+    )
+
+    snapshot = snapshot_from_v2_progress(db_path, run_id, (DiscoveryProvider.EXA,))
+
+    assert snapshot.stage == "acquisition"
+    assert snapshot.latest_checkpoint == "acquisition"
+
+
+@pytest.mark.parametrize(
+    ("completed_round", "expected_round"),
+    ((None, 2), (2, 3)),
+)
+def test_snapshot_advances_round_during_live_search_agent_planning(
+    tmp_path: Path, completed_round: int | None, expected_round: int
+) -> None:
+    db_path = str(tmp_path / f"active-search-round-{expected_round}.sqlite3")
+    run_id = uuid4()
+    _init_run(db_path, run_id)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    _persist_fingerprint(db_path, run_id, ResearchDirections())
+    if completed_round is not None:
+        insert_v2_artifact(
+            db_path,
+            f"phase-7-round-{completed_round}-search-results",
+            V2PhysicalCallStart(
+                run_id=run_id,
+                sequence=2,
+                stage="search_agent",
+                model_alias="gpt-6-luna-high",
+                reserved_tokens=100,
+                reserved_cost_usd="0.01",
+                started_at=NOW,
+            ),
+            NOW,
+        )
+    insert_v2_artifact(
+        db_path,
+        "phase-13-physical-call-001-start",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=1,
+            stage="search_agent",
+            model_alias="gpt-6-luna-high",
+            reserved_tokens=100,
+            reserved_cost_usd="0.01",
+            started_at=NOW,
+        ),
+        NOW,
+    )
+
+    snapshot = snapshot_from_v2_progress(db_path, run_id, (DiscoveryProvider.EXA,))
+
+    assert snapshot.stage == "search_agent"
+    assert snapshot.current_research_round == expected_round
+
+
+def test_completed_run_keeps_the_latest_persisted_round_with_open_historical_call(
+    tmp_path: Path,
+) -> None:
+    db_path = str(tmp_path / "completed-search-round.sqlite3")
+    run_id = uuid4()
+    _init_run(db_path, run_id, status=RunStatus.COMPLETED)
+    insert_v2_pipeline_identity(db_path, run_id, V2PipelineIdentity(), NOW)
+    _persist_fingerprint(db_path, run_id, ResearchDirections())
+    insert_v2_artifact(
+        db_path,
+        "phase-7-round-2-search-results",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=2,
+            stage="search_agent",
+            model_alias="gpt-6-luna-high",
+            reserved_tokens=100,
+            reserved_cost_usd="0.01",
+            started_at=NOW,
+        ),
+        NOW,
+    )
+    insert_v2_artifact(
+        db_path,
+        "phase-13-physical-call-001-start",
+        V2PhysicalCallStart(
+            run_id=run_id,
+            sequence=1,
+            stage="search_agent",
+            model_alias="gpt-6-luna-high",
+            reserved_tokens=100,
+            reserved_cost_usd="0.01",
+            started_at=NOW,
+        ),
+        NOW,
+    )
+
+    snapshot = snapshot_from_v2_progress(db_path, run_id, (DiscoveryProvider.EXA,))
+
+    assert snapshot.current_research_round == 2

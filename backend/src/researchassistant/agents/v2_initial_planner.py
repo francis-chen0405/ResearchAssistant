@@ -30,6 +30,7 @@ from researchassistant.contracts.discovery_v2 import (
 from researchassistant.contracts.models import (
     DiscoveryProvider,
     ProviderRunContract,
+    ResearchDirection,
     ResearchDirections,
     RunManifest,
     RunStatus,
@@ -450,6 +451,7 @@ def _assemble_initial_plan(
     discovery_policy: V2MetadataDiscoveryPolicy | None = None,
 ) -> V2InitialPlannerOutput:
     searches: list[V2RoundOneSearchQuery] = []
+    used_query_text: set[tuple[ResearchDirection, DiscoveryProvider, str]] = set()
     lanes = (
         planner_input.search_lanes
         if isinstance(response, V2InitialPlannerConceptsOutput)
@@ -490,11 +492,77 @@ def _assemble_initial_plan(
                 requested_depth=(discovery_policy or V2MetadataDiscoveryPolicy()).metadata_depth,
                 policy=discovery_policy or V2MetadataDiscoveryPolicy(),
             )
+            key = (
+                lane.direction,
+                lane.provider,
+                " ".join(compiled.query_text.split()).casefold(),
+            )
+            if key in used_query_text:
+                # Short provider queries can collapse distinct model concepts. Rotate
+                # the supplied concepts through the compiler's bounded leading slots.
+                # Web syntax also gets a phrase form based on supplied concepts.
+                original_groups = conceptual.required_concepts
+                variants = (
+                    (False, True)
+                    if lane.provider
+                    in {
+                        DiscoveryProvider.BRAVE,
+                        DiscoveryProvider.SERPER,
+                    }
+                    else (False,)
+                )
+                replacement = None
+                context_groups = original_groups[1:]
+                for offset in range(1, len(context_groups) + 1):
+                    rotated_context = context_groups[offset:] + context_groups[:offset]
+                    order = original_groups[:1] + rotated_context
+                    candidate = conceptual.model_copy(update={"required_concepts": order})
+                    for single_phrase in variants:
+                        proposed = compile_query(
+                            candidate,
+                            mode=query_modes.get(lane.provider),
+                            requested_depth=(
+                                discovery_policy or V2MetadataDiscoveryPolicy()
+                            ).metadata_depth,
+                            policy=discovery_policy or V2MetadataDiscoveryPolicy(),
+                            _single_phrase_syntax=single_phrase,
+                        )
+                        proposed_key = (
+                            lane.direction,
+                            lane.provider,
+                            " ".join(proposed.query_text.split()).casefold(),
+                        )
+                        if proposed_key not in used_query_text:
+                            replacement = proposed
+                            break
+                    if replacement is not None:
+                        break
+                if replacement is not None:
+                    compiled = replacement
+                key = (
+                    lane.direction,
+                    lane.provider,
+                    " ".join(compiled.query_text.split()).casefold(),
+                )
+                if key in used_query_text:
+                    raise ValueError(
+                        "planner concepts cannot produce a unique executable query for "
+                        f"{lane.provider.value}/{lane.direction.value}/{lane.strategy}"
+                    )
+            used_query_text.add(key)
             query_text = compiled.query_text
         else:
             item = response.searches[index]
             compiled = None
             query_text = item.query_text
+            key = (
+                lane.direction,
+                lane.provider,
+                " ".join(query_text.split()).casefold(),
+            )
+            if key in used_query_text:
+                raise ValueError("planner must provide unique query text within each search lane")
+            used_query_text.add(key)
         searches.append(
             V2RoundOneSearchQuery(
                 run_id=planner_input.run_id,

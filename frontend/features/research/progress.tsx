@@ -27,12 +27,9 @@ export function ProgressView({
   snapshot: RunSnapshot;
   startedAt?: number | null;
 } & ResearchRecoveryProps) {
-  // Phases never move backwards: a later round's search keeps the furthest phase
-  // reached, and an unrecognized stage keeps the last known phase.
+  // Follow-up rounds may return to searching, so reflect the live stage directly.
   const reported = phaseOf(snapshot.stage);
-  const [furthest, setFurthest] = useState(reported ?? 0);
-  if (reported !== null && reported > furthest) setFurthest(reported);
-  const current = Math.max(furthest, reported ?? 0);
+  const current = reported;
   const round = snapshot.current_research_round ?? 1;
   const elapsed = useElapsed(startedAt);
   const spent = Number(snapshot.known_cost_subtotal_usd ?? 0);
@@ -71,13 +68,13 @@ export function ProgressView({
         {phases.map((label, index) => (
           <li
             key={label}
-            className={index < current ? "done" : index === current ? "current" : ""}
+            className={current !== null && index < current ? "done" : index === current ? "current" : ""}
             aria-current={index === current ? "step" : undefined}
           >
             <span className="phase-dot" aria-hidden="true">
-              {index < current ? <Icon name="check" size={12} /> : index + 1}
+              {current !== null && index < current ? <Icon name="check" size={12} /> : index + 1}
             </span>
-            <span>{index === 1 && round > 1 && current >= 1 ? `${label} · round ${round}` : label}</span>
+            <span>{index === current && round > 1 ? `${label} · round ${round}` : label}</span>
           </li>
         ))}
       </ol>

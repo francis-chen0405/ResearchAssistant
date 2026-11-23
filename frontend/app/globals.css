@@ -388,11 +388,12 @@ blockquote { margin: 0; }
 .related-records { display: grid; gap: var(--s3); padding-left: 0; list-style: none; }
 .related-records > li { display: grid; gap: var(--s2); padding-left: var(--s3); border-left: 2px solid var(--border); }
 
-.sources-tab, .method-tab { display: grid; gap: var(--s5); max-width: 860px; }
-.sources-tab > section { display: grid; gap: var(--s2); }
-.source-list { display: grid; padding: 0; list-style: none; border-top: 1px solid var(--border); }
-.source-row { display: flex; justify-content: space-between; gap: var(--s4); align-items: flex-start; padding: var(--s3) 0; border-bottom: 1px solid var(--border); }
-.source-row-main { display: grid; gap: 2px; min-width: 0; }
+.sources-tab, .method-tab { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s5); max-width: 860px; }
+.sources-tab > section { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+.source-list { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.source-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2) var(--s4); align-items: flex-start; padding: var(--s3) 0; border-bottom: 1px solid var(--border); }
+.source-row-main { display: grid; gap: 2px; min-width: 0; flex: 1 1 220px; overflow-wrap: anywhere; }
+.source-row .chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .source-title { font-weight: 600; overflow-wrap: anywhere; }
 .source-reason { color: var(--text-2); font-size: var(--fs-sm); }
 .notice-list { display: grid; gap: var(--s2); padding: 0; list-style: none; }
@@ -438,7 +439,7 @@ blockquote { margin: 0; }
 .cancel-run { display: grid; gap: var(--s1); justify-items: start; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin-top: var(--s5); }
 .spinner { width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--text); border-radius: 50%; }
-.phases { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); padding: 0; list-style: none; }
+.phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s2); padding: 0; list-style: none; }
 .phases li { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-top: 3px solid var(--border); color: var(--text-3); font-weight: 600; font-size: var(--fs-sm); }
 .phases li.done { border-top-color: var(--text-2); color: var(--text-2); }
 .phases li.current { border-top-color: var(--text); color: var(--text); }

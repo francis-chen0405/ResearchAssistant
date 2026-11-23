@@ -747,17 +747,25 @@ test("recovery controls expose scoped status, last-confirmed time and confirmed 
   assert.equal(walk(h.render("CancelRun", { ...cancelProps, canCancel: false })).length, 0);
 });
 
-test("progress phases map every known stage and later rounds never move back", () => {
-  const { phaseOf, activitySentence, phases } = hookHarness("features/research/phases.ts", {}).exports;
-  assert.deepEqual([...phases], ["Plan", "Search", "Read", "Analyse", "Write up"]);
+test("progress phases map emitted stages and follow-up rounds show their current stage", () => {
+  const { phaseOf, phaseWordOf, activitySentence, phases } = hookHarness("features/research/phases.ts", {}).exports;
+  assert.deepEqual([...phases], ["Planning", "Searching", "Scouting", "Evaluating sources", "Scraping sources",
+    "Extracting evidence", "Finding gaps", "Searching follow-ups", "Selecting sources", "Analyzing evidence",
+    "Reviewing findings", "Writing up", "Validating"]);
   for (const stage of ["claim_planner", "discovery", "scout", "gap_analysis", "adaptive_search", "acquisition",
-    "source_selection", "deep_analysis", "evidence_admission", "review", "synthesis", "final_renderer_validator"]) {
+    "source_selection", "deep_analysis", "evidence_admission", "review", "synthesis", "final_renderer_validator",
+    "planner", "search_agent", "analyst", "reviewer", "synthesizer"]) {
     assert.notEqual(phaseOf(stage), null, stage);
+    assert.notEqual(activitySentence(stage, 1), "Working on the research", `${stage} describes its current activity`);
   }
   assert.equal(phaseOf("an_unknown_future_stage"), null, "Unknown stages do not map to step one");
-  assert.equal(activitySentence("adaptive_search", 2), "Follow-up search, round 2");
-  assert.equal(activitySentence("claim_planner", 3), "Follow-up search, round 3");
-  assert.equal(activitySentence("acquisition", 1), "Reading sources");
+  assert.equal(phaseWordOf("deep_analysis"), "analysis");
+  assert.equal(phaseWordOf("an_unknown_future_stage"), null);
+  assert.equal(phaseOf("adaptive_search"), 7, "The current follow-up search stays highlighted even after later steps in an earlier round");
+  assert.equal(phaseOf("search_agent"), 7, "Live adaptive planner calls stay in follow-up searching");
+  assert.equal(activitySentence("adaptive_search", 2), "Searching for answers to open questions · follow-up round 2");
+  assert.equal(activitySentence("claim_planner", 3), "Planning how to research the claim · follow-up round 3");
+  assert.equal(activitySentence("acquisition", 1), "Scraping and capturing sources");
   assert.doesNotMatch(activitySentence("an_unknown_future_stage", 1), /unknown_future/);
 });
 
