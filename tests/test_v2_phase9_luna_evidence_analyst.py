@@ -397,7 +397,7 @@ def test_luna_analysis_preserves_exact_quote_limitations_accounting_and_restart(
     assert all(request.model_alias is ModelAlias.GPT_5_6_LUNA_HIGH for request in provider.requests)
     assert all(
         request.prompt.version
-        == "post-phase13-luna-evidence-analyst-v9-independent-relationship-scope-context"
+        == "post-phase13-luna-evidence-analyst-v10-claim-fit-2-first-pass-scope"
         for request in provider.requests
     )
     assert all(

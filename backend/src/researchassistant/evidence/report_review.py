@@ -276,15 +276,30 @@ def build_publication_opening(display: V2EvidenceDisplay) -> V2EvidenceDisplay:
                 item for item in representatives if has_relationship(item, relationship)
             )
     sentences = []
+    relationship_labels = {
+        "supports": "Supporting finding",
+        "challenges": "Challenging finding",
+        "qualifies": "Qualifying finding",
+    }
     for item in chosen:
         linked = sorted(by_claim[item.ledger_claim_id], key=rank)
         statements = dict.fromkeys(
-            other.approved_factual_statement for other in sorted(linked, key=rank)
+            (
+                other.relationship_to_claim.value,
+                other.approved_factual_statement,
+            )
+            for other in linked
         )
         citations = dict.fromkeys(citation(other) for other in linked)
         sentences.append(
             PublicationOpeningSentence(
-                text=f"{'; '.join(citations)}: {' '.join(statements)}",
+                text=(
+                    f"{'; '.join(citations)}: "
+                    + " ".join(
+                        f"{relationship_labels[relationship]}: {statement}"
+                        for relationship, statement in statements
+                    )
+                ),
                 ledger_claim_ids=tuple(other.ledger_claim_id for other in linked),
             )
         )

@@ -26,6 +26,7 @@ PROMPT_NAMES = (
     "v2_scout_v2.md",
     "v2_scout_v3.md",
     "v2_scout_v4.md",
+    "v2_scout_v5.md",
 )
 
 

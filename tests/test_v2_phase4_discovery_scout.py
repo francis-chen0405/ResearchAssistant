@@ -9,10 +9,12 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from agents import v2_discovery as discovery
 from agents.v2_discovery import (
     V2_FRESH_SCOUT_BATCH_SIZE,
     V2_SCOUT_BATCH_SIZE,
     V2_SCOUT_MAX_WORKERS,
+    V2_SCOUT_V3_PROMPT_PATH,
     V2DiscoveryResponse,
     _run_scout_batches,
     cluster_discovery_items,
@@ -86,6 +88,14 @@ class FailThenCancelScout(RecallScout):
             self.requests.append(request)
             self.cancelled[0] = True
             raise RuntimeError("test provider failure before retry")
+        return super().generate(request)
+
+
+class TruncateOnceScout(RecallScout):
+    def generate(self, request: object) -> ScoutBatch:
+        if not self.requests:
+            self.requests.append(request)
+            raise RuntimeError("provider output was truncated")
         return super().generate(request)
 
 
@@ -506,6 +516,7 @@ def test_v2_scout_batches_twenty_items_retries_falls_back_and_persists(tmp_path:
         11,
         11,
     ]
+    assert len({request.prompt.version for request in scout.requests}) == 1
     assert V2_SCOUT_BATCH_SIZE == 20
     assert scout.requests[0].model_alias.value == "mimo-v2.5"
     assert all(
@@ -521,6 +532,121 @@ def test_v2_scout_batches_twenty_items_retries_falls_back_and_persists(tmp_path:
         clock=lambda: NOW,
     )
     assert resumed.resumed and resumed.output == result.output
+
+
+def test_scout_truncation_uses_compact_retry_and_replays_checkpoint(
+    tmp_path: Path,
+) -> None:
+    db_path, plan, response = _single_scout_run(tmp_path)
+    scout = TruncateOnceScout()
+
+    result = run_v2_discovery_and_scout(
+        db_path=db_path,
+        planner_output=plan,
+        responses=(response,),
+        llm_provider=scout,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+
+    assert len(scout.requests) == 2
+    assert scout.requests[0].prompt.version == "researchassistant-v2-phase-4-scout-v1"
+    assert scout.requests[1].prompt.version == "phase4-v2-scout-v5-truncation-retry"
+    assert result.output.scout_audits[0].attempted_calls == 2
+
+    resumed = run_v2_discovery_and_scout(
+        db_path=db_path,
+        planner_output=plan,
+        responses=(),
+        llm_provider=scout,
+        routing_config=_routing(),
+        clock=lambda: NOW,
+    )
+    assert resumed.resumed and resumed.output == result.output
+    assert len(scout.requests) == 2
+
+
+@pytest.mark.parametrize("legacy_retry", (False, True))
+def test_scout_saved_truncation_retries_v3_as_v5_and_replays_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legacy_retry: bool
+) -> None:
+    db_path, plan, response = _single_scout_run(tmp_path)
+    items = normalize_discovery_responses(
+        run_id=plan.run_id,
+        directions=plan.directions,
+        responses=(response,),
+        discovered_at=NOW,
+    )
+    truncated = TruncateOnceScout()
+    save_outcome = discovery.save_stage_outcome
+    interrupted = [False]
+
+    def interrupt_after_saved_failure(*args: object, **kwargs: object) -> object:
+        saved = save_outcome(*args, **kwargs)
+        if not interrupted[0]:
+            interrupted[0] = True
+            raise KeyboardInterrupt("interrupted after the failure checkpoint")
+        return saved
+
+    monkeypatch.setattr(discovery, "save_stage_outcome", interrupt_after_saved_failure)
+    with pytest.raises(KeyboardInterrupt):
+        _run_scout_batches(
+            run_id=plan.run_id,
+            directions=plan.directions,
+            items=items,
+            llm_provider=truncated,
+            model_alias=_routing().preflight().for_stage(LLMStage.SCOUT).logical_alias,
+            clock=lambda: NOW,
+            cancellation_requested=None,
+            prompt_path=V2_SCOUT_V3_PROMPT_PATH,
+            db_path=db_path,
+            checkpoint_key="scout-retry-test",
+        )
+
+    monkeypatch.setattr(discovery, "save_stage_outcome", save_outcome)
+    resource = discovery.prompt_resource
+    if legacy_retry:
+        # Simulate a pre-fix attempt-2 checkpoint using the original v4 prompt.
+        monkeypatch.setattr(
+            discovery,
+            "prompt_resource",
+            lambda name: resource("v2_scout_v4.md" if name == "v2_scout_v5.md" else name),
+        )
+    resumed_scout = RecallScout()
+    batches, audits = _run_scout_batches(
+        run_id=plan.run_id,
+        directions=plan.directions,
+        items=items,
+        llm_provider=resumed_scout,
+        model_alias=_routing().preflight().for_stage(LLMStage.SCOUT).logical_alias,
+        clock=lambda: NOW,
+        cancellation_requested=None,
+        prompt_path=V2_SCOUT_V3_PROMPT_PATH,
+        db_path=db_path,
+        checkpoint_key="scout-retry-test",
+    )
+    assert len(resumed_scout.requests) == 1
+    assert resumed_scout.requests[0].prompt.version == (
+        "phase4-v2-scout-v4-compact" if legacy_retry else "phase4-v2-scout-v5-truncation-retry"
+    )
+    assert audits[0].attempted_calls == 2
+
+    monkeypatch.setattr(discovery, "prompt_resource", resource)
+    replay_provider = RecallScout()
+    replayed_batches, replayed_audits = _run_scout_batches(
+        run_id=plan.run_id,
+        directions=plan.directions,
+        items=items,
+        llm_provider=replay_provider,
+        model_alias=_routing().preflight().for_stage(LLMStage.SCOUT).logical_alias,
+        clock=lambda: NOW,
+        cancellation_requested=None,
+        prompt_path=V2_SCOUT_V3_PROMPT_PATH,
+        db_path=db_path,
+        checkpoint_key="scout-retry-test",
+    )
+    assert (replayed_batches, replayed_audits) == (batches, audits)
+    assert replay_provider.requests == []
 
 
 def test_scout_cancellation_before_first_attempt_is_typed_and_makes_no_call(

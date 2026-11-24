@@ -1502,10 +1502,27 @@ def _run_scout_batches(
     def cancelled() -> bool:
         return stopped.is_set() or bool(cancellation_requested and cancellation_requested())
 
+    def was_truncated(error: LLMInvocationError) -> bool:
+        """Recognize the adapter's explicit truncation signal, not generic parse failures."""
+        if was_truncated_message(str(error)):
+            return True
+        cause: BaseException | None = error.__cause__
+        while cause is not None:
+            code = getattr(cause, "code", None)
+            if getattr(code, "value", code) == "truncated_output":
+                return True
+            cause = cause.__cause__
+        return False
+
+    def was_truncated_message(message: str) -> bool:
+        normalized = message.casefold()
+        return "output was truncated" in normalized or "truncated_output" in normalized
+
     def run_batch(
         request_input: V2ScoutRequest, request: LLMRequest
     ) -> tuple[ScoutBatch, ScoutBatchAudit]:
         _raise_if_cancelled(cancelled)
+        compact_request: LLMRequest | None = None
         if prompt_path == V2_SCOUT_V3_PROMPT_PATH:
             first = (
                 read_checkpoint(
@@ -1527,11 +1544,41 @@ def _run_scout_batches(
                         "rendered_prompt": render_stage_prompt(compact, request_input, ScoutBatch),
                     }
                 )
+        first_request = request
         last_error: LLMInvocationError | None = None
         response: ScoutBatch | None = None
         attempted = 0
+        first_truncated = False
         for number in range(1, 3):
             _raise_if_cancelled(cancelled)
+            if number == 2 and first_truncated:
+                # Retry with the shorter rationale contract after an explicit provider
+                # truncation. Honor a previously checkpointed attempt-2 request first:
+                # older runs may already have committed the original request hash.
+                if compact_request is None:
+                    compact = load_prompt_file(
+                        prompt_resource("v2_scout_v5.md"), expected_stage=LLMStage.SCOUT
+                    )
+                    compact_request = first_request.model_copy(
+                        update={
+                            "prompt": compact,
+                            "rendered_prompt": render_stage_prompt(
+                                compact, request_input, ScoutBatch
+                            ),
+                        }
+                    )
+                request = compact_request
+                if db_path is not None and checkpoint_key is not None:
+                    saved_second = read_checkpoint(
+                        db_path,
+                        run_id,
+                        f"{checkpoint_key}/batch-{request_input.batch_number}/attempt-2",
+                        V2StageAttemptCheckpoint,
+                    )
+                    if saved_second is not None and saved_second.request_hash == stage_request_hash(
+                        first_request
+                    ):
+                        request = first_request
             attempted += 1
             attempt = None
             saved = None
@@ -1555,6 +1602,11 @@ def _run_scout_batches(
                     if saved.invocation is not None
                     else None
                 )
+                if number == 1 and saved.invocation is not None:
+                    failure = saved.invocation.failure
+                    first_truncated = bool(
+                        failure is not None and was_truncated_message(failure.message)
+                    )
                 continue
             outcome = None
             try:
@@ -1591,6 +1643,7 @@ def _run_scout_batches(
                 if isinstance(exc.__cause__, V2CancellationRequested):
                     raise exc.__cause__ from None
                 last_error = exc
+                first_truncated = number == 1 and was_truncated(exc)
                 if attempt is not None:
                     outcome = V2StageOutcomeCheckpoint(
                         run_id=run_id,

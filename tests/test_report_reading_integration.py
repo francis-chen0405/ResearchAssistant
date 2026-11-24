@@ -355,6 +355,44 @@ def test_opening_handles_many_publications_without_manual_review(
     assert result.items == items
 
 
+def test_publication_opening_labels_each_mixed_relationship(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path, output = production_report(tmp_path, monkeypatch)
+    display = read_evidence(path, output.run_id)
+    template = display.items[0]
+    items = tuple(
+        template.model_copy(
+            update={
+                "source_id": uuid4(),
+                "ledger_claim_id": uuid4(),
+                "source_url": "https://example.org/same-publication",
+                "verified_publication": None,
+                "approved_factual_statement": statement,
+                "relationship_to_claim": type(template.relationship_to_claim)(relationship),
+            }
+        )
+        for statement, relationship in (
+            ("The result supports the claim.", "supports"),
+            ("The result challenges the claim.", "challenges"),
+            ("The result applies only to adults.", "qualifies"),
+        )
+    )
+    opening = build_publication_opening(display.model_copy(update={"items": items}))
+
+    findings = [
+        sentence
+        for sentence in opening.publication_opening
+        if not sentence.text.startswith("Recorded limitations:")
+    ]
+    assert len(findings) == 1
+    text = findings[0].text
+    assert "Supporting finding: The result supports the claim." in text
+    assert "Challenging finding: The result challenges the claim." in text
+    assert "Qualifying finding: The result applies only to adults." in text
+    assert set(findings[0].ledger_claim_ids) == {item.ledger_claim_id for item in items}
+
+
 def test_export_keeps_recorded_citation_and_discloses_vendor_interest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
