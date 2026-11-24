@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import math
+import socket
 import subprocess
 import sys
 import tempfile
@@ -73,6 +74,8 @@ def resolve_host_addresses(hostname: str, *, timeout: float | None = None) -> tu
             if len(payload) > MAX_OUTPUT_BYTES:
                 raise OSError("hostname resolver output exceeds bound")
             response = json.loads(payload)
+            if isinstance(response, dict) and response.get("error") == "resolution_failed":
+                raise socket.gaierror("hostname resolution failed")
             addresses = response.get("addresses") if isinstance(response, dict) else None
             if (
                 not isinstance(addresses, list)

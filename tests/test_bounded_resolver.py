@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
 import sys
 import time
@@ -78,6 +79,28 @@ def test_numeric_addresses_need_no_helper(monkeypatch: pytest.MonkeyPatch) -> No
     assert bounded_resolver.resolve_host_addresses("2606:4700:4700::1111") == (
         "2606:4700:4700::1111",
     )
+
+
+@pytest.mark.parametrize("through_transport", (False, True))
+def test_worker_resolution_failure_preserves_dns_error_category(
+    monkeypatch: pytest.MonkeyPatch, through_transport: bool
+) -> None:
+    monkeypatch.setattr(
+        bounded_resolver,
+        "_worker_command",
+        lambda: [sys.executable, "-c", 'print(\'{"error":"resolution_failed"}\')'],
+    )
+    if not through_transport:
+        with pytest.raises(socket.gaierror, match="hostname resolution failed"):
+            bounded_resolver.resolve_host_addresses("generated.example", timeout=3)
+        return
+    with httpx.Client(transport=DeadlineHTTPTransport(), timeout=3, trust_env=False) as client:
+        with pytest.raises(httpx.ConnectError) as caught:
+            client.get("https://generated.example")
+    error: BaseException | None = caught.value
+    while error is not None and not isinstance(error, socket.gaierror):
+        error = error.__cause__ or error.__context__
+    assert isinstance(error, socket.gaierror)
 
 
 @pytest.mark.slow

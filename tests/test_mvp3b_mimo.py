@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import socket
+import ssl
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -553,6 +555,84 @@ def test_direct_mimo_auth_error_omits_unsafe_request_id() -> None:
 
     assert exc_info.value.request_id is None
     assert str(exc_info.value) == "Xiaomi MiMo request was forbidden (HTTP 403)"
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected_code", "diagnostic"),
+    [
+        (httpx.ConnectError, MimoFailureCode.TRANSIENT_OUTAGE, "ConnectError"),
+        (httpx.ReadError, MimoFailureCode.TRANSIENT_OUTAGE, "ReadError"),
+        (httpx.RemoteProtocolError, MimoFailureCode.TRANSIENT_OUTAGE, "RemoteProtocolError"),
+        (httpx.PoolTimeout, MimoFailureCode.TIMEOUT, "PoolTimeout"),
+        (httpx.ConnectTimeout, MimoFailureCode.TIMEOUT, "ConnectTimeout"),
+        (httpx.ReadTimeout, MimoFailureCode.TIMEOUT, "ReadTimeout"),
+    ],
+)
+def test_direct_mimo_transport_errors_save_safe_type_diagnostics(
+    error_type: type[httpx.HTTPError],
+    expected_code: MimoFailureCode,
+    diagnostic: str,
+) -> None:
+    secret = "provider-secret-url-and-key"
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        raise error_type(f"{secret} {request.url}", request=request)
+
+    adapter = XiaomiMimoAdapter(
+        MimoConfig(api_key=SecretStr("mimo-secret-value")),
+        client=httpx.Client(
+            base_url="https://api.xiaomimimo.com/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    with pytest.raises(MimoProviderError) as exc_info:
+        adapter.generate(_request())
+
+    error = exc_info.value
+    assert error.code is expected_code
+    assert error.retryable is True
+    assert diagnostic in str(error)
+    assert secret not in str(error)
+    assert "api.xiaomimimo.com" not in str(error)
+    assert "mimo-secret-value" not in str(error)
+    assert calls == 1
+    assert adapter._thread_state.last_failure_usage is None
+
+
+@pytest.mark.parametrize(
+    ("cause", "diagnostic"),
+    [
+        (socket.gaierror(-2, "secret DNS detail"), "DNS resolution failure"),
+        (ssl.SSLError("secret TLS detail"), "TLS failure"),
+    ],
+)
+def test_direct_mimo_connection_error_reports_safe_dns_or_tls_cause(
+    cause: BaseException,
+    diagnostic: str,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        error = httpx.ConnectError("secret URL and credential", request=request)
+        error.__cause__ = cause
+        raise error
+
+    adapter = XiaomiMimoAdapter(
+        MimoConfig(api_key=SecretStr("mimo-secret-value")),
+        client=httpx.Client(
+            base_url="https://api.xiaomimimo.com/v1",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    with pytest.raises(MimoProviderError) as exc_info:
+        adapter.generate(_request())
+
+    message = str(exc_info.value)
+    assert exc_info.value.code is MimoFailureCode.TRANSIENT_OUTAGE
+    assert diagnostic in message
+    assert "ConnectError" in message
+    assert "secret" not in message
 
 
 def test_direct_mimo_schema_error_reports_only_redacted_locations_and_types() -> None:

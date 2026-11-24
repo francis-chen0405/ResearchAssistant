@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import socket
+import ssl
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -78,6 +80,37 @@ from researchassistant.providers.pricing import (
 )
 
 MAX_MODEL_RESPONSE_BYTES = 16 * 1024 * 1024
+
+_SAFE_TRANSPORT_ERROR_TYPES = frozenset(
+    {
+        "ConnectError",
+        "ReadError",
+        "WriteError",
+        "CloseError",
+        "RemoteProtocolError",
+        "LocalProtocolError",
+        "PoolTimeout",
+        "ConnectTimeout",
+        "ReadTimeout",
+        "WriteTimeout",
+    }
+)
+
+
+def _transport_diagnostic(error: httpx.HTTPError) -> str:
+    """Return an allowlisted transport label without exception-controlled text."""
+    error_type = type(error).__name__
+    label = error_type if error_type in _SAFE_TRANSPORT_ERROR_TYPES else "HTTPError"
+    cause: BaseException | None = error
+    seen: set[int] = set()
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        if isinstance(cause, socket.gaierror):
+            return f"{label}; DNS resolution failure"
+        if isinstance(cause, ssl.SSLError):
+            return f"{label}; TLS failure"
+        cause = cause.__cause__ or cause.__context__
+    return label
 
 
 class MimoFailureCode(StrEnum):
@@ -312,13 +345,13 @@ class XiaomiMimoAdapter:
         except httpx.TimeoutException as exc:
             raise MimoProviderError(
                 MimoFailureCode.TIMEOUT,
-                f"{self._provider_label} request timed out",
+                f"{self._provider_label} request timed out ({_transport_diagnostic(exc)})",
                 retryable=True,
             ) from exc
         except httpx.HTTPError as exc:
             raise MimoProviderError(
                 MimoFailureCode.TRANSIENT_OUTAGE,
-                f"{self._provider_label} connection failed",
+                f"{self._provider_label} connection failed ({_transport_diagnostic(exc)})",
                 retryable=True,
             ) from exc
         elapsed = time.monotonic() - started
