@@ -803,10 +803,30 @@ def test_production_scouts_and_captures_before_deeper_search_finishes(
             result = future.result(timeout=30)
 
     if recovery == "unknown-page":
-        starts = provider_attempt_audit(path, run_id).starts
+        before = provider_attempt_audit(path, run_id)
+        starts = {start.artifact_id: start for start in before.starts}
+        unknown = set(before.interrupted_unknown)
+        assert unknown and {starts[item].provider for item in unknown} == {
+            DiscoveryProvider.SERPSEARCH
+        }
+        dispatched = len(search.requests)
         result = run()
-        assert provider_attempt_audit(path, run_id).starts == starts
-        assert provider_attempt_audit(path, run_id).interrupted_unknown
+        after = provider_attempt_audit(path, run_id)
+        resumed_starts = {start.artifact_id: start for start in after.starts}
+        assert {item: resumed_starts[item] for item in starts} == starts
+        assert set(after.interrupted_unknown) == unknown
+        # The unknown SERP request blocks that provider; healthy EXA may run
+        # fresh follow-ups, without repeating any earlier physical operation.
+        new_starts = [start for item, start in resumed_starts.items() if item not in starts]
+        new_requests = search.requests[dispatched:]
+        assert new_starts and new_requests
+        assert {start.provider for start in new_starts} == {DiscoveryProvider.EXA}
+        assert {request.provider for request in new_requests} == {DiscoveryProvider.EXA}
+        old_operations = {start.operation_id for start in starts.values()}
+        assert not old_operations.intersection(start.operation_id for start in new_starts)
+        assert {start.operation_id for start in new_starts} == {
+            request.compiled_query.artifact_id for request in new_requests
+        }
         assert len([r for r in search.requests if r.page_number == 2]) == 1
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
     assert result.final_output.release_validation.valid
@@ -907,7 +927,9 @@ def test_progressive_reconsiders_skipped_work_once(
             response = super().search(request)
             results = []
             for item in response.results:
-                if item.original_url == self.ORIGINAL:
+                # Keep the original inside the smaller first-pass Scout tranche:
+                # this fixture requires an already-screened skip to reconsider.
+                if request.page_number == 1:
                     item = item.model_copy(
                         update={"metadata": item.metadata.model_copy(update={"abstract": None})}
                     )

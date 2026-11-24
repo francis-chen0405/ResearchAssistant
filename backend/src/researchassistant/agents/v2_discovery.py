@@ -124,7 +124,8 @@ V2_SCOUT_PROMPT_PATH = prompt_resource("v2_scout.md")
 V2_SCOUT_V2_PROMPT_PATH = prompt_resource("v2_scout_v2.md")
 V2_SCOUT_V3_PROMPT_PATH = prompt_resource("v2_scout_v3.md")
 V2_SCOUT_BATCH_SIZE = 20
-V2_FRESH_SCOUT_BATCH_SIZE = 15
+V2_FRESH_SCOUT_BATCH_SIZE = 8
+_PREVIOUS_FRESH_SCOUT_BATCH_SIZE = 15
 V2_SCOUT_MAX_WORKERS = 3
 V2_SCOUT_ARTIFACT_KEY = "phase-4-discovery-scout"
 V2_RANKING_ARTIFACT_PREFIX = "phase-3-metadata-ranking-round-"
@@ -173,6 +174,18 @@ class V2NberMetadataCheckpoint(StrictModel):
     run_id: UUID
     paper_number: str
     metadata: NberPaperMetadata | None = None
+
+
+def _checkpoint_scout_batch_size(checkpoint: V2ScoutRoundCheckpoint) -> int:
+    """Old plans predate the stored size; preserve their original request boundaries."""
+    if checkpoint.batch_size is not None:
+        return checkpoint.batch_size
+    if (
+        checkpoint.ranking_artifact is not None
+        and checkpoint.ranking_artifact.ranking_identity == RANKING_IDENTITY
+    ):
+        return _PREVIOUS_FRESH_SCOUT_BATCH_SIZE
+    return V2_SCOUT_BATCH_SIZE
 
 
 def _repair_nber_metadata(
@@ -768,6 +781,22 @@ def run_v2_discovery_and_scout(
     checkpoint = read_checkpoint(
         str(db_path), planner_output.run_id, checkpoint_key, V2ScoutRoundCheckpoint
     )
+    if checkpoint is not None:
+        batch_size = _checkpoint_scout_batch_size(checkpoint)
+    elif prefix is not None:
+        prefix_checkpoint = read_checkpoint(
+            str(db_path),
+            planner_output.run_id,
+            checkpoint_key + "/first-pass-v1",
+            V2ScoutRoundCheckpoint,
+        )
+        batch_size = (
+            _checkpoint_scout_batch_size(prefix_checkpoint)
+            if prefix_checkpoint is not None
+            else _PREVIOUS_FRESH_SCOUT_BATCH_SIZE
+            if claim_aware
+            else V2_SCOUT_BATCH_SIZE
+        )
     prior_ranking = None
     if checkpoint is None:
         reconsiderations: dict[UUID, UUID] = {}
@@ -875,6 +904,7 @@ def run_v2_discovery_and_scout(
                         batch_size,
                     ),
                     batch_offset=len(prefix_batches),
+                    batch_size=batch_size,
                 )
         if prior_ranking is None:
             checkpoint = V2ScoutRoundCheckpoint(
@@ -887,6 +917,7 @@ def run_v2_discovery_and_scout(
                 clusters=clusters,
                 scout_item_ids=tuple(item.item_id for item in scout_items),
                 ranking_artifact=ranking_artifact,
+                batch_size=batch_size,
                 created_at=completed_at,
             )
             insert_v2_artifact(str(db_path), checkpoint_key, checkpoint, completed_at)
@@ -1172,11 +1203,13 @@ def _ranked_scout_selection(
     reconsiderations: Mapping[UUID, UUID] | None = None,
     candidate_limit: int | None = None,
     batch_offset: int = 0,
+    batch_size: int | None = None,
 ) -> tuple[tuple[NormalizedDiscoveryItem, ...], V2MetadataRankingArtifact]:
     ranked_by_id = {item.item_id: item for item in ranks}
     by_item = {item.item_id: item for item in items}
     claim_aware = ranking_identity == RANKING_IDENTITY
-    batch_size = V2_FRESH_SCOUT_BATCH_SIZE if claim_aware else V2_SCOUT_BATCH_SIZE
+    if batch_size is None:
+        batch_size = V2_FRESH_SCOUT_BATCH_SIZE if claim_aware else V2_SCOUT_BATCH_SIZE
     available = policy.max_scout_per_round - len(already_scouted)
     if candidate_limit is not None:
         available = min(available, candidate_limit)

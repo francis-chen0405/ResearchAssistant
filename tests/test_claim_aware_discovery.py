@@ -212,6 +212,10 @@ class _EvidenceScraper(phase12._Scraper):
         response = super().scrape(request)
         if request.url in {FULL_TEXT, GAP, LATER_MIRROR}:
             text = phase12.SOURCE_TEXT + " We used data from trial NCT01234567."
+            if request.url == GAP:
+                # This is a distinct publication using the same underlying
+                # trial, rather than an exact body mirror of the first paper.
+                text += " The follow-up methods focus on rural participants in the original trial."
             if request.url == LATER_MIRROR:
                 text += f" {FULLER_QUOTE}"
             return response.model_copy(

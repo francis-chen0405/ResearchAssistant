@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from providers.v2_routing import V2RoutingConfig
+from providers.v2_routing import V2_ROUTING_PROMPT_VERSION, V2RoutingConfig
 from researchassistant.contracts.discovery_v2 import (
     V2CompiledQueryAction,
     V2ConceptGroup,
@@ -36,6 +36,7 @@ from researchassistant.contracts.discovery_v2 import (
 )
 from researchassistant.contracts.model_contracts import DiscoveryProvider, SourceSnapshot
 from researchassistant.contracts.model_research import ResearchDirection, ResearchDirections
+from researchassistant.providers.llm import LLMStage, load_prompt
 from researchassistant.research.v2_orchestrator import V2RunCeilings, _production_fingerprint
 
 
@@ -599,7 +600,7 @@ def test_binding_requires_complete_ordered_provider_identity_and_configuration_h
 
 
 def test_discovery_metadata_keeps_fingerprint_except_approved_quote_context_version() -> None:
-    """Verify the R41 policy addition and retain the exact preceding identity check."""
+    """Pin approved quote-context changes and retain the preceding identity check."""
     routing = V2RoutingConfig.from_environment(
         {
             "MIMO_API_KEY": "test",
@@ -635,10 +636,27 @@ def test_discovery_metadata_keeps_fingerprint_except_approved_quote_context_vers
     )
     prompts = payload["semantic_policy"]["custom_prompt_hashes"]
     assert prompts["v2_evidence_analyst_v9.md"] == (
-        "4b34d72f6849d144aec309b2014e1b207621146912eb4f165195131bed760a5b"
+        "98845f25d9ca513a7af43627898953fc28bffbf40ff46aba30d52a83e54b94b3"
     )
     prompts["v2_evidence_analyst_v9.md"] = (
         "4146344e4a5ab62942c2fcf3a4b38ef7ea35b955b29cb117e88b906eb230f270"
+    )
+    routing_prompts = {
+        stage.value: {"version": load_prompt(stage).version, "sha256": load_prompt(stage).sha256}
+        for stage in LLMStage
+    }
+    assert routing_prompts["extractor"] == {
+        "version": "mlp5-table-context-v1",
+        "sha256": "e6986c388ca7576bb0532c6331f494a78312ab25a8d0d3309da94f30eeb3bbc3",
+    }
+    # Restore the exact prompt bytes/version preceding the table-context change in 7f0914a.
+    routing_prompts["extractor"]["version"] = "mlp4-relaxed-evidence-yield-v1"
+    routing_prompts["extractor"]["sha256"] = (
+        "b864c32a563b54006986507ead3947d28215452cb3cf89c39774d9be48756bcc"
+    )
+    preceding_prompts = json.dumps(routing_prompts, sort_keys=True, separators=(",", ":"))
+    payload["routing_contract"]["prompt_identity"] = (
+        f"{V2_ROUTING_PROMPT_VERSION}|{sha256(preceding_prompts.encode()).hexdigest()}"
     )
     preceding = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     assert sha256(preceding.encode()).hexdigest() == (

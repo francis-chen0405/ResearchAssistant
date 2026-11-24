@@ -8,7 +8,14 @@ from datetime import datetime
 from typing import Literal, TypeVar
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from researchassistant.contracts.metadata_ranking import V2MetadataRankingArtifact
 from researchassistant.contracts.models import (
@@ -50,9 +57,19 @@ class V2ScoutRoundCheckpoint(StrictModel):
     clusters: tuple[SourceCluster, ...]
     scout_item_ids: tuple[UUID, ...]
     ranking_artifact: V2MetadataRankingArtifact | None
+    batch_size: Literal[8, 15, 20] | None = None
     created_at: datetime
 
     _created_is_aware = field_validator("created_at")(_aware_timestamp)
+
+    @model_serializer(mode="wrap")
+    def omit_historical_batch_size(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        value = handler(self)
+        if self.batch_size is None:
+            value.pop("batch_size", None)
+        return value
 
     @model_validator(mode="after")
     def validate_ownership(self) -> V2ScoutRoundCheckpoint:

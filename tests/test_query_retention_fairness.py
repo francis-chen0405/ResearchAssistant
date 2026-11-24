@@ -490,11 +490,18 @@ def test_first_pass_completes_logical_pages_before_deeper_transport(
     assert primary.page_number == metadata.page_number == 1
     assert metadata.parent_attempt_id == primary.artifact_id
     if serp_end == "unknown":
-        assert trace[4:] == ["serp-2", "serp-3"]
+        # Unknown paid exposure blocks further SERP work, while the healthy
+        # provider can finish the continuation reserved by its first pass.
+        assert trace[4:] == ["serp-2", "serp-3", "openalex-page-2"]
         assert query_dispatch_states(path, run_id) == {
             serp.compiled_query.artifact_id: "unknown",
             more_serp.compiled_query.artifact_id: "blocked",
         }
+        assert [
+            (start.operation_id, start.page_number)
+            for start in audit.starts
+            if start.provider is DiscoveryProvider.SERPSEARCH
+        ] == [(serp.compiled_query.artifact_id, page) for page in (1, 2, 3)]
         assert len(audit.interrupted_unknown) == 1
         unknown_id = audit.interrupted_unknown[0]
         for start, completion in zip(audit.starts, audit.completions, strict=True):

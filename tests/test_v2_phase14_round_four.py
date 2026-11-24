@@ -74,7 +74,7 @@ def test_round_four_reserves_both_attempts_for_smaller_scout_batches() -> None:
     from test_v2_phase4_discovery_scout import _routing
 
     gap = _continuity_output((), _identity_gap())
-    budget = V2AdaptiveBudgetState(model_calls_remaining=8)
+    budget = V2AdaptiveBudgetState(model_calls_remaining=12)
     reservation = _conservative_reservation(
         budget=budget,
         post_gap_budget=budget,
@@ -85,9 +85,12 @@ def test_round_four_reserves_both_attempts_for_smaller_scout_batches() -> None:
         search_agent_cost=Decimal("0.001"),
     )
     assert reservation is not None
-    assert reservation.scout_calls == 4  # 25 candidates, two batches, two attempts each.
-    assert reservation.optional_calls == 7
-    insufficient = V2AdaptiveBudgetState(model_calls_remaining=7)
+    assert reservation.scout_calls == 8  # 25 candidates, four batches, two attempts each.
+    assert reservation.optional_calls == 11
+    assert budget.model_calls_remaining == (
+        reservation.optional_calls + reservation.protected_downstream_calls
+    )
+    insufficient = V2AdaptiveBudgetState(model_calls_remaining=11)
     assert (
         _conservative_reservation(
             budget=insufficient,

@@ -26,12 +26,14 @@ from researchassistant.agents.v2_evidence_analyst import (
 )
 from researchassistant.agents.v2_extraction import run_v2_exact_extraction, snapshots_by_source
 from researchassistant.agents.v2_source_selection import _source_reservation
+from researchassistant.agents.v2_stage_checkpoint import checkpoint_hash
 from researchassistant.common.money import add_usd, nonnegative_difference_usd
 from researchassistant.contracts.extraction import V2ExactExtractionResult, V2ExtractionState
 from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_BACKFILL_POLICY_IDENTITY,
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
     V2_DEEP_ANALYSIS_SOURCE_TOKEN_CAP,
+    SourceSnapshot,
     StrictModel,
     V2DeepAnalysisBackfillResult,
     V2DeepAnalysisBudget,
@@ -53,6 +55,7 @@ from researchassistant.contracts.models import (
     V2SourceSelectionCandidate,
     V2SourceSelectionQueueResult,
 )
+from researchassistant.evidence.evidence_core import validate_snapshot_integrity
 from researchassistant.providers.llm import LLMProvider, LLMStage
 from researchassistant.providers.v2_budget import (
     V2BudgetExceededError,
@@ -69,6 +72,120 @@ from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY = "phase-13-deep-analysis-backfill-analyzer-admission"
 V2_DEEP_ANALYSIS_MAX_WORKERS = 4
+EXACT_BODY_MIRROR_POLICY_KEY = "exact-body-mirror-scheduling-v1"
+
+
+class V2ExactBodyMirrorPolicy(StrictModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    enabled: bool
+
+
+def exact_body_mirror_policy(path: str, run_id: UUID, now: datetime) -> bool:
+    """Freeze new-run behavior before either early assessment or final backfill."""
+    try:
+        stored = read_v2_artifact(path, run_id, EXACT_BODY_MIRROR_POLICY_KEY)
+    except KeyError:
+        stored = None
+    if stored is not None:
+        return V2ExactBodyMirrorPolicy.model_validate_json(stored.payload_json).enabled
+    audit = read_v2_physical_call_audit(path, run_id)
+    enabled = not any(
+        start.stage in {LLMStage.EXTRACTOR.value, LLMStage.ANALYST.value} for start in audit.starts
+    )
+    insert_v2_artifact(
+        path,
+        EXACT_BODY_MIRROR_POLICY_KEY,
+        V2ExactBodyMirrorPolicy(run_id=run_id, enabled=enabled),
+        now,
+    )
+    return enabled
+
+
+class V2ExactBodyMirror(StrictModel):
+    """An unmodified source location whose complete captured body is already queued."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    retained_source_id: UUID
+    snapshot_sha256: str
+
+    @model_validator(mode="after")
+    def validate_distinct_locations(self) -> V2ExactBodyMirror:
+        if self.source_id == self.retained_source_id:
+            raise ValueError("a source cannot be its own exact-body mirror")
+        return self
+
+
+class V2ExactBodyMirrorPlan(StrictModel):
+    """Freeze scheduling exclusions while retaining every acquisition and source ID."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: UUID
+    input_sha256: str
+    enabled: bool
+    mirrors: tuple[V2ExactBodyMirror, ...]
+
+
+def _exact_body_mirror_plan(
+    queue_result: V2SourceSelectionQueueResult,
+    priority: tuple[UUID, ...],
+    snapshots: dict[UUID, SourceSnapshot],
+    *,
+    enabled: bool,
+    assessed_source_ids: frozenset[UUID] = frozenset(),
+) -> V2ExactBodyMirrorPlan:
+    candidates = {item.source_id: item for item in queue_result.input.survivors}
+    seen: dict[tuple[object, str], UUID] = {}
+    mirrors: list[V2ExactBodyMirror] = []
+    identities = []
+    # Existing assessed ownership wins over later ranking. Historical assessed
+    # sources keep their own records even if another assessed body is identical.
+    comparison_order = tuple(
+        source_id for source_id in priority if source_id in assessed_source_ids
+    )
+    comparison_order += tuple(
+        source_id for source_id in priority if source_id not in assessed_source_ids
+    )
+    for source_id in comparison_order:
+        candidate = candidates[source_id]
+        snapshot = snapshots[source_id]
+        validate_snapshot_integrity(snapshot)
+        identities.append(
+            (
+                str(source_id),
+                candidate.direction.value,
+                str(snapshot.snapshot_id),
+                snapshot.snapshot_sha256,
+                snapshot.truncated,
+            )
+        )
+        if not enabled or snapshot.truncated:
+            continue
+        key = (candidate.direction, snapshot.snapshot_sha256)
+        retained = seen.get(key)
+        if retained is None:
+            seen[key] = source_id
+        elif (
+            source_id not in assessed_source_ids
+            and snapshots[retained].normalized_text == snapshot.normalized_text
+        ):
+            mirrors.append(
+                V2ExactBodyMirror(
+                    source_id=source_id,
+                    retained_source_id=retained,
+                    snapshot_sha256=snapshot.snapshot_sha256,
+                )
+            )
+    return V2ExactBodyMirrorPlan(
+        run_id=queue_result.run_id,
+        input_sha256=checkpoint_hash(identities),
+        enabled=enabled,
+        mirrors=tuple(mirrors),
+    )
 
 
 class V2DeepAnalysisWave(StrictModel):
@@ -190,6 +307,31 @@ def run_v2_deep_analysis_with_backfill(
         attempted_source_ids.append(wave.source_id)
 
     initial_audit = read_v2_physical_call_audit(path, queue_result.run_id)
+    mirror_key = f"{artifact_key}-exact-body-mirrors-v1"
+    try:
+        saved_mirrors = read_v2_artifact(path, queue_result.run_id, mirror_key)
+    except KeyError:
+        saved_mirrors = None
+    # An interrupted historical run must retain the scheduling policy under
+    # which it already made physical calls. New runs freeze this plan before
+    # their first deep-analysis wave, including plans with no duplicate bodies.
+    enabled = exact_body_mirror_policy(path, queue_result.run_id, _aware(now()))
+    if saved_mirrors is not None:
+        saved_plan = V2ExactBodyMirrorPlan.model_validate_json(saved_mirrors.payload_json)
+        enabled = saved_plan.enabled
+    mirror_plan = _exact_body_mirror_plan(
+        queue_result,
+        priority,
+        current_snapshots,
+        enabled=enabled,
+        assessed_source_ids=frozenset(wave.source_id for wave in prior_waves),
+    )
+    if saved_mirrors is not None:
+        if mirror_plan != saved_plan:
+            raise ValueError("persisted exact-body mirror plan differs from source snapshots")
+    else:
+        insert_v2_artifact(path, mirror_key, mirror_plan, _aware(now()))
+    mirror_ids = {mirror.source_id for mirror in mirror_plan.mirrors}
     pending = tuple(
         _remaining_source_envelope(
             path=path,
@@ -199,7 +341,7 @@ def run_v2_deep_analysis_with_backfill(
             audit=initial_audit,
         )
         for source_id in priority
-        if source_id not in attempted
+        if source_id not in attempted and source_id not in mirror_ids
     )
     cursor = 0
     stop_after_wave = False

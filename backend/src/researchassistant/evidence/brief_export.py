@@ -312,6 +312,11 @@ def _v2_reading_aid(
         "degraded_gap_search_agent": "The follow-up search could not be completed.",
         "invalid_search_agent_plan": "The follow-up search plan could not be used.",
     }
+    if output.stopping.reason.value == "budget" and output.stopping.explanation.strip():
+        stop_labels["budget"] = (
+            "A research limit stopped further work. Recorded stopping reason: "
+            + output.stopping.explanation
+        )
     lines.extend(
         (
             "",

@@ -121,6 +121,18 @@ class DeadlineBackend(SyncBackend):
 
 
 class DeadlineHTTPTransport(httpx.HTTPTransport):
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        # Pool acquisition happens before DeadlineBackend/DeadlineStream are
+        # reached. Its configured timeout must also spend the remaining budget,
+        # including time already spent preparing or redirecting the request.
+        timeouts = dict(request.extensions.get("timeout", {}))
+        try:
+            timeouts["pool"] = remaining_timeout(timeouts.get("pool"))
+        except httpcore.ReadTimeout as exc:
+            raise httpx.ReadTimeout(str(exc), request=request) from exc
+        request.extensions["timeout"] = timeouts
+        return super().handle_request(request)
+
     def __init__(
         self,
         *,

@@ -518,6 +518,59 @@ def test_v2_export_and_api_schema_use_the_persisted_final_output(
 
 
 @pytest.mark.parametrize(
+    "explanation",
+    [
+        "Follow-up budget exceeded remaining allowance for model cost: "
+        "$0.098321 required, $0.03603743 remaining.",
+        "The saved governor recorded a research limit without identifying which one.",
+        " ",
+    ],
+)
+def test_budget_reading_aid_uses_saved_reason_without_changing_release(
+    tmp_path: Path, explanation: str
+) -> None:
+    from researchassistant.evidence.brief_export import _v2_reading_aid
+
+    path, reviewer_result = _run(tmp_path, Phase10Provider([_approved()]))
+    continuation = _continuation(reviewer_result.run_id, V2AdaptiveStopCode.BUDGET)
+    continuation = continuation.model_copy(
+        update={
+            "stopping_decision": continuation.stopping_decision.model_copy(
+                update={"stopping_reason": explanation}
+            )
+        }
+    )
+    output = build_v2_final_research_output(
+        reviewer_result=reviewer_result,
+        continuation=continuation,
+        synthesis=_synthesis(reviewer_result),
+        created_at=NOW,
+    )
+    insert_v2_artifact(path, V2_FINAL_OUTPUT_ARTIFACT_KEY, output, NOW)
+    saved = read_v2_artifact(path, output.run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY)
+    original_render = render_v2_final_output(output)
+    original_payload = output.model_dump_json()
+    reading_aid = _v2_reading_aid(output)
+    destination = tmp_path / "budget-reading-aid.md"
+    exported = export_released_brief(
+        path, str(output.run_id), destination, BriefExportFormat.MARKDOWN, generated_at=NOW
+    )
+
+    for text in (reading_aid, destination.read_text()):
+        if explanation.strip():
+            assert f"Recorded stopping reason: {explanation}" in text
+            assert "specific exhausted limit was not identified" not in text
+        else:
+            assert "specific exhausted limit was not identified" in text
+            assert "Recorded stopping reason:" not in text
+        assert "actual spend" not in text
+    assert render_v2_final_output(output) == original_render
+    assert output.model_dump_json() == original_payload
+    assert exported.metadata.rendered_brief_hash == output.release_validation.rendered_output_hash
+    assert read_v2_artifact(path, output.run_id, V2_FINAL_OUTPUT_ARTIFACT_KEY) == saved
+
+
+@pytest.mark.parametrize(
     ("directions", "section_type"),
     [
         (ResearchDirections(support_enabled=True, challenge_enabled=False), "supporting"),

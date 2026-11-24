@@ -808,6 +808,23 @@ test("export copies take labels from the backend projection and infer none thems
   assert.match(copy, /Study design not recorded/);
 });
 
+test("reading aid fallback preserves the recorded budget reason without changing the release", () => {
+  const { briefWithReadingAid } = hookHarness("features/results/reading-aid.ts", {}).exports;
+  const explanation = "Follow-up budget exceeded remaining allowance for model cost: $0.098321 required, $0.03603743 remaining.";
+  const result = { exact_claim: "Claim", directions: { support_enabled: true }, all_surviving_sources: [],
+    claim_coverage_map: [], unresolved_material_gaps: [], stopping: { reason: "budget", explanation } };
+  const saved = JSON.stringify(result);
+  const copy = briefWithReadingAid("immutable release", result, null);
+  assert.ok(copy.includes(`Recorded stopping reason: ${explanation}`));
+  assert.doesNotMatch(copy, /specific exhausted limit was not identified|actual spend/);
+  assert.equal(JSON.stringify(result), saved);
+  for (const missing of [undefined, "", " "]) {
+    const fallback = briefWithReadingAid("immutable release", { ...result, stopping: { reason: "budget", explanation: missing } }, null);
+    assert.match(fallback, /A research limit stopped further work/);
+    assert.doesNotMatch(fallback, /Recorded stopping reason:/);
+  }
+});
+
 test("evidence picture does not infer balance from raw finding counts", () => {
   const { findingsByRelationship, evidencePicture } = hookHarness("features/results/model.ts", {}).exports;
   const item = (id, relationship, fit, family = id) => ({ ledger_claim_id: id, source_id: id, source_family: family,

@@ -237,10 +237,10 @@ def test_page_two_study_reaches_scout_shortlist_and_immutable_usable_snapshot(
         item for item in discovery_run.ranking_artifact.ranks if item.item_id == study.item_id
     )
     assert study_rank.rank <= 3
-    # One affordable scout call covers one V2_FRESH_SCOUT_BATCH_SIZE batch (15 of the
+    # One affordable scout call covers one V2_FRESH_SCOUT_BATCH_SIZE batch (8 of the
     # 19 deduplicated works); the remainder is recorded as budget-limited.
     assert discovery_run.ranking_artifact.scouted_count == V2_FRESH_SCOUT_BATCH_SIZE
-    assert discovery_run.ranking_artifact.budget_limited_count == 4
+    assert discovery_run.ranking_artifact.budget_limited_count == 19 - V2_FRESH_SCOUT_BATCH_SIZE
     assert len(scout.requests) == 1
 
     acquisition_text = SOURCE_TEXT
@@ -292,7 +292,8 @@ def test_ranked_acquisition_backfills_until_direction_target_is_usable(
             max_acquisition_per_round=60,
         ),
     )
-    discovery_run, _ = _run_discovery(path, run_id, plan, results, model_calls=10)
+    # Backfilling ten usable sources needs two eight-candidate Scout batches.
+    discovery_run, _ = _run_discovery(path, run_id, plan, results, model_calls=12)
     ranking = discovery_run.ranking_artifact
     assert ranking is not None
 

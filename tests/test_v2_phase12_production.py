@@ -188,7 +188,9 @@ class _Scraper:
             resolved_url=request.url,
             original_url=request.url,
             content_type="text/plain",
-            text=SOURCE_TEXT,
+            # Distinct fixture URLs represent independently captured studies.
+            # Keep their complete bodies distinct while preserving quote offsets.
+            text=f"{SOURCE_TEXT} Capture location: {request.url}.",
             provider_name="phase12-fixture",
             provider_version="v1",
         )
@@ -1261,7 +1263,8 @@ def test_orchestrator_round_four_uses_fresh_budget_after_gap_analysis(
     )
     assert decision.reservation.provider_search_calls == 2
     assert decision.reservation.acquisition_cluster_capacity == 10
-    assert decision.reservation.optional_calls == 5
+    assert decision.reservation.scout_calls == 4
+    assert decision.reservation.optional_calls == 7
 
 
 def test_direct_round_four_requires_fresh_snapshot_and_rejects_stale_capacity(

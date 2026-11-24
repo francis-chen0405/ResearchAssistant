@@ -119,7 +119,14 @@ def test_source_cap_rejection_is_one_call_and_backfill_continues(
         and request.source_id != model.blocked_source_id
     )
     original_input = cast(V2ExtractionLLMInput, later_extraction_request.input_artifact)
-    assert original_input.untrusted_source_text == SOURCE_TEXT
+    original_source = next(
+        source
+        for source in backfill.final_queue_result.input.survivors
+        if source.source_id == original_input.source_id
+    )
+    assert original_input.untrusted_source_text == (
+        f"{SOURCE_TEXT} Capture location: {original_source.source_url}."
+    )
     assert original_input.selectable_source_text.count("62 percent reported") == 1
     assert later_extraction_request.rendered_prompt.count("62 percent reported") == 1
     assert "[1]" in later_extraction_request.rendered_prompt

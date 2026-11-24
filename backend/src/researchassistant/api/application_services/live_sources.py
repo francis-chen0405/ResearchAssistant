@@ -12,7 +12,11 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import BaseModel
 
 from researchassistant.agents.capture_overlap import V2CaptureDispatch, V2CaptureReady
-from researchassistant.agents.v2_discovery import _normalized_doi, _provider_identity_anchors
+from researchassistant.agents.v2_discovery import (
+    _checkpoint_scout_batch_size,
+    _normalized_doi,
+    _provider_identity_anchors,
+)
 from researchassistant.agents.v2_stage_checkpoint import (
     V2ScoutRoundCheckpoint,
     V2StageAttemptCheckpoint,
@@ -61,7 +65,6 @@ from researchassistant.storage.store import (
 
 _FIRST_PASS = "/first-pass-v1"
 _SCOUT_PLAN = "scout-checkpoint-v1/"
-_BATCH_SIZE = 20
 _ROUNDS = tuple(
     (number, discovery + suffix, f"phase-3-metadata-ranking-round-{number}{suffix}", probe)
     for number in range(1, 5)
@@ -171,8 +174,9 @@ def _scout_results(
         batch, attempt_number = map(int, match.groups())
         attempt_key = key.removesuffix("/outcome")
         attempt = values.get(attempt_key)
-        start = (batch - batch_offset - 1) * _BATCH_SIZE
-        expected = plan.scout_item_ids[start : start + _BATCH_SIZE] if start >= 0 else ()
+        batch_size = _checkpoint_scout_batch_size(plan)
+        start = (batch - batch_offset - 1) * batch_size
+        expected = plan.scout_item_ids[start : start + batch_size] if start >= 0 else ()
         if (
             not isinstance(attempt, V2StageAttemptCheckpoint)
             or attempt.stage_key != attempt_key.rsplit("/", 1)[0]

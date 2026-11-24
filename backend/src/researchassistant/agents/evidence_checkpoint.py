@@ -16,17 +16,22 @@ from pydantic import ConfigDict, Field
 from researchassistant.agents.adaptive_summary import _merge_survivors
 from researchassistant.agents.v2_deep_analysis import (
     V2DeepAnalysisWave,
+    V2ExactBodyMirror,
+    V2ExactBodyMirrorPlan,
+    _exact_body_mirror_plan,
     _run_source_wave,
     _single_source_queue,
+    exact_body_mirror_policy,
 )
 from researchassistant.agents.v2_discovery import _selected_model_input_tokens, uses_claim_ranking
+from researchassistant.agents.v2_extraction import snapshots_by_source
 from researchassistant.agents.v2_source_selection import (
     _queue_priority,
     _subtract_usd,
     build_v2_source_selection_input,
     calculate_v2_deep_analysis_queue,
 )
-from researchassistant.agents.v2_stage_checkpoint import read_checkpoint
+from researchassistant.agents.v2_stage_checkpoint import checkpoint_hash, read_checkpoint
 from researchassistant.common.money import add_usd
 from researchassistant.contracts.model_contracts import StrictModel
 from researchassistant.contracts.models import (
@@ -39,6 +44,7 @@ from researchassistant.contracts.models import (
     V2SourceSelectionQueueResult,
 )
 from researchassistant.contracts.source_recovery import AssessedSourceFinding
+from researchassistant.evidence.evidence_core import validate_snapshot_integrity
 from researchassistant.providers.llm import LLMProvider, LLMRequest, LLMStage
 from researchassistant.providers.pricing import ModelPriceCap
 from researchassistant.providers.v2_budget import BudgetedV2LLMProvider, V2CancellationRequested
@@ -94,6 +100,7 @@ def assess_initial_sources(
         if result.run_id != discovery.run_id or result.exact_claim != exact_claim:
             raise ValueError("evidence checkpoint claim changed")
         return result
+    deduplicate_bodies = exact_body_mirror_policy(str(db_path), discovery.run_id, clock())
     claim_ranking = uses_claim_ranking(db_path, discovery.run_id)
     pool = _merge_survivors(
         discovery.run_id,
@@ -142,7 +149,24 @@ def assess_initial_sources(
                 V2EvidenceCheckpointPlan(run_id=discovery.run_id, queue=queue),
                 clock(),
             )
+        mirror_plan = _exact_body_mirror_plan(
+            queue,
+            queue.queued_source_ids,
+            snapshots_by_source((acquisition,)),
+            enabled=deduplicate_bodies,
+        )
+        mirror_key = CHECKPOINT_KEY + "-exact-body-mirrors-v1"
+        saved_mirrors = read_checkpoint(
+            db_path, discovery.run_id, mirror_key, V2ExactBodyMirrorPlan
+        )
+        if saved_mirrors is None:
+            insert_v2_artifact(db_path, mirror_key, mirror_plan, clock())
+        elif saved_mirrors != mirror_plan:
+            raise ValueError("evidence checkpoint mirror ownership changed")
+        mirror_ids = {mirror.source_id for mirror in mirror_plan.mirrors}
         for source_id in queue.queued_source_ids:
+            if source_id in mirror_ids:
+                continue
             if cancellation_requested is not None and cancellation_requested():
                 raise V2CancellationRequested("cancelled before evidence checkpoint source")
             waves.append(
@@ -302,6 +326,7 @@ class EarlyAssessment:
         self.plans: dict[UUID, V2EvidenceCheckpointPlan] = {}
         self.priority: tuple[UUID, ...] = ()
         self.capacity = 0
+        self.deduplicate_bodies = False
 
     @staticmethod
     def _plan_key(slot: int) -> str:
@@ -314,6 +339,7 @@ class EarlyAssessment:
     ) -> None:
         if self.budget is not None:
             return
+        self.deduplicate_bodies = exact_body_mirror_policy(self.path, self.run_id, self.clock())
         self.budget = self._budget(lead_id, pending)
         reserve = self.budget.protected
         self.capacity = min(
@@ -489,6 +515,63 @@ class EarlyAssessment:
         source_id: UUID,
         capture: V2AcquisitionProbeOutput,
     ) -> bool:
+        if self.deduplicate_bodies:
+            source = next(item for item in capture.survivors if item.cluster_id == source_id)
+            snapshot = next(
+                item.snapshot
+                for item in capture.acquisitions
+                if item.snapshot.snapshot_id == source.snapshot_id
+            )
+            validate_snapshot_integrity(snapshot)
+            if not snapshot.truncated:
+                key = f"{CHECKPOINT_KEY}/exact-body-mirror/{source_id}"
+                saved = read_checkpoint(self.path, self.run_id, key, V2ExactBodyMirrorPlan)
+                # Repeated readiness callbacks retain their first proven owner,
+                # even if another equivalent capture has since become ready.
+                retained_order = tuple(assigned)
+                if saved is not None:
+                    retained_id = saved.mirrors[0].retained_source_id
+                    if retained_id not in assigned:
+                        raise ValueError("early mirror retained capture is unavailable")
+                    retained_order = (
+                        retained_id,
+                        *(item for item in assigned if item != retained_id),
+                    )
+                for retained_id in retained_order:
+                    if retained_id == source_id:
+                        continue
+                    earlier = assigned[retained_id]
+                    retained = next(
+                        item for item in earlier.survivors if item.cluster_id == retained_id
+                    )
+                    original = next(
+                        item.snapshot
+                        for item in earlier.acquisitions
+                        if item.snapshot.snapshot_id == retained.snapshot_id
+                    )
+                    validate_snapshot_integrity(original)
+                    if (
+                        source.direction == retained.direction
+                        and not original.truncated
+                        and snapshot.snapshot_sha256 == original.snapshot_sha256
+                        and snapshot.normalized_text == original.normalized_text
+                    ):
+                        mirror = V2ExactBodyMirror(
+                            source_id=source_id,
+                            retained_source_id=retained_id,
+                            snapshot_sha256=snapshot.snapshot_sha256,
+                        )
+                        mirror_plan = V2ExactBodyMirrorPlan(
+                            run_id=self.run_id,
+                            enabled=True,
+                            input_sha256=checkpoint_hash(mirror.model_dump(mode="json")),
+                            mirrors=(mirror,),
+                        )
+                        if saved is None:
+                            insert_v2_artifact(self.path, key, mirror_plan, self.clock())
+                        elif saved != mirror_plan:
+                            raise ValueError("early mirror ownership changed")
+                        return False
         pool = _merge_survivors(
             self.run_id,
             tuple((1, discovery, output) for output in (*assigned.values(), capture)),

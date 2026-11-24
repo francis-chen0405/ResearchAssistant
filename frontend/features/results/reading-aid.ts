@@ -83,7 +83,10 @@ export function briefWithReadingAid(brief: string, result: V2FinalResearchOutput
       ? "Coverage was assessed and gaps or incomplete dimensions remain."
       : "Coverage was assessed and no gaps were recorded; this does not prove complete coverage.",
     "", `Research direction: ${result.directions.support_enabled && result.directions.challenge_enabled ? "supporting and challenging evidence" : result.directions.support_enabled ? "supporting evidence only" : "challenging evidence only"}`,
-    "", "## Earlier search decision", researchStopLabel(result.stopping.reason),
+    "", "## Earlier search decision",
+    result.stopping.reason === "budget" && result.stopping.explanation?.trim()
+      ? `A research limit stopped further work. Recorded stopping reason: ${result.stopping.explanation}`
+      : researchStopLabel(result.stopping.reason),
     "", "## Admitted evidence and reading locations");
   lines.push(...(evidence?.budget_context ?? []));
   for (const outcome of evidence?.source_budget_outcomes ?? []) {

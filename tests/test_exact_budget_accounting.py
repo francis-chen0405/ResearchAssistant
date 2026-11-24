@@ -132,15 +132,15 @@ def test_post_analysis_shortfall_explains_all_limits_and_protected_work() -> Non
 
     assert reason == (
         "Follow-up budget exceeded the remaining allowance for model calls, tokens, model cost. "
-        "Model calls: 9 required (5 follow-up + 4 protected), 8 remaining. "
-        "Tokens: 60003 required (60002 follow-up + 1 protected), 60002 remaining. "
+        "Model calls: 11 required (7 follow-up + 4 protected), 8 remaining. "
+        "Tokens: 60005 required (60004 follow-up + 1 protected), 60002 remaining. "
         "Model cost: $2.25000000000000000000000000002 required "
         "($2.00000000000000000000000000002 follow-up + $0.25 protected), $2.25 remaining."
     )
     exact_fit = budget.model_copy(
         update={
-            "model_calls_remaining": 9,
-            "tokens_remaining": 60_003,
+            "model_calls_remaining": 11,
+            "tokens_remaining": 60_005,
             "cost_remaining_usd": Decimal("2.25000000000000000000000000002"),
         }
     )

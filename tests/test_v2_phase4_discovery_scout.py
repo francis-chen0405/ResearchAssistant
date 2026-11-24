@@ -407,7 +407,7 @@ def test_three_fresh_scout_batches_overlap_and_publish_in_order() -> None:
                         title=f"Study {index}",
                         rank=index + 1,
                     )
-                    for index in range(45)
+                    for index in range(3 * V2_FRESH_SCOUT_BATCH_SIZE)
                 ),
             ),
         ),
@@ -442,7 +442,7 @@ def test_three_fresh_scout_batches_overlap_and_publish_in_order() -> None:
         on_batch=on_batch,
     )
 
-    assert [len(batch.items) for batch in batches] == [15, 15, 15]
+    assert [len(batch.items) for batch in batches] == [V2_FRESH_SCOUT_BATCH_SIZE] * 3
     assert all(audit.attempted_calls == 1 and not audit.fallback_used for audit in audits)
     assert published == [((1,), 2), ((1, 2), 1), ((1, 2, 3), 0)]
 
