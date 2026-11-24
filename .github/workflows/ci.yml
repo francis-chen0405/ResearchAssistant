@@ -17,7 +17,9 @@ jobs:
   tests:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The 3,465-test coverage suite reached 98% before the 30-minute job limit;
+    # allow bounded headroom for the suite plus isolated-install verification.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +50,7 @@ jobs:
         run: python -m pytest tests/test_pdf_worker_deadline.py --cov --cov-config=tests/pyproject.toml --cov-report=
 
       - name: Run tests with branch coverage
-        run: python -m pytest tests --cov --cov-config=tests/pyproject.toml --cov-report=term-missing
+        run: python -m pytest tests --cov --cov-config=tests/pyproject.toml --cov-report=term-missing --durations=20
 
   quality:
     name: Ruff lint and formatting

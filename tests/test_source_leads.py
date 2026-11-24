@@ -244,15 +244,58 @@ assert read_source_leads(sys.argv[1], UUID(sys.argv[2])).total == 2
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("contended_source", [None, 4])
 def test_full_production_pipeline_leads_keep_admission_families_and_released_bytes(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    contended_source: int | None,
 ) -> None:
+    from contextlib import closing
+    from threading import Timer
+
     from test_product_discovery_pipeline import _run, phase12
 
+    from researchassistant.agents import v2_deep_analysis
     from researchassistant.api.application_services.live_sources import read_live_sources
     from researchassistant.api.application_services.result_reads import read_result
     from researchassistant.contracts.models import DiscoveryProvider, ResearchControls
     from researchassistant.contracts.search import SearchDiscoveryMetadata
+    from researchassistant.storage.sqlite_policy import OVERLAPPING_ACCESS_TIMEOUT_MS
+    from researchassistant.storage.store import _connect
+
+    if contended_source is not None:
+        original_wave = v2_deep_analysis._run_source_wave
+
+        def contended_wave(**kwargs: object) -> object:
+            source = next(
+                item
+                for item in kwargs["queue_result"].input.survivors
+                if item.source_id == kwargs["source_id"]
+            )
+            if not source.source_url.endswith(f"-{contended_source}"):
+                return original_wave(**kwargs)
+            with closing(_connect(kwargs["path"])) as reader:
+                assert (
+                    reader.execute("PRAGMA busy_timeout").fetchone()[0]
+                    == OVERLAPPING_ACCESS_TIMEOUT_MS
+                )
+            # A competing writer outlasts the ordinary one-second wait, as
+            # concurrent source workers can on slower CI filesystems.
+            blocker = sqlite3.connect(kwargs["path"], check_same_thread=False)
+            blocker.execute("BEGIN IMMEDIATE")
+
+            def release() -> None:
+                blocker.rollback()
+                blocker.close()
+
+            timer = Timer(1.25, release)
+            timer.start()
+            try:
+                return original_wave(**kwargs)
+            finally:
+                timer.join()
+
+        monkeypatch.setattr(v2_deep_analysis, "_run_source_wave", contended_wave)
 
     class _MirrorSearch(phase12._Search):
         def search(self, request: phase12.SearchRequest) -> phase12.SearchResponse:
@@ -285,6 +328,7 @@ def test_full_production_pipeline_leads_keep_admission_families_and_released_byt
     admitted = [lead for lead in page.items if lead.disposition == "analyzer_admitted"]
     assert admitted and all(lead.source_family for lead in admitted)
     by_url = {lead.url: lead for lead in admitted}
+    assert len(admitted) == 6, page.model_dump_json()
     for suffix in (1, 4, 5):
         lead = by_url[f"https://example.test/regional-evaluation-{suffix}"]
         assert lead.capture_status == "readable"
@@ -295,7 +339,6 @@ def test_full_production_pipeline_leads_keep_admission_families_and_released_byt
         assert lead.readable_alternate_url == "https://example.test/regional-evaluation-1"
     # With round-four admission repaired, the fixture's sixth source is admitted
     # directly instead of being retried as backfill after a constraint failure.
-    assert len(admitted) == 6
     assert by_url["https://example.test/regional-evaluation-6"].source_family
     assert all(any(step.stage == "analysis" for step in lead.history) for lead in admitted)
     with sqlite3.connect(path) as connection:

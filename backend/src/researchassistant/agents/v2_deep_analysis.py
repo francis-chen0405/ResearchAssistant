@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -68,6 +69,7 @@ from researchassistant.providers.v2_budget import (
     read_v2_physical_call_audit,
 )
 from researchassistant.providers.v2_routing import V2RoutingConfig
+from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 V2_DEEP_ANALYSIS_BACKFILL_ARTIFACT_KEY = "phase-13-deep-analysis-backfill-analyzer-admission"
@@ -405,11 +407,14 @@ def run_v2_deep_analysis_with_backfill(
                 return _worker_failure(source_id, exc)
             return V2DeepAnalysisWorkerResult(source_id=source_id, wave=source_wave)
 
-        worker_results = _execute_source_batch(
-            source_ids=wave_source_ids,
-            worker=worker,
-            max_workers=V2_DEEP_ANALYSIS_MAX_WORKERS,
-        )
+        # Final backfill has the same concurrent SQLite writers as early
+        # assessment. Keep transient contention from becoming a source failure.
+        with overlapping_database_writes(path):
+            worker_results = _execute_source_batch(
+                source_ids=wave_source_ids,
+                worker=worker,
+                max_workers=V2_DEEP_ANALYSIS_MAX_WORKERS,
+            )
         _raise_if_cancelled(
             cancellation_requested,
             "v2 cancellation was observed after a deep-analysis wave",
@@ -663,7 +668,8 @@ def _execute_source_batch(
         thread_name_prefix="v2-deep-analysis",
     ) as executor:
         futures: dict[Future[V2DeepAnalysisWorkerResult], UUID] = {
-            executor.submit(worker, source_id): source_id for source_id in source_ids
+            executor.submit(copy_context().run, worker, source_id): source_id
+            for source_id in source_ids
         }
         for future in as_completed(futures):
             source_id = futures[future]
