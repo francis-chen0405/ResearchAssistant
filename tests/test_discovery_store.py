@@ -230,6 +230,71 @@ def test_durable_attempts_charge_unknown_starts_and_cannot_be_replayed(tmp_path:
         complete_provider_attempt(str(path), changed, changed.completed_at)
 
 
+def test_unknown_attempt_quarantines_only_its_provider(tmp_path: Path) -> None:
+    path = tmp_path / "provider-isolation.sqlite"
+    _init_run(path)
+    base = _binding()
+    exa = DiscoveryProvider.EXA
+    exa_capability = base.capabilities[0].model_copy(update={"provider": exa})
+    exa_budget = base.provider_budgets[0].model_copy(
+        update={
+            "provider": exa,
+            "cost_policy_identity": "exa-configured-upper-bound-v1",
+        }
+    )
+    binding = base.model_copy(
+        update={
+            "providers": (PROVIDER, exa),
+            "capabilities": (base.capabilities[0], exa_capability),
+            "provider_budgets": (base.provider_budgets[0], exa_budget),
+        }
+    )
+    bind_discovery_run(str(path), binding, NOW)
+    first_operation = _operation(path)
+    first = reserve_provider_attempt(str(path), _start(first_operation))
+    unknown = V2ProviderAttemptCompletion(
+        run_id=RUN_ID,
+        artifact_id=discovery_id(RUN_ID, "V2ProviderAttemptCompletion", "unknown-openalex"),
+        identity_key="unknown-openalex",
+        attempt_id=first.artifact_id,
+        operation_id=first_operation.action.artifact_id,
+        status="failed",
+        failure=V2DiscoveryFailure(code="interrupted", detail="unknown_after_start"),
+        cost_basis="unknown",
+        completed_at=NOW + timedelta(seconds=4),
+    )
+    complete_provider_attempt(str(path), unknown, unknown.completed_at)
+    with pytest.raises(ValueError, match="unknown request outcome"):
+        reserve_provider_attempt(
+            str(path), _start(first_operation, sequence=2, key="same-provider-retry")
+        )
+
+    exa_action = V2IdentityLookupAction.model_validate(
+        first_operation.action.model_dump(
+            mode="python",
+            exclude={"artifact_id", "identity_key", "policy", "capabilities", "provider"},
+        )
+        | {
+            "artifact_id": discovery_id(RUN_ID, "V2IdentityLookupAction", "exa-lookup"),
+            "identity_key": "exa-lookup",
+            "provider": exa,
+            "policy": binding.policy,
+            "capabilities": exa_capability,
+        }
+    )
+    exa_operation = V2DiscoveryOperation(
+        run_id=RUN_ID,
+        artifact_id=discovery_id(RUN_ID, "V2DiscoveryOperation", "exa-op"),
+        identity_key="exa-op",
+        binding_fingerprint=binding.fingerprint,
+        action=exa_action,
+        created_at=NOW,
+    )
+    insert_discovery_operation(str(path), exa_operation, NOW)
+    exa_start = _start(exa_operation, key="exa-start").model_copy(update={"provider": exa})
+    reserve_provider_attempt(str(path), exa_start)
+
+
 def test_reservation_race_has_one_winner_and_provider_budget_is_durable(tmp_path: Path) -> None:
     path = tmp_path / "race.sqlite"
     _init_run(path)

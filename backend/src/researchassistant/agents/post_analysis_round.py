@@ -83,6 +83,7 @@ from researchassistant.providers.scraper import ScraperProvider
 from researchassistant.providers.search import SearchProvider
 from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.providers.v2_routing import V2ModelReservation, V2RoutingConfig
+from researchassistant.research.query_execution import available_query_budgets
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.query_dispatch import query_dispatch_states
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
@@ -235,31 +236,28 @@ def run_v2_post_analysis_round(
                     )
                 }
             )
+        elif reason.startswith("no eligible provider remains"):
+            final_continuation = final_continuation.model_copy(
+                update={
+                    "stopping_decision": final_continuation.stopping_decision.model_copy(
+                        update={
+                            "stop_code": V2AdaptiveStopCode.PROVIDER_FAILURE,
+                            "stopping_reason": reason,
+                            "decided_at": decision.decided_at,
+                        }
+                    )
+                }
+            )
         if any(
             state in {"unknown", "blocked"}
             for state in query_dispatch_states(path, run_id).values()
         ):
             interruption = (
                 "A provider request has an unknown outcome; its reservation is retained "
-                "and additional searches were blocked. Existing evidence was preserved."
+                "and further attempts with that provider are blocked. Other eligible "
+                "providers may continue."
             )
             reason = f"{reason}. {interruption}"
-            prior = final_continuation.stopping_decision
-            final_continuation = final_continuation.model_copy(
-                update={
-                    "stopping_decision": final_continuation.stopping_decision.model_copy(
-                        update={
-                            "stop_code": V2AdaptiveStopCode.PROVIDER_FAILURE,
-                            "stopping_reason": (
-                                f"{prior.stopping_reason} {interruption}"
-                                if prior.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
-                                else interruption
-                            ),
-                            "decided_at": decision.decided_at,
-                        }
-                    )
-                }
-            )
         result = V2PostAnalysisRoundOutcome(
             run_id=run_id,
             decision=decision,
@@ -275,6 +273,17 @@ def run_v2_post_analysis_round(
 
     if cancellation_requested():
         raise V2CancellationRequested("cancelled before post-analysis decision")
+    if existing is None and not available_query_budgets(path, run_id):
+        assessment = build_v2_post_analysis_assessment(
+            admission_result=admission,
+            coverage=admission.analyst_result.input.queue_result.input.latest_gap_coverage,
+            unresolved_gap_count=len(unresolved_gap_ids),
+        )
+        if assessment.search_outcome == "analysis_complete":
+            decision = decide("admitted evidence and claim coverage are adequate")
+            return finish(decision, decision.reason)
+        decision = decide("no eligible provider remains within its search ceiling")
+        return finish(decision, decision.reason)
     round_four_result: V2RoundFourRunResult | None = None
     if existing is not None:
         if existing.next_round is None:
@@ -316,12 +325,6 @@ def run_v2_post_analysis_round(
             or not continuation.rounds[-1].usable_for_follow_up
         ):
             decision = decide("prior round did not complete safely")
-            return finish(decision, decision.reason)
-        if any(
-            state in {"unknown", "blocked"}
-            for state in query_dispatch_states(path, run_id).values()
-        ):
-            decision = decide("unknown request reservation blocks another dispatch")
             return finish(decision, decision.reason)
         if (
             len(continuation.merged_survivors.sources)
@@ -419,12 +422,6 @@ def run_v2_post_analysis_round(
         if _has_artifact(path, run_id, f"phase-7-round-{next_round}-plan"):
             decision = decide("existing round plan has a different authorization")
             return finish(decision, decision.reason)
-        if any(
-            state in {"unknown", "blocked"}
-            for state in query_dispatch_states(path, run_id).values()
-        ):
-            decision = decide("unknown request reservation blocks another dispatch")
-            return finish(decision, decision.reason)
         survivor_count = len(continuation.merged_survivors.sources)
         acquisition_capacity = read_discovery_binding(path, run_id).policy.max_acquisition_per_round
         if survivor_count + acquisition_capacity > 240:
@@ -499,14 +496,6 @@ def run_v2_post_analysis_round(
             source_ids=tuple(item.source_id for item in findings),
         )
     budget = budget_snapshot()
-    if any(
-        state in {"unknown", "blocked"} for state in query_dispatch_states(path, run_id).values()
-    ):
-        return finish(
-            decision,
-            "unknown request reservation blocks follow-up replay",
-            assessed_gap=gap,
-        )
     if round_four_result is not None:
         discovery = _read(
             path,

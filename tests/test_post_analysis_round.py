@@ -198,7 +198,12 @@ def _admitted_inputs(
     return captured, model, search
 
 
-def test_skip_when_admitted_coverage_is_adequate(tmp_path: Path) -> None:
+@pytest.mark.parametrize("has_eligible_provider", (True, False))
+def test_skip_when_admitted_coverage_is_adequate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, has_eligible_provider: bool
+) -> None:
+    if not has_eligible_provider:
+        monkeypatch.setattr(post_module, "available_query_budgets", lambda *_args, **_kwargs: ())
     path = tmp_path / "post-analysis-adequate-disposable.sqlite"
     run_id = uuid4()
     model = production._ConceptModel(completed_rounds=1)
@@ -215,7 +220,7 @@ def test_skip_when_admitted_coverage_is_adequate(tmp_path: Path) -> None:
     assert outcome.admission.source_results
 
 
-def test_unknown_request_stop_is_disclosed_in_final_continuation(
+def test_unknown_request_does_not_stop_independent_provider_followup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured, _model, search = _admitted_inputs(tmp_path, monkeypatch)
@@ -227,11 +232,17 @@ def test_unknown_request_stop_is_disclosed_in_final_continuation(
     monkeypatch.setattr(post_module, "query_dispatch_states", unknown_states)
     outcome = run_v2_post_analysis_round(**captured)
 
-    assert outcome.continuation.stopping_decision.stop_code is V2AdaptiveStopCode.PROVIDER_FAILURE
-    assert "unknown outcome" in outcome.continuation.stopping_decision.stopping_reason
+    assert (
+        outcome.continuation.stopping_decision.stop_code is not V2AdaptiveStopCode.PROVIDER_FAILURE
+    )
+    assert (
+        "One post-analysis evidence round completed"
+        in outcome.continuation.stopping_decision.stopping_reason
+    )
+    assert "unknown outcome" not in outcome.continuation.stopping_decision.stopping_reason
     assert "reservation is retained" in outcome.stop_reason
-    assert outcome.admission.source_results == captured["admission"].source_results
-    assert len(search.requests) == before
+    assert len(outcome.admission.source_results) >= len(captured["admission"].source_results)
+    assert len(search.requests) > before
     assert run_v2_post_analysis_round(**captured) == outcome
 
 
@@ -412,7 +423,7 @@ def test_budget_gate_stops_before_gap_or_search(
     assert len(search.requests) == provider_count
 
 
-def test_unknown_reservation_and_cancellation_stop_before_dispatch(
+def test_no_eligible_provider_and_cancellation_stop_before_dispatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     kwargs, model, search = _admitted_inputs(tmp_path, monkeypatch)
@@ -420,11 +431,11 @@ def test_unknown_reservation_and_cancellation_stop_before_dispatch(
     with pytest.raises(V2CancellationRequested):
         run_v2_post_analysis_round(**kwargs)
     kwargs["cancellation_requested"] = lambda: False
-    monkeypatch.setattr(post_module, "query_dispatch_states", lambda *_: {uuid4(): "unknown"})
+    monkeypatch.setattr(post_module, "available_query_budgets", lambda *_args, **_kwargs: ())
     model_count, provider_count = len(model.requests), len(search.requests)
     outcome = run_v2_post_analysis_round(**kwargs)
     assert outcome.decision.next_round is None
-    assert "unknown request" in outcome.stop_reason
+    assert "no eligible provider" in outcome.stop_reason
     assert len(model.requests) == model_count
     assert len(search.requests) == provider_count
 

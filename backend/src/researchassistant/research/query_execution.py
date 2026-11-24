@@ -59,6 +59,7 @@ from researchassistant.providers.web_search import web_result_records
 from researchassistant.research.discovery_policy import build_discovery_binding
 from researchassistant.research.metadata_ranking import RANKING_IDENTITY
 from researchassistant.storage.discovery_store import (
+    _unknown_request_outcome,
     bind_discovery_run,
     complete_provider_attempt,
     insert_discovery_operation,
@@ -508,8 +509,6 @@ def available_query_budgets(
     """Expose actual physical request headroom, including retries and PubMed summaries."""
     binding = read_discovery_binding(path, run_id)
     audit = provider_attempt_audit(path, run_id)
-    if audit.interrupted_unknown:
-        return ()
     results = []
     for budget in binding.provider_budgets:
         pairs = tuple(
@@ -517,6 +516,8 @@ def available_query_budgets(
             for start, completion in zip(audit.starts, audit.completions, strict=True)
             if start.provider == budget.provider
         )
+        if any(_unknown_request_outcome(completion) for _, completion in pairs):
+            continue
         if (
             skip_empty_arxiv
             and budget.provider is DiscoveryProvider.ARXIV
@@ -1189,7 +1190,10 @@ def _execute_metadata_operation(
             and page.requested_records < min(page_size, action.effective_depth - nominal_offset)
         )
 
-    if audit.interrupted_unknown:
+    if any(
+        start.provider is provider and _unknown_request_outcome(completion)
+        for start, completion in zip(audit.starts, audit.completions, strict=True)
+    ):
         reason = "unknown_outcome"
     elif unparsed:
         reason = "completed_without_checkpoint"
@@ -1333,7 +1337,12 @@ def _execute_metadata_operation(
                     current = provider_attempt_audit(path, run_id)
                     reason = (
                         "unknown_outcome"
-                        if current.interrupted_unknown
+                        if any(
+                            start.provider is provider and _unknown_request_outcome(completion)
+                            for start, completion in zip(
+                                current.starts, current.completions, strict=True
+                            )
+                        )
                         else "malformed_page"
                         if exc.code is SearchFailureCode.MALFORMED_RESPONSE
                         else "provider_budget"

@@ -552,11 +552,15 @@ def reserve_provider_attempt(db_path: str, start: V2ProviderAttemptStart) -> V2P
         if exposure > budget.max_cost_usd:
             raise ValueError("provider cost budget is exhausted")
         starts, _ = _attempt_rows(conn, start.run_id, start.operation_id)
+        # An unresolved transport reservation poisons retries for its provider only.
+        # Keep its reserved cost in provider exposure above, while allowing other
+        # providers to spend their independent budgets.
         if binding.policy.unknown_request_recovery == "stop" and any(
-            _unknown_request_outcome(completion_by_attempt.get(item.artifact_id))
+            item.provider == provider
+            and _unknown_request_outcome(completion_by_attempt.get(item.artifact_id))
             for item in all_starts
         ):
-            raise ValueError("unknown request outcome stops further provider attempts for this run")
+            raise ValueError("unknown request outcome stops further attempts for this provider")
         if isinstance(action, V2GraphNeighborAction) and any(
             prior.request_kind == start.request_kind for prior in starts
         ):

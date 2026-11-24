@@ -115,6 +115,9 @@ class V2DiscoveryPolicy(V2DiscoveryValue):
     max_acquisition_per_round: int = Field(default=25, strict=True, ge=1, le=25)
     max_seeds_per_run: int = Field(default=3, strict=True, ge=1, le=3)
     max_hops: Literal[1] = 1
+    # Preserve the historical serialized value/fingerprint. "stop" now means
+    # stop retries for the provider with the unresolved reservation; other
+    # providers retain their independent eligibility and budget.
     unknown_request_recovery: Literal["stop"] = "stop"
     max_neighbors_per_seed: int = Field(default=10, strict=True, ge=1, le=10)
     max_expansion_per_run: int = Field(default=30, strict=True, ge=1, le=30)
