@@ -991,7 +991,7 @@ test("new brief copies add the same bounded findings and retain the original rel
   const evidence = { items: [{ledger_claim_id:"b", source_url:"https://mirror.example/work", relationship_to_claim:"supports", claim_fit:4, approved_factual_statement:"The measured outcome was associated with the program."}] };
   const result = {exact_claim:"Does the program work?", directions:{support_enabled:true, challenge_enabled:false}, all_surviving_sources:[], claim_coverage_map:[], unresolved_material_gaps:[], stopping:{reason:"budget"}};
   const copy = briefWithReadingAid("# Original release", result, evidence);
-  assert.match(copy, /not established by the admitted evidence/);
+  assert.match(copy, /Supporting evidence admitted; claim not established/);
   assert.match(copy, /not necessarily representative/);
   assert.match(copy, /https:\/\/mirror.example\/work/);
   assert.match(copy, /coverage was not assessed/);
@@ -999,6 +999,37 @@ test("new brief copies add the same bounded findings and retain the original rel
   assert.match(copy, /original released brief and its recorded hash remain unchanged/i);
   assert.doesNotMatch(copy, /# Original release$/);
   assert.match(briefWithReadingAid("# Original release", result, null), /detailed evidence is unavailable/);
+});
+
+test("reading aid fallback reports every recorded relationship without implying establishment", () => {
+  const { briefWithReadingAid } = hookHarness("features/results/reading-aid.ts", {}).exports;
+  const result = { exact_claim: "Claim", directions: { support_enabled: true, challenge_enabled: true },
+    all_surviving_sources: [], claim_coverage_map: [], unresolved_material_gaps: [], stopping: { reason: "budget" } };
+  const relationships = ["supports", "challenges", "qualifies", "unrelated"];
+  const labels = ["supporting", "challenging", "qualifying", "unrelated"];
+
+  for (let mask = 0; mask < 1 << relationships.length; mask++) {
+    const selected = relationships.filter((_, index) => mask & (1 << index));
+    const evidence = { items: selected.map((relationship, index) => ({ ledger_claim_id: `${mask}-${index}`,
+      source_id: `${mask}-${index}`, source_url: "https://example.org/evidence", relationship_to_claim: relationship,
+      approved_factual_statement: "Recorded finding." })) };
+    const bottomLine = briefWithReadingAid("# Release", result, evidence).split("## Bottom line\n")[1].split("\n\n")[0];
+    if (!selected.length) {
+      assert.match(bottomLine, /No evidence was admitted/);
+    } else {
+      const expected = labels.filter((_, index) => mask & (1 << index)).join(" and ");
+      assert.equal(bottomLine.startsWith(`${expected[0].toUpperCase()}${expected.slice(1)} evidence admitted; claim not established.`), true);
+    }
+    assert.doesNotMatch(bottomLine, /claim is established/i);
+  }
+
+  const manySupport = Array.from({ length: 8 }, (_, index) => ({ ledger_claim_id: `s${index}`, source_id: `s${index}`,
+    source_url: "https://example.org/support", relationship_to_claim: "supports", approved_factual_statement: "Support." }));
+  const challenges = Array.from({ length: 2 }, (_, index) => ({ ledger_claim_id: `c${index}`, source_id: `c${index}`,
+    source_url: "https://example.org/challenge", relationship_to_claim: "challenges", approved_factual_statement: "Challenge." }));
+  const summary = briefWithReadingAid("# Release", result, { items: [...manySupport, ...challenges] })
+    .split("## Bottom line\n")[1].split("\n\n")[0];
+  assert.match(summary, /^Supporting and challenging evidence admitted; claim not established\./);
 });
 
 // Study-design and publication-type inference is pinned on the backend owner

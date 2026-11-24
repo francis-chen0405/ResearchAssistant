@@ -71,6 +71,48 @@ def test_excerpt_keeps_original_offsets_and_focus_under_byte_bound() -> None:
     assert text[offsets[0].start_char : offsets[0].end_char] == result
 
 
+def test_excerpt_keeps_local_table_headings_with_focused_values() -> None:
+    maintenance_row = "Annual maintenance costs $40,300 4 $3,500 5"
+    text = (
+        "Navigation text. " * 120
+        + "Natural Grass Synthetic Turf\n"
+        + "Initial cost $150,000 $375,000\n"
+        + "Porous dynamic base installation N/A $200,000\n"
+        + maintenance_row
+        + "\nAnnual number of events 76 769\n"
+        + "Footnote for the comparison. " * 120
+    )
+
+    view, exposed = extraction_source_view(text, (maintenance_row,), max_bytes=900)
+    spans = fresh_sentence_spans(text)
+    maintenance_number = next(
+        index for index, span in enumerate(spans, 1) if span.text == maintenance_row
+    )
+
+    assert len(view.encode("utf-8")) <= 900
+    assert maintenance_number in exposed
+    assert f"[{maintenance_number}] {maintenance_row}" in view
+    assert any("Natural Grass Synthetic Turf" in line for line in view.splitlines())
+    assert any("Initial cost" in line for line in view.splitlines())
+
+
+def test_unheaded_table_values_remain_exact_source_text() -> None:
+    text = "Annual maintenance costs $40,300 and $3,500."
+    spans = fresh_sentence_spans(text)
+    quote, offsets = assemble_fresh_selected_quote(
+        text,
+        V2VerbatimQuoteSelection(
+            selected_sentence_ranges=(SelectedSentenceRange(start_sentence=1, end_sentence=1),)
+        ),
+        truncated=False,
+    )
+
+    assert text[offsets[0].start_char : offsets[0].end_char] == spans[0].text
+    assert '"Annual maintenance costs $40,300 and $3,500."' in quote
+    assert "Natural Grass" not in quote
+    assert "Synthetic Turf" not in quote
+
+
 @pytest.mark.slow
 def test_checkpoint_drives_search_and_sources_are_not_assessed_twice(tmp_path: Path) -> None:
     path = tmp_path / "checkpoint.sqlite"

@@ -5,12 +5,13 @@ from __future__ import annotations
 from researchassistant.evidence.evidence_core import fresh_sentence_spans
 
 EXTRACTION_EXCERPT_BYTES = 8_000
+_FOCUS_CONTEXT_SENTENCES = 12
 
 
 def extraction_source_view(
     text: str, focus_passages: tuple[str, ...] = (), *, max_bytes: int = EXTRACTION_EXCERPT_BYTES
 ) -> tuple[str, frozenset[int]]:
-    """Keep original sentence IDs, nearby context, and an opening view within a byte bound."""
+    """Keep original sentence IDs, a local focus window, and an opening view within a byte bound."""
     if max_bytes < 1:
         raise ValueError("source excerpt byte limit must be positive")
     spans = fresh_sentence_spans(text)
@@ -29,7 +30,14 @@ def extraction_source_view(
         ]
         priorities.extend(matching)
         for i in matching:
-            priorities.extend(range(max(1, i - 2), min(len(spans), i + 2) + 1))
+            # Table column headings often sit several extracted lines above the value row.
+            # Keep a bounded local window so the extractor can see those exact source labels.
+            priorities.extend(
+                range(
+                    max(1, i - _FOCUS_CONTEXT_SENTENCES),
+                    min(len(spans), i + _FOCUS_CONTEXT_SENTENCES) + 1,
+                )
+            )
     priorities.extend(range(1, min(len(spans), 12) + 1))
     priorities.extend(range(1, len(spans) + 1))
     selected: set[int] = set()

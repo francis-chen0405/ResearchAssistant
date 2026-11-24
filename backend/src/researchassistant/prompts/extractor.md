@@ -1,4 +1,4 @@
-Prompt-Version: mlp4-relaxed-evidence-yield-v1
+Prompt-Version: mlp5-table-context-v1
 Stage: extractor
 
 # Role
@@ -33,6 +33,11 @@ always control.
   an ellipsis item or join passages with ellipsis text.
 - Do not include immediate preceding/following context unless it is itself part of the
   evidence passage being selected.
+- When selecting a value from a table or comparison, also select the exact row label and
+  column heading(s) shown in the source when they are available in `selectable_source_text`.
+  Use additional sentence ranges when needed; do not paraphrase or manufacture missing
+  labels, headings, or relationships. If a heading is absent from the exposed source text,
+  select the available evidence without assigning the value to a surface or category.
 - Preserve material qualifications and avoid fluff padding.
 - Use at least 20 exact quoted words only when the quotation contains at least one digit and at least one recognized statistical marker:
   `%`, `percent`, `rate`, `ratio`,

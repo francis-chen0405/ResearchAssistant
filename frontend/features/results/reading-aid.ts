@@ -28,18 +28,32 @@ export function selectedFindings(evidence: V2EvidenceDisplay | null) {
     .filter((item): item is V2EvidenceDisplay["items"][number] => Boolean(item));
 }
 
+function relationshipSummary(evidence: V2EvidenceDisplay): string | null {
+  const labels = [
+    ["supports", "supporting"],
+    ["challenges", "challenging"],
+    ["qualifies", "qualifying"],
+    ["unrelated", "unrelated"],
+  ] as const;
+  const admitted = labels
+    .filter(([relationship]) => evidence.items.some((item) => item.relationship_to_claim === relationship))
+    .map(([, label]) => label);
+  if (!admitted.length) return null;
+  const summary = `${admitted.join(" and ")} evidence admitted`;
+  return `${summary[0].toUpperCase()}${summary.slice(1)}; claim not established`;
+}
+
 /** Add a reading aid to a copy; the saved release and its hash are untouched. */
 export function briefWithReadingAid(brief: string, result: V2FinalResearchOutput | null, evidence: V2EvidenceDisplay | null): string {
   if (!result) return brief;
   if (evidence?.reading_aid_markdown) return evidence.reading_aid_markdown;
   const findings = evidence?.study_opening?.length || evidence?.publication_opening?.length ? [] : selectedFindings(evidence);
+  const recordedRelationshipSummary = evidence ? relationshipSummary(evidence) : null;
   const lines = ["# Reading aid", "", `Claim under review: ${result.exact_claim}`, "", "## Bottom line",
     !evidence
       ? "The detailed evidence is unavailable, so a conclusion cannot be assessed here."
       : evidence.items.length
-        ? evidence.items.some((item) => item.relationship_to_claim === "challenges")
-          ? "Challenging evidence admitted; claim not established. Study design, relevance and limitations determine the weight of each finding."
-          : "The claim is not established by the admitted evidence. The available assessment does not establish the balance of evidence across independent studies."
+        ? `${recordedRelationshipSummary ?? "Evidence admitted"}. Study design, relevance and limitations determine the weight of each finding.`
         : "No evidence was admitted for this result, so the claim cannot be established from it."];
   if (findings.length) lines.push("Study identity and evidence balance have not been verified. These examples are selected by recorded claim fit, with a stable identifier used to break ties; they are not necessarily representative.");
   for (const item of findings) {
@@ -48,7 +62,7 @@ export function briefWithReadingAid(brief: string, result: V2FinalResearchOutput
   }
   if (evidence?.study_opening?.length) {
     lines.splice(5);
-    if (evidence.items.some((item) => item.relationship_to_claim === "challenges")) lines.push("Challenging evidence admitted; claim not established.");
+    if (recordedRelationshipSummary) lines.push(`${recordedRelationshipSummary}.`);
     for (const assertion of evidence.study_opening) {
       const item = evidence.items.find((item) => item.ledger_claim_id === assertion.ledger_claim_id);
       lines.push(`${assertion.text} (Read at: ${item?.source_url || "Not recorded"})`);
@@ -56,7 +70,7 @@ export function briefWithReadingAid(brief: string, result: V2FinalResearchOutput
   }
   if (!evidence?.study_opening?.length && evidence?.publication_opening?.length) {
     lines.splice(5);
-    if (evidence.items.some((item) => item.relationship_to_claim === "challenges")) lines.push("Challenging evidence admitted; claim not established.");
+    if (recordedRelationshipSummary) lines.push(`${recordedRelationshipSummary}.`);
     for (const sentence of evidence.publication_opening) {
       const locations = evidence.items.filter((item) => sentence.ledger_claim_ids.includes(item.ledger_claim_id)).map((item) => item.source_url);
       lines.push(`${sentence.text} (Read at: ${[...new Set(locations)].join(", ")})`);

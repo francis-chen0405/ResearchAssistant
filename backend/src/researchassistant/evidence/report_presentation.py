@@ -224,9 +224,21 @@ def source_display(
 
 
 def claim_status(items: Iterable[V2EvidenceDisplayItem]) -> str:
-    if any(item.relationship_to_claim.value == "challenges" for item in items):
-        return "Challenging evidence admitted; claim not established"
-    return "Claim not established by the admitted evidence"
+    relationships = {item.relationship_to_claim.value for item in items}
+    labels = (
+        ("supports", "supporting"),
+        ("challenges", "challenging"),
+        ("qualifies", "qualifying"),
+        ("unrelated", "unrelated"),
+    )
+    admitted = [label for relationship, label in labels if relationship in relationships]
+    if not admitted:
+        return "Claim not established by the admitted evidence"
+    if len(admitted) == 1:
+        summary = f"{admitted[0]} evidence admitted"
+    else:
+        summary = f"{' and '.join(admitted)} evidence admitted"
+    return f"{summary[0].upper() + summary[1:]}; claim not established"
 
 
 def recorded_doi_url(item: V2EvidenceDisplayItem) -> str | None:
