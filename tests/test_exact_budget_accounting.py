@@ -110,7 +110,41 @@ def test_post_analysis_cost_gate_counts_repeated_reservations_exactly() -> None:
     )
 
     reason = _source_budget_shortfall(budget, _RoutingConfig(), planned_queries=2)  # type: ignore[arg-type]
-    assert reason == "Follow-up budget exceeded the remaining allowance for model cost."
+    assert reason == (
+        "Follow-up budget exceeded the remaining allowance for model cost. "
+        "Model cost: $2.00000000000000000000000000002 required "
+        "($2.00000000000000000000000000002 follow-up + $0 protected), "
+        "$2.00000000000000000000000000001 remaining."
+    )
+
+
+def test_post_analysis_shortfall_explains_all_limits_and_protected_work() -> None:
+    budget = V2AdaptiveBudgetState(
+        model_calls_remaining=8,
+        tokens_remaining=60_002,
+        cost_remaining_usd="2.25",
+        protected_downstream_model_calls=4,
+        protected_downstream_tokens=1,
+        protected_downstream_cost_usd="0.25",
+    )
+
+    reason = _source_budget_shortfall(budget, _RoutingConfig(), planned_queries=2)  # type: ignore[arg-type]
+
+    assert reason == (
+        "Follow-up budget exceeded the remaining allowance for model calls, tokens, model cost. "
+        "Model calls: 9 required (5 follow-up + 4 protected), 8 remaining. "
+        "Tokens: 60003 required (60002 follow-up + 1 protected), 60002 remaining. "
+        "Model cost: $2.25000000000000000000000000002 required "
+        "($2.00000000000000000000000000002 follow-up + $0.25 protected), $2.25 remaining."
+    )
+    exact_fit = budget.model_copy(
+        update={
+            "model_calls_remaining": 9,
+            "tokens_remaining": 60_003,
+            "cost_remaining_usd": Decimal("2.25000000000000000000000000002"),
+        }
+    )
+    assert _source_budget_shortfall(exact_fit, _RoutingConfig(), planned_queries=2) is None  # type: ignore[arg-type]
 
 
 def test_combined_post_analysis_queue_cost_preserves_precision() -> None:

@@ -1494,7 +1494,13 @@ def _run_v2_production_pipeline(
                 wigolo_provider=wigolo_provider,
                 firecrawl_provider=firecrawl_provider,
                 crossref_resolver=crossref_resolver,
-                budget_snapshot=lambda: _adaptive_budget(budgeted_llm.snapshot(), routing_config),
+                # Initial analysis is complete and finalization is deterministic.
+                # The follow-up gate reserves its own complete new-source workload.
+                budget_snapshot=lambda: _adaptive_budget(
+                    budgeted_llm.snapshot(),
+                    routing_config,
+                    mandatory_downstream_call_reserve=0,
+                ),
                 deep_budget_snapshot=lambda: V2DeepAnalysisBudget(
                     physical_call_ceiling=resolved_ceilings.max_physical_calls,
                     physical_calls_used=budgeted_llm.snapshot().physical_calls_used,
@@ -1791,27 +1797,30 @@ def _run_round_one_search(
 
 
 def _adaptive_budget(
-    snapshot: V2BudgetSnapshot, routing_config: V2RoutingConfig
+    snapshot: V2BudgetSnapshot,
+    routing_config: V2RoutingConfig,
+    *,
+    mandatory_downstream_call_reserve: int = V2_MANDATORY_DOWNSTREAM_CALL_RESERVE,
 ) -> V2AdaptiveBudgetState:
     preflight = routing_config.preflight()
     downstream_reservations = tuple(
         preflight.reserve(stage, 1) for stage, _route in preflight.routing
     )
-    protected_tokens = V2_MANDATORY_DOWNSTREAM_CALL_RESERVE * max(
+    protected_tokens = mandatory_downstream_call_reserve * max(
         item.reserved_tokens for item in downstream_reservations
     )
-    protected_cost = V2_MANDATORY_DOWNSTREAM_CALL_RESERVE * max(
+    protected_cost = mandatory_downstream_call_reserve * max(
         (item.reserved_cost_usd for item in downstream_reservations), default=0
     )
     downstream_fits = (
         snapshot.physical_calls_remaining
-        > V2_MANDATORY_DOWNSTREAM_CALL_RESERVE + V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE
+        > mandatory_downstream_call_reserve + V2_ROUND_THREE_COMPLETE_WORKLOAD_CALL_RESERVE
     )
     return V2AdaptiveBudgetState(
         model_calls_remaining=snapshot.physical_calls_remaining,
         tokens_remaining=snapshot.tokens_remaining,
         cost_remaining_usd=snapshot.cost_remaining_usd,
-        protected_downstream_model_calls=V2_MANDATORY_DOWNSTREAM_CALL_RESERVE,
+        protected_downstream_model_calls=mandatory_downstream_call_reserve,
         protected_downstream_tokens=protected_tokens,
         protected_downstream_cost_usd=protected_cost,
         round_three_complete_workload_reservable=downstream_fits,

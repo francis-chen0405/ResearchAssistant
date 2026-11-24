@@ -946,6 +946,32 @@ def test_adaptive_budget_protects_selected_downstream_routes_and_call_threshold(
     assert adaptive_budget.round_three_complete_workload_reservable is round_three_reservable
 
 
+@pytest.mark.parametrize(("calls_remaining", "round_three_reservable"), ((8, False), (9, True)))
+def test_post_analysis_budget_drops_stale_downstream_reserve_but_keeps_workload_gate(
+    calls_remaining: int, round_three_reservable: bool
+) -> None:
+    routing = _selected_routing(DEFAULT_STAGE_MODELS)
+    budget = V2BudgetSnapshot(
+        physical_calls_used=12,
+        token_exposure=0,
+        cost_exposure_usd=Decimal("0"),
+        physical_calls_remaining=calls_remaining,
+        tokens_remaining=100_000,
+        cost_remaining_usd=Decimal("1"),
+    )
+
+    post_analysis_budget = v2_orchestrator._adaptive_budget(
+        budget,
+        routing,
+        mandatory_downstream_call_reserve=0,
+    )
+
+    assert post_analysis_budget.protected_downstream_model_calls == 0
+    assert post_analysis_budget.protected_downstream_tokens == 0
+    assert post_analysis_budget.protected_downstream_cost_usd == 0
+    assert post_analysis_budget.round_three_complete_workload_reservable is round_three_reservable
+
+
 @pytest.mark.parametrize("routing_kind", ("historical", "selected-default", "selected-mixed"))
 def test_adaptive_rounds_use_configured_routes_without_requesting_reviewer(
     tmp_path: Path, routing_kind: str

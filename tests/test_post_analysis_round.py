@@ -115,6 +115,10 @@ def test_one_post_analysis_round_reuses_prior_evidence(
         run_id=run_id,
     )
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    post_analysis_budget = captured["budget_snapshot"]()
+    assert post_analysis_budget.protected_downstream_model_calls == 0
+    assert post_analysis_budget.protected_downstream_tokens == 0
+    assert post_analysis_budget.protected_downstream_cost_usd == 0
     outcome = V2PostAnalysisRoundOutcome.model_validate_json(
         read_v2_artifact(path, run_id, POST_ANALYSIS_COMPLETION_KEY).payload_json
     )
@@ -415,7 +419,10 @@ def test_budget_gate_stops_before_gap_or_search(
     model_count, provider_count = len(model.requests), len(search.requests)
     outcome = run_v2_post_analysis_round(**kwargs)
     assert outcome.decision.next_round is None
-    assert outcome.stop_reason == "Follow-up budget exceeded the remaining allowance for tokens."
+    assert outcome.stop_reason.startswith(
+        "Follow-up budget exceeded the remaining allowance for tokens. Tokens: "
+    )
+    assert "1 protected), 60000 remaining." in outcome.stop_reason
     stopping = outcome.continuation.stopping_decision
     assert stopping.stop_code is V2AdaptiveStopCode.BUDGET
     assert stopping.stopping_reason == outcome.stop_reason

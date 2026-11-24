@@ -54,7 +54,7 @@ from researchassistant.agents.v2_source_selection import (
     build_v2_source_selection_input,
     calculate_v2_deep_analysis_queue,
 )
-from researchassistant.common.money import add_usd
+from researchassistant.common.money import add_usd, canonical_usd
 from researchassistant.contracts.discovery_v2 import SearchMode
 from researchassistant.contracts.model_evidence import (
     V2EvidenceAdmissionBatchResult,
@@ -845,19 +845,35 @@ def _source_budget_shortfall(
         cost_components.append(search.reserved_cost_usd)
     cost = add_usd(*cost_components)
     limits: list[str] = []
-    if budget.model_calls_remaining < budget.protected_downstream_model_calls + calls:
+    details: list[str] = []
+    required_calls = budget.protected_downstream_model_calls + calls
+    required_tokens = budget.protected_downstream_tokens + tokens
+    required_cost = add_usd(budget.protected_downstream_cost_usd, cost)
+    if budget.model_calls_remaining < required_calls:
         limits.append("model calls")
-    if (
-        budget.tokens_remaining is not None
-        and budget.tokens_remaining < budget.protected_downstream_tokens + tokens
-    ):
+        details.append(
+            f"Model calls: {required_calls} required ({calls} follow-up + "
+            f"{budget.protected_downstream_model_calls} protected), "
+            f"{budget.model_calls_remaining} remaining."
+        )
+    if budget.tokens_remaining is not None and budget.tokens_remaining < required_tokens:
         limits.append("tokens")
-    if budget.cost_remaining_usd is not None and budget.cost_remaining_usd < add_usd(
-        budget.protected_downstream_cost_usd, cost
-    ):
+        details.append(
+            f"Tokens: {required_tokens} required ({tokens} follow-up + "
+            f"{budget.protected_downstream_tokens} protected), "
+            f"{budget.tokens_remaining} remaining."
+        )
+    if budget.cost_remaining_usd is not None and budget.cost_remaining_usd < required_cost:
         limits.append("model cost")
+        details.append(
+            f"Model cost: ${canonical_usd(required_cost)} required "
+            f"(${canonical_usd(cost)} follow-up + "
+            f"${canonical_usd(budget.protected_downstream_cost_usd)} protected), "
+            f"${canonical_usd(budget.cost_remaining_usd)} remaining."
+        )
     return (
-        f"Follow-up budget exceeded the remaining allowance for {', '.join(limits)}."
+        f"Follow-up budget exceeded the remaining allowance for {', '.join(limits)}. "
+        + " ".join(details)
         if limits
         else None
     )

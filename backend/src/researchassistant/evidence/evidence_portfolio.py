@@ -19,7 +19,7 @@ from researchassistant.contracts.models import (
 
 def identify_source_family(snapshot: SourceSnapshot) -> SourceFamilyIdentity:
     """Choose a stable source-family key without treating domain equality as identity."""
-    if snapshot.canonical_url:
+    if snapshot.canonical_url and not _is_interstitial_canonical(snapshot.canonical_url):
         key = _normalize_url(snapshot.canonical_url)
         basis = "canonical_primary_url"
     elif snapshot.source_url:
@@ -111,3 +111,11 @@ def _normalize_url(value: str) -> str:
     parsed = urlsplit(value)
     path = parsed.path.rstrip("/") or "/"
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query, ""))
+
+
+def _is_interstitial_canonical(value: str) -> bool:
+    """Recognize known browser challenge URLs that cannot identify a publication."""
+    parsed = urlsplit(value)
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    path = parsed.path.rstrip("/").lower()
+    return hostname in {"google.com", "www.google.com"} and path == "/recaptcha/challengepage"
