@@ -21,6 +21,49 @@ receives the exact claim and available material gaps. Capture gives strong gap l
 and credible counterevidence an early chance within the same limits. A verified fuller
 mirror can replace a truncated capture before final analysis, with both snapshots
 retained. The report discloses confirmed shared data across distinct publications.
+Pending final-analysis sources receive a bounded preference for specific unresolved
+material-gap leads from the latest completed coverage assessment. Movement is at most
+two slots, within existing direction/recommendation/family constraints and comparable
+preview relevance/type priorities. The decision is saved before dispatch and replayed
+on resume; it adds no model calls and does not establish coverage or evidence quality.
+Final source selection skips its model call when the complete validated survivor pool
+fits the existing conservative analysis queue calculation before selection spending.
+The saved queue records `selection_skip_reason=all_survivors_fit`, zero selection
+attempts and no recommendations or fallback. Its empty attempt records reserve zero
+selection calls, tokens and cost. Saved decisions replay without reconsidering the
+branch; existing selection checkpoints retain their model/recovery path. Downstream
+dispatch still checks current durable budgets. Early assessment now exposes ranked
+Retrieve candidates within half its source allowance before Scout settles, retaining
+the rest for later results and protecting pending higher-ranked capture slots. Final
+analysis and post-analysis backfill refill independent Extraction and Analysis queues
+as individual tasks settle. Full active source envelopes remain held through durable settlement;
+versioned dispatch/result records preserve snapshot identity and execution order on
+restart. Stage journals consume unknown outcomes without repeat, and cancellation
+drains active work without aggregate completion. Offline regressions cover rolling
+dispatch, durable source assignment order, cancellation and interrupted replay.
+Later Search Agent requests now include deterministic, bounded per-gap observations
+from saved query receipts, discovery provenance, acquisition attempts and assessed
+findings. Explicit assessment links and discovery leads remain distinct; unknown
+requests and provider errors never establish absent research. One immutable planning
+input freezes the context, prompt guidance, lanes and query modes for adaptive and
+Round-4 replay. Round 4 journals its existing single planning call; adaptive planning
+keeps its two-attempt repair bound. Historical prompt files are unchanged. Frozen
+legacy, conceptual and neighborhood inputs preserve their exact serialized variant
+on replay; failed query receipts never establish that research is absent.
+Stage concurrency is now controlled independently from ready demand: Scout 4–6,
+Capture 4–6, Extraction 4–6 and Analysis 5–8, with sustained-demand expansion,
+downstream backpressure and non-cancelling shrink. One run owner shares ten model
+request slots, prioritizes pending Planner/Gap decisions, rotates other stages and
+reduces/rebuilds provider capacity on explicit overload. Capacity waits precede new
+attempt journals. Capture retains a separate six-transport ceiling and one browser.
+New Scout plans use at most six candidates; recorded 8/15/20-source layouts remain
+unchanged. Source allowances remain held through queued dependent Analysis. Offline
+regressions exercise demand timing, shared admission, overload recovery, source
+reservations and cancellation before dispatch. Atomic Analyst reservation can reuse
+a completed result after a capacity wait without another physical request. The
+all-fit selection branch preserves recorded same-direction gap targets without
+creating recommendations. Live throughput and human research-quality acceptance
+remain open; [review navigation](../../.agent/plans/fix-5-adaptive-concurrency.md).
 The CLI defaults
 remain 20 sources per direction and metadata search depth 50. The old native execution
 engine is retired; historical inspection, evidence browsing and released exports
@@ -47,8 +90,8 @@ with a conservative evidence-picture label (rules in DECISIONS.md), then finding
 grouped by relationship to the claim, sources, and a Method audit view; mirrors of one
 publication merge for display. Released briefs export as Markdown, PDF or Word from the
 result page through a read-only route. Runs that did not complete offer Resume and
-Retry. Settings is one dialog. The redesign has passed offline renderer checks but no
-packaged build or human acceptance yet; desktop notifications were not added because
+Retry. Settings is one dialog. The redesign has passed offline renderer checks and
+has a local packaged build; human acceptance remains open. Notifications were not added because
 the app denies browser permission requests.
 
 Progress screens preserve the last confirmed state when the connection fails and let
@@ -59,6 +102,14 @@ and [progress recovery](../../.agent/plans/recoverable-progress-polling-2026-10-
 evidence. These are previously recorded results, not new installation or quality acceptance.
 
 ## Known problems and limits
+
+The Apple Silicon ZIP candidate under `desktop/dist/` contains the combined scheduling
+and search changes. Its archive integrity and all 298 packaged Python source files
+match the reviewed working tree. Isolated wheel/editable installation, prompt resources,
+worker cleanup and credential-free API construction are verified. Packaged startup
+could not complete the OS credential-store roundtrip in this session; browser smokes
+could not bind loopback ports, and DMG creation was blocked by the disk-image service.
+The ZIP is unsigned and has not replaced the installed application.
 
 The installed unsigned Mac build, `20261024.3`, includes the later PDF, post-analysis,
 final CLI and progress recovery changes, plus the gap-analysis validation repair.

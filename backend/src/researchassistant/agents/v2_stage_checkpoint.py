@@ -33,6 +33,7 @@ from researchassistant.contracts.models import (
     V2VerbatimQuoteSelection,
 )
 from researchassistant.contracts.source_selection_preview import V2SelectionShortlistAudit
+from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.llm import InvocationStatus, LLMInvocationRecord, LLMRequest
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
@@ -57,7 +58,7 @@ class V2ScoutRoundCheckpoint(StrictModel):
     clusters: tuple[SourceCluster, ...]
     scout_item_ids: tuple[UUID, ...]
     ranking_artifact: V2MetadataRankingArtifact | None
-    batch_size: Literal[8, 15, 20] | None = None
+    batch_size: Literal[6, 8, 15, 20] | None = None
     created_at: datetime
 
     _created_is_aware = field_validator("created_at")(_aware_timestamp)
@@ -240,7 +241,13 @@ def stage_request_hash(request: LLMRequest) -> str:
 
 
 def stage_attempt(
-    *, path: str, key: str, number: int, request: LLMRequest, started_at: datetime
+    *,
+    path: str,
+    key: str,
+    number: int,
+    request: LLMRequest,
+    started_at: datetime,
+    provider: object | None = None,
 ) -> tuple[V2StageAttemptCheckpoint, V2StageOutcomeCheckpoint | None, bool]:
     """Record intent before dispatch; a previous intent without outcome cannot repeat."""
     digest = stage_request_hash(request)
@@ -292,7 +299,11 @@ def stage_attempt(
         request_hash=digest,
         started_at=started_at,
     )
-    insert_v2_artifact(path, attempt_key, attempt, started_at)
+
+    def write_intent() -> None:
+        insert_v2_artifact(path, attempt_key, attempt, started_at)
+
+    defer_intent(provider, write_intent)
     return attempt, None, True
 
 

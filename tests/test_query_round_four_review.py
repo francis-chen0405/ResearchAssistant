@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from test_v2_phase3_initial_planner import _routing
+from test_v2_phase8_source_selection import _prepare_db
 
 from agents.v2_round_four import _build_round_four_search_agent_request
 from researchassistant.contracts.discovery_v2 import (
@@ -28,7 +29,6 @@ from researchassistant.contracts.model_research import (
 )
 from researchassistant.contracts.research_directions import ResearchDirection, ResearchDirections
 from researchassistant.research.query_compiler import compile_query
-from researchassistant.storage.store import init_db
 
 NOW = datetime(2026, 10, 7, tzinfo=UTC)
 
@@ -123,8 +123,7 @@ def _gap(initial_plan: V2InitialPlannerOutput) -> V2GapAnalysisOutput:
 
 def _build(tmp_path: Path, *, compiled: bool, remaining_calls: int) -> tuple[object, ...] | None:
     plan = _initial_plan(compiled=compiled)
-    path = tmp_path / f"round-four-{compiled}-{remaining_calls}.sqlite3"
-    init_db(path)
+    path = _prepare_db(tmp_path, plan.run_id)
     eligible = (
         V2ProviderSearchBudget(
             provider=DiscoveryProvider.PUBMED,

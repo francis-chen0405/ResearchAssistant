@@ -731,6 +731,7 @@ def run_v2_post_analysis_round(
         cancellation_requested=cancellation_requested,
         clock=clock,
         artifact_key=POST_ANALYSIS_BACKFILL_KEY,
+        gap_outputs=(gap,),
         admission_artifact_key=POST_ANALYSIS_ADMISSION_KEY,
     )
     if extra.final_admission_result is None:
@@ -799,6 +800,7 @@ def _assessed_findings(
                 if assessment
                 else (),
                 failure=item.failure[:1000] if item.failure else None,
+                addressed_gap_ids=assessment.addressed_gap_ids if assessment else (),
             )
         )
     return tuple(rows)

@@ -346,6 +346,7 @@ def run_v2_initial_planner(
                 }
             )
         attempt, outcome, new_attempt = stage_attempt(
+            provider=llm_provider,
             path=path,
             key=_PLANNER_CHECKPOINT_KEY,
             number=attempt_number,

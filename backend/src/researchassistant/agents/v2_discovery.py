@@ -96,6 +96,7 @@ from researchassistant.providers.nber_metadata import (
 )
 from researchassistant.providers.pricing import conservative_token_estimate
 from researchassistant.providers.ranking import canonical_discovery_url
+from researchassistant.providers.run_scheduler import POLICY, RunScheduler
 from researchassistant.providers.v2_budget import (
     V2BudgetSnapshot,
     V2CancellationRequested,
@@ -124,9 +125,9 @@ V2_SCOUT_PROMPT_PATH = prompt_resource("v2_scout.md")
 V2_SCOUT_V2_PROMPT_PATH = prompt_resource("v2_scout_v2.md")
 V2_SCOUT_V3_PROMPT_PATH = prompt_resource("v2_scout_v3.md")
 V2_SCOUT_BATCH_SIZE = 20
-V2_FRESH_SCOUT_BATCH_SIZE = 8
+V2_FRESH_SCOUT_BATCH_SIZE = POLICY.scout_batch_size
 _PREVIOUS_FRESH_SCOUT_BATCH_SIZE = 15
-V2_SCOUT_MAX_WORKERS = 3
+V2_SCOUT_MAX_WORKERS = POLICY.scout.maximum
 V2_SCOUT_ARTIFACT_KEY = "phase-4-discovery-scout"
 V2_RANKING_ARTIFACT_PREFIX = "phase-3-metadata-ranking-round-"
 _TITLE_TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -756,7 +757,7 @@ def run_v2_discovery_and_scout(
     binding = _fresh_ranked_binding(db_path, planner_output.run_id)
     identity = binding.ranking_identity if binding is not None else None
     claim_aware = identity == RANKING_IDENTITY
-    batch_size = V2_FRESH_SCOUT_BATCH_SIZE if claim_aware else V2_SCOUT_BATCH_SIZE
+    batch_size = V2_FRESH_SCOUT_BATCH_SIZE
     exact_claim = binding.exact_claim if binding is not None and claim_aware else None
     scout_gaps = tuple(gap[:500] for gap in target_gaps[:6]) if claim_aware else ()
     prompt_path = _scout_prompt_path(identity)
@@ -1029,7 +1030,7 @@ def run_v2_discovery_and_scout(
             on_batch=publish_batch if on_batch is not None else None,
             batch_offset=len(prefix_batches),
             batch_size=batch_size,
-            max_workers=V2_SCOUT_MAX_WORKERS if claim_aware else 1,
+            max_workers=V2_SCOUT_MAX_WORKERS,
         )
     output = V2DiscoveryScoutOutput(
         run_id=planner_output.run_id,
@@ -1209,7 +1210,7 @@ def _ranked_scout_selection(
     by_item = {item.item_id: item for item in items}
     claim_aware = ranking_identity == RANKING_IDENTITY
     if batch_size is None:
-        batch_size = V2_FRESH_SCOUT_BATCH_SIZE if claim_aware else V2_SCOUT_BATCH_SIZE
+        batch_size = V2_FRESH_SCOUT_BATCH_SIZE
     available = policy.max_scout_per_round - len(already_scouted)
     if candidate_limit is not None:
         available = min(available, candidate_limit)
@@ -1496,7 +1497,7 @@ def _run_scout_batches(
     ]
     | None = None,
     batch_offset: int = 0,
-    batch_size: int = V2_SCOUT_BATCH_SIZE,
+    batch_size: int = V2_FRESH_SCOUT_BATCH_SIZE,
     max_workers: int = 1,
 ) -> tuple[tuple[ScoutBatch, ...], tuple[ScoutBatchAudit, ...]]:
     _raise_if_cancelled(cancellation_requested)
@@ -1617,6 +1618,7 @@ def _run_scout_batches(
             saved = None
             if db_path is not None and checkpoint_key is not None:
                 attempt, saved, _fresh = stage_attempt(
+                    provider=llm_provider,
                     path=db_path,
                     key=f"{checkpoint_key}/batch-{request_input.batch_number}",
                     number=number,
@@ -1735,27 +1737,57 @@ def _run_scout_batches(
                 tuple(pending for _, pending in requests[index + 1 :]),
             )
 
-    if max_workers == 1 or len(requests) <= 1:
-        for index, (request_input, request) in enumerate(requests):
-            publish(index, run_batch(request_input, request))
-    else:
-        write_scope = overlapping_database_writes(db_path) if db_path else nullcontext()
-        with (
-            write_scope,
-            ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="scout-batch") as pool,
-        ):
-            futures = [
-                pool.submit(copy_context().run, run_batch, request_input, request)
-                for request_input, request in requests
-            ]
-            try:
-                # Publish only complete prefixes so capture and replay keep deterministic ordering.
-                for index, future in enumerate(futures):
-                    publish(index, future.result())
-            finally:
-                stopped.set()
-                for future in futures:
-                    future.cancel()
+    write_scope = overlapping_database_writes(db_path) if db_path else nullcontext()
+    scheduler = getattr(llm_provider, "scheduler", None) or RunScheduler(cancelled)
+    with (
+        scheduler.stage_scope("scout"),
+        write_scope,
+        ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="scout-batch") as pool,
+    ):
+        active = {}
+        completed = {}
+        cursor = 0
+        published = 0
+        try:
+            while cursor < len(requests) or active:
+                _raise_if_cancelled(cancelled)
+                for future, index in tuple(active.items()):
+                    if future.done():
+                        completed[index] = future.result()
+                        del active[future]
+                # Publish complete prefixes only; completion order cannot rewrite history.
+                while published in completed:
+                    publish(published, completed.pop(published))
+                    published += 1
+                capacity = getattr(llm_provider, "stage_capacity_available", None)
+                downstream = scheduler.stages["capture"].ready
+                can_reserve = getattr(llm_provider, "can_reserve_request", None)
+                reservable = cursor < len(requests) and (
+                    can_reserve(requests[cursor][1]) if callable(can_reserve) else True
+                )
+                target = scheduler.update_stage(
+                    "scout",
+                    ready=len(requests) - cursor,
+                    running=len(active),
+                    downstream=downstream,
+                    reservable=reservable,
+                    capacity=capacity(LLMStage.SCOUT) if callable(capacity) else True,
+                )
+                while cursor < len(requests) and len(active) < min(target, max_workers):
+                    request_input, request = requests[cursor]
+                    future = pool.submit(copy_context().run, run_batch, request_input, request)
+                    active[future] = cursor
+                    future.add_done_callback(lambda _future: scheduler.notify())
+                    cursor += 1
+                if active:
+                    scheduler.wait_for_change()
+        except BaseException:
+            scheduler.stop_admission()
+            raise
+        finally:
+            stopped.set()
+            for future in active:
+                future.cancel()
     return tuple(batches), tuple(audits)
 
 

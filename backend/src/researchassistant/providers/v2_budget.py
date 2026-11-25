@@ -25,6 +25,7 @@ from researchassistant.contracts.models import (
     V2PersistedArtifact,
 )
 from researchassistant.contracts.research_policy import V2_MAX_TOTAL_TOKENS
+from researchassistant.providers.dispatch_intent import commit_intent
 from researchassistant.providers.llm import (
     LLMProvider,
     LLMProviderCapabilities,
@@ -34,6 +35,7 @@ from researchassistant.providers.llm import (
     V2CancellationRequested,
 )
 from researchassistant.providers.pricing import conservative_token_estimate
+from researchassistant.providers.run_scheduler import RunScheduler
 from researchassistant.providers.v2_routing import V2RoutingConfig
 from researchassistant.storage.store import (
     DatabaseReader,
@@ -222,6 +224,15 @@ class RoutedV2LLMProvider:
         self._thread_state.provider = provider
         return provider.generate(request)
 
+    def stage_capacity_key(self, stage: LLMStage, alias: ModelAlias) -> str:
+        provider = self._providers[stage if self._by_stage else alias]
+        return getattr(provider, "_provider_label", f"adapter-{id(provider)}")
+
+    def capacity_key(self, request: LLMRequest) -> str:
+        provider = self._providers[request.stage if self._by_stage else request.model_alias]
+        method = getattr(provider, "capacity_key", None)
+        return method(request) if callable(method) else f"adapter-{id(provider)}"
+
     def conservative_input_tokens(
         self,
         request: LLMRequest,
@@ -286,6 +297,7 @@ class BudgetedV2LLMProvider:
         self._cancellation_requested = cancellation_requested
         self._clock = clock or _utc_now
         self._lock = Lock()
+        self.scheduler = RunScheduler(cancellation_requested)
         self._source_cost_limit: ContextVar[tuple[UUID, Decimal] | None] = ContextVar(
             "v2_source_cost_limit", default=None
         )
@@ -314,7 +326,56 @@ class BudgetedV2LLMProvider:
             raise ValueError("adapter input estimate cannot understate the rendered model request")
         return tokens
 
+    defers_dispatch_intents = True
+
+    def capacity_key(self, request: LLMRequest) -> str:
+        method = getattr(self._provider, "capacity_key", None)
+        return method(request) if callable(method) else "default-model-provider"
+
+    def stage_capacity_available(self, stage: LLMStage) -> bool:
+        # Routes to one endpoint share capacity even when they use different models.
+        method = getattr(self._provider, "stage_capacity_key", None)
+        key = (
+            method(stage, self._routing.preflight().for_stage(stage).logical_alias)
+            if callable(method)
+            else getattr(self._provider, "_provider_label", "default-model-provider")
+        )
+        return self.scheduler.capacity_available(key)
+
+    def can_reserve_request(self, request: LLMRequest) -> bool:
+        from researchassistant.providers.llm import completion_token_allowance
+
+        route = self._routing.preflight()
+        reservation = route.reserve(
+            request.stage,
+            self.conservative_input_tokens(
+                request,
+                conservative_token_estimate(request.rendered_prompt),
+            ),
+            output_limit=completion_token_allowance(
+                request,
+                route.for_stage(request.stage).max_completion_tokens,
+            ),
+        )
+        snapshot = self.snapshot()
+        return (
+            snapshot.physical_calls_remaining >= 1
+            and snapshot.tokens_remaining >= reservation.reserved_tokens
+            and snapshot.cost_remaining_usd >= reservation.reserved_cost_usd
+        )
+
     def generate(self, request: LLMRequest) -> BaseModel:
+        key = self.capacity_key(request)
+        with self.scheduler.model_slot(request.stage.value, key) as release_slot:
+            self.scheduler.check_cancelled()
+            commit_intent()
+            return self._generate_reserved(request, release_slot)
+
+    def _generate_reserved(
+        self,
+        request: LLMRequest,
+        release_slot: Callable[[], None],
+    ) -> BaseModel:
         if request.run_id != self._run_id:
             raise ValueError("budgeted provider request must match its v2 run")
         if (
@@ -403,7 +464,23 @@ class BudgetedV2LLMProvider:
                 raise
             self._starts.append(started)
         try:
-            output = self._provider.generate(request)
+            try:
+                with self.scheduler.physical_request(request.stage.value):
+                    try:
+                        output = self._provider.generate(request)
+                    except BaseException as exc:
+                        if getattr(exc, "capacity_overload", False):
+                            self.scheduler.overload(
+                                self.capacity_key(request),
+                                getattr(exc, "retry_after_seconds", 0) or 0,
+                            )
+                        else:
+                            self.scheduler.failure(self.capacity_key(request))
+                        raise
+                    else:
+                        self.scheduler.success(self.capacity_key(request))
+            finally:
+                release_slot()
         except Exception as exc:
             usage = _failure_usage(self._provider)
             self._complete(sequence, False, usage, f"{type(exc).__name__}: {exc}"[:1000])

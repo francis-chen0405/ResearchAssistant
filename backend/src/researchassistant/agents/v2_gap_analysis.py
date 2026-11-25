@@ -365,6 +365,7 @@ def run_v2_gap_analysis(
         if not _budget_can_reserve(gap_input.remaining_budget, attempts, recorded_reservation):
             break
         attempt, outcome, fresh = stage_attempt(
+            provider=llm_provider,
             path=path,
             key=checkpoint_key,
             number=attempt_number,

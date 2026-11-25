@@ -141,12 +141,16 @@ class MimoProviderError(RuntimeError):
         retryable: bool,
         http_status: int | None = None,
         request_id: str | None = None,
+        retry_after_seconds: float | None = None,
+        capacity_overload: bool = False,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.retryable = retryable
         self.http_status = http_status
         self.request_id = request_id
+        self.retry_after_seconds = retry_after_seconds
+        self.capacity_overload = capacity_overload
 
 
 class MimoCallMetadata(StrictModel):
@@ -314,6 +318,10 @@ class XiaomiMimoAdapter:
                 )
             finally:
                 response.close()
+
+    def capacity_key(self, request: LLMRequest) -> str:
+        # Only the public provider label is exposed in diagnostics, never credentials.
+        return self._provider_label
 
     def generate(self, request: LLMRequest) -> BaseModel:
         self._thread_state.last_failure_usage = None
@@ -982,12 +990,18 @@ def _http_error(response: httpx.Response, *, provider_label: str) -> MimoProvide
             MimoFailureCode.RATE_LIMIT,
             f"{provider_label} rate limit was reached",
             retryable=True,
+            http_status=status,
+            capacity_overload=_explicit_overload(response),
+            retry_after_seconds=_retry_after_seconds(response),
         )
     if 500 <= status < 600:
         return MimoProviderError(
             MimoFailureCode.TRANSIENT_OUTAGE,
             f"{provider_label} transient outage",
             retryable=True,
+            http_status=status,
+            capacity_overload=_explicit_overload(response),
+            retry_after_seconds=_retry_after_seconds(response),
         )
     return MimoProviderError(
         MimoFailureCode.PERMANENT_FAILURE,
@@ -1049,3 +1063,15 @@ def _redacted_error_location(raw: Any, error_type: str) -> str:
         else:
             segments.append("<field>")
     return ".".join(segments) if segments else "<root>"
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    from researchassistant.providers.run_scheduler import retry_after_delay
+
+    return retry_after_delay(response.headers.get("retry-after"))
+
+
+def _explicit_overload(response: httpx.Response) -> bool:
+    from researchassistant.providers.run_scheduler import explicit_overload_response
+
+    return explicit_overload_response(response)

@@ -13,7 +13,7 @@ from agents.v2_round_four import V2_POST13_ROUND_FOUR_GOVERNOR_KEY
 from providers.llm import LLMRequest
 from providers.v2_budget import V2RunCeilings
 from researchassistant.contracts.discovery_v2 import V2DiscoveryOperation
-from researchassistant.contracts.model_contracts import DiscoveryProvider
+from researchassistant.contracts.model_contracts import DiscoveryProvider, ResearchControls
 from researchassistant.contracts.model_evidence import (
     V2AdmissionMethod,
     V2EvidenceAdmissionBatchResult,
@@ -117,6 +117,7 @@ def _run_fresh(
     providers: tuple[DiscoveryProvider, ...] = (DiscoveryProvider.EXA,),
     query_modes: Mapping[DiscoveryProvider, str] | None = None,
     cancellation_requested: Callable[[], bool] | None = None,
+    research_controls: ResearchControls | None = None,
 ) -> V2ProductionPipelineResult:
     return run_v2_production_pipeline(
         CLAIM,
@@ -132,6 +133,7 @@ def _run_fresh(
         query_modes=query_modes,
         legacy_query_planning=False,
         cancellation_requested=cancellation_requested,
+        research_controls=research_controls,
         clock=lambda: phase12.NOW,
     )
 
@@ -180,6 +182,7 @@ def test_production_resumes_yielded_page_and_schedules_all_search_rounds(tmp_pat
     run_id = uuid4()
     search = _PagingSearch()
     providers = (DiscoveryProvider.SERPSEARCH, DiscoveryProvider.EXA)
+    controls = ResearchControls(discovery_providers=providers, sources_per_stance_per_round=5)
 
     def interrupt_after_first_page() -> bool:
         if search.requests:
@@ -194,6 +197,7 @@ def test_production_resumes_yielded_page_and_schedules_all_search_rounds(tmp_pat
             scraper=phase12._Scraper(),
             run_id=run_id,
             providers=providers,
+            research_controls=controls,
             cancellation_requested=interrupt_after_first_page,
         )
     (first_request,) = search.requests
@@ -214,6 +218,7 @@ def test_production_resumes_yielded_page_and_schedules_all_search_rounds(tmp_pat
         scraper=phase12._Scraper(),
         run_id=run_id,
         providers=providers,
+        research_controls=controls,
     )
 
     assert result.state is V2ProductionState.RELEASED, result.failure_reason

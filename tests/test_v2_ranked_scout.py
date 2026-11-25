@@ -327,11 +327,11 @@ def test_ranked_scout_reserves_both_attempts_and_records_unseen_items() -> None:
         downstream_input_tokens=None,
     )
 
-    assert len(selected) == 20
-    assert sidecar.scouted_count == 20
-    assert sidecar.budget_limited_count == 5
+    assert len(selected) == 6
+    assert sidecar.scouted_count == 6
+    assert sidecar.budget_limited_count == 19
     assert sidecar.cap_limited_count == 0
-    assert sum(item.disposition == "scouted" for item in sidecar.scout_dispositions) == 20
+    assert sum(item.disposition == "scouted" for item in sidecar.scout_dispositions) == 6
     assert all(item.disposition != "skip" for item in sidecar.scout_dispositions)
 
 
@@ -401,7 +401,7 @@ def test_fair_ranked_scout_keeps_scarce_enabled_lane() -> None:
         ResearchDirection.SUPPORT,
         ResearchDirection.CHALLENGE,
     }
-    assert sidecar.scouted_count == 10
+    assert sidecar.scouted_count == 6
 
 
 def test_ranked_scout_metadata_is_bounded_before_rendering() -> None:

@@ -401,6 +401,7 @@ class V2SourceSelectionQueueResult(StrictModel):
     used_fallback: bool
     selection_attempts: NonNegativeInt
     selection_attempt_records: tuple[V2SourceSelectionAttempt, ...] = Field(max_length=2)
+    selection_skip_reason: Literal["all_survivors_fit"] | None = None
     selection_stage: Literal["source_selection"] = "source_selection"
     priority_source_ids: tuple[UUID, ...] = ()
     queued_source_ids: tuple[UUID, ...]
@@ -421,6 +422,13 @@ class V2SourceSelectionQueueResult(StrictModel):
     completed_at: datetime
 
     _completed_at_is_aware = field_validator("completed_at")(_validate_aware_datetime)
+
+    @model_serializer(mode="wrap")
+    def omit_absent_skip_reason(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data = handler(self)
+        if self.selection_skip_reason is None:
+            data.pop("selection_skip_reason", None)
+        return data
 
     @model_validator(mode="after")
     def validate_result(self) -> V2SourceSelectionQueueResult:
@@ -479,6 +487,17 @@ class V2SourceSelectionQueueResult(StrictModel):
             raise ValueError("source statuses must reproduce deep-analysis queue order")
         if self.selection_attempts != len(self.selection_attempt_records):
             raise ValueError("selection attempt count must match its audit records")
+        if self.selection_skip_reason is not None and (
+            self.selection_attempts
+            or self.selection_attempt_records
+            or self.recommended_source_ids
+            or self.recommendation_rationales
+            or self.used_fallback
+            or any(status.recommended for status in self.source_statuses)
+        ):
+            raise ValueError(
+                "skipped selection cannot contain attempts, recommendations or fallback"
+            )
         return self
 
 

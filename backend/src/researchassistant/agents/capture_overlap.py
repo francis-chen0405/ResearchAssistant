@@ -48,11 +48,13 @@ from researchassistant.contracts.research_policy import (
     V2_ARTICLE_BODY_PROBE_POLICY_IDENTITY,
     V2_USABLE_CAPTURE_PROBE_POLICY_IDENTITY,
 )
-from researchassistant.contracts.scraping import ScrapeResponse
+from researchassistant.contracts.scraping import ScrapeRequest, ScrapeResponse
 from researchassistant.providers.acquisition import CaptureControls, capture_controls
+from researchassistant.providers.dispatch_intent import clear_intent, commit_intent
 from researchassistant.providers.llm import LLMRequest
 from researchassistant.providers.ranking import canonical_discovery_url
-from researchassistant.providers.scraper import ScraperProvider
+from researchassistant.providers.run_scheduler import POLICY, RunScheduler
+from researchassistant.providers.scraper import ScraperProvider, ScraperProviderError
 from researchassistant.providers.v2_budget import V2CancellationRequested
 from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
@@ -63,7 +65,7 @@ if TYPE_CHECKING:
         V2EvidenceCheckpoint,
     )
 
-DEFAULT_CAPTURE_SLOTS = 3
+DEFAULT_CAPTURE_SLOTS = POLICY.capture.initial
 LATER_SCOUT_CAPTURE_RESERVE = 2
 
 CaptureSettled = Callable[[V2DiscoveryScoutOutput, dict[UUID, V2AcquisitionProbeOutput]], None]
@@ -82,7 +84,7 @@ EarlySettled = Callable[
 
 class V2CaptureOverlapBinding(StrictModel):
     run_id: UUID
-    capture_slots: int = Field(ge=1, le=5)
+    capture_slots: int = Field(ge=1, le=POLICY.capture.maximum)
     progressive: bool = Field(default=False, exclude_if=lambda value: not value)
     require_article_body: bool = Field(default=False, exclude_if=lambda value: not value)
 
@@ -188,6 +190,46 @@ def supports_progressive_overlap(path: str, run_id: UUID, artifact_key: str) -> 
     return binding is not None and binding.progressive
 
 
+class ControlledCaptureProvider:
+    """Admit one existing capture attempt without adding retries or source allowance."""
+
+    defers_dispatch_intents = True
+
+    def __init__(
+        self,
+        provider: ScraperProvider,
+        controls: CaptureControls,
+        scheduler: RunScheduler,
+        key: str,
+    ) -> None:
+        self.provider = provider
+        self.controls = controls
+        self.scheduler = scheduler
+        self.key = key
+
+    def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
+        try:
+            with self.scheduler.service_slot(self.key, self.controls.park_transport):
+                self.controls.restore_transport()
+                self.controls.check_cancelled()
+                commit_intent()
+                try:
+                    response = self.provider.scrape(request)
+                except ScraperProviderError as exc:
+                    if exc.capacity_overload:
+                        self.scheduler.overload(self.key, exc.retry_after_seconds or 0)
+                    else:
+                        self.scheduler.failure(self.key)
+                    raise
+                except BaseException:
+                    self.scheduler.failure(self.key)
+                    raise
+                self.scheduler.success(self.key)
+                return response
+        finally:
+            clear_intent()
+
+
 class CaptureOverlap:
     def __init__(
         self,
@@ -206,6 +248,7 @@ class CaptureOverlap:
         cancellation_requested: Callable[[], bool] | None,
         clock: Callable[[], datetime],
         early: EarlyAssessment | None = None,
+        scheduler: RunScheduler | None = None,
         exclusions: Callable[[V2DiscoveryScoutOutput], tuple[frozenset[UUID], frozenset[str]]]
         | None = None,
     ) -> None:
@@ -218,6 +261,7 @@ class CaptureOverlap:
         self.target_gaps = target_gaps
         self.direction_target = direction_target
         self.capture_slots = capture_slots
+        self.scheduler = scheduler or RunScheduler(cancellation_requested)
         self.primary = primary
         self.fallback = fallback
         self.cancellation_requested = cancellation_requested
@@ -229,10 +273,10 @@ class CaptureOverlap:
         self.work_owners: dict[UUID, UUID] = {}
         self.stop = Event()
         self.browser_slots = Semaphore(1)
-        self.transport_slots = Semaphore(capture_slots)
+        self.transport_slots = self.scheduler.transport_slots
         self.browser_events: SimpleQueue[tuple[UUID, bool]] = SimpleQueue()
         self.parked: set[UUID] = set()
-        self.max_capture_jobs = 2 * capture_slots - 1
+        self.max_capture_jobs = POLICY.capture.maximum
         self.wake: SimpleQueue[None] = SimpleQueue()
         self.handoffs: SimpleQueue[
             tuple[
@@ -431,6 +475,46 @@ class CaptureOverlap:
             return dispatch, candidate
         return None
 
+    def _ready_count(
+        self,
+        candidates: tuple[CaptureCandidate, ...],
+        *,
+        scout_pending: bool,
+        limit: int,
+    ) -> int:
+        target = self.direction_target
+        if scout_pending:
+            limit = max(1, limit - LATER_SCOUT_CAPTURE_RESERVE)
+            if target is not None:
+                target = max(1, target - LATER_SCOUT_CAPTURE_RESERVE)
+        captured, adequate = self._captured_works()
+        direction_counts = Counter(captured.values())
+        direction_counts.update(dispatch.direction for dispatch, _ in self.active.values())
+        owners = {self.work_owners.get(item, item) for item in self.active}
+        count = 0
+        for candidate in candidates:
+            source_id = candidate.cluster.cluster_id
+            owner = self.work_owners.get(source_id, source_id)
+            if (
+                source_id in self.active
+                or source_id in self.finished
+                or owner in owners
+                or owner in adequate
+            ):
+                continue
+            if (
+                target is not None
+                and owner not in captured
+                and direction_counts[candidate.direction] >= target
+            ):
+                continue
+            if not self._unclaimed_locations(candidate.locations) and source_id in self.work_owners:
+                continue
+            count += 1
+            owners.add(owner)
+            direction_counts[candidate.direction] += 1
+        return min(count, max(0, limit - self.dispatch_count))
+
     def _captured_works(self) -> tuple[dict[UUID, ResearchDirection], set[UUID]]:
         captured_works: dict[UUID, ResearchDirection] = {}
         adequate = set()
@@ -470,15 +554,26 @@ class CaptureOverlap:
 
         source, attempts = None, ()
         if dispatch.urls:
-            with capture_controls(
-                CaptureControls(
-                    accept_html,
-                    self.transport_slots,
-                    self.browser_slots,
-                    self.check_cancelled,
-                    browser_waiting,
+            controls = CaptureControls(
+                accept_html,
+                self.transport_slots,
+                self.browser_slots,
+                self.check_cancelled,
+                browser_waiting,
+            )
+            primary = (
+                ControlledCaptureProvider(self.primary, controls, self.scheduler, "capture:primary")
+                if self.primary is not None
+                else None
+            )
+            fallback = (
+                ControlledCaptureProvider(
+                    self.fallback, controls, self.scheduler, "capture:fallback"
                 )
-            ):
+                if self.fallback is not None
+                else None
+            )
+            with capture_controls(controls):
                 source, attempts = _acquire_cluster_usable(
                     db_path=self.path,
                     artifact_key=self.artifact_key,
@@ -486,8 +581,8 @@ class CaptureOverlap:
                     run_id=self.run_id,
                     cluster=cluster,
                     direction=dispatch.direction,
-                    primary=self.primary,
-                    fallback=self.fallback,
+                    primary=primary,
+                    fallback=fallback,
                     policy=self.policy,
                     retrieved_at=dispatch.dispatched_at,
                     planned_locations=dispatch.urls,
@@ -534,7 +629,14 @@ class CaptureOverlap:
     ) -> tuple[
         V2DiscoveryScoutRunResult, dict[UUID, V2AcquisitionProbeOutput], V2EvidenceCheckpoint | None
     ]:
+        def wake() -> None:
+            self.wake.put(None)
+
+        self.scheduler.add_wake(wake)
         with (
+            self.scheduler.stage_scope(
+                *(("capture", "extraction", "analysis") if self.early else ("capture",))
+            ),
             overlapping_database_writes(self.path),
             ThreadPoolExecutor(max_workers=1, thread_name_prefix="scout") as scout_pool,
             ThreadPoolExecutor(
@@ -543,6 +645,9 @@ class CaptureOverlap:
             ThreadPoolExecutor(
                 max_workers=EARLY_ANALYSIS_SLOTS, thread_name_prefix="early-analysis"
             ) as analysis_pool,
+            ThreadPoolExecutor(
+                max_workers=POLICY.extraction.maximum, thread_name_prefix="early-extraction"
+            ) as extraction_pool,
         ):
             try:
                 return self._run(
@@ -550,11 +655,16 @@ class CaptureOverlap:
                     scout_pool,
                     capture_pool,
                     analysis_pool,
+                    extraction_pool,
                     on_scout_finished,
                     on_capture_settled,
                     on_early_settled,
                 )
+            except BaseException:
+                self.scheduler.stop_admission()
+                raise
             finally:
+                self.scheduler.remove_wake(wake)
                 self.stop.set()
 
     def _run(
@@ -563,6 +673,7 @@ class CaptureOverlap:
         scout_pool: ThreadPoolExecutor,
         capture_pool: ThreadPoolExecutor,
         analysis_pool: ThreadPoolExecutor,
+        extraction_pool: ThreadPoolExecutor,
         on_scout_finished: Callable[[], None] | None,
         on_capture_settled: CaptureSettled | None,
         on_early_settled: EarlySettled | None,
@@ -609,9 +720,17 @@ class CaptureOverlap:
                     del self.active[cluster_id]
 
             if handoff is not None:
+                ready = self._ready_count(candidates, scout_pending=scout_pending, limit=limit)
+                target = self.scheduler.update_stage(
+                    "capture",
+                    ready=ready,
+                    running=len(self.active),
+                    downstream=self.scheduler.stages["extraction"].ready,
+                    capacity=self.scheduler.capture_growth_available(),
+                )
                 while (
-                    len(self.active) < self.max_capture_jobs
-                    and len(self.active) - len(self.parked) < self.capture_slots
+                    len(self.active) < target
+                    and len(self.active) < self.max_capture_jobs
                     and self.dispatch_count < limit
                 ):
                     self.check_cancelled()
@@ -661,19 +780,24 @@ class CaptureOverlap:
                     self.early.prepare()
                 if self.early.budget is not None:
                     lead_id = self.early.budget.lead_source_id
-                    priority = (lead_id,) if lead_id is not None else ()
-                    if result is not None:
-                        ids = tuple(candidate.cluster.cluster_id for candidate in candidates)
-                        started = (self.active.keys() | self.finished.keys()) & set(ids)
-                        ranked = list(priority)
-                        for source_id in ids:
-                            owner = self.work_owners.get(source_id)
-                            if owner is not None and owner in started:
-                                # A late location cannot displace the early
-                                # assessment of a work with an owned capture.
-                                ranked.append(owner)
-                            ranked.append(source_id)
-                        priority = tuple(dict.fromkeys(ranked))
+                    ids = tuple(candidate.cluster.cluster_id for candidate in candidates)
+                    started = (self.active.keys() | self.finished.keys()) & set(ids)
+                    ranked = [*self.early.plans]
+                    if lead_id is not None:
+                        ranked.append(lead_id)
+                    decisions = _capture_scout_decisions(handoff[0])
+                    for candidate in candidates:
+                        if result is None:
+                            decision = decisions.get(candidate.item_id)
+                            if decision is None or decision.decision.value != "retrieve":
+                                continue
+                        source_id = candidate.cluster.cluster_id
+                        owner = self.work_owners.get(source_id)
+                        if owner is not None and owner in started:
+                            # Later locations cannot replace an owned early snapshot.
+                            ranked.append(owner)
+                        ranked.append(source_id)
+                    priority = tuple(dict.fromkeys(ranked))
                     captured_works, adequate = self._captured_works()
                     usable = Counter(captured_works.values())
                     outstanding = set(self.active)
@@ -698,8 +822,10 @@ class CaptureOverlap:
                         captures=self.finished,
                         outstanding=frozenset(outstanding),
                         executor=analysis_pool,
+                        extraction_executor=extraction_pool,
                         wake=self.wake,
                         check_cancelled=self.check_cancelled,
+                        scout_pending=result is None,
                     )
                     if (
                         result is not None
@@ -723,7 +849,8 @@ class CaptureOverlap:
                 return result, self.finished, checkpoint
             while True:
                 try:
-                    self.wake.get(timeout=0.1)
+                    self.wake.get(timeout=POLICY.tick_seconds)
                     break
                 except Empty:
                     self.check_cancelled()
+                    break

@@ -103,7 +103,8 @@ def test_legacy_claim_preview_keeps_its_shortlist_policy_and_exact_resume(tmp_pa
             "policy_identity": V2_PREVIEW_SELECTION_LEGACY_POLICY_IDENTITY,
         }
     )
-    _, path = _run(tmp_path, selection, BoundedSourceSelector())
+    # Exercise the retained model-selection branch: the complete pool cannot fit.
+    _, path = _run(tmp_path, selection, BoundedSourceSelector(), budget_tokens=299_999)
     saved = read_v2_artifact(path, selection.run_id, "source-selection-preview-shortlist-v2")
     audit = V2SelectionShortlistAudit.model_validate_json(saved.payload_json)
     assert audit.policy_identity == "source-selection-shortlist-v2"

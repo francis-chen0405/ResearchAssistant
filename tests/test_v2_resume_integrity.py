@@ -350,8 +350,10 @@ def test_budget_replay_never_refunds_an_unknown_physical_attempt(
     assert result.budget.token_exposure >= captured["budget"].token_exposure
 
 
+@pytest.mark.parametrize("all_fit", [False, True])
 def test_selection_replay_retains_original_snapshot_without_replenishing_budget(
     tmp_path: Path,
+    all_fit: bool,
 ) -> None:
     from uuid import uuid4
 
@@ -363,6 +365,7 @@ def test_selection_replay_retains_original_snapshot_without_replenishing_budget(
                 family="generated",
                 probe_score=10,
             ),
+            selection_fixture._candidate(uuid4(), family="independent", probe_score=9),
         )
     )
     provider = selection_fixture.FakeSourceSelector(
@@ -377,7 +380,7 @@ def test_selection_replay_retains_original_snapshot_without_replenishing_budget(
         ]
     )
     path = Path(selection_fixture._prepare_db(tmp_path, request.run_id))
-    original_budget = selection_fixture._budget()
+    original_budget = selection_fixture._budget(tokens_remaining=2_000_000 if all_fit else 119_999)
     first = run_v2_source_selection_and_queue(
         db_path=path,
         selection_input=request,
@@ -415,5 +418,6 @@ def test_selection_replay_retains_original_snapshot_without_replenishing_budget(
                 routing_config=selection_fixture._routing(),
                 budget=budget,
             )
-    assert len(provider.requests) == 1
+    assert len(provider.requests) == (0 if all_fit else 1)
+    assert first.selection_skip_reason == ("all_survivors_fit" if all_fit else None)
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before

@@ -11,7 +11,7 @@ from pathlib import Path
 from queue import SimpleQueue
 from uuid import UUID
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from researchassistant.agents.adaptive_summary import _merge_survivors
 from researchassistant.agents.v2_deep_analysis import (
@@ -19,7 +19,8 @@ from researchassistant.agents.v2_deep_analysis import (
     V2ExactBodyMirror,
     V2ExactBodyMirrorPlan,
     _exact_body_mirror_plan,
-    _run_source_wave,
+    _run_extracted_source,
+    _run_source_extraction,
     _single_source_queue,
     exact_body_mirror_policy,
 )
@@ -33,6 +34,7 @@ from researchassistant.agents.v2_source_selection import (
 )
 from researchassistant.agents.v2_stage_checkpoint import checkpoint_hash, read_checkpoint
 from researchassistant.common.money import add_usd
+from researchassistant.contracts.extraction import V2ExactExtractionResult, V2ExtractionState
 from researchassistant.contracts.model_contracts import StrictModel
 from researchassistant.contracts.models import (
     V2_DEEP_ANALYSIS_SOURCE_PHYSICAL_CALL_CAP,
@@ -47,12 +49,14 @@ from researchassistant.contracts.source_recovery import AssessedSourceFinding
 from researchassistant.evidence.evidence_core import validate_snapshot_integrity
 from researchassistant.providers.llm import LLMProvider, LLMRequest, LLMStage
 from researchassistant.providers.pricing import ModelPriceCap
-from researchassistant.providers.v2_budget import BudgetedV2LLMProvider, V2CancellationRequested
+from researchassistant.providers.run_scheduler import POLICY, RunScheduler
+from researchassistant.providers.v2_budget import BudgetedV2LLMProvider
 from researchassistant.providers.v2_routing import V2RoutingConfig
+from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
 CHECKPOINT_KEY = "phase-5-assessed-evidence-checkpoint-v1"
-EARLY_ANALYSIS_SLOTS = 3
+EARLY_ANALYSIS_SLOTS = POLICY.analysis.maximum
 EARLY_SOURCE_LIMIT = 4
 
 
@@ -70,6 +74,25 @@ class V2EvidenceCheckpointPlan(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     run_id: UUID
     queue: V2SourceSelectionQueueResult
+    discovery: V2DiscoveryScoutOutput | None = Field(default=None, exclude_if=lambda v: v is None)
+    capture: V2AcquisitionProbeOutput | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @model_validator(mode="after")
+    def validate_source_handoff(self) -> V2EvidenceCheckpointPlan:
+        if (self.discovery is None) != (self.capture is None):
+            raise ValueError("early source handoff requires both discovery and capture")
+        if self.queue.run_id != self.run_id:
+            raise ValueError("early source queue belongs to another run")
+        if self.discovery is not None and self.capture is not None:
+            if (
+                self.discovery.run_id != self.run_id
+                or self.capture.run_id != self.run_id
+                or len(self.queue.queued_source_ids) != 1
+                or self.queue.queued_source_ids[0]
+                not in {source.cluster_id for source in self.capture.survivors}
+            ):
+                raise ValueError("early source handoff differs from its queue ownership")
+        return self
 
 
 class V2EarlyBudget(StrictModel):
@@ -164,24 +187,113 @@ def assess_initial_sources(
         elif saved_mirrors != mirror_plan:
             raise ValueError("evidence checkpoint mirror ownership changed")
         mirror_ids = {mirror.source_id for mirror in mirror_plan.mirrors}
-        for source_id in queue.queued_source_ids:
-            if source_id in mirror_ids:
-                continue
-            if cancellation_requested is not None and cancellation_requested():
-                raise V2CancellationRequested("cancelled before evidence checkpoint source")
-            waves.append(
-                _run_source_wave(
-                    path=str(db_path),
-                    source_id=source_id,
-                    queue_result=_single_source_queue(queue, source_id, routing_config),
-                    discovery_outputs=(discovery,),
-                    acquisition_outputs=(acquisition,),
-                    llm_provider=llm_provider,
-                    routing_config=routing_config,
-                    clock=clock,
-                    admit=False,
-                )
+        source_ids = tuple(
+            source_id for source_id in queue.queued_source_ids if source_id not in mirror_ids
+        )
+        scheduler = getattr(llm_provider, "scheduler", None) or RunScheduler(cancellation_requested)
+
+        def check_cancelled() -> None:
+            scheduler.check_cancelled()
+
+        def analyze(source_id: UUID, extraction: V2ExactExtractionResult) -> V2DeepAnalysisWave:
+            return _run_extracted_source(
+                path=str(db_path),
+                source_id=source_id,
+                extraction=extraction,
+                acquisition_outputs=(acquisition,),
+                llm_provider=llm_provider,
+                routing_config=routing_config,
+                clock=clock,
+                admit=False,
+                journal_early_attempts=True,
+                check_cancelled=check_cancelled,
             )
+
+        # The frozen queue already protects the whole authorized early set. No
+        # source is added as either stage refills, and its hold spans both stages.
+        extracted: dict[UUID, V2ExactExtractionResult] = {}
+        completed: dict[UUID, V2DeepAnalysisWave] = {}
+        extracting: dict[UUID, Future[V2ExactExtractionResult]] = {}
+        analyzing: dict[UUID, Future[V2DeepAnalysisWave]] = {}
+        cursor = 0
+        with (
+            scheduler.stage_scope("extraction", "analysis"),
+            overlapping_database_writes(str(db_path)),
+            ThreadPoolExecutor(max_workers=POLICY.extraction.maximum) as extraction_pool,
+            ThreadPoolExecutor(max_workers=POLICY.analysis.maximum) as analysis_pool,
+        ):
+            try:
+                while len(completed) < len(source_ids):
+                    check_cancelled()
+                    for source_id, analysis_future in tuple(analyzing.items()):
+                        if analysis_future.done():
+                            completed[source_id] = analysis_future.result()
+                            del analyzing[source_id]
+                    for source_id, extraction_future in tuple(extracting.items()):
+                        if extraction_future.done():
+                            extraction = extraction_future.result()
+                            if any(
+                                item.state is V2ExtractionState.EXTRACTED
+                                for item in extraction.sources
+                            ):
+                                extracted[source_id] = extraction
+                            else:
+                                completed[source_id] = analyze(source_id, extraction)
+                            del extracting[source_id]
+                    capacity = getattr(llm_provider, "stage_capacity_available", None)
+                    target = scheduler.update_stage(
+                        "analysis",
+                        ready=len(extracted),
+                        running=len(analyzing),
+                        capacity=capacity(LLMStage.ANALYST) if callable(capacity) else True,
+                    )
+                    for source_id in source_ids:
+                        if len(analyzing) >= target:
+                            break
+                        if source_id in extracted:
+                            analysis_future = analysis_pool.submit(
+                                copy_context().run,
+                                analyze,
+                                source_id,
+                                extracted.pop(source_id),
+                            )
+                            analyzing[source_id] = analysis_future
+                            analysis_future.add_done_callback(lambda _future: scheduler.notify())
+                    target = scheduler.update_stage(
+                        "extraction",
+                        ready=len(source_ids) - cursor,
+                        running=len(extracting),
+                        downstream=len(extracted) + scheduler.model_waiting(LLMStage.ANALYST.value),
+                        capacity=capacity(LLMStage.EXTRACTOR) if callable(capacity) else True,
+                    )
+                    while cursor < len(source_ids) and len(extracting) < target:
+                        check_cancelled()
+                        source_id = source_ids[cursor]
+                        cursor += 1
+                        extraction_future = extraction_pool.submit(
+                            copy_context().run,
+                            _run_source_extraction,
+                            path=str(db_path),
+                            source_id=source_id,
+                            queue_result=_single_source_queue(queue, source_id, routing_config),
+                            discovery_outputs=(discovery,),
+                            acquisition_outputs=(acquisition,),
+                            llm_provider=llm_provider,
+                            routing_config=routing_config,
+                            clock=clock,
+                            journal_early_attempts=True,
+                        )
+                        extracting[source_id] = extraction_future
+                        extraction_future.add_done_callback(lambda _future: scheduler.notify())
+                    if extracting or analyzing:
+                        scheduler.wait_for_change()
+            except BaseException:
+                scheduler.stop_admission()
+                raise
+            finally:
+                for future in (*extracting.values(), *analyzing.values()):
+                    future.cancel()
+        waves = [completed[source_id] for source_id in source_ids]
     result = evidence_checkpoint(discovery.run_id, exact_claim, tuple(waves))
     insert_v2_artifact(db_path, CHECKPOINT_KEY, result, clock())
     return result
@@ -254,6 +366,7 @@ def evidence_checkpoint(
                 if assessment
                 else (),
                 failure=source.failure,
+                addressed_gap_ids=assessment.addressed_gap_ids if assessment else (),
             )
         )
     return V2EvidenceCheckpoint(
@@ -322,6 +435,9 @@ class EarlyAssessment:
         self.clock = clock
         self.budget: V2EarlyBudget | None = None
         self.active: dict[UUID, Future[V2DeepAnalysisWave]] = {}
+        self.assessment_captures: dict[UUID, V2AcquisitionProbeOutput] = {}
+        self.extracting: dict[UUID, Future[V2ExactExtractionResult]] = {}
+        self.extracted: dict[UUID, V2ExactExtractionResult] = {}
         self.waves: dict[UUID, V2DeepAnalysisWave] = {}
         self.plans: dict[UUID, V2EvidenceCheckpointPlan] = {}
         self.priority: tuple[UUID, ...] = ()
@@ -415,23 +531,101 @@ class EarlyAssessment:
         captures: dict[UUID, V2AcquisitionProbeOutput],
         outstanding: frozenset[UUID],
         executor: ThreadPoolExecutor,
+        extraction_executor: ThreadPoolExecutor,
         wake: SimpleQueue[None],
         check_cancelled: Callable[[], None],
+        scout_pending: bool = False,
     ) -> None:
         for source_id, future in tuple(self.active.items()):
             if future.done():
                 self.waves[source_id] = future.result()
                 del self.active[source_id]
+        for source_id, extraction_future in tuple(self.extracting.items()):
+            if extraction_future.done():
+                extraction = extraction_future.result()
+                if any(item.state is V2ExtractionState.EXTRACTED for item in extraction.sources):
+                    self.extracted[source_id] = extraction
+                else:
+                    capture = self.assessment_captures[source_id]
+                    self.waves[source_id] = self._assess(
+                        source_id,
+                        extraction,
+                        capture,
+                        check_cancelled,
+                    )
+                del self.extracting[source_id]
+        scheduler = self.llm.scheduler
+        analysis_target = scheduler.update_stage(
+            "analysis",
+            ready=len(self.extracted),
+            running=len(self.active),
+            capacity=self.llm.stage_capacity_available(LLMStage.ANALYST),
+        )
+        for source_id in self.plans:
+            if len(self.active) >= analysis_target:
+                break
+            if source_id not in self.extracted:
+                continue
+            check_cancelled()
+            capture = self.assessment_captures[source_id]
+            future = executor.submit(
+                copy_context().run,
+                self._assess,
+                source_id,
+                self.extracted.pop(source_id),
+                capture,
+                check_cancelled,
+            )
+            self.active[source_id] = future
+            future.add_done_callback(lambda _future: wake.put(None))
         assert self.budget is not None
         self.priority = priority
-        open_slots = self.capacity - len(self.plans)
+        # Pending ranked captures protect slots inside this frontier. The other
+        # half is unavailable until Scout settles, even if downloads finish early.
+        assignment_limit = (
+            max(1, self.capacity // 2) if scout_pending and self.capacity else self.capacity
+        )
+        open_slots = assignment_limit - len(self.plans)
         assigned = {
             source_id: captures[source_id] for source_id in self.plans if source_id in captures
         }
+        ready_ids = {
+            source_id
+            for source_id in priority
+            if source_id in captures
+            and captures[source_id].survivors
+            and source_id not in self.active
+            and source_id not in self.waves
+            and source_id not in self.extracting
+            and source_id not in self.extracted
+            and (source_id in self.plans or open_slots > 0)
+        }
+        extraction_target = scheduler.update_stage(
+            "extraction",
+            ready=min(
+                len(ready_ids),
+                max(
+                    0,
+                    assignment_limit
+                    - len(self.active)
+                    - len(self.waves)
+                    - len(self.extracting)
+                    - len(self.extracted),
+                ),
+            ),
+            running=len(self.extracting),
+            downstream=len(self.extracted) + scheduler.model_waiting(LLMStage.ANALYST.value),
+            capacity=self.llm.stage_capacity_available(LLMStage.EXTRACTOR),
+        )
         for source_id in priority:
-            if len(self.active) == EARLY_ANALYSIS_SLOTS:
+            if len(self.extracting) >= extraction_target:
                 break
-            if source_id in self.active or source_id in self.waves:
+            if (
+                source_id in self.active
+                or source_id in self.waves
+                or source_id in self.extracting
+                or source_id in self.extracted
+            ):
                 continue
             capture = captures.get(source_id)
             plan = self.plans.get(source_id)
@@ -452,30 +646,36 @@ class EarlyAssessment:
                 continue
             if plan is None and not self._unique_work(discovery, assigned, source_id, capture):
                 continue
-            pool = _merge_survivors(self.run_id, ((1, discovery, capture),))
-            # Freeze only the source's own cluster and snapshot. The eventual
-            # aggregate (or a fuller mirror) cannot change the request on replay.
-            cluster = next(c for c in discovery.clusters if c.cluster_id == source_id)
-            local_discovery = discovery.model_copy(
-                update={
-                    "items": tuple(
-                        item for item in discovery.items if item.item_id in cluster.item_ids
-                    ),
-                    "clusters": (cluster,),
-                    "scout_batches": (),
-                    "scout_audits": (),
-                    "late_mirrors": (),
-                }
-            )
-            selection = build_v2_source_selection_input(
-                exact_claim=self.exact_claim,
-                merged_survivors=pool,
-                discovery_outputs=(local_discovery,),
-                acquisition_outputs=(capture,),
-                gap_outputs=(),
-                claim_aware=True,
-                track_shared_data=True,
-            )
+            if plan is not None and plan.discovery is not None and plan.capture is not None:
+                # Replay the exact source-local handoff, not a growing Scout aggregate.
+                local_discovery = plan.discovery
+                capture = plan.capture
+                selection = plan.queue.input
+            else:
+                pool = _merge_survivors(self.run_id, ((1, discovery, capture),))
+                # Freeze only the source's own cluster and snapshot. The eventual
+                # aggregate (or a fuller mirror) cannot change the request on replay.
+                cluster = next(c for c in discovery.clusters if c.cluster_id == source_id)
+                local_discovery = discovery.model_copy(
+                    update={
+                        "items": tuple(
+                            item for item in discovery.items if item.item_id in cluster.item_ids
+                        ),
+                        "clusters": (cluster,),
+                        "scout_batches": (),
+                        "scout_audits": (),
+                        "late_mirrors": (),
+                    }
+                )
+                selection = build_v2_source_selection_input(
+                    exact_claim=self.exact_claim,
+                    merged_survivors=pool,
+                    discovery_outputs=(local_discovery,),
+                    acquisition_outputs=(capture,),
+                    gap_outputs=(),
+                    claim_aware=True,
+                    track_shared_data=True,
+                )
             check_cancelled()
             queue = checkpoint_queue(
                 selection,
@@ -489,24 +689,27 @@ class EarlyAssessment:
             if not queue.queued_source_ids:
                 continue
             if plan is None:
-                plan = V2EvidenceCheckpointPlan(run_id=self.run_id, queue=queue)
+                plan = V2EvidenceCheckpointPlan(
+                    run_id=self.run_id, queue=queue, discovery=local_discovery, capture=capture
+                )
                 insert_v2_artifact(
                     self.path, self._plan_key(len(self.plans) + 1), plan, queue.completed_at
                 )
                 self.plans[source_id] = plan
                 assigned[source_id] = capture
                 open_slots -= 1
-            future = executor.submit(
+            self.assessment_captures[source_id] = capture
+            extraction_future = extraction_executor.submit(
                 copy_context().run,
-                self._assess,
+                self._extract,
                 source_id,
                 queue,
                 local_discovery,
                 capture,
                 check_cancelled,
             )
-            self.active[source_id] = future
-            future.add_done_callback(lambda _future: wake.put(None))
+            self.extracting[source_id] = extraction_future
+            extraction_future.add_done_callback(lambda _future: wake.put(None))
 
     def _unique_work(
         self,
@@ -583,20 +786,40 @@ class EarlyAssessment:
             source_id,
         }
 
-    def _assess(
+    def _extract(
         self,
         source_id: UUID,
         queue: V2SourceSelectionQueueResult,
         discovery: V2DiscoveryScoutOutput,
         capture: V2AcquisitionProbeOutput,
         check_cancelled: Callable[[], None],
-    ) -> V2DeepAnalysisWave:
+    ) -> V2ExactExtractionResult:
+        check_cancelled()
         with self.llm.limit_source_cost(source_id, self.source_cost_ceiling):
-            return _run_source_wave(
+            return _run_source_extraction(
                 path=self.path,
                 source_id=source_id,
                 queue_result=queue,
                 discovery_outputs=(discovery,),
+                acquisition_outputs=(capture,),
+                llm_provider=self.llm,
+                routing_config=self.routing,
+                clock=self.clock,
+                journal_early_attempts=True,
+            )
+
+    def _assess(
+        self,
+        source_id: UUID,
+        extraction: V2ExactExtractionResult,
+        capture: V2AcquisitionProbeOutput,
+        check_cancelled: Callable[[], None],
+    ) -> V2DeepAnalysisWave:
+        with self.llm.limit_source_cost(source_id, self.source_cost_ceiling):
+            return _run_extracted_source(
+                path=self.path,
+                source_id=source_id,
+                extraction=extraction,
                 acquisition_outputs=(capture,),
                 llm_provider=self.llm,
                 routing_config=self.routing,
@@ -607,7 +830,7 @@ class EarlyAssessment:
             )
 
     def ready(self, *, capture_exhausted: bool) -> bool:
-        return not self.active and (
+        return not (self.active or self.extracting or self.extracted) and (
             capture_exhausted or (self.capacity > 0 and len(self.waves) == self.capacity)
         )
 
@@ -615,9 +838,9 @@ class EarlyAssessment:
         saved = read_checkpoint(self.path, self.run_id, CHECKPOINT_KEY, V2EvidenceCheckpoint)
         if set(self.plans) != set(self.waves) or set(self.plans) - set(self.priority):
             raise ValueError("early assessment finished without every assigned source")
-        waves = tuple(
-            self.waves[source_id] for source_id in self.priority if source_id in self.waves
-        )
+        # Slot assignment order is durable; completion order and later ranking
+        # changes must not reorder findings on restart.
+        waves = tuple(self.waves[source_id] for source_id in self.plans)
         result = evidence_checkpoint(self.run_id, self.exact_claim, waves)
         if saved is not None:
             if saved != result:

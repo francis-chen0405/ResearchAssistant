@@ -269,7 +269,7 @@ def test_input_cap_no_fit_falls_back_without_call_and_audits_every_source(
     )
     provider = BoundedSourceSelector()
 
-    result, db_path = _run(tmp_path, selection_input, provider)
+    result, db_path = _run(tmp_path, selection_input, provider, budget_tokens=59_999)
 
     audit = _audit(db_path, selection_input.run_id)
     assert provider.requests == []

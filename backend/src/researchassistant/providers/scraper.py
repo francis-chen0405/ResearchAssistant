@@ -24,6 +24,8 @@ class ScraperProviderError(RuntimeError):
         *,
         retryable: bool = False,
         verified_preflight: VerifiedAcquisitionPreflight | None = None,
+        capacity_overload: bool = False,
+        retry_after_seconds: float | None = None,
     ) -> None:
         if message is None:
             message = code
@@ -32,6 +34,8 @@ class ScraperProviderError(RuntimeError):
         self.code = code
         self.retryable = retryable
         self.verified_preflight = verified_preflight
+        self.capacity_overload = capacity_overload
+        self.retry_after_seconds = retry_after_seconds
 
 
 class ScraperTimeoutError(ScraperProviderError):

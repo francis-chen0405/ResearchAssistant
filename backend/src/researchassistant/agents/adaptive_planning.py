@@ -47,6 +47,12 @@ from researchassistant.agents.adaptive_handoffs import (
 from researchassistant.agents.adaptive_handoffs import (
     _cancelled as _cancelled,
 )
+from researchassistant.agents.followup_context import (
+    build_followup_context,
+    freeze_planning_input,
+    read_planning_input,
+    unavailable_followup_gaps,
+)
 from researchassistant.agents.v2_gap_analysis import V2GapAnalysisRunResult
 from researchassistant.common.money import add_usd, nonnegative_difference_usd
 from researchassistant.common.resources import prompt_resource
@@ -81,6 +87,7 @@ from researchassistant.contracts.query_planning import (
     V2NeighborhoodSearchAgentInput,
     V2NeighborhoodSearchOutput,
 )
+from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -181,77 +188,109 @@ def _plan_round(
         stored = None
     if stored is not None:
         return V2AdaptivePlannedRound.model_validate_json(stored.payload_json)
-    legacy_prompt = legacy_prompt or all(
-        query.compiled_query is None for query in initial_plan.searches
-    )
-    resolved_query_modes = dict(query_modes or {})
-    for query in initial_plan.searches:
-        if query.compiled_query is not None:
-            resolved_query_modes.setdefault(query.provider, query.compiled_query.mode)
-    previous_compiled_queries = previous_compiled_queries or tuple(
-        query.compiled_query for query in initial_plan.searches if query.compiled_query is not None
-    )
-    if gap_output.result is None or not gap_output.result.continue_research:
-        raise V2AdaptiveNoContinuationError(
-            "Luna did not authorize a material adaptive search recommendation"
+    saved_input = read_planning_input(path, initial_plan.run_id, round_number)
+    if saved_input is None:
+        legacy_prompt = legacy_prompt or all(
+            query.compiled_query is None for query in initial_plan.searches
         )
-    budgets = _eligible_budgets(
-        initial_plan,
-        provider_attempts,
-        search_providers,
-        path=path,
-        usable_source_urls=tuple(
-            source.source_url for source in gap_output.input.surviving_sources
-        ),
-    )
-    if not budgets:
-        raise V2AdaptiveNoEligibleProviderError(
-            "No eligible enabled provider remains within its search ceiling."
+        resolved_query_modes = dict(query_modes or {})
+        for query in initial_plan.searches:
+            if query.compiled_query is not None:
+                resolved_query_modes.setdefault(query.provider, query.compiled_query.mode)
+        previous_compiled_queries = previous_compiled_queries or tuple(
+            query.compiled_query
+            for query in initial_plan.searches
+            if query.compiled_query is not None
         )
-    maximum_queries = _maximum_queries(round_number, initial_plan, budgets)
-    base_request_input = V2SearchAgentInput(
-        run_id=initial_plan.run_id,
-        exact_claim=initial_plan.raw_claim,
-        round_number=round_number,
-        directions=initial_plan.directions,
-        eligible_providers=tuple(item.provider for item in budgets),
-        material_gaps=gap_output.result.material_gaps,
-        search_directions=gap_output.result.new_search_directions,
-        discovered_terms=tuple(
-            dict.fromkeys((*gap_output.input.discovered_terms, *gap_output.result.discovered_terms))
-        )[:40],
-        previous_queries=previous_queries,
-        provider_budgets=budgets,
-        maximum_queries=maximum_queries,
+        if gap_output.result is None or not gap_output.result.continue_research:
+            raise V2AdaptiveNoContinuationError(
+                "Luna did not authorize a material adaptive search recommendation"
+            )
+        budgets = _eligible_budgets(
+            initial_plan,
+            provider_attempts,
+            search_providers,
+            path=path,
+            usable_source_urls=tuple(
+                source.source_url for source in gap_output.input.surviving_sources
+            ),
+        )
+        if not budgets:
+            raise V2AdaptiveNoEligibleProviderError(
+                "No eligible enabled provider remains within its search ceiling."
+            )
+        maximum_queries = _maximum_queries(round_number, initial_plan, budgets)
+        base_request_input = V2SearchAgentInput(
+            run_id=initial_plan.run_id,
+            exact_claim=initial_plan.raw_claim,
+            round_number=round_number,
+            directions=initial_plan.directions,
+            eligible_providers=tuple(item.provider for item in budgets),
+            material_gaps=gap_output.result.material_gaps,
+            search_directions=gap_output.result.new_search_directions,
+            discovered_terms=tuple(
+                dict.fromkeys(
+                    (*gap_output.input.discovered_terms, *gap_output.result.discovered_terms)
+                )
+            )[:40],
+            previous_queries=previous_queries,
+            provider_budgets=budgets,
+            maximum_queries=maximum_queries,
+            followup_context=build_followup_context(path, initial_plan, gap_output),
+        )
+        if legacy_prompt:
+            request_input: V2SearchAgentInput | V2ConceptualSearchAgentInput = base_request_input
+            output_type = V2AdaptiveSearchModelOutput
+            prompt = load_prompt(LLMStage.SEARCH_AGENT)
+            lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
+        else:
+            lanes = _adaptive_concept_lanes(base_request_input, resolved_query_modes)
+            if not lanes:
+                raise V2AdaptiveNoEligibleProviderError(
+                    "No unresolved follow-up lane remains within the authorized round limits."
+                )
+            offers = offer_expansions(path, initial_plan.run_id, round_number, lanes, clock)
+            fresh_expansion = bool(offers)
+            request_input = (
+                V2NeighborhoodSearchAgentInput(
+                    request=base_request_input, lanes=lanes, offered_expansions=offers
+                )
+                if fresh_expansion
+                else V2ConceptualSearchAgentInput(request=base_request_input, lanes=lanes)
+            )
+            output_type = (
+                V2NeighborhoodSearchOutput if fresh_expansion else V2AdaptiveSearchConceptsOutput
+            )
+            prompt = load_prompt_file(
+                prompt_resource("search_agent_v3.md" if fresh_expansion else "search_agent_v2.md"),
+                expected_stage=LLMStage.SEARCH_AGENT,
+            )
+        saved_input = freeze_planning_input(
+            path, request_input, prompt, resolved_query_modes, previous_compiled_queries, clock
+        )
+    request_input = saved_input.input
+    prompt = saved_input.prompt
+    base_request_input = (
+        request_input.request
+        if isinstance(request_input, V2ConceptualSearchAgentInput)
+        else request_input
+    )
+    if base_request_input.exact_claim != initial_plan.raw_claim:
+        raise V2AdaptivePlanValidationError("Saved follow-up input has a different claim")
+    resolved_query_modes = {
+        DiscoveryProvider(key): value for key, value in saved_input.query_modes.items()
+    }
+    previous_compiled_queries = saved_input.previous_compiled_queries
+    legacy_prompt = not isinstance(request_input, V2ConceptualSearchAgentInput)
+    lanes = request_input.lanes if not legacy_prompt else ()
+    output_type = (
+        V2NeighborhoodSearchOutput
+        if isinstance(request_input, V2NeighborhoodSearchAgentInput)
+        else V2AdaptiveSearchConceptsOutput
+        if not legacy_prompt
+        else V2AdaptiveSearchModelOutput
     )
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
-    if legacy_prompt:
-        request_input: V2SearchAgentInput | V2ConceptualSearchAgentInput = base_request_input
-        output_type = V2AdaptiveSearchModelOutput
-        prompt = load_prompt(LLMStage.SEARCH_AGENT)
-        lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
-    else:
-        lanes = _adaptive_concept_lanes(base_request_input, resolved_query_modes)
-        if not lanes:
-            raise V2AdaptiveNoEligibleProviderError(
-                "No application-owned conceptual lane remains within the round limits."
-            )
-        offers = offer_expansions(path, initial_plan.run_id, round_number, lanes, clock)
-        fresh_expansion = bool(offers)
-        request_input = (
-            V2NeighborhoodSearchAgentInput(
-                request=base_request_input, lanes=lanes, offered_expansions=offers
-            )
-            if fresh_expansion
-            else V2ConceptualSearchAgentInput(request=base_request_input, lanes=lanes)
-        )
-        output_type = (
-            V2NeighborhoodSearchOutput if fresh_expansion else V2AdaptiveSearchConceptsOutput
-        )
-        prompt = load_prompt_file(
-            prompt_resource("search_agent_v3.md" if fresh_expansion else "search_agent_v2.md"),
-            expected_stage=LLMStage.SEARCH_AGENT,
-        )
     request = LLMRequest(
         run_id=initial_plan.run_id,
         stage=LLMStage.SEARCH_AGENT,
@@ -392,7 +431,14 @@ def _plan_with_repair(
                 prompt_version=request.prompt.version,
                 started_at=clock(),
             )
-            persist_artifact(path, key, started, started.started_at)
+
+            def write_intent(
+                key: str = key,
+                started: V2PlanningAttempt = started,
+            ) -> None:
+                persist_artifact(path, key, started, started.started_at)
+
+            defer_intent(llm_provider, write_intent)
             try:
                 response = invoke_llm(llm_provider, current, clock=clock).output_artifact
                 if not isinstance(
@@ -515,6 +561,12 @@ def _validate_and_assemble_plan(
     previous_compiled_queries: tuple[V2CompiledQueryAction, ...] = (),
     offered_expansions: tuple[V2GraphNeighborAction, ...] = (),
 ) -> V2AdaptiveRoundPlan:
+    blocked_gaps = unavailable_followup_gaps(request)
+    if any(gap_id in blocked_gaps for lane in lanes for gap_id in lane.target_gap_ids):
+        raise V2AdaptivePlanValidationError(
+            "Follow-up lane targets explicitly resolved evidence",
+            code="unavailable_gap",
+        )
     if isinstance(response, V2NeighborhoodSearchOutput):
         offered = {action.artifact_id: action for action in offered_expansions}
         text_proposals = []
@@ -697,6 +749,11 @@ def _validate_and_assemble_plan(
             raise V2AdaptivePlanValidationError(
                 "Search Agent query must target persisted Gap IDs", code="unknown_gap"
             )
+        if blocked_gaps.intersection(item.targeted_gap_ids):
+            raise V2AdaptivePlanValidationError(
+                "Search Agent targeted explicitly resolved evidence",
+                code="unavailable_gap",
+            )
         if any(
             gap_by_id[gap_id].direction is not item.direction for gap_id in item.targeted_gap_ids
         ):
@@ -872,8 +929,11 @@ def _adaptive_concept_lanes(
     physical_used: Counter[DiscoveryProvider] = Counter()
     available = {item.provider: item.remaining_calls for item in request.provider_budgets}
     gaps = {gap.gap_id: gap for gap in request.material_gaps}
+    blocked_gaps = unavailable_followup_gaps(request)
     results: list[V2ConceptualAdaptiveLane] = []
     for search_direction in request.search_directions:
+        if search_direction.gap_id in blocked_gaps:
+            continue
         gap = gaps[search_direction.gap_id]
         for provider in request.eligible_providers:
             lane = (search_direction.direction, provider)

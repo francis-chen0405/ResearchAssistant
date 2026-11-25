@@ -82,6 +82,7 @@ from researchassistant.evidence.paper_identity import (
     paper_title_key,
 )
 from researchassistant.providers.acquisition import AcquisitionFailureCode
+from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.ranking import canonical_discovery_url
 from researchassistant.providers.scraper import ScraperProvider, ScraperProviderError
 from researchassistant.providers.v2_budget import V2CancellationRequested
@@ -952,7 +953,11 @@ def _capture_attempt(
         if provider is None:
             return None
         _raise_if_cancelled(cancellation_requested)
-        insert_v2_artifact(db_path, f"{key}/start", start, start.started_at)
+
+        def write_intent() -> None:
+            insert_v2_artifact(db_path, f"{key}/start", start, start.started_at)
+
+        defer_intent(provider, write_intent)
         timer = monotonic()
         response: ScrapeResponse | None = None
         context: VerifiedAcquisitionPreflight | None = None

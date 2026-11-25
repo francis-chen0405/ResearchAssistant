@@ -14,6 +14,7 @@ from pydantic import ConfigDict
 from researchassistant.agents.adaptive_handoffs import V2MergedSurvivorPool
 from researchassistant.agents.v2_stage_checkpoint import (
     V2SelectionInputCheckpoint,
+    V2StageAttemptCheckpoint,
     V2StageOutcomeCheckpoint,
     checkpoint_hash,
     read_checkpoint,
@@ -72,7 +73,10 @@ from researchassistant.providers.llm import (
     render_stage_prompt,
 )
 from researchassistant.providers.pricing import conservative_token_estimate
-from researchassistant.providers.v2_budget import V2CancellationRequested
+from researchassistant.providers.v2_budget import (
+    V2CancellationRequested,
+    read_v2_physical_call_audit,
+)
 from researchassistant.providers.v2_routing import V2RoutingConfig
 from researchassistant.research.metadata_ranking import RANKING_IDENTITY
 from researchassistant.research.source_preview import build_claim_preview
@@ -378,6 +382,9 @@ def run_v2_source_selection_and_queue(
     clock: Callable[[], datetime] | None = None,
 ) -> V2SourceSelectionRunResult:
     """Recommend only known survivors, fall back safely, and persist a bounded queue."""
+    selection_input = V2SourceSelectionInput.model_validate(
+        selection_input.model_dump(mode="python", round_trip=True)
+    )
     validate_v2_source_selection_gap_history(selection_input.gap_history)
     now = clock or _utc_now
     completed_at = now()
@@ -399,6 +406,16 @@ def run_v2_source_selection_and_queue(
             or result.initial_budget.physical_call_ceiling != budget.physical_call_ceiling
         ):
             raise ValueError("persisted source-selection state does not match this survivor pool")
+        if result.selection_skip_reason is not None:
+            _require_unstarted_selection(path, selection_input.run_id)
+            if (
+                result.queued_source_ids != result.priority_source_ids
+                or set(result.queued_source_ids)
+                != {item.source_id for item in selection_input.survivors}
+                or not result.mandatory_synthesis_reservable
+                or result.limiting_reason is not None
+            ):
+                raise ValueError("skipped selection must preserve its complete affordable queue")
         if stored.artifact_key == V2_SOURCE_SELECTION_STATUS_KEY:
             insert_v2_artifact(path, V2_SOURCE_SELECTION_COMPLETION_KEY, result, stored.created_at)
         return V2SourceSelectionRunResult(**result.model_dump(), resumed=True)
@@ -420,6 +437,73 @@ def run_v2_source_selection_and_queue(
     checkpoint = read_checkpoint(
         path, selection_input.run_id, checkpoint_key, V2SelectionInputCheckpoint
     )
+    if checkpoint is None:
+        # A checkpoint fixes the ordinary branch even before its first attempt.
+        # Orphaned attempts/calls are integrity errors, never permission to skip.
+        _require_unstarted_selection(path, selection_input.run_id)
+        ordered_source_ids = _queue_priority(selection_input, ())
+        queue_plan = calculate_v2_deep_analysis_queue(
+            selection_input=selection_input,
+            ordered_source_ids=ordered_source_ids,
+            recommended_source_ids=(),
+            routing_config=routing_config,
+            budget=budget,
+        )
+        if (
+            selection_input.survivors
+            and queue_plan.queued_source_ids == ordered_source_ids
+            and queue_plan.mandatory_synthesis_reservable
+            and queue_plan.limiting_reason is None
+        ):
+            # Preserve recorded search targets even though no recommendation is
+            # needed. Later Analyst findings must retain these provenance links.
+            source_by_id = {source.source_id: source for source in selection_input.survivors}
+            queue_plan = queue_plan.model_copy(
+                update={
+                    "source_statuses": tuple(
+                        status.model_copy(
+                            update={
+                                "gap_ids": _recorded_gap_targets(
+                                    source_by_id[status.source_id], selection_input.gap_history
+                                )
+                            }
+                        )
+                        for status in queue_plan.source_statuses
+                    )
+                }
+            )
+            result = V2SourceSelectionQueueResult(
+                run_id=selection_input.run_id,
+                input=selection_input,
+                initial_budget=budget,
+                recommended_source_ids=(),
+                recommendation_rationales=(),
+                used_fallback=False,
+                selection_attempts=0,
+                selection_attempt_records=(),
+                selection_skip_reason="all_survivors_fit",
+                priority_source_ids=ordered_source_ids,
+                **queue_plan.model_dump(
+                    include={
+                        "queued_source_ids",
+                        "source_statuses",
+                        "queue_capacity",
+                        "mandatory_synthesis_reservable",
+                        "physical_calls_after_reserve",
+                        "total_reserved_tokens",
+                        "total_reserved_cost_usd",
+                        "token_reservations",
+                        "limiting_reason",
+                    }
+                ),
+                completed_at=completed_at,
+            )
+            # This immutable status is the decision checkpoint, committed before
+            # any downstream dispatch. Existing recovery repairs its completion
+            # marker without reconsidering affordability against later budgets.
+            insert_v2_artifact(path, V2_SOURCE_SELECTION_STATUS_KEY, result, completed_at)
+            insert_v2_artifact(path, V2_SOURCE_SELECTION_COMPLETION_KEY, result, completed_at)
+            return V2SourceSelectionRunResult(**result.model_dump(), resumed=False)
     compact_ranking = fresh and (checkpoint is None or checkpoint.compact_ranking)
     prompt = (
         load_prompt_file(
@@ -529,6 +613,7 @@ def run_v2_source_selection_and_queue(
         ):
             break
         attempt, outcome, new_attempt = stage_attempt(
+            provider=llm_provider,
             path=path,
             key=checkpoint_key,
             number=attempt_number,
@@ -634,6 +719,48 @@ def run_v2_source_selection_and_queue(
     insert_v2_artifact(path, V2_SOURCE_SELECTION_STATUS_KEY, result, completed_at)
     insert_v2_artifact(path, V2_SOURCE_SELECTION_COMPLETION_KEY, result, completed_at)
     return V2SourceSelectionRunResult(**result.model_dump(), resumed=checkpoint_replayed)
+
+
+def _recorded_gap_targets(
+    source: V2SourceSelectionCandidate, history: tuple[V2SourceSelectionGap, ...]
+) -> tuple[str, ...]:
+    known = {(gap.gap_id, gap.direction) for gap in history}
+    return tuple(
+        dict.fromkeys(
+            gap_id
+            for provenance in source.search_provenance
+            if (provenance.direction or source.direction) is source.direction
+            for gap_id in provenance.targeted_gap_ids
+            if (gap_id, source.direction) in known
+        )
+    )
+
+
+def _require_unstarted_selection(path: str, run_id: UUID) -> None:
+    """Reject contradictory persisted work before recording/replaying a skip."""
+    key = "selection-checkpoint-v1"
+    if read_checkpoint(path, run_id, key, V2SelectionInputCheckpoint) is not None:
+        raise ValueError("skipped selection conflicts with an existing model input checkpoint")
+    for version in ("v2", "v3"):
+        if (
+            read_checkpoint(
+                path,
+                run_id,
+                f"source-selection-preview-shortlist-{version}",
+                V2SelectionShortlistAudit,
+            )
+            is not None
+        ):
+            raise ValueError("source-selection shortlist has no owning input checkpoint")
+    for number in range(1, V2_SOURCE_SELECTION_MAX_ATTEMPTS + 1):
+        attempt_key = f"{key}/attempt-{number}"
+        attempt = read_checkpoint(path, run_id, attempt_key, V2StageAttemptCheckpoint)
+        outcome = read_checkpoint(path, run_id, attempt_key + "/outcome", V2StageOutcomeCheckpoint)
+        if attempt is not None or outcome is not None:
+            raise ValueError("source-selection attempt/outcome has no owning input checkpoint")
+    audit = read_v2_physical_call_audit(path, run_id)
+    if any(start.stage == LLMStage.SOURCE_SELECTION.value for start in audit.starts):
+        raise ValueError("source-selection physical call has no owning input checkpoint")
 
 
 def _actual_input_tokens(provider: LLMProvider, request: LLMRequest) -> int:

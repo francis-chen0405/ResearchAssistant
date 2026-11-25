@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from pydantic import ConfigDict, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from researchassistant.contracts.model_contracts import StrictModel
 from researchassistant.contracts.research_directions import ResearchDirection
@@ -20,6 +21,9 @@ class AssessedSourceFinding(StrictModel):
     relationship_to_claim: str | None = Field(default=None, max_length=100)
     limitations: tuple[str, ...] = Field(default=(), max_length=12)
     failure: str | None = Field(default=None, max_length=1000)
+    addressed_gap_ids: SkipJsonSchema[tuple[str, ...]] = Field(
+        default=(), max_length=3, exclude_if=lambda value: not value
+    )
 
 
 class SavedSourceLead(StrictModel):

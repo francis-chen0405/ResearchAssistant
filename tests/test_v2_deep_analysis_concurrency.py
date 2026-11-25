@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -49,6 +50,8 @@ from researchassistant.contracts.models import (
     V2SourceSelectionQueueResult,
     V2VerbatimQuoteSelection,
 )
+from researchassistant.contracts.search import SearchRequest, SearchResponse
+from researchassistant.providers.llm import LLMRequest
 from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult, V2ProductionState
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
@@ -558,3 +561,102 @@ def test_one_source_failure_does_not_corrupt_parallel_source_audit(tmp_path: Pat
     assert len(all_sequences) == len(set(all_sequences))
     audit = read_v2_physical_call_audit(result.db_path, result.run_id)
     assert tuple(item.sequence for item in audit.starts) == tuple(range(1, len(audit.starts) + 1))
+
+
+def test_rolling_analysis_refills_while_unrelated_analysts_are_still_running(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    final_started = Event()
+    run_deep = v2_orchestrator.run_v2_deep_analysis_with_backfill
+
+    def start_final(**kwargs: object) -> V2DeepAnalysisBackfillResult:
+        final_started.set()
+        return run_deep(**kwargs)
+
+    monkeypatch.setattr(v2_orchestrator, "run_v2_deep_analysis_with_backfill", start_final)
+
+    class IndependentResults(_Search):
+        def search(self, request: SearchRequest) -> SearchResponse:
+            response = super().search(request)
+            titles = (
+                "Regional program participation and completion",
+                "Surveyed learners compared across voluntary courses",
+                "Matched adult education cohort outcomes",
+                "Community curriculum evaluation findings",
+            )
+            results = tuple(
+                response.results[0].model_copy(
+                    update={
+                        "original_url": response.results[0].original_url + f"-independent-{i}",
+                        "title": f"{title} {len(self.requests)} {chr(97 + i)}",
+                    }
+                )
+                for i, title in enumerate(titles)
+            )
+            return response.model_copy(update={"results": list(results)})
+
+    class GatedAnalysts(_V2Model):
+        def __init__(self) -> None:
+            super().__init__(completed_rounds=2)
+            self.lock = Lock()
+            self.five_started = Event()
+            self.six_started = Event()
+            self.six_extracted = Event()
+            self.release_all = Event()
+            self.gates: dict[UUID, Event] = {}
+            self.extracted: set[UUID] = set()
+
+        def generate(self, request: LLMRequest) -> object:
+            if final_started.is_set() and request.stage is LLMStage.EXTRACTOR:
+                with self.lock:
+                    self.extracted.add(request.source_id)
+                    if len(self.extracted) >= 6:
+                        self.six_extracted.set()
+            if final_started.is_set() and request.stage is LLMStage.ANALYST:
+                with self.lock:
+                    gate = self.gates.setdefault(request.source_id, Event())
+                    if len(self.gates) >= 5:
+                        self.five_started.set()
+                    if len(self.gates) >= 6:
+                        self.six_started.set()
+                if not self.release_all.is_set():
+                    assert gate.wait(30)
+            return super().generate(request)
+
+    model = GatedAnalysts()
+    with ThreadPoolExecutor(max_workers=1) as owner:
+        future = owner.submit(
+            _run,
+            tmp_path / "rolling-analysis.sqlite3",
+            model,
+            IndependentResults(unique_results=True),
+            _Scraper(),
+            ceilings=V2RunCeilings(
+                max_physical_calls=100,
+                max_total_tokens=500_000,
+                max_total_cost_usd=Decimal("5"),
+            ),
+        )
+        try:
+            assert model.five_started.wait(20), (
+                tuple(model.gates),
+                future.result() if future.done() else "pipeline still running",
+            )
+            assert model.six_extracted.wait(5), "Extraction must continue while Analysis waits"
+            assert not model.six_started.is_set(), "Initial Analysis limit is five"
+            with model.lock:
+                held = tuple(model.gates.values())
+                held[0].set()
+            assert model.six_started.wait(5), "A settled Analyst must release its slot immediately"
+            assert all(not gate.is_set() for gate in held[1:])
+        finally:
+            model.release_all.set()
+            with model.lock:
+                for gate in model.gates.values():
+                    gate.set()
+        result = future.result(20)
+    assert result.state is V2ProductionState.RELEASED, result.failure_reason
+    audit = read_v2_physical_call_audit(result.db_path, result.run_id)
+    assert len(audit.starts) <= 100
+    assert result.budget.token_exposure <= 500_000

@@ -34,6 +34,11 @@ from researchassistant.contracts.models import (
     V2EvidenceAnalystModelOutput,
     V2EvidenceAnalystSourceResult,
 )
+from researchassistant.providers.v2_budget import (
+    BudgetedV2LLMProvider,
+    V2RunCeilings,
+    read_v2_physical_call_audit,
+)
 from researchassistant.storage.store import finish_model_route_attempt, read_model_route_attempts
 
 
@@ -303,9 +308,11 @@ def test_analyst_matching_completion_reuses_original_start_with_new_clock(
     assert provider.requests == []
 
 
+@pytest.mark.parametrize("deferred", [False, True])
 def test_analyst_terminal_completion_returned_by_reservation_skips_provider(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    deferred: bool,
 ) -> None:
     path, batch_input = _analyst_direct_setup(tmp_path)
     original_reserve = analyst_agent.reserve_model_route_attempt
@@ -340,11 +347,28 @@ def test_analyst_terminal_completion_returned_by_reservation_skips_provider(
 
     monkeypatch.setattr(analyst_agent, "reserve_model_route_attempt", reserve_then_complete)
     provider = FakeLunaAnalyst([])
+    guarded = (
+        BudgetedV2LLMProvider(
+            db_path=path,
+            run_id=batch_input.run_id,
+            provider=provider,
+            routing_config=_routing(),
+            ceilings=V2RunCeilings(
+                max_physical_calls=40, max_total_tokens=500_000, max_total_cost_usd=Decimal("5")
+            ),
+            clock=lambda: NOW,
+        )
+        if deferred
+        else provider
+    )
 
-    output, _ = _analyst_call(path, batch_input, provider, lambda: NOW)
+    output, _ = _analyst_call(path, batch_input, guarded, lambda: NOW)
 
     assert output == _assessment()
     assert provider.requests == []
+    assert not read_v2_physical_call_audit(path, batch_input.run_id).starts
+    if deferred:
+        assert guarded.scheduler.model_running == 0
 
 
 def test_analyst_mismatched_terminal_reservation_fails_before_provider(

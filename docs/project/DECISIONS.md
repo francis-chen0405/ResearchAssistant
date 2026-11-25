@@ -23,7 +23,21 @@ This file records decisions that still govern current behavior. The exact preced
 
 - Fresh website, API, and ordinary CLI requests select the v2 pipeline. The bundled native provider executor is retired. The explicit `legacy_runner` boundary accepts externally supplied runners and remains for embedding and lifecycle tests. The controller retains `runner` as an alias and rejects supplying both before allocating workers; CLI identity injection remains explicit.
 - Fresh v2 stages import neutral source-evidence and Analyst helpers. Historical agent imports remain supported; native execution and both orchestrator aliases are retired. `researchassistant.evidence.evidence_core` owns snapshots/quotations and `evidence_analysis` owns Analyst/admission helpers; historical agent facades resolve to those same implementations.
-- Fresh deep analysis uses deterministic priority waves of at most four sources. Dispatch only a budget-safe priority prefix, do not share SQLite connections or mutable handoffs across workers, and drain in-flight work on cancellation. See [deep-analysis concurrency](../../.agent/plans/deep-analysis-deterministic-concurrency.md).
+- Fresh execution uses one run-owned typed stage policy: Scout 4–6 (25-second
+  expansion), Capture 4–6 (5 seconds), Extraction 4–6 (7 seconds), Analysis 5–8
+  (13 seconds). Expand only under sustained full utilization with two waiting
+  tasks, available provider/budget capacity and downstream waiting below 8/8/10.
+  Shrink after 30 seconds of lower demand without cancelling work. Independent
+  Extraction/Analysis queues retain a single whole-source allowance until durable
+  terminal settlement, preserving rolling refill, early half-allowance and saved
+  dispatch order. One model capacity owner limits all physical requests to ten,
+  prioritizes pending Planner/Gap decisions, and rotates other stages. Explicit
+  overload halves provider capacity with at least 30-second cooldown and gradual
+  recovery; no retry is added. Admission precedes fresh attempt journals; transient
+  intent callbacks never enter persistent request identity. Capture has a separate
+  shared six-transport bound and retains one browser. New Scout plans use six-source
+  batches; saved 8/15/20-source plans keep their exact boundaries. See the
+  [implementation/review handoff](../../.agent/plans/fix-5-adaptive-concurrency.md).
 - Each of seven active model stages has an explicit selectable route. A selected choice, route settings, price cap, stage allowance, and run configuration participate in frozen identity. Defaults and the historical Standard profile remain distinct. See [per-step model choices](../../.agent/plans/per-step-model-choices.md) and [model settings](../model-settings.md).
 - Physical provider attempts reserve their calls, tokens, and conservative cost before transport. Unknown or missing usage does not erase exposure. Historical costs and run identities are not rewritten.
 
@@ -162,7 +176,7 @@ All six phases of the [source-discovery plan](../../.agent/plans/source-discover
 
 New checkpoints and physical reservations reuse `v2_artifacts`; historical fingerprints, contracts and source meanings retain their original interpretation. Incompatible new settings require a new run. Unknown outcomes keep conservative exposure and stop further requests; any future recovery semantics require a separately versioned policy. Discovery items, edges, scores and previews cannot authorize factual evidence admission. Current acquisition, extraction, Analyst and deterministic admission remain the evidence boundary.
 
-Phase 3 extends fresh discovery with durable bounded pagination (default depth 20, maximum requested depth 50, no more than three physical attempts per operation), deterministic ranking from common metadata signals, fair Scout allocation and ranked acquisition shortlisting. Effective depth always respects executable provider capabilities and tighter request/cost budgets. Raw retention is capped at 300 per round and 1,000 per run; Scout is capped at 60 per round, in batches of at most 20 and at most two attempts per batch; acquisition is capped at 25 per round. Search direction is provenance only; rank never interprets support/challenge, missing fields remain neutral, and conflicting metadata is recorded rather than silently resolved. Identity grouping uses conservative work anchors and does not assert study independence. Every enabled direction/provider lane receives a first pass before repeated strategies consume retention headroom. Completed pages and independent parser receipts checkpoint durably; cancellation/resume does not replay completed or terminal pages, and substituted page candidates fail provenance checks. Exa uses an effective result cap of 25 with $0.02 default-depth and $0.03 policy-depth request reservations, while retaining the established $0.18 total /18-request ceiling. Phase 4 activates deterministic exact snapshot previews in fresh Probe v3/selection-v2, with bounded windows and separate acquisition-usability/relevance diagnostics. Historical Probe v1/v2 and selection-v1 preserve serialization, prompt bytes and policy meaning. Full rendered selection input including adapter overhead is capped at 24,000 tokens through an audited whole-source shortlist; omissions remain in the complete pool/queue, downstream source capacity is protected, and lower configured ceilings remain authoritative. All ranks, Scout dispositions, shortlists and previews remain discovery/selection metadata and cannot satisfy the acquisition, snapshot, exact-extraction, Analyst or admission gates.
+Phase 3 extends fresh discovery with durable bounded pagination (default depth 20, maximum requested depth 50, no more than three physical attempts per operation), deterministic ranking from common metadata signals, fair Scout allocation and ranked acquisition shortlisting. Effective depth always respects executable provider capabilities and tighter request/cost budgets. Raw retention is capped at 300 per round and 1,000 per run; Scout is capped at 60 per round, in newly frozen batches of at most six (recorded historical sizes are retained) and at most two attempts per batch; acquisition is capped at 25 per round. Search direction is provenance only; rank never interprets support/challenge, missing fields remain neutral, and conflicting metadata is recorded rather than silently resolved. Identity grouping uses conservative work anchors and does not assert study independence. Every enabled direction/provider lane receives a first pass before repeated strategies consume retention headroom. Completed pages and independent parser receipts checkpoint durably; cancellation/resume does not replay completed or terminal pages, and substituted page candidates fail provenance checks. Exa uses an effective result cap of 25 with $0.02 default-depth and $0.03 policy-depth request reservations, while retaining the established $0.18 total /18-request ceiling. Phase 4 activates deterministic exact snapshot previews in fresh Probe v3/selection-v2, with bounded windows and separate acquisition-usability/relevance diagnostics. Historical Probe v1/v2 and selection-v1 preserve serialization, prompt bytes and policy meaning. Full rendered selection input including adapter overhead is capped at 24,000 tokens through an audited whole-source shortlist; omissions remain in the complete pool/queue, downstream source capacity is protected, and lower configured ceilings remain authoritative. All ranks, Scout dispositions, shortlists and previews remain discovery/selection metadata and cannot satisfy the acquisition, snapshot, exact-extraction, Analyst or admission gates.
 
 Phase 5 activates OpenAlex exact scholarly identity lookup and provider-reported one-hop
 references/citing/related discovery inside existing Round 2–4 lane slots and Governor
@@ -318,6 +332,31 @@ Other overlaps remain unresolved. Historical prompt bytes, policy identities and
 the exact resume gate retain their existing behavior.
 
 
+## Mild pending-source scheduling preference
+
+`pending-gap-preference-v1` adjusts the existing final-analysis pending baseline,
+including post-analysis follow-up, after assessed sources and exact-body mirrors are
+removed. Freeze one immutable decision and its complete queue/latest-assessment input
+hash before dispatch. No new gap assessment occurs between these analysis waves;
+consume the saved order without applying repeated boosts. Prefix removal cannot
+increase displacement. Started work without a saved decision retains baseline order.
+Historical artifacts and exact source-identity resume gates retain their meaning.
+
+At most two absolute positions of movement are allowed in either direction. Preserve
+direction/recommendation slots, family occurrence layers and each family's member
+order, with stable ties within those partitions. Every inverted pair must retain the
+existing source-type priority and use completed, usable preview-v2 scores on the same
+0–100 scale, with at most five points of relevance deficit. Missing type or incompatible
+preview scores prevent movement. These are conservative product bounds, not measured
+optimal settings.
+
+Only current material gaps with an explicit matching missing/partial/conflicting
+coverage component qualify. Match an adjacent pair of distinct case-folded words,
+each at least four letters and outside a fixed generic-word list, in the gap's missing
+evidence and an exact preview passage outside title/bibliography. Exclude pairs already
+in the claim. No stemming, paraphrase inference, query provenance, selection rationale,
+stance inference, redundancy penalty, coverage closure or extra model calls are used.
+
 ## Live source shortlist
 
 Read one bounded database snapshot from the desktop inspection API. The durable
@@ -367,3 +406,18 @@ interest) have one owner, `evidence/report_presentation.py`, exposed as optional
 display fields on `V2SourceTitleDisplay`: a generic host rule plus one small
 publisher table. Missing values stay missing in the result page; export wording
 keeps its explicit "not recorded" phrases.
+
+
+## Evidence-grounded follow-up strategy
+
+Use deterministic saved observations rather than another classification call. Gap
+association requires explicit query targets, Analyst addressed-gap IDs, or an exact
+saved source UUID referenced by the current gap assessment. A discovery-target link
+remains a lead. Otherwise retain unassigned counts and a bounded source-level sample.
+Opposite relationships or search directions do not establish contradiction; require an
+explicit conflicting coverage record tied to the exact dimension and claim component.
+Historical access failures remain visible after recovery without diagnosing an active
+access problem. Provider errors, skipped work and missing parse outcomes cannot imply
+research absence. Freeze one shared planning input before dispatch and replay it on
+resume. Existing novelty, recovery, continuation, pending-capture and budget gates
+remain the work authorization boundary; this context cannot admit evidence or close gaps.

@@ -174,13 +174,14 @@ def _prepare_db(tmp_path: Path, run_id: UUID) -> str:
 def test_all_survivors_are_retained_and_complementary_recommendations_are_queued(
     tmp_path: Path,
 ) -> None:
-    source_ids = tuple(uuid4() for _ in range(4))
+    source_ids = tuple(uuid4() for _ in range(5))
     selection_input = _selection_input(
         (
             _candidate(source_ids[0], family="family-a", probe_score=12),
             _candidate(source_ids[1], family="family-b", probe_score=10),
             _candidate(source_ids[2], family="family-a", probe_score=9),
             _candidate(source_ids[3], family="family-c", probe_score=8),
+            _candidate(source_ids[4], family="family-d", probe_score=7),
         )
     )
     provider = FakeSourceSelector(
@@ -204,7 +205,8 @@ def test_all_survivors_are_retained_and_complementary_recommendations_are_queued
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        # Five sources need fifteen calls; fourteen remain before selection.
+        budget=_budget(physical_calls_used=146),
         clock=lambda: NOW,
     )
 
@@ -213,8 +215,18 @@ def test_all_survivors_are_retained_and_complementary_recommendations_are_queued
     assert result.recommended_source_ids == (source_ids[0], source_ids[1], source_ids[3])
     assert result.queued_source_ids[:3] == result.recommended_source_ids
     assert result.queued_source_ids[3] == source_ids[2]
-    assert all(status.queued_for_deep_analysis for status in result.source_statuses)
-    assert all(status.budget_prevented_reason is None for status in result.source_statuses)
+    assert len(provider.requests) == 1
+    assert result.selection_skip_reason is None
+    assert {
+        status.source_id for status in result.source_statuses if status.queued_for_deep_analysis
+    } == (set(source_ids[:4]))
+    blocked = next(status for status in result.source_statuses if status.source_id == source_ids[4])
+    assert blocked.budget_prevented_reason.value == "physical_call_ceiling"
+    assert all(
+        status.budget_prevented_reason is None
+        for status in result.source_statuses
+        if status.queued_for_deep_analysis
+    )
     persisted_pool = V2SourceSelectionInput.model_validate_json(
         read_v2_artifact(
             db_path,
@@ -268,7 +280,8 @@ def test_phase13_queue_does_not_resume_legacy_phase8_queue_artifact(tmp_path: Pa
         clock=lambda: NOW,
     )
 
-    assert len(provider.requests) == 1
+    assert len(provider.requests) == 0
+    assert fresh_result.selection_skip_reason == "all_survivors_fit"
     assert fresh_result.physical_calls_per_source == 3
     assert fresh_result.source_physical_call_cap == 3
 
@@ -312,7 +325,7 @@ def test_duplicate_family_domination_retries_then_accepts_diverse_prefix(tmp_pat
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(tokens_remaining=179_999),
         clock=lambda: NOW,
     )
 
@@ -338,13 +351,14 @@ def test_selection_failure_falls_back_without_dropping_survivors(tmp_path: Path)
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(tokens_remaining=239_999),
         clock=lambda: NOW,
     )
 
     assert result.used_fallback is True
     assert result.recommended_source_ids[:3] == (source_ids[0], source_ids[2], source_ids[3])
-    assert set(result.queued_source_ids) == set(source_ids)
+    assert result.queued_source_ids == (source_ids[0], source_ids[2], source_ids[3])
+    assert {status.source_id for status in result.source_statuses} == set(source_ids)
     assert len(provider.requests) == V2_SOURCE_SELECTION_MAX_ATTEMPTS
 
 
@@ -486,6 +500,10 @@ def test_two_direction_recommendations_and_queue_are_interleaved(tmp_path: Path)
                 family="challenge-b",
                 probe_score=9,
             ),
+            _candidate(uuid4(), family="support-c", probe_score=8),
+            _candidate(
+                uuid4(), direction=ResearchDirection.CHALLENGE, family="challenge-c", probe_score=7
+            ),
         ),
         directions=directions,
     )
@@ -509,7 +527,7 @@ def test_two_direction_recommendations_and_queue_are_interleaved(tmp_path: Path)
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(physical_calls_used=147),
         clock=lambda: NOW,
     )
 
@@ -522,9 +540,50 @@ def test_two_direction_recommendations_and_queue_are_interleaved(tmp_path: Path)
     assert result.queued_source_ids == result.recommended_source_ids
 
 
+def test_all_fit_shortcut_replays_without_calls_after_budget_changes(tmp_path: Path) -> None:
+    source_ids = tuple(uuid4() for _ in range(3))
+    selection_input = _selection_input(
+        tuple(
+            _candidate(source_id, family=f"family-{index}", probe_score=12 - index)
+            for index, source_id in enumerate(source_ids)
+        )
+    )
+    provider = FakeSourceSelector([])
+    db_path = _prepare_db(tmp_path, selection_input.run_id)
+    first = run_v2_source_selection_and_queue(
+        db_path=db_path,
+        selection_input=selection_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        budget=_budget(),
+        clock=lambda: NOW,
+    )
+    assert first.selection_skip_reason == "all_survivors_fit"
+    assert first.queued_source_ids == source_ids
+    assert not first.recommended_source_ids and not first.used_fallback
+    assert first.selection_attempts == 0 and not first.selection_attempt_records
+    assert not provider.requests
+    assert all(status.queued_for_deep_analysis for status in first.source_statuses)
+    resumed = run_v2_source_selection_and_queue(
+        db_path=db_path,
+        selection_input=selection_input,
+        llm_provider=provider,
+        routing_config=_routing(),
+        budget=_budget(physical_calls_used=159, tokens_remaining=0, cost_remaining_usd="0"),
+        clock=lambda: NOW,
+    )
+    assert resumed.resumed and resumed.result == first.result
+    assert not provider.requests
+
+
 def test_completed_selection_and_queue_resume_without_another_call(tmp_path: Path) -> None:
     source_id = uuid4()
-    selection_input = _selection_input((_candidate(source_id, family="family-a", probe_score=12),))
+    selection_input = _selection_input(
+        (
+            _candidate(source_id, family="family-a", probe_score=12),
+            _candidate(uuid4(), family="family-b", probe_score=10),
+        )
+    )
     provider = FakeSourceSelector(
         [
             V2SourceSelectionModelOutput(
@@ -542,7 +601,7 @@ def test_completed_selection_and_queue_resume_without_another_call(tmp_path: Pat
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(physical_calls_used=155),
         clock=lambda: NOW,
     )
     resumed = run_v2_source_selection_and_queue(
@@ -550,7 +609,7 @@ def test_completed_selection_and_queue_resume_without_another_call(tmp_path: Pat
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(physical_calls_used=155),
         clock=lambda: NOW,
     )
 
@@ -558,4 +617,32 @@ def test_completed_selection_and_queue_resume_without_another_call(tmp_path: Pat
     assert resumed.resumed is True
     assert len(provider.requests) == 1
     assert resumed.result.selection_attempts == 1
+    assert resumed.result.selection_skip_reason is None
+    assert resumed.result.queued_source_ids == (source_id,)
     assert resumed.result.selection_stage == LLMStage.SOURCE_SELECTION.value
+
+
+def test_all_fit_retains_recorded_gap_targets_without_a_recommendation(tmp_path: Path) -> None:
+    source = _candidate(uuid4(), family="gap-lead", probe_score=12)
+    source = source.model_copy(
+        update={
+            "search_provenance": tuple(
+                provenance.model_copy(update={"targeted_gap_ids": ("gap-1",)})
+                for provenance in source.search_provenance
+            )
+        }
+    )
+    request = _selection_input((source,))
+    provider = FakeSourceSelector([])
+    result = run_v2_source_selection_and_queue(
+        db_path=_prepare_db(tmp_path, request.run_id),
+        selection_input=request,
+        llm_provider=provider,
+        routing_config=_routing(),
+        budget=_budget(),
+        clock=lambda: NOW,
+    )
+    assert result.selection_skip_reason == "all_survivors_fit"
+    assert result.source_statuses[0].gap_ids == ("gap-1",)
+    assert not result.source_statuses[0].recommended
+    assert not result.recommendation_rationales and not provider.requests

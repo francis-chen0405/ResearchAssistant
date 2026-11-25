@@ -284,7 +284,12 @@ def _extract_source(
             path, key = attempt_journal
             try:
                 intent, saved, _fresh = stage_attempt(
-                    path=path, key=key, number=attempt, request=request, started_at=clock()
+                    provider=llm_provider,
+                    path=path,
+                    key=key,
+                    number=attempt,
+                    request=request,
+                    started_at=clock(),
                 )
             except V2UnknownStageOutcomeError as exc:
                 return V2ExtractionSourceResult(

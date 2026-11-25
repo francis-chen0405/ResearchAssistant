@@ -667,6 +667,28 @@ def invoke_llm(
     clock: Callable[[], datetime] | None = None,
     invocation_id_factory: Callable[[], UUID] = uuid4,
 ) -> LLMInvocationResult:
+    from researchassistant.providers.dispatch_intent import clear_intent
+
+    try:
+        return _invoke_llm(
+            provider,
+            request,
+            retry_metadata=retry_metadata,
+            clock=clock,
+            invocation_id_factory=invocation_id_factory,
+        )
+    finally:
+        clear_intent()
+
+
+def _invoke_llm(
+    provider: LLMProvider,
+    request: LLMRequest,
+    *,
+    retry_metadata: RetryMetadata | None = None,
+    clock: Callable[[], datetime] | None = None,
+    invocation_id_factory: Callable[[], UUID] = uuid4,
+) -> LLMInvocationResult:
     """Execute one primary-model call, validate it, and record success or failure."""
     now = clock or _utc_now
     started_at = _aware_timestamp(now(), "started_at")

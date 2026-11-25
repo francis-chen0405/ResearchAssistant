@@ -241,6 +241,7 @@ def _run_round_from_plan(
             return output
 
         overlap = CaptureOverlap(
+            scheduler=getattr(llm_provider, "scheduler", None),
             path=path,
             run_id=plan.run_id,
             artifact_key=key,

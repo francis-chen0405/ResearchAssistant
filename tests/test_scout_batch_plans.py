@@ -88,9 +88,9 @@ def _historical_plans(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(v2_discovery, "insert_v2_artifact", save)
 
 
-@pytest.mark.parametrize("historical", [False, True])
-def test_interrupted_scout_replays_8_or_historical_15_boundaries_without_calls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, historical: bool
+@pytest.mark.parametrize("size", [6, 8, 15, 20])
+def test_interrupted_scout_replays_fresh_and_historical_boundaries_without_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, size: int
 ) -> None:
     path, run_id, scout, run = _case(tmp_path)
     published = []
@@ -109,13 +109,15 @@ def test_interrupted_scout_replays_8_or_historical_15_boundaries_without_calls(
         raise RuntimeError("interrupted before final Scout artifacts")
 
     with monkeypatch.context() as patch:
-        if historical:
+        if size == 15:
             _historical_plans(patch)
+        else:
+            patch.setattr(v2_discovery, "V2_FRESH_SCOUT_BATCH_SIZE", size)
         patch.setattr(v2_discovery, "insert_v2_artifact_batch", interrupt)
         with pytest.raises(RuntimeError, match="interrupted before final"):
             run(on_batch=publish)
 
-    expected_sizes = [15] * 4 if historical else [8] * 7 + [4]
+    expected_sizes = [size] * (60 // size) + ([60 % size] if 60 % size else [])
     requests = tuple(scout.requests)
     assert sorted(len(request.input_artifact.candidates) for request in requests) == sorted(
         expected_sizes
@@ -132,8 +134,8 @@ def test_interrupted_scout_replays_8_or_historical_15_boundaries_without_calls(
     key = "scout-checkpoint-v1/phase-4-discovery-scout"
     before = read_v2_artifact(str(path), run_id, key)
     checkpoint = V2ScoutRoundCheckpoint.model_validate_json(before.payload_json)
-    assert checkpoint.batch_size == (None if historical else 8)
-    assert ("batch_size" in checkpoint.model_dump()) is not historical
+    assert checkpoint.batch_size == (None if size == 15 else size)
+    assert ("batch_size" in checkpoint.model_dump()) == (size != 15)
 
     result = run()
     assert [len(batch.items) for batch in result.output.scout_batches] == expected_sizes
@@ -143,23 +145,24 @@ def test_interrupted_scout_replays_8_or_historical_15_boundaries_without_calls(
     assert tuple(scout.requests) == requests
 
 
-@pytest.mark.parametrize("historical", [False, True])
+@pytest.mark.parametrize("size", [6, 8, 15, 20])
 def test_first_pass_completion_preserves_batch_plan_and_candidate_membership(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, historical: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, size: int
 ) -> None:
     path, run_id, scout, run = _case(tmp_path)
     with monkeypatch.context() as patch:
-        if historical:
+        if size == 15:
             _historical_plans(patch)
+        else:
+            patch.setattr(v2_discovery, "V2_FRESH_SCOUT_BATCH_SIZE", size)
         first = run(first_pass_only=True)
-    size = 15 if historical else 8
     assert len(first.output.scout_batches[0].items) == size
     assert len(scout.requests) == 1
     resumed_first = run(first_pass_only=True)
     assert resumed_first.resumed
     assert len(scout.requests) == 1
     result = run(first_pass=resumed_first)
-    expected_sizes = [15] * 4 if historical else [8] * 7 + [4]
+    expected_sizes = [size] * (60 // size) + ([60 % size] if 60 % size else [])
     assert [len(batch.items) for batch in result.output.scout_batches] == expected_sizes
     assert [audit.batch_number for audit in result.output.scout_audits] == list(
         range(1, len(expected_sizes) + 1)
@@ -222,7 +225,7 @@ def test_historical_ranking_only_recovery_keeps_legacy_fallback_without_reissuin
 
 
 @pytest.mark.parametrize("limiting_budget", ["calls", "cost"])
-def test_eight_item_batches_reserve_both_attempts_under_call_and_cost_limits(
+def test_six_item_batches_reserve_both_attempts_under_call_and_cost_limits(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limiting_budget: str
 ) -> None:
     path, run_id, scout, run = _case(tmp_path)
@@ -232,9 +235,9 @@ def test_eight_item_batches_reserve_both_attempts_under_call_and_cost_limits(
     def limit(**kwargs: Any) -> int:
         reservations = kwargs["optional_reservations"]
         recorded.extend(reservations)
-        # Fourteen full-size reservations plus two for the final four candidates.
-        assert len(reservations) == 16
-        assert all(reservations[index] == reservations[index + 1] for index in range(0, 16, 2))
+        # Ten six-candidate batches each reserve both allowed attempts.
+        assert len(reservations) == 20
+        assert all(reservations[index] == reservations[index + 1] for index in range(0, 20, 2))
         snapshot = kwargs["snapshot"]
         if limiting_budget == "calls":
             snapshot = snapshot.model_copy(
@@ -257,8 +260,8 @@ def test_eight_item_batches_reserve_both_attempts_under_call_and_cost_limits(
     monkeypatch.setattr(v2_discovery, "safe_optional_model_prefix", limit)
     result = run()
     assert recorded and all(item.stage is LLMStage.SCOUT for item in recorded)
-    assert result.ranking_artifact.scouted_count == 8
+    assert result.ranking_artifact.scouted_count == 6
     assert len(scout.requests) == 1
     assert isinstance(scout.requests[0].input_artifact, v2_discovery.V2ClaimScoutRequest)
-    assert len(scout.requests[0].input_artifact.candidates) == 8
+    assert len(scout.requests[0].input_artifact.candidates) == 6
     assert all(isinstance(batch, ScoutBatch) for batch in result.output.scout_batches)

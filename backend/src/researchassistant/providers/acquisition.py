@@ -39,6 +39,7 @@ from researchassistant.providers.normalization import (
     normalize_plain_text,
 )
 from researchassistant.providers.public_network import PublicDestinationHTTPTransport
+from researchassistant.providers.run_scheduler import explicit_overload_response, retry_after_delay
 from researchassistant.providers.scraper import ScraperProviderError, ScraperTimeoutError
 
 ACQUISITION_VERSION = "mvp6.9-acquisition-provenance-v5"
@@ -106,6 +107,16 @@ class CaptureControls:
     def _acquire(self, slots: Semaphore) -> None:
         while not slots.acquire(timeout=0.1):
             self.check_cancelled()
+
+    def park_transport(self) -> None:
+        if self._has_transport:
+            self.transport_slots.release()
+            self._has_transport = False
+
+    def restore_transport(self) -> None:
+        if not self._has_transport:
+            self._acquire(self.transport_slots)
+            self._has_transport = True
 
     @contextmanager
     def transport_slot(self) -> Iterator[None]:
@@ -235,6 +246,8 @@ class WigoloAcquisitionAdapter:
                 str(exc),
                 retryable=exc.retryable,
                 verified_preflight=verified_preflight,
+                capacity_overload=exc.capacity_overload,
+                retry_after_seconds=exc.retry_after_seconds,
             ) from exc
         except NormalizationError as exc:
             raise ScraperProviderError(
@@ -448,6 +461,15 @@ class WigoloAcquisitionAdapter:
                 "Wigolo fetch could not connect to loopback service",
                 retryable=True,
             ) from exc
+        if response.status_code >= 400 and explicit_overload_response(response):
+            raise ScraperProviderError(
+                AcquisitionFailureCode.RATE_LIMIT
+                if response.status_code == 429
+                else AcquisitionFailureCode.TRANSIENT,
+                "Wigolo service is rate limited or overloaded",
+                capacity_overload=True,
+                retry_after_seconds=retry_after_delay(response.headers.get("retry-after")),
+            )
         if response.status_code != 200:
             _raise_source_status(response.status_code)
         try:

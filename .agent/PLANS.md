@@ -5,6 +5,10 @@ owns current behavior, limits and priorities. Routine changes need no plan; comp
 or risky work may use one lightweight active plan under these
 [conventions](../docs/project/CONVENTIONS.md#keep-project-records-small).
 
+## Active implementation review
+
+- [Fix 5 adaptive concurrency](plans/fix-5-adaptive-concurrency.md): combined offline review, scheduling policy and original working-tree ownership.
+
 ## Follow-up owners
 
 - [Source recovery and integration](plans/source-loss-recovery-2026-10-19.md#master-integration--october-23): source integration provenance and source/installed-build boundaries; STATUS owns subsequent packaged readiness and open acceptance.

@@ -199,7 +199,10 @@ def test_optional_scout_admits_only_budget_safe_prefix_and_caps_candidates() -> 
         )
         == 2
     )
-    assert scout_candidate_capacity(V2DiscoveryPolicy(), 2, 100) == 40
+    assert scout_candidate_capacity(V2DiscoveryPolicy(), 2, 100) == 12
+    assert scout_candidate_capacity(V2DiscoveryPolicy(), 2, 100, batch_size=20) == 40
+    assert scout_candidate_capacity(V2DiscoveryPolicy(), 2, 100, batch_size=8) == 16
+    assert scout_candidate_capacity(V2DiscoveryPolicy(), 2, 100, batch_size=15) == 30
     assert scout_candidate_capacity(V2DiscoveryPolicy(), 10, 100) == 60
     assert scout_candidate_capacity(V2DiscoveryPolicy(), 0, 100) == 0
     assert scout_candidate_capacity(V2DiscoveryPolicy(), 3, 8) == 8

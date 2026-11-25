@@ -17,6 +17,7 @@ from researchassistant.providers.acquisition import (
 )
 from researchassistant.providers.config import FirecrawlConfig
 from researchassistant.providers.normalization import NormalizationError, normalize_markdown
+from researchassistant.providers.run_scheduler import explicit_overload_response, retry_after_delay
 from researchassistant.providers.scraper import (
     ScraperProvider,
     ScraperProviderError,
@@ -108,9 +109,14 @@ class FirecrawlAcquisitionAdapter:
             raise ScraperProviderError(
                 AcquisitionFailureCode.AUTHENTICATION, "Firecrawl rejected its API key"
             )
-        if response.status_code == 429:
+        if response.status_code >= 400 and explicit_overload_response(response):
             raise ScraperProviderError(
-                AcquisitionFailureCode.RATE_LIMIT, "Firecrawl rate limited the fallback"
+                AcquisitionFailureCode.RATE_LIMIT
+                if response.status_code == 429
+                else AcquisitionFailureCode.TRANSIENT,
+                "Firecrawl rate limited or overloaded the fallback",
+                capacity_overload=True,
+                retry_after_seconds=retry_after_delay(response.headers.get("retry-after")),
             )
         if response.status_code < 200 or response.status_code >= 300:
             raise ScraperProviderError(

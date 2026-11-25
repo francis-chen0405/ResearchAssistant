@@ -143,6 +143,15 @@ def normalize_approved_additive_fields(
                 "default": None,
                 "title": "Model View Policy",
             }
+        elif title == "V2SourceSelectionQueueResult":
+            assert properties.pop("selection_skip_reason") == {
+                "anyOf": [
+                    {"const": "all_survivors_fit", "type": "string"},
+                    {"type": "null"},
+                ],
+                "default": None,
+                "title": "Selection Skip Reason",
+            }
         elif title in {"V2SourceSelectionCandidate", "V2ResultSource"}:
             assert properties.pop("alternate_source_urls") == bounded_urls
         elif title == "V2MergedSurvivor":

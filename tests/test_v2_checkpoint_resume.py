@@ -51,6 +51,13 @@ def test_partial_checkpoint_prefix_resumes_with_original_bytes_and_accounting(
 ) -> None:
     path = tmp_path / "generated.sqlite3"
     controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
+    if key == "source-selection-preview-shortlist-v3":
+        # A constrained pool still needs the model and its durable shortlist.
+        monkeypatch.setattr(
+            product.production,
+            "CEILINGS",
+            product.production.CEILINGS.model_copy(update={"max_total_tokens": 200_000}),
+        )
     original_entry = product.run_v2_production_pipeline
 
     def advancing_clock(*args: Any, **kwargs: Any) -> V2ProductionPipelineResult:

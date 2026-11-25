@@ -30,13 +30,14 @@ from researchassistant.contracts.model_contracts import DiscoveryProvider
 from researchassistant.contracts.model_research import ResearchDirection, ResearchDirections
 from researchassistant.providers.llm import LLMStage
 from researchassistant.providers.ranking import canonical_discovery_url
+from researchassistant.providers.run_scheduler import POLICY
 from researchassistant.providers.v2_budget import V2BudgetSnapshot
 from researchassistant.providers.v2_routing import V2ModelReservation, V2RoutingConfig
 from researchassistant.runtime.application_runtime import repository_identity, source_directory
 
 # Keep the established mandatory downstream reserve; this module can only tighten it.
 MANDATORY_DOWNSTREAM_CALLS = 8
-SCOUT_BATCH_SIZE = 20
+SCOUT_BATCH_SIZE = POLICY.scout_batch_size
 _PROVIDER_ORDER = tuple(DiscoveryProvider)
 
 
@@ -187,11 +188,15 @@ def safe_optional_model_prefix(
 
 
 def scout_candidate_capacity(
-    policy: V2DiscoveryPolicy, safe_batches: int, available_candidates: int
+    policy: V2DiscoveryPolicy,
+    safe_batches: int,
+    available_candidates: int,
+    *,
+    batch_size: Literal[6, 8, 15, 20] = SCOUT_BATCH_SIZE,
 ) -> int:
     if any(type(value) is not int or value < 0 for value in (safe_batches, available_candidates)):
         raise ValueError("Scout capacity inputs must be nonnegative integers")
-    return min(policy.max_scout_per_round, safe_batches * SCOUT_BATCH_SIZE, available_candidates)
+    return min(policy.max_scout_per_round, safe_batches * batch_size, available_candidates)
 
 
 def discovery_contract_schema_hash(root: Path) -> str:

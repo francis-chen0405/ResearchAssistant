@@ -54,7 +54,15 @@ def _selection_case(
     folder: Path,
 ) -> tuple[str, FakeSourceSelector, selection.V2SourceSelectionInput]:
     source_id = uuid4()
-    value = _selection_input((_candidate(source_id, family="independent", probe_score=12),))
+    # Keep this recovery fixture on the model branch. Thirty-four complete
+    # 60k-token source envelopes exceed the original two-million-token budget.
+    value = _selection_input(
+        (_candidate(source_id, family="independent", probe_score=12),)
+        + tuple(
+            _candidate(uuid4(), family=f"independent-{index}", probe_score=10)
+            for index in range(33)
+        )
+    )
     provider = FakeSourceSelector(
         [
             V2SourceSelectionModelOutput(
@@ -484,6 +492,13 @@ def test_actual_production_preserves_calls_audit_and_unknown_reservations(
     controls = ResearchControls(discovery_providers=(DiscoveryProvider.EXA,))
     run_id: UUID | None = None
     with monkeypatch.context() as scoped:
+        if stage == "source_selection":
+            # Exercise a real model-selection call rather than the all-fit branch.
+            scoped.setattr(
+                product.production,
+                "CEILINGS",
+                product.production.CEILINGS.model_copy(update={"max_total_tokens": 200_000}),
+            )
         scoped.setattr(product.production._ConceptModel, "generate", observe)
         for _ in range(1 if unknown else 2):
             with monkeypatch.context() as cut:

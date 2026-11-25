@@ -14,12 +14,14 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 from pydantic_core import PydanticCustomError
 
 from researchassistant.contracts.discovery_v2 import (
     V2CompiledQueryAction,
     V2GraphNeighborAction,
 )
+from researchassistant.contracts.followup_context import FollowupContext
 from researchassistant.contracts.model_contracts import (
     DiscoveryProvider,
     NonEmptyStr,
@@ -603,6 +605,10 @@ class V2SearchAgentInput(StrictModel):
     previous_queries: tuple[NonEmptyStr, ...] = Field(max_length=48)
     provider_budgets: tuple[V2ProviderSearchBudget, ...]
     maximum_queries: PositiveInt
+    # Versioned runtime context, absent from historical serialization/schema.
+    followup_context: SkipJsonSchema[FollowupContext | None] = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     policy_identity: Literal[
         "researchassistant-v2-phase-7-adaptive-search-v1",
         "researchassistant-v2-post-phase-13-round-four-v1",
@@ -624,6 +630,10 @@ class V2SearchAgentInput(StrictModel):
         if any(item.remaining_calls < 1 for item in self.provider_budgets):
             raise ValueError("eligible providers must have remaining search capacity")
         gap_ids = {gap.gap_id for gap in self.material_gaps}
+        if self.followup_context is not None and {
+            (item.gap_id, item.direction) for item in self.followup_context.gaps
+        } != {(item.gap_id, item.direction) for item in self.material_gaps}:
+            raise ValueError("follow-up context must exactly cover the authorized gaps")
         for gap in self.material_gaps:
             self.directions.require_permitted(gap.direction)
         for item in self.search_directions:

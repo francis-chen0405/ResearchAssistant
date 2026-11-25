@@ -48,6 +48,7 @@ from researchassistant.evidence.evidence_core import (
     parse_extracted_quote_block,
     verify_candidate_against_snapshot,
 )
+from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMInvocationError,
@@ -105,6 +106,18 @@ _OutputT = TypeVar("_OutputT", bound=BaseModel)
 
 class V2EvidenceAnalystFailure(RuntimeError):
     """Raised internally when one bounded Analyst logical operation is exhausted."""
+
+
+class _AnalystDispatchSettled(BaseException):
+    """Return a concurrent durable result across dispatch without a physical call.
+
+    This private control signal bypasses generic provider-failure conversion and
+    is consumed by the owning Analyst operation before it leaves the stage.
+    """
+
+    def __init__(self, attempt: ModelRouteAttempt) -> None:
+        super().__init__("Analyst reservation returned a settled attempt")
+        self.attempt = attempt
 
 
 class _RetryableAssessmentValidationError(ValueError):
@@ -542,19 +555,36 @@ def _invoke_bounded_analyst(
             source_id=source_id,
         )
         ceilings = _attempt_budget_ceilings(db_path, batch_input)
-        try:
-            reserved = reserve_model_route_attempt(
-                db_path,
-                running,
-                max_model_calls=ceilings[0],
-                max_total_tokens=ceilings[1],
-                max_total_cost_usd=ceilings[2],
-            )
-            validate_model_route_attempt_identity(reserved, running)
-        except ModelAttemptBudgetError as exc:
-            raise V2EvidenceAnalystFailure(str(exc)) from exc
-        except (ValueError, sqlite3.IntegrityError) as exc:
-            raise V2EvidenceAnalystFailure("persisted Analyst attempt identity conflicts") from exc
+
+        reserved = running
+
+        def write_intent(
+            running: ModelRouteAttempt = running,
+            ceilings: tuple[int, int, Decimal] = ceilings,
+        ) -> None:
+            nonlocal reserved
+            try:
+                reserved = reserve_model_route_attempt(
+                    db_path,
+                    running,
+                    max_model_calls=ceilings[0],
+                    max_total_tokens=ceilings[1],
+                    max_total_cost_usd=ceilings[2],
+                )
+                validate_model_route_attempt_identity(reserved, running)
+                if reserved.status is not ModelAttemptStatus.RUNNING:
+                    if getattr(llm_provider, "defers_dispatch_intents", False):
+                        raise _AnalystDispatchSettled(reserved)
+                elif reserved != running:
+                    raise V2EvidenceAnalystFailure("Analyst dispatch no longer owns a fresh intent")
+            except ModelAttemptBudgetError as exc:
+                raise V2EvidenceAnalystFailure(str(exc)) from exc
+            except (ValueError, sqlite3.IntegrityError) as exc:
+                raise V2EvidenceAnalystFailure(
+                    "persisted Analyst attempt identity conflicts"
+                ) from exc
+
+        defer_intent(llm_provider, write_intent)
         attempt_ids.append(attempt_id)
         if reserved.status is ModelAttemptStatus.COMPLETED:
             return reuse_completion(reserved), tuple(attempt_ids)
@@ -595,6 +625,13 @@ def _invoke_bounded_analyst(
             )
             finish_model_route_attempt(db_path, completed)
             return output, tuple(attempt_ids)
+        except _AnalystDispatchSettled as settled:
+            if settled.attempt.status is ModelAttemptStatus.COMPLETED:
+                return reuse_completion(settled.attempt), tuple(attempt_ids)
+            failures.append(
+                settled.attempt.failure_reason or "persisted Analyst attempt was exhausted"
+            )
+            continue
         except V2CancellationRequested:
             raise
         except (LLMInvocationError, ValueError, TypeError, RuntimeError) as exc:

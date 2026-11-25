@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime
+from uuid import NAMESPACE_URL, uuid5
 
+from researchassistant.agents.adaptive_handoffs import V2PlanningOutcome
+from researchassistant.agents.followup_context import (
+    build_followup_context,
+    freeze_planning_input,
+    read_planning_input,
+)
 from researchassistant.agents.round_four_handoffs import (
     V2_POST13_ROUND_FOUR_GOVERNOR_KEY as V2_POST13_ROUND_FOUR_GOVERNOR_KEY,
 )
@@ -28,6 +35,11 @@ from researchassistant.agents.v2_adaptive_search import (
     _maximum_queries,
     _validate_and_assemble_plan,
 )
+from researchassistant.agents.v2_stage_checkpoint import (
+    V2StageAttemptCheckpoint,
+    read_checkpoint,
+    stage_request_hash,
+)
 from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.discovery_v2 import SearchMode, V2CompiledQueryAction
 from researchassistant.contracts.models import (
@@ -46,6 +58,7 @@ from researchassistant.contracts.query_planning import (
     V2ConceptualAdaptiveLane,
     V2ConceptualSearchAgentInput,
 )
+from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
     LLMProvider,
@@ -79,94 +92,129 @@ def _build_round_four_search_agent_request(
     ]
     | None
 ):
-    if gap.result is None:
-        raise ValueError("Round-4 Search Agent requires a usable Gap Analysis result")
-    maximum_queries = _maximum_queries(4, initial_plan, eligible)
-    if maximum_queries == 0:
-        return None
-    previous = tuple(query.query_text for query in initial_plan.searches)
-    for round_number in (2, 3):
-        payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
-        if payload is not None:
-            previous += tuple(
-                query.query_text
-                for query in V2AdaptivePlannedRound.model_validate_json(payload).plan.searches
-                if query.query_text is not None
-            )
-    request_input = V2SearchAgentInput(
-        run_id=initial_plan.run_id,
-        exact_claim=initial_plan.raw_claim,
-        round_number=4,
-        directions=initial_plan.directions,
-        eligible_providers=tuple(item.provider for item in eligible),
-        material_gaps=gap.result.material_gaps,
-        search_directions=gap.result.new_search_directions,
-        discovered_terms=tuple(
-            dict.fromkeys((*gap.input.discovered_terms, *gap.result.discovered_terms))
-        )[:40],
-        previous_queries=previous,
-        provider_budgets=eligible,
-        maximum_queries=maximum_queries,
-        policy_identity=V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
-    )
-    prior_actions = tuple(
-        query.compiled_query for query in initial_plan.searches if query.compiled_query is not None
-    )
-    for round_number in (2, 3):
-        payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
-        if payload is not None:
-            prior_actions += tuple(
-                query.compiled_query
-                for query in V2AdaptivePlannedRound.model_validate_json(payload).plan.searches
-                if query.compiled_query is not None
-            )
-    modes = {action.conceptual_query.provider: action.mode for action in prior_actions}
-    legacy_prompt = not any(query.compiled_query is not None for query in initial_plan.searches)
-    if legacy_prompt:
-        planner_input: V2SearchAgentInput | V2ConceptualSearchAgentInput = request_input
-        lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
-        output_type = V2AdaptiveSearchModelOutput
-        prompt = load_prompt(LLMStage.SEARCH_AGENT)
-    else:
-        lanes = _adaptive_concept_lanes(request_input, modes)
-        if not lanes:
+    saved_input = read_planning_input(path, initial_plan.run_id, 4)
+    if saved_input is None:
+        if gap.result is None or not gap.result.continue_research or gap.stop_adaptive_continuation:
+            raise ValueError("Round-4 Search Agent requires a usable Gap Analysis result")
+        maximum_queries = _maximum_queries(4, initial_plan, eligible)
+        if maximum_queries == 0:
             return None
-        from researchassistant.contracts.query_planning import (
-            V2NeighborhoodSearchAgentInput,
-            V2NeighborhoodSearchOutput,
+        previous = tuple(query.query_text for query in initial_plan.searches)
+        for round_number in (2, 3):
+            payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
+            if payload is not None:
+                previous += tuple(
+                    query.query_text
+                    for query in V2AdaptivePlannedRound.model_validate_json(payload).plan.searches
+                    if query.query_text is not None
+                )
+        request_input = V2SearchAgentInput(
+            run_id=initial_plan.run_id,
+            exact_claim=initial_plan.raw_claim,
+            round_number=4,
+            directions=initial_plan.directions,
+            eligible_providers=tuple(item.provider for item in eligible),
+            material_gaps=gap.result.material_gaps,
+            search_directions=gap.result.new_search_directions,
+            discovered_terms=tuple(
+                dict.fromkeys((*gap.input.discovered_terms, *gap.result.discovered_terms))
+            )[:40],
+            previous_queries=previous,
+            provider_budgets=eligible,
+            maximum_queries=maximum_queries,
+            followup_context=build_followup_context(path, initial_plan, gap),
+            policy_identity=V2_POST13_ROUND_FOUR_POLICY_IDENTITY,
         )
-        from researchassistant.research.seed_expansion import offer_expansions
-        from researchassistant.storage.discovery_store import read_discovery_binding
-
-        try:
-            fresh_expansion = read_discovery_binding(path, initial_plan.run_id).seed_identity in {
-                "source-seed-expansion-v2",
-                "source-seed-expansion-v3",
-            }
-        except KeyError:
-            fresh_expansion = False
-        offers = (
-            offer_expansions(path, initial_plan.run_id, 4, lanes, _utc_now)
-            if fresh_expansion
-            else ()
+        prior_actions = tuple(
+            query.compiled_query
+            for query in initial_plan.searches
+            if query.compiled_query is not None
         )
-        fresh_expansion = bool(offers)
-        planner_input = (
-            V2NeighborhoodSearchAgentInput(
-                request=request_input, lanes=lanes, offered_expansions=offers
+        for round_number in (2, 3):
+            payload = _read(path, initial_plan.run_id, f"phase-7-round-{round_number}-plan")
+            if payload is not None:
+                prior_actions += tuple(
+                    query.compiled_query
+                    for query in V2AdaptivePlannedRound.model_validate_json(payload).plan.searches
+                    if query.compiled_query is not None
+                )
+        modes = {action.conceptual_query.provider: action.mode for action in prior_actions}
+        legacy_prompt = not any(query.compiled_query is not None for query in initial_plan.searches)
+        if legacy_prompt:
+            planner_input: V2SearchAgentInput | V2ConceptualSearchAgentInput = request_input
+            lanes: tuple[V2ConceptualAdaptiveLane, ...] = ()
+            output_type = V2AdaptiveSearchModelOutput
+            prompt = load_prompt(LLMStage.SEARCH_AGENT)
+        else:
+            lanes = _adaptive_concept_lanes(request_input, modes)
+            if not lanes:
+                return None
+            from researchassistant.contracts.query_planning import (
+                V2NeighborhoodSearchAgentInput,
+                V2NeighborhoodSearchOutput,
             )
-            if fresh_expansion
-            else V2ConceptualSearchAgentInput(request=request_input, lanes=lanes)
-        )
-        output_type = (
-            V2NeighborhoodSearchOutput if fresh_expansion else V2AdaptiveSearchConceptsOutput
-        )
-        from researchassistant.providers.llm import load_prompt_file
+            from researchassistant.research.seed_expansion import offer_expansions
+            from researchassistant.storage.discovery_store import read_discovery_binding
 
-        prompt = load_prompt_file(
-            prompt_resource("search_agent_v3.md" if fresh_expansion else "search_agent_v2.md"),
-            expected_stage=LLMStage.SEARCH_AGENT,
+            try:
+                fresh_expansion = read_discovery_binding(
+                    path, initial_plan.run_id
+                ).seed_identity in {
+                    "source-seed-expansion-v2",
+                    "source-seed-expansion-v3",
+                }
+            except KeyError:
+                fresh_expansion = False
+            offers = (
+                offer_expansions(path, initial_plan.run_id, 4, lanes, _utc_now)
+                if fresh_expansion
+                else ()
+            )
+            fresh_expansion = bool(offers)
+            planner_input = (
+                V2NeighborhoodSearchAgentInput(
+                    request=request_input, lanes=lanes, offered_expansions=offers
+                )
+                if fresh_expansion
+                else V2ConceptualSearchAgentInput(request=request_input, lanes=lanes)
+            )
+            output_type = (
+                V2NeighborhoodSearchOutput if fresh_expansion else V2AdaptiveSearchConceptsOutput
+            )
+            from researchassistant.providers.llm import load_prompt_file
+
+            prompt = load_prompt_file(
+                prompt_resource("search_agent_v3.md" if fresh_expansion else "search_agent_v2.md"),
+                expected_stage=LLMStage.SEARCH_AGENT,
+            )
+        saved_input = freeze_planning_input(
+            path, planner_input, prompt, modes, prior_actions, _utc_now
         )
+    planner_input = saved_input.input
+    prompt = saved_input.prompt
+    base = (
+        planner_input.request
+        if isinstance(planner_input, V2ConceptualSearchAgentInput)
+        else planner_input
+    )
+    if base.exact_claim != initial_plan.raw_claim:
+        raise V2AdaptivePlanValidationError("Saved Round-4 input has a different claim")
+    modes = {DiscoveryProvider(key): value for key, value in saved_input.query_modes.items()}
+    prior_actions = saved_input.previous_compiled_queries
+    legacy_prompt = not isinstance(planner_input, V2ConceptualSearchAgentInput)
+    lanes = planner_input.lanes if not legacy_prompt else ()
+    from researchassistant.contracts.query_planning import (
+        V2NeighborhoodSearchAgentInput,
+        V2NeighborhoodSearchOutput,
+    )
+
+    output_type = (
+        V2NeighborhoodSearchOutput
+        if isinstance(planner_input, V2NeighborhoodSearchAgentInput)
+        else V2AdaptiveSearchConceptsOutput
+        if not legacy_prompt
+        else V2AdaptiveSearchModelOutput
+    )
     route = routing_config.preflight().for_stage(LLMStage.SEARCH_AGENT)
     request = LLMRequest(
         run_id=initial_plan.run_id,
@@ -252,7 +300,47 @@ def _plan_round_four(
     )
     if base_request_input.maximum_queries == 0:
         return None
-    response = invoke_llm(llm_provider, request, clock=clock).output_artifact
+    # Round 4 retains its single planning call. Freeze intent/outcome independently
+    # of aggregate plan publication so interrupted requests never repeat.
+    attempt_key = "followup-round-four-v1/attempt-1"
+    digest = stage_request_hash(request)
+    started = read_checkpoint(path, request.run_id, attempt_key, V2StageAttemptCheckpoint)
+    if started is not None:
+        if started.request_hash != digest or started.stage_key != attempt_key:
+            raise V2AdaptivePlanValidationError("Saved Round-4 planning request changed")
+        outcome = read_checkpoint(path, request.run_id, attempt_key + "/outcome", V2PlanningOutcome)
+        if outcome is None:
+            raise V2AdaptivePlanValidationError(
+                "Round-4 planning has an unknown outcome; its attempt remains consumed",
+                code="unknown_outcome",
+            )
+        response = outcome.candidate
+    else:
+        if (
+            read_checkpoint(path, request.run_id, attempt_key + "/outcome", V2PlanningOutcome)
+            is not None
+        ):
+            raise V2AdaptivePlanValidationError("Round-4 outcome has no owning attempt")
+        started = V2StageAttemptCheckpoint(
+            run_id=request.run_id,
+            attempt_id=uuid5(NAMESPACE_URL, f"{request.run_id}/{attempt_key}"),
+            stage_key=attempt_key,
+            attempt_number=1,
+            request_hash=digest,
+            started_at=clock(),
+        )
+
+        def write_intent() -> None:
+            insert_v2_artifact(path, attempt_key, started, started.started_at)
+
+        defer_intent(llm_provider, write_intent)
+        response = invoke_llm(llm_provider, request, clock=clock).output_artifact
+        if not isinstance(response, (V2AdaptiveSearchModelOutput, V2AdaptiveSearchConceptsOutput)):
+            raise V2AdaptivePlanValidationError(
+                "Search Agent returned an unexpected typed artifact"
+            )
+        outcome = V2PlanningOutcome(run_id=request.run_id, candidate=response, completed_at=clock())
+        insert_v2_artifact(path, attempt_key + "/outcome", outcome, outcome.completed_at)
     if not isinstance(response, (V2AdaptiveSearchModelOutput, V2AdaptiveSearchConceptsOutput)):
         raise V2AdaptivePlanValidationError("Search Agent returned an unexpected typed artifact")
     if isinstance(response, V2AdaptiveSearchConceptsOutput):

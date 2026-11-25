@@ -128,6 +128,9 @@ For early evidence feedback and source recovery, start with `test_source_loss_re
 `test_source_leads.py`. The provider-native prompt projection and completion allowance are
 covered alongside exact snapshot offsets, budget exhaustion, prior-source metadata isolation,
 DOI deduplication, fresh assessment and truthful counts after follow-up failures.
+`test_pending_source_priority.py` exercises the bounded final-analysis gap preference,
+direction/family/recommendation and relevance/type constraints, saved decisions,
+budget-limited dispatch, and interrupted promoted-source physical-call replay.
 `test_neighborhood_planning.py` exercises graph-only and mixed planning through
 persistence, bounded repair and replay without another call. Frontend outcome labels are exercised by
 `node --test frontend/scripts/hook-regressions.test.cjs` and the offline UI smoke suite.
@@ -309,3 +312,17 @@ When reusing dependencies through checkout symlinks, run network loader integrat
 against the staged physical acquisition tree: its URL-scoped loader uses exact module
 locations. Run the stale-cache reproduction against the original unpatched dependency;
 the staged cache already includes that repair. These are separate fixture requirements.
+
+Adaptive scheduling is covered by `test_run_scheduler.py` with controlled clocks
+and threaded admission gates: independent 4–6/4–6/4–6/5–8 limits, continuous-demand
+timers, 8/8/10 backpressure, ten shared request slots, decision priority, stage
+rotation, overload/recovery and cancellation before journal dispatch.
+`test_scout_batch_plans.py` preserves six-candidate plans and recorded 8/15/20 layouts,
+including partial batches and two-attempt reservations. `test_capture_overlap.py`
+and `test_v2_deep_analysis_concurrency.py` exercise independent Extraction/Analysis
+queues and refill while unrelated workers remain busy. The existing physical-budget,
+source-recovery and replay owners remain required. `test_followup_context.py` checks
+planning-input variants and distinguishes saved empty queries from provider failures.
+`test_database_v2_replay_phase2.py` covers completed Analyst reservation reuse before
+physical dispatch; `test_v2_phase8_source_selection.py` covers model and all-fit branches,
+including retained query/gap provenance without fabricated recommendations.

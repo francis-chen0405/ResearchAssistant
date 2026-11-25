@@ -172,6 +172,7 @@ def test_source_selection_falls_back_after_terminal_provider_failure(tmp_path: P
         (
             _candidate(source_ids[0], family="family-a", probe_score=10),
             _candidate(source_ids[1], family="family-b", probe_score=9),
+            _candidate(uuid4(), family="family-c", probe_score=8),
         )
     )
     db_path = _prepare_db(tmp_path, selection_input.run_id)
@@ -182,7 +183,7 @@ def test_source_selection_falls_back_after_terminal_provider_failure(tmp_path: P
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(tokens_remaining=179_999),
         clock=lambda: SELECTION_NOW,
     )
 
@@ -203,6 +204,7 @@ def test_source_selection_retries_transient_provider_failure(tmp_path: Path) -> 
         (
             _candidate(source_ids[0], family="family-a", probe_score=10),
             _candidate(source_ids[1], family="family-b", probe_score=9),
+            _candidate(uuid4(), family="family-c", probe_score=8),
         )
     )
     db_path = _prepare_db(tmp_path, selection_input.run_id)
@@ -230,7 +232,7 @@ def test_source_selection_retries_transient_provider_failure(tmp_path: Path) -> 
         selection_input=selection_input,
         llm_provider=provider,
         routing_config=_routing(),
-        budget=_budget(),
+        budget=_budget(tokens_remaining=179_999),
         clock=lambda: SELECTION_NOW,
     )
 

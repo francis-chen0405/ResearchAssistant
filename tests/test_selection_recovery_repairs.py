@@ -63,7 +63,7 @@ def test_compact_selection_considers_twenty_sources_and_replays_without_calls(
     assert conservative_token_estimate(_render_full_input(original)) > 24_000
     compact = original.model_copy(update={"model_view_policy": "compact-selection-v1"})
     model = NativeSizedSelector(output_source_id=compact.survivors[-1].source_id)
-    result, path = _run(tmp_path, compact, model)
+    result, path = _run(tmp_path, compact, model, budget_tokens=500_000)
     audit = _audit(path, compact.run_id)
     assert len(audit.included_source_ids) == 20
     assert not audit.omitted

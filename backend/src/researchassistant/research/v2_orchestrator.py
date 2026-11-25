@@ -1109,6 +1109,7 @@ def _run_v2_production_pipeline(
         checkpoint = None
         if slots is not None and acquisition_policy is not None:
             overlap = CaptureOverlap(
+                scheduler=budgeted_llm.scheduler,
                 path=path,
                 run_id=resolved_run_id,
                 artifact_key=V2_ACQUISITION_PROBE_ARTIFACT_KEY,
@@ -1470,6 +1471,7 @@ def _run_v2_production_pipeline(
             cancellation_requested=effective_cancellation_requested,
             clock=now,
             prior_waves=prior_waves,
+            gap_outputs=gaps,
         )
         _raise_if_v2_cancelled(effective_cancellation_requested)
         current_stage = Stage.EVIDENCE_ADMISSION

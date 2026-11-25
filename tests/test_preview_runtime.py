@@ -41,15 +41,20 @@ class Selector:
         supports_temperature=True, supports_structured_output_control=True
     )
 
-    def __init__(self) -> None:
+    def __init__(self, preferred_url: str | None = None) -> None:
         self.requests: list[LLMRequest] = []
+        self.preferred_url = preferred_url
 
     def generate(self, request: LLMRequest) -> V2SourceSelectionModelOutput:
         self.requests.append(request)
         return V2SourceSelectionModelOutput(
             recommendations=(
                 V2SourceSelectionRecommendation(
-                    source_id=request.input_artifact.survivors[0].source_id,
+                    source_id=next(
+                        source.source_id
+                        for source in request.input_artifact.survivors
+                        if self.preferred_url is None or source.source_url == self.preferred_url
+                    ),
                     rationale="Substantive methods and null findings deserve independent analysis.",
                 ),
             )
@@ -59,12 +64,15 @@ class Selector:
 def test_fresh_acquisition_selection_and_extractor_snapshot_boundary(tmp_path: Path) -> None:
     run_id = uuid4()
     url = "https://example.test/current-study"
-    discovery = _discovery(run_id, (url,), ("retrieve",))
+    other = "https://independent.test/other-study"
+    discovery = _discovery(run_id, (url, other), ("retrieve", "retrieve"))
     path = _prepare_db(tmp_path, run_id)
     acquisition = run_v2_acquisition_probe(
         db_path=path,
         discovery_output=discovery,
-        wigolo_provider=FixtureScraper({url: _response(url, STUDY)}),
+        wigolo_provider=FixtureScraper(
+            {url: _response(url, STUDY), other: _response(other, STUDY)}
+        ),
         exact_claim=CLAIM,
         asserted_components=("intervention", "symptoms"),
         policy=V2AcquisitionPolicy(policy_identity=V2_CLAIM_PREVIEW_PROBE_POLICY_IDENTITY),
@@ -81,12 +89,13 @@ def test_fresh_acquisition_selection_and_extractor_snapshot_boundary(tmp_path: P
     assert snapshot.normalized_text == STUDY
     merged = V2MergedSurvivorPool(
         run_id=run_id,
-        sources=(
+        sources=tuple(
             V2MergedSurvivor(
                 research_round=1,
-                source_url=url,
-                survivor=acquisition.survivors[0],
-            ),
+                source_url=source_url,
+                survivor=survivor,
+            )
+            for source_url, survivor in zip((url, other), acquisition.survivors, strict=True)
         ),
     )
     selection = build_v2_source_selection_input(
@@ -98,13 +107,14 @@ def test_fresh_acquisition_selection_and_extractor_snapshot_boundary(tmp_path: P
         claim_aware=True,
         asserted_components=("intervention", "symptoms"),
     )
-    model = Selector()
+    model = Selector(preferred_url=url)
     result = run_v2_source_selection_and_queue(
         db_path=path,
         selection_input=selection,
         llm_provider=model,
         routing_config=_routing(),
-        budget=_budget(),
+        # Five remaining calls cannot cover both three-call source envelopes.
+        budget=_budget(physical_calls_used=155),
         clock=lambda: discovery.completed_at,
     )
     assert len(model.requests) == 1

@@ -28,7 +28,11 @@ from researchassistant.agents import (
     v2_stage_checkpoint,
 )
 from researchassistant.agents.capture_overlap import V2CaptureDispatch
-from researchassistant.agents.evidence_checkpoint import CHECKPOINT_KEY, V2EvidenceCheckpoint
+from researchassistant.agents.evidence_checkpoint import (
+    CHECKPOINT_KEY,
+    V2EvidenceCheckpoint,
+    V2EvidenceCheckpointPlan,
+)
 from researchassistant.agents.v2_discovery import V2_SCOUT_ARTIFACT_KEY
 from researchassistant.agents.v2_gap_analysis import V2_GAP_ANALYSIS_ARTIFACT_KEY
 from researchassistant.api.application_services.live_sources import read_live_sources
@@ -99,7 +103,7 @@ def _run(
     search: _Works,
     scraper: ScraperProvider,
     *,
-    capture_slots: int = 3,
+    capture_slots: int = 4,
     cancel: Callable[[], bool] | None = None,
     target: int = 7,
 ) -> V2ProductionPipelineResult:
@@ -230,11 +234,10 @@ class _OverlapModel(production._ConceptModel):
         return super().generate(request)
 
 
-@pytest.mark.parametrize("slots", (3, 5))
 def test_capture_and_early_workers_overlap_without_using_download_order(
     tmp_path: Path,
-    slots: int,
 ) -> None:
+    slots = 4
     path = tmp_path / "overlap.sqlite"
     run_id = uuid4()
     scraper = _GatedScraper()
@@ -248,19 +251,23 @@ def test_capture_and_early_workers_overlap_without_using_download_order(
             lead = V2CaptureDispatch.model_validate_json(
                 read_v2_artifact(path, run_id, f"{ACQUISITION}/overlap-v1/dispatch-1").payload_json
             ).urls[0]
+            faster = V2CaptureDispatch.model_validate_json(
+                read_v2_artifact(path, run_id, f"{ACQUISITION}/overlap-v1/dispatch-2").payload_json
+            ).urls[0]
             with scraper.lock:
-                faster = next(url for url in scraper.pending if url != lead)
                 scraper.pending[faster].set()
             _wait(lambda: faster in scraper.finished)
-            assert not model.first_analysis.is_set()
+            # Two ranked sources can use the early half-allowance while Scout
+            # is pending; a slower lead no longer blocks the ready second work.
+            assert model.first_analysis.wait(12)
+            assert model.first_snapshot_url == faster
             with scraper.lock:
                 scraper.pending[lead].set()
             assert model.first_analysis.wait(12)
-            assert model.first_snapshot_url == lead
             assert not model.gap.is_set()
             model.release_scout.set()
             scraper.release_all.set()
-            _wait(lambda: model.max_early_active == 3)
+            _wait(lambda: model.max_early_active == 4)
             assert not model.gap.is_set()
         finally:
             model.release_scout.set()
@@ -269,14 +276,15 @@ def test_capture_and_early_workers_overlap_without_using_download_order(
         result = running.result(timeout=20)
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
     assert result.final_output.release_validation.valid
-    assert scraper.max_active == slots and model.max_early_active == 3
+    assert scraper.max_active == slots and model.max_early_active == 4
     assert len(scraper.requests) == 7
     checkpoint = V2EvidenceCheckpoint.model_validate_json(
         read_v2_artifact(path, run_id, CHECKPOINT_KEY).payload_json
     )
     assert len(checkpoint.waves) == len(checkpoint.findings) == 4
     urls = [wave.extraction.sources[0].candidate.source_url for wave in checkpoint.waves]
-    assert urls[0] == lead
+    assert urls[0] == faster
+    assert lead in urls
     assert set(model.late_specialists) <= set(urls)
     gaps = [request for request in model.requests if request.stage is LLMStage.GAP_ANALYSIS]
     assert len(gaps) == 1
@@ -574,7 +582,7 @@ def test_ready_source_inside_ranked_frontier_does_not_wait_for_slower_lead(
     with ThreadPoolExecutor(max_workers=1) as pool:
         running = pool.submit(_run, path, run_id, model, _Works(5), scraper)
         try:
-            _wait(lambda: len(scraper.pending) == 3)
+            _wait(lambda: len(scraper.pending) == 4)
             lead, second = (
                 V2CaptureDispatch.model_validate_json(
                     read_v2_artifact(
@@ -596,10 +604,15 @@ def test_ready_source_inside_ranked_frontier_does_not_wait_for_slower_lead(
     checkpoint = V2EvidenceCheckpoint.model_validate_json(
         read_v2_artifact(path, run_id, CHECKPOINT_KEY).payload_json
     )
-    assert [wave.extraction.sources[0].candidate.source_url for wave in checkpoint.waves][:2] == [
-        lead,
-        second,
-    ]
+    urls = [wave.extraction.sources[0].candidate.source_url for wave in checkpoint.waves]
+    assert urls[0] == second and lead in urls
+    assigned = tuple(
+        V2EvidenceCheckpointPlan.model_validate_json(
+            read_v2_artifact(path, run_id, f"{CHECKPOINT_KEY}/overlap-v1/slot-{slot}").payload_json
+        ).queue.queued_source_ids[0]
+        for slot in range(1, len(checkpoint.waves) + 1)
+    )
+    assert tuple(wave.source_id for wave in checkpoint.waves) == assigned
 
 
 class _DeeperPageInterrupted(BaseException):

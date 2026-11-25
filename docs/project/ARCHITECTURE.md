@@ -211,7 +211,7 @@ contract parity and race coverage; static export does not verify signed delivery
 
 The [source-discovery plan](../../.agent/plans/source-discovery-v2-2026-10-05.md) records all six phases. Fresh Planner/Search Agent handoffs contain bounded concepts; application lanes and `query_compiler` own native syntax, IDs and executable settings. Round 1 and authorized adaptive/Round-4 searches share `query_execution`, which freezes compiler/prompt/schema/mode/configuration identity and reserves each physical request in immutable `v2_artifacts` before transport. `discovery_store` owns physical starts/completions; `query_retrieval_store` owns resumable parsed pages and independent immutable parser receipts, without schema migration. Provider adapters observe every page, retry and metadata request; PubMed summaries bind primary IDs/response hashes. Completed pages do not replay; parser receipts reject substituted candidates. Terminal empty/repeated/no-new-result pages remain terminal on resume, and unknown outcomes retain exposure and stop further requests. Metadata depth defaults to 50 and choices include 10 and 20, subject to at most three physical attempts and lower provider/run budgets. Executable pagination is bounded by provider: 20-result lexical pages for OpenAlex and arXiv, up to 50 semantic OpenAlex results in one request, PubMed's two physical requests per complete page, three 10-result SERP Search pages, and Exa's auto-search cap of 25. Exa reserves $0.02 for depth 20 and $0.03 for depth 50 within the unchanged $0.18 /18-request ceiling.
 
-`metadata_ranking` ranks normalized discovery metadata deterministically and emits a typed sidecar with common signals, stable work/lane identity and rationale. Search direction remains provenance; support/challenge relationship is not inferred from it. Missing metadata is neutral and identity conflicts remain visible. Ranking work keys use DOI/URL anchors. Historical clustering retains its normalized-title/DOI/URL equivalence; fresh clustering prevents title or unidentified-record bridges from merging contradictory DOI/provider-ID anchors. Source-family identification is unchanged. Scout selection applies stable lane fairness under the 60-item/round cap, sends at most 20 candidates per batch and makes at most two attempts per batch, further constrained by model exposure. `agents.v2_acquisition` receives the ranked shortlist, capped at 60 clusters/round for current product runs (up to 30 per enabled direction) and lower when provider or run budget requires; it does not convert a rank into evidence. Fresh acquisition Probe v3 and Source Selection use deterministic exact preview v2 from owned immutable snapshots. Lexical/structural windows prioritize substantive claim-aware content; capture usability and claim relevance remain separate. Historical Probe v1/v2 and selection-v1 retain their original dispatch and serialization. Complete selection input plus adapter overhead is capped at 24,000 tokens using an audited direction-fair whole-source shortlist, with explicit omissions retained in the full pool and queue. Typed preview diagnostics, metadata rank and final selection rationale are distinct in read-only trail presentation. New executable prompt/schema/policy identities are bound in the discovery fingerprint; no preview enters evidence admission. Acquisition, immutable snapshots, exact extraction, Analyst and deterministic admission remain the evidence boundary. Existing prompt/fingerprint histories and explicit legacy paths retain their meaning; incompatible fresh resumes require a new run, and a legacy selector cannot bypass a fresh binding. Read-only inspection owns one validated snapshot. No schema migration or new model stage is added.
+`metadata_ranking` ranks normalized discovery metadata deterministically and emits a typed sidecar with common signals, stable work/lane identity and rationale. Search direction remains provenance; support/challenge relationship is not inferred from it. Missing metadata is neutral and identity conflicts remain visible. Ranking work keys use DOI/URL anchors. Historical clustering retains its normalized-title/DOI/URL equivalence; fresh clustering prevents title or unidentified-record bridges from merging contradictory DOI/provider-ID anchors. Source-family identification is unchanged. Scout selection applies stable lane fairness under the 60-item/round cap, sends at most six candidates per newly frozen batch (recorded historical sizes remain unchanged) and makes at most two attempts per batch, further constrained by model exposure. `agents.v2_acquisition` receives the ranked shortlist, capped at 60 clusters/round for current product runs (up to 30 per enabled direction) and lower when provider or run budget requires; it does not convert a rank into evidence. Fresh acquisition Probe v3 and Source Selection use deterministic exact preview v2 from owned immutable snapshots. Lexical/structural windows prioritize substantive claim-aware content; capture usability and claim relevance remain separate. Historical Probe v1/v2 and selection-v1 retain their original dispatch and serialization. Complete selection input plus adapter overhead is capped at 24,000 tokens using an audited direction-fair whole-source shortlist, with explicit omissions retained in the full pool and queue. Typed preview diagnostics, metadata rank and final selection rationale are distinct in read-only trail presentation. New executable prompt/schema/policy identities are bound in the discovery fingerprint; no preview enters evidence admission. Acquisition, immutable snapshots, exact extraction, Analyst and deterministic admission remain the evidence boundary. Existing prompt/fingerprint histories and explicit legacy paths retain their meaning; incompatible fresh resumes require a new run, and a legacy selector cannot bypass a fresh binding. Read-only inspection owns one validated snapshot. No schema migration or new model stage is added.
 
 `seed_expansion` offers owned scholarly seeds from current discovery/acquisition previews to
 subsequent authorized adaptive rounds. `providers.openalex_neighborhood` resolves exact
@@ -271,7 +271,54 @@ The seven active model stages are Planner, Scout, Gap Analysis, Search Agent, So
 
 Each physical model attempt reserves calls, tokens, and conservative cost before transport. Failures and retries count. Unknown outcomes retain reserved exposure; absent usage is never treated as zero or refunded. Existing global ceilings are 160 calls and 500,000 tokens, with lower configured limits supported. Search and acquisition have separate limits. No synthetic per-call subscription price is added.
 
-Deep analysis uses priority-ordered waves of at most four source workers. Each wave is limited to a budget-safe priority prefix; extraction, Analyst work, and admission stay sequential within a source. Workers do not share SQLite connections or mutable handoffs. Cancellation drains in-flight work, preserves audit exposure, and does not write aggregate completion for a cancelled run.
+Deep analysis uses a rolling set of independent ready source tasks in the saved pending
+priority order, shared by initial final analysis and post-analysis backfill. Extraction
+and Analysis now have independent queues and limits: 4–6 extraction tasks and 5–8
+Analysis tasks, controlled by the single typed `providers/run_scheduler.py` policy.
+Persisted extraction outputs under existing source dispatches durably identify pending
+Analysis. Failed extraction takes terminal bookkeeping without entering that queue.
+The source ownership ledger protects the complete remaining allowance through both
+stages and their ready queues until durable source settlement, without reserving the
+source twice. Settled actual usage (or unknown reservations) replaces that hold. Live
+provider snapshots and atomic physical reservations remain authoritative ceilings.
+
+The same run owner controls Scout (4–6 batches) and Capture (4–6 source tasks).
+Continuous full utilization and two ready waiting tasks permit one-slot growth after
+25/5/7/13 seconds for Scout/Capture/Extraction/Analysis, respectively. Downstream
+waiting counts of 8/8/10 block upstream growth, not draining. Demand below the control
+limit for 30 seconds lowers it to at least the initial limit without cancellation.
+Stage events, capacity changes and a two-second fallback tick recalculate demand;
+monotonic timers are transient. Planning/Gap/Search planning/Selection remain logical
+single decisions. Model admission is shared across all routes/attempts at ten requests,
+with pending Planner/Gap priority and rotating remaining stages. Explicit overload
+halves the affected provider capacity, waits at least 30 seconds (or longer Retry-After),
+and restores at most one slot per successful 30 seconds. Fresh stage/Analyst intents
+are written after capacity admission; context-local callbacks are outside saved identity.
+The physical slot is released before completion-accounting writes. Capture has a
+separate shared six-transport ceiling and acquisition-service capacity/backoff; service
+admission precedes fresh capture-attempt journals. Parked service/browser work releases
+its transport and
+the single-browser constraint remains. Bounded transient diagnostics distinguish ready,
+running, capacity-waiting, admitted and actual physical usage, without tick artifacts.
+
+Versioned `rolling-v1` dispatch slots bind the queue, discovery/acquisition input and
+snapshot before launch; terminal source results are saved before futures settle.
+Aggregate execution history follows frozen dispatch order, with reused early waves
+first, rather than completion order. Stage journals retain known outputs and consume
+unknown attempts without replay. Workers do not share SQLite connections or mutable
+handoffs. Cancellation stops new dispatch, checks between source stages, drains active
+work and durable writes, and writes no aggregate completion.
+
+Before Scout finishes, early assessment may assign at most half its existing source
+capacity (rounded down, minimum one for positive capacity). The rest remains reserved
+for later Scout results. Only ranked Retrieve candidates enter that frontier; pending
+higher-ranked captures protect slots while ready candidates may use unreserved slots.
+After Scout finishes the remaining ranked allowance opens. Source-local discovery and
+capture inputs are saved with each assignment, including snapshot ownership. Early
+findings use durable assignment order; fuller late mirrors cannot alter started inputs.
+Existing capture reservations and explicit pending-capture Gap inputs remain; adaptive
+limits change scheduling without enlarging the early source allowance. Source/executable identity changes require fresh runs; historical
+artifacts retain their original meaning.
 
 Discovery may use configured OpenAlex, arXiv, PubMed, Exa, and SERP lanes. Crossref is identity metadata only. Search snippets, abstracts, recommendations, and Probe passages are not admitted as factual evidence. Acquisition and fallback behavior stay bounded by their existing policies.
 
@@ -400,3 +447,27 @@ Read-only dispatch diagnostics distinguish unknown dispatched calls from subsequ
 queries blocked before dispatch using validated physical attempts and retrieval
 receipts. Historical receipts are not rewritten. An unknown outcome still freezes
 further dispatch and retains its reservation; no automatic retry or refund is added.
+
+
+## Evidence-grounded follow-up input
+
+`agents.followup_context` projects saved observations into the optional typed runtime
+context on Search Agent input. It shares one implementation across adaptive planning,
+post-analysis follow-up and Round 4. At most six gaps receive three query/source
+examples each; findings/requirements are capped at 500 characters and two limitation
+excerpts at 300 characters each. Three unassigned assessed examples retain ambiguous
+source-level observations without inventing a gap association. Omission counts and
+clipping flags accompany bounded samples. Source IDs, query/operation/attempt IDs,
+snapshot IDs and acquisition attempt indexes retain provenance. Discovery targeting
+is a lead, never an evidence relationship. Only explicit coverage assessment records
+establish a conflict in this projection.
+
+`followup-planning-input-v1/round-N` freezes the complete projected input, original
+provider budgets, lanes/offers, modes, previous compiled queries and composed prompt
+before dispatch. Its canonical hash excludes transient Gap invocation/resume fields.
+Resume consumes that saved input without rebuilding it from later captures or budgets;
+current physical accounting still admits new work. Runtime guidance adds the
+`-gap-followup-v1` version suffix and binds the composed prompt hash without modifying
+historical prompt resources. Existing executable identity gates remain authoritative.
+Round 4 retains its authorization and single Search Agent call, with immutable intent
+and typed outcome before aggregate publication; unknown outcomes cannot repeat.

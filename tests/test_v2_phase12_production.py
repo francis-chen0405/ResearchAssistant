@@ -148,6 +148,28 @@ class _Search:
         )
 
 
+class _SelectionNeededSearch(_Search):
+    """Two distinct studies exceed a single-source analysis allowance."""
+
+    def search(self, request: SearchRequest) -> SearchResponse:
+        response = super().search(request)
+        return response.model_copy(
+            update={
+                "results": [
+                    response.results[0].model_copy(
+                        update={
+                            "original_url": response.results[0].original_url + f"/study-{i}",
+                            "title": title,
+                        }
+                    )
+                    for i, title in enumerate(
+                        ("Regional program evaluation", "Matched adult learners cohort survey")
+                    )
+                ]
+            }
+        )
+
+
 class _FailsRoundFourSearch(_Search):
     def search(self, request: SearchRequest) -> SearchResponse:
         if len(self.requests) >= 5:
@@ -1044,7 +1066,8 @@ def test_run_a_full_v2_path_releases_and_restart_reuses_terminal_artifact(
     assert first.budget.physical_calls_used < 40
     assert first.budget.token_exposure == len(model.requests) * 15
     assert read_v2_artifact(str(db_path), run_id, V2_PRODUCTION_ARTIFACT_KEY)
-    assert len(model.requests) == 6
+    assert len(model.requests) == 5
+    assert all(request.stage is not LLMStage.SOURCE_SELECTION for request in model.requests)
     assert all(request.stage is not LLMStage.REVIEWER for request in model.requests)
     assert all(
         request.requested_output_type.__name__ != "ReviewerDecision" for request in model.requests
@@ -2462,7 +2485,19 @@ def test_persisted_cancellation_stops_before_later_v2_model_work(
         cancel_after_output_type=cancel_after_output_type,
     )
 
-    result = _run(db_path, model, _Search(), _Scraper(), run_id=run_id)
+    selection_case = cancel_after_output_type == "V2SourceSelectionModelOutput"
+    result = _run(
+        db_path,
+        model,
+        _SelectionNeededSearch() if selection_case else _Search(),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=40,
+            max_total_tokens=119_999 if selection_case else 100_000,
+            max_total_cost_usd=Decimal("1"),
+        ),
+    )
 
     assert result.state is V2ProductionState.CANCELLED
     assert result.current_stage is expected_stage
@@ -2527,7 +2562,16 @@ def test_cancellation_between_selection_retries_prevents_a_second_model_call(
         fail_on_cancellation=True,
     )
 
-    result = _run(db_path, model, _Search(), _Scraper(), run_id=run_id)
+    result = _run(
+        db_path,
+        model,
+        _SelectionNeededSearch(),
+        _Scraper(),
+        run_id=run_id,
+        ceilings=V2RunCeilings(
+            max_physical_calls=40, max_total_tokens=119_999, max_total_cost_usd=Decimal("1")
+        ),
+    )
 
     selection_requests = [
         request
