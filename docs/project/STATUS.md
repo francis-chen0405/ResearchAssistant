@@ -28,6 +28,10 @@ Model response reads recheck their original request and read-phase deadlines usi
 one-second socket waits, including after system wake. These waits never resend an
 HTTP request. Fixed provider-capability failures stop bounded stage retries; invalid
 model output remains eligible for the existing bounded repair.
+Active v2 research uses the existing five-second SQLite contention wait from startup
+through terminal publication, including initial Planner and saved-source writes that
+can overlap progress reads. Idle inspection retains its one-second wait; operations
+and provider requests are never replayed after contention.
 Fresh ranked follow-ups distinguish discovery from attempted acquisition, so an
 earlier unscouted or uncaptured source can remain eligible. Comparative financial
 reports receive an explicit method cue without publisher or stance preferences.

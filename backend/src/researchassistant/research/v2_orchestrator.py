@@ -151,6 +151,7 @@ from researchassistant.research.query_execution import (
 from researchassistant.research.research_governor import DEFAULT_RESEARCH_GOVERNOR_POLICY
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.query_dispatch import query_dispatch_states
+from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import (
     init_db,
     insert_provider_run_contract,
@@ -707,7 +708,7 @@ def _v2_database_lock(db_path: str | Path) -> Iterator[None]:
     """Serialize direct v2 callers with the live controller's database lock."""
     from researchassistant.storage.database_lock import database_lock
 
-    with database_lock(db_path, blocking=True):
+    with database_lock(db_path, blocking=True), overlapping_database_writes(str(db_path)):
         yield
 
 
@@ -739,7 +740,7 @@ def run_v2_production_pipeline(
     if _database_lock_owned:
         from researchassistant.storage.database_lock import retained_database_lock
 
-        with retained_database_lock(db_path):
+        with retained_database_lock(db_path), overlapping_database_writes(str(db_path)):
             return _run_v2_production_pipeline(
                 raw_claim,
                 db_path=db_path,
