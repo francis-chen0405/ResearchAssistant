@@ -22,6 +22,7 @@ from researchassistant.contracts.models import (
     V2EvidenceAdmissionState,
 )
 from researchassistant.providers.llm import LLMStage
+from researchassistant.providers.v2_budget import read_v2_physical_call_audit
 from researchassistant.research.v2_orchestrator import V2ProductionPipelineResult, V2ProductionState
 from researchassistant.storage.store import (
     insert_v2_artifact,
@@ -79,11 +80,33 @@ def test_interruption_preserves_admitted_evidence_on_unchanged_resume(
     source = captured[0]
     assert source.evidence_record is not None and partial.status.value == "running"
     before = read_v2_evidence_admission(path, source.evidence_record.ledger_claim_id)
+    before_audit = read_v2_physical_call_audit(path, partial.run_id)
+    before_source_calls = {
+        (call.stage, call.source_id) for call in before_audit.starts if call.source_id is not None
+    }
     result, model, search = product._run(path, controls, run_id=partial.run_id)
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
-    # Initial source work is checkpointed. Only the newly placed Round-4
-    # gap, plan and Scout may run after the interrupted admission completes.
-    assert [request.stage for request in model.requests] == [
+    # Rolling admission can interrupt before a sibling's Analysis has started.
+    # Resume may finish that source, but must never repeat completed physical work.
+    source_stages = {LLMStage.EXTRACTOR, LLMStage.ANALYST}
+    resumed_source_calls = [
+        (request.stage.value, request.source_id)
+        for request in model.requests
+        if request.stage in source_stages
+    ]
+    assert before_source_calls.isdisjoint(resumed_source_calls)
+    assert all(source_id is not None for _, source_id in resumed_source_calls)
+    after_audit = read_v2_physical_call_audit(path, partial.run_id)
+    assert after_audit.starts[: len(before_audit.starts)] == before_audit.starts
+    assert after_audit.completions[: len(before_audit.completions)] == before_audit.completions
+    all_source_calls = [
+        (call.stage, call.source_id) for call in after_audit.starts if call.source_id is not None
+    ]
+    assert len(all_source_calls) == len(set(all_source_calls))
+    assert set(all_source_calls) - before_source_calls == set(resumed_source_calls)
+    # Remaining source work must finish before the existing Round-4 tail.
+    assert all(request.stage in source_stages for request in model.requests[:-3])
+    assert [request.stage for request in model.requests[-3:]] == [
         LLMStage.GAP_ANALYSIS,
         LLMStage.SEARCH_AGENT,
         LLMStage.SCOUT,

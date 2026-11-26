@@ -347,3 +347,107 @@ def test_model_deadline_expires_after_wall_time_jump(monkeypatch: pytest.MonkeyP
         with pytest.raises(MimoProviderError) as error:
             adapter.generate(_request(LLMStage.SCOUT, uuid4()))
         assert error.value.code is MimoFailureCode.TIMEOUT
+
+
+def test_model_read_rechecks_wall_deadline_after_sleep_without_resending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    routing = _config().routing
+    selected = routing.luna
+    assert selected is not None
+    route = routing.preflight().for_stage(LLMStage.GAP_ANALYSIS)
+    clock = Clock()
+    sleep_seconds = 0.0
+
+    class SleepingWire(SlowWire):
+        def recv(self, count: int) -> bytes:
+            nonlocal sleep_seconds
+            if sleep_seconds == 0:
+                sleep_seconds = 110.0
+            # Model a socket timer that counts awake time, while the request's
+            # wall clock also includes the system suspension during this read.
+            return super().recv(count)
+
+    wire = SleepingWire(clock, header_delay=121.0)
+    monkeypatch.setattr(socket, "socket", lambda *args, **kwargs: wire)
+    monkeypatch.setattr(
+        bounded_network, "resolve_host_addresses", lambda host, **kwargs: ("93.184.216.34",)
+    )
+    monkeypatch.setattr(
+        mimo,
+        "time",
+        SimpleNamespace(monotonic=clock.now, time=lambda: 1000.0 + clock.elapsed + sleep_seconds),
+    )
+    with httpx.Client(base_url="http://api.example", transport=DeadlineHTTPTransport()) as client:
+        adapter = XiaomiMimoAdapter(
+            selected,
+            client=client,
+            price_cap=route.price_cap,
+            expected_model_alias=route.logical_alias,
+        )
+        with pytest.raises(MimoProviderError) as error:
+            adapter.generate(_request(LLMStage.GAP_ANALYSIS, uuid4()))
+    assert error.value.code is MimoFailureCode.TIMEOUT
+    assert clock.elapsed + sleep_seconds == pytest.approx(120.0)
+    assert max(clock.budgets) <= 1.0
+    assert wire.closed
+    assert wire.sent.count(b"POST /chat/completions ") == 1
+
+
+@pytest.mark.parametrize("phase_timeout, request_timeout", [(2.5, 10.0), (10.0, 2.5)])
+def test_read_watchdog_preserves_phase_and_request_deadlines(
+    phase_timeout: float,
+    request_timeout: float,
+) -> None:
+    import httpcore
+
+    clock = Clock()
+
+    class StalledStream(httpcore.NetworkStream):
+        def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+            assert timeout is not None
+            clock.budgets.append(timeout)
+            clock.elapsed += timeout
+            raise httpcore.ReadTimeout("generated stalled read")
+
+    stream = bounded_network.DeadlineStream(StalledStream())
+    with bounded_network.network_deadline(clock.now, request_timeout):
+        with pytest.raises(httpcore.ReadTimeout):
+            stream.read(1, timeout=phase_timeout)
+    assert clock.elapsed == pytest.approx(2.5)
+    assert clock.budgets == [1.0, 1.0, 0.5]
+
+
+@pytest.mark.parametrize("payload", [b"response bytes", b""])
+def test_read_watchdog_returns_data_and_eof_after_read_waits(payload: bytes) -> None:
+    import httpcore
+
+    clock = Clock()
+
+    class DelayedStream(httpcore.NetworkStream):
+        def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+            assert timeout is not None
+            clock.budgets.append(timeout)
+            if len(clock.budgets) <= 2:
+                clock.elapsed += timeout
+                raise httpcore.ReadTimeout("generated watchdog timeout")
+            clock.elapsed += 0.25
+            return payload
+
+    stream = bounded_network.DeadlineStream(DelayedStream())
+    with bounded_network.network_deadline(clock.now, 10.0):
+        assert stream.read(20, timeout=3.0) == payload
+    assert clock.elapsed == pytest.approx(2.25)
+    assert clock.budgets == [1.0, 1.0, 1.0]
+
+
+def test_read_without_request_deadline_keeps_original_timeout() -> None:
+    import httpcore
+
+    class UnboundedStream(httpcore.NetworkStream):
+        def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+            assert max_bytes == 20 and timeout == 30.0
+            raise httpcore.ReadTimeout("original timeout")
+
+    with pytest.raises(httpcore.ReadTimeout, match="original timeout"):
+        bounded_network.DeadlineStream(UnboundedStream()).read(20, timeout=30.0)

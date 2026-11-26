@@ -69,6 +69,7 @@ from researchassistant.contracts.models import (
     V2AcquisitionProbeOutput,
     V2DeepAnalysisBudget,
     V2DiscoveryScoutOutput,
+    V2EvidenceRelationship,
     V2GapAnalysisInput,
     V2GapAnalysisOutput,
     V2GapBudgetState,
@@ -767,10 +768,23 @@ def _assessed_findings(
         (item for item in visible if item.assessment is not None),
         key=lambda item: (
             item.source_id not in preferred,
-            item.assessment.relationship_to_claim.value,
             str(item.source_id),
         ),
     )
+    # Sample each recorded relationship before repeating one. Alphabetical
+    # relationship sorting could fill this bounded input with challenges and
+    # qualifications while omitting every assessed supporting finding.
+    represented: set[V2EvidenceRelationship] = set()
+    distinct = []
+    repeated = []
+    for item in reviewed:
+        relationship = item.assessment.relationship_to_claim
+        if relationship in represented:
+            repeated.append(item)
+        else:
+            represented.add(relationship)
+            distinct.append(item)
+    reviewed = [*distinct, *repeated]
     failed = sorted(
         (item for item in visible if item.assessment is None),
         key=lambda item: (item.state.value, str(item.source_id)),

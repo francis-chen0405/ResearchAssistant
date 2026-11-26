@@ -12,7 +12,13 @@ from agents.v2_gap_analysis import (
     build_v2_gap_analysis_input,
     run_v2_gap_analysis,
 )
-from providers.llm import LLMProviderCapabilities, LLMProviderExecutionError, ModelAlias
+from providers.llm import (
+    LLMInvocationCapabilityError,
+    LLMInvocationError,
+    LLMProviderCapabilities,
+    LLMProviderExecutionError,
+    ModelAlias,
+)
 from providers.mimo import MimoFailureCode, MimoProviderError
 from providers.v2_routing import V2RoutingConfig
 from researchassistant.agents import v2_gap_analysis as gap_module
@@ -569,6 +575,51 @@ def test_gap_analysis_does_not_retry_terminal_provider_authentication(
         )
 
     assert len(provider.requests) == 1
+
+
+@pytest.mark.parametrize("unsupported", ["temperature", "structured_output_control"])
+def test_gap_analysis_does_not_repeat_fixed_capability_failure(
+    tmp_path: Path,
+    unsupported: str,
+) -> None:
+    gap_input = _input()
+    db_path = tmp_path / "capability.sqlite3"
+    _prepare_db(db_path, gap_input.run_id)
+    provider = FakeLuna([_stop()])
+    provider.capabilities = LLMProviderCapabilities(
+        supports_temperature=unsupported != "temperature",
+        supports_structured_output_control=unsupported != "structured_output_control",
+    )
+    with pytest.raises(LLMInvocationCapabilityError, match="does not support"):
+        run_v2_gap_analysis(
+            db_path=db_path,
+            gap_input=gap_input,
+            llm_provider=provider,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+    outcome = V2StageOutcomeCheckpoint.model_validate_json(
+        read_v2_artifact(
+            db_path,
+            gap_input.run_id,
+            "gap-checkpoint-v1/phase-6-gap-analysis/attempt-1/outcome",
+        ).payload_json
+    )
+    assert outcome.terminal_provider_failure
+    assert provider.requests == []
+    with pytest.raises(LLMInvocationError, match="does not support"):
+        run_v2_gap_analysis(
+            db_path=db_path,
+            gap_input=gap_input,
+            llm_provider=provider,
+            routing_config=_routing(),
+            clock=lambda: NOW,
+        )
+    with pytest.raises(KeyError):
+        read_v2_artifact(
+            db_path, gap_input.run_id, "gap-checkpoint-v1/phase-6-gap-analysis/attempt-2"
+        )
+    assert provider.requests == []
 
 
 def test_gap_input_limits_probe_data_and_requires_specific_typed_search_direction() -> None:

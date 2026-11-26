@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import test_query_production as production
@@ -36,6 +36,9 @@ from researchassistant.contracts.model_evidence import (
 from researchassistant.contracts.models import (
     V2ClaimCoverageAssessment,
     V2ClaimCoverageState,
+    V2EvidenceAnalystSourceResult,
+    V2EvidenceAnalystState,
+    V2EvidenceRelationship,
     V2GapAnalysisModelOutput,
     V2GapAnalysisOutput,
 )
@@ -200,6 +203,120 @@ def _admitted_inputs(
     )
     assert result.state is V2ProductionState.RELEASED, result.failure_reason
     return captured, model, search
+
+
+@pytest.mark.parametrize("failure_count", (0, 2))
+def test_post_analysis_sample_retains_distinct_assessed_relationships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_count: int
+) -> None:
+    captured, _model, _search = _admitted_inputs(tmp_path, monkeypatch)
+    admission = captured["admission"]
+    gap = captured["gaps"][-1]
+    template = admission.analyst_result.source_results[0]
+    relationships = (
+        V2EvidenceRelationship.CHALLENGES,
+        V2EvidenceRelationship.CHALLENGES,
+        V2EvidenceRelationship.CHALLENGES,
+        V2EvidenceRelationship.QUALIFIES,
+        V2EvidenceRelationship.QUALIFIES,
+        V2EvidenceRelationship.SUPPORTS,
+        V2EvidenceRelationship.SUPPORTS,
+    )
+    reviewed = tuple(
+        template.model_copy(
+            update={
+                "source_id": UUID(int=index + 1),
+                "assessment": template.assessment.model_copy(
+                    update={"relationship_to_claim": relationship}
+                ),
+            }
+        )
+        for index, relationship in enumerate(relationships)
+    )
+    failed = tuple(
+        V2EvidenceAnalystSourceResult(
+            run_id=admission.run_id,
+            source_id=UUID(int=100 + index),
+            direction=template.direction,
+            state=V2EvidenceAnalystState.FAILED,
+            failure="The acquired text could not be assessed.",
+        )
+        for index in range(failure_count)
+    )
+    # Only the sampling projection is under test; retain real typed source
+    # assessments and gap metadata without publishing a synthetic admission.
+    sources = (*reviewed, *failed)
+    admission = admission.model_copy(
+        update={
+            "analyst_result": admission.analyst_result.model_copy(
+                update={"source_results": sources}
+            )
+        }
+    )
+    gap = gap.model_copy(
+        update={
+            "input": gap.input.model_copy(
+                update={
+                    "surviving_sources": tuple(
+                        gap.input.surviving_sources[0].model_copy(
+                            update={"source_cluster_id": source.source_id}
+                        )
+                        for source in sources
+                    )
+                }
+            )
+        }
+    )
+    preferred = frozenset((reviewed[2].source_id, reviewed[-1].source_id))
+    findings = post_module._assessed_findings(admission, gap, preferred=preferred)
+    reordered = admission.model_copy(
+        update={
+            "analyst_result": admission.analyst_result.model_copy(
+                update={"source_results": tuple(reversed(sources))}
+            )
+        }
+    )
+    assert post_module._assessed_findings(reordered, gap, preferred=preferred) == findings
+    assert len(findings) == 4
+    assert len({item.source_id for item in findings}) == 4
+    assert {item.source_id for item in findings} >= preferred
+    assert {item.source_id for item in findings if item.failure} == {
+        item.source_id for item in failed
+    }
+    if not failure_count:
+        assert {item.relationship_to_claim for item in findings} == {
+            "supports",
+            "challenges",
+            "qualifies",
+        }
+    by_id = {source.source_id: source for source in sources}
+    for finding in findings:
+        source = by_id[finding.source_id]
+        if source.assessment is not None:
+            assert finding.supported_proposition == (
+                source.assessment.narrowest_supported_proposition
+            )
+            assert finding.relationship_to_claim == source.assessment.relationship_to_claim
+        else:
+            assert finding.supported_proposition is None
+    hidden_id = findings[0].source_id
+    restricted_gap = gap.model_copy(
+        update={
+            "input": gap.input.model_copy(
+                update={
+                    "surviving_sources": tuple(
+                        source
+                        for source in gap.input.surviving_sources
+                        if source.source_cluster_id != hidden_id
+                    )
+                }
+            )
+        }
+    )
+    assert hidden_id not in {
+        item.source_id
+        for item in post_module._assessed_findings(admission, restricted_gap, preferred=preferred)
+    }
 
 
 @pytest.mark.parametrize("has_eligible_provider", (True, False))

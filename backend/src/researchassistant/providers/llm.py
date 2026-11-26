@@ -489,9 +489,9 @@ class V2CancellationRequested(RuntimeError):
 
 
 def is_non_retryable_provider_error(error: LLMInvocationError) -> bool:
-    """Return whether a provider explicitly marked its failure as terminal."""
+    """Stop fixed provider/configuration failures; retain bounded output repair."""
     return (
-        isinstance(error, LLMProviderExecutionError)
+        isinstance(error, (LLMProviderExecutionError, LLMInvocationCapabilityError))
         and error.record.failure is not None
         and not error.record.failure.retryable
     )

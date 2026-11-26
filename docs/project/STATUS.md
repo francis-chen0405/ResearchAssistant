@@ -13,6 +13,9 @@ credential store; research data stays outside the application bundle.
 Current source uses assessed findings to guide further searches, replaces unusable
 sources within existing limits, captures later PDF pages with explicit omissions,
 and performs a bounded follow-up when analysis leaves evidence gaps. Each fresh
+post-analysis finding sample retains distinct recorded evidence relationships before
+repeating a relationship, within the existing four-finding bound and failed-source
+slots. Preferred late sources retain priority within each relationship. Each fresh
 search round gives providers with eligible text queries a first-page opportunity
 before deeper retrieval and reserves space for their results within the shared
 retention cap. Reports retain source provenance, quotation checks and conservative
@@ -21,6 +24,10 @@ receives the exact claim and available material gaps. Capture gives strong gap l
 and credible counterevidence an early chance within the same limits. A verified fuller
 mirror can replace a truncated capture before final analysis, with both snapshots
 retained. The report discloses confirmed shared data across distinct publications.
+Model response reads recheck their original request and read-phase deadlines using
+one-second socket waits, including after system wake. These waits never resend an
+HTTP request. Fixed provider-capability failures stop bounded stage retries; invalid
+model output remains eligible for the existing bounded repair.
 Pending final-analysis sources receive a bounded preference for specific unresolved
 material-gap leads from the latest completed coverage assessment. Movement is at most
 two slots, within existing direction/recommendation/family constraints and comparable

@@ -23,6 +23,7 @@ from researchassistant.providers.bounded_resolver import resolve_host_addresses
 _DEADLINE: ContextVar[tuple[Callable[[], float], float] | None] = ContextVar(
     "provider_network_deadline", default=None
 )
+_READ_WATCHDOG_SECONDS = 1.0
 
 
 @contextmanager
@@ -50,7 +51,24 @@ class DeadlineStream(httpcore.NetworkStream):
         self._stream = stream
 
     def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
-        return self._stream.read(max_bytes, timeout=remaining_timeout(timeout))
+        active = _DEADLINE.get()
+        if active is None or (timeout is not None and timeout <= 0):
+            return self._stream.read(max_bytes, timeout=remaining_timeout(timeout))
+        clock, deadline = active
+        if timeout is not None:
+            deadline = min(deadline, clock() + timeout)
+        while True:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                raise httpcore.ReadTimeout("provider exceeded absolute network deadline")
+            try:
+                # Socket timers may pause during system sleep. Short waits let
+                # the request's wall-aware clock recheck its original deadline
+                # after wake, without sending the HTTP request again.
+                return self._stream.read(max_bytes, timeout=min(remaining, _READ_WATCHDOG_SECONDS))
+            except httpcore.ReadTimeout:
+                if clock() >= deadline:
+                    raise
 
     def write(self, buffer: bytes, timeout: float | None = None) -> None:
         self._stream.write(buffer, timeout=remaining_timeout(timeout))
