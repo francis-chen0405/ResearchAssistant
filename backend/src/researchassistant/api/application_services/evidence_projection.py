@@ -268,7 +268,12 @@ def _build_v2_evidence_display(
         source_titles=tuple(
             _source_title_display(source, items) for source in output.all_surviving_sources
         ),
-        study_lineage=build_study_lineage_notices(candidates),
+        study_lineage=build_study_lineage_notices(
+            candidates,
+            snapshots={
+                source_id: queued.snapshot for source_id, queued in queued_candidates.items()
+            },
+        ),
         source_budget_outcomes=source_budget_outcomes,
         shared_website_groups=_build_shared_website_groups(tuple(items)),
         research_status=research_status,

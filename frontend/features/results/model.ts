@@ -54,7 +54,7 @@ class UnionFind {
 export type PublicationGroups = {
   groupOf: (sourceId: string) => string;
   /** Why sources in a group were treated as one publication; null when a single source. */
-  basisOf: (groupId: string) => "same publication" | "matching title" | null;
+  basisOf: (groupId: string) => "same publication" | "matching title" | "matching study details" | null;
 };
 
 /**
@@ -68,6 +68,7 @@ export function publicationGroups(
   const union = new UnionFind();
   // Sources joined only by a title match; a group containing one is labelled as such.
   const titleLinked = new Set<string>();
+  const sampleLinked = new Set<string>();
   const firstBy = new Map<string, string>();
   const link = (key: string | null | undefined, sourceId: string, kind: "strong" | "title") => {
     if (!key) return;
@@ -94,6 +95,7 @@ export function publicationGroups(
       if (union.find(first) === union.find(other)) continue;
       union.union(first, other);
       if (notice.basis === "matching_title") titleLinked.add(other);
+      if (notice.basis === "matching_reported_sample") sampleLinked.add(other);
     }
   }
   for (const item of evidence.items) {
@@ -107,12 +109,13 @@ export function publicationGroups(
     sizes.set(root, (sizes.get(root) ?? new Set()).add(item.source_id));
   }
   const titleRoots = new Set([...titleLinked].map((id) => union.find(id)));
+  const sampleRoots = new Set([...sampleLinked].map((id) => union.find(id)));
   return {
     groupOf: (sourceId) => union.find(sourceId),
     basisOf: (groupId) => {
       const root = union.find(groupId);
       if ((sizes.get(root)?.size ?? 1) < 2) return null;
-      return titleRoots.has(root) ? "matching title" : "same publication";
+      return sampleRoots.has(root) ? "matching study details" : titleRoots.has(root) ? "matching title" : "same publication";
     },
   };
 }
@@ -127,7 +130,7 @@ export type Finding = {
   related: EvidenceItem[];
   /** Other reading locations for the same publication. */
   alsoAt: { sourceId: string; url: string; name: string | null }[];
-  mergeBasis: "same publication" | "matching title" | null;
+  mergeBasis: "same publication" | "matching title" | "matching study details" | null;
 };
 
 const byStrength = (a: EvidenceItem, b: EvidenceItem) =>

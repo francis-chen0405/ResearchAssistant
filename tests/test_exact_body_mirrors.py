@@ -191,6 +191,12 @@ def test_complete_body_mirrors_preserve_locations_but_make_one_physical_analysis
     assert sum(request.stage is LLMStage.EXTRACTOR for request in model.requests) == 1
     assert sum(request.stage is LLMStage.ANALYST for request in model.requests) == 1
     mirror_ids = {item.source_id for item in plan.mirrors}
+    for source in result.final_output.all_surviving_sources:
+        if source.source_id in mirror_ids:
+            assert source.analysis_skip_reason == "exact_body_mirror"
+            assert source.budget_prevented_reason is None
+            assert source.status.value != "budget_prevented_analysis"
+            assert source.ledger_claim_ids == ()
     assert all(
         not item.physical_call_sequences
         for item in backfill.source_executions

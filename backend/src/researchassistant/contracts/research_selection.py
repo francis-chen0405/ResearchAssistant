@@ -293,6 +293,16 @@ class V2DeepAnalysisSourceStatus(StrictModel):
     queued_for_deep_analysis: bool
     queue_rank: PositiveInt | None = None
     budget_prevented_reason: V2DeepAnalysisBudgetReason | None = None
+    analysis_skip_reason: Literal["exact_body_mirror"] | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_analysis_skip(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        data = handler(self)
+        if self.analysis_skip_reason is None:
+            data.pop("analysis_skip_reason", None)
+        return data
 
     @model_validator(mode="after")
     def validate_status(self) -> V2DeepAnalysisSourceStatus:
@@ -302,7 +312,10 @@ class V2DeepAnalysisSourceStatus(StrictModel):
             raise ValueError("recommended sources require a selection rationale")
         if self.queued_for_deep_analysis != (self.queue_rank is not None):
             raise ValueError("deep-analysis queue state and rank must agree")
-        if self.queued_for_deep_analysis == (self.budget_prevented_reason is not None):
+        if self.analysis_skip_reason is not None:
+            if self.queued_for_deep_analysis or self.budget_prevented_reason is not None:
+                raise ValueError("an exact-body skip cannot be queued or budget-prevented")
+        elif self.queued_for_deep_analysis == (self.budget_prevented_reason is not None):
             raise ValueError("only non-queued survivors may have a budget-prevented reason")
         return self
 

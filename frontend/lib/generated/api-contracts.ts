@@ -419,7 +419,7 @@ export type ApiSchemas = {
   "Stance": "supporting" | "opposing";
   "StudyLineageNotice": {
     "source_ids": Array<string>;
-    "basis": "matching_doi" | "matching_title" | "matching_archive_id";
+    "basis": "matching_doi" | "matching_title" | "matching_archive_id" | "matching_reported_sample";
     "explanation": string;
   };
   "Supplemental__researchassistant.api.live_contracts.LiveRunSnapshot__DiscoveryProvider": "serpsearch" | "exa" | "openalex" | "arxiv" | "pubmed" | "serper" | "brave";
@@ -857,6 +857,7 @@ export type ApiSchemas = {
     "ledger_claim_ids"?: Array<string>;
     "budget_prevented_reason"?: (ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2DeepAnalysisBudgetReason"] | null);
     "alternate_source_urls"?: Array<string>;
+    "analysis_skip_reason"?: ("exact_body_mirror" | null);
   };
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2ResultSourceStatus": "recommended_analyzed" | "recommended_analyzer_admitted" | "recommended_analyzer_rejected" | "recommended_analyzer_failed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_analyzer_admitted" | "surviving_analyzer_rejected" | "surviving_analyzer_failed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
   "Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2RoundFourDecisionCode": "authorized" | "no_material_gaps" | "no_productive_search" | "gap_analysis_unusable" | "no_novel_query" | "no_eligible_provider" | "duplicate_heavy" | "unproductive" | "insufficient_reservation" | "cancelled" | "terminal_failure";
@@ -1185,6 +1186,7 @@ export type ApiSchemas = {
     "ledger_claim_ids"?: Array<string>;
     "budget_prevented_reason"?: (ApiSchemas["Supplemental__researchassistant.contracts.model_evidence.V2FinalResearchOutput__V2DeepAnalysisBudgetReason"] | null);
     "alternate_source_urls"?: Array<string>;
+    "analysis_skip_reason"?: ("exact_body_mirror" | null);
   };
   "V2ResultSourceStatus": "recommended_analyzed" | "recommended_analyzer_admitted" | "recommended_analyzer_rejected" | "recommended_analyzer_failed" | "recommended_no_ledger_evidence" | "surviving_analyzed" | "surviving_analyzer_admitted" | "surviving_analyzer_rejected" | "surviving_analyzer_failed" | "surviving_not_deeply_analyzed" | "budget_prevented_analysis";
   "V2RoundFourDecisionCode": "authorized" | "no_material_gaps" | "no_productive_search" | "gap_analysis_unusable" | "no_novel_query" | "no_eligible_provider" | "duplicate_heavy" | "unproductive" | "insufficient_reservation" | "cancelled" | "terminal_failure";

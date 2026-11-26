@@ -94,6 +94,7 @@ class V2MetadataRankingArtifact(StrictModel):
         "source-candidate-ranking-v3",
         "source-candidate-ranking-v4",
         "source-candidate-ranking-v5",
+        "source-candidate-ranking-v6",
     ] = "source-candidate-ranking-v2"
     ranks: tuple[MetadataRank, ...] = Field(max_length=300)
     scout_dispositions: tuple[V2ScoutDisposition, ...] = Field(max_length=300)

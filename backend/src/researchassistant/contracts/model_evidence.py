@@ -179,6 +179,16 @@ class V2EvidenceAnalystSnapshotContext(StrictModel):
     truncated: bool
     preceding_context: NonEmptyStr
     following_context: NonEmptyStr
+    source_excerpts: tuple[Annotated[str, Field(min_length=1, max_length=1800)], ...] = Field(
+        default=(), max_length=6
+    )
+
+    @model_serializer(mode="wrap")
+    def omit_absent_source_excerpts(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if not self.source_excerpts:
+            data.pop("source_excerpts", None)
+        return data
 
 
 class V2EvidenceAnalystExtractionFailure(StrictModel):
@@ -987,12 +997,15 @@ class V2ResultSource(StrictModel):
     ledger_claim_ids: tuple[UUID, ...] = ()
     budget_prevented_reason: V2DeepAnalysisBudgetReason | None = None
     alternate_source_urls: tuple[str, ...] = Field(default=(), max_length=240)
+    analysis_skip_reason: Literal["exact_body_mirror"] | None = None
 
     @model_serializer(mode="wrap")
     def omit_legacy_alternates(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         data = handler(self)
         if not self.alternate_source_urls:
             data.pop("alternate_source_urls", None)
+        if self.analysis_skip_reason is None:
+            data.pop("analysis_skip_reason", None)
         return data
 
     @classmethod
@@ -1011,6 +1024,19 @@ class V2ResultSource(StrictModel):
 
     @model_validator(mode="after")
     def validate_source_status(self) -> V2ResultSource:
+        if self.analysis_skip_reason is not None and (
+            self.ledger_claim_ids
+            or self.budget_prevented_reason is not None
+            or self.queue_rank is not None
+            or self.status
+            not in {
+                V2ResultSourceStatus.RECOMMENDED_NO_LEDGER_EVIDENCE,
+                V2ResultSourceStatus.SURVIVING_NOT_DEEPLY_ANALYZED,
+            }
+        ):
+            raise ValueError(
+                "an exact-body skip cannot claim evidence, analysis, or budget failure"
+            )
         if self.recommended != (self.recommendation_rank is not None):
             raise ValueError("v2 result recommendation state and rank must agree")
         if self.status is V2ResultSourceStatus.BUDGET_PREVENTED_ANALYSIS:

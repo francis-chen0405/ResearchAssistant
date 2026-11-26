@@ -78,7 +78,8 @@ from researchassistant.providers.v2_budget import (
     read_v2_physical_call_audit,
 )
 from researchassistant.providers.v2_routing import V2RoutingConfig
-from researchassistant.research.metadata_ranking import RANKING_IDENTITY
+from researchassistant.research.metadata_ranking import CLAIM_RANKING_IDENTITIES
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY as RANKING_IDENTITY
 from researchassistant.research.source_preview import build_claim_preview
 from researchassistant.storage.store import insert_v2_artifact, read_v2_artifact
 
@@ -163,7 +164,7 @@ def build_v2_source_selection_input(
     if any(item.run_id != run_id for item in metadata_ranking_outputs):
         raise ValueError("selection metadata ranking belongs to another run")
     track_shared_data = track_shared_data or any(
-        item.ranking_identity == RANKING_IDENTITY for item in metadata_ranking_outputs
+        item.ranking_identity in CLAIM_RANKING_IDENTITIES for item in metadata_ranking_outputs
     )
     fresh_preview = claim_aware or preview_builder is build_claim_preview
     if fresh_preview and preview_builder is None:

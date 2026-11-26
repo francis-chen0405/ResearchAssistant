@@ -166,6 +166,8 @@ export function FindingCard({
           <p className="subtle">
             {finding.mergeBasis === "matching title"
               ? "Records grouped because the titles match; not independently confirmed as the same publication. They count once."
+              : finding.mergeBasis === "matching study details"
+              ? "Accounts grouped because sample counts and study details match; shared study identity is unconfirmed. They count once."
               : "These records come from the same publication and count once."}
           </p>
         )}

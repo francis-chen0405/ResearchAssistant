@@ -44,6 +44,13 @@ _COMMENTARY = re.compile(
     r"\b(?:this (?:opinion|commentary|editorial|essay)|opinion piece)\b",
     re.I,
 )
+_COST_REPORT = re.compile(
+    r"\b(?:cost.benefit analysis|life[- ]?cycle cost(?:s| analysis)?|"
+    r"\d{1,3}[- ]year (?:costs?|budgets?|expenditures?)|"
+    r"(?:annual|operating|maintenance) (?:budget|expenditures?)|"
+    r"(?:financial|fiscal|cost|maintenance) (?:analysis|comparison|study|report))\b",
+    re.I,
+)
 _STOP = frozenset(
     "a an the and or of to in on for with by is are was were be been that this it as at from "
     "does do can may will would should did not no more less than among within has have had "
@@ -108,7 +115,13 @@ class ClaimFacets:
         )
 
     def fit(
-        self, *, title: str | None, abstract: str | None, snippet: str | None, source_type: str
+        self,
+        *,
+        title: str | None,
+        abstract: str | None,
+        snippet: str | None,
+        source_type: str,
+        comparative_reports: bool = True,
     ) -> tuple[float | None, float | None]:
         text = " ".join((title or "", abstract or "", snippet or ""))[:8000]
         if not text.strip():
@@ -137,6 +150,14 @@ class ClaimFacets:
             method = 1.0
         elif _OBSERVATION.search(text):
             method = 0.8
+        elif comparative_reports and self.comparative and _COST_REPORT.search(text):
+            method = 0.8
+            claim_terms = self.exposure | self.outcome | self.setting | self.comparison
+            if len(claim_terms & terms) >= 3:
+                # A measured multi-year comparison can use less verbatim claim
+                # wording than a sales headline. Require concrete shared terms;
+                # unknown metadata alone must never receive this relevance floor.
+                directness = max(directness or 0, 0.65)
         else:
             method = None
         return directness, method

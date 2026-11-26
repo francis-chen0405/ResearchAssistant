@@ -140,6 +140,10 @@ test("every shortlisted-source status maps to one plain outcome", () => {
   assert.match(label("budget_prevented_analysis"), /token allowance/);
   assert.equal(label("surviving_analyzer_failed", "token_cap_blocked"), "A per-source token limit stopped the reading");
   assert.equal(label("unknown_internal_status"), "Outcome not recognized");
+  assert.equal(sourceOutcome({
+    status: "surviving_not_deeply_analyzed", budget_prevented_reason: null,
+    analysis_skip_reason: "exact_body_mirror",
+  }).label, "Duplicate text; separate assessment skipped");
 });
 
 test("provider outcome labels separate blocked and unknown requests from failures", () => {

@@ -13,13 +13,16 @@ from researchassistant.contracts.models import NormalizedDiscoveryItem
 from researchassistant.research.claim_metadata_fit import ClaimFacets
 from researchassistant.research.discovery_policy import stable_work_key
 
-RANKING_IDENTITY = "source-candidate-ranking-v5"
+RANKING_IDENTITY = "source-candidate-ranking-v6"
+CLAIM_RANKING_IDENTITY = "source-candidate-ranking-v5"
+CLAIM_RANKING_IDENTITIES = frozenset({CLAIM_RANKING_IDENTITY, RANKING_IDENTITY})
 EXACT_URL_RANKING_IDENTITY = "source-candidate-ranking-v4"
 PREVIOUS_RANKING_IDENTITY = "source-candidate-ranking-v3"
 LEGACY_RANKING_IDENTITY = "source-candidate-ranking-v2"
 RANKING_IDENTITIES = frozenset(
     {
         RANKING_IDENTITY,
+        CLAIM_RANKING_IDENTITY,
         EXACT_URL_RANKING_IDENTITY,
         PREVIOUS_RANKING_IDENTITY,
         LEGACY_RANKING_IDENTITY,
@@ -78,7 +81,8 @@ def _work_key(item: NormalizedDiscoveryItem, ranking_identity: str) -> str:
         doi=doi,
         canonical_url=item.canonical_url,
         url_identity_version=2
-        if ranking_identity in {EXACT_URL_RANKING_IDENTITY, RANKING_IDENTITY}
+        if ranking_identity
+        in {EXACT_URL_RANKING_IDENTITY, CLAIM_RANKING_IDENTITY, RANKING_IDENTITY}
         else 1,
     )
 
@@ -110,7 +114,11 @@ def rank_metadata(
         raise ValueError("metadata ranking cannot mix runs")
     weights = getattr(policy, "ranking_weights", MetadataRankingWeights())
     claim = _tokens(exact_claim[:8000])
-    facets = ClaimFacets.from_claim(exact_claim) if ranking_identity == RANKING_IDENTITY else None
+    facets = (
+        ClaimFacets.from_claim(exact_claim)
+        if ranking_identity in {CLAIM_RANKING_IDENTITY, RANKING_IDENTITY}
+        else None
+    )
     material_gap_terms = tuple(
         _tokens(gap[:500]) - claim - _RESULT_DIRECTION_TERMS for gap in target_gaps[:6]
     )
@@ -154,6 +162,7 @@ def rank_metadata(
                 abstract=item.abstract,
                 snippet=item.snippet,
                 source_type=source_type,
+                comparative_reports=ranking_identity == RANKING_IDENTITY,
             )
         gap_tokens = _tokens((item.query_text or "")[:4000]) - claim
         targeted = any(p.targeted_gap_ids for p in item.provenance_chain)

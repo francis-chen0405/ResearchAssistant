@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Mapping
 from typing import Literal
 from urllib.parse import unquote, urlsplit
 from uuid import UUID
@@ -15,14 +16,17 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, model_validator
 
 from researchassistant.contracts.model_contracts import NonEmptyStr, StrictModel
-from researchassistant.contracts.models import V2SourceSelectionCandidate
+from researchassistant.contracts.models import SourceSnapshot, V2SourceSelectionCandidate
+from researchassistant.evidence.evidence_core import validate_snapshot_integrity
 
 
 class StudyLineageNotice(StrictModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source_ids: tuple[UUID, ...] = Field(min_length=2)
-    basis: Literal["matching_doi", "matching_title", "matching_archive_id"]
+    basis: Literal[
+        "matching_doi", "matching_title", "matching_archive_id", "matching_reported_sample"
+    ]
     explanation: NonEmptyStr
 
     @model_validator(mode="after")
@@ -34,6 +38,8 @@ class StudyLineageNotice(StrictModel):
 
 def build_study_lineage_notices(
     candidates: tuple[V2SourceSelectionCandidate, ...],
+    *,
+    snapshots: Mapping[UUID, SourceSnapshot] | None = None,
 ) -> tuple[StudyLineageNotice, ...]:
     """Disclose shared identifiers or possible mirrors without rewriting evidence."""
     if len({item.source_id for item in candidates}) != len(candidates):
@@ -144,7 +150,60 @@ def build_study_lineage_notices(
                 ),
             )
         )
+    if snapshots:
+        signatures = {}
+        for candidate in candidates:
+            snapshot = snapshots.get(candidate.source_id)
+            if snapshot is None:
+                continue
+            validate_snapshot_integrity(snapshot)
+            if snapshot.source_url != candidate.source_url:
+                continue
+            signatures[candidate.source_id] = _reported_sample_signature(snapshot.normalized_text)
+        for index, first in enumerate(candidates):
+            for second in candidates[index + 1 :]:
+                source_ids = (first.source_id, second.source_id)
+                if any(set(source_ids) <= set(notice.source_ids) for notice in notices):
+                    continue
+                a = signatures.get(first.source_id)
+                b = signatures.get(second.source_id)
+                if a is None or b is None:
+                    continue
+                numbers_a, terms_a = a
+                numbers_b, terms_b = b
+                if len(numbers_a & numbers_b) < 3 or len(terms_a & terms_b) < 12:
+                    continue
+                if len(terms_a & terms_b) / max(1, min(len(terms_a), len(terms_b))) < 0.6:
+                    continue
+                notices.append(
+                    StudyLineageNotice(
+                        source_ids=source_ids,
+                        basis="matching_reported_sample",
+                        explanation=(
+                            "These captured accounts report matching sample counts and similar "
+                            "study details. They may describe the same underlying study; identity "
+                            "is unverified. Separate accounts do not establish "
+                            "independent replication."
+                        ),
+                    )
+                )
     return tuple(notices)
+
+
+def _reported_sample_signature(text: str) -> tuple[frozenset[str], frozenset[str]]:
+    """Require several non-year counts in substantive study prose, outside references."""
+    body = re.split(r"(?im)^\s*(?:references|bibliography|works cited)\s*$", text[:100_000])[0]
+    passages = re.findall(
+        r"[^.!?\n]*(?:identified|collected|analy[sz]ed|found|results:)[^.!?\n]*", body, re.I
+    )
+    prose = " ".join(passages)
+    numbers = frozenset(
+        number
+        for number in re.findall(r"(?<![\d.])\b[1-9]\d{2,}\b(?!\.\d)", prose)
+        if not 1800 <= int(number) <= 2100
+    )
+    terms = frozenset(re.findall(r"\b[a-z]{4,}\b", prose.casefold()))
+    return numbers, terms
 
 
 def _recognized_socarxiv_reference(

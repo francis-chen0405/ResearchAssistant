@@ -816,6 +816,7 @@ class V2DiscoveryBinding(V2DiscoveryArtifact):
         "source-candidate-ranking-v3",
         "source-candidate-ranking-v4",
         "source-candidate-ranking-v5",
+        "source-candidate-ranking-v6",
     ] = RANKING_ID
     preview_identity: Literal["source-claim-preview-v1", "source-claim-preview-v2"] = PREVIEW_ID
     seed_identity: Literal[

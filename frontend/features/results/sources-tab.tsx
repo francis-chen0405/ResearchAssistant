@@ -16,9 +16,10 @@ const budgetOutcomeText: Record<string, string> = {
 
 /** One plain outcome per shortlisted source. */
 export function sourceOutcome(
-  source: Pick<ResultSource, "status" | "budget_prevented_reason">,
+  source: Pick<ResultSource, "status" | "budget_prevented_reason" | "analysis_skip_reason">,
   budgetOutcome?: string,
 ): { label: string; tone: Tone } {
+  if (source.analysis_skip_reason === "exact_body_mirror") return { label: "Duplicate text; separate assessment skipped", tone: "neutral" };
   if (budgetOutcome) return { label: budgetOutcomeText[budgetOutcome] ?? "A per-source limit stopped the reading", tone: "warning" };
   const status = source.status;
   if (status === "budget_prevented_analysis") return { label: sourceBudgetStop(source.budget_prevented_reason).replace(/\.$/, ""), tone: "warning" };

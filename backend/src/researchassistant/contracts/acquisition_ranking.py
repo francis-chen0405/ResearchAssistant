@@ -37,6 +37,7 @@ class V2AcquisitionRankingAudit(StrictModel):
         "source-candidate-ranking-v3",
         "source-candidate-ranking-v4",
         "source-candidate-ranking-v5",
+        "source-candidate-ranking-v6",
     ] = "source-candidate-ranking-v2"
     raw_hits: int = Field(strict=True, ge=0)
     deduplicated_works: int = Field(strict=True, ge=0)

@@ -2,10 +2,49 @@
 
 from __future__ import annotations
 
+import re
+
 from researchassistant.evidence.evidence_core import fresh_sentence_spans
 
 EXTRACTION_EXCERPT_BYTES = 8_000
 _FOCUS_CONTEXT_SENTENCES = 12
+_RESULT = re.compile(
+    r"\b(?:overall (?:injury |adjusted )?(?:incidence|risk|rate|result)|"
+    r"our (?:results|findings|analysis)|we (?:found|observed|estimated)|"
+    r"annual maintenance costs?|present.value maintenance)\b",
+    re.I,
+)
+_CAVEAT = re.compile(
+    r"\b(?:lack of exposure data|(?:no|without|lack(?:ing)?) exposure (?:data|time)|"
+    r"(?:cannot|unable to|limits? the ability to) (?:calculate|estimate|control)|"
+    r"confound(?:ers|ing)|underreporting|evidence quality (?:low|very low)|"
+    r"considerable heterogeneity|(?:observational|retrospective) (?:design|study))\b",
+    re.I,
+)
+
+
+def source_context_excerpts(text: str) -> tuple[str, ...]:
+    """Expose bounded exact results/caveats, never invented quote context."""
+    spans = fresh_sentence_spans(text)
+    excerpts: list[str] = []
+    for cue in (_CAVEAT, _RESULT):
+        count = 0
+        for index, span in enumerate(spans):
+            if not cue.search(span.text):
+                continue
+            # PDF line breaks can split one caveat into several sentence spans.
+            end = span.end_char
+            for neighbor in spans[index + 1 : index + 4]:
+                if neighbor.end_char - span.start_char > 1800:
+                    break
+                end = neighbor.end_char
+            excerpt = text[span.start_char : end]
+            if len(excerpt) <= 1800 and excerpt not in excerpts:
+                excerpts.append(excerpt)
+                count += 1
+            if count == 3:
+                break
+    return tuple(excerpts)
 
 
 def extraction_source_view(
@@ -19,6 +58,15 @@ def extraction_source_view(
         raise ValueError("snapshot has no selectable sentences")
     lines = {i: f"[{i}] {span.text}" for i, span in enumerate(spans, 1)}
     priorities: list[int] = []
+    # Probe keyword hits can be introductory citations. Reserve room for the
+    # document's own results and methodological caveats before local padding.
+    important = [
+        i
+        for i, span in enumerate(spans, 1)
+        if (_RESULT.search(span.text) or _CAVEAT.search(span.text))
+        and len(lines[i].encode("utf-8")) <= max_bytes // 3
+    ]
+    priorities.extend(important[:8])
     # Favor exact Probe passages over unrelated navigation and reference lists.
     for passage in focus_passages:
         start = text.find(passage)

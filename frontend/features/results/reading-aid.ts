@@ -94,6 +94,7 @@ export function briefWithReadingAid(brief: string, result: V2FinalResearchOutput
     lines.push(`- ${source?.title || "Source"}: ${sourceLocalStop(outcome.outcome)}`);
   }
   for (const source of result.all_surviving_sources) {
+    if (source.analysis_skip_reason === "exact_body_mirror") lines.push(`- ${source.title || "Source"}: Duplicate text; separate assessment skipped.`);
     if (source.status === "budget_prevented_analysis" && !(evidence?.source_budget_outcomes ?? []).some((item) => item.source_id === source.source_id)) lines.push(`- ${source.title || "Source"}: ${sourceBudgetStop(source.budget_prevented_reason)}`);
   }
   for (const item of evidence?.items ?? []) {

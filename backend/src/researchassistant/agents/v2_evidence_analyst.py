@@ -16,6 +16,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import BaseModel
 
 from researchassistant.common.money import add_usd
+from researchassistant.common.research_guidance import ANALYST_GUIDANCE
 from researchassistant.common.resources import prompt_resource
 from researchassistant.contracts.models import (
     V2_EVIDENCE_ANALYST_LEGACY_POLICY_IDENTITY,
@@ -48,6 +49,7 @@ from researchassistant.evidence.evidence_core import (
     parse_extracted_quote_block,
     verify_candidate_against_snapshot,
 )
+from researchassistant.evidence.source_excerpt import source_context_excerpts
 from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.llm import (
     V2_LLM_ROUTING,
@@ -328,6 +330,7 @@ def _analyze_source(
                 following_context=parse_extracted_quote_block(
                     candidate.extracted_quote_block
                 ).following_context,
+                source_excerpts=source_context_excerpts(source_input.snapshot.normalized_text),
             ),
             targeted_gap_ids=tuple(
                 dict.fromkeys(
@@ -364,6 +367,9 @@ def _analyze_source(
             stop_on_unknown_attempt=stop_on_unknown_attempt,
         )
         attempt_ids.extend(score_attempts)
+        if batch_input.policy_identity == V2_EVIDENCE_ANALYST_POLICY_IDENTITY:
+            assessment = _exclude_discovery_only_finding(assessment, batch_input.exact_claim)
+            assessment = _preserve_exposure_caveat(assessment, semantic_input.snapshot_context)
         route = routing_config.preflight().for_stage(LLMStage.ANALYST)
         prompt = load_prompt_file(
             _analyst_prompt_path(batch_input.policy_identity),
@@ -457,6 +463,7 @@ def _invoke_bounded_analyst(
         expected_stage=LLMStage.ANALYST,
     )
     base_rendered_prompt = render_stage_prompt(prompt, input_artifact, output_type)
+    base_rendered_prompt += "\n" + ANALYST_GUIDANCE
     attempt_limit = max_attempts or V2_EVIDENCE_ANALYST_MAX_ATTEMPTS
     operation_id = uuid5(
         NAMESPACE_URL, f"v2-phase13::{batch_input.run_id}::{source_id}::{operation}"
@@ -663,6 +670,69 @@ def _invoke_bounded_analyst(
                 ) from exc
     raise V2EvidenceAnalystFailure(
         f"{operation} exhausted bounded Analyst retry: {'; '.join(failures)}"
+    )
+
+
+def _exclude_discovery_only_finding(
+    assessment: V2EvidenceAnalystModelOutput,
+    exact_claim: str = "",
+) -> V2EvidenceAnalystModelOutput:
+    """A recorded title or hypothesis alone cannot become substantive evidence."""
+    proposition = assessment.narrowest_supported_proposition
+    if re.search(r"\b(?:hypothes\w*|propos\w*|protocol|bibliograph\w*)\b", exact_claim, re.I):
+        return assessment
+    title_only = re.search(
+        r"\b(?:page|bibliography|listing)\b.*\b(?:lists?|titles?)\b|"
+        r"\b(?:study title|title alone|title in a listing)\b",
+        " ".join((proposition, *assessment.material_limitations)),
+        re.I,
+    )
+    proposed = re.search(
+        r"\b(?:hypothesiz\w*|hypothesised|plan to|propose to)\b", proposition, re.I
+    )
+    observed = re.search(r"\b(?:found|observed|measured|results showed)\b", proposition, re.I)
+    if not title_only and not (proposed and not observed):
+        return assessment
+    return assessment.model_copy(
+        update={"claim_fit": min(assessment.claim_fit, 1), "addressed_gap_ids": ()}
+    )
+
+
+def _preserve_exposure_caveat(
+    assessment: V2EvidenceAnalystModelOutput,
+    context: V2EvidenceAnalystSnapshotContext,
+) -> V2EvidenceAnalystModelOutput:
+    """Keep an explicit missing-denominator caveat with an injury comparison."""
+    missing_exposure = any(
+        re.search(r"\b(?:lack of|no|without) exposure data\b", text, re.I)
+        for text in context.source_excerpts
+    )
+    statement = assessment.canonical_factual_statement
+    if (
+        not missing_exposure
+        or not statement
+        or not re.search(
+            r"\b(?:injur|fractur|concussion|sprain|dislocat|laceration|contusion|burn)\w*\b",
+            statement,
+            re.I,
+        )
+    ):
+        return assessment
+    caveat = "The study lacks exposure data and cannot establish injury rates per hour of play."
+    limitations = assessment.material_limitations
+    if not any("exposure" in item.casefold() for item in limitations):
+        limitations = (
+            (*limitations, caveat)
+            if len(limitations) < 12
+            else (*limitations[:-1], limitations[-1] + " " + caveat)
+        )
+    if "exposure" not in statement.casefold() and len(statement) + len(caveat) + 1 <= 2000:
+        statement += " " + caveat
+    return assessment.model_copy(
+        update={
+            "canonical_factual_statement": statement,
+            "material_limitations": limitations,
+        }
     )
 
 

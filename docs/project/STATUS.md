@@ -28,6 +28,21 @@ Model response reads recheck their original request and read-phase deadlines usi
 one-second socket waits, including after system wake. These waits never resend an
 HTTP request. Fixed provider-capability failures stop bounded stage retries; invalid
 model output remains eligible for the existing bounded repair.
+Fresh ranked follow-ups distinguish discovery from attempted acquisition, so an
+earlier unscouted or uncaptured source can remain eligible. Comparative financial
+reports receive an explicit method cue without publisher or stance preferences.
+Exact-body skips have a separate reason and are not reported as budget failures.
+Bounded source views retain main-result and methodological-caveat excerpts; the
+Analyst receives that exact untrusted context and preserves missing exposure-data
+limitations in injury comparisons. Bibliography-only and hypothesis-only findings
+cannot supply substantive evidence for an outcome claim. Relationship guidance
+separates a finding's direction from its limited scope. Post-analysis samples favor
+later, stronger findings within each recorded relationship. Gap guidance distinguishes
+searched terms from assessed coverage; search saturation does not establish coverage.
+Captured accounts with matching sample counts and study details receive an explicit
+unconfirmed shared-study notice in the display. Historical released text and hashes
+remain unchanged. These guards and guidance need fresh live quality evaluation;
+they do not guarantee model judgments or complete evidence coverage.
 Pending final-analysis sources receive a bounded preference for specific unresolved
 material-gap leads from the latest completed coverage assessment. Movement is at most
 two slots, within existing direction/recommendation/family constraints and comparable

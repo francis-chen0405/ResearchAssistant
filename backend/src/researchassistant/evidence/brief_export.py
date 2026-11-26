@@ -360,6 +360,10 @@ def _v2_reading_aid(
         )
         lines.append(f"- {source.title if source and source.title else 'Source'}: {label}")
     for source in output.all_surviving_sources:
+        if source.analysis_skip_reason == "exact_body_mirror":
+            lines.append(
+                f"- {source.title or 'Source'}: Duplicate text; separate assessment skipped."
+            )
         if source.status.value == "budget_prevented_analysis" and not any(
             outcome.source_id == source.source_id
             for outcome in (evidence.source_budget_outcomes if evidence else ())

@@ -85,6 +85,32 @@ def normalize_approved_additive_fields(
     for model in models:
         properties = model.get("properties", {})
         title = model.get("title")
+        if title in {"V2DeepAnalysisSourceStatus", "V2ResultSource"}:
+            skip_reason = properties.pop("analysis_skip_reason")
+            if reference_root == "components/schemas":
+                assert "default" not in skip_reason
+                skip_reason = {**skip_reason, "default": None}
+            assert skip_reason == {
+                "anyOf": [
+                    {"const": "exact_body_mirror", "type": "string"},
+                    {"type": "null"},
+                ],
+                "default": None,
+                "title": "Analysis Skip Reason",
+            }
+        if title == "V2EvidenceAnalystSnapshotContext":
+            assert properties.pop("source_excerpts") == {
+                "default": [],
+                "items": {"minLength": 1, "maxLength": 1800, "type": "string"},
+                "maxItems": 6,
+                "title": "Source Excerpts",
+                "type": "array",
+            }
+        if title == "StudyLineageNotice":
+            assert properties["basis"]["enum"].pop() == "matching_reported_sample"
+        ranking = properties.get("ranking_identity", {})
+        if "enum" in ranking and "source-candidate-ranking-v6" in ranking["enum"]:
+            assert ranking["enum"].pop() == "source-candidate-ranking-v6"
         limit_field = {
             "ResearchControls": "provider_request_limits",
             "ResearchStartInput": "provider_request_limits",

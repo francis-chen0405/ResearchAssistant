@@ -764,10 +764,17 @@ def _assessed_findings(
     visible_ids = {item.source_cluster_id for item in gap.input.surviving_sources}
     assessed = admission.analyst_result.source_results
     visible = tuple(item for item in assessed if item.source_id in visible_ids)
+    source_rounds = {
+        item.source_id: item.research_round
+        for item in admission.analyst_result.input.queue_result.input.survivors
+    }
     reviewed = sorted(
         (item for item in visible if item.assessment is not None),
         key=lambda item: (
             item.source_id not in preferred,
+            -source_rounds.get(item.source_id, 1),
+            -item.assessment.claim_fit,
+            -item.assessment.evidence_quality,
             str(item.source_id),
         ),
     )

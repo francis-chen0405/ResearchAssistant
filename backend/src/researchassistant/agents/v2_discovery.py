@@ -107,12 +107,13 @@ from researchassistant.research.discovery_policy import (
     stable_work_key,
 )
 from researchassistant.research.metadata_ranking import (
+    CLAIM_RANKING_IDENTITIES,
     EXACT_URL_RANKING_IDENTITY,
     RANKING_IDENTITIES,
-    RANKING_IDENTITY,
     fair_ranked_ids,
     rank_metadata,
 )
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY as RANKING_IDENTITY
 from researchassistant.storage.discovery_store import read_discovery_binding
 from researchassistant.storage.sqlite_policy import overlapping_database_writes
 from researchassistant.storage.store import (
@@ -183,7 +184,7 @@ def _checkpoint_scout_batch_size(checkpoint: V2ScoutRoundCheckpoint) -> int:
         return checkpoint.batch_size
     if (
         checkpoint.ranking_artifact is not None
-        and checkpoint.ranking_artifact.ranking_identity == RANKING_IDENTITY
+        and checkpoint.ranking_artifact.ranking_identity in CLAIM_RANKING_IDENTITIES
     ):
         return _PREVIOUS_FRESH_SCOUT_BATCH_SIZE
     return V2_SCOUT_BATCH_SIZE
@@ -756,7 +757,7 @@ def run_v2_discovery_and_scout(
     routing_config.preflight()
     binding = _fresh_ranked_binding(db_path, planner_output.run_id)
     identity = binding.ranking_identity if binding is not None else None
-    claim_aware = identity == RANKING_IDENTITY
+    claim_aware = identity in CLAIM_RANKING_IDENTITIES
     batch_size = V2_FRESH_SCOUT_BATCH_SIZE
     exact_claim = binding.exact_claim if binding is not None and claim_aware else None
     scout_gaps = tuple(gap[:500] for gap in target_gaps[:6]) if claim_aware else ()
@@ -826,7 +827,9 @@ def run_v2_discovery_and_scout(
             # Ranking-only historical checkpoints must reconstruct their original inputs.
             nber_resolver=resolve_nber if prior_ranking is None else None,
             url_identity_version=(
-                2 if identity in {None, EXACT_URL_RANKING_IDENTITY, RANKING_IDENTITY} else 1
+                2
+                if identity in {None, EXACT_URL_RANKING_IDENTITY, *CLAIM_RANKING_IDENTITIES}
+                else 1
             ),
         )
         items = (*prefix.items, *delta) if prefix is not None else delta
@@ -1096,7 +1099,7 @@ def _fresh_ranked_binding(db_path: str | Path, run_id: UUID) -> V2DiscoveryBindi
 
 def uses_claim_ranking(db_path: str | Path, run_id: UUID) -> bool:
     binding = _fresh_ranked_binding(db_path, run_id)
-    return binding is not None and binding.ranking_identity == RANKING_IDENTITY
+    return binding is not None and binding.ranking_identity in CLAIM_RANKING_IDENTITIES
 
 
 def _round_number(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) -> int:
@@ -1104,7 +1107,7 @@ def _round_number(planner_output: V2InitialPlannerOutput | V2AdaptiveRoundPlan) 
 
 
 def _scout_prompt_path(ranking_identity: str | None) -> Traversable:
-    if ranking_identity == RANKING_IDENTITY:
+    if ranking_identity in CLAIM_RANKING_IDENTITIES:
         return V2_SCOUT_V3_PROMPT_PATH
     return V2_SCOUT_V2_PROMPT_PATH if ranking_identity is not None else V2_SCOUT_PROMPT_PATH
 
@@ -1208,7 +1211,7 @@ def _ranked_scout_selection(
 ) -> tuple[tuple[NormalizedDiscoveryItem, ...], V2MetadataRankingArtifact]:
     ranked_by_id = {item.item_id: item for item in ranks}
     by_item = {item.item_id: item for item in items}
-    claim_aware = ranking_identity == RANKING_IDENTITY
+    claim_aware = ranking_identity in CLAIM_RANKING_IDENTITIES
     if batch_size is None:
         batch_size = V2_FRESH_SCOUT_BATCH_SIZE
     available = policy.max_scout_per_round - len(already_scouted)

@@ -698,6 +698,7 @@ def run_v2_deep_analysis_with_backfill(
         audit,
         attempted_source_ids=tuple(attempted_source_ids),
         prior_source_ids=frozenset(wave.source_id for wave in prior_waves),
+        mirror_ids=frozenset(mirror_ids),
     )
     final_analyst = _final_analyst_result(final_queue, attempted, tuple(attempted_source_ids))
     _raise_if_cancelled(
@@ -1226,6 +1227,7 @@ def _final_queue_result(
     audit: V2PhysicalCallAudit,
     attempted_source_ids: tuple[UUID, ...],
     prior_source_ids: frozenset[UUID],
+    mirror_ids: frozenset[UUID] = frozenset(),
 ) -> V2SourceSelectionQueueResult:
     original_status = {item.source_id: item for item in original.source_statuses}
     statuses = tuple(
@@ -1237,6 +1239,7 @@ def _final_queue_result(
                 item.source_id in set(attempted_source_ids)
                 or item.source_id in set(original.queued_source_ids)
             ),
+            exact_body_mirror=item.source_id in mirror_ids,
         )
         for item in original.input.survivors
     )
@@ -1313,6 +1316,7 @@ def _status_for_queue(
     queued: bool,
     queue_rank: int | None,
     replacement: bool = False,
+    exact_body_mirror: bool = False,
 ) -> V2DeepAnalysisSourceStatus:
     return status.model_copy(
         update={
@@ -1320,11 +1324,12 @@ def _status_for_queue(
             "queue_rank": queue_rank,
             "budget_prevented_reason": (
                 None
-                if queued
+                if queued or exact_body_mirror
                 else V2DeepAnalysisBudgetReason.BACKFILL_REPLACED
                 if replacement
                 else status.budget_prevented_reason
             ),
+            "analysis_skip_reason": "exact_body_mirror" if exact_body_mirror else None,
         }
     )
 

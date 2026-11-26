@@ -86,7 +86,8 @@ from researchassistant.providers.dispatch_intent import defer_intent
 from researchassistant.providers.ranking import canonical_discovery_url
 from researchassistant.providers.scraper import ScraperProvider, ScraperProviderError
 from researchassistant.providers.v2_budget import V2CancellationRequested
-from researchassistant.research.metadata_ranking import RANKING_IDENTITY, fair_ranked_ids
+from researchassistant.research.metadata_ranking import CLAIM_RANKING_IDENTITIES, fair_ranked_ids
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY as RANKING_IDENTITY
 from researchassistant.research.source_preview import (
     build_capture_windows,
     build_claim_preview,
@@ -283,12 +284,12 @@ def run_v2_acquisition_probe(
             or ranking.round_number != round_number
             or {item.item_id for item in ranking.ranks} != set(item_by_id)
             or (
-                binding.ranking_identity == RANKING_IDENTITY
+                binding.ranking_identity in CLAIM_RANKING_IDENTITIES
                 and ranking.ranking_identity != binding.ranking_identity
             )
         ):
             raise ValueError("acquisition ranking sidecar differs from its discovery pool")
-        claim_aware_ranking = ranking.ranking_identity == RANKING_IDENTITY
+        claim_aware_ranking = ranking.ranking_identity in CLAIM_RANKING_IDENTITIES
         candidate_ids = _capture_candidate_ids(discovery_output, ranking)
         cluster_by_item = {
             item_id: cluster
@@ -1227,8 +1228,6 @@ def prior_publication_clusters(
 ) -> tuple[frozenset[UUID], frozenset[UUID], frozenset[str]]:
     """Return adequate matches, incomplete matches, and previously attempted locations."""
     current = _publication_keys(discovery)
-    if not current:
-        return frozenset(), frozenset(), frozenset()
     candidates = set(current.values())
     captured: dict[tuple[str, str], SourceSnapshot] = {}
     attempted_urls: set[str] = set()
@@ -1246,13 +1245,10 @@ def prior_publication_clusters(
         snapshots = {
             source.snapshot.snapshot_id: source.snapshot for source in acquisition.acquisitions
         }
-        if recover_incomplete:
-            attempted_urls.update(
-                canonical_discovery_url(item.url) for item in acquisition.attempts
-            )
-            attempted_urls.update(
-                canonical_discovery_url(snapshot.source_url) for snapshot in snapshots.values()
-            )
+        attempted_urls.update(canonical_discovery_url(item.url) for item in acquisition.attempts)
+        attempted_urls.update(
+            canonical_discovery_url(snapshot.source_url) for snapshot in snapshots.values()
+        )
         for survivor in sorted(
             acquisition.survivors,
             key=lambda row: (-snapshots[row.snapshot_id].word_count, str(row.cluster_id)),
@@ -1313,7 +1309,7 @@ def _capture_candidate_ids(
         ),
         key=lambda rank: (scout[rank.item_id].decision.value == "maybe", rank.rank),
     )
-    if ranking.ranking_identity != RANKING_IDENTITY:
+    if ranking.ranking_identity not in CLAIM_RANKING_IDENTITIES:
         reranked = tuple(
             rank.model_copy(update={"rank": index}) for index, rank in enumerate(eligible, 1)
         )

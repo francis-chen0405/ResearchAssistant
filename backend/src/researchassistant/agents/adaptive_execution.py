@@ -69,7 +69,8 @@ from researchassistant.providers.llm import (
 from researchassistant.providers.scraper import ScraperProvider
 from researchassistant.providers.search import SearchProvider
 from researchassistant.providers.v2_routing import V2RoutingConfig
-from researchassistant.research.metadata_ranking import RANKING_IDENTITY
+from researchassistant.research.metadata_ranking import CLAIM_RANKING_IDENTITIES
+from researchassistant.research.metadata_ranking import RANKING_IDENTITY as RANKING_IDENTITY
 from researchassistant.research.query_execution import execute_query_round, read_query_first_pass
 from researchassistant.research.seed_expansion import execute_expansion
 from researchassistant.storage.discovery_store import read_discovery_binding
@@ -127,7 +128,7 @@ def _run_round_from_plan(
         else None
     )
     claim_ranking = (
-        preview_binding is not None and preview_binding.ranking_identity == RANKING_IDENTITY
+        preview_binding is not None and preview_binding.ranking_identity in CLAIM_RANKING_IDENTITIES
     )
 
     def exclusions(output: V2DiscoveryScoutOutput) -> tuple[frozenset[UUID], frozenset[str]]:
@@ -374,7 +375,15 @@ def _capture_exclusions(
             for cluster_id in incomplete
             if cluster_locations[cluster_id] - attempted_urls
         }
-        duplicate_ids = (duplicate_ids - recoverable) | adequate | (incomplete - recoverable)
+        # Discovery alone is not an acquisition attempt. A source below an earlier
+        # Scout/capture limit must remain eligible when a later search finds it.
+        attempted_ids = {
+            cluster_id
+            for cluster_id, locations in cluster_locations.items()
+            if locations & attempted_urls
+        }
+        duplicate_ids = (duplicate_ids & attempted_ids) - recoverable
+        duplicate_ids |= adequate | (incomplete - recoverable)
         excluded_capture_urls = attempted_urls & frozenset(
             url for cluster_id in recoverable for url in cluster_locations[cluster_id]
         )

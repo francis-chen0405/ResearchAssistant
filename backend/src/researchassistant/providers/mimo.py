@@ -22,6 +22,7 @@ from researchassistant.agents.analyst import AnalystLLMInput, StatementDraftLLMI
 from researchassistant.agents.planner import PlannerLLMInput
 from researchassistant.common.money import parse_exact_usd
 from researchassistant.common.research_guidance import (
+    ANALYST_GUIDANCE,
     ASSESSED_FINDINGS_GUIDANCE,
     EXCERPT_GUIDANCE,
     SAVED_LEADS_GUIDANCE,
@@ -45,6 +46,7 @@ from researchassistant.contracts.models import (
     SynthesisItem,
     SynthesisOutput,
     SynthesisSection,
+    V2EvidenceAnalystLLMInput,
     V2SynthesizerInput,
     _derive_ledger_score,
     _expected_placement,
@@ -576,6 +578,10 @@ def _direct_mimo_prompt(request: LLMRequest) -> str:
         }
         stage_input_json = json.dumps(stage_input, indent=2, ensure_ascii=False)
         recovery_guidance = EXCERPT_GUIDANCE
+    elif request.stage is LLMStage.ANALYST and isinstance(
+        request.input_artifact, V2EvidenceAnalystLLMInput
+    ):
+        recovery_guidance = ANALYST_GUIDANCE
     elif request.stage is LLMStage.GAP_ANALYSIS and getattr(
         request.input_artifact, "assessed_source_findings", ()
     ):

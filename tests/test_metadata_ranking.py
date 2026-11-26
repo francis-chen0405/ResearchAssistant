@@ -33,7 +33,7 @@ def test_version_three_normalizes_method_cues_without_rewriting_version_two(cue:
     assert historical.method_fit is None
     previous = rank_metadata((item,), ranking_identity="source-candidate-ranking-v3", **options)[0]
     assert previous == current
-    assert metadata_ranking.RANKING_IDENTITY == "source-candidate-ranking-v5"
+    assert metadata_ranking.RANKING_IDENTITY == "source-candidate-ranking-v6"
     assert rank_metadata((item,), **options)[0].method_fit is None
 
 
